@@ -6,6 +6,7 @@
 // and disconnect any of them, from Settings > Integrations.
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { logAudit } from '../../services/AuditLogService.js';
@@ -14,9 +15,7 @@ import {
   revokeConnection
 } from '../../services/oauth/ConnectionService.js';
 import configCache from '../../configCache.js';
-import logger from '../../utils/logger.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const router = express.Router();
 
 // Same feature gate as the rest of the integrations page.
@@ -44,30 +43,25 @@ const DELEGATED_AUTH_MODES = new Set([
  * mean anything.
  *
  * @param {import('express').Request} req
- * @param {import('express').Response} res
- * @returns {Object|null} The acting user, or null when a response was sent
+ * @returns {Object} The acting user; throws a ServiceError when the caller may not act
  */
-function requireConnectionOwner(req, res) {
+function requireConnectionOwner(req) {
   const platform = configCache.getPlatform() || {};
 
   if (platform.oauth?.enabled?.authz !== true) {
-    sendErrorResponse(res, 404, 'The OAuth authorization server is not enabled');
-    return null;
+    throw new ServiceError('NOT_FOUND', 'The OAuth authorization server is not enabled');
   }
 
   if (!req.user?.id || req.user.id === 'anonymous') {
-    sendErrorResponse(res, 401, 'Authentication required');
-    return null;
+    throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   }
 
   if (req.user.isOAuthClient || req.user.isAgent === true) {
-    sendErrorResponse(res, 403, 'Only an interactive session can manage connections');
-    return null;
+    throw new ServiceError('FORBIDDEN', 'Only an interactive session can manage connections');
   }
 
   if (DELEGATED_AUTH_MODES.has(req.user.authMode)) {
-    sendErrorResponse(res, 403, 'Only an interactive session can manage connections');
-    return null;
+    throw new ServiceError('FORBIDDEN', 'Only an interactive session can manage connections');
   }
 
   return req.user;
@@ -95,22 +89,16 @@ function requireConnectionOwner(req, res) {
  *         description: The OAuth authorization server is not enabled
  */
 router.get('/', authRequired, (req, res) => {
-  const user = requireConnectionOwner(req, res);
-  if (!user) return;
+  const user = requireConnectionOwner(req);
 
-  try {
-    const platform = configCache.getPlatform() || {};
-    res.json({
-      enabled: true,
-      // The UI tells the user how long an access token issued before the
-      // disconnect can still work, so it needs the number.
-      tokenExpirationMinutes: platform.oauth?.defaultTokenExpirationMinutes || 60,
-      connections: listConnectionsForUser(user.id)
-    });
-  } catch (error) {
-    logger.error('Failed to list connections', { component: 'Connections', error });
-    sendErrorResponse(res, 500, 'Failed to list connected applications');
-  }
+  const platform = configCache.getPlatform() || {};
+  res.json({
+    enabled: true,
+    // The UI tells the user how long an access token issued before the
+    // disconnect can still work, so it needs the number.
+    tokenExpirationMinutes: platform.oauth?.defaultTokenExpirationMinutes || 60,
+    connections: listConnectionsForUser(user.id)
+  });
 });
 
 /**
@@ -137,42 +125,36 @@ router.get('/', authRequired, (req, res) => {
  *         description: No such connection for this user
  */
 router.delete('/:clientId', authRequired, async (req, res) => {
-  const user = requireConnectionOwner(req, res);
-  if (!user) return;
+  const user = requireConnectionOwner(req);
 
   // A CIMD client id is a URL, so it arrives percent-encoded. It is a store
   // key and never a path segment on disk, so there is nothing to validate it
   // against beyond ownership — which is checked below.
   const clientId = decodeURIComponent(req.params.clientId || '');
   if (!clientId) {
-    return sendErrorResponse(res, 400, 'clientId is required');
+    throw new ServiceError('BAD_REQUEST', 'clientId is required');
   }
 
-  try {
-    // Ownership check before the revoke, and a 404 rather than a 403 for
-    // someone else's connection: whether another user has connected a given
-    // client is not this caller's business either.
-    const owned = listConnectionsForUser(user.id).some(c => c.clientId === clientId);
-    if (!owned) {
-      return sendErrorResponse(res, 404, 'Connection not found');
-    }
-
-    const result = await revokeConnection(clientId, user.id);
-
-    logAudit({
-      req,
-      action: 'delete',
-      resource: 'oauthConnection',
-      resourceId: `${clientId}:${user.id}`,
-      summary: `Disconnected ${clientId} (${result.refreshTokensRevoked} refresh token(s) revoked)`,
-      source: 'web'
-    });
-
-    res.json({ success: true, ...result });
-  } catch (error) {
-    logger.error('Failed to revoke connection', { component: 'Connections', error });
-    sendErrorResponse(res, 500, 'Failed to disconnect the application');
+  // Ownership check before the revoke, and a 404 rather than a 403 for
+  // someone else's connection: whether another user has connected a given
+  // client is not this caller's business either.
+  const owned = listConnectionsForUser(user.id).some(c => c.clientId === clientId);
+  if (!owned) {
+    throw new ServiceError('NOT_FOUND', 'Connection not found');
   }
+
+  const result = await revokeConnection(clientId, user.id);
+
+  logAudit({
+    req,
+    action: 'delete',
+    resource: 'oauthConnection',
+    resourceId: `${clientId}:${user.id}`,
+    summary: `Disconnected ${clientId} (${result.refreshTokensRevoked} refresh token(s) revoked)`,
+    source: 'web'
+  });
+
+  res.json({ ...result });
 });
 
 export default router;

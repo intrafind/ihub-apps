@@ -28,6 +28,7 @@ import { fetchItemContent } from '../marketplace/ContentInstaller.js';
 import { parseFrontMatter } from '../../utils/frontMatter.js';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
+import { limitFrom, pageOfList } from '../../utils/pagination.js';
 import { SKILL_FILE_PATH_PATTERN, SKILL_NAME_PATTERN } from '../../validators/userSkillSchema.js';
 
 const COMPONENT = 'MarketplaceSkills';
@@ -193,11 +194,10 @@ function matchesSearch(item, term) {
  *   tags, category and author, in every language the catalog has.
  * @param {string} [filters.registry] - Registry id.
  * @param {string} [filters.category] - Catalog category.
- * @param {number|string} [filters.page=1] - 1-based page.
+ * @param {string} [filters.cursor] - The `nextCursor` of the previous page.
  * @param {number|string} [filters.limit=24] - Items per page, at most 60.
- * @returns {Promise<{items: Object[], total: number, page: number, limit: number,
- *   totalPages: number, registries: Array<{id: string, name: string, count: number}>,
- *   categories: string[]}>}
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number,
+ *   registries: Array<{id: string, name: string, count: number}>, categories: string[]}>}
  */
 export async function listMarketplaceSkills(filters = {}) {
   const all = [];
@@ -228,21 +228,11 @@ export async function listMarketplaceSkills(filters = {}) {
   const term = typeof filters.search === 'string' ? filters.search.trim().toLowerCase() : '';
   if (term) filtered = filtered.filter(item => matchesSearch(item, term));
 
-  const limit = Math.min(
-    MAX_PAGE_SIZE,
-    Math.max(1, Number.parseInt(filters.limit, 10) || DEFAULT_PAGE_SIZE)
-  );
-  const total = filtered.length;
-  const totalPages = Math.max(1, Math.ceil(total / limit));
-  const page = Math.min(totalPages, Math.max(1, Number.parseInt(filters.page, 10) || 1));
-  const start = (page - 1) * limit;
+  const limit = limitFrom(filters.limit, { fallback: DEFAULT_PAGE_SIZE, max: MAX_PAGE_SIZE });
 
   return {
-    items: filtered.slice(start, start + limit),
-    total,
-    page,
-    limit,
-    totalPages,
+    ...pageOfList(filtered, { limit, cursor: filters.cursor }),
+    total: filtered.length,
     registries,
     categories: [...categories].sort((a, b) => a.localeCompare(b))
   };

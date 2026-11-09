@@ -125,9 +125,9 @@ The user editor also shows the user's current usage, with a **Reset usage** butt
 | --- | --- | --- |
 | `GET /api/usage/me` | signed-in user or guest | own budgets, usage per model and app, file storage, next resets |
 | `GET/PUT /api/admin/usage/limits/settings` | admin | platform budget and reset schedule |
-| `GET /api/admin/usage/limits/users` | admin | users with their budgets (`search`, `status`, `modelId`, `page`, `pageSize`) |
+| `GET /api/admin/usage/limits/users` | admin | users with their budgets (`search`, `status`, `modelId`, `limit`, `cursor`; answers `{ items, nextCursor, total }`) |
 | `GET /api/admin/usage/limits/users/:userKey` | admin | one user in detail |
-| `POST /api/admin/usage/limits/users/:userKey/reset` | admin | reset current counts (`{ modelId?, window? }`) |
+| `POST /api/admin/usage/limits/users/:userKey/_reset` | admin | reset current counts (`{ modelId?, window? }`) |
 | `GET /api/admin/usage/limits/models` | admin | per-model overview |
 | `GET /api/admin/usage/limits/groups` | admin | per-group overview |
 | `GET /api/admin/usage/limits/near` | admin | users at or above `threshold` (default `0.8`) of a budget, soonest reset first (`threshold`, `limit`) |

@@ -4,6 +4,7 @@
 import { promises as fs, existsSync } from 'node:fs';
 import path from 'node:path';
 import JSZip from 'jszip';
+import { z } from 'zod';
 import { ZipArchive } from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -42,6 +43,20 @@ import {
   skillPromoteSchema,
   userSkillSettingsSchema
 } from '../../validators/userSkillSchema.js';
+import { sendCreated, segment } from '../../utils/created.js';
+import {
+  MAX_SKILL_DESCRIPTION_LENGTH,
+  updateSkillOverride
+} from '../../services/skills/skillOverrides.js';
+
+/** `PUT /api/admin/skills/:name`: the settings an administrator may change. */
+const skillSettingsBodySchema = z
+  .object({
+    configOverrides: z
+      .object({ description: z.string().max(MAX_SKILL_DESCRIPTION_LENGTH).optional() })
+      .strict()
+  })
+  .strict();
 
 const MAX_SKILL_ZIP_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -105,6 +120,23 @@ async function listSharedUserSkills(req) {
   });
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
   return { skills: items, truncated, available: true };
+}
+
+/**
+ * The installed skill an admin may change: it must exist and not be a system
+ * skill (those ship with iHub and are always on).
+ *
+ * @param {string} name - From the path
+ * @returns {object} The skill as the cache holds it
+ */
+function findChangeableSkill(name) {
+  assertValidId(name, 'skill');
+  const skill = (configCache.getSkills().data || []).find(entry => entry.name === name);
+  if (!skill) throw new ServiceError('NOT_FOUND', 'Skill not found');
+  if (skill.isSystem) {
+    throw new ServiceError('FORBIDDEN', `'${name}' is a system skill and cannot be changed`);
+  }
+  return skill;
 }
 
 /**
@@ -198,6 +230,116 @@ export default function registerAdminSkillsRoutes(app) {
   );
 
   /**
+   * @swagger
+   * /api/admin/skills/{name}:
+   *   put:
+   *     summary: Change the settings of an installed skill
+   *     description: |
+   *       Sets the description shown for the skill (`configOverrides.description`;
+   *       an empty string removes the override). The skill's own files are not
+   *       touched. System skills cannot be changed. Answers the skill.
+   *     tags:
+   *       - Admin - Skills
+   *     parameters:
+   *       - name: name
+   *         in: path
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required: [configOverrides]
+   *             properties:
+   *               configOverrides:
+   *                 type: object
+   *                 properties:
+   *                   description:
+   *                     type: string
+   *     responses:
+   *       200:
+   *         description: The skill with its settings applied
+   *       400:
+   *         description: Invalid body
+   *       403:
+   *         description: System skills cannot be changed
+   *       404:
+   *         description: Skill not found
+   */
+  app.put(
+    buildServerPath('/api/admin/skills/:name'),
+    adminAuth,
+    requireFeature('skills'),
+    async (req, res) => {
+      const skill = findChangeableSkill(req.params.name);
+      const body = skillSettingsBodySchema.parse(req.body ?? {});
+
+      await updateSkillOverride(skill.name, {
+        description: body.configOverrides.description ?? ''
+      });
+      await configCache.refreshSkillsCache();
+
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'skill',
+        resourceId: skill.name,
+        summary: `Changed the settings of skill "${skill.name}"`
+      });
+      res.json(findChangeableSkill(skill.name));
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/skills/{name}/_toggle:
+   *   post:
+   *     summary: Switch an installed skill on or off
+   *     description: |
+   *       A skill that is off is offered to no app, user or MCP client; its files stay
+   *       installed. System skills cannot be switched off. Answers the skill.
+   *     tags:
+   *       - Admin - Skills
+   *     parameters:
+   *       - name: name
+   *         in: path
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: The skill with its new `enabled` state
+   *       403:
+   *         description: System skills cannot be switched off
+   *       404:
+   *         description: Skill not found
+   */
+  app.post(
+    buildServerPath('/api/admin/skills/:name/_toggle'),
+    adminAuth,
+    requireFeature('skills'),
+    async (req, res) => {
+      const skill = findChangeableSkill(req.params.name);
+      const enabled = skill.enabled === false;
+
+      await updateSkillOverride(skill.name, { enabled });
+      await configCache.refreshSkillsCache();
+
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'skill',
+        resourceId: skill.name,
+        summary: `${enabled ? 'Enabled' : 'Disabled'} skill "${skill.name}"`
+      });
+      res.json(findChangeableSkill(skill.name));
+    }
+  );
+
+  /**
    * DELETE /api/admin/skills/:name - Remove skill directory
    */
   app.delete(
@@ -234,7 +376,7 @@ export default function registerAdminSkillsRoutes(app) {
 
       await removeMarketplaceInstallation('skill', req.params.name);
 
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -278,7 +420,7 @@ export default function registerAdminSkillsRoutes(app) {
   );
 
   /**
-   * POST /api/admin/skills/import - Import a skill from a zip file.
+   * POST /api/admin/skills/_import - Import a skill from a zip file.
    *
    * Expects multipart/form-data with a 'skill' file field.
    * Uses JSZip for safe in-process extraction — no shell commands are invoked.
@@ -286,7 +428,7 @@ export default function registerAdminSkillsRoutes(app) {
    * Maximum upload size: 10 MB.
    */
   app.post(
-    buildServerPath('/api/admin/skills/import'),
+    buildServerPath('/api/admin/skills/_import'),
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
@@ -363,7 +505,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         await configCache.refreshSkillsCache();
 
-        res.json({ success: true, skillName, metadata: validation.metadata });
+        res.json({ skillName, metadata: validation.metadata });
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
@@ -574,7 +716,7 @@ export default function registerAdminSkillsRoutes(app) {
             skill.ownerName || skill.ownerId
           } to global skill ${name}`
         });
-        res.status(201).json({ name, promotedTo });
+        sendCreated(res, `/api/admin/skills/${segment(name)}`, { name, promotedTo });
       } catch (error) {
         if (created && targetPath) {
           await fs.rm(targetPath, { recursive: true, force: true }).catch(() => {});

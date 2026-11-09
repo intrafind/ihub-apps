@@ -26,8 +26,8 @@ import { getProjectRepository } from '../../services/projects/ProjectRepository.
 import { uploadsClientConfig } from '../../services/chatFiles/chatFilePolicy.js';
 import { getChatFileRepository } from '../../services/chatFiles/ChatFileRepository.js';
 import crypto from 'node:crypto';
+import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
 
 /**
  * The default dictation model as the client sees it: its id, and whether it is
@@ -295,21 +295,13 @@ export default function registerDataRoutes(app) {
    *                   error: "Internal server error"
    */
   app.get(buildServerPath('/api/styles'), authRequired, async (req, res) => {
-    try {
-      // Try to get styles from cache first
-      let { data: styles = [] } = configCache.getStyles();
+    // Try to get styles from cache first
+    let { data: styles = [] } = configCache.getStyles();
 
-      if (!styles) {
-        return sendFailedOperationError(
-          res,
-          'load styles configuration',
-          new Error('styles is null')
-        );
-      }
-      res.json(styles);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch styles');
+    if (!styles) {
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to load styles configuration');
     }
+    res.json(styles);
   });
 
   // The prompt library — global and user prompts behind one /api/prompts
@@ -520,10 +512,9 @@ export default function registerDataRoutes(app) {
           }
         }
 
-        return sendFailedOperationError(
-          res,
-          `load translations for language: ${lang}`,
-          new Error(`requestId: ${requestId}`)
+        throw new ServiceError(
+          'INTERNAL_ERROR',
+          `Failed to load translations for language: ${lang}`
         );
       }
 
@@ -578,7 +569,7 @@ export default function registerDataRoutes(app) {
         });
       }
 
-      sendInternalError(res, error, 'fetch translations');
+      throw error;
     }
   });
 
@@ -651,53 +642,45 @@ export default function registerDataRoutes(app) {
    *                   error: "Internal server error"
    */
   app.get(buildServerPath('/api/configs/ui'), async (req, res) => {
-    try {
-      // Try to get UI config from cache first
-      let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
+    // Try to get UI config from cache first
+    let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
 
-      if (!uiConfig) {
-        return sendFailedOperationError(
-          res,
-          'load UI configuration',
-          new Error('uiConfig is null')
-        );
-      }
-
-      // Get platform config for additional UI-related fields
-      const platform = configCache.getPlatform() || {};
-
-      // Get app version using the helper
-      const appVersion = getAppVersion();
-
-      // Compute refresh salt combining version and admin-triggered value
-      const refreshSalt = platform.refreshSalt || {
-        salt: 0,
-        lastUpdated: new Date().toISOString()
-      };
-      const computedSalt = `${appVersion}.${refreshSalt.salt}`;
-
-      // Sanitize admin config - include only pages and encrypted status
-      const sanitizedAdmin = platform.admin
-        ? {
-            pages: platform.admin.pages,
-            encrypted: platform.admin.encrypted
-          }
-        : {};
-
-      // Enhance UI config with additional platform fields needed by frontend
-      const enhancedUiConfig = {
-        ...uiConfig,
-        version: appVersion,
-        computedRefreshSalt: computedSalt,
-        defaultLanguage: platform.defaultLanguage,
-        admin: sanitizedAdmin
-      };
-
-      res.setHeader('ETag', uiConfigEtag);
-      res.json(enhancedUiConfig);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch UI configuration');
+    if (!uiConfig) {
+      throw new ServiceError('INTERNAL_ERROR', `Failed to load UI configuration`);
     }
+
+    // Get platform config for additional UI-related fields
+    const platform = configCache.getPlatform() || {};
+
+    // Get app version using the helper
+    const appVersion = getAppVersion();
+
+    // Compute refresh salt combining version and admin-triggered value
+    const refreshSalt = platform.refreshSalt || {
+      salt: 0,
+      lastUpdated: new Date().toISOString()
+    };
+    const computedSalt = `${appVersion}.${refreshSalt.salt}`;
+
+    // Sanitize admin config - include only pages and encrypted status
+    const sanitizedAdmin = platform.admin
+      ? {
+          pages: platform.admin.pages,
+          encrypted: platform.admin.encrypted
+        }
+      : {};
+
+    // Enhance UI config with additional platform fields needed by frontend
+    const enhancedUiConfig = {
+      ...uiConfig,
+      version: appVersion,
+      computedRefreshSalt: computedSalt,
+      defaultLanguage: platform.defaultLanguage,
+      admin: sanitizedAdmin
+    };
+
+    res.setHeader('ETag', uiConfigEtag);
+    res.json(enhancedUiConfig);
   });
 
   /**
@@ -745,22 +728,14 @@ export default function registerDataRoutes(app) {
    *               $ref: '#/components/schemas/DataError'
    */
   app.get(buildServerPath('/api/configs/mimetypes'), async (req, res) => {
-    try {
-      const { data: mimetypesConfig = {}, etag: mimetypesEtag } = configCache.getMimetypes();
+    const { data: mimetypesConfig = {}, etag: mimetypesEtag } = configCache.getMimetypes();
 
-      if (!mimetypesConfig) {
-        return sendFailedOperationError(
-          res,
-          'load mimetypes configuration',
-          new Error('mimetypesConfig is null')
-        );
-      }
-
-      res.setHeader('ETag', mimetypesEtag);
-      res.json(mimetypesConfig);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch mimetypes configuration');
+    if (!mimetypesConfig) {
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to load mimetypes configuration');
     }
+
+    res.setHeader('ETag', mimetypesEtag);
+    res.json(mimetypesConfig);
   });
 
   /**
@@ -802,156 +777,148 @@ export default function registerDataRoutes(app) {
    *               error: "Failed to load platform configuration"
    */
   app.get(buildServerPath('/api/configs/platform'), async (req, res) => {
-    try {
-      // Get platform config from cache
-      const platform = configCache.getPlatform();
+    // Get platform config from cache
+    const platform = configCache.getPlatform();
 
-      if (!platform) {
-        return sendFailedOperationError(
-          res,
-          'load platform configuration',
-          new Error('platform is null')
-        );
-      }
-
-      // Sanitize platform config - remove all sensitive fields and auth-related data
-      // Note: Auth configuration is available via /api/auth/status endpoint
-      const sanitizedConfig = {
-        defaultLanguage: platform.defaultLanguage,
-        features: resolveFeatures(configCache.getFeatures()),
-        requestBodyLimitMB: platform.requestBodyLimitMB,
-        requestConcurrency: platform.requestConcurrency,
-        pdfExport: platform.pdfExport,
-        globalPromptVariables: platform.globalPromptVariables,
-        telemetry: platform.telemetry
-          ? {
-              enabled: platform.telemetry.enabled,
-              metrics: platform.telemetry.metrics,
-              traces: platform.telemetry.traces,
-              logs: platform.telemetry.logs
-            }
-          : undefined,
-        // Chat history. Every chat is stored; `persistence` says whether
-        // chats are also *kept* — listed, reopened, shared — or every one is
-        // temporary. The feature flag alone does not tell the client — the
-        // platform switch and a storage provider that came up have to agree —
-        // so the answer is resolved server-side. Always sent as an object (the
-        // undefined-stripping below would otherwise hide it), but the client
-        // must still treat an absent block as "no persistence" to stay
-        // compatible with an older server.
-        //
-        // One field, because there is only one answer. `chats.enabled` was
-        // also sent and added nothing: `isChatHistoryConfigured` already
-        // returns false whenever the platform switch is off, so
-        // `enabled: true, persistence: false` is the *ordinary* state — the
-        // flag off, or storage down — and a client that reached for the
-        // obvious-looking name would enable the UI in exactly the cases where
-        // nothing gets stored. Nothing read it.
-        chats: {
-          persistence: isChatHistoryConfigured(configCache.getFeatures(), platform),
-          // How long a temporary chat outlives its last activity, for the
-          // composer's "deleted after …" note.
-          temporaryRetentionHours: chatRetentionSettings(platform).temporaryRetentionHours,
-          // Sharing rides on persistence: whether links can be made at all,
-          // which audiences an owner may pick and the caps the form has to
-          // respect. The server enforces the same caps on create.
-          sharing: chatSharingClientConfig(configCache.getFeatures(), platform)
-        },
-        // Scheduled tasks: on only when the flag, durable chats and the
-        // platform switch agree. Whether this user may create tasks is their
-        // `permissions.scheduledTasks` on /api/auth/status.
-        scheduledTasks: scheduledTasksClientConfig(configCache.getFeatures(), platform),
-        // User prompts in the prompt library: whether users may keep their
-        // own (which needs the storage provider as well as the switches) and
-        // the audiences they may share with. The server enforces the same.
-        userPrompts: userPromptsClientConfig(configCache.getFeatures(), platform, {
-          storageAvailable: getUserPromptRepository().isAvailable()
-        }),
-        // User skills: whether users may keep and share skills of their own
-        // (the `skills` feature, `platform.userSkills` and the storage
-        // provider) and the limits the editor shows. The server enforces them.
-        // `marketplace` says whether the library offers skills from the
-        // marketplace: switched on, and an enabled registry has a catalog.
-        userSkills: userSkillsClientConfig(configCache.getFeatures(), platform, {
-          storageAvailable: getUserSkillRepository().isAvailable(),
-          marketplaceReady: hasSyncedRegistry(configCache.getRegistries().data)
-        }),
-        // Projects (#1036): whether admin projects and user projects are on
-        // (flags plus the storage provider) and the limits the dialogs show.
-        // Whether this user may create or share one is on /api/projects/_config.
-        projects: projectsClientConfig(configCache.getFeatures(), platform, {
-          storageAvailable: getProjectRepository().isAvailable()
-        }),
-        uploads: uploadsClientConfig(platform, {
-          storageAvailable: getChatFileRepository().isAvailable()
-        }),
-        rateLimit: platform.rateLimit,
-        swagger: platform.swagger
-          ? {
-              enabled: platform.swagger.enabled,
-              requireAuth: platform.swagger.requireAuth
-            }
-          : undefined,
-        ssl: platform.ssl
-          ? {
-              ignoreInvalidCertificates: platform.ssl.ignoreInvalidCertificates
-            }
-          : undefined,
-        cors: platform.cors
-          ? {
-              methods: platform.cors.methods,
-              credentials: platform.cors.credentials
-              // Note: origin is intentionally excluded as it may contain internal URLs
-            }
-          : undefined,
-        // Speech-to-text: expose only non-secret fields the client needs.
-        // Transcription endpoints stay on their models, server-side (the
-        // browser connects to iHub, never to them). dictation.available says
-        // whether the default dictation model is an enabled transcription
-        // model, so apps that follow the default fall back to the browser
-        // instead of failing on a disabled one. Azure host is
-        // not a secret and lets the client fall back to a platform default.
-        // keyConfigured tells the client whether to fetch a token at all: without
-        // a key (on-prem container, air-gapped) it connects to the host directly.
-        // defaultService is the platform-wide dictation default apps fall back
-        // to when they pick none of their own.
-        // tts says whether read aloud is on and with which model; whether this
-        // user may use that model is the client's /api/models?type=tts list.
-        // voiceMode is the platform side of the spoken conversation with an app
-        // (shared/voiceMode.js resolves it against the app's own settings).
-        speech: platform.speech
-          ? {
-              defaultService: platform.speech.defaultService,
-              tts: platform.speech.tts
-                ? {
-                    enabled: platform.speech.tts.enabled === true,
-                    defaultModelId: platform.speech.tts.defaultModelId || ''
-                  }
-                : undefined,
-              voiceMode: platform.speech.voiceMode
-                ? voiceModeClientConfig(platform.speech.voiceMode)
-                : undefined,
-              dictation: dictationClientConfig(platform.speech.dictation),
-              azure: platform.speech.azure
-                ? {
-                    enabled: platform.speech.azure.enabled,
-                    host: platform.speech.azure.host,
-                    region: platform.speech.azure.region,
-                    keyConfigured: !!platform.speech.azure.subscriptionKey
-                  }
-                : undefined
-            }
-          : undefined
-      };
-
-      // Remove undefined fields for cleaner response
-      const cleanedConfig = Object.fromEntries(
-        Object.entries(sanitizedConfig).filter(([, value]) => value !== undefined)
-      );
-
-      res.json(cleanedConfig);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch platform configuration');
+    if (!platform) {
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to load platform configuration');
     }
+
+    // Sanitize platform config - remove all sensitive fields and auth-related data
+    // Note: Auth configuration is available via /api/auth/status endpoint
+    const sanitizedConfig = {
+      defaultLanguage: platform.defaultLanguage,
+      features: resolveFeatures(configCache.getFeatures()),
+      requestBodyLimitMB: platform.requestBodyLimitMB,
+      requestConcurrency: platform.requestConcurrency,
+      pdfExport: platform.pdfExport,
+      globalPromptVariables: platform.globalPromptVariables,
+      telemetry: platform.telemetry
+        ? {
+            enabled: platform.telemetry.enabled,
+            metrics: platform.telemetry.metrics,
+            traces: platform.telemetry.traces,
+            logs: platform.telemetry.logs
+          }
+        : undefined,
+      // Chat history. Every chat is stored; `persistence` says whether
+      // chats are also *kept* — listed, reopened, shared — or every one is
+      // temporary. The feature flag alone does not tell the client — the
+      // platform switch and a storage provider that came up have to agree —
+      // so the answer is resolved server-side. Always sent as an object (the
+      // undefined-stripping below would otherwise hide it), but the client
+      // must still treat an absent block as "no persistence" to stay
+      // compatible with an older server.
+      //
+      // One field, because there is only one answer. `chats.enabled` was
+      // also sent and added nothing: `isChatHistoryConfigured` already
+      // returns false whenever the platform switch is off, so
+      // `enabled: true, persistence: false` is the *ordinary* state — the
+      // flag off, or storage down — and a client that reached for the
+      // obvious-looking name would enable the UI in exactly the cases where
+      // nothing gets stored. Nothing read it.
+      chats: {
+        persistence: isChatHistoryConfigured(configCache.getFeatures(), platform),
+        // How long a temporary chat outlives its last activity, for the
+        // composer's "deleted after …" note.
+        temporaryRetentionHours: chatRetentionSettings(platform).temporaryRetentionHours,
+        // Sharing rides on persistence: whether links can be made at all,
+        // which audiences an owner may pick and the caps the form has to
+        // respect. The server enforces the same caps on create.
+        sharing: chatSharingClientConfig(configCache.getFeatures(), platform)
+      },
+      // Scheduled tasks: on only when the flag, durable chats and the
+      // platform switch agree. Whether this user may create tasks is their
+      // `permissions.scheduledTasks` on /api/auth/status.
+      scheduledTasks: scheduledTasksClientConfig(configCache.getFeatures(), platform),
+      // User prompts in the prompt library: whether users may keep their
+      // own (which needs the storage provider as well as the switches) and
+      // the audiences they may share with. The server enforces the same.
+      userPrompts: userPromptsClientConfig(configCache.getFeatures(), platform, {
+        storageAvailable: getUserPromptRepository().isAvailable()
+      }),
+      // User skills: whether users may keep and share skills of their own
+      // (the `skills` feature, `platform.userSkills` and the storage
+      // provider) and the limits the editor shows. The server enforces them.
+      // `marketplace` says whether the library offers skills from the
+      // marketplace: switched on, and an enabled registry has a catalog.
+      userSkills: userSkillsClientConfig(configCache.getFeatures(), platform, {
+        storageAvailable: getUserSkillRepository().isAvailable(),
+        marketplaceReady: hasSyncedRegistry(configCache.getRegistries().data)
+      }),
+      // Projects (#1036): whether admin projects and user projects are on
+      // (flags plus the storage provider) and the limits the dialogs show.
+      // Whether this user may create or share one is on /api/projects/_config.
+      projects: projectsClientConfig(configCache.getFeatures(), platform, {
+        storageAvailable: getProjectRepository().isAvailable()
+      }),
+      uploads: uploadsClientConfig(platform, {
+        storageAvailable: getChatFileRepository().isAvailable()
+      }),
+      rateLimit: platform.rateLimit,
+      swagger: platform.swagger
+        ? {
+            enabled: platform.swagger.enabled,
+            requireAuth: platform.swagger.requireAuth
+          }
+        : undefined,
+      ssl: platform.ssl
+        ? {
+            ignoreInvalidCertificates: platform.ssl.ignoreInvalidCertificates
+          }
+        : undefined,
+      cors: platform.cors
+        ? {
+            methods: platform.cors.methods,
+            credentials: platform.cors.credentials
+            // Note: origin is intentionally excluded as it may contain internal URLs
+          }
+        : undefined,
+      // Speech-to-text: expose only non-secret fields the client needs.
+      // Transcription endpoints stay on their models, server-side (the
+      // browser connects to iHub, never to them). dictation.available says
+      // whether the default dictation model is an enabled transcription
+      // model, so apps that follow the default fall back to the browser
+      // instead of failing on a disabled one. Azure host is
+      // not a secret and lets the client fall back to a platform default.
+      // keyConfigured tells the client whether to fetch a token at all: without
+      // a key (on-prem container, air-gapped) it connects to the host directly.
+      // defaultService is the platform-wide dictation default apps fall back
+      // to when they pick none of their own.
+      // tts says whether read aloud is on and with which model; whether this
+      // user may use that model is the client's /api/models?type=tts list.
+      // voiceMode is the platform side of the spoken conversation with an app
+      // (shared/voiceMode.js resolves it against the app's own settings).
+      speech: platform.speech
+        ? {
+            defaultService: platform.speech.defaultService,
+            tts: platform.speech.tts
+              ? {
+                  enabled: platform.speech.tts.enabled === true,
+                  defaultModelId: platform.speech.tts.defaultModelId || ''
+                }
+              : undefined,
+            voiceMode: platform.speech.voiceMode
+              ? voiceModeClientConfig(platform.speech.voiceMode)
+              : undefined,
+            dictation: dictationClientConfig(platform.speech.dictation),
+            azure: platform.speech.azure
+              ? {
+                  enabled: platform.speech.azure.enabled,
+                  host: platform.speech.azure.host,
+                  region: platform.speech.azure.region,
+                  keyConfigured: !!platform.speech.azure.subscriptionKey
+                }
+              : undefined
+          }
+        : undefined
+    };
+
+    // Remove undefined fields for cleaner response
+    const cleanedConfig = Object.fromEntries(
+      Object.entries(sanitizedConfig).filter(([, value]) => value !== undefined)
+    );
+
+    res.json(cleanedConfig);
   });
 }

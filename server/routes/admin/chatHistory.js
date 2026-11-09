@@ -18,12 +18,7 @@
 import { z } from 'zod';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import {
-  sendBadRequest,
-  sendInternalError,
-  sendNotFound,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';
 import logger from '../../utils/logger.js';
@@ -239,24 +234,20 @@ export default function registerAdminChatHistoryRoutes(app) {
    * Settings, gate status and storage statistics in one read.
    */
   app.get(buildServerPath('/api/admin/chat-history'), adminAuth, async (_req, res) => {
-    try {
-      const platform = configCache.getPlatform?.() || {};
-      const features = configCache.getFeatures?.() || {};
-      const settings = resolveSettings(platform);
-      const [chats, ledger, shares] = await Promise.all([
-        collectChatStats({ repository: getChatRepository(), settings: settings.chats }),
-        getRunSummaryRepository().stats(),
-        getChatShareRepository().collectStats()
-      ]);
-      res.json({
-        settings,
-        status: resolveStatus(platform, features),
-        stats: { chats, ledger, shares },
-        generatedAt: new Date().toISOString()
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'read chat history overview');
-    }
+    const platform = configCache.getPlatform?.() || {};
+    const features = configCache.getFeatures?.() || {};
+    const settings = resolveSettings(platform);
+    const [chats, ledger, shares] = await Promise.all([
+      collectChatStats({ repository: getChatRepository(), settings: settings.chats }),
+      getRunSummaryRepository().stats(),
+      getChatShareRepository().collectStats()
+    ]);
+    res.json({
+      settings,
+      status: resolveStatus(platform, features),
+      stats: { chats, ledger, shares },
+      generatedAt: new Date().toISOString()
+    });
   });
 
   /**
@@ -267,108 +258,103 @@ export default function registerAdminChatHistoryRoutes(app) {
   app.put(buildServerPath('/api/admin/chat-history/settings'), adminAuth, async (req, res) => {
     const parsed = settingsBodySchema.safeParse(req.body || {});
     if (!parsed.success) {
-      return sendBadRequest(
-        res,
+      throw new ServiceError(
+        'BAD_REQUEST',
         `Invalid chat history settings: ${parsed.error.issues
           .map(issue => `${issue.path.join('.') || 'body'}: ${issue.message}`)
           .join('; ')}`
       );
     }
-    try {
-      const { chats, runLog: ledger, titles, sharing, uploads } = parsed.data;
-      const platformConfig = await configStore.readJson('config/platform.json');
-      if (!platformConfig) throw new Error('Unable to read config/platform.json');
+    const { chats, runLog: ledger, titles, sharing, uploads } = parsed.data;
+    const platformConfig = await configStore.readJson('config/platform.json');
+    if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
-      // Only values that differ from what is in force are written: the page
-      // sends its whole form, and an unchanged field should neither land in
-      // the audit entry nor ask for a restart.
-      const current = resolveSettings(platformConfig);
-      const changed = [];
-      for (const [block, patch] of [
-        ['chats', chats],
-        ['runLog', ledger]
-      ]) {
-        for (const [key, value] of Object.entries(patch || {})) {
-          if (current[block][key] === value) continue;
-          platformConfig[block] = { ...platformConfig[block], [key]: value };
-          changed.push(`${block}.${key}`);
-        }
+    // Only values that differ from what is in force are written: the page
+    // sends its whole form, and an unchanged field should neither land in
+    // the audit entry nor ask for a restart.
+    const current = resolveSettings(platformConfig);
+    const changed = [];
+    for (const [block, patch] of [
+      ['chats', chats],
+      ['runLog', ledger]
+    ]) {
+      for (const [key, value] of Object.entries(patch || {})) {
+        if (current[block][key] === value) continue;
+        platformConfig[block] = { ...platformConfig[block], [key]: value };
+        changed.push(`${block}.${key}`);
       }
-      // The titles form section is `platform.chats.titles` on disk.
-      for (const [key, value] of Object.entries(titles || {})) {
-        if (current.titles[key] === value) continue;
-        platformConfig.chats = {
-          ...platformConfig.chats,
-          titles: { ...platformConfig.chats?.titles, [key]: value }
-        };
-        changed.push(`chats.titles.${key}`);
-      }
-      // The sharing form section is `platform.chats.sharing` on disk.
-      const nextSharing = { ...current.sharing, ...sharing };
-      if (
-        nextSharing.defaultExpiryDays > 0 &&
-        nextSharing.maxExpiryDays > 0 &&
-        nextSharing.defaultExpiryDays > nextSharing.maxExpiryDays
-      ) {
-        return sendBadRequest(
-          res,
-          'Invalid chat history settings: sharing.defaultExpiryDays must not exceed sharing.maxExpiryDays'
-        );
-      }
-      for (const [key, rawValue] of Object.entries(sharing || {})) {
-        // Origins are stored as bare `http(s)` origins; anything else is dropped.
-        const value = key === 'embedAllowedOrigins' ? sanitizeOrigins(rawValue) : rawValue;
-        if (JSON.stringify(current.sharing[key]) === JSON.stringify(value)) continue;
-        platformConfig.chats = {
-          ...platformConfig.chats,
-          sharing: { ...platformConfig.chats?.sharing, [key]: value }
-        };
-        changed.push(`chats.sharing.${key}`);
-      }
-
-      // `platform.uploads`: top-level values and the `quotas` block, written
-      // one by one so only what changed shows up in the audit entry.
-      for (const [key, value] of Object.entries(uploads || {})) {
-        if (key === 'quotas') {
-          for (const [quota, limit] of Object.entries(value || {})) {
-            if (current.uploads.quotas[quota] === limit) continue;
-            platformConfig.uploads = {
-              ...platformConfig.uploads,
-              quotas: { ...platformConfig.uploads?.quotas, [quota]: limit }
-            };
-            changed.push(`uploads.quotas.${quota}`);
-          }
-        } else if (current.uploads[key] !== value) {
-          platformConfig.uploads = { ...platformConfig.uploads, [key]: value };
-          changed.push(`uploads.${key}`);
-        }
-      }
-
-      if (changed.length > 0) {
-        await configStore.writeJson('config/platform.json', platformConfig);
-        await configCache.refreshCacheEntry('config/platform.json');
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'platform',
-          resourceId: 'chat-history',
-          summary: `Updated ${changed.join(', ')}`
-        });
-        logger.info('Chat history settings updated', { component: COMPONENT, changed });
-      }
-
-      const platform = configCache.getPlatform?.() || platformConfig;
-      res.json({
-        ok: true,
-        changed,
-        settings: resolveSettings(platform),
-        status: resolveStatus(platform, configCache.getFeatures?.() || {}),
-        // The ledger reads its flush interval once, when it is constructed.
-        restartRequired: changed.includes('runLog.flushIntervalMs')
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update chat history settings');
     }
+    // The titles form section is `platform.chats.titles` on disk.
+    for (const [key, value] of Object.entries(titles || {})) {
+      if (current.titles[key] === value) continue;
+      platformConfig.chats = {
+        ...platformConfig.chats,
+        titles: { ...platformConfig.chats?.titles, [key]: value }
+      };
+      changed.push(`chats.titles.${key}`);
+    }
+    // The sharing form section is `platform.chats.sharing` on disk.
+    const nextSharing = { ...current.sharing, ...sharing };
+    if (
+      nextSharing.defaultExpiryDays > 0 &&
+      nextSharing.maxExpiryDays > 0 &&
+      nextSharing.defaultExpiryDays > nextSharing.maxExpiryDays
+    ) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Invalid chat history settings: sharing.defaultExpiryDays must not exceed sharing.maxExpiryDays'
+      );
+    }
+    for (const [key, rawValue] of Object.entries(sharing || {})) {
+      // Origins are stored as bare `http(s)` origins; anything else is dropped.
+      const value = key === 'embedAllowedOrigins' ? sanitizeOrigins(rawValue) : rawValue;
+      if (JSON.stringify(current.sharing[key]) === JSON.stringify(value)) continue;
+      platformConfig.chats = {
+        ...platformConfig.chats,
+        sharing: { ...platformConfig.chats?.sharing, [key]: value }
+      };
+      changed.push(`chats.sharing.${key}`);
+    }
+
+    // `platform.uploads`: top-level values and the `quotas` block, written
+    // one by one so only what changed shows up in the audit entry.
+    for (const [key, value] of Object.entries(uploads || {})) {
+      if (key === 'quotas') {
+        for (const [quota, limit] of Object.entries(value || {})) {
+          if (current.uploads.quotas[quota] === limit) continue;
+          platformConfig.uploads = {
+            ...platformConfig.uploads,
+            quotas: { ...platformConfig.uploads?.quotas, [quota]: limit }
+          };
+          changed.push(`uploads.quotas.${quota}`);
+        }
+      } else if (current.uploads[key] !== value) {
+        platformConfig.uploads = { ...platformConfig.uploads, [key]: value };
+        changed.push(`uploads.${key}`);
+      }
+    }
+
+    if (changed.length > 0) {
+      await configStore.writeJson('config/platform.json', platformConfig);
+      await configCache.refreshCacheEntry('config/platform.json');
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'chat-history',
+        summary: `Updated ${changed.join(', ')}`
+      });
+      logger.info('Chat history settings updated', { component: COMPONENT, changed });
+    }
+
+    const platform = configCache.getPlatform?.() || platformConfig;
+    res.json({
+      changed,
+      settings: resolveSettings(platform),
+      status: resolveStatus(platform, configCache.getFeatures?.() || {}),
+      // The ledger reads its flush interval once, when it is constructed.
+      restartRequired: changed.includes('runLog.flushIntervalMs')
+    });
   });
 
   /**
@@ -377,32 +363,28 @@ export default function registerAdminChatHistoryRoutes(app) {
    * support and compliance. Bounded; `truncated` says when the walk was cut.
    */
   app.get(buildServerPath('/api/admin/chat-history/shares'), adminAuth, async (_req, res) => {
-    try {
-      const now = Date.now();
-      const { shares, truncated } = await getChatShareRepository().scanShares();
-      const items = shares.slice(0, ADMIN_SHARES_LIMIT).map(share => ({
-        id: share.id,
-        chatId: share.chatId,
-        ownerId: share.ownerId,
-        ownerName: share.ownerName || null,
-        appId: share.appId || null,
-        title: share.title || '',
-        target: share.target || 'chat',
-        embeddable: share.embeddable === true,
-        mode: share.mode,
-        state: shareState(share, now),
-        recipientCount: Array.isArray(share.recipients) ? share.recipients.length : 0,
-        createdAt: share.createdAt,
-        expiresAt: share.expiresAt || null,
-        revokedAt: share.revokedAt || null,
-        maxViews: share.maxViews || null,
-        viewCount: share.viewCount || 0,
-        lastViewedAt: share.lastViewedAt || null
-      }));
-      res.json({ items, truncated: truncated || shares.length > ADMIN_SHARES_LIMIT });
-    } catch (error) {
-      return sendInternalError(res, error, 'list chat shares');
-    }
+    const now = Date.now();
+    const { shares, truncated } = await getChatShareRepository().scanShares();
+    const items = shares.slice(0, ADMIN_SHARES_LIMIT).map(share => ({
+      id: share.id,
+      chatId: share.chatId,
+      ownerId: share.ownerId,
+      ownerName: share.ownerName || null,
+      appId: share.appId || null,
+      title: share.title || '',
+      target: share.target || 'chat',
+      embeddable: share.embeddable === true,
+      mode: share.mode,
+      state: shareState(share, now),
+      recipientCount: Array.isArray(share.recipients) ? share.recipients.length : 0,
+      createdAt: share.createdAt,
+      expiresAt: share.expiresAt || null,
+      revokedAt: share.revokedAt || null,
+      maxViews: share.maxViews || null,
+      viewCount: share.viewCount || 0,
+      lastViewedAt: share.lastViewedAt || null
+    }));
+    res.json({ items, truncated: truncated || shares.length > ADMIN_SHARES_LIMIT });
   });
 
   /**
@@ -415,27 +397,23 @@ export default function registerAdminChatHistoryRoutes(app) {
     buildServerPath('/api/admin/chat-history/shares/:shareId'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { shareId } = req.params;
-        if (!isShareId(shareId)) return sendNotFound(res, 'Share');
-        const revoked = await getChatShareRepository().revokeShare(shareId);
-        if (!revoked) return sendNotFound(res, 'Share');
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'chatShare',
-          resourceId: shareId,
-          summary: `Admin revoked share of chat ${revoked.chatId} (${revoked.mode})`
-        });
-        res.json({ ok: true, share: { ...revoked, views: undefined, state: 'revoked' } });
-      } catch (error) {
-        return sendInternalError(res, error, 'revoke chat share');
-      }
+      const { shareId } = req.params;
+      if (!isShareId(shareId)) throw new ServiceError('NOT_FOUND', 'Share not found');
+      const revoked = await getChatShareRepository().revokeShare(shareId);
+      if (!revoked) throw new ServiceError('NOT_FOUND', 'Share not found');
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'chatShare',
+        resourceId: shareId,
+        summary: `Admin revoked share of chat ${revoked.chatId} (${revoked.mode})`
+      });
+      res.json({ ...revoked, views: undefined, state: 'revoked' });
     }
   );
 
   /**
-   * POST /api/admin/chat-history/retention/run
+   * POST /api/admin/chat-history/retention/_run
    * Apply the retention rules now instead of waiting for the daily sweep.
    * Body: `{ target: 'chats' | 'ledger' | 'all' }` (default `all`).
    *
@@ -445,15 +423,18 @@ export default function registerAdminChatHistoryRoutes(app) {
    * is enabled.
    */
   app.post(
-    buildServerPath('/api/admin/chat-history/retention/run'),
+    buildServerPath('/api/admin/chat-history/retention/_run'),
     adminAuth,
     async (req, res) => {
       const parsed = retentionRunSchema.safeParse(req.body || {});
       if (!parsed.success) {
-        return sendBadRequest(res, "Invalid target; expected 'chats', 'ledger' or 'all'");
+        throw new ServiceError(
+          'BAD_REQUEST',
+          "Invalid target; expected 'chats', 'ledger' or 'all'"
+        );
       }
       if (retentionRunning) {
-        return sendErrorResponse(res, 409, 'A retention run is already in progress');
+        throw new ServiceError('CONFLICT', 'A retention run is already in progress');
       }
       retentionRunning = true;
       try {
@@ -496,9 +477,7 @@ export default function registerAdminChatHistoryRoutes(app) {
           resourceId: 'chat-history-retention',
           summary: `Retention run (${target}): chats removed ${result.chats?.removed ?? 0}, runs removed ${result.ledger?.removed ?? 0}`
         });
-        res.json({ ok: true, target, ...result });
-      } catch (error) {
-        return sendInternalError(res, error, 'run chat history retention');
+        res.json({ target, ...result });
       } finally {
         retentionRunning = false;
       }

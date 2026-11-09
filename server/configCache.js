@@ -13,6 +13,7 @@ import { announceConfigChange, announceFullConfigReload, setConfigReloader } fro
 import { getStorage } from './storage/bootstrap.js';
 import { getRawNamespace } from './storage/namespaces.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
+import { applySkillOverrides, readSkillOverrides } from './services/skills/skillOverrides.js';
 import { createHash } from 'node:crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import logger from './utils/logger.js';
@@ -1185,14 +1186,18 @@ class ConfigCache {
 
   /**
    * Load skills from the filesystem using platform config settings.
-   * Skills are determined purely by directory presence — no external registry.
+   * Skills are found by directory; `config/skills.json` switches one off or
+   * changes the description shown for it (see skills/skillOverrides.js).
    * @param {object} [platformConfig] - Platform config (reads skills.skillsDirectory)
    */
   async _loadSkillsFromFilesystem(platformConfig) {
     try {
       const customDir = platformConfig?.skills?.skillsDirectory || undefined;
       const discoveredSkills = await loadSkillsMetadata(customDir);
-      const skills = [...discoveredSkills.values()];
+      const skills = applySkillOverrides(
+        [...discoveredSkills.values()],
+        await readSkillOverrides()
+      );
 
       // Only update cache and log if content has changed (same pattern as other caches)
       const newEtag = this.generateETag(skills);
@@ -1363,7 +1368,9 @@ class ConfigCache {
 
   /**
    * Get all discovered skills from the filesystem.
-   * Skills are determined purely by directory presence — no external enable/disable registry.
+   * Skills are found by directory; `enabled` and `configOverrides` come from
+   * `config/skills.json`. Disabled skills are included here (the admin lists
+   * them); {@link ConfigCache#getSkillsForUser} leaves them out.
    * @returns {{ data: Array, etag: string }}
    */
   getSkills() {
@@ -1380,9 +1387,11 @@ class ConfigCache {
    * @returns {{ data: Array, etag: string }}
    */
   async getSkillsForUser(user) {
-    const { data: skills, etag: skillsEtag } = this.getSkills();
+    const { data: allSkills, etag: skillsEtag } = this.getSkills();
+    // A skill an administrator switched off is offered to no one.
+    const skills = (allSkills || []).filter(skill => skill.enabled !== false);
 
-    if (!skills || skills.length === 0) {
+    if (skills.length === 0) {
       return { data: [], etag: null };
     }
 

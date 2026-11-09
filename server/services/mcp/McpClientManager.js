@@ -713,7 +713,7 @@ class McpClientManager {
 
   /**
    * The route that starts a user's sign-in to a server (the one connect flow,
-   * `POST /api/integrations/:id/connect`).
+   * `POST /api/integrations/:id/_connect`).
    * @param {string} serverId
    * @returns {string}
    */

@@ -51,7 +51,12 @@ function call(handler, params) {
         return this;
       }
     };
-    handler({ params, user: { id: 'u', groups: ['admins'] }, query: {} }, res);
+    // A handler answers errors by throwing; the error middleware would turn that into the status.
+    Promise.resolve(
+      handler({ params, user: { id: 'u', groups: ['admins'] }, query: {} }, res)
+    ).catch(error =>
+      resolve({ status: error.status, body: { code: error.code, detail: error.message } })
+    );
   });
 }
 

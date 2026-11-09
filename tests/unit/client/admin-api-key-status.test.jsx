@@ -98,7 +98,7 @@ describe('useApiKeyStatus', () => {
 
   it('reads the status of the models', async () => {
     mockMakeAdminApiCall.mockResolvedValue({
-      data: { statuses: { gpt: { state: 'ok', source: 'model', envVar: null } } }
+      data: { items: [{ id: 'gpt', state: 'ok', source: 'model', envVar: null }] }
     });
     render(<Probe kind="models" />);
     await waitFor(() =>
@@ -109,7 +109,7 @@ describe('useApiKeyStatus', () => {
   });
 
   it('reads the status of the providers', async () => {
-    mockMakeAdminApiCall.mockResolvedValue({ data: { statuses: {} } });
+    mockMakeAdminApiCall.mockResolvedValue({ data: { items: [] } });
     render(<Probe kind="providers" />);
     await waitFor(() =>
       expect(mockMakeAdminApiCall).toHaveBeenCalledWith('/admin/providers/_key-status')

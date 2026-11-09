@@ -57,12 +57,23 @@ check('legacy callback route is removed', !getRoutes.includes('/callback'));
 
 // Drive the handlers directly. Each call gets a fresh request with no session,
 // like a callback landing on a different cluster worker than the connect
-// request (`POST /api/integrations/:id/connect`) did.
+// request (`POST /api/integrations/:id/_connect`) did.
 function handlerFor(path) {
   const route = office365Router.stack.find(layer => layer.route?.path === path).route;
   return route.stack[route.stack.length - 1].handle;
 }
 const callbackHandler = handlerFor('/:providerId/callback');
+
+// A handler answers errors by throwing a ServiceError (the error middleware would turn that into
+// the response); this reports the status and body that response would carry.
+async function answerOf(handler, req, res) {
+  try {
+    await handler(req, res);
+    return null;
+  } catch (error) {
+    return { status: error.status, body: { code: error.code, details: error.details } };
+  }
+}
 
 // The `office365` installation, its secret and a local token endpoint.
 const installed = values => ({
@@ -250,8 +261,12 @@ async function itemsStatus(driveId) {
     status: code => ((status = code), res),
     json: () => res
   };
-  await itemsHandler({ query: { driveId, providerId: 'office365' }, user: { id: 'u1' } }, res);
-  return status;
+  const thrown = await answerOf(
+    itemsHandler,
+    { query: { driveId, providerId: 'office365' }, user: { id: 'u1' } },
+    res
+  );
+  return thrown ? thrown.status : status;
 }
 const businessDriveId = 'b!Xk3pQ-7zLmN0aBcD_eF9gH1iJ2kL3mN4oP5qR6sT7uV8wX9yZ0';
 check('drive ID with ! is accepted', (await itemsStatus(businessDriveId)) === 200);
@@ -276,14 +291,19 @@ Office365Service.listItems = async () => {
     status: code => ((status = code), res),
     json: payload => ((body = payload), res)
   };
-  await itemsHandler({ query: { providerId: 'office365' }, user: { id: 'u1' } }, res);
+  const thrown = await answerOf(
+    itemsHandler,
+    { query: { providerId: 'office365' }, user: { id: 'u1' } },
+    res
+  );
+  if (thrown) ({ status, body } = thrown);
   check(
     'a missing connection answers 409 INTEGRATION_AUTH_REQUIRED with reason and connect route',
     status === 409 &&
       body?.code === 'INTEGRATION_AUTH_REQUIRED' &&
       body.details?.integration === 'office365' &&
       body.details.reason === 'expired' &&
-      body.details.connectUrl === '/api/integrations/office365/connect'
+      body.details.connectUrl === '/api/integrations/office365/_connect'
   );
 }
 
@@ -315,13 +335,18 @@ async function callJson(handler, req) {
     status: code => ((out.status = code), res),
     json: body => ((out.body = body), res)
   };
-  await handler({ user: { id: 'u1' }, query: { providerId: 'office365' }, ...req }, res);
+  const thrown = await answerOf(
+    handler,
+    { user: { id: 'u1' }, query: { providerId: 'office365' }, ...req },
+    res
+  );
+  if (thrown) Object.assign(out, thrown);
   return out;
 }
 const sourcesRes = await callJson(handlerFor('/sources'), {});
 check(
   'only enabled sources are listed',
-  JSON.stringify(sourcesRes.body.sources.map(source => source.id)) === '["personal"]'
+  JSON.stringify(sourcesRes.body.items.map(source => source.id)) === '["personal"]'
 );
 const teamsRes = await callJson(handlerFor('/drives/:source'), { params: { source: 'teams' } });
 check('drives of a disabled source are refused', teamsRes.status === 403);
@@ -337,8 +362,8 @@ const personalRes = await callJson(handlerFor('/drives/:source'), {
 });
 check(
   'OneDrive returns only the default drive',
-  personalRes.body.drives.length === 1 &&
-    personalRes.body.drives[0].id === 'b!default' &&
+  personalRes.body.items.length === 1 &&
+    personalRes.body.items[0].id === 'b!default' &&
     requested.join() === '/me/drive'
 );
 

@@ -4,7 +4,7 @@
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 
 export default function registerAdminSearchRoutes(app) {
   /**
@@ -13,147 +13,138 @@ export default function registerAdminSearchRoutes(app) {
    * Returns max 5 results per category.
    */
   app.get(buildServerPath('/api/admin/search'), adminAuth, async (req, res) => {
-    try {
-      const query = (req.query.q || '').trim().toLowerCase();
-      if (query.length < 2) {
-        return sendBadRequest(res, 'Query must be at least 2 characters');
-      }
-
-      const MAX_PER_CATEGORY = 5;
-      const results = {
-        apps: [],
-        prompts: [],
-        models: [],
-        groups: [],
-        users: [],
-        projects: [],
-        providers: []
-      };
-
-      // Search apps
-      try {
-        const { data: apps } = configCache.getApps(true);
-        results.apps = apps
-          .filter(a => {
-            const name =
-              typeof a.name === 'object' ? Object.values(a.name).join(' ') : a.name || '';
-            return a.id?.toLowerCase().includes(query) || name.toLowerCase().includes(query);
-          })
-          .slice(0, MAX_PER_CATEGORY)
-          .map(a => ({ id: a.id, name: a.name, enabled: a.enabled }));
-      } catch {
-        // skip
-      }
-
-      // Search prompts
-      try {
-        const { data: prompts } = configCache.getPrompts(true);
-        results.prompts = prompts
-          .filter(p => {
-            const name =
-              typeof p.name === 'object' ? Object.values(p.name).join(' ') : p.name || '';
-            const title =
-              typeof p.title === 'object' ? Object.values(p.title).join(' ') : p.title || '';
-            return (
-              p.id?.toLowerCase().includes(query) ||
-              name.toLowerCase().includes(query) ||
-              title.toLowerCase().includes(query)
-            );
-          })
-          .slice(0, MAX_PER_CATEGORY)
-          .map(p => ({ id: p.id, name: p.name || p.title }));
-      } catch {
-        // skip
-      }
-
-      // Search models
-      try {
-        const { data: models } = configCache.getModels(true);
-        results.models = models
-          .filter(m => {
-            const name =
-              typeof m.name === 'object' ? Object.values(m.name).join(' ') : m.name || '';
-            return m.id?.toLowerCase().includes(query) || name.toLowerCase().includes(query);
-          })
-          .slice(0, MAX_PER_CATEGORY)
-          .map(m => ({ id: m.id, name: m.name }));
-      } catch {
-        // skip
-      }
-
-      // Search groups
-      try {
-        const { data: groupsData } = configCache.getGroups();
-        if (groupsData?.groups) {
-          const groupEntries = Object.values(groupsData.groups);
-          results.groups = groupEntries
-            .filter(g => {
-              return g.id?.toLowerCase().includes(query) || g.name?.toLowerCase().includes(query);
-            })
-            .slice(0, MAX_PER_CATEGORY)
-            .map(g => ({ id: g.id, name: g.name }));
-        }
-      } catch {
-        // skip
-      }
-
-      // Search users
-      try {
-        const { data: usersData } = configCache.get('config/users.json');
-        if (usersData?.users) {
-          const userEntries = Object.values(usersData.users);
-          results.users = userEntries
-            .filter(u => {
-              return (
-                u.username?.toLowerCase().includes(query) ||
-                u.email?.toLowerCase().includes(query) ||
-                u.name?.toLowerCase().includes(query)
-              );
-            })
-            .slice(0, MAX_PER_CATEGORY)
-            .map(u => ({ id: u.id, username: u.username, email: u.email }));
-        }
-      } catch {
-        // skip
-      }
-
-      // Search projects
-      try {
-        const { data: projects } = configCache.getProjects(true);
-        results.projects = projects
-          .filter(s => {
-            const name =
-              typeof s.name === 'object' ? Object.values(s.name).join(' ') : s.name || '';
-            return (
-              s.id?.toLowerCase().includes(query) ||
-              name.toLowerCase().includes(query) ||
-              s.type?.toLowerCase().includes(query)
-            );
-          })
-          .slice(0, MAX_PER_CATEGORY)
-          .map(s => ({ id: s.id, name: s.name }));
-      } catch {
-        // skip
-      }
-
-      // Search providers
-      try {
-        const { data: providers } = configCache.getProviders(true);
-        results.providers = providers
-          .filter(p => {
-            const name =
-              typeof p.name === 'object' ? Object.values(p.name).join(' ') : p.name || '';
-            return p.id?.toLowerCase().includes(query) || name.toLowerCase().includes(query);
-          })
-          .slice(0, MAX_PER_CATEGORY)
-          .map(p => ({ id: p.id, name: p.name }));
-      } catch {
-        // skip
-      }
-
-      res.json(results);
-    } catch (error) {
-      return sendInternalError(res, error, 'admin search');
+    const query = (req.query.q || '').trim().toLowerCase();
+    if (query.length < 2) {
+      throw new ServiceError('BAD_REQUEST', 'Query must be at least 2 characters');
     }
+
+    const MAX_PER_CATEGORY = 5;
+    const results = {
+      apps: [],
+      prompts: [],
+      models: [],
+      groups: [],
+      users: [],
+      projects: [],
+      providers: []
+    };
+
+    // Search apps
+    try {
+      const { data: apps } = configCache.getApps(true);
+      results.apps = apps
+        .filter(a => {
+          const name = typeof a.name === 'object' ? Object.values(a.name).join(' ') : a.name || '';
+          return a.id?.toLowerCase().includes(query) || name.toLowerCase().includes(query);
+        })
+        .slice(0, MAX_PER_CATEGORY)
+        .map(a => ({ id: a.id, name: a.name, enabled: a.enabled }));
+    } catch {
+      // skip
+    }
+
+    // Search prompts
+    try {
+      const { data: prompts } = configCache.getPrompts(true);
+      results.prompts = prompts
+        .filter(p => {
+          const name = typeof p.name === 'object' ? Object.values(p.name).join(' ') : p.name || '';
+          const title =
+            typeof p.title === 'object' ? Object.values(p.title).join(' ') : p.title || '';
+          return (
+            p.id?.toLowerCase().includes(query) ||
+            name.toLowerCase().includes(query) ||
+            title.toLowerCase().includes(query)
+          );
+        })
+        .slice(0, MAX_PER_CATEGORY)
+        .map(p => ({ id: p.id, name: p.name || p.title }));
+    } catch {
+      // skip
+    }
+
+    // Search models
+    try {
+      const { data: models } = configCache.getModels(true);
+      results.models = models
+        .filter(m => {
+          const name = typeof m.name === 'object' ? Object.values(m.name).join(' ') : m.name || '';
+          return m.id?.toLowerCase().includes(query) || name.toLowerCase().includes(query);
+        })
+        .slice(0, MAX_PER_CATEGORY)
+        .map(m => ({ id: m.id, name: m.name }));
+    } catch {
+      // skip
+    }
+
+    // Search groups
+    try {
+      const { data: groupsData } = configCache.getGroups();
+      if (groupsData?.groups) {
+        const groupEntries = Object.values(groupsData.groups);
+        results.groups = groupEntries
+          .filter(g => {
+            return g.id?.toLowerCase().includes(query) || g.name?.toLowerCase().includes(query);
+          })
+          .slice(0, MAX_PER_CATEGORY)
+          .map(g => ({ id: g.id, name: g.name }));
+      }
+    } catch {
+      // skip
+    }
+
+    // Search users
+    try {
+      const { data: usersData } = configCache.get('config/users.json');
+      if (usersData?.users) {
+        const userEntries = Object.values(usersData.users);
+        results.users = userEntries
+          .filter(u => {
+            return (
+              u.username?.toLowerCase().includes(query) ||
+              u.email?.toLowerCase().includes(query) ||
+              u.name?.toLowerCase().includes(query)
+            );
+          })
+          .slice(0, MAX_PER_CATEGORY)
+          .map(u => ({ id: u.id, username: u.username, email: u.email }));
+      }
+    } catch {
+      // skip
+    }
+
+    // Search projects
+    try {
+      const { data: projects } = configCache.getProjects(true);
+      results.projects = projects
+        .filter(s => {
+          const name = typeof s.name === 'object' ? Object.values(s.name).join(' ') : s.name || '';
+          return (
+            s.id?.toLowerCase().includes(query) ||
+            name.toLowerCase().includes(query) ||
+            s.type?.toLowerCase().includes(query)
+          );
+        })
+        .slice(0, MAX_PER_CATEGORY)
+        .map(s => ({ id: s.id, name: s.name }));
+    } catch {
+      // skip
+    }
+
+    // Search providers
+    try {
+      const { data: providers } = configCache.getProviders(true);
+      results.providers = providers
+        .filter(p => {
+          const name = typeof p.name === 'object' ? Object.values(p.name).join(' ') : p.name || '';
+          return p.id?.toLowerCase().includes(query) || name.toLowerCase().includes(query);
+        })
+        .slice(0, MAX_PER_CATEGORY)
+        .map(p => ({ id: p.id, name: p.name }));
+    } catch {
+      // skip
+    }
+
+    res.json(results);
   });
 }

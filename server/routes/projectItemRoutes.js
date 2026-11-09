@@ -10,7 +10,7 @@
  * The upload goes to disk first (multer `diskStorage` into a private
  * directory per request under `contents/data/tmp/project-uploads/`), never
  * into memory; `fileFilter` runs the type and quota checks before the first
- * byte is accepted; the route answers `202 { item }` as soon as the file is
+ * byte is accepted; the route answers `202` with the item as soon as the file is
  * on disk and the item document written, and extraction continues on the
  * ingest queue.
  *
@@ -26,14 +26,8 @@ import { requireFeature } from '../featureRegistry.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { recordUpload } from '../telemetry/metrics.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
-import {
-  sendBadRequest,
-  sendErrorResponse,
-  sendFailedOperationError,
-  sendNotFound
-} from '../utils/responseHelpers.js';
-import { KnowledgeError } from '../services/knowledge/types.js';
+import { ServiceError } from '../utils/ServiceError.js';
+import { assertValidId } from '../utils/pathSecurity.js';
 import { getItemText } from '../services/knowledge/ItemTextService.js';
 import { ProjectError, getProjectService } from '../services/projects/ProjectService.js';
 import { PROJECTS_FEATURE, projectSettings } from '../services/projects/projectSettings.js';
@@ -52,43 +46,6 @@ export const UPLOAD_FIELD = 'file';
 
 function platformOf() {
   return configCache.getPlatform?.() || {};
-}
-
-/**
- * Map a project error (or a multer one) onto the response.
- *
- * @param {import('express').Response} res
- * @param {unknown} error
- * @param {string} operation
- */
-export function sendProjectError(res, error, operation) {
-  if (error instanceof ProjectError || error instanceof KnowledgeError) {
-    const status = error.status || statusOfKnowledge(error.code);
-    return sendErrorResponse(res, status, error.message, {
-      details: { code: error.code, ...(error.details || {}) }
-    });
-  }
-  return sendFailedOperationError(res, operation, error);
-}
-
-function statusOfKnowledge(code) {
-  switch (code) {
-    case 'ITEM_NOT_READY':
-      return 409;
-    case 'SOURCE_FORBIDDEN':
-    case 'KEY_ACCESS_DENIED':
-      return 403;
-    case 'SOURCE_GONE':
-    case 'ITEM_NOT_FOUND':
-    case 'PROJECT_NOT_FOUND':
-      return 404;
-    case 'STORAGE_UNAVAILABLE':
-      return 503;
-    case 'TEXT_UNAVAILABLE':
-      return 410;
-    default:
-      return 400;
-  }
 }
 
 /**
@@ -115,10 +72,8 @@ export function receiveUpload(req, res, next) {
   const service = getProjectService();
   const ingest = service.ingest;
   if (!ingest) {
-    return sendProjectError(
-      res,
-      new ProjectError('INGEST_UNAVAILABLE', 'Uploads are not available on this installation'),
-      'upload project item'
+    return next(
+      new ProjectError('INGEST_UNAVAILABLE', 'Uploads are not available on this installation')
     );
   }
   const { limits } = projectSettings(platformOf());
@@ -180,23 +135,24 @@ export function receiveUpload(req, res, next) {
   upload.single(UPLOAD_FIELD)(req, res, async error => {
     if (!error) return next();
     await removeUploadDir(req);
-    if (error instanceof ProjectError) return sendProjectError(res, error, 'upload project item');
+    // A callback of multer: the refusal goes to `next`, a throw here would not reach Express.
+    if (error instanceof ProjectError) return next(error);
     if (error?.code === 'LIMIT_FILE_SIZE') {
       recordUpload('project', 'rejected_size');
-      return sendProjectError(
-        res,
+      return next(
         new ProjectError(
           'QUOTA_FILE_BYTES',
           `A file may be at most ${Math.floor(limits.maxFileBytes / (1024 * 1024))} MB`,
           { limit: limits.maxFileBytes }
-        ),
-        'upload project item'
+        )
       );
     }
     if (error?.code === 'LIMIT_FILE_COUNT' || error?.code === 'LIMIT_UNEXPECTED_FILE') {
-      return sendBadRequest(res, `Send exactly one file in the "${UPLOAD_FIELD}" field`);
+      return next(
+        new ServiceError('BAD_REQUEST', `Send exactly one file in the "${UPLOAD_FIELD}" field`)
+      );
     }
-    return sendProjectError(res, error, 'upload project item');
+    return next(error);
   });
 }
 
@@ -232,7 +188,7 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
   const file = req.file;
   if (!file) {
     await removeUploadDir(req);
-    return sendBadRequest(res, `A multipart upload needs a "${UPLOAD_FIELD}" field`);
+    throw new ServiceError('BAD_REQUEST', `A multipart upload needs a "${UPLOAD_FIELD}" field`);
   }
   try {
     // `fileFilter` saw only the declared type; the bytes decide what the
@@ -240,15 +196,10 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
     // before the item exists, whatever the client declared.
     if (sniffBytes(await headOf(file.path)) === 'refused') {
       recordUpload('project', 'rejected_type', file.size);
-      await removeUploadDir(req);
-      return sendProjectError(
-        res,
-        new ProjectError(
-          'UNSUPPORTED_TYPE',
-          `${file.originalname || 'The file'} is an image, media, archive or binary file. Supported: ${ACCEPTED_TYPES.summary}.`,
-          { accepted: ACCEPTED_TYPES }
-        ),
-        'upload project item'
+      throw new ProjectError(
+        'UNSUPPORTED_TYPE',
+        `${file.originalname || 'The file'} is an image, media, archive or binary file. Supported: ${ACCEPTED_TYPES.summary}.`,
+        { accepted: ACCEPTED_TYPES }
       );
     }
     const service = getProjectService();
@@ -279,10 +230,11 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
       resourceId: project.id,
       summary: `Uploaded "${item.name}" (${file.size} bytes) to ${admin ? 'admin ' : ''}project "${projectName(project)}"`
     });
-    res.status(202).json({ item: serializeItem(item) });
+    res.status(202).json(serializeItem(item));
   } catch (error) {
+    // The upload directory goes whatever failed; the refusal is answered by the error middleware.
     await removeUploadDir(req);
-    sendProjectError(res, error, 'upload project item');
+    throw error;
   }
 }
 
@@ -295,26 +247,22 @@ export async function addUploadedItem(req, res, { project, authorize, admin = fa
  */
 export async function refreshItem(req, res, { project, authorize }) {
   const { itemId } = req.params;
-  if (!validateIdForPath(itemId, 'item', res)) return;
-  try {
-    const { item } = await getProjectService().refreshItem(project.id, itemId, {
-      user: req.user,
-      authorize,
-      wait: req.query?.wait === '1' || req.query?.wait === 'true'
-    });
-    logAudit({
-      req,
-      action: 'update',
-      resource: 'projectItem',
-      resourceId: project.id,
-      summary: `Refreshed ${item.kind} item "${item.name}" in project "${projectName(project)}"`
-    });
-    res.status(item.status === 'pending' || item.status === 'extracting' ? 202 : 200).json({
-      item: serializeItem(item)
-    });
-  } catch (error) {
-    sendProjectError(res, error, 'refresh project item');
-  }
+  assertValidId(itemId, 'item');
+  const { item } = await getProjectService().refreshItem(project.id, itemId, {
+    user: req.user,
+    authorize,
+    wait: req.query?.wait === '1' || req.query?.wait === 'true'
+  });
+  logAudit({
+    req,
+    action: 'update',
+    resource: 'projectItem',
+    resourceId: project.id,
+    summary: `Refreshed ${item.kind} item "${item.name}" in project "${projectName(project)}"`
+  });
+  res
+    .status(item.status === 'pending' || item.status === 'extracting' ? 202 : 200)
+    .json(serializeItem(item));
 }
 
 /**
@@ -328,29 +276,23 @@ export async function refreshItem(req, res, { project, authorize }) {
  */
 export async function replaceItemText(req, res, { project, authorize }) {
   const { itemId } = req.params;
-  if (!validateIdForPath(itemId, 'item', res)) return;
+  assertValidId(itemId, 'item');
   const parsed = itemTextUpdateSchema.safeParse(req.body || {});
   if (!parsed.success) {
-    return sendBadRequest(res, parsed.error.issues[0]?.message || 'Invalid text');
+    throw new ServiceError('BAD_REQUEST', parsed.error.issues[0]?.message || 'Invalid text');
   }
-  try {
-    const { item } = await getProjectService().replaceItemText(
-      project.id,
-      itemId,
-      parsed.data.text,
-      { user: req.user, authorize }
-    );
-    logAudit({
-      req,
-      action: 'update',
-      resource: 'projectItem',
-      resourceId: project.id,
-      summary: `Edited the text of ${item.kind} item "${item.name}" in project "${projectName(project)}"`
-    });
-    res.json({ item: serializeItem(item) });
-  } catch (error) {
-    sendProjectError(res, error, 'edit project item text');
-  }
+  const { item } = await getProjectService().replaceItemText(project.id, itemId, parsed.data.text, {
+    user: req.user,
+    authorize
+  });
+  logAudit({
+    req,
+    action: 'update',
+    resource: 'projectItem',
+    resourceId: project.id,
+    summary: `Edited the text of ${item.kind} item "${item.name}" in project "${projectName(project)}"`
+  });
+  res.json(serializeItem(item));
 }
 
 /**
@@ -363,42 +305,38 @@ export async function replaceItemText(req, res, { project, authorize }) {
  */
 export async function sendItemText(req, res, { project }) {
   const { itemId } = req.params;
-  if (!validateIdForPath(itemId, 'item', res)) return;
+  assertValidId(itemId, 'item');
   const item = (project.items || []).find(entry => entry.id === itemId);
-  if (!item) return sendNotFound(res, 'Item');
-  try {
-    const { text } = await getItemText(project, item, {
-      user: req.user,
-      chatId: `project-text-${project.id}-${item.id}`,
-      language: req.query?.lang || req.user?.language || 'en',
-      purpose: 'read'
+  if (!item) throw new ServiceError('NOT_FOUND', 'Item not found');
+  const { text } = await getItemText(project, item, {
+    user: req.user,
+    chatId: `project-text-${project.id}-${item.id}`,
+    language: req.query?.lang || req.user?.language || 'en',
+    purpose: 'read'
+  });
+  const maxChars = Math.max(0, parseInt(req.query?.maxChars, 10) || 0);
+  const body = maxChars > 0 && text.length > maxChars ? text.slice(0, maxChars) : text;
+  if (platformOf().audit?.logReads === true) {
+    logAudit({
+      req,
+      action: 'read',
+      resource: 'projectItem',
+      resourceId: project.id,
+      summary: `Read ${item.kind} item "${item.name}" (${item.text?.format || 'link'}) of project "${projectName(project)}"`
     });
-    const maxChars = Math.max(0, parseInt(req.query?.maxChars, 10) || 0);
-    const body = maxChars > 0 && text.length > maxChars ? text.slice(0, maxChars) : text;
-    if (platformOf().audit?.logReads === true) {
-      logAudit({
-        req,
-        action: 'read',
-        resource: 'projectItem',
-        resourceId: project.id,
-        summary: `Read ${item.kind} item "${item.name}" (${item.text?.format || 'link'}) of project "${projectName(project)}"`
-      });
-    }
-    const download = req.query?.download === '1' || req.query?.download === 'true';
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('X-Item-Chars', String(text.length));
-    if (maxChars > 0 && text.length > maxChars) res.setHeader('X-Item-Truncated', 'true');
-    if (download) {
-      const base = String(item.name || item.id)
-        .replace(/\.[A-Za-z0-9]{1,8}$/, '')
-        .replace(/[^\w.\- ]+/g, '_')
-        .slice(0, 120);
-      res.setHeader('Content-Disposition', `attachment; filename="${base || item.id}.txt"`);
-    }
-    res.send(body);
-  } catch (error) {
-    sendProjectError(res, error, 'read project item');
   }
+  const download = req.query?.download === '1' || req.query?.download === 'true';
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('X-Item-Chars', String(text.length));
+  if (maxChars > 0 && text.length > maxChars) res.setHeader('X-Item-Truncated', 'true');
+  if (download) {
+    const base = String(item.name || item.id)
+      .replace(/\.[A-Za-z0-9]{1,8}$/, '')
+      .replace(/[^\w.\- ]+/g, '_')
+      .slice(0, 120);
+    res.setHeader('Content-Disposition', `attachment; filename="${base || item.id}.txt"`);
+  }
+  res.send(body);
 }
 
 // --- pickers ----------------------------------------------------------------
@@ -437,7 +375,7 @@ export function registerProjectPickerRoutes(app) {
         title: config?.title || id,
         languages: Object.keys(config?.filePath || {})
       }));
-    res.json({ pages });
+    res.json({ items: pages });
   });
 
   // The search profiles the caller may search in, as the chat input offers
@@ -445,84 +383,72 @@ export function registerProjectPickerRoutes(app) {
   // to the admin's allow-list, or the configured default when iFinder cannot
   // say. No app is involved, so no app pins one.
   app.get(route('/ifinder/profiles'), ...gate, async (req, res) => {
-    if (!ifinderConfigured()) return sendNotFound(res, 'iFinder');
-    try {
-      const { default: iFinderScopes } =
-        await import('../services/integrations/scopes/iFinderScopes.js');
-      const listing = await iFinderScopes.listScopes({ user: req.user, app: null });
-      res.json({
-        profiles: listing.scopes,
-        defaultProfile: listing.defaultScope,
-        fixed: listing.fixed,
-        ...(listing.hint ? { hint: listing.hint } : {})
-      });
-    } catch (error) {
-      sendFailedOperationError(res, 'list iFinder search profiles', error);
-    }
+    if (!ifinderConfigured()) throw new ServiceError('NOT_FOUND', 'iFinder not found');
+    const { default: iFinderScopes } =
+      await import('../services/integrations/scopes/iFinderScopes.js');
+    const listing = await iFinderScopes.listScopes({ user: req.user, app: null });
+    res.json({
+      profiles: listing.scopes,
+      defaultProfile: listing.defaultScope,
+      fixed: listing.fixed,
+      ...(listing.hint ? { hint: listing.hint } : {})
+    });
   });
 
   app.get(route('/ifinder/search'), ...gate, async (req, res) => {
-    if (!ifinderConfigured()) return sendNotFound(res, 'iFinder');
+    if (!ifinderConfigured()) throw new ServiceError('NOT_FOUND', 'iFinder not found');
     const parsed = ifinderPickerSchema.safeParse(req.query || {});
-    if (!parsed.success) return sendBadRequest(res, 'A search query is required');
+    if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A search query is required');
     const { q, profile, limit } = parsed.data;
-    try {
-      // A profile picked here is checked like one picked in the chat input.
-      if (profile) {
-        const { default: iFinderScopes } =
-          await import('../services/integrations/scopes/iFinderScopes.js');
-        const check = await iFinderScopes.validateScope({
-          scopeId: profile,
-          user: req.user,
-          app: null
-        });
-        if (!check.ok) {
-          return sendErrorResponse(res, 403, check.message, {
-            details: { code: check.code }
-          });
-        }
-      }
-      const { default: IFinderHandler } = await import('../sources/IFinderHandler.js');
-      const handler = new IFinderHandler();
-      const results = await handler.searchDocuments({
-        query: q,
+    // A profile picked here is checked like one picked in the chat input.
+    if (profile) {
+      const { default: iFinderScopes } =
+        await import('../services/integrations/scopes/iFinderScopes.js');
+      const check = await iFinderScopes.validateScope({
+        scopeId: profile,
         user: req.user,
-        chatId: `project-picker-${req.user.id}`,
-        maxResults: limit,
-        ...(profile ? { searchProfile: profile } : {})
+        app: null
       });
-      res.json({ results });
-    } catch (error) {
-      sendFailedOperationError(res, 'search iFinder', error);
+      if (!check.ok) {
+        throw new ServiceError(check.code || 'FORBIDDEN', check.message, { status: 403 });
+      }
     }
+    const { default: IFinderHandler } = await import('../sources/IFinderHandler.js');
+    const handler = new IFinderHandler();
+    const results = await handler.searchDocuments({
+      query: q,
+      user: req.user,
+      chatId: `project-picker-${req.user.id}`,
+      maxResults: limit,
+      ...(profile ? { searchProfile: profile } : {})
+    });
+    res.json({ items: results });
   });
 
   app.get(route('/ifinder/metadata'), ...gate, async (req, res) => {
-    if (!ifinderConfigured()) return sendNotFound(res, 'iFinder');
+    if (!ifinderConfigured()) throw new ServiceError('NOT_FOUND', 'iFinder not found');
     const documentId = String(req.query?.documentId || '').trim();
-    if (!documentId) return sendBadRequest(res, 'documentId is required');
-    try {
-      const { default: iFinder } = await import('../services/integrations/iFinderService.js');
-      const metadata = await iFinder.getMetadata({
-        documentId,
-        chatId: `project-picker-${req.user.id}`,
-        user: req.user,
-        ...(req.query?.profile ? { searchProfile: String(req.query.profile) } : {})
-      });
-      res.json({ metadata });
-    } catch (error) {
-      sendFailedOperationError(res, 'read iFinder metadata', error);
-    }
+    if (!documentId) throw new ServiceError('BAD_REQUEST', 'documentId is required');
+    const { default: iFinder } = await import('../services/integrations/iFinderService.js');
+    const metadata = await iFinder.getMetadata({
+      documentId,
+      chatId: `project-picker-${req.user.id}`,
+      user: req.user,
+      ...(req.query?.profile ? { searchProfile: String(req.query.profile) } : {})
+    });
+    res.json(metadata);
   });
 
-  app.post(route('/url/check'), ...gate, async (req, res) => {
+  app.post(route('/url/_check'), ...gate, async (req, res) => {
     const parsed = urlCheckSchema.safeParse(req.body || {});
-    if (!parsed.success) return sendBadRequest(res, 'A http(s) URL is required');
+    if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A http(s) URL is required');
     try {
       const { createSourceManager } = await import('../sources/index.js');
       const result = await createSourceManager().testSource('url', { url: parsed.data.url });
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.json({ ok: true, ...result });
     } catch (error) {
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.status(200).json({
         ok: false,
         error: error.message,
@@ -535,14 +461,15 @@ export function registerProjectPickerRoutes(app) {
   // through the same handler a URL item is read with. Not through the
   // handler's own cache, which keeps every entry: the page reader's bounded
   // page cache below it still answers a repeated preview.
-  app.post(route('/url/preview'), ...gate, async (req, res) => {
+  app.post(route('/url/_preview'), ...gate, async (req, res) => {
     const parsed = urlPreviewSchema.safeParse(req.body || {});
-    if (!parsed.success) return sendBadRequest(res, 'A http(s) URL is required');
+    if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A http(s) URL is required');
     try {
       const { createSourceManager } = await import('../sources/index.js');
       const { content, metadata } = await createSourceManager()
         .getHandler('url')
         .loadContent({ url: parsed.data.url });
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.json({
         ok: true,
         title: metadata?.title || '',
@@ -552,6 +479,7 @@ export function registerProjectPickerRoutes(app) {
         truncated: metadata?.truncated === true
       });
     } catch (error) {
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.status(200).json({ ok: false, error: error.message });
     }
   });
@@ -559,11 +487,12 @@ export function registerProjectPickerRoutes(app) {
   // The pages of a site below a start URL, for picking several at once. One
   // crawl per user at a time (per server process), cancelled when the client
   // goes away.
-  app.post(route('/url/crawl'), ...gate, async (req, res) => {
+  app.post(route('/url/_crawl'), ...gate, async (req, res) => {
     const parsed = urlCrawlSchema.safeParse(req.body || {});
-    if (!parsed.success) return sendBadRequest(res, 'A http(s) URL is required');
+    if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A http(s) URL is required');
     const userId = req.user.id;
     if (crawlsRunning.has(userId)) {
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       return res.status(200).json({
         ok: false,
         code: 'CRAWL_RUNNING',
@@ -578,9 +507,11 @@ export function registerProjectPickerRoutes(app) {
     try {
       const { crawlSite } = await import('../services/projects/siteCrawler.js');
       const result = await crawlSite({ ...parsed.data, signal: controller.signal });
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       if (!controller.signal.aborted) res.json({ ok: true, ...result });
     } catch (error) {
       if (!controller.signal.aborted) {
+        // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
         res.status(200).json({
           ok: false,
           error: error.message,
@@ -603,7 +534,7 @@ export function registerProjectPickerRoutes(app) {
         type: provider.type,
         displayName: provider.displayName || provider.name || provider.id
       }));
-    res.json({ providers });
+    res.json({ items: providers });
   });
 }
 

@@ -8,7 +8,6 @@ import { startSessionSchema } from '../validators/index.js';
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../utils/responseHelpers.js';
 
 export default function registerAppSessionStartRoute(app) {
   app.post(
@@ -16,32 +15,25 @@ export default function registerAppSessionStartRoute(app) {
     authOptional,
     validate(startSessionSchema),
     async (req, res) => {
-      try {
-        const { sessionId, type, metadata } = req.body;
-        if (!sessionId) {
-          return sendBadRequest(res, 'Session ID is required');
-        }
-        const enrichedMetadata = {
-          ...metadata,
-          userAgent: req.headers['user-agent'] || metadata?.userAgent || 'unknown',
-          ipAddress: req.ip || req.connection.remoteAddress || 'unknown',
-          language:
-            req.headers['accept-language'] ||
-            metadata?.language ||
-            configCache.getPlatform()?.defaultLanguage ||
-            'en',
-          referrer: req.headers['referer'] || metadata?.referrer || 'direct'
-        };
-        logger.info('[APP LOADED] New session started', {
-          component: 'AppSessionRoutes',
-          sessionId,
-          ip: enrichedMetadata.ipAddress.split(':').pop()
-        });
-        await logNewSession(sessionId, type || 'app_loaded', enrichedMetadata);
-        res.status(200).json({ success: true });
-      } catch (error) {
-        return sendInternalError(res, error, 'log session start');
-      }
+      const { sessionId, type, metadata } = req.body;
+      const enrichedMetadata = {
+        ...metadata,
+        userAgent: req.headers['user-agent'] || metadata?.userAgent || 'unknown',
+        ipAddress: req.ip || req.connection.remoteAddress || 'unknown',
+        language:
+          req.headers['accept-language'] ||
+          metadata?.language ||
+          configCache.getPlatform()?.defaultLanguage ||
+          'en',
+        referrer: req.headers['referer'] || metadata?.referrer || 'direct'
+      };
+      logger.info('[APP LOADED] New session started', {
+        component: 'AppSessionRoutes',
+        sessionId,
+        ip: enrichedMetadata.ipAddress.split(':').pop()
+      });
+      await logNewSession(sessionId, type || 'app_loaded', enrichedMetadata);
+      res.status(204).end();
     }
   );
 }

@@ -1,22 +1,17 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { nextOffsetCursor, offsetFromCursor } from '../../utils/pagination.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import {
   queryAuditLog,
   cleanupAuditLog,
   getAuditLogRetentionDefault,
   logAudit
 } from '../../services/AuditLogService.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
-import {
-  BadFilterError,
-  MAX_PAGE_SIZE,
-  clampInt,
-  isFlagSet,
-  parseAuditLogQuery
-} from './auditLogQueryParams.js';
+import { MAX_PAGE_SIZE, clampInt, isFlagSet, parseAuditLogQuery } from './auditLogQueryParams.js';
 import { buildCsv } from '../../utils/csv.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
@@ -45,7 +40,8 @@ function getAuditSettings() {
 export default function registerAdminAuditLogRoutes(app) {
   /**
    * GET /api/admin/audit-log
-   * Query audit log entries with optional filters and pagination.
+   * Query audit log entries with optional filters and cursor pagination (`limit`, `cursor`).
+   * Answers `{ items, nextCursor, total, facets? }`.
    *
    * Each of actor/resource/action/result/source accepts an include parameter
    * and a `<field>Exclude` parameter subtracted from it, with `*` meaning
@@ -55,21 +51,23 @@ export default function registerAdminAuditLogRoutes(app) {
    * its checkbox lists from.
    */
   app.get(buildServerPath('/api/admin/audit-log'), adminAuth, async (req, res) => {
-    try {
-      const filters = parseAuditLogQuery(req.query);
+    const filters = parseAuditLogQuery(req.query);
 
-      const result = await queryAuditLog({
-        ...filters,
-        facets: isFlagSet(req.query.facets),
-        limit: clampInt(req.query.limit, 50, 1, MAX_PAGE_SIZE),
-        offset: clampInt(req.query.offset, 0, 0, Number.MAX_SAFE_INTEGER)
-      });
+    const limit = clampInt(req.query.limit, 50, 1, MAX_PAGE_SIZE);
+    const offset = offsetFromCursor(req.query.cursor);
+    const { entries, total, facets } = await queryAuditLog({
+      ...filters,
+      facets: isFlagSet(req.query.facets),
+      limit,
+      offset
+    });
 
-      res.json(result);
-    } catch (error) {
-      if (error instanceof BadFilterError) return sendBadRequest(res, error.message);
-      return sendInternalError(res, error, 'query audit log');
-    }
+    res.json({
+      items: entries,
+      nextCursor: nextOffsetCursor({ offset, limit, total }),
+      total,
+      ...(facets ? { facets } : {})
+    });
   });
 
   /**
@@ -77,56 +75,51 @@ export default function registerAdminAuditLogRoutes(app) {
    * Export audit log entries as CSV using the current filters.
    */
   app.get(buildServerPath('/api/admin/audit-log/export'), adminAuth, async (req, res) => {
-    try {
-      const filters = parseAuditLogQuery(req.query);
+    const filters = parseAuditLogQuery(req.query);
 
-      // Cap the export so a wide date range can't build an unbounded CSV string
-      // in memory. Admins can narrow the date range to export more granularly.
-      const { entries, total } = await queryAuditLog({
-        ...filters,
-        limit: MAX_EXPORT_ROWS,
-        offset: 0
-      });
-      if (total > MAX_EXPORT_ROWS) {
-        res.setHeader('X-Audit-Export-Truncated', `${total - MAX_EXPORT_ROWS}`);
-      }
-
-      const headers = [
-        'ts',
-        'actor',
-        'actorId',
-        'authenticated',
-        'action',
-        'resource',
-        'resourceId',
-        'result',
-        'source',
-        'ip',
-        'requestId',
-        'summary'
-      ];
-      const rows = entries.map(e => [
-        e.ts,
-        e.actor?.displayName ?? e.actor?.username ?? e.admin ?? '',
-        e.actor?.id ?? '',
-        e.actor?.authenticated ?? '',
-        e.action,
-        e.resource,
-        e.resourceId,
-        e.result ?? 'success',
-        e.source ?? '',
-        e.ip ?? '',
-        e.requestId ?? '',
-        e.summary ?? ''
-      ]);
-
-      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', 'attachment; filename="audit-log.csv"');
-      res.send(buildCsv(headers, rows));
-    } catch (error) {
-      if (error instanceof BadFilterError) return sendBadRequest(res, error.message);
-      return sendInternalError(res, error, 'export audit log');
+    // Cap the export so a wide date range can't build an unbounded CSV string
+    // in memory. Admins can narrow the date range to export more granularly.
+    const { entries, total } = await queryAuditLog({
+      ...filters,
+      limit: MAX_EXPORT_ROWS,
+      offset: 0
+    });
+    if (total > MAX_EXPORT_ROWS) {
+      res.setHeader('X-Audit-Export-Truncated', `${total - MAX_EXPORT_ROWS}`);
     }
+
+    const headers = [
+      'ts',
+      'actor',
+      'actorId',
+      'authenticated',
+      'action',
+      'resource',
+      'resourceId',
+      'result',
+      'source',
+      'ip',
+      'requestId',
+      'summary'
+    ];
+    const rows = entries.map(e => [
+      e.ts,
+      e.actor?.displayName ?? e.actor?.username ?? e.admin ?? '',
+      e.actor?.id ?? '',
+      e.actor?.authenticated ?? '',
+      e.action,
+      e.resource,
+      e.resourceId,
+      e.result ?? 'success',
+      e.source ?? '',
+      e.ip ?? '',
+      e.requestId ?? '',
+      e.summary ?? ''
+    ]);
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="audit-log.csv"');
+    res.send(buildCsv(headers, rows));
   });
 
   /**
@@ -135,25 +128,17 @@ export default function registerAdminAuditLogRoutes(app) {
    * with defaults filled in).
    */
   app.get(buildServerPath('/api/admin/audit-log/retention'), adminAuth, async (_req, res) => {
-    try {
-      res.json(getAuditSettings());
-    } catch (error) {
-      return sendInternalError(res, error, 'read audit log retention');
-    }
+    res.json(getAuditSettings());
   });
 
   /**
-   * POST /api/admin/audit-log/retention/run
+   * POST /api/admin/audit-log/retention/_run
    * Manually trigger an audit log cleanup pass using the current retention.
    */
-  app.post(buildServerPath('/api/admin/audit-log/retention/run'), adminAuth, async (_req, res) => {
-    try {
-      const { retentionDays } = getAuditSettings();
-      const result = await cleanupAuditLog(retentionDays);
-      res.json({ ok: true, ...result });
-    } catch (error) {
-      return sendInternalError(res, error, 'run audit log cleanup');
-    }
+  app.post(buildServerPath('/api/admin/audit-log/retention/_run'), adminAuth, async (_req, res) => {
+    const { retentionDays } = getAuditSettings();
+    const result = await cleanupAuditLog(retentionDays);
+    res.json({ ...result });
   });
 
   /**
@@ -162,11 +147,7 @@ export default function registerAdminAuditLogRoutes(app) {
    * a single read so the admin UI can prefill the form with one round-trip.
    */
   app.get(buildServerPath('/api/admin/audit-log/settings'), adminAuth, async (_req, res) => {
-    try {
-      res.json(getAuditSettings());
-    } catch (error) {
-      return sendInternalError(res, error, 'read audit log settings');
-    }
+    res.json(getAuditSettings());
   });
 
   /**
@@ -177,41 +158,37 @@ export default function registerAdminAuditLogRoutes(app) {
    * body are written — `undefined` keys leave the existing value alone.
    */
   app.put(buildServerPath('/api/admin/audit-log/settings'), adminAuth, async (req, res) => {
-    try {
-      const { anonymizeIp } = req.body || {};
-      if (anonymizeIp !== undefined && !VALID_ANONYMIZE_IP.has(anonymizeIp)) {
-        return sendBadRequest(
-          res,
-          "Invalid anonymizeIp value; expected one of 'off' | 'mask' | 'drop'"
-        );
-      }
-
-      const platformConfig = await configStore.readJson('config/platform.json');
-      if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
-      if (!platformConfig.audit) platformConfig.audit = {};
-      if (anonymizeIp !== undefined) {
-        platformConfig.audit.anonymizeIp = anonymizeIp;
-      }
-
-      await configStore.writeJson('config/platform.json', platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
-
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'platform',
-        resourceId: 'audit',
-        summary: `audit.anonymizeIp -> ${anonymizeIp}`
-      });
-      logger.info('Audit log settings updated', {
-        component: 'AdminAuditLog',
-        anonymizeIp
-      });
-
-      res.json({ ok: true, settings: getAuditSettings() });
-    } catch (error) {
-      return sendInternalError(res, error, 'update audit log settings');
+    const { anonymizeIp } = req.body || {};
+    if (anonymizeIp !== undefined && !VALID_ANONYMIZE_IP.has(anonymizeIp)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        "Invalid anonymizeIp value; expected one of 'off' | 'mask' | 'drop'"
+      );
     }
+
+    const platformConfig = await configStore.readJson('config/platform.json');
+    if (!platformConfig) throw new Error('Unable to read config/platform.json');
+
+    if (!platformConfig.audit) platformConfig.audit = {};
+    if (anonymizeIp !== undefined) {
+      platformConfig.audit.anonymizeIp = anonymizeIp;
+    }
+
+    await configStore.writeJson('config/platform.json', platformConfig);
+    await configCache.refreshCacheEntry('config/platform.json');
+
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'audit',
+      summary: `audit.anonymizeIp -> ${anonymizeIp}`
+    });
+    logger.info('Audit log settings updated', {
+      component: 'AdminAuditLog',
+      anonymizeIp
+    });
+
+    res.json(getAuditSettings());
   });
 }

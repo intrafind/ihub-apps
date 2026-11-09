@@ -170,7 +170,7 @@ describe('GET example apps', () => {
   it('lists the shipped example apps with a suggested id', async () => {
     state.apps = [{ id: 'portal-assistant' }];
     const res = await admin(request(app).get(`${URL('govdata')}?lang=de`)).expect(200);
-    expect(res.body).toMatchObject({ success: true, grantedToYou: true, enabled: true });
+    expect(res.body).toMatchObject({ grantedToYou: true, enabled: true });
     expect(res.body.templates).toEqual([
       expect.objectContaining({
         key: 'apps/portal-assistant.json',
@@ -204,7 +204,7 @@ describe('GET example apps', () => {
 describe('POST example apps', () => {
   it('creates the example app bound to the installation and audits it', async () => {
     const res = await admin(request(app).post(URL('govdata')).send({})).expect(201);
-    expect(res.body.app).toMatchObject({
+    expect(res.body).toMatchObject({
       id: 'portal-assistant',
       enabled: true,
       integrations: { govdata: { actions: ['search'] } },
@@ -226,7 +226,7 @@ describe('POST example apps', () => {
         .post(URL('govdata'))
         .send({ template: 'apps/portal-assistant.json', enabled: false })
     ).expect(201);
-    expect(res.body.app).toMatchObject({
+    expect(res.body).toMatchObject({
       id: 'portal-assistant-govdata',
       enabled: false,
       name: { en: 'Portal assistant (GovData)', de: 'Portal-Assistent (GovData)' }
@@ -240,14 +240,14 @@ describe('POST example apps', () => {
     const res = await admin(
       request(app).post(URL('govdata')).send({ appId: 'portal-test' })
     ).expect(201);
-    expect(res.body.app.id).toBe('portal-test');
+    expect(res.body.id).toBe('portal-test');
   });
 
   it('creates the generated app for a definition without example apps', async () => {
     const res = await admin(request(app).post(URL('plain')).send({ template: 'generated' })).expect(
       201
     );
-    expect(res.body.app).toMatchObject({
+    expect(res.body).toMatchObject({
       id: 'plain-assistant',
       integrations: { plain: {} },
       name: { en: 'Plain', de: 'Schlicht' }

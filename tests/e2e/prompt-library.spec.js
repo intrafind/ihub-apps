@@ -53,7 +53,7 @@ test.describe('Prompt library: create → share → use with variables', () => {
       }
     });
     expect(created.ok()).toBeTruthy();
-    const colleagueId = (await created.json()).user.id;
+    const colleagueId = (await created.json()).id;
     let promptId = null;
     let colleagueContext = null;
 
@@ -113,7 +113,7 @@ test.describe('Prompt library: create → share → use with variables', () => {
       });
       expect(revoke.ok()).toBeTruthy();
       const list = await page.request.get('/api/prompts?scope=shared');
-      const ids = (await list.json()).map(prompt => prompt.id);
+      const ids = (await list.json()).items.map(prompt => prompt.id);
       expect(ids).not.toContain(promptId);
     } finally {
       await colleagueContext?.close();

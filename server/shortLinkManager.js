@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { createSharedJsonFile } from './utils/sharedJsonFile.js';
 import { isAllowedShortLinkTarget } from './utils/shortLinkTarget.js';
 import { getContentsPath } from './utils/contentsPath.js';
+import { ServiceError } from './utils/ServiceError.js';
 
 const dataFile = getContentsPath('data', 'shortlinks.json');
 
@@ -62,11 +63,12 @@ function generateCode(length = 6) {
 }
 
 /** A link's target could not be accepted (see utils/shortLinkTarget.js). */
-export class ShortLinkTargetError extends Error {
-  constructor(message = 'Short link target is not allowed') {
-    super(message);
+export class ShortLinkTargetError extends ServiceError {
+  constructor(
+    message = 'The target must be a path on this server or a URL on an allowed host (shortLinks.allowedHosts)'
+  ) {
+    super('BAD_REQUEST', message);
     this.name = 'ShortLinkTargetError';
-    this.code = 'SHORT_LINK_TARGET_NOT_ALLOWED';
   }
 }
 
@@ -122,7 +124,7 @@ export async function createLink(
     let finalCode = code;
     if (finalCode) {
       if (data.links.some(l => l.code === finalCode)) {
-        throw new Error('Code already exists');
+        throw new ServiceError('CONFLICT', 'Code already exists');
       }
     } else {
       do {

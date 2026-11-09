@@ -128,7 +128,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
       try {
         const response = await makeAdminApiCall('/admin/providers');
         if (cancelled) return;
-        const list = Array.isArray(response.data) ? response.data : [];
+        const list = Array.isArray(response.data?.items) ? response.data.items : [];
         setProviders(list);
         setProvidersError(null);
         const initial = getImportableProviders(list).find(p => p.id === initialProviderId);

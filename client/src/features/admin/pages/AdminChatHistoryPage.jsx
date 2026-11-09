@@ -353,7 +353,7 @@ function AdminChatHistoryPage() {
     try {
       setRunning(true);
       setMessage(null);
-      const response = await makeAdminApiCall('/admin/chat-history/retention/run', {
+      const response = await makeAdminApiCall('/admin/chat-history/retention/_run', {
         method: 'POST',
         body: { target }
       });

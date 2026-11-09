@@ -306,7 +306,7 @@ export default function IntegrationsPage() {
 
   const handleRotateApiKey = async key => {
     const data = await callApiKeyEndpoint(
-      `/${encodeURIComponent(key.id)}/rotate`,
+      `/${encodeURIComponent(key.id)}/_rotate`,
       { method: 'POST', body: JSON.stringify({}) },
       'integrations.page.apiKeys.rotateFailed'
     );
@@ -325,7 +325,8 @@ export default function IntegrationsPage() {
       'integrations.page.apiKeys.revokeFailed'
     );
 
-    if (data?.success) {
+    // 204: nothing comes back, only a refused call is `null`
+    if (data) {
       setApiKeySecrets(null);
       setMessage({ type: 'success', text: t('integrations.page.apiKeys.revoked') });
     }

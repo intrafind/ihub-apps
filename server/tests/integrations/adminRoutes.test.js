@@ -198,12 +198,8 @@ describe('catalog', () => {
     const detail = await admin(
       request(app).get(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}`)
     ).expect(200);
-    expect(detail.body.definition.install.map(f => f.key)).toEqual([
-      'baseUrl',
-      'apiToken',
-      'maxRows'
-    ]);
-    expect(detail.body.definition.actions[0].name).toBe('search');
+    expect(detail.body.install.map(f => f.key)).toEqual(['baseUrl', 'apiToken', 'maxRows']);
+    expect(detail.body.actions[0].name).toBe('search');
     await admin(request(app).get('/api/admin/integrations/catalog/nope.missing')).expect(404);
     await admin(request(app).get('/api/admin/integrations/catalog/Bad%20Id')).expect(400);
   });
@@ -214,8 +210,8 @@ describe('catalog', () => {
         .post(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}/_test`)
         .send({ values: { baseUrl: 'https://portal.example' }, auth: { mode: 'none' } })
     ).expect(200);
-    expect(res.body.result.success).toBe(true);
-    expect(res.body.result.steps.map(s => s.status)).toEqual(['ok', 'ok', 'ok']);
+    expect(res.body.success).toBe(true);
+    expect(res.body.steps.map(s => s.status)).toEqual(['ok', 'ok', 'ok']);
     expect(runCalls[0].args.rows).toBe(0);
     expect(state.writes).toEqual([]);
     expect(audits[0]).toMatchObject({ action: 'execute', resource: 'integration' });
@@ -231,7 +227,7 @@ describe('catalog', () => {
           secrets: { apiToken: 'inline-token' }
         })
     ).expect(200);
-    expect(res.body.result.success).toBe(true);
+    expect(res.body.success).toBe(true);
     expect(runCalls[0].tool.openapi.headers.Authorization).toBe('inline-token');
     expect(state.writes).toEqual([]);
   });
@@ -250,7 +246,7 @@ describe('installed instances', () => {
     const created = await admin(
       request(app).post('/api/admin/integrations/installed').send(payload)
     ).expect(201);
-    expect(created.body.instance).toMatchObject({
+    expect(created.body).toMatchObject({
       id: 'ckan-demo',
       definitionVersion: '1.2.3',
       enabled: true,
@@ -288,17 +284,17 @@ describe('installed instances', () => {
         .send({ ...payload, values: { baseUrl: 'https://other.example' } })
     ).expect(200);
     expect(state.integrations.installed[0].values.baseUrl).toBe('https://other.example');
-    expect(state.integrations.installed[0].installedAt).toBe(created.body.instance.installedAt);
+    expect(state.integrations.installed[0].installedAt).toBe(created.body.installedAt);
 
     const disabled = await admin(
       request(app).post('/api/admin/integrations/installed/ckan-demo/_disable')
     ).expect(200);
-    expect(disabled.body.instance.enabled).toBe(false);
+    expect(disabled.body.enabled).toBe(false);
 
     const test = await admin(
       request(app).post('/api/admin/integrations/installed/ckan-demo/_test')
     ).expect(200);
-    expect(test.body.result.success).toBe(true);
+    expect(test.body.success).toBe(true);
 
     await admin(request(app).delete('/api/admin/integrations/installed/ckan-demo')).expect(204);
     expect(state.integrations.installed).toEqual([]);
@@ -431,7 +427,7 @@ describe('installed instances', () => {
           secrets: { apiToken: 's3cret' }
         })
     ).expect(201);
-    expect(res.body.instance.auth).toEqual({
+    expect(res.body.auth).toEqual({
       mode: 'service-account',
       credentialRef: 'integration-private-apiToken'
     });
@@ -468,8 +464,8 @@ describe('installed instances', () => {
     const res = await admin(
       request(app).post('/api/admin/integrations/installed/broken/_test')
     ).expect(200);
-    expect(res.body.result.success).toBe(false);
-    expect(res.body.result.steps.find(s => s.id === 'probe').status).toBe('fail');
+    expect(res.body.success).toBe(false);
+    expect(res.body.steps.find(s => s.id === 'probe').status).toBe('fail');
   });
   it('serves Markdown companion files of a definition by path, nothing outside the folder', async () => {
     await fs.writeFile(
@@ -520,7 +516,7 @@ describe('installed instances', () => {
     const detail = await admin(
       request(app).get(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}`)
     ).expect(200);
-    expect(detail.body.definition.releases).toEqual([]);
+    expect(detail.body.releases).toEqual([]);
     const list = await admin(request(app).get('/api/admin/integrations/installed')).expect(200);
     expect(list.body.items[0]).toMatchObject({
       id: 'ckan-demo',
@@ -531,7 +527,7 @@ describe('installed instances', () => {
     });
     expect(list.body.updatesAvailable).toBe(0);
     const updates = await admin(request(app).get('/api/admin/integrations/updates')).expect(200);
-    expect(updates.body).toEqual({ success: true, definitions: [], installations: [], count: 0 });
+    expect(updates.body).toEqual({ definitions: [], installations: [], count: 0 });
   });
 });
 
@@ -555,7 +551,7 @@ describe('action review (#2916)', () => {
       request(app).get(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}`)
     ).expect(200);
     // Both actions declare `read`: ask on writes.
-    expect(detail.body.definition.approvalPreset).toBe('writes');
+    expect(detail.body.approvalPreset).toBe('writes');
   });
 
   it('takes no baseline and writes nothing for an installation without approval', async () => {

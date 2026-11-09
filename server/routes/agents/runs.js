@@ -6,7 +6,7 @@
  *   POST /api/agents/profiles/:id/runs        — manual trigger
  *   GET  /api/agents/runs                     — list agent runs
  *   GET  /api/agents/runs/:runId              — single run state
- *   POST /api/agents/runs/:runId/cancel       — cancel a running run
+ *   POST /api/agents/runs/:runId/_cancel       — cancel a running run
  *
  * HITL: a paused run's checkpoint is an interaction — answer it through
  * `POST /api/runs/:runId/interactions/:id/answer`; the queue is
@@ -21,14 +21,9 @@ import {
   stampSeq
 } from '../../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
-import {
-  sendBadRequest,
-  sendNotFound,
-  sendFailedOperationError,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
 import { getWorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
 import { buildAgentPrincipal, isAdmin } from '../../utils/authorization.js';
@@ -120,45 +115,41 @@ async function countRunningProfileRuns(profileId) {
 }
 
 /**
- * Authorize the requesting user against a specific agent run. The run was
+ * Check that the requesting user may access a specific agent run. The run was
  * triggered by a specific human (recorded in
  * `state.data._agent.triggeredBy.userId`); only that user — or an
  * administrator — should be able to read its state, stream its events, or
  * download its artifacts. Anyone else gets 403 even though anonymous auth
  * may be globally enabled for chat.
  *
- * Returns true when access is allowed. When denied, the response has
- * already been sent (404 if the run doesn't exist, 403 otherwise) and the
- * caller must return immediately.
+ * @param {import('express').Request} req
+ * @param {string} runId
+ * @returns {Promise<void>}
+ * @throws {ServiceError} `NOT_FOUND` when the run does not exist, `FORBIDDEN` otherwise
  */
-async function authorizeRunAccess(req, res, runId) {
-  if (isAdmin(req.user)) return true;
+async function loadRunAccess(req, runId) {
+  if (isAdmin(req.user)) return;
+  let state;
   try {
-    const state = await getEngine().getState(runId);
-    if (!state) {
-      sendNotFound(res, `Run ${runId} not found`);
-      return false;
-    }
-    const triggeredByUserId = state.data?._agent?.triggeredBy?.userId;
-    const requestingUserId = req.user?.id;
-    if (
-      triggeredByUserId &&
-      requestingUserId &&
-      requestingUserId !== 'anonymous' &&
-      triggeredByUserId === requestingUserId
-    ) {
-      return true;
-    }
-    sendErrorResponse(res, 403, 'You are not allowed to access this run.');
-    return false;
+    state = await getEngine().getState(runId);
   } catch (err) {
     logger.warn('Run authorization check failed', {
       component: 'AgentRuns',
       runId,
       error: err.message
     });
-    sendErrorResponse(res, 403, 'Authorization check failed.');
-    return false;
+    throw new ServiceError('FORBIDDEN', 'Authorization check failed.', { cause: err });
+  }
+  if (!state) throw new ServiceError('NOT_FOUND', `Run ${runId} not found`);
+  const triggeredByUserId = state.data?._agent?.triggeredBy?.userId;
+  const requestingUserId = req.user?.id;
+  const triggeredByCaller =
+    triggeredByUserId &&
+    requestingUserId &&
+    requestingUserId !== 'anonymous' &&
+    triggeredByUserId === requestingUserId;
+  if (!triggeredByCaller) {
+    throw new ServiceError('FORBIDDEN', 'You are not allowed to access this run.');
   }
 }
 
@@ -169,225 +160,214 @@ export default function registerAgentRunRoutes(app) {
     authRequired,
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const { profileId } = req.params;
-        if (!validateIdForPath(profileId, 'profile', res)) return;
+      const { profileId } = req.params;
+      assertValidId(profileId, 'profile');
 
-        const profile = lookupProfile(profileId);
-        if (!profile) return sendNotFound(res, `Profile ${profileId} not found`);
-        if (profile.enabled === false) {
-          return sendBadRequest(res, `Profile ${profileId} is disabled`);
-        }
+      const profile = lookupProfile(profileId);
+      if (!profile) throw new ServiceError('NOT_FOUND', `Profile ${profileId} not found`);
+      if (profile.enabled === false) {
+        throw new ServiceError('BAD_REQUEST', `Profile ${profileId} is disabled`);
+      }
 
-        // Concurrency guard
-        const maxConcurrent = profile.concurrency?.maxConcurrent ?? 1;
-        const running = await countRunningProfileRuns(profileId);
-        if (running >= maxConcurrent) {
-          return sendErrorResponse(
-            res,
-            409,
-            `Profile ${profileId} already has ${running} running run(s); limit is ${maxConcurrent}`,
-            { code: 'CONCURRENCY_LIMIT', details: { runningRuns: running } }
+      // Concurrency guard
+      const maxConcurrent = profile.concurrency?.maxConcurrent ?? 1;
+      const running = await countRunningProfileRuns(profileId);
+      if (running >= maxConcurrent) {
+        throw new ServiceError(
+          'CONCURRENCY_LIMIT',
+          `Profile ${profileId} already has ${running} running run(s); limit is ${maxConcurrent}`,
+          { details: { runningRuns: running } }
+        );
+      }
+
+      const { brief, variables } = req.body || {};
+      const serialized = serializeProfile(profile);
+
+      // Resolve workflow: either the profile's embedded definition or a
+      // reference to a hand-authored workflow in contents/workflows/.
+      // External refs let authors wire complex workflows (e.g.
+      // iterative-research-auto) to an agent profile without having to
+      // inline the whole definition into the profile file.
+      let workflow;
+      if (
+        serialized.workflow?.ref === 'external' &&
+        typeof serialized.workflow.workflowId === 'string'
+      ) {
+        const wf = configCache.getWorkflowById(serialized.workflow.workflowId);
+        if (!wf) {
+          throw new ServiceError(
+            'BAD_REQUEST',
+            `External workflow ${serialized.workflow.workflowId} not found`
           );
         }
+        workflow = JSON.parse(JSON.stringify(wf));
+      } else {
+        workflow = serialized.workflow.definition || {};
+      }
+      workflow.id = workflow.id || `agent:${profileId}`;
 
-        const { brief, variables } = req.body || {};
-        const serialized = serializeProfile(profile);
+      const principal = buildAgentPrincipal(profile, {
+        userId: req.user?.id || 'anonymous',
+        kind: 'manual'
+      });
 
-        // Resolve workflow: either the profile's embedded definition or a
-        // reference to a hand-authored workflow in contents/workflows/.
-        // External refs let authors wire complex workflows (e.g.
-        // iterative-research-auto) to an agent profile without having to
-        // inline the whole definition into the profile file.
-        let workflow;
-        if (
-          serialized.workflow?.ref === 'external' &&
-          typeof serialized.workflow.workflowId === 'string'
-        ) {
-          const wf = configCache.getWorkflowById(serialized.workflow.workflowId);
-          if (!wf) {
-            return sendBadRequest(
-              res,
-              `External workflow ${serialized.workflow.workflowId} not found`
-            );
-          }
-          workflow = JSON.parse(JSON.stringify(wf));
-        } else {
-          workflow = serialized.workflow.definition || {};
-        }
-        workflow.id = workflow.id || `agent:${profileId}`;
+      // Pre-populate the brief from (in priority order):
+      //   1. operator-supplied brief in the POST body
+      //   2. for inbox-bound profiles: empty — the runtime reads the inbox
+      //      item from disk and the agent / planner prompts reference
+      //      {{currentInboxItem}} directly. Forcing a brief here previously
+      //      defaulted to profile.system, which made the system prompt end
+      //      up as the user message and starved the agent of its actual
+      //      question.
+      //   3. for non-inbox profiles: a generic fallback so the planner /
+      //      simple-agent prompt isn't empty.
+      let resolvedBrief = brief && brief.trim().length > 0 ? brief : '';
+      if (!resolvedBrief && !profile.inboxId) {
+        resolvedBrief = `You are agent ${profileId}. Plan and execute the work this agent is configured for.`;
+      }
 
-        const principal = buildAgentPrincipal(profile, {
-          userId: req.user?.id || 'anonymous',
-          kind: 'manual'
+      const initialData = {
+        brief: resolvedBrief,
+        variables: variables || {},
+        _agent: {
+          profileId,
+          triggeredBy: { userId: req.user?.id || 'anonymous', kind: 'manual' },
+          artifacts: []
+        },
+        // DURABLE model config for the whole run. `applyNodeModels` and
+        // `workflow.config.defaultModelId` mutate the shared cached workflow
+        // object, which the config cache's TTL refresh later discards —
+        // dropping every node back to the global default (local-vllm). Stash
+        // the agent's configured model in run state (which survives the
+        // refresh) so resolvers always land on the configured model. Copied
+        // into child sub-workflows automatically (see PlannerNodeExecutor's
+        // childInitial copy), so planner sub-tasks inherit it too.
+        _agentModelConfig: {
+          defaultModelId: profile.preferredModel || null,
+          nodeModels: profile.nodeModels || {}
+        },
+        // DURABLE review config — stashed in run state so it survives workflow
+        // config-cache refreshes and is available to all verifier nodes throughout
+        // the run (including in child sub-workflows via PlannerNodeExecutor copy).
+        _agentReviewConfig: resolveReviewSettings(profile.review),
+        // Pre-initialize mutable state slots so they're shared by reference
+        // between any state-snapshot that an in-flight async caller (e.g.
+        // the fire-and-forget title generator) may have captured before
+        // an inner mutation. Without this, the first `create_task` /
+        // citation-capture / skill-activation on a brand-new run creates
+        // the slot on the OLD orphaned data object and the mutation
+        // never reaches the live activeStates entry.
+        _taskQueue: [],
+        _citations: [],
+        _activatedSkills: {},
+        _stepLogs: {},
+        _taskTimings: {}
+      };
+
+      // Calculate wall-time deadline via workflow config. Also publish the
+      // profile's preferred model as the run's workflow-level default so EVERY
+      // LLM node inherits it (the prompt/agent node via getModel step 3, and
+      // the verifier via the same defaultModelId) — without this, an EXTERNAL
+      // workflow's nodes fall back to the global default model and the
+      // operator has no single place to set the run's model. A node may still
+      // override per-node with its own `config.modelId`.
+      const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
+      workflow.config = {
+        ...workflow.config,
+        maxExecutionTime: maxWallTimeSec * 1000,
+        ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
+      };
+      // Per-step model overrides (profile.nodeModels) win over the run-wide
+      // default for the listed nodes.
+      applyNodeModels(workflow, profile.nodeModels);
+      // Inject resolved review knobs onto every verifier node so EXTERNAL
+      // workflows (which don't reference profile flags directly) pick up the
+      // operator's strictness / retry / acceptance configuration.
+      applyReviewSettings(workflow, initialData._agentReviewConfig);
+
+      // Persist a checkpoint after every node completes. Agent runs are
+      // long-lived (each task is a multi-minute LLM call) and otherwise
+      // exist only in-memory until the run reaches a terminal state.
+      // Without per-node checkpoints, a server restart mid-run loses the
+      // plan, task results, and progress — the UI then shows "no run
+      // found" even though the artifacts on disk indicate work happened.
+      // The state-file write is a deepMerge-after-update; cost is
+      // dominated by the LLM call time, so the I/O is negligible.
+      const state = await getEngine().start(workflow, initialData, {
+        user: principal,
+        checkpointOnNode: true,
+        timeout: AGENT_NODE_TIMEOUT_MS
+      });
+
+      // Register the run in the ExecutionRegistry so the /api/agents/runs
+      // listing (and per-profile filter) actually finds it. Without this
+      // the registry only knows about runs started via workflowRoutes /
+      // workflowRunner — agent runs are invisible to GET /api/agents/runs
+      // and the "Runs" tab on the profile page comes up empty.
+      //
+      // userId follows the agent principal convention `agent:<profileId>`
+      // so the route's filter `r.userId === \`agent:${profileId}\`` matches.
+      try {
+        const registry = getExecutionRegistry();
+        registry.register(state.executionId, {
+          userId: principal.id, // `agent:${profileId}`
+          workflowId: workflow.id || `agent:${profileId}`,
+          workflowName: workflow.name || profile.name || profileId,
+          status: state.status,
+          startedAt: state.createdAt || state.startedAt || new Date().toISOString(),
+          source: 'agent',
+          inputPreview: typeof resolvedBrief === 'string' ? resolvedBrief.slice(0, 240) : undefined,
+          models: profile.preferredModel ? [profile.preferredModel] : undefined,
+          // Carry the human who triggered the run so per-user filtering
+          // on the list endpoint doesn't need a separate state read.
+          triggeredBy: { userId: req.user?.id || 'anonymous', kind: 'manual' }
         });
-
-        // Pre-populate the brief from (in priority order):
-        //   1. operator-supplied brief in the POST body
-        //   2. for inbox-bound profiles: empty — the runtime reads the inbox
-        //      item from disk and the agent / planner prompts reference
-        //      {{currentInboxItem}} directly. Forcing a brief here previously
-        //      defaulted to profile.system, which made the system prompt end
-        //      up as the user message and starved the agent of its actual
-        //      question.
-        //   3. for non-inbox profiles: a generic fallback so the planner /
-        //      simple-agent prompt isn't empty.
-        let resolvedBrief = brief && brief.trim().length > 0 ? brief : '';
-        if (!resolvedBrief && !profile.inboxId) {
-          resolvedBrief = `You are agent ${profileId}. Plan and execute the work this agent is configured for.`;
-        }
-
-        const initialData = {
-          brief: resolvedBrief,
-          variables: variables || {},
-          _agent: {
-            profileId,
-            triggeredBy: { userId: req.user?.id || 'anonymous', kind: 'manual' },
-            artifacts: []
-          },
-          // DURABLE model config for the whole run. `applyNodeModels` and
-          // `workflow.config.defaultModelId` mutate the shared cached workflow
-          // object, which the config cache's TTL refresh later discards —
-          // dropping every node back to the global default (local-vllm). Stash
-          // the agent's configured model in run state (which survives the
-          // refresh) so resolvers always land on the configured model. Copied
-          // into child sub-workflows automatically (see PlannerNodeExecutor's
-          // childInitial copy), so planner sub-tasks inherit it too.
-          _agentModelConfig: {
-            defaultModelId: profile.preferredModel || null,
-            nodeModels: profile.nodeModels || {}
-          },
-          // DURABLE review config — stashed in run state so it survives workflow
-          // config-cache refreshes and is available to all verifier nodes throughout
-          // the run (including in child sub-workflows via PlannerNodeExecutor copy).
-          _agentReviewConfig: resolveReviewSettings(profile.review),
-          // Pre-initialize mutable state slots so they're shared by reference
-          // between any state-snapshot that an in-flight async caller (e.g.
-          // the fire-and-forget title generator) may have captured before
-          // an inner mutation. Without this, the first `create_task` /
-          // citation-capture / skill-activation on a brand-new run creates
-          // the slot on the OLD orphaned data object and the mutation
-          // never reaches the live activeStates entry.
-          _taskQueue: [],
-          _citations: [],
-          _activatedSkills: {},
-          _stepLogs: {},
-          _taskTimings: {}
-        };
-
-        // Calculate wall-time deadline via workflow config. Also publish the
-        // profile's preferred model as the run's workflow-level default so EVERY
-        // LLM node inherits it (the prompt/agent node via getModel step 3, and
-        // the verifier via the same defaultModelId) — without this, an EXTERNAL
-        // workflow's nodes fall back to the global default model and the
-        // operator has no single place to set the run's model. A node may still
-        // override per-node with its own `config.modelId`.
-        const maxWallTimeSec = profile.budgets?.maxWallTimeSec ?? 600;
-        workflow.config = {
-          ...workflow.config,
-          maxExecutionTime: maxWallTimeSec * 1000,
-          ...(profile.preferredModel ? { defaultModelId: profile.preferredModel } : {})
-        };
-        // Per-step model overrides (profile.nodeModels) win over the run-wide
-        // default for the listed nodes.
-        applyNodeModels(workflow, profile.nodeModels);
-        // Inject resolved review knobs onto every verifier node so EXTERNAL
-        // workflows (which don't reference profile flags directly) pick up the
-        // operator's strictness / retry / acceptance configuration.
-        applyReviewSettings(workflow, initialData._agentReviewConfig);
-
-        // Persist a checkpoint after every node completes. Agent runs are
-        // long-lived (each task is a multi-minute LLM call) and otherwise
-        // exist only in-memory until the run reaches a terminal state.
-        // Without per-node checkpoints, a server restart mid-run loses the
-        // plan, task results, and progress — the UI then shows "no run
-        // found" even though the artifacts on disk indicate work happened.
-        // The state-file write is a deepMerge-after-update; cost is
-        // dominated by the LLM call time, so the I/O is negligible.
-        const state = await getEngine().start(workflow, initialData, {
-          user: principal,
-          checkpointOnNode: true,
-          timeout: AGENT_NODE_TIMEOUT_MS
-        });
-
-        // Register the run in the ExecutionRegistry so the /api/agents/runs
-        // listing (and per-profile filter) actually finds it. Without this
-        // the registry only knows about runs started via workflowRoutes /
-        // workflowRunner — agent runs are invisible to GET /api/agents/runs
-        // and the "Runs" tab on the profile page comes up empty.
-        //
-        // userId follows the agent principal convention `agent:<profileId>`
-        // so the route's filter `r.userId === \`agent:${profileId}\`` matches.
-        try {
-          const registry = getExecutionRegistry();
-          registry.register(state.executionId, {
-            userId: principal.id, // `agent:${profileId}`
-            workflowId: workflow.id || `agent:${profileId}`,
-            workflowName: workflow.name || profile.name || profileId,
-            status: state.status,
-            startedAt: state.createdAt || state.startedAt || new Date().toISOString(),
-            source: 'agent',
-            inputPreview:
-              typeof resolvedBrief === 'string' ? resolvedBrief.slice(0, 240) : undefined,
-            models: profile.preferredModel ? [profile.preferredModel] : undefined,
-            // Carry the human who triggered the run so per-user filtering
-            // on the list endpoint doesn't need a separate state read.
-            triggeredBy: { userId: req.user?.id || 'anonymous', kind: 'manual' }
-          });
-        } catch (regErr) {
-          logger.warn('Failed to register agent run in ExecutionRegistry', {
-            component: 'AgentRuns',
-            profileId,
-            executionId: state.executionId,
-            error: regErr.message
-          });
-        }
-
-        // Fire-and-forget LLM title generation. Runs in background; never
-        // blocks the trigger response. Title appears in the UI header once
-        // the LLM call returns (typically <2s).
-        try {
-          let inboxTextHint;
-          if (profile.inboxId) {
-            try {
-              const { default: inboxStore } = await import('../../agents/inbox/inboxStore.js');
-              const inbox = await inboxStore.readInbox(profile.inboxId, { status: 'open' });
-              const top = (inbox.items || []).find(i => i.status === 'open');
-              if (top) inboxTextHint = top.text;
-            } catch {
-              // Title generator will fall back to the brief.
-            }
-          }
-          generateRunTitleAsync({
-            executionId: state.executionId,
-            brief: resolvedBrief,
-            inboxText: inboxTextHint,
-            preferredModelId: profile.preferredModel,
-            language: req.user?.language || 'en'
-          });
-        } catch (titleErr) {
-          logger.warn('Failed to kick off title generation', {
-            component: 'AgentRuns',
-            executionId: state.executionId,
-            error: titleErr.message
-          });
-        }
-
-        logger.info('Started agent run', {
+      } catch (regErr) {
+        logger.warn('Failed to register agent run in ExecutionRegistry', {
           component: 'AgentRuns',
           profileId,
           executionId: state.executionId,
-          actor: req.user?.id
+          error: regErr.message
         });
-        res.status(202).json({
-          ok: true,
-          executionId: state.executionId,
-          status: state.status,
-          profileId
-        });
-      } catch (error) {
-        sendFailedOperationError(res, 'start agent run', error);
       }
+
+      // Fire-and-forget LLM title generation. Runs in background; never
+      // blocks the trigger response. Title appears in the UI header once
+      // the LLM call returns (typically <2s).
+      try {
+        let inboxTextHint;
+        if (profile.inboxId) {
+          try {
+            const { default: inboxStore } = await import('../../agents/inbox/inboxStore.js');
+            const inbox = await inboxStore.readInbox(profile.inboxId, { status: 'open' });
+            const top = (inbox.items || []).find(i => i.status === 'open');
+            if (top) inboxTextHint = top.text;
+          } catch {
+            // Title generator will fall back to the brief.
+          }
+        }
+        generateRunTitleAsync({
+          executionId: state.executionId,
+          brief: resolvedBrief,
+          inboxText: inboxTextHint,
+          preferredModelId: profile.preferredModel,
+          language: req.user?.language || 'en'
+        });
+      } catch (titleErr) {
+        logger.warn('Failed to kick off title generation', {
+          component: 'AgentRuns',
+          executionId: state.executionId,
+          error: titleErr.message
+        });
+      }
+
+      logger.info('Started agent run', {
+        component: 'AgentRuns',
+        profileId,
+        executionId: state.executionId,
+        actor: req.user?.id
+      });
+      res.status(202).json({ executionId: state.executionId, status: state.status, profileId });
     }
   );
 
@@ -397,76 +377,72 @@ export default function registerAgentRunRoutes(app) {
     authRequired,
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const registry = getExecutionRegistry();
-        const all = registry.getAll ? await registry.getAll() : [];
-        const { profileId, status } = req.query;
-        let runs = all.filter(r => {
-          if (typeof r?.userId !== 'string' || !r.userId.startsWith('agent:')) return false;
-          // Children inherit userId from the parent — the only reliable way
-          // to distinguish a parent agent run from a planner-spawned child
-          // sub-workflow is the executionId prefix (children start with
-          // `wf-child-`) plus the `source: 'agent'` tag the route writes
-          // when registering a fresh trigger. Drop everything else so the
-          // UI list shows only top-level runs.
-          if (typeof r.executionId === 'string' && r.executionId.startsWith('wf-child-')) {
-            return false;
+      const registry = getExecutionRegistry();
+      const all = registry.getAll ? await registry.getAll() : [];
+      const { profileId, status } = req.query;
+      let runs = all.filter(r => {
+        if (typeof r?.userId !== 'string' || !r.userId.startsWith('agent:')) return false;
+        // Children inherit userId from the parent — the only reliable way
+        // to distinguish a parent agent run from a planner-spawned child
+        // sub-workflow is the executionId prefix (children start with
+        // `wf-child-`) plus the `source: 'agent'` tag the route writes
+        // when registering a fresh trigger. Drop everything else so the
+        // UI list shows only top-level runs.
+        if (typeof r.executionId === 'string' && r.executionId.startsWith('wf-child-')) {
+          return false;
+        }
+        if (r.source && r.source !== 'agent') return false;
+        return true;
+      });
+      if (profileId) runs = runs.filter(r => r.userId === `agent:${profileId}`);
+      if (status) runs = runs.filter(r => r.status === status);
+      // Per-user filter: a regular operator should only see runs they
+      // triggered. Admins see everything. The registry record's
+      // triggeredBy is mirrored from state.data._agent.triggeredBy, but
+      // we keep it on the registry too via the register payload below —
+      // legacy entries from before this commit may not have it, so we
+      // fall back to a state lookup for those.
+      if (!isAdmin(req.user)) {
+        const myId = req.user?.id;
+        const filtered = [];
+        let unknownMetadataSkipped = 0;
+        for (const r of runs) {
+          const trig = r.triggeredBy?.userId;
+          if (trig && myId && trig === myId) {
+            filtered.push(r);
+            continue;
           }
-          if (r.source && r.source !== 'agent') return false;
-          return true;
-        });
-        if (profileId) runs = runs.filter(r => r.userId === `agent:${profileId}`);
-        if (status) runs = runs.filter(r => r.status === status);
-        // Per-user filter: a regular operator should only see runs they
-        // triggered. Admins see everything. The registry record's
-        // triggeredBy is mirrored from state.data._agent.triggeredBy, but
-        // we keep it on the registry too via the register payload below —
-        // legacy entries from before this commit may not have it, so we
-        // fall back to a state lookup for those.
-        if (!isAdmin(req.user)) {
-          const myId = req.user?.id;
-          const filtered = [];
-          let unknownMetadataSkipped = 0;
-          for (const r of runs) {
-            const trig = r.triggeredBy?.userId;
-            if (trig && myId && trig === myId) {
+          if (trig) {
+            // Belongs to another user — quietly exclude.
+            continue;
+          }
+          // Fall back to checking state.data._agent.triggeredBy for runs
+          // registered before this filter shipped.
+          try {
+            const st = await getEngine().getState(r.executionId);
+            const stTrig = st?.data?._agent?.triggeredBy?.userId;
+            if (stTrig && myId && stTrig === myId) {
               filtered.push(r);
-              continue;
-            }
-            if (trig) {
-              // Belongs to another user — quietly exclude.
-              continue;
-            }
-            // Fall back to checking state.data._agent.triggeredBy for runs
-            // registered before this filter shipped.
-            try {
-              const st = await getEngine().getState(r.executionId);
-              const stTrig = st?.data?._agent?.triggeredBy?.userId;
-              if (stTrig && myId && stTrig === myId) {
-                filtered.push(r);
-              } else if (!stTrig) {
-                // No triggeredBy anywhere — quarantine this run; surface
-                // the count so operators notice broken metadata instead of
-                // wondering why their list is short.
-                unknownMetadataSkipped += 1;
-              }
-            } catch {
+            } else if (!stTrig) {
+              // No triggeredBy anywhere — quarantine this run; surface
+              // the count so operators notice broken metadata instead of
+              // wondering why their list is short.
               unknownMetadataSkipped += 1;
             }
+          } catch {
+            unknownMetadataSkipped += 1;
           }
-          if (unknownMetadataSkipped > 0) {
-            logger.warn('Agent runs without triggeredBy metadata excluded from list', {
-              component: 'AgentRuns',
-              userId: myId,
-              count: unknownMetadataSkipped
-            });
-          }
-          runs = filtered;
         }
-        res.json(runs);
-      } catch (error) {
-        sendFailedOperationError(res, 'list agent runs', error);
+        if (unknownMetadataSkipped > 0) {
+          logger.warn('Agent runs without triggeredBy metadata excluded from list', {
+            component: 'AgentRuns',
+            userId: myId,
+            count: unknownMetadataSkipped
+          });
+        }
+        runs = filtered;
       }
+      res.json({ items: runs });
     }
   );
 
@@ -479,38 +455,34 @@ export default function registerAgentRunRoutes(app) {
     authRequired,
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const { runId } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!(await authorizeRunAccess(req, res, runId))) return;
-        const state = await getEngine().getState(runId);
-        if (!state) return sendNotFound(res, `Run ${runId} not found`);
+      const { runId } = req.params;
+      assertValidId(runId, 'run');
+      await loadRunAccess(req, runId);
+      const state = await getEngine().getState(runId);
+      if (!state) throw new ServiceError('NOT_FOUND', `Run ${runId} not found`);
 
-        const canReconnect = state.status === 'running' || state.status === 'paused';
-        const pendingCheckpoint = state.data?.pendingCheckpoint || null;
-        const workflowName = state.data?._workflowDefinition?.name || null;
+      const canReconnect = state.status === 'running' || state.status === 'paused';
+      const pendingCheckpoint = state.data?.pendingCheckpoint || null;
+      const workflowName = state.data?._workflowDefinition?.name || null;
 
-        res.json({
-          executionId: state.executionId,
-          workflowId: state.workflowId,
-          workflowName,
-          status: state.status,
-          currentNodes: state.currentNodes,
-          completedNodes: state.completedNodes,
-          failedNodes: state.failedNodes,
-          createdAt: state.createdAt,
-          startedAt: state.startedAt,
-          completedAt: state.completedAt,
-          history: state.history,
-          errors: state.errors,
-          checkpoints: state.checkpoints?.map(cp => ({ id: cp.id, timestamp: cp.timestamp })),
-          data: state.data,
-          canReconnect,
-          pendingCheckpoint
-        });
-      } catch (error) {
-        sendFailedOperationError(res, 'read agent run', error);
-      }
+      res.json({
+        executionId: state.executionId,
+        workflowId: state.workflowId,
+        workflowName,
+        status: state.status,
+        currentNodes: state.currentNodes,
+        completedNodes: state.completedNodes,
+        failedNodes: state.failedNodes,
+        createdAt: state.createdAt,
+        startedAt: state.startedAt,
+        completedAt: state.completedAt,
+        history: state.history,
+        errors: state.errors,
+        checkpoints: state.checkpoints?.map(cp => ({ id: cp.id, timestamp: cp.timestamp })),
+        data: state.data,
+        canReconnect,
+        pendingCheckpoint
+      });
     }
   );
 
@@ -527,8 +499,8 @@ export default function registerAgentRunRoutes(app) {
     authenticatedOnly,
     async (req, res) => {
       const { runId } = req.params;
-      if (!validateIdForPath(runId, 'run', res)) return;
-      if (!(await authorizeRunAccess(req, res, runId))) return;
+      assertValidId(runId, 'run');
+      await loadRunAccess(req, runId);
 
       // Track this run and any descendant sub-workflow executionIds. The
       // planner spawns a child workflow whose events fire with
@@ -648,24 +620,16 @@ export default function registerAgentRunRoutes(app) {
 
   // ── Cancel ────────────────────────────────────────────────────────────────
   app.post(
-    buildServerPath('/api/agents/runs/:runId/cancel'),
+    buildServerPath('/api/agents/runs/:runId/_cancel'),
     authRequired,
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const { runId } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!(await authorizeRunAccess(req, res, runId))) return;
-        // The run may execute on another worker: the engine relays the cancel.
-        const state = await getEngine().cancelAnywhere(runId, req.body?.reason || 'user_cancelled');
-        res.json({
-          ok: true,
-          status: state.status,
-          ...(state.cancelRelayed ? { relayed: true } : {})
-        });
-      } catch (error) {
-        sendFailedOperationError(res, 'cancel agent run', error);
-      }
+      const { runId } = req.params;
+      assertValidId(runId, 'run');
+      await loadRunAccess(req, runId);
+      // The run may execute on another worker: the engine relays the cancel.
+      const state = await getEngine().cancelAnywhere(runId, req.body?.reason || 'user_cancelled');
+      res.json({ status: state.status, ...(state.cancelRelayed ? { relayed: true } : {}) });
     }
   );
 
@@ -680,18 +644,18 @@ export default function registerAgentRunRoutes(app) {
   // so we rebuild it here from the agent profile and pass it via options.
   // Same logic used at run-start above (lines ~138-161).
   app.post(
-    buildServerPath('/api/agents/runs/:runId/resume'),
+    buildServerPath('/api/agents/runs/:runId/_resume'),
     authRequired,
     authenticatedOnly,
     async (req, res) => {
       try {
         const { runId } = req.params;
-        if (!validateIdForPath(runId, 'run', res)) return;
-        if (!(await authorizeRunAccess(req, res, runId))) return;
+        assertValidId(runId, 'run');
+        await loadRunAccess(req, runId);
 
         // Recover the profile id from state (preferred) or registry entry.
         const state = await getEngine().stateManager.get(runId);
-        if (!state) return sendNotFound(res, 'Run');
+        if (!state) throw new ServiceError('NOT_FOUND', 'Run not found');
         let profileId = state.data?._agent?.profileId;
         if (!profileId) {
           const registry = getExecutionRegistry();
@@ -701,14 +665,15 @@ export default function registerAgentRunRoutes(app) {
           }
         }
         if (!profileId) {
-          return sendBadRequest(
-            res,
+          throw new ServiceError(
+            'BAD_REQUEST',
             'Cannot identify agent profile for this run — refusing to resume without a workflow definition.'
           );
         }
 
         const profile = lookupProfile(profileId);
-        if (!profile) return sendBadRequest(res, `Agent profile ${profileId} no longer exists`);
+        if (!profile)
+          throw new ServiceError('BAD_REQUEST', `Agent profile ${profileId} no longer exists`);
 
         const serialized = serializeProfile(profile);
         let workflow;
@@ -718,8 +683,8 @@ export default function registerAgentRunRoutes(app) {
         ) {
           const wf = configCache.getWorkflowById(serialized.workflow.workflowId);
           if (!wf) {
-            return sendBadRequest(
-              res,
+            throw new ServiceError(
+              'BAD_REQUEST',
               `External workflow ${serialized.workflow.workflowId} not found`
             );
           }
@@ -755,22 +720,22 @@ export default function registerAgentRunRoutes(app) {
           userId: req.user?.id
         });
         res.json({
-          ok: true,
           executionId: newState.executionId,
           status: newState.status,
           currentNodes: newState.currentNodes
         });
       } catch (error) {
-        if (error.code === 'EXECUTION_NOT_FOUND') return sendNotFound(res, 'Run');
+        if (error.code === 'EXECUTION_NOT_FOUND')
+          throw new ServiceError('NOT_FOUND', 'Run not found');
         if (
           error.code === 'INVALID_STATE_FOR_RESUME' ||
           error.code === 'WORKFLOW_NOT_AVAILABLE' ||
           error.code === 'NO_RESUME_POINT' ||
           error.code === 'USER_CANCELLED'
         ) {
-          return sendBadRequest(res, error.message);
+          throw new ServiceError('BAD_REQUEST', error.message);
         }
-        sendFailedOperationError(res, 'resume agent run', error);
+        throw error;
       }
     }
   );

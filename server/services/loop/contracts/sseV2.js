@@ -5,7 +5,7 @@
  * SSE v2 event contracts — one typed schema, a projection of RunLog events
  * plus transport frames (concept §5.6). Every envelope carries a per-run
  * sequence number so the client reducer can detect relay gaps and re-sync
- * from `GET /api/runs/:runId/events?after=<seq>`.
+ * from `GET /api/runs/:runId/events?cursor=<c>`.
  *
  * @module services/loop/contracts/sseV2
  */

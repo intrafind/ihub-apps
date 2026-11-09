@@ -229,7 +229,16 @@ does — for example a regulated app that must only use reviewed skills — set:
 ## Admin
 
 **Admin → Skills** manages the global skills (import, export, delete, group access) and has a
-**User skills** tab:
+**User skills** tab.
+
+Open a global skill to **switch it off** or to change the **description** shown for it. A skill that
+is off is offered to no app, user, agent or MCP client; its files stay installed and you switch it
+on again at any time. A description you set replaces the one in the skill's `SKILL.md` wherever
+the skill is listed (the skill's files are not touched, so a marketplace update does not overwrite
+it); clear the field to go back to the original. Both are stored in `contents/config/skills.json`.
+System skills ship with iHub, are always on and cannot be changed here.
+
+The **User skills** tab:
 
 - It lists the user skills shared with a group or with everyone. Private skills and skills
   shared only with named users are not listed.
@@ -286,17 +295,19 @@ global skills keep working.
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | GET | `/api/skills` | Skills for the `/` picker: global skills the user may see, plus their own and shared user skills (`scope`: `global`, `mine`, `shared`) |
-| POST | `/api/skills/:name/duplicate` | Copy a global skill into My skills |
+| POST | `/api/skills/:name/_duplicate` | Copy a global skill into My skills |
+| PUT | `/api/admin/skills/:name` | Admin: set the description shown for a global skill (`{ configOverrides: { description } }`, empty removes it); answers the skill |
+| POST | `/api/admin/skills/:name/_toggle` | Admin: switch a global skill on or off; answers the skill with its new `enabled` |
 | GET | `/api/user-skills?scope=all\|mine\|shared` | The caller's own and shared user skills |
 | POST | `/api/user-skills` | Create a user skill (`name`, `description`, `body`, `files`) |
 | GET / PUT / DELETE | `/api/user-skills/:id` | Read (with instructions and files), update (`expectedRevision` refuses a stale save with 409), delete |
 | PUT | `/api/user-skills/:id/shares` | Replace the share list |
 | PUT | `/api/user-skills/:id/owner` | Hand the skill to another user (`ownerId`) |
-| POST | `/api/user-skills/:id/duplicate` | Copy a user skill |
+| POST | `/api/user-skills/:id/_duplicate` | Copy a user skill |
 | GET | `/api/user-skills/:id/versions` | Versions, newest first; `/versions/:revision` returns one with its content |
 | POST | `/api/user-skills/:id/versions/:revision/restore` | Restore a version |
 | GET | `/api/user-skills/share-targets?q=` | Users and groups the caller may share with |
-| GET | `/api/user-skills/marketplace?search=&category=&registry=&page=&limit=` | Skills of the enabled registries, with the registries and categories to filter by; each says whether the caller added it already (`added`) |
+| GET | `/api/user-skills/marketplace?search=&category=&registry=&cursor=&limit=` | Skills of the enabled registries, with the registries and categories to filter by; each says whether the caller added it already (`added`) |
 | GET | `/api/user-skills/marketplace/:registryId/:name` | One marketplace skill with a preview of its instructions and files |
 | POST | `/api/user-skills/marketplace/:registryId/:name/add` | Copy it into My skills (`name` optional); the response lists `skippedFiles` |
 | GET | `/api/admin/user-skills` | User skills shared with a group or everyone (admins and content admins) |

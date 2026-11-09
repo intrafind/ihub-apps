@@ -69,6 +69,7 @@ import {
   userPromptContentSchema,
   userPromptUpdateSchema
 } from '../validators/userPromptSchema.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 /** Scopes `GET /api/prompts?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'global', 'mine', 'shared', 'favorites']);
@@ -518,7 +519,7 @@ export default function registerPromptRoutes(app) {
     // permissions, own prompts, shares — so the ETag does too, and `private`
     // keeps shared caches from handing one user another's list.
     res.setHeader('Cache-Control', 'private, no-cache');
-    res.json(items);
+    res.json({ items });
   });
 
   /**
@@ -706,7 +707,9 @@ export default function registerPromptRoutes(app) {
       summary: `Created user prompt "${prompt.name}"`
     });
     const context = callerContext(req.user);
-    res.status(201).json(
+    sendCreated(
+      res,
+      `/api/prompts/${segment(prompt.id)}`,
       serializeUserPrompt(
         prompt,
         userPromptPermissions(prompt, req.user, {
@@ -860,20 +863,20 @@ export default function registerPromptRoutes(app) {
           ? `Deleted user prompt "${removed.name}"`
           : `Deleted user prompt "${removed.name}" owned by ${removed.ownerName || removed.ownerId}`
       });
-      res.json({ message: 'Prompt deleted', id: promptId });
+      res.status(204).end();
     }
   );
 
   /**
    * @swagger
-   * /api/prompts/{promptId}/duplicate:
+   * /api/prompts/{promptId}/_duplicate:
    *   post:
    *     summary: Copy a global or shared prompt into the caller's own prompts
    *     tags:
    *       - Prompts
    */
   app.post(
-    buildServerPath('/api/prompts/:promptId/duplicate'),
+    buildServerPath('/api/prompts/:promptId/_duplicate'),
     ...gate,
     authenticatedOnly,
     async (req, res) => {
@@ -936,7 +939,9 @@ export default function registerPromptRoutes(app) {
         summary: `Duplicated ${copiedFrom.scope} prompt ${promptId} as "${prompt.name}"`
       });
       const context = callerContext(req.user);
-      res.status(201).json(
+      sendCreated(
+        res,
+        `/api/prompts/${segment(prompt.id)}`,
         serializeUserPrompt(
           prompt,
           userPromptPermissions(prompt, req.user, {
@@ -1111,7 +1116,7 @@ export default function registerPromptRoutes(app) {
       const versions = await deps.repo.listVersions(promptId);
       res.json({
         revision: loaded.prompt.revision,
-        versions: versions.map(version => ({
+        items: versions.map(version => ({
           revision: version.revision,
           name: version.name,
           description: version.description,

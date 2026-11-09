@@ -43,6 +43,7 @@ import {
   markChatDurable
 } from '../sse.js';
 import registerSessionRoutes, { messageAttachments } from '../routes/chat/sessionRoutes.js';
+import errorHandler from '../middleware/errorHandler.js';
 import { workflowSummary } from '../services/workflow/mentionWorkflow.js';
 
 const USER = { id: 'user-1', name: 'Ada' };
@@ -164,9 +165,14 @@ async function drive(handlers, { chatId, body = {}, user }) {
   const res = makeResponse();
   for (let index = 1; index < handlers.length; index += 1) {
     let advanced = false;
-    await handlers[index](req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handlers[index](req, res, () => {
+        advanced = true;
+      });
+    } catch (error) {
+      // A handler refuses by throwing; the error middleware answers it.
+      errorHandler(error, req, res, () => {});
+    }
     if (index < handlers.length - 1 && !advanced) break;
   }
   return res;
@@ -1129,8 +1135,7 @@ describe('Stop reaches a durable turn that never streamed', () => {
     try {
       const res = await drive(chatStopHandlers, { chatId, user: USER });
 
-      assert.equal(res.statusCode, 200);
-      assert.deepEqual(res.body, { success: true, message: 'Chat stream stopped' });
+      assert.equal(res.statusCode, 204);
       assert.equal(aborted, true);
     } finally {
       activeRequests.delete(chatId);

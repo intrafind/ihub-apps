@@ -3,9 +3,9 @@
 
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 
 const DEFAULT_CORS_CONFIG = {
@@ -42,16 +42,12 @@ export default function registerAdminCorsRoutes(app) {
    *         description: Current CORS configuration
    */
   app.get(buildServerPath('/api/admin/cors/config'), adminAuth, async (req, res) => {
-    try {
-      const platformConfig = configCache.getPlatform() || {};
-      const corsConfig = platformConfig.cors
-        ? { ...DEFAULT_CORS_CONFIG, ...platformConfig.cors }
-        : { ...DEFAULT_CORS_CONFIG };
+    const platformConfig = configCache.getPlatform() || {};
+    const corsConfig = platformConfig.cors
+      ? { ...DEFAULT_CORS_CONFIG, ...platformConfig.cors }
+      : { ...DEFAULT_CORS_CONFIG };
 
-      res.json(corsConfig);
-    } catch (error) {
-      return sendInternalError(res, error, 'get CORS configuration');
-    }
+    res.json(corsConfig);
   });
 
   /**
@@ -75,80 +71,82 @@ export default function registerAdminCorsRoutes(app) {
    *         description: Invalid CORS configuration
    */
   app.put(buildServerPath('/api/admin/cors/config'), adminAuth, async (req, res) => {
-    try {
-      const { origin, credentials, maxAge, methods, allowedHeaders } = req.body;
+    const { origin, credentials, maxAge, methods, allowedHeaders } = req.body;
 
-      if (!Array.isArray(origin)) {
-        return sendBadRequest(res, 'Invalid CORS configuration: origin must be an array');
-      }
+    if (!Array.isArray(origin)) {
+      throw new ServiceError('BAD_REQUEST', 'Invalid CORS configuration: origin must be an array');
+    }
 
-      for (const o of origin) {
-        if (typeof o !== 'string' || !o.trim()) {
-          return sendBadRequest(
-            res,
-            'Invalid CORS configuration: all origins must be non-empty strings'
-          );
-        }
-      }
-
-      if (typeof credentials !== 'boolean') {
-        return sendBadRequest(res, 'Invalid CORS configuration: credentials must be a boolean');
-      }
-
-      if (!Number.isInteger(maxAge) || maxAge < 0) {
-        return sendBadRequest(
-          res,
-          'Invalid CORS configuration: maxAge must be a non-negative integer'
+    for (const o of origin) {
+      if (typeof o !== 'string' || !o.trim()) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid CORS configuration: all origins must be non-empty strings'
         );
       }
-
-      if (!Array.isArray(methods) || methods.length === 0) {
-        return sendBadRequest(res, 'Invalid CORS configuration: methods must be a non-empty array');
-      }
-
-      for (const m of methods) {
-        if (typeof m !== 'string' || !m.trim()) {
-          return sendBadRequest(
-            res,
-            'Invalid CORS configuration: all methods must be non-empty strings'
-          );
-        }
-      }
-
-      if (!Array.isArray(allowedHeaders)) {
-        return sendBadRequest(res, 'Invalid CORS configuration: allowedHeaders must be an array');
-      }
-
-      for (const h of allowedHeaders) {
-        if (typeof h !== 'string' || !h.trim()) {
-          return sendBadRequest(
-            res,
-            'Invalid CORS configuration: all allowedHeaders must be non-empty strings'
-          );
-        }
-      }
-
-      const platformConfig = await configStore.readJson('config/platform.json');
-      if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
-      platformConfig.cors = { origin, credentials, maxAge, methods, allowedHeaders };
-
-      await configStore.writeJson('config/platform.json', platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
-
-      logger.info('CORS configuration updated', {
-        component: 'AdminCORS',
-        originCount: origin.length,
-        credentials,
-        maxAge
-      });
-
-      res.json({
-        message: 'CORS configuration updated successfully',
-        config: platformConfig.cors
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update CORS configuration');
     }
+
+    if (typeof credentials !== 'boolean') {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Invalid CORS configuration: credentials must be a boolean'
+      );
+    }
+
+    if (!Number.isInteger(maxAge) || maxAge < 0) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Invalid CORS configuration: maxAge must be a non-negative integer'
+      );
+    }
+
+    if (!Array.isArray(methods) || methods.length === 0) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Invalid CORS configuration: methods must be a non-empty array'
+      );
+    }
+
+    for (const m of methods) {
+      if (typeof m !== 'string' || !m.trim()) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid CORS configuration: all methods must be non-empty strings'
+        );
+      }
+    }
+
+    if (!Array.isArray(allowedHeaders)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'Invalid CORS configuration: allowedHeaders must be an array'
+      );
+    }
+
+    for (const h of allowedHeaders) {
+      if (typeof h !== 'string' || !h.trim()) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid CORS configuration: all allowedHeaders must be non-empty strings'
+        );
+      }
+    }
+
+    const platformConfig = await configStore.readJson('config/platform.json');
+    if (!platformConfig) throw new Error('Unable to read config/platform.json');
+
+    platformConfig.cors = { origin, credentials, maxAge, methods, allowedHeaders };
+
+    await configStore.writeJson('config/platform.json', platformConfig);
+    await configCache.refreshCacheEntry('config/platform.json');
+
+    logger.info('CORS configuration updated', {
+      component: 'AdminCORS',
+      originCount: origin.length,
+      credentials,
+      maxAge
+    });
+
+    res.json(platformConfig.cors);
   });
 }

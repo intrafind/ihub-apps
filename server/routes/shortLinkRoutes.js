@@ -9,20 +9,13 @@ import {
   updateLink,
   searchLinks,
   isLinkExpired,
-  canManageLink,
-  ShortLinkTargetError
+  canManageLink
 } from '../shortLinkManager.js';
 import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { isAdmin } from '../utils/authorization.js';
 import { isAllowedShortLinkTarget } from '../utils/shortLinkTarget.js';
-import {
-  sendBadRequest,
-  sendNotFound,
-  sendFailedOperationError,
-  sendErrorResponse,
-  sendInsufficientPermissions
-} from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
@@ -32,9 +25,6 @@ function allowedHosts() {
   return configCache.getPlatform()?.shortLinks?.allowedHosts || [];
 }
 
-const TARGET_NOT_ALLOWED =
-  'The target must be a path on this server or a URL on an allowed host (shortLinks.allowedHosts)';
-
 export default function registerShortLinkRoutes(app) {
   // Links belong to the signed-in user who creates them; only they and admins
   // may list, change or delete them.
@@ -43,34 +33,24 @@ export default function registerShortLinkRoutes(app) {
     requireFeature('shortLinks'),
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const { code, appId, path, params, url, includeParams, expiresAt } = req.body;
-        if (!url && !appId && !path) {
-          return sendBadRequest(res, 'appId or url or path required');
-        }
-        const link = await createLink(
-          {
-            code,
-            appId,
-            ownerId: req.user.id,
-            path,
-            params,
-            url,
-            includeParams,
-            expiresAt
-          },
-          { allowedHosts: allowedHosts() }
-        );
-        res.json(link);
-      } catch (error) {
-        if (error.message === 'Code already exists') {
-          return sendErrorResponse(res, 409, 'Code already exists');
-        }
-        if (error instanceof ShortLinkTargetError) {
-          return sendBadRequest(res, TARGET_NOT_ALLOWED);
-        }
-        sendFailedOperationError(res, 'create short link', error);
+      const { code, appId, path, params, url, includeParams, expiresAt } = req.body;
+      if (!url && !appId && !path) {
+        throw new ServiceError('BAD_REQUEST', 'appId or url or path required');
       }
+      const link = await createLink(
+        {
+          code,
+          appId,
+          ownerId: req.user.id,
+          path,
+          params,
+          url,
+          includeParams,
+          expiresAt
+        },
+        { allowedHosts: allowedHosts() }
+      );
+      res.json(link);
     }
   );
 
@@ -79,19 +59,15 @@ export default function registerShortLinkRoutes(app) {
     requireFeature('shortLinks'),
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const appId = typeof req.query.appId === 'string' ? req.query.appId : undefined;
-        // Admins see every link (optionally one owner's); everyone else their own.
-        const ownerId = isAdmin(req.user)
-          ? typeof req.query.ownerId === 'string'
-            ? req.query.ownerId
-            : undefined
-          : req.user.id;
-        const links = await searchLinks({ appId, ownerId });
-        res.json(links);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch short links', error);
-      }
+      const appId = typeof req.query.appId === 'string' ? req.query.appId : undefined;
+      // Admins see every link (optionally one owner's); everyone else their own.
+      const ownerId = isAdmin(req.user)
+        ? typeof req.query.ownerId === 'string'
+          ? req.query.ownerId
+          : undefined
+        : req.user.id;
+      const links = await searchLinks({ appId, ownerId });
+      res.json({ items: links });
     }
   );
 
@@ -100,18 +76,14 @@ export default function registerShortLinkRoutes(app) {
     requireFeature('shortLinks'),
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const link = await getLink(req.params.code);
-        if (!link) return sendNotFound(res, 'Short link');
-        // Anyone signed in may learn that a code is taken (the share dialog
-        // checks a custom code this way); only the owner and admins see the link.
-        if (!canManageLink(link, req.user, isAdmin(req.user))) {
-          return res.json({ code: link.code });
-        }
-        res.json(link);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch short link', error);
+      const link = await getLink(req.params.code);
+      if (!link) throw new ServiceError('NOT_FOUND', 'Short link not found');
+      // Anyone signed in may learn that a code is taken (the share dialog
+      // checks a custom code this way); only the owner and admins see the link.
+      if (!canManageLink(link, req.user, isAdmin(req.user))) {
+        return res.json({ code: link.code });
       }
+      res.json(link);
     }
   );
 
@@ -120,23 +92,16 @@ export default function registerShortLinkRoutes(app) {
     requireFeature('shortLinks'),
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const existing = await getLink(req.params.code);
-        if (!existing) return sendNotFound(res, 'Short link');
-        if (!canManageLink(existing, req.user, isAdmin(req.user))) {
-          return sendInsufficientPermissions(res, 'ownership of the short link');
-        }
-        const link = await updateLink(req.params.code, req.body || {}, {
-          allowedHosts: allowedHosts()
-        });
-        if (!link) return sendNotFound(res, 'Short link');
-        res.json(link);
-      } catch (error) {
-        if (error instanceof ShortLinkTargetError) {
-          return sendBadRequest(res, TARGET_NOT_ALLOWED);
-        }
-        sendFailedOperationError(res, 'update short link', error);
+      const existing = await getLink(req.params.code);
+      if (!existing) throw new ServiceError('NOT_FOUND', 'Short link not found');
+      if (!canManageLink(existing, req.user, isAdmin(req.user))) {
+        throw new ServiceError('FORBIDDEN', 'You do not own this short link.');
       }
+      const link = await updateLink(req.params.code, req.body || {}, {
+        allowedHosts: allowedHosts()
+      });
+      if (!link) throw new ServiceError('NOT_FOUND', 'Short link not found');
+      res.json(link);
     }
   );
 
@@ -145,18 +110,14 @@ export default function registerShortLinkRoutes(app) {
     requireFeature('shortLinks'),
     authenticatedOnly,
     async (req, res) => {
-      try {
-        const existing = await getLink(req.params.code);
-        if (!existing) return sendNotFound(res, 'Short link');
-        if (!canManageLink(existing, req.user, isAdmin(req.user))) {
-          return sendInsufficientPermissions(res, 'ownership of the short link');
-        }
-        const ok = await deleteLink(req.params.code);
-        if (!ok) return sendNotFound(res, 'Short link');
-        res.json({ success: true });
-      } catch (error) {
-        sendFailedOperationError(res, 'delete short link', error);
+      const existing = await getLink(req.params.code);
+      if (!existing) throw new ServiceError('NOT_FOUND', 'Short link not found');
+      if (!canManageLink(existing, req.user, isAdmin(req.user))) {
+        throw new ServiceError('FORBIDDEN', 'You do not own this short link.');
       }
+      const ok = await deleteLink(req.params.code);
+      if (!ok) throw new ServiceError('NOT_FOUND', 'Short link not found');
+      res.status(204).end();
     }
   );
 

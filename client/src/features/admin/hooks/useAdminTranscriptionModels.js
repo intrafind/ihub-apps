@@ -21,7 +21,7 @@ export default function useAdminTranscriptionModels() {
     makeAdminApiCall('/admin/models')
       .then(response => {
         if (!active) return;
-        const all = Array.isArray(response?.data) ? response.data : [];
+        const all = Array.isArray(response?.data?.items) ? response.data.items : [];
         setModels(
           all.filter(
             m =>

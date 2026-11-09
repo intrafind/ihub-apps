@@ -862,7 +862,6 @@ export async function importConfig(req, res) {
       summary: `Imported configuration backup (${importedFiles.length} files)`
     });
     res.json({
-      success: true,
       message: migrationError
         ? 'Configuration imported, but one or more migrations failed. See server logs and the migrations field for details.'
         : 'Configuration imported successfully',
@@ -934,7 +933,7 @@ export default async function registerBackupRoutes(app) {
 
   // Import configuration
   app.post(
-    buildServerPath('/api/admin/backup/import'),
+    buildServerPath('/api/admin/backup/_import'),
     adminAuth,
     upload.single('backup'),
     importConfig

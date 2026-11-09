@@ -82,6 +82,7 @@ import { countBodyBytes, probeUrl } from '../sources/SourceManager.js';
 import { assertPublicTarget } from '../utils/ssrfGuard.js';
 import { z } from 'zod';
 import { makeMsg } from './helpers/msgFile.js';
+import { answerWithError } from './helpers/answerError.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const MASTER = crypto.createHash('sha256').update('test-master').digest('hex');
@@ -201,10 +202,14 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, req: 
   for (const handler of handlers) {
     let advanced = false;
     let failure = null;
-    await handler(req, res, error => {
-      if (error) failure = error;
-      advanced = true;
-    });
+    try {
+      await handler(req, res, error => {
+        if (error) failure = error;
+        advanced = true;
+      });
+    } catch (error) {
+      failure = error;
+    }
     // A middleware that hands the request to a stream (multer) calls `next`
     // or answers later than its own return.
     if (!advanced && !responded) {
@@ -212,7 +217,11 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, req: 
         // A middleware that never answers is reported through `failure` below.
       });
     }
-    if (failure) throw failure;
+    if (failure) {
+      // What the error middleware would answer.
+      answerWithError(res, failure);
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -2291,11 +2300,11 @@ describe('routes', () => {
     addItem: handlersFor(routes, 'post', '/api/projects/:projectId/items'),
     text: handlersFor(routes, 'get', '/api/projects/:projectId/items/:itemId/text'),
     editText: handlersFor(routes, 'put', '/api/projects/:projectId/items/:itemId/text'),
-    refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/refresh'),
+    refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/_refresh'),
     pages: handlersFor(routes, 'get', '/api/projects/pickers/pages'),
-    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check'),
-    urlPreview: handlersFor(routes, 'post', '/api/projects/pickers/url/preview'),
-    urlCrawl: handlersFor(routes, 'post', '/api/projects/pickers/url/crawl')
+    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/_check'),
+    urlPreview: handlersFor(routes, 'post', '/api/projects/pickers/url/_preview'),
+    urlCrawl: handlersFor(routes, 'post', '/api/projects/pickers/url/_crawl')
   };
 
   async function create() {
@@ -2314,26 +2323,26 @@ describe('routes', () => {
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     const edited = await drive(route.editText, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: 'New notes.' }
     });
     assert.equal(edited.statusCode, 200, JSON.stringify(edited.body));
-    assert.equal(edited.body.item.status, 'ready');
-    assert.equal(edited.body.item.provenance.origin, 'written');
+    assert.equal(edited.body.status, 'ready');
+    assert.equal(edited.body.provenance.origin, 'written');
     const read = await drive(route.text, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id }
+      params: { projectId: project.id, itemId: added.body.id }
     });
     assert.equal(read.body, 'New notes.');
     const empty = await drive(route.editText, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: '  ' }
     });
     assert.equal(empty.statusCode, 400);
     const stranger = await drive(route.editText, {
       user: GRACE,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: 'Not mine.' }
     });
     // A project the caller is no member of does not exist for them.
@@ -2349,18 +2358,18 @@ describe('routes', () => {
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     // An imported text can be longer than an upload may be.
-    await getProjectService().patchItem(project.id, added.body.item.id, item => {
+    await getProjectService().patchItem(project.id, added.body.id, item => {
       item.text.chars = 20_000_000;
     });
     const refused = await drive(route.editText, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id },
+      params: { projectId: project.id, itemId: added.body.id },
       body: { text: 'Cut.' }
     });
     assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
     const read = await drive(route.text, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id }
+      params: { projectId: project.id, itemId: added.body.id }
     });
     assert.equal(read.body, 'Old notes.', 'nothing was replaced');
   });
@@ -2376,11 +2385,11 @@ describe('routes', () => {
     req.params = { projectId: project.id };
     const res = await drive(route.addItem, { user: ADA, req });
     assert.equal(res.statusCode, 202, JSON.stringify(res.body));
-    assert.equal(res.body.item.status, 'pending');
-    assert.equal(res.body.item.pinned, true);
-    assert.equal(res.body.item.name, 'notes.md');
-    assert.equal(res.body.item.text, null);
-    const ready = await settled(project.id, res.body.item.id);
+    assert.equal(res.body.status, 'pending');
+    assert.equal(res.body.pinned, true);
+    assert.equal(res.body.name, 'notes.md');
+    assert.equal(res.body.text, null);
+    const ready = await settled(project.id, res.body.id);
     assert.equal(ready.status, 'ready', JSON.stringify(ready.error));
     const text = await drive(route.text, {
       user: ADA,
@@ -2411,7 +2420,7 @@ describe('routes', () => {
     const res = await drive(route.addItem, { user: ADA, req });
     assert.equal(res.statusCode, 202, JSON.stringify(res.body));
     // multer reads part headers as latin1 unless told otherwise: "–" came out as "â€\"".
-    assert.equal(res.body.item.name, name);
+    assert.equal(res.body.name, name);
   });
 
   it('refuses an unsupported type before accepting bytes and a file over the limit', async () => {
@@ -2465,7 +2474,7 @@ describe('routes', () => {
       body: { kind: 'upload', ref: {}, name: 'Pasted', text: 'Pasted text for the project.' }
     });
     assert.equal(stillJson.statusCode, 201, JSON.stringify(stillJson.body));
-    assert.equal(stillJson.body.item.status, 'ready');
+    assert.equal(stillJson.body.status, 'ready');
   });
 
   it('lists readable pages and checks a URL', async () => {
@@ -2483,10 +2492,10 @@ describe('routes', () => {
     const pages = await drive(route.pages, { user: ADA });
     assert.equal(pages.statusCode, 200);
     assert.deepEqual(
-      pages.body.pages.map(page => page.id),
+      pages.body.items.map(page => page.id),
       ['faq']
     );
-    assert.deepEqual(pages.body.pages[0].languages, ['en', 'de']);
+    assert.deepEqual(pages.body.items[0].languages, ['en', 'de']);
     const bad = await drive(route.urlCheck, { user: ADA, body: { url: 'ftp://example.com' } });
     assert.equal(bad.statusCode, 400);
     // The probe is held to the reader's line: no private or internal target.

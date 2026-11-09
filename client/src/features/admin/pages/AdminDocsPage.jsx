@@ -189,7 +189,7 @@ function AdminDocsPage() {
       makeAdminApiCall(`/admin/docs/search?q=${encodeURIComponent(trimmed)}`, { method: 'GET' })
         .then(response => {
           if (active) {
-            setSearch({ results: response.data?.results ?? [], loading: false, error: '' });
+            setSearch({ results: response.data?.items ?? [], loading: false, error: '' });
           }
         })
         .catch(err => {

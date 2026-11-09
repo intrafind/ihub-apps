@@ -341,7 +341,9 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   if (api) {
-    await api.post(`/api/integrations/${INSTALLATION_ID}/disconnect`, { data: {} }).catch(() => {});
+    await api
+      .post(`/api/integrations/${INSTALLATION_ID}/_disconnect`, { data: {} })
+      .catch(() => {});
     await api.delete(`/api/admin/apps/${APP_ID}`).catch(() => {});
     await api.delete(`/api/admin/integrations/installed/${INSTALLATION_ID}`).catch(() => {});
     await api.delete(`/api/admin/models/${MODEL.id}`).catch(() => {});
@@ -425,7 +427,7 @@ test('picker → Connect → consent in a new tab → back in the same chat → 
 }) => {
   await signIn(context);
   // Start disconnected.
-  const disconnected = await api.post(`/api/integrations/${INSTALLATION_ID}/disconnect`, {
+  const disconnected = await api.post(`/api/integrations/${INSTALLATION_ID}/_disconnect`, {
     data: {}
   });
   expect(disconnected.ok(), await disconnected.text()).toBeTruthy();

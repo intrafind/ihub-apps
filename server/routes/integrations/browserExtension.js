@@ -5,11 +5,11 @@
 // Serves runtime configuration the extension needs before OAuth can start.
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const router = express.Router();
 
 // Gate behind the integrations feature flag (consistent with the Office add-in)
@@ -56,7 +56,7 @@ router.get('/config', (req, res) => {
   const cfg = platform?.browserExtension;
 
   if (!cfg?.enabled) {
-    return sendErrorResponse(res, 404, 'Browser extension integration is not enabled');
+    throw new ServiceError('NOT_FOUND', 'Browser extension integration is not enabled');
   }
 
   const baseUrl = buildPublicBaseUrl(req);

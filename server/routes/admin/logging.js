@@ -3,7 +3,6 @@
 
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import configStore from '../../services/config/ConfigStore.js';
@@ -22,23 +21,19 @@ export default function registerAdminLoggingRoutes(app) {
    *         description: Logging configuration
    */
   app.get(buildServerPath('/api/admin/logging/config'), adminAuth, (req, res) => {
-    try {
-      const platformConfig = configCache.getPlatform();
-      const loggingConfig = platformConfig?.logging || {
-        level: 'info',
-        format: 'json',
-        file: {
-          enabled: false,
-          path: 'logs/app.log',
-          maxSize: 10485760,
-          maxFiles: 5
-        }
-      };
+    const platformConfig = configCache.getPlatform();
+    const loggingConfig = platformConfig?.logging || {
+      level: 'info',
+      format: 'json',
+      file: {
+        enabled: false,
+        path: 'logs/app.log',
+        maxSize: 10485760,
+        maxFiles: 5
+      }
+    };
 
-      res.json(loggingConfig);
-    } catch (error) {
-      return sendInternalError(res, error, 'get logging configuration');
-    }
+    res.json(loggingConfig);
   });
 
   /**
@@ -74,35 +69,27 @@ export default function registerAdminLoggingRoutes(app) {
    *         description: Logging configuration updated
    */
   app.put(buildServerPath('/api/admin/logging/config'), adminAuth, async (req, res) => {
-    try {
-      const newLoggingConfig = req.body;
+    const newLoggingConfig = req.body;
 
-      const platformConfig = await configStore.readJson('config/platform.json');
-      if (!platformConfig) throw new Error('Unable to read config/platform.json');
+    const platformConfig = await configStore.readJson('config/platform.json');
+    if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
-      // Update logging config
-      platformConfig.logging = {
-        ...platformConfig.logging,
-        ...newLoggingConfig
-      };
+    // Update logging config
+    platformConfig.logging = {
+      ...platformConfig.logging,
+      ...newLoggingConfig
+    };
 
-      await configStore.writeJson('config/platform.json', platformConfig);
+    await configStore.writeJson('config/platform.json', platformConfig);
 
-      // Refresh config cache
-      await configCache.refreshCacheEntry('config/platform.json');
+    // Refresh config cache
+    await configCache.refreshCacheEntry('config/platform.json');
 
-      // Reconfigure logger to pick up changes
-      logger.reconfigureLogger();
+    // Reconfigure logger to pick up changes
+    logger.reconfigureLogger();
 
-      logger.info('Logging configuration updated', { component: 'AdminLogging', newLoggingConfig });
+    logger.info('Logging configuration updated', { component: 'AdminLogging', newLoggingConfig });
 
-      res.json({
-        success: true,
-        config: platformConfig.logging,
-        message: 'Logging configuration updated successfully'
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update logging configuration');
-    }
+    res.json(platformConfig.logging);
   });
 }

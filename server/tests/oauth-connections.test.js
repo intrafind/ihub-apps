@@ -206,7 +206,7 @@ describe('consent store snapshots', () => {
     writeClients({ [SERVICE]: { clientId: SERVICE, name: 'Claude Code (ihub)' } });
 
     expect(listConnectionsForUser('bob')[0].clientName).toBe('Claude Code (ihub)');
-    expect(listConnections({ userId: 'bob' }).connections[0].clientName).toBe('Claude Code (ihub)');
+    expect(listConnections({ userId: 'bob' }).items[0].clientName).toBe('Claude Code (ihub)');
 
     state.user = { id: 'bob', authMode: 'local' };
     const res = await request(userApp()).get('/api/integrations/connections');
@@ -256,9 +256,14 @@ describe('ConnectionService', () => {
     for (const user of ['a', 'b', 'c', 'd', 'e']) {
       await seedConnection(SERVICE, user);
     }
-    const page = listConnections({ pageSize: 2, page: 2 });
-    expect(page.connections).toHaveLength(2);
-    expect(page.total).toBe(5);
+    const first = listConnections({ limit: 2 });
+    expect(first.items).toHaveLength(2);
+    expect(first.total).toBe(5);
+    const second = listConnections({ limit: 2, cursor: first.nextCursor });
+    expect(second.items).toHaveLength(2);
+    const last = listConnections({ limit: 2, cursor: second.nextCursor });
+    expect(last.items).toHaveLength(1);
+    expect(last.nextCursor).toBeNull();
   });
 
   test('revoking removes the consent AND every refresh token for the pair', async () => {
@@ -296,7 +301,8 @@ describe('admin API', () => {
 
     const res = await request(adminApp()).get('/api/admin/oauth/connections');
     expect(res.status).toBe(200);
-    expect(res.body.connections).toHaveLength(1);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.success).toBeUndefined();
     expect(res.body.cimdClients[0].host).toBe('claude.ai');
   });
 
@@ -305,8 +311,8 @@ describe('admin API', () => {
     await seedConnection(SERVICE, 'bob');
 
     const res = await request(adminApp()).get('/api/admin/oauth/connections?userId=bob');
-    expect(res.body.connections).toHaveLength(1);
-    expect(res.body.connections[0].userId).toBe('bob');
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].userId).toBe('bob');
   });
 
   test('revokes a connection, including URL-shaped client IDs', async () => {

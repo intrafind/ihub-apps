@@ -31,6 +31,7 @@ import {
 } from '../../services/llmProviders.js';
 import { inspectModelApiKey } from '../../utils.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** Largest voice sample accepted (Mistral needs seconds, not minutes, of audio). */
 const MAX_VOICE_SAMPLE_BYTES = 10 * 1024 * 1024;
@@ -359,7 +360,7 @@ export default function registerAdminModelsRoutes(app) {
     });
 
     res.setHeader('ETag', modelsEtag);
-    res.json(maskedModels);
+    res.json({ items: maskedModels });
   });
 
   /**
@@ -506,31 +507,28 @@ export default function registerAdminModelsRoutes(app) {
    *       - sessionAuth: []
    *     responses:
    *       200:
-   *         description: Key status by model id
+   *         description: "{ items: [{ id, state, source, envVar, enabled }] }, one per chat model"
    *       401:
    *         description: Admin authentication required
    */
   app.get(buildServerPath('/api/admin/models/_key-status'), adminAuth, async (req, res) => {
     const { data: models } = configCache.getModels(true);
-    // Entries rather than assignments: an id such as `__proto__` would set
-    // the prototype of a plain object instead of adding a property.
-    const entries = [];
+    const items = [];
     for (const model of models) {
       // Speech models resolve their credentials on their own path.
       if (!isChatModel(model)) continue;
       const enabled = model.enabled !== false;
       if (model.provider === 'iassistant-conversation') {
-        entries.push([model.id, { state: 'keyless', source: 'none', envVar: null, enabled }]);
+        items.push({ id: model.id, state: 'keyless', source: 'none', envVar: null, enabled });
         continue;
       }
       const { state, source, envVar } = inspectModelApiKey(model, { quiet: true });
-      entries.push([model.id, { state, source, envVar, enabled }]);
+      items.push({ id: model.id, state, source, envVar, enabled });
     }
-    const statuses = Object.fromEntries(entries);
     // Depends on providers and the environment as well as on the models, so
     // it must not ride on the models' ETag.
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ statuses });
+    res.json({ items });
   });
 
   app.get(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
@@ -647,7 +645,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Updated model ${modelId}`
     });
-    res.json({ message: 'Model updated successfully', model: updatedModel }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json(updatedModel);
   });
 
   app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
@@ -711,46 +709,7 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: newModel.id,
       summary: `Created model ${newModel.id}`
     });
-    res.json({ message: 'Model created successfully', model: newModel }); // api-guidelines-ignore: existing success body, changed in its own API change
-  });
-
-  app.post(buildServerPath('/api/admin/models/:modelId/toggle'), adminAuth, async (req, res) => {
-    const { modelId } = req.params;
-
-    // Validate modelId for security
-    assertValidId(modelId, 'model');
-
-    const { data: models } = configCache.getModels(true);
-    const model = models.find(m => m.id === modelId);
-    if (!model) {
-      throw new ServiceError('NOT_FOUND', 'Model not found');
-    }
-    const newEnabledState = !model.enabled;
-    model.enabled = newEnabledState;
-    if (!newEnabledState && model.default === true) {
-      const enabledModels = models.filter(
-        m => m.id !== modelId && m.enabled === true && isChatModel(m)
-      );
-      if (enabledModels.length > 0) {
-        enabledModels[0].default = true;
-        await configStore.writeJson(await modelPath(enabledModels[0].id), enabledModels[0]);
-      }
-      model.default = false;
-    }
-    await configStore.writeJson(await modelPath(modelId), model);
-    await configCache.refreshModelsCache();
-    await logAudit({
-      req,
-      action: 'toggle',
-      resource: 'model',
-      resourceId: modelId,
-      summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
-    });
-    res.json({
-      message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-      model: model,
-      enabled: newEnabledState
-    });
+    sendCreated(res, `/api/admin/models/${segment(newModel.id)}`, newModel);
   });
 
   app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
@@ -792,7 +751,6 @@ export default function registerAdminModelsRoutes(app) {
       summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
     });
     res.json({
-      message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
       enabled,
       ids: resolvedIds
     });
@@ -839,11 +797,11 @@ export default function registerAdminModelsRoutes(app) {
       resourceId: modelId,
       summary: `Deleted model ${modelId}`
     });
-    res.json({ message: 'Model deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.status(204).end();
   });
 
   /**
-   * POST /api/admin/models/:modelId/test
+   * POST /api/admin/models/:modelId/_test
    *
    * Connectivity / credential diagnostic for one configured model. Disabled
    * models are included so an admin can verify a model before enabling it.
@@ -899,7 +857,6 @@ export default function registerAdminModelsRoutes(app) {
     }
     const seconds = bytes / 2 / provider.sampleRate;
     return res.json({
-      success: true,
       message: 'Model test successful',
       messageKey: 'testSuccessful',
       response: `Generated ${seconds.toFixed(1)} s of speech (voice: ${cfg.voice})`,
@@ -928,7 +885,6 @@ export default function registerAdminModelsRoutes(app) {
       });
     }
     return res.json({
-      success: true,
       message: 'Model test successful',
       messageKey: 'testSuccessful',
       response: result.message,
@@ -944,7 +900,7 @@ export default function registerAdminModelsRoutes(app) {
     const resolved = resolveVoicesModel(req);
     try {
       const voices = await resolved.provider.listVoices(resolved.cfg);
-      return res.json({ voices });
+      return res.json({ items: voices });
     } catch (error) {
       throw voicesError(error, 'list voices');
     }
@@ -953,7 +909,7 @@ export default function registerAdminModelsRoutes(app) {
   /**
    * POST /api/admin/models/:modelId/tts/voices — create a custom voice from
    * one recording of the speaker: `{ name, audio (base64), filename?,
-   * languages?, gender? }`. Answers with the new voice; its `id` goes into the
+   * languages?, gender? }`. Answers `201` with the new voice; its `id` goes into the
    * model's voice settings.
    */
   app.post(
@@ -1003,10 +959,39 @@ export default function registerAdminModelsRoutes(app) {
           resourceId: voice.id,
           summary: `Created text-to-speech voice "${voiceName}" for model ${resolved.model.id}`
         });
-        return res.json({ voice });
+        return sendCreated(
+          res,
+          `/api/admin/models/${segment(resolved.model.id)}/tts/voices/${segment(voice.id)}`,
+          voice
+        );
       } catch (error) {
         throw voicesError(error, 'create the voice');
       }
+    }
+  );
+
+  /**
+   * GET /api/admin/models/:modelId/tts/voices/:voiceId — one voice of the model
+   * (the `Location` a create answers with).
+   */
+  app.get(
+    buildServerPath('/api/admin/models/:modelId/tts/voices/:voiceId'),
+    adminAuth,
+    async (req, res) => {
+      const resolved = resolveVoicesModel(req);
+      const { voiceId } = req.params;
+      if (!/^[\w-]{1,100}$/.test(voiceId)) {
+        throw new ServiceError('BAD_REQUEST', 'Invalid voice id');
+      }
+      let voices;
+      try {
+        voices = await resolved.provider.listVoices(resolved.cfg);
+      } catch (error) {
+        throw voicesError(error, 'read voice');
+      }
+      const voice = voices.find(candidate => candidate.id === voiceId);
+      if (!voice) throw new ServiceError('NOT_FOUND', 'Voice not found');
+      return res.json(voice);
     }
   );
 
@@ -1029,14 +1014,14 @@ export default function registerAdminModelsRoutes(app) {
           resourceId: voiceId,
           summary: `Deleted text-to-speech voice ${voiceId} of model ${resolved.model.id}`
         });
-        return res.json({ deleted: voiceId });
+        return res.status(204).end();
       } catch (error) {
         throw voicesError(error, 'delete the voice');
       }
     }
   );
 
-  app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/models/:modelId/_test'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
 
@@ -1070,7 +1055,6 @@ export default function registerAdminModelsRoutes(app) {
         const safeModel = { ...model };
         delete safeModel.apiKey;
         res.json({
-          success: true,
           message: 'Model test successful',
           messageKey: 'testSuccessful',
           response: result.content,

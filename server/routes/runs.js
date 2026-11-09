@@ -6,7 +6,7 @@
  *
  *   GET    /api/runs                                  admin: list runs from the ledger index
  *   GET    /api/runs/:runId                           run metadata (owner, admin, or anonymous-run id possession)
- *   GET    /api/runs/:runId/events?after=&lt;seq&gt;        ledger events (`view=sse` → SSE v2 envelopes for re-sync)
+ *   GET    /api/runs/:runId/events?cursor=&lt;c&gt;       ledger events (`view=sse` → SSE v2 envelopes for re-sync)
  *   DELETE /api/runs/:runId                           erase a run with cascade (owner or admin)
  *   GET    /api/runs/:runId/interactions              pending interactions of a run
  *   POST   /api/runs/:runId/interactions/:id/answer   THE one answer endpoint
@@ -19,6 +19,7 @@
  *
  * @module routes/runs
  */
+import { limitFrom, offsetCursor, offsetFromCursor } from '../utils/pagination.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import { buildServerPath } from '../utils/basePath.js';
@@ -109,7 +110,7 @@ export default function registerRunRoutes(app) {
       principalId: typeof req.query.principalId === 'string' ? req.query.principalId : undefined,
       limit
     });
-    res.json({ runs, persisted: runLog.isEnabled() });
+    res.json({ items: runs, persisted: runLog.isEnabled() });
   });
 
   app.get(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
@@ -133,13 +134,14 @@ export default function registerRunRoutes(app) {
         ? new ServiceError('NOT_FOUND', 'Run not found')
         : new ServiceError('FORBIDDEN', 'Insufficient permissions: access run required');
     }
-    const after = Math.max(Number.parseInt(req.query.after, 10) || 0, 0); // api-guidelines-ignore: existing ledger cursor, changed in its own API change
-    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 1000, 1), 5000);
+    const after = offsetFromCursor(req.query.cursor);
+    const limit = limitFrom(req.query.limit, { fallback: 1000, max: 5000 });
     const events = await runLog.readEvents(runId, { afterSeq: after, limit });
-    // The last raw ledger sequence this page read: the paging cursor. A
+    // The cursor stands for the last raw ledger sequence this page read. A
     // projected page can be empty (headers, budget events, compactions
-    // produce no envelopes) while more of the ledger remains.
-    const nextAfter = events.length ? events[events.length - 1].seq : after;
+    // produce no envelopes) while more of the ledger remains, so the walk
+    // follows the cursor, never the items: it ends on a page that read nothing.
+    const nextCursor = events.length ? offsetCursor(events[events.length - 1].seq) : null;
     // No `lastSeq`. It used to be answered per page, and on a provider whose
     // append log cannot stop early — the filesystem one cannot, since a
     // record's position need not follow its sequence number — that was a
@@ -151,14 +153,9 @@ export default function registerRunRoutes(app) {
     // the reads for the whole of it.
     if (req.query.view === 'sse') {
       // Client re-sync: the same envelopes the live stream would have carried.
-      return res.json({
-        runId,
-        after,
-        nextAfter,
-        events: events.flatMap(projectLedgerEvent)
-      });
+      return res.json({ runId, items: events.flatMap(projectLedgerEvent), nextCursor });
     }
-    res.json({ runId, after, nextAfter, events });
+    res.json({ runId, items: events, nextCursor });
   });
 
   app.delete(buildServerPath('/api/runs/:runId'), authRequired, async (req, res) => {
@@ -198,7 +195,7 @@ export default function registerRunRoutes(app) {
         i.source.principalId === (await resolvePrincipal(req.user, { mode })).id;
       visible.push(mine ? i : redactInteractionForViewer(i));
     }
-    res.json({ runId, interactions: visible });
+    res.json({ items: visible });
   });
 
   /**
@@ -307,7 +304,7 @@ export default function registerRunRoutes(app) {
         user: req.user,
         channel: ['chat', 'run_page', 'queue', 'api'].includes(channel) ? channel : 'api'
       });
-      res.json({ success: true, interaction: answered }); // api-guidelines-ignore: existing success body, changed in its own API change
+      res.json(answered);
     }
   );
 
@@ -406,7 +403,7 @@ export default function registerRunRoutes(app) {
       const routed = steerRun(runId, { message, by: event?.data?.by ?? null, at: event?.ts });
       effect = routed ? `steer_${routed}` : null;
     }
-    res.json({ success: true, runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ runId, seq: event?.seq ?? null, ...(effect ? { effect } : {}) });
   });
 
   /**
@@ -468,7 +465,7 @@ export default function registerRunRoutes(app) {
     // A tool approval's arguments are the requester's: anyone else (an
     // admin, an approver group) sees secret-looking values redacted (#2945).
     res.json({
-      interactions: visible.map(i => (ownedByCaller(i) ? i : redactInteractionForViewer(i)))
+      items: visible.map(i => (ownedByCaller(i) ? i : redactInteractionForViewer(i)))
     });
   });
 }

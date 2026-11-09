@@ -33,6 +33,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import { dirNameToDefinitionId } from '../../validators/integrationDefinitionSchema.js';
 import { previewDefinitionUpdate } from '../../services/integrations/definitions/migrationPreview.js';
 import { isUpdate, offeredVersion } from '../../services/marketplace/versionPolicy.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const COMPONENT = 'AdminMarketplaceRoutes';
 
@@ -107,7 +108,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       const registries = await registryService.listRegistries();
-      res.json(registries);
+      res.json({ items: registries });
     }
   );
 
@@ -141,7 +142,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         summary: `Created marketplace registry ${registry.id}`
       });
 
-      res.status(201).json(registry);
+      sendCreated(res, `/api/admin/marketplace/registries/${segment(registry.id)}`, registry);
     }
   );
 
@@ -214,7 +215,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: registryId,
         summary: `Deleted marketplace registry ${registryId}`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -239,7 +240,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: registryId,
         summary: `Refreshed catalog for marketplace registry ${registryId}`
       });
-      res.json({ success: true, itemCount: (catalog.items || []).length });
+      res.json({ itemCount: (catalog.items || []).length });
     }
   );
 
@@ -259,6 +260,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         res.json(result);
       } catch (error) {
         logger.error('Error testing registry', { component: COMPONENT, error: error.message });
+        // api-guidelines-ignore: a registry test answers 200 with its outcome: that it failed is the result
         res.json({ success: false, itemCount: 0, message: error.message });
       }
     }
@@ -294,6 +296,7 @@ export default function registerAdminMarketplaceRoutes(app) {
       } catch (error) {
         logger.error('Error testing registry', { component: COMPONENT, error: error.message });
         // Always return 200 with success:false so the UI can display the message
+        // api-guidelines-ignore: a registry test answers 200 with its outcome: that it failed is the result
         res.json({ success: false, itemCount: 0, message: error.message });
       }
     }
@@ -306,7 +309,8 @@ export default function registerAdminMarketplaceRoutes(app) {
   /**
    * GET /api/admin/marketplace
    * Browse all items across all enabled registries.
-   * Query params: type, search, category, registry, status, page, limit
+   * Query params: type, search, category, registry, status, limit, cursor.
+   * Answers `{ items, nextCursor, total }`.
    */
   app.get(buildServerPath('/api/admin/marketplace'), adminAuth, featureGuard, async (req, res) => {
     const filters = {
@@ -315,7 +319,7 @@ export default function registerAdminMarketplaceRoutes(app) {
       category: req.query.category,
       registry: req.query.registry,
       status: req.query.status,
-      page: req.query.page,
+      cursor: req.query.cursor,
       limit: req.query.limit
     };
     const result = await registryService.getAllItems(filters);
@@ -424,7 +428,11 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: `${type}/${name}`,
         summary: `Installed marketplace item ${type}/${name} from registry ${registryId}`
       });
-      res.status(201).json(manifest);
+      sendCreated(
+        res,
+        `/api/admin/marketplace/registries/${segment(registryId)}/items/${segment(type)}/${segment(name)}`,
+        manifest
+      );
     }
   );
 
@@ -477,7 +485,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: `${type}/${name}`,
         summary: `Uninstalled marketplace item ${type}/${name}`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -500,7 +508,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         resourceId: `${type}/${name}`,
         summary: `Detached marketplace item ${type}/${name} from tracking`
       });
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -566,7 +574,7 @@ export default function registerAdminMarketplaceRoutes(app) {
         }
       }
 
-      res.json(updates);
+      res.json({ items: updates });
     }
   );
 }

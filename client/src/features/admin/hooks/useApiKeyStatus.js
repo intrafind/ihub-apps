@@ -8,8 +8,8 @@ import { makeAdminApiCall } from '../../../api/adminApi';
  * Whether each model (or provider) has an API key the server can use.
  *
  * Reads `GET /admin/models/_key-status` or `/admin/providers/_key-status`:
- * per id, `{ state, source, envVar }` where `state` is `ok`, `keyless`,
- * `undecryptable` or `missing`. The key itself never reaches the browser.
+ * `{ items: [{ id, state, source, envVar }] }` where `state` is `ok`, `keyless`,
+ * `undecryptable` or `missing`; `statuses` is that list by id. The key itself never reaches the browser.
  *
  * A failed read leaves `statuses` empty rather than raising: the status is a
  * hint next to a list or form, and nothing there depends on it.
@@ -25,7 +25,10 @@ export default function useApiKeyStatus(kind = 'models') {
   const reload = useCallback(async () => {
     try {
       const response = await makeAdminApiCall(`/admin/${kind}/_key-status`);
-      setStatuses(response?.data?.statuses || {});
+      // A null-prototype object: an id such as `__proto__` stays an ordinary key.
+      const byId = Object.create(null);
+      for (const { id, ...status } of response?.data?.items || []) byId[id] = status;
+      setStatuses(byId);
     } catch (error) {
       console.error(`Failed to load ${kind} API key status:`, error);
       setStatuses({});

@@ -359,9 +359,14 @@ describe('resource access middleware', () => {
       }
     };
     let passed = false;
-    middleware(req, res, () => {
-      passed = true;
-    });
+    try {
+      middleware(req, res, () => {
+        passed = true;
+      });
+    } catch (error) {
+      // A refusal is a thrown ServiceError, which the error middleware answers.
+      res.statusCode = error.status;
+    }
     return { passed, status: res.statusCode };
   };
 

@@ -12,6 +12,8 @@
  */
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import logger from '../../utils/logger.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import iFinderAssistants from '../../services/integrations/iFinderAssistants.js';
 import iFinderSearchProfiles from '../../services/integrations/iFinderSearchProfiles.js';
@@ -20,8 +22,6 @@ import {
   getIFinderConfig,
   isIFinderConfigured
 } from '../../services/integrations/ifinderConfig.js';
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
-import logger from '../../utils/logger.js';
 
 /** The Accept-Language value for a `lang` query parameter, or undefined. */
 function languageOf(lang) {
@@ -59,7 +59,7 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
    *             schema:
    *               type: object
    *               properties:
-   *                 assistants:
+   *                 items:
    *                   type: array
    *                   items:
    *                     type: object
@@ -81,7 +81,7 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
     adminAuth,
     async (req, res) => {
       if (!isIFinderConfigured()) {
-        return sendErrorResponse(res, 409, 'The iFinder integration is not configured');
+        throw new ServiceError('CONFLICT', 'The iFinder integration is not configured');
       }
 
       try {
@@ -90,14 +90,14 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
           baseUrl: iAssistantService.getConfig().baseUrl,
           language: languageOf(req.query.lang)
         });
-        res.json({ assistants });
+        res.json({ items: assistants });
       } catch (error) {
         logger.warn('Could not list the iFinder iAssistants', {
           component: 'AdminIFinderAssistants',
           error: error.message
         });
-        return sendErrorResponse(res, 502, 'iFinder could not be asked for its iAssistants', {
-          details: error.message
+        throw new ServiceError('UPSTREAM_ERROR', 'iFinder could not be asked for its iAssistants', {
+          cause: error
         });
       }
     }
@@ -147,7 +147,7 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
     adminAuth,
     async (req, res) => {
       if (!isIFinderConfigured()) {
-        return sendErrorResponse(res, 409, 'The iFinder integration is not configured');
+        throw new ServiceError('CONFLICT', 'The iFinder integration is not configured');
       }
 
       const cfg = getIFinderConfig();
@@ -170,9 +170,13 @@ export default function registerAdminIFinderAssistantsRoutes(app) {
           component: 'AdminIFinderAssistants',
           error: error.message
         });
-        return sendErrorResponse(res, 502, 'iFinder could not be asked for its search profiles', {
-          details: error.message
-        });
+        throw new ServiceError(
+          'UPSTREAM_ERROR',
+          'iFinder could not be asked for its search profiles',
+          {
+            cause: error
+          }
+        );
       }
     }
   );

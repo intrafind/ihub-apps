@@ -35,7 +35,7 @@ function useWorkflowList() {
 
     try {
       const response = await apiClient.get('/workflows');
-      setWorkflows(response.data || []);
+      setWorkflows(response.data?.items ?? []);
     } catch (err) {
       console.error('Failed to fetch workflows:', err);
       setError(err.response?.data?.detail || err.message || 'Failed to load workflows');

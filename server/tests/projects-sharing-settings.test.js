@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { answerWithError } from './helpers/answerError.js';
 
 let scratch;
 let configCache;
@@ -41,9 +42,19 @@ async function drive(handlers, { body = {}, user } = {}) {
   };
   for (const handler of handlers) {
     let advanced = false;
-    await handler(req, res, () => {
-      advanced = true;
-    });
+    let refusal = null;
+    try {
+      await handler(req, res, error => {
+        // `next(error)` is what Express hands to the global handler, not a step forward.
+        if (error) refusal = error;
+        else advanced = true;
+      });
+      if (refusal) throw refusal;
+    } catch (error) {
+      // What the error middleware would answer.
+      answerWithError(res, error);
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -163,7 +174,7 @@ describe('project sharing settings', () => {
     assert.equal(cleared.body.defaultAppId, '');
     const invalid = await drive(route.put, { user: ROOT, body: { defaultAppId: '../x' } });
     assert.equal(invalid.statusCode, 400);
-    assert.equal(invalid.headers['Content-Type'], 'application/problem+json');
+    assert.equal(invalid.headers['content-type'], 'application/problem+json');
     assert.equal(invalid.body.code, 'BAD_REQUEST');
   });
 

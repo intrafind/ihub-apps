@@ -1,5 +1,29 @@
 # Fixes — Unreleased
 
+## The Azure Speech Key Stays Encrypted When Other Settings Are Saved
+
+The Azure Speech subscription key is kept encrypted in `platform.json`, but the server holds it
+decrypted. Several admin actions save `platform.json` from that copy: switching the Office add-in, the
+browser extension or the Nextcloud embed on or off or saving their settings, and the CORS, SSL,
+SSRF, logging, audit log, chat history, scheduled tasks, usage and skills pages. Each of them wrote the
+key into the file as plain text. Every save of `platform.json` now encrypts the key again, and a key
+that was already written in plain text is encrypted by the next save of any of those pages.
+
+## Cookie Settings Can Be Saved Again
+
+**Admin → System → Cookie settings** sent its save with a request method the server does not accept, so
+the change was refused, and the server would not have stored the setting even then. Both are fixed: the
+page now sends only the cookie settings, as the Tool approval page does, and they are kept like every
+other platform setting.
+
+## Three Loose Ends of the Error Response Conversion
+
+- Downloading an agent artifact whose file cannot be read (it vanished after the check, a disk fault)
+  answers a 500 instead of an unhandled stream error that could take the process down.
+- Revoking an OAuth connection reads the client and user id from the path once; a literal `%` in an id
+  used to be decoded a second time.
+- The Teams sign-in recognises a deactivated account by an error code, not by the wording of its message.
+
 ## Google API Key No Longer Appears in Server Logs
 
 The Gemini adapter used to send the API key as a `?key=` query parameter on the request URL, so a
@@ -371,3 +395,11 @@ integrations in its brief and answers with `integrations`; the wizard turns the 
 app's `integrations` bindings (only installations that exist are kept). Migration V231 updates the
 stored `app-generator` prompt: it drops the `actions` example and the `tools` answer field and adds
 the fields the wizard applies; the rest of an edited prompt is left alone.
+
+## Privacy Link in the FAQ, and OAuth Connection Counts
+
+The default FAQ page linked its privacy policy to `/page/privacy`, a URL that does not exist (pages
+are served under `/pages/{pageId}`); the link now points to `/pages/privacy`, in English and German.
+New installations get the corrected text; an existing FAQ page keeps its own copy, so change the link
+there if you use it. **Admin → OAuth** showed no connection count and **Admin → Users → View** no
+OAuth connections for a user, because both read a list key the server no longer sends.

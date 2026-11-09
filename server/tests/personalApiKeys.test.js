@@ -24,6 +24,7 @@ import {
   getPersonalKeyConfig,
   isPersonalKeyExpired,
   isPersonalKeysEnabled,
+  getPersonalKey,
   listPersonalKeys,
   revokePersonalKey,
   rotatePersonalKey
@@ -523,6 +524,18 @@ async function run() {
     'another user cannot revoke the key',
     404,
     revokePersonalKey({ user: mallory, platform: platformConfig(), keyId: owned.key.id })
+  );
+  check(
+    'the owner reads one key by id, without any secret',
+    owned.key.id,
+    getPersonalKey({ user: USER, platform: platformConfig(), keyId: owned.key.id }).id
+  );
+  await checkRejects(
+    "another user reads someone else's key as missing",
+    404,
+    Promise.resolve().then(() =>
+      getPersonalKey({ user: mallory, platform: platformConfig(), keyId: owned.key.id })
+    )
   );
   await checkRejects(
     'another user cannot rotate the key',

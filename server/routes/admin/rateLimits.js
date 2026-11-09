@@ -7,9 +7,9 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { RATE_LIMITER_KEYS, resolveRateLimitConfigs } from '../../middleware/rateLimiting.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 
 /**
  * Admin → Security → Rate limits: read and change the limits in the
@@ -116,11 +116,7 @@ export default function registerAdminRateLimitRoutes(app) {
    *         description: Rate limits per limiter
    */
   app.get(buildServerPath('/api/admin/rate-limits'), adminAuth, (req, res) => {
-    try {
-      res.json(statusPayload(req));
-    } catch (error) {
-      return sendInternalError(res, error, 'get rate limits');
-    }
+    res.json(statusPayload(req));
   });
 
   /**
@@ -158,42 +154,40 @@ export default function registerAdminRateLimitRoutes(app) {
   app.put(buildServerPath('/api/admin/rate-limits'), adminAuth, async (req, res) => {
     const parsed = updateSchema.safeParse(req.body);
     if (!parsed.success) {
-      return sendBadRequest(res, 'Invalid rate limits', parsed.error.issues);
+      throw new ServiceError('VALIDATION_FAILED', 'Invalid rate limits', {
+        details: parsed.error.issues
+      });
     }
     const changes = Object.entries(parsed.data.limiters).filter(([, value]) => value);
-    if (changes.length === 0) return sendBadRequest(res, 'No rate limits to save');
+    if (changes.length === 0) throw new ServiceError('BAD_REQUEST', 'No rate limits to save');
 
-    try {
-      // The stored file, not the cache: the cache holds env overrides and
-      // decrypted secrets, which must not be written back.
-      const stored = (await configStore.readJsonStrict(PLATFORM_FILE)) || {};
-      const rateLimit = { ...stored.rateLimit };
-      for (const [key, { windowMs, limit, counts }] of changes) {
-        rateLimit[key] = {
-          ...rateLimit[key],
-          windowMs,
-          limit,
-          skipSuccessfulRequests: counts === 'failed',
-          skipFailedRequests: counts === 'successful'
-        };
-      }
-      stored.rateLimit = rateLimit;
-      await configStore.writeJson(PLATFORM_FILE, stored);
-      await configCache.refreshCacheEntry(PLATFORM_FILE);
-
-      const keys = changes.map(([key]) => key);
-      logAudit({
-        req,
-        action: 'update',
-        resource: 'platform',
-        resourceId: 'rateLimit',
-        summary: `Changed rate limits: ${keys.join(', ')}`
-      });
-      logger.info('Rate limits saved', { component: COMPONENT, limiters: keys });
-
-      res.json(statusPayload(req));
-    } catch (error) {
-      return sendInternalError(res, error, 'save rate limits');
+    // The stored file, not the cache: the cache holds env overrides and
+    // decrypted secrets, which must not be written back.
+    const stored = (await configStore.readJsonStrict(PLATFORM_FILE)) || {};
+    const rateLimit = { ...stored.rateLimit };
+    for (const [key, { windowMs, limit, counts }] of changes) {
+      rateLimit[key] = {
+        ...rateLimit[key],
+        windowMs,
+        limit,
+        skipSuccessfulRequests: counts === 'failed',
+        skipFailedRequests: counts === 'successful'
+      };
     }
+    stored.rateLimit = rateLimit;
+    await configStore.writeJson(PLATFORM_FILE, stored);
+    await configCache.refreshCacheEntry(PLATFORM_FILE);
+
+    const keys = changes.map(([key]) => key);
+    logAudit({
+      req,
+      action: 'update',
+      resource: 'platform',
+      resourceId: 'rateLimit',
+      summary: `Changed rate limits: ${keys.join(', ')}`
+    });
+    logger.info('Rate limits saved', { component: COMPONENT, limiters: keys });
+
+    res.json(statusPayload(req));
   });
 }

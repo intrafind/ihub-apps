@@ -16,6 +16,7 @@
  * picker shows.
  */
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import configCache from '../../configCache.js';
 import {
@@ -25,7 +26,6 @@ import {
 } from '../../services/integrations/scopes/index.js';
 import { isValidId, sanitizeLanguageCode } from '../../utils/pathSecurity.js';
 import { findByIdCaseInsensitive, hasIdCaseInsensitive } from '../../utils/resourceLookup.js';
-import { sendBadRequest, sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -37,26 +37,23 @@ function isPermitted(user, kind, id) {
 }
 
 /**
- * The app, model and user a scope request is about, or a response already sent.
- * @returns {{ app: Object, model: Object|undefined, user: Object, language: string }|null}
+ * The app, model and user a scope request is about; throws a ServiceError for an invalid one.
+ * @returns {{ app: Object, model: Object|undefined, user: Object, language: string }}
  */
-function resolveContext(req, res) {
+function resolveContext(req) {
   const { appId, modelId } = req.query;
   if (!isValidId(appId)) {
-    sendBadRequest(res, 'A valid appId is required');
-    return null;
+    throw new ServiceError('BAD_REQUEST', 'A valid appId is required');
   }
   if (modelId !== undefined && !isValidId(modelId)) {
-    sendBadRequest(res, 'Invalid modelId');
-    return null;
+    throw new ServiceError('BAD_REQUEST', 'Invalid modelId');
   }
 
   // An app the user may not use answers like one that does not exist, so the
   // route cannot be used to probe app ids.
   const app = findByIdCaseInsensitive(configCache.getApps()?.data || [], appId);
   if (!app || app.enabled === false || !isPermitted(req.user, 'apps', app.id)) {
-    sendNotFound(res, 'App');
-    return null;
+    throw new ServiceError('NOT_FOUND', 'App not found');
   }
 
   const wantedModel = modelId || app.preferredModel;
@@ -144,19 +141,14 @@ function requestSignal(res) {
  *         description: App not found or not available to the user
  */
 router.get('/scopes', authRequired, async (req, res) => {
-  const context = resolveContext(req, res);
-  if (!context) return;
-  try {
-    const signal = requestSignal(res);
-    const integrations = await Promise.all(
-      applicableScopeProviders(context).map(provider =>
-        describe(provider, { req, ...context, signal })
-      )
-    );
-    res.json({ integrations });
-  } catch (error) {
-    return sendInternalError(res, error, 'list integration scopes');
-  }
+  const context = resolveContext(req);
+  const signal = requestSignal(res);
+  const integrations = await Promise.all(
+    applicableScopeProviders(context).map(provider =>
+      describe(provider, { req, ...context, signal })
+    )
+  );
+  res.json({ items: integrations });
 });
 
 /**
@@ -199,17 +191,12 @@ router.get('/:integrationId/scopes', authRequired, async (req, res) => {
   const provider = isValidId(req.params.integrationId)
     ? getScopeProvider(req.params.integrationId)
     : null;
-  if (!provider) return sendNotFound(res, 'Integration');
-  const context = resolveContext(req, res);
-  if (!context) return;
+  if (!provider) throw new ServiceError('NOT_FOUND', 'Integration not found');
+  const context = resolveContext(req);
   if (!applicableScopeProviders(context).includes(provider)) {
-    return sendNotFound(res, 'Integration');
+    throw new ServiceError('NOT_FOUND', 'Integration not found');
   }
-  try {
-    res.json(await describe(provider, { req, ...context, signal: requestSignal(res) }));
-  } catch (error) {
-    return sendInternalError(res, error, 'list integration scopes');
-  }
+  res.json(await describe(provider, { req, ...context, signal: requestSignal(res) }));
 });
 
 export default router;

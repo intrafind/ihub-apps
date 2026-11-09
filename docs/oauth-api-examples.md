@@ -15,7 +15,7 @@ Set up these variables for all examples below:
 # Your iHub Apps base URL (no trailing slash)
 export BASE_URL="https://your-ihub-instance.com"
 
-# Tools: curl, jq (optional but recommended), uuidgen
+# Tools: curl, jq .optional but recommended), uuidgen
 ```
 
 All authenticated requests use the `Authorization: Bearer <token>` header.
@@ -91,7 +91,7 @@ export TOKEN=$(curl -s -X POST "$BASE_URL/api/oauth/token" \
     \"grant_type\": \"client_credentials\",
     \"client_id\": \"$CLIENT_ID\",
     \"client_secret\": \"$CLIENT_SECRET\"
-  }" | jq -r '.access_token')
+  }" | jq .r '.access_token')
 
 echo "Token: ${TOKEN:0:50}..."
 ```
@@ -253,7 +253,7 @@ Example response:
 
 ```bash
 curl -s "$BASE_URL/api/apps" \
-  -H "Authorization: Bearer $TOKEN" | jq '.[].id'
+  -H "Authorization: Bearer $TOKEN" | jq ..[].id'
 ```
 
 ### 2b. Get Available Models
@@ -531,7 +531,7 @@ TOKEN_RESPONSE=$(curl -s -X POST "$BASE_URL/api/oauth/token" \
     \"client_secret\": \"$CLIENT_SECRET\"
   }")
 
-TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
+TOKEN=$(echo "$TOKEN_RESPONSE" | jq .r '.access_token')
 if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then
   echo "Authentication failed:"
   echo "$TOKEN_RESPONSE" | jq .
@@ -543,12 +543,12 @@ echo ""
 # ─── Step 2: List Apps ───────────────────────────────────────────
 echo "2. Listing available apps..."
 APPS=$(curl -s "$BASE_URL/api/apps" -H "Authorization: Bearer $TOKEN")
-echo "$APPS" | jq '.[].id'
+echo "$APPS" | jq ..[].id'
 echo ""
 
 # Pick the first app
-APP_ID=$(echo "$APPS" | jq -r '.[0].id')
-APP_NAME=$(echo "$APPS" | jq -r '.[0].name.en // .[0].name | keys[0] as $k | .[$k]')
+APP_ID=$(echo "$APPS" | jq .r '.[0].id')
+APP_NAME=$(echo "$APPS" | jq .r '.[0].name.en // .[0].name | keys[0] as $k | .[$k]')
 echo "   Using app: $APP_ID ($APP_NAME)"
 echo ""
 

@@ -12,7 +12,7 @@ import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 import { checkProxyTrust, reportIgnoredProxyHeaders } from '../utils/proxyAuthTrust.js';
 
-import { sendErrorResponse } from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
 // JWKS documents are cached per provider URL, but only for a bounded TTL. The
 // previous cache never expired, so once an IdP rotated its signing keys every
 // token signed with the new key failed verification until the process was
@@ -448,12 +448,14 @@ export async function proxyAuth(req, res, next) {
     // Enhance user with authenticated group
     const authConfig = platform.auth || {};
     user = enhanceUserGroups(user, authConfig);
-
-    req.user = user;
-    next();
   } catch (error) {
     logger.error('Proxy user validation error', { component: 'ProxyAuth', error });
-    // Return a 403 Forbidden with a user-friendly error message
-    sendErrorResponse(res, 403, error.message, { code: 'USER_VALIDATION_FAILED' });
+    // A 403 with the validation's own, user-friendly message; the request never goes on.
+    // Passed to `next` rather than thrown: `createAuthChain` calls this middleware with its own
+    // callback and never observes the returned promise, so a rejection would leave the request hanging.
+    return next(new ServiceError('USER_VALIDATION_FAILED', error.message, { cause: error }));
   }
+
+  req.user = user;
+  next();
 }

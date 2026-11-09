@@ -78,7 +78,7 @@ function AdminNextcloudEmbedPage() {
     // after `loadStatus()` resolves would refer to the post-toggle state and
     // invert the toast.
     const wasEnabled = status.enabled;
-    const action = wasEnabled ? 'disable' : 'enable';
+    const action = wasEnabled ? '_disable' : '_enable';
     try {
       setToggling(true);
       setMessage(null);

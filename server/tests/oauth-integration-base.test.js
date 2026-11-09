@@ -678,7 +678,8 @@ describe('Nextcloud: a refused access token on the storage routes', () => {
   it('is "connect first" (expired), which the storage routes answer with 409', async () => {
     const { default: nextcloudService } =
       await import('../services/integrations/NextcloudService.js');
-    const { respondIfAuthRequired } = await import('../routes/integrations/cloudStorageAccess.js');
+    const { integrationAuthRequiredError } =
+      await import('../routes/integrations/cloudStorageAccess.js');
     const tokens = { accessToken: 'nc-access', providerId: 'nc-main', nextcloudUserId: 'erin' };
     const getTokens = jest.spyOn(nextcloudService, 'getUserTokens').mockResolvedValue(tokens);
     const getProvider = jest
@@ -694,22 +695,10 @@ describe('Nextcloud: a refused access token on the storage routes', () => {
         expect(error.code).toBe('INTEGRATION_AUTH_REQUIRED');
         expect(error.reason).toBe('expired');
 
-        const res = {
-          setHeader: jest.fn(),
-          status: jest.fn(function status(code) {
-            this.statusCode = code;
-            return this;
-          }),
-          json: jest.fn(function json(body) {
-            this.body = body;
-            return this;
-          })
-        };
-        expect(respondIfAuthRequired(res, error, 'nc-main')).toBe(true);
-        expect(res.statusCode).toBe(409);
-        expect(res.body).toMatchObject({
+        const answered = integrationAuthRequiredError(error, 'nc-main');
+        expect(answered.status).toBe(409);
+        expect(answered).toMatchObject({
           code: 'INTEGRATION_AUTH_REQUIRED',
-          status: 409,
           details: { integration: 'nc-main', reason: 'expired' }
         });
       }

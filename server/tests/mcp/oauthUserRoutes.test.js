@@ -7,13 +7,14 @@ import request from 'supertest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import errorHandler from '../../middleware/errorHandler.js';
 import { scratchDocuments } from '../helpers/testStorage.js';
 
 const scratch = await scratchDocuments();
 
 /**
  * Per-user OAuth for outbound MCP servers — the one connect flow of every
- * integration (`POST /api/integrations/:id/connect|disconnect`,
+ * integration (`POST /api/integrations/:id/_connect|_disconnect`,
  * `GET /api/integrations`) and the MCP callback alias, end to end with the MCP
  * SDK's OAuth functions mocked: start (discovery, DCR / CIMD, PKCE,
  * server-side state), callback (state checks, user binding, code exchange,
@@ -162,6 +163,7 @@ function mountRoutes(target) {
   target.use(testUser);
   registerMcpOAuthRoutes(target);
   target.use('/api/integrations', userIntegrationRoutes);
+  target.use(errorHandler);
   return target;
 }
 
@@ -293,7 +295,7 @@ function matchesChallenge(verifier, challenge) {
 
 /**
  * Start a sign-in the way the chat's Connect card does:
- * `POST /api/integrations/:id/connect` → `{ url }`. Answers the status, the
+ * `POST /api/integrations/:id/_connect` → `{ url }`. Answers the status, the
  * body and the authorization URL (`location`).
  */
 async function connect({
@@ -304,7 +306,7 @@ async function connect({
   admin = false,
   headers = {}
 } = {}) {
-  let req = request(target).post(`/api/integrations/${serverId}/connect`);
+  let req = request(target).post(`/api/integrations/${serverId}/_connect`);
   if (user) req = req.set('x-test-user', user);
   if (admin) req = req.set('x-test-admin', '1');
   for (const [name, value] of Object.entries(headers)) req = req.set(name, value);
@@ -316,7 +318,7 @@ function startFlow(user = 'alice', returnUrl = '/chat/abc') {
   return connect({ user, returnUrl });
 }
 
-describe('POST /api/integrations/:id/connect (MCP)', () => {
+describe('POST /api/integrations/:id/_connect (MCP)', () => {
   it('answers the authorization URL with PKCE, resource and a server-side state', async () => {
     const res = await startFlow();
     expect(res.status).toBe(200);
@@ -405,7 +407,7 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
 
   it('refuses a request without a JSON body (no cross-site form posts)', async () => {
     const res = await request(app)
-      .post('/api/integrations/okta/connect')
+      .post('/api/integrations/okta/_connect')
       .set('x-test-user', 'alice')
       .type('form')
       .send('returnUrl=/chat/abc');
@@ -431,7 +433,7 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
     expect(res.status).toBe(200);
     expect(res.location).toContain('https://okta-mcp.example.com/authorize?');
     const listed = await request(app).get('/api/integrations').set('x-test-user', 'alice');
-    expect(listed.body.integrations.map(entry => entry.id)).toContain('okta');
+    expect(listed.body.items.map(entry => entry.id)).toContain('okta');
   });
 
   it('refuses a user whose groups do not grant the installation, whatever the apps grant', async () => {
@@ -447,7 +449,7 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
     expect(hidden.status).toBe(404);
     // The listing never shows an integration the user's groups do not allow.
     const listed = await request(app).get('/api/integrations').set('x-test-user', 'alice');
-    expect(listed.body.integrations.map(entry => entry.id)).not.toContain('okta');
+    expect(listed.body.items.map(entry => entry.id)).not.toContain('okta');
     // Admins configure and test the server: they always may connect.
     const admin = await connect({ user: 'root', admin: true });
     expect(admin.status).toBe(200);
@@ -468,12 +470,14 @@ describe('POST /api/integrations/:id/connect (MCP)', () => {
     expect(discovery.body).toMatchObject({
       status: 502,
       detail: 'The sign-in could not be started',
-      code: 'discovery_failed'
+      code: 'INTEGRATION_CONNECT_FAILED',
+      details: { reason: 'discovery_failed' }
     });
     sdk.registerClient.mockRejectedValueOnce(new Error('registration refused'));
     const registration = await startFlow();
     expect(registration.status).toBe(502);
-    expect(registration.body.code).toBe('registration_failed');
+    expect(registration.body.code).toBe('INTEGRATION_CONNECT_FAILED');
+    expect(registration.body.details.reason).toBe('registration_failed');
   });
 });
 
@@ -586,7 +590,7 @@ describe('GET /api/mcp/oauth/callback/:serverId', () => {
   });
 });
 
-describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)', () => {
+describe('GET /api/integrations and POST /api/integrations/:id/_disconnect (MCP)', () => {
   it('lists the per-user server with its connection status', async () => {
     await writeUserTokens(
       'alice',
@@ -594,7 +598,7 @@ describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)'
       { access_token: 'a', token_type: 'bearer', expires_in: 3600, scope: 'openid' },
       tokenBindingFor(SERVER)
     );
-    const okta = res => res.body.integrations.find(entry => entry.id === 'okta');
+    const okta = res => res.body.items.find(entry => entry.id === 'okta');
     const alice = await request(app).get('/api/integrations').set('x-test-user', 'alice');
     expect(alice.status).toBe(200);
     expect([okta(alice)]).toEqual([
@@ -616,7 +620,7 @@ describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)'
       reason: 'not_connected'
     });
     const one = await request(app).get('/api/integrations/okta').set('x-test-user', 'bob');
-    expect(one.body.integration).toMatchObject({ id: 'okta' });
+    expect(one.body).toMatchObject({ id: 'okta' });
     const anonymous = await request(app).get('/api/integrations');
     expect(anonymous.status).toBe(401);
   });
@@ -631,11 +635,11 @@ describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)'
     expect(await readUserTokens('alice', 'okta')).not.toBeNull();
 
     const res = await request(app)
-      .post('/api/integrations/okta/disconnect')
+      .post('/api/integrations/okta/_disconnect')
       .set('x-test-user', 'alice')
       .send({});
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ success: true, removed: true, revoked: true });
+    expect(res.body).toMatchObject({ removed: true, revoked: true });
     // Revocation requests refuse redirects too.
     for (const [url, init] of safeFetch.mock.calls) {
       if (String(url).includes('/revoke')) expect(init.redirect).toBe('manual');
@@ -653,12 +657,12 @@ describe('GET /api/integrations and POST /api/integrations/:id/disconnect (MCP)'
 
   it('refuses an invalid or unknown server id', async () => {
     const bad = await request(app)
-      .post('/api/integrations/..%2Fetc/disconnect')
+      .post('/api/integrations/..%2Fetc/_disconnect')
       .set('x-test-user', 'alice')
       .send({});
     expect(bad.status).toBe(404);
     const unknown = await request(app)
-      .post('/api/integrations/nope/disconnect')
+      .post('/api/integrations/nope/_disconnect')
       .set('x-test-user', 'alice')
       .send({});
     expect(unknown.status).toBe(404);
@@ -856,7 +860,8 @@ describe('public base and the shared registration', () => {
     sdk.registerClient.mockResolvedValue({ client_id: 'attacker-client' });
     const forged = await connect({ user: 'mallory', headers: { Host: 'evil.example' } });
     expect(forged.status).toBe(409);
-    expect(forged.body.code).toBe('public_url_mismatch');
+    expect(forged.body.code).toBe('INTEGRATION_CONNECT_FAILED');
+    expect(forged.body.details.reason).toBe('public_url_mismatch');
     expect(sdk.registerClient).toHaveBeenCalledTimes(1);
     expect(await mcpClientManager.clientStore.get('okta')).toMatchObject({
       clientId: 'dcr-client',
@@ -880,7 +885,8 @@ describe('public base and the shared registration', () => {
       user: 'mallory',
       headers: { 'X-Forwarded-Host': 'evil.example', 'X-Forwarded-Proto': 'https' }
     });
-    expect(forged.body.code).toBe('public_url_mismatch');
+    expect(forged.body.code).toBe('INTEGRATION_CONNECT_FAILED');
+    expect(forged.body.details.reason).toBe('public_url_mismatch');
     expect((await mcpClientManager.clientStore.get('okta')).publicBase).toBe(
       'https://ihub.example.com'
     );

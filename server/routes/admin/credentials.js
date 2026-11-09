@@ -5,17 +5,13 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
-import {
-  sendInternalError,
-  sendBadRequest,
-  sendNotFound,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { validateCredential, SECRET_FIELDS_BY_TYPE } from '../../validators/credentialSchema.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Admin CRUD routes for the central credential store
@@ -125,170 +121,154 @@ function adminIdentity(req) {
 export default function registerAdminCredentialsRoutes(app) {
   // List all credential profiles (secrets redacted).
   app.get(buildServerPath('/api/admin/credentials'), adminAuth, async (req, res) => {
-    try {
-      const store = await readStore();
-      const credentials = Object.entries(store.credentials || {}).map(([id, profile]) =>
-        redactProfile({ ...profile, id })
-      );
-      res.json({ credentials });
-    } catch (error) {
-      return sendInternalError(res, error, 'list credentials');
-    }
+    const store = await readStore();
+    const credentials = Object.entries(store.credentials || {}).map(([id, profile]) =>
+      redactProfile({ ...profile, id })
+    );
+    res.json({ items: credentials });
   });
 
   // Get a single credential profile (secrets redacted).
   app.get(buildServerPath('/api/admin/credentials/:id'), adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      if (!validateIdForPath(id, 'credential', res)) return;
-      const store = await readStore();
-      const profile = store.credentials?.[id];
-      if (!profile) return sendNotFound(res, 'Credential');
-      res.json(redactProfile({ ...profile, id }));
-    } catch (error) {
-      return sendInternalError(res, error, 'get credential');
-    }
+    const { id } = req.params;
+    assertValidId(id, 'credential');
+    const store = await readStore();
+    const profile = store.credentials?.[id];
+    if (!profile) throw new ServiceError('NOT_FOUND', 'Credential not found');
+    res.json(redactProfile({ ...profile, id }));
   });
 
   // Create a new credential profile.
   app.post(buildServerPath('/api/admin/credentials'), adminAuth, async (req, res) => {
-    try {
-      const body = req.body;
-      if (!body || typeof body !== 'object') {
-        return sendBadRequest(res, 'Invalid credential data');
-      }
-
-      const validation = validateCredential(body);
-      if (!validation.success) {
-        return sendBadRequest(res, 'Invalid credential configuration', validation.errors);
-      }
-      const profile = validation.data;
-
-      const store = await readStore();
-      if (store.credentials?.[profile.id]) {
-        return sendErrorResponse(res, 409, 'Credential id already exists');
-      }
-
-      // Encrypt secret fields before writing.
-      const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
-      for (const field of secretFields) {
-        if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
-      }
-
-      store.credentials = { ...store.credentials, [profile.id]: profile };
-      await writeStore(store);
-
-      await logAudit({
-        req,
-        action: 'create',
-        resource: 'credential',
-        resourceId: profile.id,
-        summary: `Created credential profile "${profile.id}" (${profile.type})`
-      });
-
-      logger.info('Credential profile created', {
-        component: COMPONENT,
-        id: profile.id,
-        type: profile.type,
-        admin: adminIdentity(req)
-      });
-
-      res.status(201).json(redactProfile(profile));
-    } catch (error) {
-      return sendInternalError(res, error, 'create credential');
+    const body = req.body;
+    if (!body || typeof body !== 'object') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid credential data');
     }
+
+    const validation = validateCredential(body);
+    if (!validation.success) {
+      throw new ServiceError('VALIDATION_FAILED', 'Invalid credential configuration', {
+        details: validation.errors
+      });
+    }
+    const profile = validation.data;
+
+    const store = await readStore();
+    if (store.credentials?.[profile.id]) {
+      throw new ServiceError('CONFLICT', 'Credential id already exists');
+    }
+
+    // Encrypt secret fields before writing.
+    const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
+    for (const field of secretFields) {
+      if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
+    }
+
+    store.credentials = { ...store.credentials, [profile.id]: profile };
+    await writeStore(store);
+
+    await logAudit({
+      req,
+      action: 'create',
+      resource: 'credential',
+      resourceId: profile.id,
+      summary: `Created credential profile "${profile.id}" (${profile.type})`
+    });
+
+    logger.info('Credential profile created', {
+      component: COMPONENT,
+      id: profile.id,
+      type: profile.type,
+      admin: adminIdentity(req)
+    });
+
+    sendCreated(res, `/api/admin/credentials/${segment(profile.id)}`, redactProfile(profile));
   });
 
   // Update an existing credential profile.
   app.put(buildServerPath('/api/admin/credentials/:id'), adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      if (!validateIdForPath(id, 'credential', res)) return;
+    const { id } = req.params;
+    assertValidId(id, 'credential');
 
-      const store = await readStore();
-      const existing = store.credentials?.[id];
-      if (!existing) return sendNotFound(res, 'Credential');
+    const store = await readStore();
+    const existing = store.credentials?.[id];
+    if (!existing) throw new ServiceError('NOT_FOUND', 'Credential not found');
 
-      // Force the path id onto the body so it cannot be changed via the payload.
-      const incoming = { ...req.body, id };
+    // Force the path id onto the body so it cannot be changed via the payload.
+    const incoming = { ...req.body, id };
 
-      // Restore redacted secrets from the existing (encrypted) profile before
-      // validation, so the redaction marker never reaches disk and unchanged
-      // secrets are preserved without re-typing.
-      const incomingSecretFields = SECRET_FIELDS_BY_TYPE[incoming.type] || [];
-      for (const field of incomingSecretFields) {
-        if (incoming[field] === REDACTED) {
-          // Only restore when the type is unchanged (the field maps cleanly).
-          incoming[field] = existing.type === incoming.type ? existing[field] : undefined;
-        }
+    // Restore redacted secrets from the existing (encrypted) profile before
+    // validation, so the redaction marker never reaches disk and unchanged
+    // secrets are preserved without re-typing.
+    const incomingSecretFields = SECRET_FIELDS_BY_TYPE[incoming.type] || [];
+    for (const field of incomingSecretFields) {
+      if (incoming[field] === REDACTED) {
+        // Only restore when the type is unchanged (the field maps cleanly).
+        incoming[field] = existing.type === incoming.type ? existing[field] : undefined;
       }
-
-      const validation = validateCredential(incoming);
-      if (!validation.success) {
-        return sendBadRequest(res, 'Invalid credential configuration', validation.errors);
-      }
-      const profile = validation.data;
-
-      // Re-encrypt any changed (plaintext) secret fields. Values restored from
-      // disk are already ENC[...] and skipped by the guard.
-      const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
-      for (const field of secretFields) {
-        if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
-      }
-
-      store.credentials[id] = profile;
-      await writeStore(store);
-
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'credential',
-        resourceId: id,
-        summary: `Updated credential profile "${id}" (${profile.type})`
-      });
-
-      logger.info('Credential profile updated', {
-        component: COMPONENT,
-        id,
-        type: profile.type,
-        admin: adminIdentity(req)
-      });
-
-      res.json(redactProfile(profile));
-    } catch (error) {
-      return sendInternalError(res, error, 'update credential');
     }
+
+    const validation = validateCredential(incoming);
+    if (!validation.success) {
+      throw new ServiceError('VALIDATION_FAILED', 'Invalid credential configuration', {
+        details: validation.errors
+      });
+    }
+    const profile = validation.data;
+
+    // Re-encrypt any changed (plaintext) secret fields. Values restored from
+    // disk are already ENC[...] and skipped by the guard.
+    const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
+    for (const field of secretFields) {
+      if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
+    }
+
+    store.credentials[id] = profile;
+    await writeStore(store);
+
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'credential',
+      resourceId: id,
+      summary: `Updated credential profile "${id}" (${profile.type})`
+    });
+
+    logger.info('Credential profile updated', {
+      component: COMPONENT,
+      id,
+      type: profile.type,
+      admin: adminIdentity(req)
+    });
+
+    res.json(redactProfile(profile));
   });
 
   // Delete a credential profile.
   app.delete(buildServerPath('/api/admin/credentials/:id'), adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      if (!validateIdForPath(id, 'credential', res)) return;
+    const { id } = req.params;
+    assertValidId(id, 'credential');
 
-      const store = await readStore();
-      if (!store.credentials?.[id]) return sendNotFound(res, 'Credential');
+    const store = await readStore();
+    if (!store.credentials?.[id]) throw new ServiceError('NOT_FOUND', 'Credential not found');
 
-      delete store.credentials[id];
-      await writeStore(store);
+    delete store.credentials[id];
+    await writeStore(store);
 
-      await logAudit({
-        req,
-        action: 'delete',
-        resource: 'credential',
-        resourceId: id,
-        summary: `Deleted credential profile "${id}"`
-      });
+    await logAudit({
+      req,
+      action: 'delete',
+      resource: 'credential',
+      resourceId: id,
+      summary: `Deleted credential profile "${id}"`
+    });
 
-      logger.info('Credential profile deleted', {
-        component: COMPONENT,
-        id,
-        admin: adminIdentity(req)
-      });
+    logger.info('Credential profile deleted', {
+      component: COMPONENT,
+      id,
+      admin: adminIdentity(req)
+    });
 
-      res.status(204).end();
-    } catch (error) {
-      return sendInternalError(res, error, 'delete credential');
-    }
+    res.status(204).end();
   });
 }

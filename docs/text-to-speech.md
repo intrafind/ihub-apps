@@ -241,7 +241,7 @@ An app can also name a `voice` of that model in `inputMode.voiceMode.voice`
 the admin configured: one of the model's own (`tts.voice`, `tts.voices`) or the
 voice of an app the caller may use whose voice mode is on and speaks with that
 model. A user can have at most six syntheses running at once (`429` with
-`too-many-requests`); voice mode keeps two running for one answer.
+`RATE_LIMITED`); voice mode keeps two running for one answer.
 Users need access to the model through their groups, as for read aloud. See
 [Voice mode](microphone-feature.md#voice-mode-spoken-conversation) for all
 settings.
@@ -284,7 +284,7 @@ plays with Web Audio as it arrives      next piece once one is finished …
   the language chooses. It must be a voice the admin configured: the model's
   **Voice**, a value of its **Voices per language**, or the `voice` of an app
   whose voice mode speaks with this model. Any other voice is a `400` with
-  code `invalid-voice`, so a request cannot reach other voices of the
+  code `INVALID_VOICE`, so a request cannot reach other voices of the
   provider account.
 - **Voice mode.** [Voice mode](microphone-feature.md#voice-mode-spoken-conversation)
   reads an answer in pieces instead of waiting for the whole message. The
@@ -297,9 +297,10 @@ plays with Web Audio as it arrives      next piece once one is finished …
   interrupts.
 - **Voices (admin).** `GET`/`POST /api/admin/models/:id/tts/voices` lists the
   provider's voices and creates a custom one
-  (`{ name, audio: <base64>, filename, languages, gender }`).
-  `DELETE /api/admin/models/:id/tts/voices/:voiceId` deletes a custom voice.
-  All three use the model's stored key, and creating and deleting are
+  (`{ name, audio: <base64>, filename, languages, gender }`; answers `201` with
+  the voice and its `Location`). `GET /api/admin/models/:id/tts/voices/:voiceId`
+  reads one voice, and `DELETE …/:voiceId` deletes a custom voice (`204`).
+  All of them use the model's stored key, and creating and deleting are
   recorded in the audit log.
 - **Errors** before the first audio byte are JSON with a status: `400` (no
   text, or an invalid `languageFixed`, `language` or `voice`), `403` (model not permitted), `404` (not a TTS model), `413` (input

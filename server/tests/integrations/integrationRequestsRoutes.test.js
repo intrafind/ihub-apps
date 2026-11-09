@@ -200,9 +200,9 @@ describe('the user side', () => {
       reason: '  For contracts '
     });
     assert.equal(first.status, 201, JSON.stringify(first.body));
-    assert.equal(first.body.request.status, 'open');
-    assert.equal(first.body.request.reason, 'For contracts');
-    assert.equal(first.body.request.id, requestIdFor('alice', 'com.example/docs'));
+    assert.equal(first.body.status, 'open');
+    assert.equal(first.body.reason, 'For contracts');
+    assert.equal(first.body.id, requestIdFor('alice', 'com.example/docs'));
 
     const second = await ask('alice', { definition: 'com.example/docs' });
     assert.equal(second.status, 409);
@@ -214,6 +214,23 @@ describe('the user side', () => {
     assert.equal((await ask('bob', { definition: 'com.example/docs' })).status, 201);
     const forBob = (await catalog('bob')).find(item => item.definition === 'com.example/docs');
     assert.equal(forBob.request.reason, null);
+  });
+
+  it('reads one request by id, for its requester only', async () => {
+    const created = await ask('alice', { definition: 'com.example/docs', reason: 'For contracts' });
+    assert.equal(created.status, 201);
+    const location = created.headers.location;
+    assert.ok(location.endsWith(`/api/integrations/requests/${created.body.id}`), location);
+
+    const own = await asUser('alice', 'get', `/api/integrations/requests/${created.body.id}`);
+    assert.equal(own.status, 200, JSON.stringify(own.body));
+    assert.deepEqual(own.body, created.body);
+
+    const other = await asUser('bob', 'get', `/api/integrations/requests/${created.body.id}`);
+    assert.equal(other.status, 404);
+    assert.equal(other.body.code, 'REQUEST_NOT_FOUND');
+    const unknown = await asUser('alice', 'get', '/api/integrations/requests/not-an-id');
+    assert.equal(unknown.status, 404);
   });
 
   it('refuses anonymous callers, also when anonymous access is on', async () => {
@@ -311,8 +328,8 @@ describe('the admin queue', () => {
     const id = requestIdFor('alice', 'com.example/docs');
     const res = await decide(id, '_approve', { note: 'Installing it this week' });
     assert.equal(res.status, 200, JSON.stringify(res.body));
-    assert.equal(res.body.request.status, 'approved');
-    assert.deepEqual(res.body.request.decidedBy, { id: 'admin', name: 'Admin' });
+    assert.equal(res.body.status, 'approved');
+    assert.deepEqual(res.body.decidedBy, { id: 'admin', name: 'Admin' });
     assert.equal((await queue()).openCount, 0);
     // Still one standing request: a second is refused.
     assert.equal((await ask('alice', { definition: 'com.example/docs' })).status, 409);
@@ -337,7 +354,7 @@ describe('the admin queue', () => {
     // Asking again opens a new request.
     const again = await ask('bob', { definition: 'com.example/docs' });
     assert.equal(again.status, 201);
-    assert.equal(again.body.request.status, 'open');
+    assert.equal(again.body.status, 'open');
   });
 
   it('declines and hides: gone from every user, the other open requests declined, shown again', async () => {
@@ -370,7 +387,7 @@ describe('the admin queue', () => {
       'delete',
       '/api/admin/integrations/requests/hidden/com.example%2Fcrm'
     );
-    assert.equal(shown.status, 200);
+    assert.equal(shown.status, 204);
     assert.ok((await catalog('bob')).some(item => item.definition === 'com.example/crm'));
     const twice = await asUser(
       'admin',

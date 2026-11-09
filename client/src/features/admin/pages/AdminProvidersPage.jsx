@@ -203,7 +203,7 @@ function AdminProvidersPage() {
     const results = [];
     for (const model of providerModels) {
       try {
-        const response = await makeAdminApiCall(`/admin/models/${model.id}/test`, {
+        const response = await makeAdminApiCall(`/admin/models/${model.id}/_test`, {
           method: 'POST'
         });
         const data = response?.data || {};

@@ -84,6 +84,7 @@ import { isProjectTestChat } from '../services/knowledge/projectTestScope.js';
 import { getLocalizedError } from '../serverHelpers.js';
 import { markRunChatSeen } from '../services/scheduler/tasks/taskService.js';
 import { publicChatView } from '../services/chat/chatToolApproval.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 const COMPONENT = 'ChatRoutes';
 
@@ -512,7 +513,11 @@ export default function registerChatRoutes(app) {
       store: fileStore,
       user: req.user
     });
-    return res.status(201).json({ file: descriptor });
+    return sendCreated(
+      res,
+      `/api/chats/${segment(chatId)}/files/${segment(descriptor.id)}`,
+      descriptor
+    );
   });
 
   app.get(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {
@@ -545,7 +550,7 @@ export default function registerChatRoutes(app) {
         // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
         return res.send(textFile.text);
       }
-      return res.json({ file: textFile });
+      return res.json(textFile);
     }
 
     const original = await fileStore.getOriginal(scope, fileId);
@@ -593,11 +598,12 @@ export default function registerChatRoutes(app) {
           reason: 'user_deleted'
         });
         if (!updated) throw notFound('File');
-        return res.json({ file: updated });
+        return res.json(updated);
       }
 
       const deleted = await fileStore.delete(scope, fileId);
-      return res.json({ deleted });
+      if (!deleted) throw notFound('File');
+      return res.status(204).end();
     }
   );
 
@@ -683,7 +689,7 @@ export default function registerChatRoutes(app) {
       chat = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
       if (!chat) throw notFound('Chat');
     }
-    res.json({ chat: publicChatView(chat) });
+    res.json(publicChatView(chat));
   });
 
   app.delete(buildServerPath('/api/chats/:chatId'), authRequired, async (req, res) => {
@@ -734,6 +740,6 @@ export default function registerChatRoutes(app) {
     }
     // True even when a concurrent delete won the race: the postcondition the
     // caller asked for — this chat no longer exists — holds either way.
-    res.json({ deleted: true });
+    res.status(204).end();
   });
 }

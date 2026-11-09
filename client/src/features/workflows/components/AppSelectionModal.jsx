@@ -39,7 +39,7 @@ function AppSelectionModal({ isOpen, onClose, onSelect }) {
     apiClient
       .get('/apps')
       .then(response => {
-        const enabledApps = (response.data || []).filter(a => a.enabled !== false);
+        const enabledApps = (response.data?.items ?? []).filter(a => a.enabled !== false);
         setApps(enabledApps);
       })
       .catch(err => {

@@ -10,7 +10,6 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { usageToOpenAI, isLLMError } from '../../services/loop/LLMClient.js';
-import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
 import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
@@ -31,6 +30,7 @@ import {
   buildAppGeneratorBrief,
   describeInstalledIntegrations
 } from '../../services/appGenerator.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * The file a prompt id lives in.
@@ -85,7 +85,7 @@ function adminName(req) {
  */
 async function listSharedUserPrompts(req) {
   const repo = getUserPromptRepository();
-  if (!repo.isAvailable()) return { prompts: [], truncated: false, available: false };
+  if (!repo.isAvailable()) return { items: [], truncated: false, available: false };
   const { prompts, truncated } = await repo.scan({
     filter: prompt =>
       (prompt.shares || []).some(share => share.type === 'group' || share.type === 'everyone')
@@ -102,7 +102,7 @@ async function listSharedUserPrompts(req) {
     );
   });
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-  return { prompts: items, truncated, available: true };
+  return { items, truncated, available: true };
 }
 
 /** A string, or a localized object, as a localized object in `language`. */
@@ -469,7 +469,7 @@ export default function registerAdminPromptsRoutes(app) {
         return res.status(304).end();
       }
     }
-    res.json(prompts);
+    res.json({ items: prompts });
   });
 
   /**
@@ -872,7 +872,7 @@ export default function registerAdminPromptsRoutes(app) {
       resourceId: promptId,
       summary: `Updated prompt ${promptId}`
     });
-    res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
+    res.json(updatedPrompt);
   });
 
   /**
@@ -1003,12 +1003,12 @@ export default function registerAdminPromptsRoutes(app) {
       resourceId: newPrompt.id,
       summary: `Created prompt ${newPrompt.id}`
     });
-    res.json({ message: 'Prompt created successfully', prompt: newPrompt });
+    sendCreated(res, `/api/admin/prompts/${segment(newPrompt.id)}`, newPrompt);
   });
 
   /**
    * @swagger
-   * /api/admin/prompts/{promptId}/toggle:
+   * /api/admin/prompts/{promptId}/_toggle:
    *   post:
    *     summary: Toggle the enabled state of a prompt template
    *     description: |
@@ -1082,39 +1082,6 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to toggle prompt"
    */
-  app.post(
-    buildServerPath('/api/admin/prompts/:promptId/toggle'),
-    contentAdminAuth,
-    async (req, res) => {
-      const { promptId } = req.params;
-
-      // Validate promptId for security
-      assertValidId(promptId, 'prompt');
-
-      const { data: prompts } = configCache.getPrompts(true);
-      const prompt = prompts.find(p => p.id === promptId);
-      if (!prompt) {
-        throw new ServiceError('NOT_FOUND', 'Prompt not found');
-      }
-      const newEnabledState = !prompt.enabled;
-      prompt.enabled = newEnabledState;
-      await configStore.writeJson(await promptPath(promptId), prompt);
-      await configCache.refreshPromptsCache();
-      await logAudit({
-        req,
-        action: 'toggle',
-        resource: 'prompt',
-        resourceId: promptId,
-        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} prompt ${promptId}`
-      });
-      res.json({
-        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        prompt: prompt,
-        enabled: newEnabledState
-      });
-    }
-  );
-
   /**
    * @swagger
    * /api/admin/prompts/{promptIds}/_toggle:
@@ -1254,7 +1221,6 @@ export default function registerAdminPromptsRoutes(app) {
         summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} prompts`
       });
       res.json({
-        message: `Prompts ${enabled ? 'enabled' : 'disabled'} successfully`,
         enabled,
         ids: resolvedIds
       });
@@ -1369,7 +1335,7 @@ export default function registerAdminPromptsRoutes(app) {
           userPrompt.ownerName || userPrompt.ownerId
         } to global prompt ${id}`
       });
-      res.status(201).json({ message: 'Prompt promoted successfully', prompt: globalPrompt });
+      sendCreated(res, `/api/admin/prompts/${segment(globalPrompt.id)}`, globalPrompt);
     }
   );
 
@@ -1483,7 +1449,7 @@ export default function registerAdminPromptsRoutes(app) {
         resourceId: promptId,
         summary: `Deleted prompt ${promptId}`
       });
-      res.json({ message: 'Prompt deleted successfully' });
+      res.status(204).end();
     }
   );
 
@@ -1641,9 +1607,7 @@ export default function registerAdminPromptsRoutes(app) {
       });
     } catch (error) {
       if (error instanceof ServiceError) throw error;
-      if (isLLMError(error)) {
-        return sendLLMError(res, error, { context: 'completions' });
-      }
+      if (isLLMError(error)) throw error;
       logger.error('Error in completions endpoint', { component: 'AdminPrompts', error });
       const { getLocalizedError } = await import('../../serverHelpers.js');
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';

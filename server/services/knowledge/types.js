@@ -7,22 +7,34 @@
  * @module services/knowledge/types
  */
 import { getItemKind } from '../projects/kinds/registry.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+
+/** HTTP status per knowledge error code; a code not listed is a 400. */
+const STATUS_BY_KNOWLEDGE_CODE = Object.freeze({
+  ITEM_NOT_READY: 409,
+  SOURCE_FORBIDDEN: 403,
+  KEY_ACCESS_DENIED: 403,
+  SOURCE_GONE: 404,
+  ITEM_NOT_FOUND: 404,
+  PROJECT_NOT_FOUND: 404,
+  STORAGE_UNAVAILABLE: 503,
+  TEXT_UNAVAILABLE: 410
+});
 
 /**
  * An error a knowledge call answers with. The codes are those of spec 1
  * §5.4 plus `NOT_SUPPORTED` (a capability the provider lacks),
  * `ITEM_NOT_READY` and `TEXT_UNAVAILABLE`.
  */
-export class KnowledgeError extends Error {
+export class KnowledgeError extends ServiceError {
   /**
    * @param {string} code
    * @param {string} message
    * @param {{projectId?: string, itemId?: string}} [where]
    */
   constructor(code, message, where = {}) {
-    super(message);
+    super(code, message, { status: STATUS_BY_KNOWLEDGE_CODE[code] ?? 400 });
     this.name = 'KnowledgeError';
-    this.code = code;
     if (where.projectId) this.projectId = where.projectId;
     if (where.itemId) this.itemId = where.itemId;
   }

@@ -8,6 +8,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import configCache from '../configCache.js';
 import { chatAuthRequired } from '../middleware/authRequired.js';
+import errorHandler from '../middleware/errorHandler.js';
 
 // Regression test for #1688: anonymous requests were reaching chat endpoints
 // for ANY app id because req.user was never materialized for tokenless
@@ -73,6 +74,15 @@ function makeReqRes(appId) {
   return { req, res };
 }
 
+/** Runs the guard; a refusal is a thrown ServiceError, answered the way the error middleware does. */
+function runGuard(req, res, next) {
+  try {
+    chatAuthRequired(req, res, next);
+  } catch (error) {
+    errorHandler(error, req, res, () => {});
+  }
+}
+
 describe('chatAuthRequired anonymous app-permission enforcement', () => {
   before(() => {
     if (!fs.existsSync(contentsDir)) {
@@ -108,7 +118,7 @@ describe('chatAuthRequired anonymous app-permission enforcement', () => {
     const { req, res } = makeReqRes('non-allowlisted-app');
     let calledNext = false;
 
-    chatAuthRequired(req, res, () => {
+    runGuard(req, res, () => {
       calledNext = true;
     });
 
@@ -124,7 +134,7 @@ describe('chatAuthRequired anonymous app-permission enforcement', () => {
     const { req, res } = makeReqRes('public-app');
     let calledNext = false;
 
-    chatAuthRequired(req, res, () => {
+    runGuard(req, res, () => {
       calledNext = true;
     });
 
@@ -138,7 +148,7 @@ describe('chatAuthRequired anonymous app-permission enforcement', () => {
     const { req, res } = makeReqRes('public-app');
     let calledNext = false;
 
-    chatAuthRequired(req, res, () => {
+    runGuard(req, res, () => {
       calledNext = true;
     });
 

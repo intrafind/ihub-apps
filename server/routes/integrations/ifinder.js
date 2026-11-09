@@ -4,7 +4,8 @@
 import express from 'express';
 import { authRequired } from '../../middleware/authRequired.js';
 import logger from '../../utils/logger.js';
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { codeOfStatus } from '../../utils/errorResponse.js';
 import configCache from '../../configCache.js';
 import {
   deleteLoginTokens,
@@ -16,13 +17,15 @@ import { getIFinderConfig } from '../../services/integrations/ifinderConfig.js';
 
 const router = express.Router();
 
-function sendFailure(res, error, message) {
+/**
+ * Logs a failed token-store call and rethrows it as a `ServiceError` that keeps the
+ * status the token provider reported (500 when it reported none).
+ */
+function failure(error, message) {
   logger.error(message, { component: 'IFinder', error });
-  return sendErrorResponse(
-    res,
-    Number.isInteger(error?.status) ? error.status : 500,
-    error.message
-  );
+  if (error instanceof ServiceError) return error;
+  const status = Number.isInteger(error?.status) ? error.status : 500;
+  return new ServiceError(codeOfStatus(status), error.message, { status, cause: error });
 }
 
 /**
@@ -53,7 +56,7 @@ router.get('/authorization', authRequired, async (req, res) => {
     const status = await getLoginTokenStatus(req.user.id, provider.name);
     return res.json({ enabled: true, provider, ...status });
   } catch (error) {
-    return sendFailure(res, error, 'iFinder authorization status error');
+    throw failure(error, 'iFinder authorization status error');
   }
 });
 
@@ -76,9 +79,9 @@ router.delete('/authorization', authRequired, async (req, res) => {
         source: 'web'
       });
     }
-    return res.json({ revoked });
+    return res.status(204).end();
   } catch (error) {
-    return sendFailure(res, error, 'iFinder authorization revoke error');
+    throw failure(error, 'iFinder authorization revoke error');
   }
 });
 

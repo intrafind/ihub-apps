@@ -10,7 +10,7 @@
  * redirect URI and the provider's own settings.
  *
  * **The installation id is the provider id.** It names the provider in the
- * connect flow (`POST /api/integrations/<id>/connect`), in the
+ * connect flow (`POST /api/integrations/<id>/_connect`), in the
  * callback URL (`/api/integrations/<service>/<id>/callback`), in the users'
  * stored connections (`<userId>__<id>.json` in the service's token
  * directory), in project cloud documents (`ref.providerId`) and in the

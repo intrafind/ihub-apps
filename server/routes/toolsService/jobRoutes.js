@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import rateLimit from 'express-rate-limit';
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { createReadStream } from 'node:fs';
 import { authRequired } from '../../middleware/authRequired.js';
 import {
@@ -12,7 +14,6 @@ import {
   isTerminal,
   listJobsEverywhere
 } from './jobStore.js';
-import { sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
 
 /** How often a progress stream for a job on another worker asks for news. */
 const REMOTE_PROGRESS_POLL_MS = 1000;
@@ -62,7 +63,7 @@ router.get('/jobs/:jobId/progress', authRequired, async (req, res) => {
   const found = await findJob(req.params.jobId);
   const job = found?.job;
   if (!job || !canAccessJob(job, req.user)) {
-    return sendNotFound(res, 'Job');
+    throw new ServiceError('NOT_FOUND', 'Job not found');
   }
 
   // `Connection: keep-alive` is intentionally absent — hop-by-hop headers are
@@ -138,21 +139,29 @@ router.get('/jobs/:jobId/progress', authRequired, async (req, res) => {
   });
 });
 
+/** Downloading results reads files: generous for a person, a wall for a script. */
+const downloadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 /**
  * GET /jobs/:jobId/download
  * Download the result of a completed job (shared across all tools).
  */
-router.get('/jobs/:jobId/download', authRequired, async (req, res) => {
+router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, res, next) => {
   const found = await findJob(req.params.jobId);
   const job = found?.job;
   if (!job || !canAccessJob(job, req.user)) {
-    return sendNotFound(res, 'Job');
+    throw new ServiceError('NOT_FOUND', 'Job not found');
   }
 
   // A job on another worker is served from the result file it wrote.
   const hasResult = found.local ? Boolean(job.result) : Boolean(job.resultFile);
   if (job.status !== 'completed' || !hasResult) {
-    return sendBadRequest(res, 'Job is not completed yet');
+    throw new ServiceError('BAD_REQUEST', 'Job is not completed yet');
   }
 
   res.setHeader('Content-Type', job.resultContentType || 'application/octet-stream');
@@ -164,33 +173,34 @@ router.get('/jobs/:jobId/download', authRequired, async (req, res) => {
   }
   const stream = createReadStream(job.resultFile);
   stream.on('error', () => {
-    if (!res.headersSent) sendNotFound(res, 'Job result');
+    // An event listener cannot throw into Express: hand the error to `next`.
+    if (!res.headersSent) next(new ServiceError('NOT_FOUND', 'Job result not found'));
     else res.destroy();
   });
   stream.pipe(res);
 });
 
 /**
- * PATCH /jobs/:jobId/cancel
- * Cancel a running job.
+ * POST /jobs/:jobId/_cancel
+ * Cancel a running job. Answers the job as it is now: `{ id, status: 'cancelled' }`.
  */
-router.patch('/jobs/:jobId/cancel', authRequired, async (req, res) => {
+router.post('/jobs/:jobId/_cancel', authRequired, async (req, res) => {
   const found = await findJob(req.params.jobId);
   const job = found?.job;
   if (!job || !canAccessJob(job, req.user)) {
-    return sendNotFound(res, 'Job');
+    throw new ServiceError('NOT_FOUND', 'Job not found');
   }
 
   if (isTerminal(job)) {
-    return sendBadRequest(res, `Job is already ${job.status}`);
+    throw new ServiceError('BAD_REQUEST', `Job is already ${job.status}`);
   }
 
   // Cancelled where it runs, so its processing loop sees it.
   const outcome = await cancelJobAnywhere(job.id);
-  if (!outcome) return sendNotFound(res, 'Job');
-  if (outcome.error) return sendBadRequest(res, outcome.error);
+  if (!outcome) throw new ServiceError('NOT_FOUND', 'Job not found');
+  if (outcome.error) throw new ServiceError('BAD_REQUEST', outcome.error);
 
-  res.json({ success: true, status: 'cancelled' });
+  res.json({ id: job.id, status: 'cancelled' });
 });
 
 export function registerJobRoutes(parentRouter) {

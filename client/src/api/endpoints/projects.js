@@ -125,7 +125,7 @@ export const deleteProject = async (projectId, { deleteCollection = false } = {}
  */
 export const addProjectItem = async (projectId, item) => {
   const data = await call(() => apiClient.post(`${projectPath(projectId)}/items`, item));
-  return data?.item;
+  return data;
 };
 
 /**
@@ -146,7 +146,7 @@ export const uploadProjectItem = async (projectId, { file, name, pinned = false 
       headers: { 'Content-Type': undefined }
     })
   );
-  return data?.item;
+  return data;
 };
 
 /**
@@ -172,7 +172,7 @@ export const updateProjectItem = (projectId, itemId, changes) =>
  */
 export const updateProjectItemText = async (projectId, itemId, text) => {
   const data = await call(() => apiClient.put(`${itemPath(projectId, itemId)}/text`, { text }));
-  return data?.item;
+  return data;
 };
 
 /**
@@ -195,8 +195,8 @@ export const deleteProjectItem = async (projectId, itemId) => {
  * @returns {Promise<Object>} The item.
  */
 export const refreshProjectItem = async (projectId, itemId) => {
-  const data = await call(() => apiClient.post(`${itemPath(projectId, itemId)}/refresh`));
-  return data?.item;
+  const data = await call(() => apiClient.post(`${itemPath(projectId, itemId)}/_refresh`));
+  return data;
 };
 
 /**
@@ -360,7 +360,7 @@ export const fetchProjectChats = async (projectId, { filter = 'all', limit, curs
  */
 export const fetchPickerPages = async () => {
   const data = await call(() => apiClient.get(`${PROJECTS_PATH}/pickers/pages`));
-  return Array.isArray(data?.pages) ? data.pages : [];
+  return Array.isArray(data?.items) ? data.items : [];
 };
 
 /**
@@ -392,7 +392,7 @@ export const searchPickerIFinder = async (query, { profile, limit } = {}) => {
   const data = await call(() =>
     apiClient.get(`${PROJECTS_PATH}/pickers/ifinder/search`, { params })
   );
-  return Array.isArray(data?.results) ? data.results : [];
+  return Array.isArray(data?.items) ? data.items : [];
 };
 
 /**
@@ -402,7 +402,7 @@ export const searchPickerIFinder = async (query, { profile, limit } = {}) => {
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
 export const checkPickerUrl = async url => {
-  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/check`, { url }));
+  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/_check`, { url }));
   return data || { ok: false };
 };
 
@@ -414,7 +414,7 @@ export const checkPickerUrl = async url => {
  *   chars?: number, truncated?: boolean, error?: string}>}
  */
 export const previewPickerUrl = async url => {
-  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/preview`, { url }));
+  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/_preview`, { url }));
   return data || { ok: false };
 };
 
@@ -436,7 +436,7 @@ export const CRAWL_REQUEST_TIMEOUT_MS = 45_000;
 export const crawlPickerUrl = async (url, options = {}) => {
   const data = await call(() =>
     apiClient.post(
-      `${PROJECTS_PATH}/pickers/url/crawl`,
+      `${PROJECTS_PATH}/pickers/url/_crawl`,
       { url, ...options },
       { timeout: CRAWL_REQUEST_TIMEOUT_MS }
     )
@@ -451,5 +451,5 @@ export const crawlPickerUrl = async (url, options = {}) => {
  */
 export const fetchPickerCloudProviders = async () => {
   const data = await call(() => apiClient.get(`${PROJECTS_PATH}/pickers/cloud`));
-  return Array.isArray(data?.providers) ? data.providers : [];
+  return Array.isArray(data?.items) ? data.items : [];
 };

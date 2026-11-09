@@ -13,6 +13,7 @@
  * @module services/usage/usageQuery
  */
 import { readDayEvents, eventFileMtime, flushQueue, listEventDays } from '../UsageEventLog.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import {
   readDailyRollup,
   readMonthlyRollup,
@@ -39,7 +40,12 @@ export const RANGES = Object.freeze(['today', '24h', '7d', '30d', '90d', '12m', 
 export const BREAKDOWN_DIMENSIONS = Object.freeze(Object.keys(DIMENSIONS));
 
 /** A request-level error the route turns into a 400. */
-export class UsageQueryError extends Error {}
+export class UsageQueryError extends ServiceError {
+  constructor(message) {
+    super('BAD_REQUEST', message);
+    this.name = 'UsageQueryError';
+  }
+}
 
 const utcDay = ms => new Date(ms).toISOString().slice(0, 10);
 const startOfDay = date => Date.parse(`${date}T00:00:00.000Z`);

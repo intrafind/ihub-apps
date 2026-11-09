@@ -222,15 +222,15 @@ checked and disconnected through one API, and a missing connection is reported w
 
 | Removed | Use instead |
 | --- | --- |
-| `GET /api/integrations/jira/auth` | `POST /api/integrations/jira/connect` `{ "returnUrl" }` → `{ "url" }` |
+| `GET /api/integrations/jira/auth` | `POST /api/integrations/jira/_connect` `{ "returnUrl" }` → `{ "url" }` |
 | `GET /api/integrations/jira/status` | `GET /api/integrations/jira` (`connection.status`) |
 | `POST /api/integrations/jira/refresh` | none: tokens refresh on use |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<id>` | `POST /api/integrations/<id>/connect` |
+| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<id>` | `POST /api/integrations/<id>/_connect` |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/status?providerId=<id>` | `GET /api/integrations/<id>` |
-| `POST /api/integrations/{office365,googledrive,nextcloud}/disconnect` | `POST /api/integrations/<id>/disconnect` |
-| `GET /api/mcp/oauth/authorize?serverId=<id>&scope=` | `POST /api/integrations/<id>/connect`, or `…/reconnect` `{ "scopes" }` |
+| `POST /api/integrations/{office365,googledrive,nextcloud}/disconnect` | `POST /api/integrations/<id>/_disconnect` |
+| `GET /api/mcp/oauth/authorize?serverId=<id>&scope=` | `POST /api/integrations/<id>/_connect`, or `…/_reconnect` `{ "scopes" }` |
 | `GET /api/mcp/oauth/connections` | `GET /api/integrations` (per-user servers: `connection.mode: "personal"`) |
-| `POST /api/mcp/oauth/disconnect` `{ "serverId" }` | `POST /api/integrations/<id>/disconnect` |
+| `POST /api/mcp/oauth/disconnect` `{ "serverId" }` | `POST /api/integrations/<id>/_disconnect` |
 
 - **Error code:** Jira tools returned `JIRA_AUTH_REQUIRED` with `authUrl`, per-user MCP tools
   `MCP_AUTH_REQUIRED`; both now return `{ "error": "INTEGRATION_AUTH_REQUIRED", "integration":
@@ -243,7 +243,7 @@ checked and disconnected through one API, and a missing connection is reported w
 - **Run events:** `tool/completed` carries `authRequired` as `{ "integration", "name", "reason",
   "action"?, "scopes"? }` for any integration (was `{ "serverId", "serverName", "connectUrl" }`,
   MCP only), without a URL. A client rendering a Connect card starts the sign-in with
-  `POST /api/integrations/<integration>/connect`. Connect cards stored with older answers are not
+  `POST /api/integrations/<integration>/_connect`. Connect cards stored with older answers are not
   shown again.
 - **Return parameters:** after a sign-in the browser comes back with
   `integration_connected=<installation id>` or `integration_error=<code>&integration=<id>`, instead
@@ -565,3 +565,246 @@ and the members that used to sit next to it moved into `details`:
 a failed call must read `detail`, and should branch on `code`. A client that checks the response
 content type for exactly `application/json` must also accept `application/problem+json`. The web
 app, the Office add-ins and the browser extension ship with the server and need no change.
+
+## Operations Are `_action` Segments
+
+An operation that is not create, read, update or delete is now an `_action` segment, as
+`docs/api-guidelines.md` has required for new endpoints. The web app ships with the server and
+needs no change; scripts that call these endpoints must use the new path.
+
+| Was | Is now |
+| --- | --- |
+| `PATCH /api/tools-service/jobs/:jobId/cancel` → `{ "success": true }` | `POST /api/tools-service/jobs/:jobId/_cancel` → `{ "id", "status": "cancelled" }` |
+| `POST /api/scheduled-tasks/:taskId/run` · `/pause` · `/resume` · `/duplicate` | `POST …/_run` · `/_pause` · `/_resume` · `/_duplicate` |
+| `POST /api/scheduled-tasks/:taskId/runs/:runId/cancel` | `POST …/runs/:runId/_cancel` |
+| `POST /api/scheduled-tasks/_notifications/seen` | `POST /api/scheduled-tasks/_notifications/_mark-seen` |
+| `POST /api/scheduled-tasks/:taskId/runs/delete` `{ "runIds", "all", "deleteChats" }` and the same under `/api/admin/scheduled-tasks` | `DELETE …/runs/:runId` for one run, `DELETE …/runs` for all finished runs (`?deleteChats=0` keeps the chats) |
+| `POST /api/integrations/:id/connect` · `/reconnect` · `/disconnect` | `POST …/_connect` · `/_reconnect` · `/_disconnect` |
+| `POST /api/integrations/api-keys/:keyId/rotate` | `POST …/api-keys/:keyId/_rotate` |
+
+`POST /api/integrations/:id/_disconnect` answers `{ "removed", "revoked" }`; the `success` member is
+gone. The `connectUrl` that an integration sign-in error carries points at `_connect`.
+
+## Lists Page by `limit` and `cursor`
+
+Every list that the server pages answers `{ "items": [...], "nextCursor": "…" }` and takes `limit`
+and `cursor`, as `docs/api-guidelines.md` requires. The cursor is opaque: pass back what
+`nextCursor` gave you; `nextCursor` is `null` on the last page. `page`, `pageSize` and `offset` are
+gone, and an unknown cursor is answered `400` with the code `INVALID_CURSOR`. A `limit` above the
+maximum is capped, not refused. The web app ships with the server and needs no change; its admin
+tables now step with **Previous** and **Next** instead of jumping to a page number.
+
+| Endpoint | Was | Now |
+| --- | --- | --- |
+| `GET /api/admin/audit-log` | `offset` → `{ entries, total, facets }` | `limit`, `cursor` → `{ items, nextCursor, total, facets }` |
+| `GET /api/admin/usage/limits/users` | `page`, `pageSize` → `{ items, total, page, pageSize }` | `limit`, `cursor` → `{ items, nextCursor, total }` |
+| `GET /api/admin/usage/feedback` | `offset` → `{ feedbackEntries, total, limit, offset }` | `cursor` → `{ items, nextCursor, total }` |
+| `GET /api/admin/oauth/connections` | `page`, `pageSize` → `{ success, connections, total, page, pageSize, cimdClients }` | `limit`, `cursor` → `{ items, nextCursor, total, cimdClients }` |
+| `GET /api/admin/translations/:lang` | `offset` → `entries`, `offset`, `limit` | `cursor` → `items`, `nextCursor` |
+| `GET /api/admin/marketplace` | `page` → `{ items, total, page, limit, totalPages }` | `cursor` → `{ items, nextCursor, total }` |
+| `GET /api/user-skills/marketplace` | `page` → `{ …, page, limit, totalPages }` | `cursor` → `{ items, nextCursor, total, registries, categories }` |
+| `GET /api/workflows/my-executions` | `offset` → a bare array | `cursor` → `{ items, nextCursor }` |
+| `GET /api/admin/workflows/executions` | `offset` → `{ executions, total, stats, offset, limit }` | `cursor` → `{ items, nextCursor, total, stats }` |
+| `GET /api/runs/:runId/events` | `after` → `{ runId, after, nextAfter, events }` | `cursor` → `{ runId, items, nextCursor }` |
+
+The run ledger cursor stands for the last raw sequence a page read. A page that read nothing has no
+`nextCursor`, and a client keeps following the cursor, not the number of items, because a page of
+raw events can project to none.
+
+## More Operations Are `_action` Segments, and Integration Calls Drop `{ success }`
+
+The operations below move to an `_action` segment, like the ones in "Operations Are `_action`
+Segments". The web app ships with the server and needs no change; scripts must use the new path.
+
+| Was | Is now |
+| --- | --- |
+| `POST …/toggle` on `/api/admin/workflows/:id` and `/agents/profiles/:id` | `POST …/_toggle` |
+| `POST /api/admin/{apps,models,prompts}/:id/toggle` (flips the state) | gone: `POST /api/admin/{apps,models,prompts}/:ids/_toggle` with `{ "enabled": true\|false }` sets it, for one id, a comma-separated list or `*` |
+| `POST /api/admin/{browser-extension,copilot-agent,nextcloud-embed,office-integration}/{enable,disable}` | `…/_enable` and `…/_disable` |
+| `POST /api/admin/models/:id/test`, `/proxy/test`, `/voice/azure/test`, `/office-integration/office-js/test`, `/projects/:id/test`, `/api/setup/test` | `…/_test` |
+| `POST /api/setup/disable` | `POST /api/setup/_disable` |
+| `POST /api/admin/backup/import`, `/api/admin/skills/import` | `…/_import` |
+| `POST /api/admin/{audit-log,chat-history}/retention/run` | `…/retention/_run` |
+| `POST /api/admin/usage/limits/users/:userKey/reset` | `…/_reset` |
+| `POST /api/agents/runs/:runId/cancel` and `/resume`, `POST /api/workflows/executions/:id/cancel` and `/restart` | `…/_cancel`, `…/_resume`, `…/_restart` |
+| `POST /api/prompts/:id/duplicate`, `/api/skills/:name/duplicate`, `/api/user-skills/:id/duplicate` | `…/_duplicate` |
+| `POST /api/projects/:id/items/:itemId/refresh`, `/api/admin/projects/:id/items/:itemId/refresh`, `POST /api/projects/pickers/url/preview` | `…/_refresh`, `…/_preview` |
+
+The calls under `/api/admin/integrations` and `/api/admin/marketplace` that answered `{ "success":
+true, … }` answer the resource without the `success` member; the ones that had nothing to say
+answer `204`. That covers the catalog, installed integrations, migrations, example apps, the
+builder and integration requests, the registry edits and the personal API key revocation. A
+connection test keeps its outcome in the body (`success: false` with a `message`), because the
+outcome is its result.
+
+## Admin, Sign-In and Run Calls Drop `{ success }` and `{ message: '… successfully' }`
+
+The status code carries success. The calls below no longer answer `success: true` or a
+`message: '… successfully'` text; the web app ships with the server and shows its own messages.
+Scripts that read those members must read the status (and the resource) instead.
+
+- **Nothing to say → `204`:** deleting an app, model, prompt, provider, page, group, user, OAuth client
+  or UI asset; saving the UI configuration; `POST /api/admin/{cache/_clear,cache/_refresh,client/_refresh}`;
+  `…/_disable` of the browser extension, Copilot agent, Nextcloud embed and Office integration;
+  `POST /api/session/start`; `POST /api/feedback`.
+- **A created resource → `201` and the resource:** apps, models, prompts (and promoting one), providers,
+  pages, UI assets, OAuth clients' static API keys.
+- **Everything else answers the resource or what it computed**, without the envelope: configuration
+  saves (`/api/admin/{cors,ssl,ssrf,proxy,logging,features,platform}`), the OAuth client calls, the
+  usage tracking mode and rollup, the workflow calls.
+- **Sign-in:** `POST /api/auth/{local,ldap,ntlm}/login`, the OIDC JSON callback, `POST
+  /api/auth/teams/exchange` and `GET /api/auth/user` answer `{ "user", … }`; a client that checked
+  `success` checks `user`. `POST /api/auth/logout` answers `{ "oidcLogoutRequired" }`.
+- **`POST /api/admin/update/download`** with nothing newer answers `409` `CONFLICT` ("No update
+  available") instead of `200` with `success: false`.
+- **A test keeps its report in the body:** the directory (LDAP) tests and the registry test answer `200`
+  with `success`, `message` and the steps, as `docs/api-guidelines.md` now says. A model test that ran
+  answers the model's reply; one that failed is `502`, as before.
+
+## Calls Drop the `{ ok }`, `{ deleted: true }` and Message-Only Bodies
+
+Same rule, last shapes: the status code carries success, so a call with nothing to report answers
+`204` with no body instead of `{ "ok": true }`, `{ "deleted": true }`, `{ "revoked": true }` or a
+bare `{ "message": … }`. This covers the admin agent, agent-inbox, audit-log, chat-history,
+scheduled-task, change-log, configuration and Copilot-agent calls, the agent run calls, chat stop
+and history deletion, project item calls, prompt calls, and workflow trigger calls. Calls that
+return something (a run, a count, a resource) keep that body. Scripts that read `ok`, `deleted`
+or `revoked` must read the status instead.
+
+## Project Picker URL Calls Are `_action` Segments
+
+`POST /api/projects/pickers/url/check` is now `…/url/_check` and `…/url/crawl` is `…/url/_crawl`, like
+`…/url/_preview` already was. The bodies are unchanged. The API guidelines check now reads routes
+registered through a file-local `route('…')` helper and rejects `check` and `crawl` as bare verbs.
+
+## Every `201` Carries a `Location`
+
+A call that creates a resource answers `201` with the resource in the body and the URL of the new
+resource in the `Location` header (a path, including a configured base path), as
+`docs/api-guidelines.md` has always required. Until now none did. Bodies are unchanged, so a client
+that ignored the header keeps working; one that wants the URL reads it. The calls covered are the
+admin create calls (apps, models, prompts, providers, pages, credentials, OAuth clients, agents,
+projects, integrations, marketplace registries and installs, document templates, UI assets), the
+user create calls (prompts, skills, projects, scheduled tasks and their files, chat shares, chat
+files, integration requests, personal API keys, workflows). The API guidelines check now rejects a
+bare `status(201).json(…)`; use `sendCreated` from `server/utils/created.js`.
+
+## A Resource Is Answered As Itself, Not Wrapped in `{ app }` or `{ model }`
+
+The body of a call that returns one resource is that resource, not an object with one member named
+after it. This covers the create and update answers of apps, models, prompts (and promoting one),
+providers, pages, groups, projects, agent profiles, OAuth clients, integration installations and
+example apps, document templates and chat shares, a chat rename (`PATCH /api/chats/{chatId}`), the
+text and discard answers of chat and scheduled-task files, the UI asset upload, and the CIMD client
+read. Read `body.id` where you read `body.app.id`.
+
+Bodies that carry more than the resource keep their members: `{ instance, reviewed }`,
+`{ template, files }`, `{ client, revoked }`, `{ instance, definitionId }`, the migration result, and
+`GET /api/chats/{chatId}`.
+
+## Admin Lists Are `{ items }`, Not a Bare Array
+
+A top-level JSON value is an object, and a list is `{ "items": [...] }`. These admin lists answered a
+bare array and now answer `{ "items": [...] }`: `GET /api/admin/{apps,apps/templates,models,prompts,
+providers,pages,agents/profiles,agents/inboxes,marketplace/registries,marketplace/updates,
+integrations/tools}` and the unpaged `GET /api/admin/projects`. The shared user prompts
+(`GET /api/admin/prompts?scope=user`) answer `items` instead of `prompts`. The web app is updated; a
+script that reads these lists reads `body.items`. The public lists (`/api/apps`, `/api/models`,
+`/api/prompts`) and the named-list answers (`{ credentials }`, `{ assets }`, `{ templates }`, …) follow
+in a later change.
+
+## The Public Lists Are `{ items }`, Not a Bare Array
+
+A list is an object, `{ "items": [...] }`, never a bare array. These calls answered an array and now
+answer `{ items }`: `GET /api/apps`, `GET /api/models` (with `?type=` too), `GET /api/prompts`,
+`GET /api/shortlinks`, `GET /api/agents/runs` and `GET /api/workflows`. The web app is updated.
+**Scripts and integrations that call these with an OAuth token or API key must read `body.items`**,
+for example `curl … /api/models | jq '.items[].id'` instead of `jq '.[].id'`. The conditional-request
+behaviour (`ETag` / `If-None-Match`) is unchanged.
+
+## Lists Named After What They Hold Are `{ items }` Too
+
+A list answer is `{ "items": [...] }` whatever it holds. These answered a list under its own name and
+now answer `items` (siblings such as `persisted`, `pinned` or `categories` keep their names):
+
+- Admin: `GET /api/admin/{credentials, ui/assets, document-templates, docs/search, features}`,
+  `…/integrations/installed/{id}/connections`, `…/integrations/ifinder/assistants` and
+  `…/models/{id}/tts/voices`, plus the answer of `POST …/office-integration/office-js/_test`.
+- User: `GET /api/document-templates`, `GET /api/integrations`, `GET /api/integrations/scopes`,
+  `GET /api/interactions/pending`, `GET /api/runs`, the jobs an OCR upload starts, and the cloud storage lists
+  (`…/sources`, `…/drives/{source}` of Google Drive, Office 365 and Nextcloud).
+- Project pickers: `GET /api/projects/pickers/{pages, ifinder/search, cloud}`.
+
+The web app is updated. A script that reads one of these reads `body.items`. The id-keyed key-status
+maps follow below.
+
+## More Resources Are Answered As Themselves
+
+The same rule, for the entity answers that still wrapped one resource under its own name. They now
+answer the resource itself:
+
+- `GET /api/integrations/{id}` (was `{ integration }`), `GET /api/admin/integrations/catalog/{definitionId}`
+  (was `{ definition }`), `GET …/installed/{id}/actions/{action}` (was `{ detail }`)
+- `POST /api/admin/integrations/requests/{id}/_approve` (was `{ request }`)
+- `POST /api/runs/{runId}/interactions/{id}/answer` (was `{ interaction }`)
+- `PUT /api/workflows/{id}` (was `{ workflow }`)
+- `POST /api/admin/auth/users` and `PUT /api/admin/auth/users/{userId}` (were `{ user }`)
+
+Answers that carry more than the resource keep their members (`_decline` still answers
+`{ request, alsoDeclined }`; an action override answers `{ override, detail }`). Singleton settings
+answers follow below.
+
+## Project Item Answers Are the Item Itself
+
+Adding, changing, refreshing or rewriting a project item answers the item, not `{ item }`:
+
+- `POST /api/projects/{projectId}/items` (`201` or `202`, with `Location`), including the upload
+  variant
+- `PATCH /api/projects/{projectId}/items/{itemId}`, `PUT …/items/{itemId}/text`,
+  `POST …/items/{itemId}/_refresh`
+- The same four routes under `/api/admin/projects/{projectId}/items`
+
+Adding a single iFinder document to a smart collection still answers
+`{ item, alreadyMember }`, because it carries a second member.
+
+## Settings and Config Answers Are the Object Itself
+
+The admin config routes answered the object directly on `GET` but wrapped it on `PUT`, and a few
+`GET`s wrapped it too. They now answer the object on both:
+
+- `PUT /api/admin/ssl/config`, `PUT /api/admin/cors/config`, `PUT /api/admin/ssrf/config` and
+  `PUT /api/admin/logging/config` (were `{ config }`)
+- `PUT /api/admin/audit-log/settings` (was `{ settings }`)
+- `GET /api/admin/ui/config` (was `{ config }`)
+- `GET /api/projects/pickers/ifinder/metadata` (was `{ metadata }`)
+
+Answers that carry more than the object keep their members (user prompt and skill settings answer
+`{ settings, storageAvailable }`; `PUT /api/admin/configs/platform` answers `{ config, reconfiguration }`).
+`GET /api/admin/system/storage` keeps `{ storage }`, because the value is `null` when no volume could be read.
+
+## Test Probes and Deletes Answer Plainly
+
+- The `_test` probes of integrations answer their report itself, not `{ result }`:
+  `POST /api/admin/integrations/installed/{id}/_test`, `POST …/actions/{action}/_test` and the draft
+  probe `POST /api/admin/integrations/catalog/{definitionId}/_test`.
+- `POST /api/admin/models/{modelId}/tts/voices` answers `201` with the voice itself and a
+  `Location` (was `200 { voice }`); `GET …/tts/voices/{voiceId}` is new.
+- Deleting answers `204` with no body, not `{ deleted }` or `{ revoked }`:
+  `DELETE /api/admin/models/{modelId}/tts/voices/{voiceId}`,
+  `DELETE /api/chats/{chatId}/files/{fileId}` (a file that does not exist now answers `404`) and
+  `DELETE /api/integrations/ifinder/authorization`.
+
+## API Key Status Is a List
+
+`GET /api/admin/models/_key-status` and `GET /api/admin/providers/_key-status` answered
+`{ statuses: { "<id>": { state, source, envVar } } }`, a map that used the model or provider id as a
+member name. They now answer `{ items: [{ id, state, source, envVar }] }` (models also carry
+`enabled`), like every other collection. The ids are values, so an id such as `__proto__` is an
+ordinary entry. The web app, including the setup wizard, is updated.
+
+## Three Last Wrapped Answers
+
+- `GET /api/shares/{shareId}/files/{fileId}?format=text` answers the file itself (id, name, text, …),
+  not `{ file }`, like the same read on chats and scheduled tasks.
+- `GET /api/runs/{runId}/interactions` answers `{ items }` (was `{ runId, interactions }`).
+- `GET /api/prompts/{promptId}/versions` answers `{ revision, items }` (was `{ revision, versions }`).

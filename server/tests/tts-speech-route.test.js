@@ -91,10 +91,12 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
 }));
 
 const { default: registerVoiceRoutes } = await import('../routes/voiceRoutes.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const app = express();
 app.use(express.json({ limit: '2mb' }));
 registerVoiceRoutes(app);
+app.use(errorHandler);
 
 const binary = (res, cb) => {
   const chunks = [];
@@ -194,6 +196,7 @@ describe('POST /api/voice/speech', () => {
       setTimeout(next, 20);
     });
     registerVoiceRoutes(hungUp);
+    hungUp.use(errorHandler);
     const server = hungUp.listen(0, '127.0.0.1');
     await new Promise(resolve => server.once('listening', resolve));
     try {
@@ -242,14 +245,14 @@ describe('POST /api/voice/speech', () => {
   test('400 without text', async () => {
     const res = await request(app).post('/api/voice/speech').send({ text: '  ' });
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('invalid-text');
+    expect(res.body.code).toBe('INVALID_TEXT');
   });
 
   test('503 when read aloud is not configured', async () => {
     state.platform = { speech: { tts: { enabled: false, defaultModelId: 'voxtral-mini-tts' } } };
     const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
     expect(res.status).toBe(503);
-    expect(res.body.code).toBe('not-configured');
+    expect(res.body.code).toBe('TTS_NOT_CONFIGURED');
   });
 
   test('403 when the user may not use the model', async () => {
@@ -269,7 +272,7 @@ describe('POST /api/voice/speech', () => {
       .post('/api/voice/speech')
       .send({ text: '```js\nconsole.log(1)\n```' });
     expect(res.status).toBe(422);
-    expect(res.body.code).toBe('no-speakable-text');
+    expect(res.body.code).toBe('NO_SPEAKABLE_TEXT');
   });
 
   test('502 with the provider message when it fails before any audio', async () => {
@@ -280,11 +283,11 @@ describe('POST /api/voice/speech', () => {
     expect(res.status).toBe(502);
     expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
     expect(res.body).toEqual({
-      type: 'urn:ihub:problem:upstream-error',
+      type: 'urn:ihub:problem:UPSTREAM_ERROR',
       title: 'A connected service failed. Please try again later.',
       status: 502,
       detail: 'Mistral rejected the API key (HTTP 401)',
-      code: 'upstream-error'
+      code: 'UPSTREAM_ERROR'
     });
   });
 
@@ -294,11 +297,11 @@ describe('POST /api/voice/speech', () => {
     expect(res.status).toBe(502);
     expect(res.headers['content-type']).toMatch(/^application\/problem\+json/);
     expect(res.body).toEqual({
-      type: 'urn:ihub:problem:no-audio',
-      title: 'A connected service failed. Please try again later.',
+      type: 'urn:ihub:problem:NO_AUDIO',
+      title: 'The speech service returned no audio.',
       status: 502,
       detail: 'No audio was returned',
-      code: 'no-audio'
+      code: 'NO_AUDIO'
     });
   });
 
@@ -307,7 +310,7 @@ describe('POST /api/voice/speech', () => {
     const res = await request(app).post('/api/voice/speech').send({ text: 'Hi' });
     expect(res.status).toBe(502);
     expect(res.body.detail).toBe('Text-to-speech failed');
-    expect(res.body.code).toBe('upstream-error');
+    expect(res.body.code).toBe('UPSTREAM_ERROR');
     expect(JSON.stringify(res.body)).not.toContain('ECONNREFUSED');
   });
 });

@@ -63,7 +63,7 @@ const actorSchema = z
 
 /**
  * An item id as the item routes accept it (`isValidId`, the predicate behind
- * `validateIdForPath`) and as the blob keys need it (no `__`, the separator
+ * `assertValidId`) and as the blob keys need it (no `__`, the separator
  * of `<project>__<item>__<version>`).
  */
 const itemIdSchema = zSafeId
@@ -476,7 +476,7 @@ export const ifinderPickerSchema = z
   })
   .passthrough();
 
-/** Body of `POST /api/projects/pickers/url/check`. */
+/** Body of `POST /api/projects/pickers/url/_check`. */
 export const urlCheckSchema = z
   .object({
     url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed')
@@ -487,7 +487,7 @@ export const urlCheckSchema = z
 export const urlPreviewSchema = urlCheckSchema;
 
 /**
- * Body of `POST /api/projects/pickers/url/crawl`. The bounds are the crawler's
+ * Body of `POST /api/projects/pickers/url/_crawl`. The bounds are the crawler's
  * (`CRAWL_MAX_PAGES`, `CRAWL_MAX_DEPTH` in `services/projects/siteCrawler.js`),
  * which clamps again.
  */

@@ -153,19 +153,19 @@ describe('writes', () => {
       'duplicateUserSkill',
       () => duplicateUserSkill('usk_1'),
       'post',
-      ['/user-skills/usk_1/duplicate', {}]
+      ['/user-skills/usk_1/_duplicate', {}]
     ],
     [
       'duplicateUserSkill with a name',
       () => duplicateUserSkill('usk_1', { name: 'copy' }),
       'post',
-      ['/user-skills/usk_1/duplicate', { name: 'copy' }]
+      ['/user-skills/usk_1/_duplicate', { name: 'copy' }]
     ],
     [
       'duplicateGlobalSkill',
       () => duplicateGlobalSkill('brand-voice'),
       'post',
-      ['/skills/brand-voice/duplicate', {}]
+      ['/skills/brand-voice/_duplicate', {}]
     ],
     [
       'restoreUserSkillVersion',

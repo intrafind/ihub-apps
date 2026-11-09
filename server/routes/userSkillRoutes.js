@@ -72,6 +72,7 @@ import {
   userSkillUpdateSchema
 } from '../validators/userSkillSchema.js';
 import { resolveShares, shareRefusal } from './promptRoutes.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 /** Scopes `GET /api/user-skills?scope=` accepts. */
 export const LIST_SCOPES = Object.freeze(['all', 'mine', 'shared']);
@@ -350,9 +351,10 @@ async function createCopy(req, res, deps, content, copiedFrom, auditSummary, ext
     resourceId: skill.id,
     summary: auditSummary(skill)
   });
-  res
-    .status(201)
-    .json({ ...view(skill, req, callerContext(req.user), { includeContent: true }), ...extra });
+  sendCreated(res, `/api/user-skills/${segment(skill.id)}`, {
+    ...view(skill, req, callerContext(req.user), { includeContent: true }),
+    ...extra
+  });
 }
 
 export default function registerUserSkillRoutes(app) {
@@ -481,9 +483,10 @@ export default function registerUserSkillRoutes(app) {
    *         schema:
    *           type: string
    *       - in: query
-   *         name: page
+   *         name: cursor
    *         schema:
-   *           type: integer
+   *           type: string
+   *         description: The `nextCursor` of the previous page
    *       - in: query
    *         name: limit
    *         schema:
@@ -497,7 +500,7 @@ export default function registerUserSkillRoutes(app) {
       search: typeof query.search === 'string' ? query.search.slice(0, 200) : '',
       registry: typeof query.registry === 'string' ? query.registry : '',
       category: typeof query.category === 'string' ? query.category : '',
-      page: query.page,
+      cursor: query.cursor,
       limit: query.limit
     });
     const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));
@@ -683,7 +686,7 @@ export default function registerUserSkillRoutes(app) {
       resourceId: skillId,
       summary: `Deleted user skill "${removed.name}"`
     });
-    res.json({ success: true });
+    res.status(204).end();
   });
 
   /**
@@ -789,13 +792,13 @@ export default function registerUserSkillRoutes(app) {
 
   /**
    * @swagger
-   * /api/user-skills/{skillId}/duplicate:
+   * /api/user-skills/{skillId}/_duplicate:
    *   post:
    *     summary: Copy a user skill into the caller's skills
    *     tags:
    *       - Skills
    */
-  app.post(buildServerPath('/api/user-skills/:skillId/duplicate'), ...gate, async (req, res) => {
+  app.post(buildServerPath('/api/user-skills/:skillId/_duplicate'), ...gate, async (req, res) => {
     const { skillId } = req.params;
     assertValidId(skillId, 'skill');
     if (!isUserSkillId(skillId)) throw new ServiceError('NOT_FOUND', 'Skill not found');
@@ -820,13 +823,13 @@ export default function registerUserSkillRoutes(app) {
 
   /**
    * @swagger
-   * /api/skills/{name}/duplicate:
+   * /api/skills/{name}/_duplicate:
    *   post:
    *     summary: Copy a global skill into the caller's skills
    *     tags:
    *       - Skills
    */
-  app.post(buildServerPath('/api/skills/:name/duplicate'), ...gate, async (req, res) => {
+  app.post(buildServerPath('/api/skills/:name/_duplicate'), ...gate, async (req, res) => {
     const { name } = req.params;
     if (!SKILL_NAME_PATTERN.test(name || ''))
       throw new ServiceError('NOT_FOUND', 'Skill not found');

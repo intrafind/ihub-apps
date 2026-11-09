@@ -7,6 +7,7 @@ import { assertValidId } from '../../utils/pathSecurity.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import integrationBuilderService from '../../services/integrations/builder/IntegrationBuilderService.js';
 import { builderImportSchema } from '../../validators/integrationBuilderSchema.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Routes of the integration builder (**Admin → Integrations → Add
@@ -70,7 +71,7 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
   app.get(buildServerPath('/api/admin/integrations/tools'), adminAuth, async (req, res) => {
     const { loadTools } = await import('../../services/tools/catalog.js');
     const tools = await loadTools(languageOf(req));
-    res.json((tools || []).map(toolCatalogEntry));
+    res.json({ items: (tools || []).map(toolCatalogEntry) });
   });
 
   /**
@@ -163,7 +164,10 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
       resourceId: instance.id,
       summary: `Built custom integration "${instance.id}" (${definition.protocol.type})`
     });
-    res.status(201).json({ success: true, instance, definitionId: definition.id });
+    sendCreated(res, `/api/admin/integrations/installed/${segment(instance.id)}`, {
+      instance,
+      definitionId: definition.id
+    });
   });
 
   /**
@@ -211,6 +215,6 @@ export default function registerAdminIntegrationBuilderRoutes(app) {
       resourceId: id,
       summary: `Saved custom integration "${id}" (${definition.version})`
     });
-    res.json({ success: true, instance, definitionId: definition.id });
+    res.json({ instance, definitionId: definition.id });
   });
 }

@@ -5,14 +5,9 @@ import configStore from '../../services/config/ConfigStore.js';
 import { rawRelPath } from '../../storage/namespaces.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import {
-  sendNotFound,
-  sendBadRequest,
-  sendFailedOperationError,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { assertValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
 import { agentProfileSchema } from '../../validators/agentProfileSchema.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
@@ -20,7 +15,7 @@ import memoryFile from '../../agents/memory/memoryFile.js';
 import { runTool } from '../../services/tools/runTool.js';
 import { resolveModelId } from '../../utils.js';
 import llmClient from '../../services/loop/LLMClient.js';
-import { sendLLMError } from '../../services/loop/llmHttpErrors.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** Namespace holding the agent profiles (`contents/agents/profiles`). */
 const PROFILES_NS = 'agents';
@@ -147,7 +142,7 @@ async function shapeToolResultWithLLM(toolResult, { promptTemplate, modelId }) {
 /**
  * The contents-relative path of one agent profile.
  *
- * `validateIdForPath` should have run upstream; going through `rawRelPath`
+ * `assertValidId` should have run upstream; going through `rawRelPath`
  * keeps the defense-in-depth check that used to live in `profileFilePath`,
  * and does it with the same key rules the store itself applies, so a route
  * that forgets cannot address a file outside the namespace.
@@ -164,13 +159,9 @@ function profileRelPath(profileId) {
 export default function registerAdminAgentsRoutes(app) {
   // ── Profiles list ─────────────────────────────────────────────────────────
   app.get(buildServerPath('/api/admin/agents/profiles'), adminAuth, async (req, res) => {
-    try {
-      const { data: profiles = [], etag } = configCache.getAgentProfiles(true);
-      if (etag) res.setHeader('ETag', etag);
-      res.json(profiles);
-    } catch (error) {
-      sendFailedOperationError(res, 'list agent profiles', error);
-    }
+    const { data: profiles = [], etag } = configCache.getAgentProfiles(true);
+    if (etag) res.setHeader('ETag', etag);
+    res.json({ items: profiles });
   });
 
   // ── Default LLM shaper prompt used by the memory builder UI ───────────────
@@ -184,100 +175,78 @@ export default function registerAdminAgentsRoutes(app) {
 
   // ── Single profile ────────────────────────────────────────────────────────
   app.get(buildServerPath('/api/admin/agents/profiles/:profileId'), adminAuth, async (req, res) => {
-    try {
-      const { profileId } = req.params;
-      if (!validateIdForPath(profileId, 'profile', res)) return;
-      const { data: profiles = [] } = configCache.getAgentProfiles(true);
-      const profile = profiles.find(p => p.id === profileId);
-      if (!profile) return sendNotFound(res, `Profile ${profileId} not found`);
-      res.json(profile);
-    } catch (error) {
-      sendFailedOperationError(res, 'load agent profile', error);
-    }
+    const { profileId } = req.params;
+    assertValidId(profileId, 'profile');
+    const { data: profiles = [] } = configCache.getAgentProfiles(true);
+    const profile = profiles.find(p => p.id === profileId);
+    if (!profile) throw new ServiceError('NOT_FOUND', `Profile ${profileId} not found`);
+    res.json(profile);
   });
 
   // ── Create ────────────────────────────────────────────────────────────────
   app.post(buildServerPath('/api/admin/agents/profiles'), adminAuth, async (req, res) => {
+    const payload = req.body;
+    if (!payload?.id) throw new ServiceError('BAD_REQUEST', 'Profile id is required');
+    assertValidId(payload.id, 'profile');
+
+    // A schema mismatch is a ZodError: the global handler answers it as VALIDATION_FAILED.
+    const profile = serializeProfile(agentProfileSchema.parse(payload));
+
     try {
-      const payload = req.body;
-      if (!payload?.id) return sendBadRequest(res, 'Profile id is required');
-      if (!validateIdForPath(payload.id, 'profile', res)) return;
-
-      const parseResult = agentProfileSchema.safeParse(payload);
-      if (!parseResult.success) {
-        return sendBadRequest(res, 'Profile validation failed', parseResult.error.format());
+      await configStore.createJson(profileRelPath(profile.id), profile);
+    } catch (err) {
+      if (err.code === 'EEXIST') {
+        throw new ServiceError('CONFLICT', `Profile ${profile.id} already exists`);
       }
-      const profile = serializeProfile(parseResult.data);
-
-      try {
-        await configStore.createJson(profileRelPath(profile.id), profile);
-      } catch (err) {
-        if (err.code === 'EEXIST') {
-          return sendErrorResponse(res, 409, `Profile ${profile.id} already exists`);
-        }
-        throw err;
-      }
-      await configCache.refreshAgentProfilesCache();
-      logger.info('Created agent profile', {
-        component: 'AdminAgents',
-        profileId: profile.id,
-        actor: req.user?.id
-      });
-      res.status(201).json({ ok: true, profile });
-    } catch (error) {
-      sendFailedOperationError(res, 'create agent profile', error);
+      throw err;
     }
+    await configCache.refreshAgentProfilesCache();
+    logger.info('Created agent profile', {
+      component: 'AdminAgents',
+      profileId: profile.id,
+      actor: req.user?.id
+    });
+    sendCreated(res, `/api/admin/agents/profiles/${segment(profile.id)}`, profile);
   });
 
   // ── Update ────────────────────────────────────────────────────────────────
   app.put(buildServerPath('/api/admin/agents/profiles/:profileId'), adminAuth, async (req, res) => {
-    try {
-      const { profileId } = req.params;
-      if (!validateIdForPath(profileId, 'profile', res)) return;
-      const payload = req.body;
-      if (!payload?.id) return sendBadRequest(res, 'Profile id is required');
-      if (payload.id !== profileId) {
-        return sendBadRequest(res, 'Profile id in URL must match payload id');
-      }
-
-      const parseResult = agentProfileSchema.safeParse(payload);
-      if (!parseResult.success) {
-        return sendBadRequest(res, 'Profile validation failed', parseResult.error.format());
-      }
-      const profile = serializeProfile(parseResult.data);
-
-      await configStore.writeJson(profileRelPath(profileId), profile);
-      await configCache.refreshAgentProfilesCache();
-      logger.info('Updated agent profile', {
-        component: 'AdminAgents',
-        profileId,
-        actor: req.user?.id
-      });
-      res.json({ ok: true, profile });
-    } catch (error) {
-      sendFailedOperationError(res, 'update agent profile', error);
+    const { profileId } = req.params;
+    assertValidId(profileId, 'profile');
+    const payload = req.body;
+    if (!payload?.id) throw new ServiceError('BAD_REQUEST', 'Profile id is required');
+    if (payload.id !== profileId) {
+      throw new ServiceError('BAD_REQUEST', 'Profile id in URL must match payload id');
     }
+
+    // A schema mismatch is a ZodError: the global handler answers it as VALIDATION_FAILED.
+    const profile = serializeProfile(agentProfileSchema.parse(payload));
+
+    await configStore.writeJson(profileRelPath(profileId), profile);
+    await configCache.refreshAgentProfilesCache();
+    logger.info('Updated agent profile', {
+      component: 'AdminAgents',
+      profileId,
+      actor: req.user?.id
+    });
+    res.json(profile);
   });
 
   // ── Toggle enabled ────────────────────────────────────────────────────────
   app.post(
-    buildServerPath('/api/admin/agents/profiles/:profileId/toggle'),
+    buildServerPath('/api/admin/agents/profiles/:profileId/_toggle'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { profileId } = req.params;
-        if (!validateIdForPath(profileId, 'profile', res)) return;
-        const { data: profiles = [] } = configCache.getAgentProfiles(true);
-        const profile = profiles.find(p => p.id === profileId);
-        if (!profile) return sendNotFound(res, `Profile ${profileId} not found`);
+      const { profileId } = req.params;
+      assertValidId(profileId, 'profile');
+      const { data: profiles = [] } = configCache.getAgentProfiles(true);
+      const profile = profiles.find(p => p.id === profileId);
+      if (!profile) throw new ServiceError('NOT_FOUND', `Profile ${profileId} not found`);
 
-        const updated = { ...profile, enabled: !profile.enabled };
-        await configStore.writeJson(profileRelPath(profileId), updated);
-        await configCache.refreshAgentProfilesCache();
-        res.json({ ok: true, enabled: updated.enabled });
-      } catch (error) {
-        sendFailedOperationError(res, 'toggle agent profile', error);
-      }
+      const updated = { ...profile, enabled: !profile.enabled };
+      await configStore.writeJson(profileRelPath(profileId), updated);
+      await configCache.refreshAgentProfilesCache();
+      res.json({ enabled: updated.enabled });
     }
   );
 
@@ -286,22 +255,18 @@ export default function registerAdminAgentsRoutes(app) {
     buildServerPath('/api/admin/agents/profiles/:profileId'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { profileId } = req.params;
-        if (!validateIdForPath(profileId, 'profile', res)) return;
-        if (!(await configStore.remove(profileRelPath(profileId)))) {
-          return sendNotFound(res, `Profile ${profileId} not found`);
-        }
-        await configCache.refreshAgentProfilesCache();
-        logger.info('Deleted agent profile', {
-          component: 'AdminAgents',
-          profileId,
-          actor: req.user?.id
-        });
-        res.json({ ok: true });
-      } catch (error) {
-        sendFailedOperationError(res, 'delete agent profile', error);
+      const { profileId } = req.params;
+      assertValidId(profileId, 'profile');
+      if (!(await configStore.remove(profileRelPath(profileId)))) {
+        throw new ServiceError('NOT_FOUND', `Profile ${profileId} not found`);
       }
+      await configCache.refreshAgentProfilesCache();
+      logger.info('Deleted agent profile', {
+        component: 'AdminAgents',
+        profileId,
+        actor: req.user?.id
+      });
+      res.status(204).end();
     }
   );
 
@@ -310,14 +275,10 @@ export default function registerAdminAgentsRoutes(app) {
     buildServerPath('/api/admin/agents/profiles/:profileId/memory'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { profileId } = req.params;
-        if (!validateIdForPath(profileId, 'profile', res)) return;
-        const mem = await memoryFile.readMemory(profileId);
-        res.json(mem);
-      } catch (error) {
-        sendFailedOperationError(res, 'read agent memory', error);
-      }
+      const { profileId } = req.params;
+      assertValidId(profileId, 'profile');
+      const mem = await memoryFile.readMemory(profileId);
+      res.json(mem);
     }
   );
 
@@ -325,30 +286,20 @@ export default function registerAdminAgentsRoutes(app) {
     buildServerPath('/api/admin/agents/profiles/:profileId/memory'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { profileId } = req.params;
-        if (!validateIdForPath(profileId, 'profile', res)) return;
-        const { content, expectedVersion, summary } = req.body || {};
-        if (typeof content !== 'string') {
-          return sendBadRequest(res, 'content is required');
-        }
-        const result = await memoryFile.writeMemory(profileId, {
-          mode: 'replace',
-          content,
-          summary,
-          expectedVersion,
-          updatedBy: req.user?.id || 'admin'
-        });
-        res.json({ ok: true, version: result.version });
-      } catch (error) {
-        if (error.code === 'VERSION_CONFLICT') {
-          return sendErrorResponse(res, 409, error.message, {
-            code: 'VERSION_CONFLICT',
-            details: { currentVersion: error.currentVersion }
-          });
-        }
-        sendFailedOperationError(res, 'write agent memory', error);
+      const { profileId } = req.params;
+      assertValidId(profileId, 'profile');
+      const { content, expectedVersion, summary } = req.body || {};
+      if (typeof content !== 'string') {
+        throw new ServiceError('BAD_REQUEST', 'content is required');
       }
+      const result = await memoryFile.writeMemory(profileId, {
+        mode: 'replace',
+        content,
+        summary,
+        expectedVersion,
+        updatedBy: req.user?.id || 'admin'
+      });
+      res.json({ version: result.version });
     }
   );
 
@@ -362,103 +313,81 @@ export default function registerAdminAgentsRoutes(app) {
     buildServerPath('/api/admin/agents/profiles/:profileId/memory/from-tool'),
     adminAuth,
     async (req, res) => {
-      try {
-        const { profileId } = req.params;
-        if (!validateIdForPath(profileId, 'profile', res)) return;
-        const {
-          toolId,
-          params = {},
-          section,
-          mode = 'replace-section',
-          shape = false,
-          shapePrompt,
-          shapeModel
-        } = req.body || {};
-        if (typeof toolId !== 'string' || !toolId) {
-          return sendBadRequest(res, 'toolId is required');
-        }
-        if (typeof section !== 'string' || !section.trim()) {
-          return sendBadRequest(res, 'section is required');
-        }
-        if (mode !== 'replace-section' && mode !== 'append') {
-          return sendBadRequest(res, 'mode must be replace-section or append');
-        }
-
-        // Run the tool with admin context. `runTool` already deduplicates the
-        // skill / source / MCP / function-tool dispatch paths.
-        const toolResult = await runTool(toolId, {
-          ...params,
-          user: req.user,
-          chatId: req.headers['x-request-id'] || `admin-memory-build-${profileId}`
-        });
-
-        let newSectionContent;
-        let shaped = false;
-        if (shape) {
-          newSectionContent = await shapeToolResultWithLLM(toolResult, {
-            promptTemplate: typeof shapePrompt === 'string' ? shapePrompt : null,
-            modelId: typeof shapeModel === 'string' ? shapeModel : null
-          });
-          shaped = true;
-        } else {
-          newSectionContent = toolResultToMarkdown(toolResult);
-        }
-
-        const current = await memoryFile.readMemory(profileId);
-        let nextBody = current.body || '';
-        if (mode === 'replace-section') {
-          nextBody = removeMemorySection(nextBody, section.trim());
-        }
-        const heading = `## ${section.trim()}`;
-        const append = `${heading}\n\n${newSectionContent}\n`;
-        nextBody =
-          nextBody.endsWith('\n') || nextBody.length === 0
-            ? `${nextBody}${nextBody.length === 0 ? '' : '\n'}${append}`
-            : `${nextBody}\n\n${append}`;
-
-        // Optimistic concurrency: anchor the write to the version we read so
-        // a concurrent edit (admin in another tab, agent run, etc.) surfaces
-        // as VERSION_CONFLICT below instead of silently overwriting.
-        const writeResult = await memoryFile.writeMemory(profileId, {
-          mode: 'replace',
-          content: nextBody,
-          summary: `memory build via ${toolId}${shaped ? ' (LLM-shaped)' : ''}`,
-          expectedVersion: current.version,
-          updatedBy: req.user?.id || 'admin'
-        });
-
-        logger.info('Built agent memory section from tool', {
-          component: 'AdminAgents',
-          profileId,
-          toolId,
-          section: section.trim(),
-          mode,
-          shaped,
-          version: writeResult.version
-        });
-
-        res.json({
-          ok: true,
-          version: writeResult.version,
-          section: section.trim(),
-          toolId,
-          shaped
-        });
-      } catch (error) {
-        if (error.code === 'VERSION_CONFLICT') {
-          return sendErrorResponse(res, 409, error.message, {
-            code: 'VERSION_CONFLICT',
-            details: { currentVersion: error.currentVersion }
-          });
-        }
-        logger.error('Failed to build memory from tool', {
-          component: 'AdminAgents',
-          error
-        });
-        // Provider failures keep their canonical status (429 / 504 / 404 / 502);
-        // anything else falls back to a 500 like sendFailedOperationError.
-        sendLLMError(res, error, { context: 'build memory from tool' });
+      const { profileId } = req.params;
+      assertValidId(profileId, 'profile');
+      const {
+        toolId,
+        params = {},
+        section,
+        mode = 'replace-section',
+        shape = false,
+        shapePrompt,
+        shapeModel
+      } = req.body || {};
+      if (typeof toolId !== 'string' || !toolId) {
+        throw new ServiceError('BAD_REQUEST', 'toolId is required');
       }
+      if (typeof section !== 'string' || !section.trim()) {
+        throw new ServiceError('BAD_REQUEST', 'section is required');
+      }
+      if (mode !== 'replace-section' && mode !== 'append') {
+        throw new ServiceError('BAD_REQUEST', 'mode must be replace-section or append');
+      }
+
+      // Run the tool with admin context. `runTool` already deduplicates the
+      // skill / source / MCP / function-tool dispatch paths.
+      const toolResult = await runTool(toolId, {
+        ...params,
+        user: req.user,
+        chatId: req.headers['x-request-id'] || `admin-memory-build-${profileId}`
+      });
+
+      let newSectionContent;
+      let shaped = false;
+      if (shape) {
+        newSectionContent = await shapeToolResultWithLLM(toolResult, {
+          promptTemplate: typeof shapePrompt === 'string' ? shapePrompt : null,
+          modelId: typeof shapeModel === 'string' ? shapeModel : null
+        });
+        shaped = true;
+      } else {
+        newSectionContent = toolResultToMarkdown(toolResult);
+      }
+
+      const current = await memoryFile.readMemory(profileId);
+      let nextBody = current.body || '';
+      if (mode === 'replace-section') {
+        nextBody = removeMemorySection(nextBody, section.trim());
+      }
+      const heading = `## ${section.trim()}`;
+      const append = `${heading}\n\n${newSectionContent}\n`;
+      nextBody =
+        nextBody.endsWith('\n') || nextBody.length === 0
+          ? `${nextBody}${nextBody.length === 0 ? '' : '\n'}${append}`
+          : `${nextBody}\n\n${append}`;
+
+      // Optimistic concurrency: anchor the write to the version we read so
+      // a concurrent edit (admin in another tab, agent run, etc.) surfaces
+      // as VERSION_CONFLICT below instead of silently overwriting.
+      const writeResult = await memoryFile.writeMemory(profileId, {
+        mode: 'replace',
+        content: nextBody,
+        summary: `memory build via ${toolId}${shaped ? ' (LLM-shaped)' : ''}`,
+        expectedVersion: current.version,
+        updatedBy: req.user?.id || 'admin'
+      });
+
+      logger.info('Built agent memory section from tool', {
+        component: 'AdminAgents',
+        profileId,
+        toolId,
+        section: section.trim(),
+        mode,
+        shaped,
+        version: writeResult.version
+      });
+
+      res.json({ version: writeResult.version, section: section.trim(), toolId, shaped });
     }
   );
 }

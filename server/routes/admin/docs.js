@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { getRootDir } from '../../pathUtils.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { sendBadRequest, sendInternalError, sendNotFound } from '../../utils/responseHelpers.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import {
   buildDocsIndex,
   loadDocPage,
@@ -42,11 +42,7 @@ export default function registerAdminDocsRoutes(app, { docsDir = defaultDocsDir 
    * The navigation tree from SUMMARY.md plus pages that exist but are not in it.
    */
   app.get(buildServerPath('/api/admin/docs/toc'), adminAuth, async (req, res) => {
-    try {
-      res.json(await loadDocsToc(docsDir));
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch documentation contents');
-    }
+    res.json(await loadDocsToc(docsDir));
   });
 
   /**
@@ -54,15 +50,11 @@ export default function registerAdminDocsRoutes(app, { docsDir = defaultDocsDir 
    * One page as Markdown. The path only selects one of the pages the listing found.
    */
   app.get(buildServerPath('/api/admin/docs/page'), adminAuth, async (req, res) => {
-    try {
-      const requested = typeof req.query.path === 'string' ? req.query.path : '';
-      if (!requested) return sendBadRequest(res, 'path is required');
-      const page = await loadDocPage(docsDir, requested);
-      if (!page) return sendNotFound(res, 'Documentation page');
-      res.json(page);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch documentation page');
-    }
+    const requested = typeof req.query.path === 'string' ? req.query.path : '';
+    if (!requested) throw new ServiceError('BAD_REQUEST', 'path is required');
+    const page = await loadDocPage(docsDir, requested);
+    if (!page) throw new ServiceError('NOT_FOUND', 'Documentation page not found');
+    res.json(page);
   });
 
   /**
@@ -70,14 +62,10 @@ export default function registerAdminDocsRoutes(app, { docsDir = defaultDocsDir 
    * Sections of all pages that contain every term, best match first.
    */
   app.get(buildServerPath('/api/admin/docs/search'), adminAuth, async (req, res) => {
-    try {
-      const query = typeof req.query.q === 'string' ? req.query.q.slice(0, 200) : '';
-      if (!query.trim()) return res.json({ query: '', results: [] });
-      const results = searchDocsIndex(await getIndex(), query);
-      res.json({ query, results });
-    } catch (error) {
-      return sendInternalError(res, error, 'search documentation');
-    }
+    const query = typeof req.query.q === 'string' ? req.query.q.slice(0, 200) : '';
+    if (!query.trim()) return res.json({ query: '', items: [] });
+    const results = searchDocsIndex(await getIndex(), query);
+    res.json({ query, items: results });
   });
 
   /**

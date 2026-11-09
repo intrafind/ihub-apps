@@ -12,7 +12,7 @@
  * ```json
  * { "error": "INTEGRATION_AUTH_REQUIRED", "integration": "jira",
  *   "reason": "not_connected", "message": "…",
- *   "connectUrl": "/api/integrations/jira/connect" }
+ *   "connectUrl": "/api/integrations/jira/_connect" }
  * ```
  *
  * `reason` is one of {@link INTEGRATION_AUTH_REASONS}:
@@ -50,10 +50,10 @@ const MAX_SCOPES = 50;
  * The route that starts a sign-in for an installation (`POST`, answers `{ url }`).
  *
  * @param {string} installationId
- * @returns {string} e.g. `/api/integrations/jira/connect` (with the base path)
+ * @returns {string} e.g. `/api/integrations/jira/_connect` (with the base path)
  */
 export function integrationConnectPath(installationId) {
-  return buildServerPath(`/api/integrations/${encodeURIComponent(installationId)}/connect`);
+  return buildServerPath(`/api/integrations/${encodeURIComponent(installationId)}/_connect`);
 }
 
 /**
@@ -61,10 +61,10 @@ export function integrationConnectPath(installationId) {
  * already connected to, optionally asking for more scopes (`POST`, `{ url }`).
  *
  * @param {string} installationId
- * @returns {string} e.g. `/api/integrations/okta/reconnect` (with the base path)
+ * @returns {string} e.g. `/api/integrations/okta/_reconnect` (with the base path)
  */
 export function integrationReconnectPath(installationId) {
-  return buildServerPath(`/api/integrations/${encodeURIComponent(installationId)}/reconnect`);
+  return buildServerPath(`/api/integrations/${encodeURIComponent(installationId)}/_reconnect`);
 }
 
 /** Scopes as a bounded list of non-empty strings, or undefined. */
@@ -135,7 +135,7 @@ export function isIntegrationAuthRequired(value) {
  *   integrationAuthRequiredResult({ integration: 'jira', reason: 'expired',
  *     message: 'JIRA authentication expired. Please reconnect your account.' });
  *   // → { error: 'INTEGRATION_AUTH_REQUIRED', integration: 'jira', reason: 'expired',
- *   //     message: '…', connectUrl: '/api/integrations/jira/connect' }
+ *   //     message: '…', connectUrl: '/api/integrations/jira/_connect' }
  */
 export function integrationAuthRequiredResult({
   integration,

@@ -22,6 +22,7 @@ import { runWithContext, setContext } from '../utils/requestContext.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
 import { auditLogger } from './auditLogger.js';
 import { randomUUID } from 'node:crypto';
+import { ServiceError } from '../utils/ServiceError.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -36,7 +37,7 @@ export function checkContentLength(limit) {
     const lenHeader = req.headers['content-length'];
     const length = lenHeader ? Number.parseInt(lenHeader, 10) : Number.NaN;
     if (!Number.isNaN(length) && length > limit) {
-      return res.status(413).send('Payload Too Large');
+      return next(new ServiceError('PAYLOAD_TOO_LARGE', 'Payload Too Large'));
     }
     next();
   };

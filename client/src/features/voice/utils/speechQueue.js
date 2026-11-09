@@ -36,7 +36,7 @@ import { createSpeakableChunker } from './speakableChunker';
  */
 
 /** `/api/voice/speech` answers 422 with this code for a chunk that has nothing to read (a table, code). */
-const NO_SPEAKABLE_TEXT = 'no-speakable-text';
+const NO_SPEAKABLE_TEXT = 'NO_SPEAKABLE_TEXT';
 
 /**
  * Speaking pace used to place the playhead inside a chunk whose audio is still
@@ -94,7 +94,7 @@ function notify(callback, ...args) {
  * @param {(error: Error) => void} [opts.onError] - A chunk failed (HTTP error,
  *   network). The queue skips it and carries on with the next ones, so the
  *   caption still shows the whole answer. A chunk with nothing to read (422
- *   `no-speakable-text`) is skipped silently.
+ *   `NO_SPEAKABLE_TEXT`) is skipped silently.
  * @param {(stage: 'firstChunk' | 'firstAudio', ms: number) => void} [opts.onTiming] -
  *   Milliseconds from the answer's first `update()`/`say()` to its first chunk
  *   being cut, and to its first audio being scheduled.

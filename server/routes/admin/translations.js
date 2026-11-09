@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configCache from '../../configCache.js';
+import { limitFrom, nextOffsetCursor, offsetFromCursor } from '../../utils/pagination.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { loadBuiltinLocaleJson } from '../../configLoader.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const MAX_VALUE_LENGTH = 5000;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 500;
@@ -113,74 +113,67 @@ export default function registerAdminTranslationsRoutes(app) {
   /**
    * List/search translations of one language.
    * Query: q (matches key, built-in and overridden text), changedOnly (default
-   * true), limit, offset.
+   * true), limit, cursor.
    */
   app.get(
     buildServerPath('/api/admin/translations/:lang'),
     authRequired,
     adminAuth,
     async (req, res) => {
-      try {
-        const language = resolveLanguage(req.params.lang);
-        if (!language) return sendErrorResponse(res, 404, 'Unsupported language');
+      const language = resolveLanguage(req.params.lang);
+      if (!language) throw new ServiceError('NOT_FOUND', 'Unsupported language');
 
-        const base = await loadBuiltinLocaleJson(`${language}.json`);
-        if (!base) return sendErrorResponse(res, 500, 'Built-in locale could not be loaded');
-        const stored = (await configStore.readJson(`locales/${language}.json`)) || {};
+      const base = await loadBuiltinLocaleJson(`${language}.json`);
+      if (!base) throw new ServiceError('INTERNAL_ERROR', 'Built-in locale could not be loaded');
+      const stored = (await configStore.readJson(`locales/${language}.json`)) || {};
 
-        const overrides = new Map();
-        for (const { path, value } of flatten(stored)) {
-          if (typeof value === 'string') overrides.set(pathKey(path), { path, value });
-        }
-
-        const changedOnly = req.query.changedOnly !== 'false';
-        const query = String(req.query.q || '')
-          .trim()
-          .toLowerCase();
-        const limit = Math.min(
-          Math.max(parseInt(req.query.limit, 10) || DEFAULT_LIMIT, 1),
-          MAX_LIMIT
-        );
-        const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
-
-        const baseKeys = new Set();
-        const candidates = [];
-        for (const { path, value } of flatten(base)) {
-          if (typeof value !== 'string') continue;
-          const key = pathKey(path);
-          baseKeys.add(key);
-          candidates.push({ path, base: value, override: overrides.get(key)?.value ?? null });
-        }
-        for (const [key, { path, value }] of overrides) {
-          if (!baseKeys.has(key)) {
-            candidates.push({ path, base: null, override: value, unknown: true });
-          }
-        }
-
-        const matches = candidates.filter(entry => {
-          if (changedOnly && entry.override === null) return false;
-          if (!query) return true;
-          return (
-            entry.path.join('.').toLowerCase().includes(query) ||
-            (entry.base || '').toLowerCase().includes(query) ||
-            (entry.override || '').toLowerCase().includes(query)
-          );
-        });
-
-        res.json({
-          language,
-          languages: configCache.getSupportedLanguages(),
-          changedCount: overrides.size,
-          total: matches.length,
-          entries: matches.slice(offset, offset + limit).map(entry => ({
-            ...entry,
-            key: entry.path.join('.')
-          }))
-        });
-      } catch (error) {
-        logger.error('Error listing translations', { component: 'AdminTranslations', error });
-        sendErrorResponse(res, 500, 'Failed to load translations');
+      const overrides = new Map();
+      for (const { path, value } of flatten(stored)) {
+        if (typeof value === 'string') overrides.set(pathKey(path), { path, value });
       }
+
+      const changedOnly = req.query.changedOnly !== 'false';
+      const query = String(req.query.q || '')
+        .trim()
+        .toLowerCase();
+      const limit = limitFrom(req.query.limit, { fallback: DEFAULT_LIMIT, max: MAX_LIMIT });
+      const offset = offsetFromCursor(req.query.cursor);
+
+      const baseKeys = new Set();
+      const candidates = [];
+      for (const { path, value } of flatten(base)) {
+        if (typeof value !== 'string') continue;
+        const key = pathKey(path);
+        baseKeys.add(key);
+        candidates.push({ path, base: value, override: overrides.get(key)?.value ?? null });
+      }
+      for (const [key, { path, value }] of overrides) {
+        if (!baseKeys.has(key)) {
+          candidates.push({ path, base: null, override: value, unknown: true });
+        }
+      }
+
+      const matches = candidates.filter(entry => {
+        if (changedOnly && entry.override === null) return false;
+        if (!query) return true;
+        return (
+          entry.path.join('.').toLowerCase().includes(query) ||
+          (entry.base || '').toLowerCase().includes(query) ||
+          (entry.override || '').toLowerCase().includes(query)
+        );
+      });
+
+      res.json({
+        language,
+        languages: configCache.getSupportedLanguages(),
+        changedCount: overrides.size,
+        total: matches.length,
+        items: matches.slice(offset, offset + limit).map(entry => ({
+          ...entry,
+          key: entry.path.join('.')
+        })),
+        nextCursor: nextOffsetCursor({ offset, limit, total: matches.length })
+      });
     }
   );
 
@@ -193,52 +186,44 @@ export default function registerAdminTranslationsRoutes(app) {
     authRequired,
     adminAuth,
     async (req, res) => {
-      try {
-        const language = resolveLanguage(req.params.lang);
-        if (!language) return sendErrorResponse(res, 404, 'Unsupported language');
+      const language = resolveLanguage(req.params.lang);
+      if (!language) throw new ServiceError('NOT_FOUND', 'Unsupported language');
 
-        const { path, value } = req.body || {};
-        if (!isPath(path)) return sendErrorResponse(res, 400, 'Invalid key path');
-        const reset = value === null;
-        if (!reset && (typeof value !== 'string' || value.length > MAX_VALUE_LENGTH)) {
-          return sendErrorResponse(res, 400, 'Value must be a string');
-        }
-
-        const base = await loadBuiltinLocaleJson(`${language}.json`);
-        if (!base) return sendErrorResponse(res, 500, 'Built-in locale could not be loaded');
-        // Resetting is always allowed so stale keys can be cleaned out; setting
-        // needs a key the built-in locale actually has.
-        if (!reset && leafAt(base, path) === undefined) {
-          return sendErrorResponse(res, 400, 'Unknown translation key');
-        }
-
-        const relPath = `locales/${language}.json`;
-        await configStore.updateJson(relPath, current => {
-          const next = current && typeof current === 'object' ? current : {};
-          if (reset) removeAt(next, path);
-          else setAt(next, path, value);
-          return next;
-        });
-        await configCache.refreshCacheEntry(relPath);
-
-        logAudit({
-          req,
-          action: 'update',
-          resource: 'translation',
-          resourceId: `${language}:${path.join('.')}`,
-          summary: reset
-            ? `Reset translation override ${path.join('.')} (${language})`
-            : `Overrode translation ${path.join('.')} (${language})`
-        });
-
-        res.json({ success: true });
-      } catch (error) {
-        logger.error('Error saving translation override', {
-          component: 'AdminTranslations',
-          error
-        });
-        sendErrorResponse(res, 500, 'Failed to save translation');
+      const { path, value } = req.body || {};
+      if (!isPath(path)) throw new ServiceError('BAD_REQUEST', 'Invalid key path');
+      const reset = value === null;
+      if (!reset && (typeof value !== 'string' || value.length > MAX_VALUE_LENGTH)) {
+        throw new ServiceError('BAD_REQUEST', 'Value must be a string');
       }
+
+      const base = await loadBuiltinLocaleJson(`${language}.json`);
+      if (!base) throw new ServiceError('INTERNAL_ERROR', 'Built-in locale could not be loaded');
+      // Resetting is always allowed so stale keys can be cleaned out; setting
+      // needs a key the built-in locale actually has.
+      if (!reset && leafAt(base, path) === undefined) {
+        throw new ServiceError('BAD_REQUEST', 'Unknown translation key');
+      }
+
+      const relPath = `locales/${language}.json`;
+      await configStore.updateJson(relPath, current => {
+        const next = current && typeof current === 'object' ? current : {};
+        if (reset) removeAt(next, path);
+        else setAt(next, path, value);
+        return next;
+      });
+      await configCache.refreshCacheEntry(relPath);
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'translation',
+        resourceId: `${language}:${path.join('.')}`,
+        summary: reset
+          ? `Reset translation override ${path.join('.')} (${language})`
+          : `Overrode translation ${path.join('.')} (${language})`
+      });
+
+      res.status(204).end();
     }
   );
 }

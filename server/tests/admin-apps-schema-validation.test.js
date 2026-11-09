@@ -104,7 +104,7 @@ describe('POST /api/admin/apps', () => {
   test('creates a valid app and stores the body unchanged', async () => {
     const res = await request(app).post('/api/admin/apps').send(chatApp('helper'));
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     // Stored as sent: schema defaults are not written into the file.
     expect(store['apps/helper.json']).toEqual(chatApp('helper'));
   });
@@ -114,7 +114,7 @@ describe('POST /api/admin/apps', () => {
       .post('/api/admin/apps')
       .send(redirectApp('tool', 'https://example.com/tool'));
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(store['apps/tool.json'].redirectConfig.url).toBe('https://example.com/tool');
   });
 

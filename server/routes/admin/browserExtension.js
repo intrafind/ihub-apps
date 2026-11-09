@@ -11,6 +11,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient, updateOAuthClient } from '../../utils/oauthClientManager.js';
 import {
@@ -20,7 +21,6 @@ import {
 } from '../../utils/chromeExtensionId.js';
 import { isValidExtensionId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
 
 // The browser extension uses a fixed redirect URI scheme:
 //   https://<extension-id>.chromiumapp.org/cb     (Chrome / Edge)
@@ -228,7 +228,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/browser-extension/enable:
+   * /api/admin/browser-extension/_enable:
    *   post:
    *     summary: Enable browser extension integration and auto-create OAuth client
    *     tags:
@@ -237,116 +237,112 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    *       - bearerAuth: []
    *       - sessionAuth: []
    */
-  app.post(buildServerPath('/api/admin/browser-extension/enable'), adminAuth, async (req, res) => {
-    try {
-      const platform = configCache.getPlatform();
-      const cfg = platform?.browserExtension || {};
+  app.post(buildServerPath('/api/admin/browser-extension/_enable'), adminAuth, async (req, res) => {
+    const platform = configCache.getPlatform();
+    const cfg = platform?.browserExtension || {};
 
-      let oauthClientId = cfg.oauthClientId;
+    let oauthClientId = cfg.oauthClientId;
 
-      const allowedGroups = Array.isArray(cfg.allowedGroups)
-        ? cfg.allowedGroups
-        : ['browser-extension'];
-      const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
-      // Signing-key generation is opt-in via /rotate-key. Unpacked dev
-      // installs only need the manual extensionIds → redirect URIs path; the
-      // signing key is only required for the packaged-download flow.
-      const signingKey = cfg.signingKey || null;
-      const redirectUris = buildAllRedirectUris(extensionIds, signingKey);
+    const allowedGroups = Array.isArray(cfg.allowedGroups)
+      ? cfg.allowedGroups
+      : ['browser-extension'];
+    const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
+    // Signing-key generation is opt-in via /rotate-key. Unpacked dev
+    // installs only need the manual extensionIds → redirect URIs path; the
+    // signing key is only required for the packaged-download flow.
+    const signingKey = cfg.signingKey || null;
+    const redirectUris = buildAllRedirectUris(extensionIds, signingKey);
 
-      if (!oauthClientId) {
-        const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthClientsFile(oauthConfig);
+    if (!oauthClientId) {
+      const oauthConfig = platform?.oauth || {};
+      const clientsFile = oauthClientsFile(oauthConfig);
 
-        const newClient = await createOAuthClient(
-          {
-            name: 'Browser Extension',
-            description:
-              'Auto-generated client for the iHub browser extension (PKCE public client)',
-            clientType: 'public',
-            grantTypes: ['authorization_code', 'refresh_token'],
-            redirectUris,
-            trusted: true,
-            consentRequired: false,
-            scopes: ['openid', 'profile', 'email'],
-            allowedGroups
-          },
-          clientsFile,
-          req.user?.id || 'admin'
-        );
+      const newClient = await createOAuthClient(
+        {
+          name: 'Browser Extension',
+          description: 'Auto-generated client for the iHub browser extension (PKCE public client)',
+          clientType: 'public',
+          grantTypes: ['authorization_code', 'refresh_token'],
+          redirectUris,
+          trusted: true,
+          consentRequired: false,
+          scopes: ['openid', 'profile', 'email'],
+          allowedGroups
+        },
+        clientsFile,
+        req.user?.id || 'admin'
+      );
 
-        oauthClientId = newClient.clientId;
+      oauthClientId = newClient.clientId;
 
-        logger.info('Created OAuth client for browser extension', {
-          component: 'AdminBrowserExtension',
-          clientId: oauthClientId
-        });
-      } else {
-        // Re-sync redirectUris and allowedGroups onto the existing client so
-        // the admin can manage extension IDs without rotating the secret.
-        const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthClientsFile(oauthConfig);
-        await updateOAuthClient(
-          oauthClientId,
-          { redirectUris, allowedGroups, active: true },
-          clientsFile,
-          req.user?.id || 'admin'
-        );
-      }
-
-      const oauthUpdates = {
-        oauth: {
-          ...platform?.oauth,
-          enabled: {
-            ...platform?.oauth?.enabled,
-            authz: true,
-            clients: true
-          },
-          authorizationCodeEnabled: true,
-          refreshTokenEnabled: true
-        }
-      };
-
-      const updates = {
-        ...oauthUpdates,
-        browserExtension: {
-          ...cfg,
-          enabled: true,
-          oauthClientId,
-          allowedGroups,
-          signingKey
-        }
-      };
-
-      await savePlatformConfig(updates);
-
-      const baseUrl = buildPublicBaseUrl(req);
-
-      logger.info('Browser extension integration enabled', {
+      logger.info('Created OAuth client for browser extension', {
         component: 'AdminBrowserExtension',
-        oauthClientId
+        clientId: oauthClientId
       });
-
-      res.json({
-        message: 'Browser extension integration enabled successfully',
+    } else {
+      // Re-sync redirectUris and allowedGroups onto the existing client so
+      // the admin can manage extension IDs without rotating the secret.
+      const oauthConfig = platform?.oauth || {};
+      const clientsFile = oauthClientsFile(oauthConfig);
+      await updateOAuthClient(
         oauthClientId,
-        configUrl: `${baseUrl}/api/integrations/browser-extension/config`
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'enable browser extension integration');
+        { redirectUris, allowedGroups, active: true },
+        clientsFile,
+        req.user?.id || 'admin'
+      );
     }
+
+    const oauthUpdates = {
+      oauth: {
+        ...platform?.oauth,
+        enabled: {
+          ...platform?.oauth?.enabled,
+          authz: true,
+          clients: true
+        },
+        authorizationCodeEnabled: true,
+        refreshTokenEnabled: true
+      }
+    };
+
+    const updates = {
+      ...oauthUpdates,
+      browserExtension: {
+        ...cfg,
+        enabled: true,
+        oauthClientId,
+        allowedGroups,
+        signingKey
+      }
+    };
+
+    await savePlatformConfig(updates);
+
+    const baseUrl = buildPublicBaseUrl(req);
+
+    logger.info('Browser extension integration enabled', {
+      component: 'AdminBrowserExtension',
+      oauthClientId
+    });
+
+    res.json({
+      oauthClientId,
+      configUrl: `${baseUrl}/api/integrations/browser-extension/config`
+    });
   });
 
   /**
    * @swagger
-   * /api/admin/browser-extension/disable:
+   * /api/admin/browser-extension/_disable:
    *   post:
    *     summary: Disable browser extension integration
    *     tags:
    *       - Admin - Browser Extension
    */
-  app.post(buildServerPath('/api/admin/browser-extension/disable'), adminAuth, async (req, res) => {
-    try {
+  app.post(
+    buildServerPath('/api/admin/browser-extension/_disable'),
+    adminAuth,
+    async (req, res) => {
       const platform = configCache.getPlatform();
 
       await savePlatformConfig({
@@ -360,11 +356,9 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         component: 'AdminBrowserExtension'
       });
 
-      res.json({ message: 'Browser extension integration disabled successfully' });
-    } catch (error) {
-      return sendInternalError(res, error, 'disable browser extension integration');
+      res.status(204).end();
     }
-  });
+  );
 
   /**
    * @swagger
@@ -375,134 +369,133 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    *       - Admin - Browser Extension
    */
   app.put(buildServerPath('/api/admin/browser-extension/config'), adminAuth, async (req, res) => {
-    try {
-      const { displayName, description, starterPrompts, extensionIds, allowedGroups } = req.body;
-      const platform = configCache.getPlatform();
-      const allowed = {};
+    const { displayName, description, starterPrompts, extensionIds, allowedGroups } = req.body;
+    const platform = configCache.getPlatform();
+    const allowed = {};
 
-      if (displayName !== undefined) {
-        const result = validateLocalizedObject('displayName', displayName, {
+    if (displayName !== undefined) {
+      const result = validateLocalizedObject('displayName', displayName, {
+        maxLength: 250,
+        requireNonEmpty: true
+      });
+      if (result.error) throw new ServiceError('BAD_REQUEST', result.error);
+      allowed.displayName = result.value;
+    }
+    if (description !== undefined) {
+      const result = validateLocalizedObject('description', description, {
+        maxLength: 250,
+        requireNonEmpty: false
+      });
+      if (result.error) throw new ServiceError('BAD_REQUEST', result.error);
+      allowed.description = result.value;
+    }
+    if (starterPrompts !== undefined) {
+      if (!Array.isArray(starterPrompts)) {
+        throw new ServiceError('BAD_REQUEST', 'starterPrompts must be an array');
+      }
+      if (starterPrompts.length > 20) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'starterPrompts must not contain more than 20 entries'
+        );
+      }
+      const sanitized = [];
+      for (let i = 0; i < starterPrompts.length; i++) {
+        const prompt = starterPrompts[i];
+        if (!prompt || typeof prompt !== 'object' || Array.isArray(prompt)) {
+          throw new ServiceError('BAD_REQUEST', `starterPrompts[${i}] must be an object`);
+        }
+        const titleResult = validateLocalizedObject(`starterPrompts[${i}].title`, prompt.title, {
           maxLength: 250,
           requireNonEmpty: true
         });
-        if (result.error) return sendBadRequest(res, result.error);
-        allowed.displayName = result.value;
+        if (titleResult.error) throw new ServiceError('BAD_REQUEST', titleResult.error);
+        const messageResult = validateLocalizedObject(
+          `starterPrompts[${i}].message`,
+          prompt.message,
+          { maxLength: 4000, requireNonEmpty: true }
+        );
+        if (messageResult.error) throw new ServiceError('BAD_REQUEST', messageResult.error);
+        sanitized.push({ title: titleResult.value, message: messageResult.value });
       }
-      if (description !== undefined) {
-        const result = validateLocalizedObject('description', description, {
-          maxLength: 250,
-          requireNonEmpty: false
-        });
-        if (result.error) return sendBadRequest(res, result.error);
-        allowed.description = result.value;
-      }
-      if (starterPrompts !== undefined) {
-        if (!Array.isArray(starterPrompts)) {
-          return sendBadRequest(res, 'starterPrompts must be an array');
-        }
-        if (starterPrompts.length > 20) {
-          return sendBadRequest(res, 'starterPrompts must not contain more than 20 entries');
-        }
-        const sanitized = [];
-        for (let i = 0; i < starterPrompts.length; i++) {
-          const prompt = starterPrompts[i];
-          if (!prompt || typeof prompt !== 'object' || Array.isArray(prompt)) {
-            return sendBadRequest(res, `starterPrompts[${i}] must be an object`);
-          }
-          const titleResult = validateLocalizedObject(`starterPrompts[${i}].title`, prompt.title, {
-            maxLength: 250,
-            requireNonEmpty: true
-          });
-          if (titleResult.error) return sendBadRequest(res, titleResult.error);
-          const messageResult = validateLocalizedObject(
-            `starterPrompts[${i}].message`,
-            prompt.message,
-            { maxLength: 4000, requireNonEmpty: true }
-          );
-          if (messageResult.error) return sendBadRequest(res, messageResult.error);
-          sanitized.push({ title: titleResult.value, message: messageResult.value });
-        }
-        allowed.starterPrompts = sanitized;
-      }
-      if (extensionIds !== undefined) {
-        if (!Array.isArray(extensionIds)) {
-          return sendBadRequest(res, 'extensionIds must be an array of strings');
-        }
-        const sanitized = [];
-        for (const id of extensionIds) {
-          if (typeof id !== 'string') {
-            return sendBadRequest(res, 'extensionIds entries must be strings');
-          }
-          const trimmed = id.trim();
-          if (!trimmed) continue;
-          if (!isValidExtensionId(trimmed)) {
-            return sendBadRequest(
-              res,
-              `extensionIds entry "${trimmed}" must contain only alphanumeric, dot, dash or underscore characters (8-128 chars)`
-            );
-          }
-          sanitized.push(trimmed.toLowerCase());
-        }
-        allowed.extensionIds = Array.from(new Set(sanitized));
-      }
-      if (allowedGroups !== undefined) {
-        if (!Array.isArray(allowedGroups)) {
-          return sendBadRequest(res, 'allowedGroups must be an array of strings');
-        }
-        const sanitized = [];
-        for (const g of allowedGroups) {
-          if (typeof g !== 'string') {
-            return sendBadRequest(res, 'allowedGroups entries must be strings');
-          }
-          const trimmed = g.trim();
-          if (trimmed) sanitized.push(trimmed);
-        }
-        allowed.allowedGroups = Array.from(new Set(sanitized));
-      }
-
-      // If extensionIds or allowedGroups changed, re-sync the OAuth client.
-      const previous = platform?.browserExtension || {};
-      const merged = { ...previous, ...allowed };
-
-      if (
-        previous.oauthClientId &&
-        (allowed.extensionIds !== undefined || allowed.allowedGroups !== undefined)
-      ) {
-        const oauthConfig = platform?.oauth || {};
-        const clientsFile = oauthClientsFile(oauthConfig);
-        const newRedirectUris = buildAllRedirectUris(merged.extensionIds || [], merged.signingKey);
-        const newAllowedGroups = merged.allowedGroups || ['browser-extension'];
-        try {
-          await updateOAuthClient(
-            previous.oauthClientId,
-            { redirectUris: newRedirectUris, allowedGroups: newAllowedGroups },
-            clientsFile,
-            req.user?.id || 'admin'
-          );
-        } catch (err) {
-          logger.warn('Failed to sync OAuth client for extension integration', {
-            component: 'AdminBrowserExtension',
-            error: err
-          });
-        }
-      }
-
-      await savePlatformConfig({
-        browserExtension: merged
-      });
-
-      logger.info('Browser extension integration config updated', {
-        component: 'AdminBrowserExtension',
-        fields: Object.keys(allowed)
-      });
-
-      res.json({
-        message: 'Browser extension integration configuration updated',
-        browserExtension: configCache.getPlatform()?.browserExtension
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update browser extension integration config');
+      allowed.starterPrompts = sanitized;
     }
+    if (extensionIds !== undefined) {
+      if (!Array.isArray(extensionIds)) {
+        throw new ServiceError('BAD_REQUEST', 'extensionIds must be an array of strings');
+      }
+      const sanitized = [];
+      for (const id of extensionIds) {
+        if (typeof id !== 'string') {
+          throw new ServiceError('BAD_REQUEST', 'extensionIds entries must be strings');
+        }
+        const trimmed = id.trim();
+        if (!trimmed) continue;
+        if (!isValidExtensionId(trimmed)) {
+          throw new ServiceError(
+            'BAD_REQUEST',
+            `extensionIds entry "${trimmed}" must contain only alphanumeric, dot, dash or underscore characters (8-128 chars)`
+          );
+        }
+        sanitized.push(trimmed.toLowerCase());
+      }
+      allowed.extensionIds = Array.from(new Set(sanitized));
+    }
+    if (allowedGroups !== undefined) {
+      if (!Array.isArray(allowedGroups)) {
+        throw new ServiceError('BAD_REQUEST', 'allowedGroups must be an array of strings');
+      }
+      const sanitized = [];
+      for (const g of allowedGroups) {
+        if (typeof g !== 'string') {
+          throw new ServiceError('BAD_REQUEST', 'allowedGroups entries must be strings');
+        }
+        const trimmed = g.trim();
+        if (trimmed) sanitized.push(trimmed);
+      }
+      allowed.allowedGroups = Array.from(new Set(sanitized));
+    }
+
+    // If extensionIds or allowedGroups changed, re-sync the OAuth client.
+    const previous = platform?.browserExtension || {};
+    const merged = { ...previous, ...allowed };
+
+    if (
+      previous.oauthClientId &&
+      (allowed.extensionIds !== undefined || allowed.allowedGroups !== undefined)
+    ) {
+      const oauthConfig = platform?.oauth || {};
+      const clientsFile = oauthClientsFile(oauthConfig);
+      const newRedirectUris = buildAllRedirectUris(merged.extensionIds || [], merged.signingKey);
+      const newAllowedGroups = merged.allowedGroups || ['browser-extension'];
+      try {
+        await updateOAuthClient(
+          previous.oauthClientId,
+          { redirectUris: newRedirectUris, allowedGroups: newAllowedGroups },
+          clientsFile,
+          req.user?.id || 'admin'
+        );
+      } catch (err) {
+        logger.warn('Failed to sync OAuth client for extension integration', {
+          component: 'AdminBrowserExtension',
+          error: err
+        });
+      }
+    }
+
+    await savePlatformConfig({
+      browserExtension: merged
+    });
+
+    logger.info('Browser extension integration config updated', {
+      component: 'AdminBrowserExtension',
+      fields: Object.keys(allowed)
+    });
+
+    res.json({
+      message: 'Browser extension integration configuration updated',
+      browserExtension: configCache.getPlatform()?.browserExtension
+    });
   });
 
   /**
@@ -523,82 +516,78 @@ export default function registerAdminBrowserExtensionRoutes(app) {
     buildServerPath('/api/admin/browser-extension/rotate-key'),
     adminAuth,
     async (req, res) => {
-      try {
-        const platform = configCache.getPlatform();
-        const cfg = platform?.browserExtension || {};
+      const platform = configCache.getPlatform();
+      const cfg = platform?.browserExtension || {};
 
-        const newSigningKey = await rotateSigningKey(cfg.signingKey);
-        const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
-        const allowedGroups = Array.isArray(cfg.allowedGroups)
-          ? cfg.allowedGroups
-          : ['browser-extension'];
+      const newSigningKey = await rotateSigningKey(cfg.signingKey);
+      const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
+      const allowedGroups = Array.isArray(cfg.allowedGroups)
+        ? cfg.allowedGroups
+        : ['browser-extension'];
 
-        // Resync the OAuth client redirect URIs to include the new ID + the
-        // previous ID (one-cycle grace period) + manual side-load IDs.
-        if (cfg.oauthClientId) {
-          const oauthConfig = platform?.oauth || {};
-          const clientsFile = oauthClientsFile(oauthConfig);
-          try {
-            await updateOAuthClient(
-              cfg.oauthClientId,
-              {
-                redirectUris: buildAllRedirectUris(extensionIds, newSigningKey),
-                allowedGroups
-              },
-              clientsFile,
-              req.user?.id || 'admin'
-            );
-          } catch (err) {
-            logger.warn('Failed to resync OAuth client after extension key rotation', {
-              component: 'AdminBrowserExtension',
-              error: err
-            });
-          }
+      // Resync the OAuth client redirect URIs to include the new ID + the
+      // previous ID (one-cycle grace period) + manual side-load IDs.
+      if (cfg.oauthClientId) {
+        const oauthConfig = platform?.oauth || {};
+        const clientsFile = oauthClientsFile(oauthConfig);
+        try {
+          await updateOAuthClient(
+            cfg.oauthClientId,
+            {
+              redirectUris: buildAllRedirectUris(extensionIds, newSigningKey),
+              allowedGroups
+            },
+            clientsFile,
+            req.user?.id || 'admin'
+          );
+        } catch (err) {
+          logger.warn('Failed to resync OAuth client after extension key rotation', {
+            component: 'AdminBrowserExtension',
+            error: err
+          });
         }
-
-        // Auto-add chrome-extension:// + moz-extension:// origins for the new
-        // signing-key extension ID (and the previous one, for the rotation
-        // grace window) into cors.origin. Admins shouldn't need to know that
-        // a fresh extension ID also requires editing the CORS allowlist by
-        // hand — the side panel's first cross-origin fetch would otherwise
-        // be blocked with a misleading "Access-Control-Allow-Origin missing"
-        // error.
-        const corsConfig = platform?.cors || {};
-        const updatedCorsOrigin = unionCorsOriginsWithExtension(
-          corsConfig.origin,
-          extensionIds,
-          newSigningKey
-        );
-
-        await savePlatformConfig({
-          browserExtension: {
-            ...cfg,
-            signingKey: newSigningKey
-          },
-          cors: {
-            ...corsConfig,
-            origin: updatedCorsOrigin
-          }
-        });
-
-        logger.warn('Browser extension signing key rotated', {
-          component: 'AdminBrowserExtension',
-          newExtensionId: newSigningKey.extensionId,
-          previousExtensionId: newSigningKey.previousExtensionId || null
-        });
-
-        res.json({
-          message: 'Browser extension signing key rotated',
-          signingKey: {
-            extensionId: newSigningKey.extensionId,
-            publicKey: newSigningKey.publicKey,
-            createdAt: newSigningKey.createdAt,
-            previousExtensionId: newSigningKey.previousExtensionId || null
-          }
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'rotate browser extension signing key');
       }
+
+      // Auto-add chrome-extension:// + moz-extension:// origins for the new
+      // signing-key extension ID (and the previous one, for the rotation
+      // grace window) into cors.origin. Admins shouldn't need to know that
+      // a fresh extension ID also requires editing the CORS allowlist by
+      // hand — the side panel's first cross-origin fetch would otherwise
+      // be blocked with a misleading "Access-Control-Allow-Origin missing"
+      // error.
+      const corsConfig = platform?.cors || {};
+      const updatedCorsOrigin = unionCorsOriginsWithExtension(
+        corsConfig.origin,
+        extensionIds,
+        newSigningKey
+      );
+
+      await savePlatformConfig({
+        browserExtension: {
+          ...cfg,
+          signingKey: newSigningKey
+        },
+        cors: {
+          ...corsConfig,
+          origin: updatedCorsOrigin
+        }
+      });
+
+      logger.warn('Browser extension signing key rotated', {
+        component: 'AdminBrowserExtension',
+        newExtensionId: newSigningKey.extensionId,
+        previousExtensionId: newSigningKey.previousExtensionId || null
+      });
+
+      res.json({
+        message: 'Browser extension signing key rotated',
+        signingKey: {
+          extensionId: newSigningKey.extensionId,
+          publicKey: newSigningKey.publicKey,
+          createdAt: newSigningKey.createdAt,
+          previousExtensionId: newSigningKey.previousExtensionId || null
+        }
+      });
     }
   );
 
@@ -743,29 +732,28 @@ export default function registerAdminBrowserExtensionRoutes(app) {
     buildServerPath('/api/admin/browser-extension/download.zip'),
     adminAuth,
     async (req, res) => {
-      try {
-        const platform = configCache.getPlatform();
-        const cfg = platform?.browserExtension || {};
-        if (!cfg.enabled || !cfg.signingKey?.publicKey) {
-          return sendNotFound(res, 'Browser extension is not enabled or has no signing key');
-        }
-
-        const zipBuffer = await buildExtensionZipBuffer({ req, cfg });
-        const filename = `ihub-extension-${cfg.signingKey.extensionId}.zip`;
-        res.setHeader('Content-Type', 'application/zip');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Cache-Control', 'no-store');
-        res.send(zipBuffer);
-
-        logger.info('Browser extension package downloaded', {
-          component: 'AdminBrowserExtension',
-          format: 'zip',
-          extensionId: cfg.signingKey.extensionId,
-          userId: req.user?.id || 'admin'
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'download browser extension package');
+      const platform = configCache.getPlatform();
+      const cfg = platform?.browserExtension || {};
+      if (!cfg.enabled || !cfg.signingKey?.publicKey) {
+        throw new ServiceError(
+          'NOT_FOUND',
+          'Browser extension is not enabled or has no signing key'
+        );
       }
+
+      const zipBuffer = await buildExtensionZipBuffer({ req, cfg });
+      const filename = `ihub-extension-${cfg.signingKey.extensionId}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(zipBuffer);
+
+      logger.info('Browser extension package downloaded', {
+        component: 'AdminBrowserExtension',
+        format: 'zip',
+        extensionId: cfg.signingKey.extensionId,
+        userId: req.user?.id || 'admin'
+      });
     }
   );
 
@@ -787,39 +775,38 @@ export default function registerAdminBrowserExtensionRoutes(app) {
     buildServerPath('/api/admin/browser-extension/download.crx'),
     adminAuth,
     async (req, res) => {
-      try {
-        const platform = configCache.getPlatform();
-        const cfg = platform?.browserExtension || {};
-        if (!cfg.enabled || !cfg.signingKey?.publicKey) {
-          return sendNotFound(res, 'Browser extension is not enabled or has no signing key');
-        }
-        const privateKeyPem = await readSigningPrivateKey();
-        if (!privateKeyPem) {
-          return sendNotFound(
-            res,
-            'Signing private key not found on disk. Re-enable the integration to regenerate it.'
-          );
-        }
-
-        const zipBuffer = await buildExtensionZipBuffer({ req, cfg });
-        const publicKeyDer = Buffer.from(cfg.signingKey.publicKey, 'base64');
-        const crxBuffer = packCrx3({ zipBuffer, publicKeyDer, privateKeyPem });
-
-        const filename = `ihub-extension-${cfg.signingKey.extensionId}.crx`;
-        res.setHeader('Content-Type', 'application/x-chrome-extension');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Cache-Control', 'no-store');
-        res.send(crxBuffer);
-
-        logger.info('Browser extension package downloaded', {
-          component: 'AdminBrowserExtension',
-          format: 'crx',
-          extensionId: cfg.signingKey.extensionId,
-          userId: req.user?.id || 'admin'
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'download browser extension package (crx)');
+      const platform = configCache.getPlatform();
+      const cfg = platform?.browserExtension || {};
+      if (!cfg.enabled || !cfg.signingKey?.publicKey) {
+        throw new ServiceError(
+          'NOT_FOUND',
+          'Browser extension is not enabled or has no signing key'
+        );
       }
+      const privateKeyPem = await readSigningPrivateKey();
+      if (!privateKeyPem) {
+        throw new ServiceError(
+          'NOT_FOUND',
+          'Signing private key not found on disk. Re-enable the integration to regenerate it.'
+        );
+      }
+
+      const zipBuffer = await buildExtensionZipBuffer({ req, cfg });
+      const publicKeyDer = Buffer.from(cfg.signingKey.publicKey, 'base64');
+      const crxBuffer = packCrx3({ zipBuffer, publicKeyDer, privateKeyPem });
+
+      const filename = `ihub-extension-${cfg.signingKey.extensionId}.crx`;
+      res.setHeader('Content-Type', 'application/x-chrome-extension');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Cache-Control', 'no-store');
+      res.send(crxBuffer);
+
+      logger.info('Browser extension package downloaded', {
+        component: 'AdminBrowserExtension',
+        format: 'crx',
+        extensionId: cfg.signingKey.extensionId,
+        userId: req.user?.id || 'admin'
+      });
     }
   );
 }

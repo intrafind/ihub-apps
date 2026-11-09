@@ -22,6 +22,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getContentsPath } from '../../utils/contentsPath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
@@ -170,10 +171,12 @@ export async function writeInbox(inboxId, { body, expectedVersion, updatedBy }) 
   }
   const currentVersion = current.frontmatter.version || 0;
   if (typeof expectedVersion === 'number' && expectedVersion !== currentVersion) {
-    const conflictErr = new Error(
-      `Inbox version mismatch: expected ${expectedVersion}, found ${currentVersion}`
+    const conflictErr = new ServiceError(
+      'VERSION_CONFLICT',
+      `Inbox version mismatch: expected ${expectedVersion}, found ${currentVersion}`,
+      { details: { currentVersion } }
     );
-    conflictErr.code = 'VERSION_CONFLICT';
+    // Callers inside the server read it straight off the error.
     conflictErr.currentVersion = currentVersion;
     throw conflictErr;
   }

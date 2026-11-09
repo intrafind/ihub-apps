@@ -24,6 +24,7 @@
  */
 import fs from 'node:fs/promises';
 import { installationsFor } from './helpers/installedIFinder.js';
+import { answerWithError } from './helpers/answerError.js';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, beforeEach, describe, it, mock } from 'node:test';
@@ -163,9 +164,19 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, metho
   const chain = [...guards, ...handlers];
   for (const handler of chain) {
     let advanced = false;
-    await handler(req, res, () => {
-      advanced = true;
-    });
+    let refusal = null;
+    try {
+      await handler(req, res, error => {
+        // `next(error)` is what Express hands to the global handler, not a step forward.
+        if (error) refusal = error;
+        else advanced = true;
+      });
+      if (refusal) throw refusal;
+    } catch (error) {
+      // What the error middleware would answer.
+      answerWithError(res, error);
+      break;
+    }
     if (!advanced) break;
   }
   return res;
@@ -685,7 +696,7 @@ describe('the write allow-list', () => {
   });
 
   it('names the allowed writes in the guard by method and path, and nothing near them', async () => {
-    const { refuseIFinderWrite, refuseIFinderWriteRoute, IFINDER_WRITE_ROUTES } =
+    const { assertIFinderWriteAllowed, assertIFinderWriteRouteAllowed, IFINDER_WRITE_ROUTES } =
       await import('../middleware/projectAccess.js');
     assert.deepEqual(
       IFINDER_WRITE_ROUTES.map(
@@ -694,12 +705,15 @@ describe('the write allow-list', () => {
       ALLOWED_WRITES
     );
     const refusedBy = (guard, request) => {
-      const res = makeResponse();
-      const refused = guard(request, res, pid(1));
-      return refused ? res.statusCode : null;
+      try {
+        guard(request, pid(1));
+        return null;
+      } catch (error) {
+        return error.status;
+      }
     };
     const byPath = (method, pathBelow) =>
-      refusedBy(refuseIFinderWrite, { method, path: pathBelow });
+      refusedBy(assertIFinderWriteAllowed, { method, path: pathBelow });
     // On the list.
     assert.equal(byPath('PATCH', '/'), null);
     assert.equal(byPath('POST', '/items'), null);
@@ -714,7 +728,7 @@ describe('the write allow-list', () => {
       ['PATCH', '/items'],
       ['PATCH', '/items/itm_abc'],
       ['POST', '/items/itm_abc'],
-      ['POST', '/items/itm_abc/refresh'],
+      ['POST', '/items/itm_abc/_refresh'],
       ['PUT', '/items/itm_abc/text'],
       ['DELETE', '/items'],
       ['DELETE', '/items/itm_abc/text'],
@@ -730,14 +744,14 @@ describe('the write allow-list', () => {
       assert.equal(byPath(method, below), 403, `${method} ${below}`);
     }
     const byRoute = (method, template) =>
-      refusedBy(refuseIFinderWriteRoute, { method, route: template && { path: template } });
+      refusedBy(assertIFinderWriteRouteAllowed, { method, route: template && { path: template } });
     assert.equal(byRoute('PATCH', '/api/projects/:projectId'), null);
     assert.equal(byRoute('POST', '/api/projects/:projectId/items'), null);
     assert.equal(byRoute('DELETE', '/api/projects/:projectId/items/:itemId'), null);
     for (const [method, template] of [
       ['DELETE', '/api/projects/:projectId'],
       ['PUT', '/api/projects/:projectId/items/:itemId/text'],
-      ['POST', '/api/projects/:projectId/items/:itemId/refresh'],
+      ['POST', '/api/projects/:projectId/items/:itemId/_refresh'],
       ['PATCH', '/api/projects/:projectId/items/:itemId'],
       ['POST', '/api/projects/:projectId/estimate'],
       ['POST', undefined]
@@ -749,7 +763,7 @@ describe('the write allow-list', () => {
   it('gives the same refusal for a closed route whether or not the collection exists', async () => {
     const entry = projects.routes.find(
       route =>
-        route.method === 'post' && route.routePath.endsWith(':projectId/items/:itemId/refresh')
+        route.method === 'post' && route.routePath.endsWith(':projectId/items/:itemId/_refresh')
     );
     const res = await drive(entry.handlers, {
       user: GRACE,

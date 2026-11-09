@@ -283,7 +283,7 @@ affected.
 
 ![An admin project's view page: items, the apps and workflows that use it, and the settings rows with Availability](assets/screenshots/admin-project-view.png)
 
-- **Test** (`POST /api/admin/projects/:id/test`) reads every item the way a chat would, with your
+- **Test** (`POST /api/admin/projects/:id/_test`) reads every item the way a chat would, with your
   own credentials for iFinder items, and reports per item whether it was readable, its size and
   how long it took.
 - **Try in chat** (on the editor, `/admin/projects/:id/edit`) opens a scratch chat beside it that
@@ -1060,11 +1060,17 @@ you want into one project.
 
 ## API
 
-All paths are relative to the server's base path. Project errors carry their code in
-`details.code`, next to any further details (for `PROJECT_IN_USE`, the dependencies):
+All paths are relative to the server's base path. Project errors are RFC 9457 problems that carry
+their code in `code`; `details` holds any further information (for `PROJECT_IN_USE`, the dependencies):
 
 ```json
-{ "error": "Project not found", "details": { "code": "PROJECT_NOT_FOUND" } }
+{
+  "type": "urn:ihub:problem:PROJECT_NOT_FOUND",
+  "title": "…",
+  "status": 404,
+  "detail": "Project not found",
+  "code": "PROJECT_NOT_FOUND"
+}
 ```
 
 The codes are the ones named on this page plus `PROJECT_NOT_FOUND` (also "no access"),
@@ -1075,8 +1081,8 @@ reached), `TIER_NOT_AVAILABLE`, `IFINDER_WRITES_DISABLED` (no lock reaches every
 `IFINDER_FORBIDDEN` (the user lacks the iFinder role), `IFINDER_REJECTED`, `IFINDER_WRITE_FAILED`
 (not atomic: see `details.outcome`), `COLLECTION_BUSY`, `QUOTA_COLLECTION_DOCUMENTS`,
 `DOCUMENT_NOT_READABLE` and `KIND_NOT_ALLOWED`. Generic errors (a plain
-"not found", a validation failure, an unexpected server error) may come without `details` or
-without a code.
+"not found", a validation failure, an unexpected server error) carry the generic code of
+their status.
 
 The chat request is different: a project it names but may not use is answered with the code at the
 top level:
@@ -1112,7 +1118,7 @@ changing it takes a content admin.
 | `GET`    | `/api/projects/:projectId/items/:itemId`      | member    | One item; poll it while it extracts.                                                             |
 | `PATCH`  | `/api/projects/:projectId/items/:itemId`      | editor    | Change `name`, `pinned`.                                                                         |
 | `DELETE` | `/api/projects/:projectId/items/:itemId`      | editor    | Remove the item. From a smart collection: the membership only.                                   |
-| `POST`   | `/api/projects/:projectId/items/:itemId/refresh` | editor | Take the text of a picked file again, with your account.                                         |
+| `POST`   | `/api/projects/:projectId/items/:itemId/_refresh` | editor | Take the text of a picked file again, with your account.                                         |
 | `PUT`    | `/api/projects/:projectId/items/:itemId/text` | editor    | Replace the text of an uploaded, written or imported document: `{ text }`. Links and picked documents are refused (`INVALID_REF`). |
 | `GET`    | `/api/projects/:projectId/items/:itemId/text` | member    | The text as `text/plain`; `?maxChars=`, `?download=1` saves it as `.txt`.                        |
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
@@ -1135,9 +1141,9 @@ Picker helpers, needing the `projects` flag and a signed-in user:
 | `GET`  | `/api/projects/pickers/ifinder/profiles` | Your iFinder search profiles, as the chat input offers them.   |
 | `GET`  | `/api/projects/pickers/ifinder/search`  | iFinder search with your rights; `?q=&profile=&limit=`. A profile outside the allow-list answers `403 INTEGRATION_SCOPE_NOT_ALLOWED`. |
 | `GET`  | `/api/projects/pickers/ifinder/metadata` | One iFinder document's metadata; `?documentId=&profile=`.      |
-| `POST` | `/api/projects/pickers/url/check`       | Check a URL `{ url }` before adding it.                         |
-| `POST` | `/api/projects/pickers/url/preview`     | The text a URL `{ url }` gives the model, before it is added.   |
-| `POST` | `/api/projects/pickers/url/crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
+| `POST` | `/api/projects/pickers/url/_check`       | Check a URL `{ url }` before adding it.                         |
+| `POST` | `/api/projects/pickers/url/_preview`    | The text a URL `{ url }` gives the model, before it is added.   |
+| `POST` | `/api/projects/pickers/url/_crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
 | `GET`  | `/api/projects/pickers/cloud`           | The enabled cloud storage providers.                            |
 
 ### Admin API
@@ -1167,10 +1173,10 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `DELETE` | `/api/admin/projects/:id/items/:itemId`     | Remove an item.                                                                             |
 | `POST`   | `/api/admin/projects/_move`                 | Move items into another admin project `{ sourceId, targetId, itemIds }`. Answers `{ transferred, failed, source, target }`; an item that cannot go is in `failed` with its code. |
 | `POST`   | `/api/admin/projects/_copy`                 | The same body and answer; the items stay in the source.                                     |
-| `POST`   | `/api/admin/projects/:id/items/:itemId/refresh` | Refresh an item.                                                                        |
+| `POST`   | `/api/admin/projects/:id/items/:itemId/_refresh` | Refresh an item.                                                                        |
 | `PUT`    | `/api/admin/projects/:id/items/:itemId/text` | Replace the text of an uploaded, written or imported document: `{ text }`.                  |
 | `GET`    | `/api/admin/projects/:id/items/:itemId/text` | The stored or fetched text as `text/plain`.                                                |
-| `POST`   | `/api/admin/projects/:id/test`              | Read every item the way a chat would.                                                       |
+| `POST`   | `/api/admin/projects/:id/_test`              | Read every item the way a chat would.                                                       |
 
 A project is tried in chat with the ordinary chat request, `POST /api/apps/:appId/chat/:chatId`,
 plus `testProjectId` (the id of an admin project). The turn runs with that project as the only one

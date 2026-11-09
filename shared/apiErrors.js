@@ -334,7 +334,8 @@ export const CLOUD_STORAGE_ERROR_CODES = Object.freeze({
   STORAGE_PROVIDER_NOT_FOUND: 404,
   STORAGE_PROVIDER_REQUIRED: 400,
   INVALID_RETURN_URL: 400,
-  NOT_CONNECTABLE: 400
+  NOT_CONNECTABLE: 400,
+  INTEGRATION_CONNECT_FAILED: 400
 });
 
 /** Codes of the project, upload and Copilot routes that used to travel in `details.code`. */
@@ -353,6 +354,51 @@ export const PROJECT_ERROR_CODES = Object.freeze({
   INTEGRATION_AUTH_REQUIRED: 409
 });
 
+/** Codes of the project service (`server/services/projects`, `ProjectError` / `KnowledgeError`) that used to travel in `details.code`. */
+export const PROJECT_SERVICE_ERROR_CODES = Object.freeze({
+  PROJECT_NOT_FOUND: 404,
+  PROJECT_ACCESS_CHANGED: 403,
+  PROJECT_EXISTS: 409,
+  PROJECT_IN_USE: 400,
+  CASCADE_INCOMPLETE: 500,
+  QUOTA_PROJECTS: 409,
+  QUOTA_FILES: 413,
+  QUOTA_PROJECT_BYTES: 413,
+  KIND_DISABLED: 400,
+  KIND_UNKNOWN: 400,
+  INVALID_REF: 400,
+  SOURCE_TIMEOUT: 504,
+  ITEM_NOT_FOUND: 404,
+  ITEM_NOT_READY: 409,
+  INGEST_UNAVAILABLE: 501,
+  INTERRUPTED: 422,
+  TIER_NOT_AVAILABLE: 403,
+  IFINDER_FORBIDDEN: 403,
+  IFINDER_REJECTED: 422,
+  IFINDER_WRITE_FAILED: 502,
+  COLLECTION_BUSY: 409,
+  QUOTA_COLLECTION_DOCUMENTS: 413,
+  DOCUMENT_NOT_READABLE: 403,
+  KIND_NOT_ALLOWED: 400,
+  COLLECTION_ALREADY_ADDED: 409,
+  KEY_ACCESS_DENIED: 403,
+  TEXT_UNAVAILABLE: 410,
+  INTEGRATION_SCOPE_NOT_ALLOWED: 403
+});
+
+/** Codes of the read-aloud route (`server/routes/voiceRoutes.js`) that used to be kebab-case strings. */
+export const VOICE_ERROR_CODES = Object.freeze({
+  INVALID_TEXT: 400,
+  TEXT_TOO_LONG: 413,
+  INVALID_MODEL: 400,
+  INVALID_LANGUAGE: 400,
+  INVALID_VOICE: 400,
+  NO_SPEAKABLE_TEXT: 422,
+  NO_AUDIO: 502,
+  TTS_NOT_CONFIGURED: 503,
+  MODEL_DISABLED: 503
+});
+
 /** Codes of the Teams sign-in (`server/middleware/teamsAuth.js`) and a few admin and agent conflicts. */
 export const MISC_ERROR_CODES = Object.freeze({
   TEAMS_SSO_TOKEN_REQUIRED: 400,
@@ -360,7 +406,10 @@ export const MISC_ERROR_CODES = Object.freeze({
   TEAMS_ACCOUNT_DISABLED: 403,
   TEAMS_INVALID_OR_EXPIRED_TOKEN: 401,
   CONCURRENCY_LIMIT: 409,
-  PROVIDER_IN_USE: 409
+  PROVIDER_IN_USE: 409,
+  APP_ACCESS_DENIED: 403,
+  MODEL_ACCESS_DENIED: 403,
+  USER_VALIDATION_FAILED: 403
 });
 
 /** Every code, with its default HTTP status. */
@@ -383,7 +432,9 @@ export const API_ERROR_CODES = Object.freeze({
   ...MCP_APP_ERROR_CODES,
   ...CHAT_SESSION_ERROR_CODES,
   ...CLOUD_STORAGE_ERROR_CODES,
+  ...PROJECT_SERVICE_ERROR_CODES,
   ...PROJECT_ERROR_CODES,
+  ...VOICE_ERROR_CODES,
   ...MISC_ERROR_CODES
 });
 

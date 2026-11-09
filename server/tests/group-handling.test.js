@@ -716,6 +716,9 @@ describe('Group Handling System Tests', () => {
       await expect(
         validateAndPersistExternalUser(disabledUser, mockPlatformConfig)
       ).rejects.toThrow('User account is disabled');
+      await expect(
+        validateAndPersistExternalUser(disabledUser, mockPlatformConfig)
+      ).rejects.toMatchObject({ code: 'ACCOUNT_DISABLED' });
     });
 
     test('should handle missing groups configuration gracefully', () => {

@@ -16,7 +16,16 @@ import express from 'express';
 const executions = new Map();
 const registry = {
   get: async id => executions.get(id) || null,
-  remove: async id => executions.delete(id)
+  remove: async id => executions.delete(id),
+  getByUser: async () =>
+    Array.from({ length: 5 }, (_, i) => ({ id: `e${i}`, status: 'completed', userId: 'ada' })),
+  list: async ({ limit, offset }) => ({
+    executions: Array.from({ length: Math.max(Math.min(limit, 7 - offset), 0) }, (_, i) => ({
+      id: `x${offset + i}`
+    })),
+    total: 7,
+    stats: { total: 7 }
+  })
 };
 
 jest.unstable_mockModule('../services/workflow/ExecutionRegistry.js', () => ({
@@ -40,7 +49,7 @@ const realAuth = await import('../middleware/authRequired.js');
 jest.unstable_mockModule('../middleware/authRequired.js', () => ({
   ...realAuth,
   authRequired: (req, res, next) => {
-    req.user = { id: 'ada', groups: [] };
+    req.user = { id: 'ada', groups: [], isAdmin: req.headers['x-test-admin'] === '1' };
     next();
   }
 }));
@@ -52,6 +61,7 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
 }));
 
 const { default: configCache } = await import('../configCache.js');
+const { default: configStore } = await import('../services/config/ConfigStore.js');
 const { default: registerWorkflowRoutes } = await import('../routes/workflow/workflowRoutes.js');
 const { default: registerTriggerRoutes } = await import('../routes/workflow/triggerRoutes.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
@@ -89,7 +99,7 @@ describe('workflow execution routes', () => {
   });
 
   it('answers an unknown execution with NOT_FOUND', async () => {
-    const res = await request(app).post('/api/workflows/executions/nope/cancel').expect(404);
+    const res = await request(app).post('/api/workflows/executions/nope/_cancel').expect(404);
     expect(res.body).toEqual({
       type: 'urn:ihub:problem:NOT_FOUND',
       title: 'The requested resource was not found.',
@@ -125,7 +135,7 @@ describe('workflow execution routes', () => {
   it('deletes a finished execution', async () => {
     executions.set('run1', { executionId: 'run1', userId: 'ada', status: 'completed' });
     engine.deleteExecution.mockResolvedValue();
-    await request(app).delete('/api/workflows/executions/run1').expect(200);
+    await request(app).delete('/api/workflows/executions/run1').expect(204);
     expect(executions.has('run1')).toBe(false);
   });
 
@@ -134,11 +144,11 @@ describe('workflow execution routes', () => {
     engine.cancelAnywhere.mockRejectedValueOnce(
       Object.assign(new Error('gone'), { code: 'EXECUTION_NOT_FOUND' })
     );
-    const missing = await request(app).post('/api/workflows/executions/run1/cancel').expect(404);
+    const missing = await request(app).post('/api/workflows/executions/run1/_cancel').expect(404);
     expect(missing.body.code).toBe('NOT_FOUND');
 
     engine.cancelAnywhere.mockRejectedValueOnce(new Error('/srv/secret/path exploded'));
-    const failed = await request(app).post('/api/workflows/executions/run1/cancel').expect(500);
+    const failed = await request(app).post('/api/workflows/executions/run1/_cancel').expect(500);
     expect(failed.body.code).toBe('INTERNAL_ERROR');
     expect(JSON.stringify(failed.body)).not.toContain('/srv/secret');
   });
@@ -194,5 +204,59 @@ describe('workflow webhook route', () => {
       detail: 'Invalid JSON body',
       code: 'BAD_REQUEST'
     });
+  });
+
+  it('pages my executions by cursor as { items, nextCursor }', async () => {
+    const first = await request(app).get('/api/workflows/my-executions?limit=2').expect(200);
+    expect(first.body.items.map(e => e.id)).toEqual(['e0', 'e1']);
+    const last = await request(app)
+      .get('/api/workflows/my-executions')
+      .query({ limit: 4, cursor: first.body.nextCursor })
+      .expect(200);
+    // The cursor stands for position 2: the next page of four holds the three left.
+    expect(last.body.items.map(e => e.id)).toEqual(['e2', 'e3', 'e4']);
+    expect(last.body.nextCursor).toBeNull();
+  });
+
+  it('pages the admin execution list by cursor and keeps total and stats', async () => {
+    const first = await request(app)
+      .get('/api/admin/workflows/executions?status=all&limit=5')
+      .expect(200);
+    expect(first.body.items).toHaveLength(5);
+    expect(first.body).toMatchObject({ total: 7, stats: { total: 7 } });
+    expect(first.body.executions).toBeUndefined();
+    const second = await request(app)
+      .get('/api/admin/workflows/executions')
+      .query({ status: 'all', limit: 5, cursor: first.body.nextCursor })
+      .expect(200);
+    expect(second.body.items.map(e => e.id)).toEqual(['x5', 'x6']);
+    expect(second.body.nextCursor).toBeNull();
+  });
+
+  it('refuses a cursor it did not issue with INVALID_CURSOR', async () => {
+    const res = await request(app).get('/api/workflows/my-executions?cursor=bogus').expect(400);
+    expect(res.body.code).toBe('INVALID_CURSOR');
+  });
+});
+
+describe('GET /api/workflows/:id', () => {
+  const workflow = { id: 'wf-off', name: { en: 'Off' }, enabled: false };
+
+  beforeEach(() => {
+    jest.spyOn(configStore, 'listDocuments').mockResolvedValue([{ data: workflow }]);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('hides a disabled workflow from a regular user', async () => {
+    const res = await request(app).get('/api/workflows/wf-off').expect(404);
+    expect(res.body.code).toBe('NOT_FOUND');
+  });
+
+  it('answers a disabled workflow to an admin, so the Location of a create resolves', async () => {
+    const res = await request(app)
+      .get('/api/workflows/wf-off')
+      .set('x-test-admin', '1')
+      .expect(200);
+    expect(res.body.id).toBe('wf-off');
   });
 });

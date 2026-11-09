@@ -127,7 +127,7 @@ export const makeAdminApiCall = async (url, options = {}) => {
 // Specific admin API functions
 export const fetchAdminApps = async () => {
   const response = await makeAdminApiCall('/admin/apps');
-  return response.data;
+  return response.data?.items ?? [];
 };
 
 /**
@@ -142,10 +142,10 @@ export const fetchAppIntegrationStatus = async () => {
 export const fetchAdminModels = async () => {
   try {
     const response = await makeAdminApiCall('/admin/models');
-    const data = response.data;
+    const items = response.data?.items;
 
     // Ensure we return an array
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(items) ? items : [];
   } catch (error) {
     console.error('Error in fetchAdminModels:', error);
     throw error;
@@ -155,10 +155,10 @@ export const fetchAdminModels = async () => {
 export const fetchAdminPrompts = async () => {
   try {
     const response = await makeAdminApiCall('/admin/prompts');
-    const data = response.data;
+    const items = response.data?.items;
 
     // Ensure we return an array
-    return Array.isArray(data) ? data : [];
+    return Array.isArray(items) ? items : [];
   } catch (error) {
     console.error('Error in fetchAdminPrompts:', error);
     throw error;
@@ -167,7 +167,7 @@ export const fetchAdminPrompts = async () => {
 
 export const fetchAdminAppTemplates = async () => {
   const response = await makeAdminApiCall('/admin/apps/templates');
-  return response.data;
+  return response.data?.items ?? [];
 };
 export const createPrompt = async promptData => {
   const response = await makeAdminApiCall('/admin/prompts', {
@@ -231,7 +231,7 @@ export const reorderApps = async ids => {
 
 export const fetchAdminPages = async () => {
   const response = await makeAdminApiCall('/admin/pages');
-  return response.data;
+  return response.data?.items ?? [];
 };
 
 export const fetchAdminPage = async pageId => {
@@ -408,7 +408,7 @@ export const createAdminProject = async project => {
     method: 'POST',
     body: project
   });
-  return response.data?.project;
+  return response.data;
 };
 
 /**
@@ -423,7 +423,7 @@ export const updateAdminProject = async (projectId, project) => {
     method: 'PUT',
     body: project
   });
-  return response.data?.project;
+  return response.data;
 };
 
 /**
@@ -501,7 +501,7 @@ export const transferAdminProjectItems = async (
  * @returns {Promise<{success: boolean, duration: number, items: Array<Object>}>}
  */
 export const testAdminProject = async projectId => {
-  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/test`, {
+  const response = await makeAdminApiCall(`${adminProjectPath(projectId)}/_test`, {
     method: 'POST'
   });
   return response.data;
@@ -533,7 +533,7 @@ export const addAdminProjectItem = async (projectId, item) => {
     method: 'POST',
     body: item
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -552,7 +552,7 @@ export const uploadAdminProjectItem = async (projectId, { file, name, pinned = f
     method: 'POST',
     body: formData
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -569,7 +569,7 @@ export const updateAdminProjectItem = async (projectId, itemId, changes) => {
     method: 'PATCH',
     body: changes
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -585,7 +585,7 @@ export const updateAdminProjectItemText = async (projectId, itemId, text) => {
     method: 'PUT',
     body: { text }
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -607,10 +607,10 @@ export const deleteAdminProjectItem = async (projectId, itemId) => {
  * @returns {Promise<Object>} The item.
  */
 export const refreshAdminProjectItem = async (projectId, itemId) => {
-  const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/refresh`, {
+  const response = await makeAdminApiCall(`${adminProjectItemPath(projectId, itemId)}/_refresh`, {
     method: 'POST'
   });
-  return response.data?.item;
+  return response.data;
 };
 
 /**
@@ -646,7 +646,7 @@ export const fetchAdminProjectItemText = async (projectId, itemId, { maxChars = 
  */
 export const fetchProjectPickerPages = async () => {
   const response = await makeAdminApiCall('/projects/pickers/pages');
-  return Array.isArray(response.data?.pages) ? response.data.pages : [];
+  return Array.isArray(response.data?.items) ? response.data.items : [];
 };
 
 /**
@@ -677,7 +677,7 @@ export const searchProjectPickerIFinder = async (query, { profile, limit } = {})
   if (profile) params.set('profile', profile);
   if (limit) params.set('limit', String(limit));
   const response = await makeAdminApiCall(`/projects/pickers/ifinder/search?${params}`);
-  return Array.isArray(response.data?.results) ? response.data.results : [];
+  return Array.isArray(response.data?.items) ? response.data.items : [];
 };
 
 /**
@@ -687,7 +687,7 @@ export const searchProjectPickerIFinder = async (query, { profile, limit } = {})
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
 export const checkProjectPickerUrl = async url => {
-  const response = await makeAdminApiCall('/projects/pickers/url/check', {
+  const response = await makeAdminApiCall('/projects/pickers/url/_check', {
     method: 'POST',
     body: { url }
   });
@@ -702,7 +702,7 @@ export const checkProjectPickerUrl = async url => {
  *   chars?: number, truncated?: boolean, error?: string}>}
  */
 export const previewProjectPickerUrl = async url => {
-  const response = await makeAdminApiCall('/projects/pickers/url/preview', {
+  const response = await makeAdminApiCall('/projects/pickers/url/_preview', {
     method: 'POST',
     body: { url }
   });
@@ -717,7 +717,7 @@ export const previewProjectPickerUrl = async url => {
  * @returns {Promise<{ok: boolean, pages?: Array<Object>, truncated?: boolean, error?: string}>}
  */
 export const crawlProjectPickerUrl = async (url, options = {}) => {
-  const response = await makeAdminApiCall('/projects/pickers/url/crawl', {
+  const response = await makeAdminApiCall('/projects/pickers/url/_crawl', {
     method: 'POST',
     body: { url, ...options },
     // Past the server's crawl deadline; see `CRAWL_REQUEST_TIMEOUT_MS`.
@@ -759,7 +759,7 @@ export const deleteAdminWorkflow = async id => {
 };
 
 export const toggleAdminWorkflow = async id => {
-  const response = await makeAdminApiCall(`/admin/workflows/${id}/toggle`, { method: 'POST' });
+  const response = await makeAdminApiCall(`/admin/workflows/${id}/_toggle`, { method: 'POST' });
   return response.data;
 };
 
@@ -811,7 +811,7 @@ export const listCredentials = async () => {
   try {
     const response = await makeAdminApiCall('/admin/credentials');
     const data = response.data;
-    const credentials = data?.credentials ?? data;
+    const credentials = data?.items;
     return Array.isArray(credentials) ? credentials : [];
   } catch (error) {
     console.error('Error in listCredentials:', error);
@@ -872,8 +872,8 @@ export const deleteCredential = async id => {
  * @param {string} [params.status] - Filter by status ('all', 'running', 'paused', 'completed', 'failed', 'cancelled')
  * @param {string} [params.search] - Search by user ID or workflow name
  * @param {number} [params.limit] - Maximum number of results
- * @param {number} [params.offset] - Number of results to skip
- * @returns {Promise<Object>} Response containing executions array, total count, and stats
+ * @param {string} [params.cursor] - The `nextCursor` of the previous page
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number, stats: Object}>}
  */
 export const fetchAdminExecutions = async (params, { signal } = {}) => {
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
@@ -888,7 +888,9 @@ export const fetchAdminExecutions = async (params, { signal } = {}) => {
  * @returns {Promise<Object>} Response with success status and new execution state
  */
 export const cancelAdminExecution = async id => {
-  const response = await makeAdminApiCall(`/workflows/executions/${id}/cancel`, { method: 'POST' });
+  const response = await makeAdminApiCall(`/workflows/executions/${id}/_cancel`, {
+    method: 'POST'
+  });
   return response.data;
 };
 
@@ -945,9 +947,12 @@ export const updateSkill = async (skillName, data) => {
  * @returns {Promise<Object>} The toggled skill object with updated enabled state
  */
 export const toggleSkill = async skillName => {
-  const response = await makeAdminApiCall(`/admin/skills/${encodeURIComponent(skillName)}/toggle`, {
-    method: 'POST'
-  });
+  const response = await makeAdminApiCall(
+    `/admin/skills/${encodeURIComponent(skillName)}/_toggle`,
+    {
+      method: 'POST'
+    }
+  );
   return response.data;
 };
 
@@ -971,7 +976,7 @@ export const deleteSkill = async skillName => {
  * @returns {Promise<Object>} The imported skill object
  */
 export const importSkill = async formData => {
-  const response = await makeAdminApiCall('/admin/skills/import', {
+  const response = await makeAdminApiCall('/admin/skills/_import', {
     method: 'POST',
     body: formData
   });
@@ -997,7 +1002,7 @@ export const exportSkill = skillName => {
  */
 export const fetchMarketplaceRegistries = async () => {
   const response = await makeAdminApiCall('/admin/marketplace/registries');
-  return response.data;
+  return response.data?.items ?? [];
 };
 
 /**
@@ -1079,9 +1084,9 @@ export const testMarketplaceRegistry = async data => {
  * @param {string} [params.search] - Search query string
  * @param {string} [params.registry] - Filter by registry ID
  * @param {string} [params.status] - Filter by installation status (available, installed)
- * @param {number} [params.page] - Page number for pagination
- * @param {number} [params.limit] - Number of items per page
- * @returns {Promise<Object>} Paginated result with items, total, and totalPages
+ * @param {string} [params.cursor] - The `nextCursor` of the previous page
+ * @param {number} [params.limit] - Number of items per page (default 24, at most 1000)
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number}>}
  */
 export const browseMarketplace = async (params = {}) => {
   const query = new URLSearchParams(
@@ -1248,7 +1253,7 @@ export const fetchAdminUsageLimitUser = async userKey => {
  */
 export const resetAdminUsageLimitUser = async (userKey, body = {}) => {
   const response = await makeAdminApiCall(
-    `/admin/usage/limits/users/${encodeURIComponent(userKey)}/reset`,
+    `/admin/usage/limits/users/${encodeURIComponent(userKey)}/_reset`,
     {
       method: 'POST',
       body
@@ -1265,7 +1270,15 @@ export const setAppFeedbackEnabled = async (appId, enabled) => {
   return response.data;
 };
 
-export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
-  const response = await makeAdminApiCall(`/admin/usage/feedback?limit=${limit}&offset=${offset}`);
+/**
+ * One page of feedback entries, newest first.
+ * @param {number} [limit]
+ * @param {string|null} [cursor] - The `nextCursor` of the previous page
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number}>}
+ */
+export const fetchAdminFeedbackEntries = async (limit = 100, cursor = null) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  const response = await makeAdminApiCall(`/admin/usage/feedback?${params}`);
   return response.data;
 };

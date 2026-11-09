@@ -25,19 +25,10 @@ import { codeOfStatus, sendProblem } from './errorResponse.js';
  * @param {Object|Array} [options.details] - Interpolation parameters for the client's message, or a list of problems
  */
 export function sendErrorResponse(res, statusCode, message, options = {}) {
-  const { error, logPrefix } = options;
-  let { code, details } = options;
+  const { error, logPrefix, code, details } = options;
 
   if (error && logPrefix) {
     logger.error(logPrefix, { component: 'Utils', error });
-  }
-
-  // Older call sites carry the specific code in `details.code`; `details` never holds a
-  // code, it is the `code` of the response.
-  if (code === undefined && typeof details?.code === 'string') {
-    const { code: carried, ...rest } = details;
-    code = carried;
-    details = Object.keys(rest).length ? rest : undefined;
   }
 
   return sendProblem(
@@ -57,56 +48,4 @@ export function sendInternalError(res, error, context) {
     error,
     logPrefix: `Error in ${context}`
   });
-}
-
-/**
- * Send a failed operation error
- * @param {Object} res - Express response object
- * @param {string} operation - Operation that failed
- * @param {Error} error - Error object for logging
- */
-export function sendFailedOperationError(res, operation, error) {
-  return sendErrorResponse(res, 500, `Failed to ${operation}`, {
-    error,
-    logPrefix: `Failed to ${operation}`
-  });
-}
-
-/**
- * Send an authentication required error
- * @param {Object} res - Express response object
- */
-export function sendAuthRequired(res) {
-  return sendErrorResponse(res, 401, 'Authentication required');
-}
-
-/**
- * Send an insufficient permissions error
- * @param {Object} res - Express response object
- * @param {string} requiredPermission - Optional specific permission required
- */
-export function sendInsufficientPermissions(res, requiredPermission) {
-  const message = requiredPermission
-    ? `Insufficient permissions: ${requiredPermission} required`
-    : 'Insufficient permissions';
-  return sendErrorResponse(res, 403, message);
-}
-
-/**
- * Send a not found error
- * @param {Object} res - Express response object
- * @param {string} resource - Resource that was not found
- */
-export function sendNotFound(res, resource) {
-  return sendErrorResponse(res, 404, `${resource} not found`);
-}
-
-/**
- * Send a bad request error
- * @param {Object} res - Express response object
- * @param {string} message - Error message
- * @param {Object} details - Optional validation details
- */
-export function sendBadRequest(res, message, details) {
-  return sendErrorResponse(res, 400, message, { details });
 }

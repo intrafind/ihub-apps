@@ -345,8 +345,14 @@ describe('storage providers', () => {
           return this;
         }
       };
-      requireCloudStorageGrant(type)(req, res, () => {
-        passed = true;
+      requireCloudStorageGrant(type)(req, res, error => {
+        // The middleware hands a refusal to `next` as a ServiceError.
+        if (error) {
+          status = error.status;
+          body = { code: error.code };
+        } else {
+          passed = true;
+        }
       });
       return { status, body, passed };
     };

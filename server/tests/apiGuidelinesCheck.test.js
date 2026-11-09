@@ -26,8 +26,11 @@ describe('check-api-guidelines', () => {
 
   it('accepts a thrown ServiceError and a success body that has an error member', () => {
     assert.deepEqual(rules("throw new ServiceError('NOT_FOUND', 'Task not found');"), []);
-    assert.deepEqual(rules("res.status(200).json({ ok: false, error: 'probe failed' });"), []);
-    assert.deepEqual(rules('res.status(201).json({ error: null });'), []);
+    assert.deepEqual(
+      rules("res.status(200).json({ status: 'failed', error: 'probe failed' });"),
+      []
+    );
+    assert.deepEqual(rules('res.status(200).json({ error: null });'), []);
     assert.deepEqual(rules('res.json({ error: null });'), []);
   });
 
@@ -63,8 +66,31 @@ describe('check-api-guidelines', () => {
     assert.deepEqual(rules('res.status(422);'), ['status-422']);
   });
 
+  it('flags a 201 without a Location and accepts sendCreated', () => {
+    assert.deepEqual(rules('res.status(201).json({ id });'), ['created-location']);
+    assert.deepEqual(rules('res\n  .status(201)\n  .json({ id });'), ['created-location']);
+    assert.deepEqual(rules('res.status(ok ? 201 : 202).json({ item });'), ['created-location']);
+    assert.deepEqual(rules('sendCreated(res, `/api/things/${id}`, { id });'), []);
+    assert.deepEqual(
+      rules('sendWithLocation(res, ok ? 201 : 202, `/api/things/${id}`, { id });'),
+      []
+    );
+  });
+
   it('flags a bare verb on a route but accepts an _action segment', () => {
     assert.deepEqual(rules("router.post('/:taskId/run', handler);"), ['route-verb']);
+    // Admin routes are registered through buildServerPath(…), on one line or across lines.
+    assert.deepEqual(
+      rules("app.post(buildServerPath('/api/admin/apps/:appId/toggle'), adminAuth, h);"),
+      ['route-verb']
+    );
+    assert.deepEqual(
+      rules("app.post(\n  buildServerPath('/api/admin/proxy/_test'),\n  adminAuth,\n  h\n);"),
+      []
+    );
+    // a file-local route('…') prefix helper is read the same way
+    assert.deepEqual(rules("app.post(route('/url/check'), ...gate, h);"), ['route-verb']);
+    assert.deepEqual(rules("app.post(route('/url/_check'), ...gate, h);"), []);
     assert.deepEqual(rules('app.post(`${base}/:id/duplicate`, handler);'), ['route-verb']);
     assert.deepEqual(rules("router.post('/:keyId/_rotate', handler);"), []);
     assert.deepEqual(rules('app.post(`${base}/_preview`, handler);'), []);
@@ -84,6 +110,11 @@ describe('check-api-guidelines', () => {
     assert.deepEqual(rules('const p = req.query.page;'), ['pagination-param']);
     assert.deepEqual(rules('const { limit, offset = 0 } = req.query;'), ['pagination-param']);
     assert.deepEqual(rules('const s = req.query.per_page;'), ['pagination-param']);
+    // A handler that reads the parameters through an alias of req.query.
+    assert.deepEqual(rules('const query = req.query || {};\nconst page = query.page;'), [
+      'pagination-param'
+    ]);
+    assert.deepEqual(rules('const query = req.query || {};\nconst q = query.cursor;'), []);
     assert.deepEqual(rules('const s = req.query.sort_by;'), ['query-naming']);
     assert.deepEqual(rules('const { limit, cursor, appId } = req.query;'), []);
   });

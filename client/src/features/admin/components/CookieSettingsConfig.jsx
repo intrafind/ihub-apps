@@ -51,22 +51,13 @@ function CookieSettingsConfig() {
     setMessage('');
 
     try {
-      // Fetch full platform config first
-      const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET'
-      });
-
-      const updatedPlatform = {
-        ...platformResponse.data,
-        cookieSettings: {
-          disableSecure: config.disableSecure
-        }
-      };
-
-      // Save the updated platform config
+      // Only the cookie block: the save route keeps every section the body
+      // leaves out, while the GET answer it would otherwise echo back has
+      // fields removed (a proxy JWT provider's `jwkUrl`), which a full-body
+      // save would erase.
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'PUT',
-        body: updatedPlatform
+        method: 'POST',
+        body: { cookieSettings: { disableSecure: config.disableSecure } }
       });
 
       setMessage({

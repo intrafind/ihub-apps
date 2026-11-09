@@ -82,7 +82,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
     setListError('');
     try {
       const response = await makeAdminApiCall(`/admin/models/${modelId}/tts/voices`);
-      setVoices(Array.isArray(response.data?.voices) ? response.data.voices : []);
+      setVoices(Array.isArray(response.data?.items) ? response.data.items : []);
     } catch (error) {
       setListError(
         errorText(error, t('admin.models.ttsVoices.loadError', 'Could not load voices'))
@@ -204,7 +204,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
           ...(gender ? { gender } : {})
         }
       });
-      const voice = response.data?.voice;
+      const voice = response.data;
       setCreated(voice || null);
       if (voice && voices) setVoices(prev => [voice, ...(prev || [])]);
       setName('');

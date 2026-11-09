@@ -156,7 +156,7 @@ const route = {
   remove: handlersFor(promptRoutes, 'delete', '/api/prompts/:promptId'),
   shares: handlersFor(promptRoutes, 'put', '/api/prompts/:promptId/shares'),
   owner: handlersFor(promptRoutes, 'put', '/api/prompts/:promptId/owner'),
-  duplicate: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/duplicate'),
+  duplicate: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/_duplicate'),
   versions: handlersFor(promptRoutes, 'get', '/api/prompts/:promptId/versions'),
   restore: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/versions/:revision/restore'),
   usage: handlersFor(promptRoutes, 'post', '/api/prompts/:promptId/usage'),
@@ -171,7 +171,7 @@ const route = {
 async function list(user, scope) {
   const res = await drive(route.list, { user, query: scope ? { scope } : {} });
   assert.equal(res.statusCode, 200, JSON.stringify(res.body));
-  return res.body;
+  return res.body.items;
 }
 
 async function create(user, body = {}) {
@@ -401,7 +401,7 @@ describe('creating and listing', () => {
     const unshared = await share(ROOT, prompt.id, []);
     assert.equal(unshared.statusCode, 200, JSON.stringify(unshared.body));
     const removed = await drive(route.remove, { user: ROOT, params });
-    assert.equal(removed.statusCode, 200, JSON.stringify(removed.body));
+    assert.equal(removed.statusCode, 204, JSON.stringify(removed.body));
 
     const created = await drive(route.create, { user: ROOT, body: { name: 'x', prompt: 'y' } });
     assert.equal(created.statusCode, 403, 'nobody creates new ones, admins included');
@@ -670,7 +670,7 @@ describe('ownership', () => {
     const prompt = await create(ADA);
     await share(ADA, prompt.id, [{ type: 'user', id: GRACE.id, permission: 'edit' }]);
     const res = await drive(route.remove, { user: ADA, params: { promptId: prompt.id } });
-    assert.equal(res.statusCode, 200);
+    assert.equal(res.statusCode, 204);
     assert.ok(!ids(await list(GRACE)).includes(prompt.id));
     const marker = await getUserPromptRepository().documents.get(
       USER_PROMPT_SHARES_NAMESPACE,
@@ -758,7 +758,7 @@ describe('versions', () => {
     const history = await drive(route.versions, { user: ADA, params: { promptId: prompt.id } });
     assert.equal(history.statusCode, 200);
     assert.deepEqual(
-      history.body.versions.map(v => [v.revision, v.prompt]),
+      history.body.items.map(v => [v.revision, v.prompt]),
       [
         [2, 'second'],
         [1, 'first']
@@ -793,7 +793,7 @@ describe('versions', () => {
     }
     const history = await drive(route.versions, { user: ADA, params: { promptId: prompt.id } });
     assert.deepEqual(
-      history.body.versions.map(v => v.revision),
+      history.body.items.map(v => v.revision),
       [4, 3]
     );
   });
@@ -898,10 +898,10 @@ describe('the admin view', () => {
     await share(ADA, narrow.id, [{ type: 'user', id: GRACE.id, permission: 'use' }]);
     const res = await drive(route.adminList, { user: ROOT, query: { scope: 'user' } });
     assert.equal(res.statusCode, 200, JSON.stringify(res.body));
-    const listed = ids(res.body.prompts);
+    const listed = ids(res.body.items);
     assert.ok(listed.includes(broad.id));
     assert.ok(!listed.includes(narrow.id));
-    const entry = res.body.prompts.find(item => item.id === broad.id);
+    const entry = res.body.items.find(item => item.id === broad.id);
     assert.equal(entry.owner.id, ADA.id);
     assert.equal(entry.permissions.canDelete, true);
   });

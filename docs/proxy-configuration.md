@@ -217,7 +217,7 @@ OpenAPI spec under the **Admin - Proxy** tag.
 | -------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `GET /api/admin/proxy/config`  | The stored block, the configuration in effect, and the origin of each field. Passwords redacted.   |
 | `PUT /api/admin/proxy/config`  | Validate and store the block, then refresh the cache. Encrypts URLs; keeps `${ENV_VAR}` verbatim.  |
-| `POST /api/admin/proxy/test`   | Probe one URL. Body: `{ "url": "...", "timeoutMs": 10000, "config": { ... } }`.                    |
+| `POST /api/admin/proxy/_test`   | Probe one URL. Body: `{ "url": "...", "timeoutMs": 10000, "config": { ... } }`.                    |
 
 The test endpoint answers with the routing decision (`proxied`, `bypassed`,
 `excluded`, `disabled`, `direct`), whether the proxy answered at TCP level, the

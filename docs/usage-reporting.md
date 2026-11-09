@@ -159,7 +159,7 @@ All endpoints require an admin. Range parameters everywhere: `range` = `today`, 
 | `GET /api/admin/usage/calls?user=&app=&model=&surface=&outcome=&limit=&cursor=` | One page of call records, newest first, and `nextCursor` |
 | `GET /api/admin/usage/export?format=csv\|json` | Every record of the range |
 | `GET /api/admin/usage/feedback/summary` | Feedback ratings in total and per user, app and model |
-| `GET /api/admin/usage/feedback?limit=&offset=` | Stored feedback entries with comments, newest first |
+| `GET /api/admin/usage/feedback?limit=&cursor=` | Stored feedback entries with comments, newest first |
 | `GET/PUT /api/admin/usage/meta` | The tracking mode |
 | `POST /api/admin/usage/_rollup` | Rolls up now |
 

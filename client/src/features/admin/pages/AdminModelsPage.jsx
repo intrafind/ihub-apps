@@ -158,11 +158,10 @@ function AdminModelsPage() {
 
   const toggleModel = async modelId => {
     try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/toggle`, {
-        method: 'POST'
-      });
-      const result = response.data;
-      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled: result.enabled } : m)));
+      // The route sets the state it is told: flip from what the list shows.
+      const enabled = !models.find(m => m.id === modelId)?.enabled;
+      await toggleModels(modelId, enabled);
+      setModels(prev => prev.map(m => (m.id === modelId ? { ...m, enabled } : m)));
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     }
@@ -192,10 +191,14 @@ function AdminModelsPage() {
     // 401), so the shared admin client is safe here: a 401 really is an expired
     // admin session and must go through the global re-authentication flow.
     try {
-      const response = await makeAdminApiCall(`/admin/models/${modelId}/test`, {
+      const response = await makeAdminApiCall(`/admin/models/${modelId}/_test`, {
         method: 'POST'
       });
-      setTestResults(prev => ({ ...prev, [modelId]: response?.data || {} }));
+      // A failed test is an HTTP error (the catch below); an answer is a passed test.
+      setTestResults(prev => ({
+        ...prev,
+        [modelId]: { ...(response?.data || {}), success: true }
+      }));
     } catch (err) {
       // Server body: { error: headline, code, details: { remediation, messageKey } }
       const body = err?.response?.data || {};

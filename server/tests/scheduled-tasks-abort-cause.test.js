@@ -73,7 +73,7 @@ describe('the cause of a stopped scheduled run', () => {
     assert.deepEqual(run.reason.cause.actor, { type: 'user', id: 'user-ada', owner: true });
     assert.equal(
       run.reason.cause.origin.via,
-      'POST /api/scheduled-tasks/:taskId/runs/:runId/cancel'
+      'POST /api/scheduled-tasks/:taskId/runs/:runId/_cancel'
     );
     assert.deepEqual(run.reason.cause.related, { taskId: task.id, runId });
     await cleanup(user);

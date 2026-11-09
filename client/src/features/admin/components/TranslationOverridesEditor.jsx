@@ -21,7 +21,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [changedOnly, setChangedOnly] = useState(true);
-  const [data, setData] = useState({ entries: [], total: 0, changedCount: 0 });
+  const [data, setData] = useState({ items: [], total: 0, changedCount: 0 });
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -93,7 +93,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
     }
   };
 
-  const hasMore = data.entries.length < data.total;
+  const hasMore = data.items.length < data.total;
 
   return (
     <div className="mt-8 bg-white dark:bg-gray-800 shadow-sm sm:rounded-lg px-4 py-5 sm:p-6">
@@ -161,7 +161,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
       )}
 
       <ul className="mt-4 divide-y divide-gray-200 dark:divide-gray-700" aria-busy={loading}>
-        {data.entries.map(entry => {
+        {data.items.map(entry => {
           const current = entry.override ?? entry.base ?? '';
           const draft = drafts[entry.key];
           const value = draft ?? current;
@@ -234,7 +234,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
         })}
       </ul>
 
-      {!loading && data.entries.length === 0 && !error && (
+      {!loading && data.items.length === 0 && !error && (
         <p className="mt-4 text-sm text-gray-500 dark:text-gray-400">
           {changedOnly && !debouncedQuery
             ? t(
@@ -252,8 +252,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
             onClick={() => setLimit(l => l + PAGE_SIZE)}
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-200"
           >
-            {t('admin.localization.overrides.more', 'Show more')} ({data.entries.length}/
-            {data.total})
+            {t('admin.localization.overrides.more', 'Show more')} ({data.items.length}/{data.total})
           </button>
         </div>
       )}

@@ -748,6 +748,171 @@ used to be an HTML or plain text page.
   deleted, a gateway setting that cannot be removed while models use their own dialect) and
   `409 PROVIDER_IN_USE` with the models that use the provider in `details.linkedModels`. An unexpected
   failure answers 500 with a fixed text; the cause is in the server log.
+- The platform configuration endpoints (`/api/admin/configs/platform`, `/api/admin/voice/azure/test`) answer
+  in this shape: `BAD_REQUEST` for a body that is not an object, a default language that is not a language
+  code, a rejected `proxyAuth.sharedSecretHeader` or a `toolApproval` block that does not validate (the
+  reason is in `detail`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The OAuth client administration endpoints (`/api/admin/oauth/clients*`, `/api/admin/oauth/public-key*`)
+  answer in this shape: `BAD_REQUEST` while OAuth clients are switched off, for an unsafe id or an invalid
+  body (the reason is in `detail`), `NOT_FOUND` for an unknown client or a public key that is not available,
+  and 500 with a fixed text for an unexpected failure (the cause is in the server log).
+- The agent profile administration endpoints (`/api/admin/agents/profiles*`) answer in this shape:
+  `BAD_REQUEST` for an unsafe, missing or mismatched id or an invalid memory request, `NOT_FOUND` for an unknown
+  profile, `CONFLICT` for a profile that exists already, and `VERSION_CONFLICT` (409) with the current version
+  in `details.currentVersion` when a memory write lost the race. A profile that does not match its schema
+  answers `VALIDATION_FAILED` with the failed fields in `errors` (before: `BAD_REQUEST` with the formatted
+  schema issues in `details`). A failing model call keeps its canonical status through its LLM code.
+- The group administration endpoints (`/api/admin/groups*`) answer in this shape: `BAD_REQUEST` for an unsafe
+  id, a missing field, a protected system group, an invalid inheritance (the reason is in `detail`) or the
+  removal of the last group with administrative access, `NOT_FOUND` for an unknown group and `CONFLICT` for
+  a group id that exists. An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The agent run endpoints (`/api/agents/profiles/:id/runs`, `/api/agents/runs*`) answer in this shape:
+  `BAD_REQUEST` for an unsafe id, a disabled profile or a run that cannot be resumed (the reason is in
+  `detail`), `NOT_FOUND` for an unknown profile or run, `FORBIDDEN` for the run of somebody else (also when
+  the authorization lookup itself fails), and `CONCURRENCY_LIMIT` (409) with the running count in
+  `details.runningRuns`. An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The user administration endpoints (`/api/admin/auth/*`) answer in this shape: `BAD_REQUEST` for an invalid
+  user id, a missing username or a password that is required or too short, `NOT_FOUND` for an unknown user,
+  `CONFLICT` for a username that exists and `FORBIDDEN` for deleting the last admin user (the reason is in
+  `detail`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The page administration endpoints (`/api/admin/pages*`) answer in this shape: `BAD_REQUEST` for an unsafe,
+  missing or mismatched page id and for a content or title key that is not a language code, `NOT_FOUND` for an
+  unknown page and `CONFLICT` for a page id that exists (the reason is in `detail`). An unexpected failure
+  answers 500 with a fixed text; the cause is in the server log.
+- The credential administration endpoints (`/api/admin/credentials*`) answer in this shape: `BAD_REQUEST` for an
+  unsafe id or a body that is not an object, `VALIDATION_FAILED` with the failed fields in `errors` for an
+  invalid credential (before: `BAD_REQUEST` with the schema issues in `details`), `NOT_FOUND` for an unknown
+  credential and `CONFLICT` for a credential id that exists. An unexpected failure, including an unreadable
+  credential store, answers 500 with a fixed text; the cause is in the server log.
+- The client-metadata client endpoints (`/api/admin/oauth/clients/cimd/*` and the revoke-all route
+  `/api/admin/oauth/clients/{id}/connections`) answer in this shape: `BAD_REQUEST` for OAuth clients that are
+  not enabled, an identifier that does not decode and an invalid policy field (the reason is in `detail`),
+  and `NOT_FOUND` for an unknown client. An unexpected failure answers 500 with a fixed text; the cause is
+  in the server log.
+- The short-link endpoints (`/api/shortlinks*`) answer in this shape: `BAD_REQUEST` for a missing target or a
+  target that is not a path on this server or a URL on an allowed host, `NOT_FOUND` for an unknown code,
+  `FORBIDDEN` for a link of somebody else and `CONFLICT` for a code that exists. The redirect `/s/{code}`
+  keeps its plain-text answers. An unexpected failure answers 500 with a fixed text; the cause is in the
+  server log.
+- The skill endpoints (`/api/skills*`) answer in this shape: `BAD_REQUEST` for an unsafe skill name or a missing
+  file path and `NOT_FOUND` for an unknown skill, missing skill content or an unknown resource (the reason is
+  in `detail`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The CORS administration endpoints (`/api/admin/cors/config`) answer in this shape: `BAD_REQUEST` for an invalid
+  field of the configuration (the field and the reason are in `detail`). An unexpected failure, including an
+  unreadable platform file, answers 500 with a fixed text; the cause is in the server log.
+- The agent inbox administration endpoints (`/api/admin/agents/inboxes*`) answer in this shape: `BAD_REQUEST` for
+  an unsafe inbox id or a missing `body` or `text`, `NOT_FOUND` for an unknown inbox and `VERSION_CONFLICT`
+  (409) with the current version in `details.currentVersion` for a stale `expectedVersion`. The inbox editor
+  now recognizes that conflict by its `code` and shows the reload hint. An unexpected failure answers 500 with
+  a fixed text; the cause is in the server log.
+- The SSL administration endpoints (`/api/admin/ssl/config`) answer in this shape: `BAD_REQUEST` for an invalid
+  field of the configuration (the field and the reason are in `detail`). An unexpected failure, including an
+  unreadable platform file, answers 500 with a fixed text; the cause is in the server log.
+- The SSRF allowlist endpoints (`/api/admin/ssrf/config`) answer in this shape: `BAD_REQUEST` for an allowlist
+  that is not an array and for an entry that is not a string, is empty or is not a host pattern (the reason is
+  in `detail`). An unexpected failure, including an unreadable platform file, answers 500 with a fixed text;
+  the cause is in the server log.
+- The admin translate endpoint (`/api/admin/translate`) answers in this shape: `BAD_REQUEST` for missing fields
+  and, for a failing model call, the LLM code with its canonical status (as for the model test). A missing
+  model or any other unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The JSON schema endpoints (`/api/admin/schemas*`) answer in this shape: `BAD_REQUEST` for an unknown schema
+  type (the allowed types are in `detail`) and `NOT_FOUND` for a type without a schema. An unexpected failure
+  answers 500 with a fixed text; the cause is in the server log.
+- The cache administration endpoints (`/api/admin/cache*`, `/api/admin/client/_refresh`), the value encryption endpoint (`/api/admin/encrypt-value`), the feature flag endpoint (`/api/admin/features`),
+  documentation endpoints (`/api/admin/docs*`), version endpoints (`/api/admin/version*`), logging endpoints
+  (`/api/admin/logging*`), system endpoints (`/api/admin/system*`) and rate limit endpoints
+  (`/api/admin/rate-limits`) answer in this shape: `BAD_REQUEST` for an invalid value, `NOT_FOUND` for an
+  unknown documentation page and, for an invalid rate limit body, `VALIDATION_FAILED` with the failed fields
+  in `errors` (before: `BAD_REQUEST` with the schema issues in `details`). An unexpected failure answers 500
+  with a fixed text; the cause is in the server log.
+- The usage guide endpoint (`/api/admin/apps/_usage-guide`) answers in this shape: `BAD_REQUEST` for a missing
+  app or an invalid language, `SERVICE_UNAVAILABLE` (503) when no chat model is available and, for a failing
+  model call, the LLM code with its canonical status.
+- The audit log (`/api/admin/audit-log*`), usage (`/api/admin/usage*`), UI customization (`/api/admin/ui*`),
+  proxy (`/api/admin/proxy*`), translation override (`/api/admin/translations*`), overview and people directory
+  editor administration endpoints answer in this shape: `BAD_REQUEST` for an invalid filter, date range, asset
+  id, configuration or proxy setting (the reason is in `detail`; an invalid proxy configuration lists the failed
+  fields in `errors`), `NOT_FOUND` for an unknown asset or language and `FORBIDDEN` for a proxy test target the
+  SSRF guard blocks. The UI endpoints no longer answer an error with `{ success: false, message }`, and a UI
+  configuration that is missing a section or has an invalid value answers `BAD_REQUEST` again instead of 500. An
+  unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The public page (`/api/pages/{id}`), renderer (`/api/renderers*`) and magic prompt (`/api/magic-prompt`)
+  endpoints answer in this shape: `NOT_FOUND` for an unknown page, page file, renderer or app, `AUTH_REQUIRED` /
+  `FORBIDDEN` for a protected page or a model the caller may not use, `BAD_REQUEST` for an invalid id or a
+  missing input and, for a failing model call, the LLM code with its canonical status. An unexpected failure
+  answers 500 with a fixed text; the cause is in the server log.
+- The PDF export (`/api/exports*`), apps and models listing (`/api/apps*`, `/api/models*`), document template
+  administration (`/api/admin/document-templates*`), content access (`/api/admin/content-access*`) and chat
+  history administration endpoints answer in this shape: `NOT_FOUND` for an unknown app, model, template or group,
+  `BAD_REQUEST` for an invalid id, type or upload, `CONFLICT` for a template that already exists,
+  `PAYLOAD_TOO_LARGE` for a template file over the limit, `SERVICE_UNAVAILABLE` / `TIMEOUT` when the document
+  renderer is busy or too slow (before: a plain `error` text), and `INTERNAL_ERROR` with a fixed text for an
+  unexpected failure; the cause is in the server log.
+- The change history (`/api/admin/changes*`), usage limits (`/api/admin/usage-limits*`), Nextcloud embed,
+  Microsoft Office add-in and Copilot agent administration endpoints, the example apps of an installed integration
+  and the app session and usage endpoints answer in this shape: `BAD_REQUEST` for an invalid id, resource or
+  value (the reason is in `detail`), `NOT_FOUND` for an unknown snapshot or installation, `CONFLICT` for an
+  installation whose definition is not loaded or an app id that already exists, the existing
+  `COPILOT_AGENT_DISABLED`, `COPILOT_REFERENCE_ID_MISSING` and `COPILOT_PUBLIC_HTTPS_REQUIRED` codes for a
+  Copilot package that cannot be built yet, and `INTERNAL_ERROR` with a fixed text for an unexpected failure;
+  the cause is in the server log.
+- The Office 365, Google Drive, Nextcloud and Jira integration endpoints (`/api/integrations/*`), the
+  storage-provider access check that guards them, the personal API key, connection and scope endpoints answer in
+  this shape: `AUTH_REQUIRED` for a missing session, `FORBIDDEN` for a caller or source that is not allowed,
+  `BAD_REQUEST` for an invalid id, `NOT_FOUND` for an unknown installation, key or feature, the existing
+  `STORAGE_PROVIDER_REQUIRED`, `STORAGE_PROVIDER_NOT_FOUND` and `INTEGRATION_NOT_GRANTED` codes for a storage
+  request without a usable provider, and `INTEGRATION_AUTH_REQUIRED` (409, with the Connect card details) when the
+  user has no usable connection. An unexpected failure answers 500 with a fixed text; the cause is in the server
+  log.
+- The agent run artifact (`/api/agents/runs/{id}/artifacts*`), OCR and tool job, chat feedback, release changelog,
+  OAuth connection and iFinder assistant administration endpoints answer in this shape: `NOT_FOUND` for an unknown
+  run, job, artifact or connection, `FORBIDDEN` for a run that is not the caller's or an app that turned feedback
+  off (`FEATURE_DISABLED`), `BAD_REQUEST` for an invalid upload, id or value, `CONFLICT` when iFinder is not
+  configured, `UPSTREAM_ERROR` (502) when iFinder cannot be asked, and `INTERNAL_ERROR` with a fixed text for an
+  unexpected failure; the cause is in the server log. The voice routes keep their own codes as before.
+- The user integration endpoints (`/api/integrations`, connect, reconnect, disconnect and preferences), the browser
+  extension, Office add-in and Nextcloud embed configuration endpoints, the LDAP test, admin search and browser
+  extension administration endpoints, the chat configuration endpoints (`/api/styles`, `/api/translations`,
+  `/api/configs/*`) and conversation lookups answer in this shape: `AUTH_REQUIRED`, `JSON_REQUIRED`,
+  `INTERACTIVE_SESSION_REQUIRED`, `INTEGRATION_NOT_FOUND`, `INVALID_APP`, `APP_NOT_FOUND` and
+  `PREFERENCES_UNAVAILABLE` as before, and a failed sign-in start answers the new `INTEGRATION_CONNECT_FAILED`
+  with the flow's own reason (`discovery_failed`, `public_url_mismatch`, ...) in `details.reason` (before: the
+  reason as `code`). An unexpected failure answers 500 with a fixed text; the cause is in the server log.
+- The route guards answer in this shape too: the admin guard (`FORBIDDEN`, 403), the content admin guard
+  (`AUTH_REQUIRED` for a missing sign-in, `FORBIDDEN` for a user who may not edit content), the sign-in guards
+  (`AUTH_REQUIRED`, 401), the app and model access guards (`APP_ACCESS_DENIED` / `MODEL_ACCESS_DENIED`, 403; now
+  in the code registry) and the rate limiters (`RATE_LIMITED`, 429, with `Retry-After` as before). Every guard
+  still fails closed: a refused request never reaches the route behind it.
+- The first-run setup endpoints (`/api/setup/*`), the Teams token exchange, the reverse proxy sign-in and the OIDC
+  login start answer in this shape: `BAD_REQUEST` for an invalid provider or key, `FORBIDDEN` when the system is
+  already configured, `NOT_FOUND` for an unknown provider, the Teams codes (`TEAMS_SSO_TOKEN_REQUIRED`,
+  `TEAMS_AUTH_NOT_ENABLED`, `TEAMS_ACCOUNT_DISABLED`, `TEAMS_INVALID_OR_EXPIRED_TOKEN`) as before, and the new
+  `USER_VALIDATION_FAILED` (403, with the validation's own message) when a reverse proxy user is refused. A
+  Teams request without a token or with Teams sign-in turned off is no longer answered as an invalid token.
+  Every sign-in path still fails closed.
+- The chat endpoints (`/api/apps/{appId}/chat/{chatId}` to send a message and to connect the live stream, and
+  `/api/models/{modelId}/chat/test`) answer in this shape: `NOT_FOUND` for an unknown chat, app or model, the existing
+  chat codes (`GUEST_COOKIE_MISSING`, `CHAT_STORAGE_UNAVAILABLE`, `CLIENT_HISTORY_NOT_ALLOWED`, `UNKNOWN_MESSAGE`,
+  `CHAT_OWNER_REQUIRED`, `APP_NOT_FOUND`, `INVALID_APP`, the tool approval and project refusals) as before, the model
+  call's own code and status (`TIMEOUT`, rate limits, provider errors) and `INTERNAL_ERROR` with a fixed text for an
+  unexpected failure; the cause is in the server log. A refusal is no longer logged as a chat error.
+- The iFinder authorization routes (`/api/integrations/ifinder/authorization`), the feature gate (`FEATURE_DISABLED`,
+  403), the workflow chat route (`CHAT_STORAGE_UNAVAILABLE`, 503) and the admin prompt completions answer in this
+  shape. The iFinder routes keep the status the token store reported and show its message only for a client error.
+- A request whose declared body is larger than the configured limit is refused with `PAYLOAD_TOO_LARGE` (413) in this
+  shape instead of the plain text `Payload Too Large`.
+- The sign-in routes (`/api/auth/local/login`, `/api/auth/ldap/login`, `/api/auth/ntlm/login`) and `/api/auth/user`
+  answer in this shape: `BAD_REQUEST` for missing credentials, a turned-off method, an unknown LDAP provider or an
+  invalid return URL, `AUTH_REQUIRED` (401) for refused credentials or an unfinished NTLM handshake, and
+  `RATE_LIMITED` (429, with `Retry-After`) for a locked account. They still fail closed: any other failure inside a
+  sign-in handler answers 401, never a 500, and the cause stays in the server log. The wording of the messages is
+  unchanged.
+- The project routes (`/api/projects`, `/api/projects/{id}/items`, the pickers, the smart collections and
+  `/api/admin/projects`) answer with the project's own error code in `code`, as every other route does, instead of
+  inside `details.code`. `details` now holds only the extras (`limit`, `used`, `required`, `reason`, …). The client
+  reads `code` first. New registry codes carry the English and German texts: `PROJECT_NOT_FOUND`, `PROJECT_EXISTS`,
+  `QUOTA_FILES`, `ITEM_NOT_READY`, `KIND_DISABLED`, `IFINDER_REJECTED` and the other codes of the project service.
+  The access guards still fail closed: a refused request never reaches the route behind it.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,
@@ -762,9 +927,15 @@ used to be an HTML or plain text page.
   `details.remediation` and its `messageKey` in `details.messageKey`.
 - Reading the sections above: where one says `error`, the member is now `detail`, and a list that
   is described as `details.issues` is now the `errors` list.
-- The voice routes of the chat (`/api/voice/*`) keep their own kebab-case codes (`invalid-voice`,
-  `not-permitted`, …): they are shared with the voice WebSocket and the voice dock of the web app, not
-  part of the code registry.
+- The read-aloud routes (`/api/voice/speech`, `/api/voice/azure/token`) answer with registry codes instead of the
+  former kebab-case strings: `INVALID_TEXT`, `TEXT_TOO_LONG`, `INVALID_MODEL`, `INVALID_LANGUAGE`, `INVALID_VOICE`,
+  `NO_SPEAKABLE_TEXT`, `NO_AUDIO`, `TTS_NOT_CONFIGURED`, `MODEL_NOT_FOUND`, `MODEL_DISABLED`, `MODEL_ACCESS_DENIED`,
+  `RATE_LIMITED` (too many syntheses at once) and `UPSTREAM_ERROR`. This is a clean break: a client that compared the
+  old strings has to compare the new ones. The web app is updated. The codes of the voice WebSocket
+  (`unknown-model`, `not-permitted`, …) are a different protocol and stay as they are. The discovery and JWKS
+  endpoints under `/.well-known/` answer their failures in the OAuth shape (`error`, `error_description`) like the
+  other protocol endpoints, and an expired token on an API route is answered `TOKEN_EXPIRED`
+  (401) through the same error middleware as the other routes.
 
 See [Error Responses](../../error-responses.md).
 
@@ -975,3 +1146,19 @@ Nothing else changes: addresses (`/admin/models`, `/admin/providers`), permissio
 still decides whether the **Providers** tab is shown), data files and the API stay as they are.
 
 See [Admin UI → Managing Models](../../admin-ui.md#managing-models).
+
+## Created Resources Can Be Read Back From Their `Location`
+
+Two creates answered a `Location` that had no matching read. `GET /api/integrations/api-keys/{keyId}`
+now answers the metadata of one of your personal API keys (never its secret), and
+`GET /api/integrations/requests/{requestId}` answers one of your own integration requests. Both
+answer `404` for an id that is not yours. `GET /api/workflows/{id}` now also answers a disabled
+workflow to an administrator, so the `Location` of a create that saved it as disabled resolves.
+
+## Switch Skills Off and Change Their Description
+
+**Admin → Skills → (a skill)** now switches an installed skill on or off and changes the description
+shown for it. A skill that is off is offered to no app, user, agent or MCP client, and its files stay
+installed. A description you set replaces the one in `SKILL.md` wherever the skill is listed, and a
+marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
+`contents/config/skills.json`, a new file that a fresh install and an upgrade create.

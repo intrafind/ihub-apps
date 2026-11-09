@@ -14,7 +14,9 @@
  *
  *   hand-rolled-error  `res.status(4xx|5xx).json({ error … })` — throw a ServiceError instead
  *                      (a body with `error_description` is RFC 6749/6750 and stays)
- *   success-envelope   `.json({ success: … })` / `.json({ message: '… successfully' })`
+ *   success-envelope   `.json({ success: … })`, `.json({ ok: … })`, `.json({ deleted: true })`, a body that
+ *                      is only `{ message }`, or `{ message: '… successfully' }`
+ *   created-location   `.status(201).json(…)` — answer with `sendCreated(res, path, body)` (or `sendWithLocation` when the status depends on the outcome), which sets `Location`
  *   status-422         `res.status(422)` — validation is 400 VALIDATION_FAILED
  *   route-verb         `router.post('/:id/run')` — a non-CRUD operation is an `_action` segment
  *   route-naming       a literal path segment that is not lower-case kebab-case
@@ -69,6 +71,8 @@ const ACTION_VERBS = new Set([
   'reset',
   'test',
   'validate',
+  'check',
+  'crawl',
   'preview',
   'export',
   'import',
@@ -95,10 +99,34 @@ const RULES = [
       'No { success } envelope: the status code carries success. Return the resource, or 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
   },
   {
+    id: 'created-location',
+    pattern: /\.status\(\s*[^()]*\b201\b[^()]*\)\s*\.json\(/g,
+    message:
+      'A 201 carries a Location header: answer with sendCreated(res, path, body) from server/utils/created.js (docs/api-guidelines.md#2-methods-and-status-codes).'
+  },
+  {
     id: 'success-envelope',
     pattern: /\.json\(\s*\{[^}]*?\bmessage\s*:\s*(['"`])[^'"`\n]*\bsuccessfully\b/gs,
     message:
       "No { message: '… successfully' } envelope: return the resource, or 204 for a delete (docs/api-guidelines.md#2-methods-and-status-codes)."
+  },
+  {
+    id: 'success-envelope',
+    pattern: /\.json\(\s*\{\s*ok\s*:/g,
+    message:
+      'No { ok } envelope: the status code carries success. Return the resource, or 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
+  },
+  {
+    id: 'success-envelope',
+    pattern: /\.json\(\s*\{\s*(?:deleted|saved|updated|revoked)\s*:\s*true\s*\}\s*\)/g,
+    message:
+      'No { deleted: true } body: a delete answers 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
+  },
+  {
+    id: 'success-envelope',
+    pattern: /\.json\(\s*\{\s*message\s*:\s*(['"`])[^'"`\n]*\1\s*\}\s*\)/g,
+    message:
+      'No { message } body that only confirms: answer the resource, or 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
   },
   {
     id: 'status-422',
@@ -108,9 +136,13 @@ const RULES = [
   }
 ];
 
-const ROUTE = /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]*)\2/g;
+/** A route path, bare or wrapped in `buildServerPath(…)`, as the first argument of a registration. */
+const ROUTE =
+  /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(?:(?:buildServerPath|route)\(\s*)?(['"`])([^'"`]*)\2/g;
 const QUERY_PARAM = /\breq\.query\.([A-Za-z_]\w*)/g;
 const QUERY_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*req\.query\b/g;
+/** `const query = req.query || {}`: the name the rest of the handler reads the parameters by. */
+const QUERY_ALIAS = /\b(?:const|let)\s+([A-Za-z_]\w*)\s*=\s*req\.query\b/g;
 
 /** 1-based line number of the character at |index|. */
 function lineOf(source, index) {
@@ -217,6 +249,12 @@ function checkQueryName(name, index, endIndex, add) {
 }
 
 function checkQueryParams(source, add) {
+  for (const [, alias] of source.matchAll(QUERY_ALIAS)) {
+    const aliased = new RegExp(String.raw`\b${alias}\.([A-Za-z_]\w*)`, 'g');
+    for (const match of source.matchAll(aliased)) {
+      checkQueryName(match[1], match.index, match.index + match[0].length, add);
+    }
+  }
   for (const match of source.matchAll(QUERY_PARAM)) {
     checkQueryName(match[1], match.index, match.index + match[0].length, add);
   }

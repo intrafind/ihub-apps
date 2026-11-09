@@ -5,22 +5,18 @@
 // Handles OAuth2 PKCE flow for Google Workspace file access authentication
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import GoogleDriveService from '../../services/integrations/GoogleDriveService.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import rateLimit from 'express-rate-limit';
-import {
-  sendInternalError,
-  sendAuthRequired,
-  sendBadRequest
-} from '../../utils/responseHelpers.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { registerIntegrationCallbackAlias } from './oauthIntegrationFactory.js';
 import {
   requireCloudStorageGrant,
   requestedProviderId,
-  respondIfAuthRequired
+  createCloudStorageLimiter,
+  integrationAuthRequiredError
 } from './cloudStorageAccess.js';
 
 const router = express.Router();
@@ -42,17 +38,12 @@ router.use(requireFeature('integrations'));
 // be neither connected nor browsed.
 router.use(requireCloudStorageGrant('googledrive'));
 
-// Rate limiter for status and other authenticated endpoints
-const googleDriveApiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
-  standardHeaders: true,
-  legacyHeaders: false
-});
+// Rate limiter for status, browse and download requests
+const googleDriveApiLimiter = createCloudStorageLimiter();
 
 // The OAuth callback registered in the vendor app: an alias of the one integration
 // callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
-// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
+// are the one connect flow (POST /api/integrations/:id/_connect|_disconnect).
 registerIntegrationCallbackAlias(router, {
   providerKey: 'googledrive',
   requiresProviderId: true,
@@ -64,69 +55,57 @@ registerIntegrationCallbackAlias(router, {
  * GET /api/integrations/googledrive/sources?providerId=xxx
  */
 router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => {
-  try {
-    if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
-    }
-
-    const { providerId } = req.query;
-
-    const allSources = [
-      {
-        id: 'myDrive',
-        name: 'My Drive',
-        description: 'Your personal Google Drive files',
-        icon: 'hard-drive'
-      },
-      {
-        id: 'sharedDrives',
-        name: 'Shared Drives',
-        description: 'Files from shared team drives',
-        icon: 'user-group'
-      },
-      {
-        id: 'sharedWithMe',
-        name: 'Shared with Me',
-        description: 'Files shared with you by others',
-        icon: 'share'
-      }
-    ];
-
-    let sources = allSources;
-
-    if (providerId) {
-      try {
-        const provider = GoogleDriveService._getProviderConfig(providerId);
-        if (provider.sources) {
-          sources = allSources.filter(s => provider.sources[s.id] !== false);
-        }
-      } catch {
-        // Provider not found or invalid — return all sources as fallback
-      }
-    }
-
-    res.json({
-      success: true,
-      sources
-    });
-  } catch (error) {
-    logger.error('Error getting Google Drive sources:', {
-      component: 'Google Drive',
-      error: error.message
-    });
-
-    return sendInternalError(res, error, 'get Google Drive sources');
+  if (!req.user?.id || req.user.id === 'anonymous') {
+    throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
   }
+
+  const { providerId } = req.query;
+
+  const allSources = [
+    {
+      id: 'myDrive',
+      name: 'My Drive',
+      description: 'Your personal Google Drive files',
+      icon: 'hard-drive'
+    },
+    {
+      id: 'sharedDrives',
+      name: 'Shared Drives',
+      description: 'Files from shared team drives',
+      icon: 'user-group'
+    },
+    {
+      id: 'sharedWithMe',
+      name: 'Shared with Me',
+      description: 'Files shared with you by others',
+      icon: 'share'
+    }
+  ];
+
+  let sources = allSources;
+
+  if (providerId) {
+    try {
+      const provider = GoogleDriveService._getProviderConfig(providerId);
+      if (provider.sources) {
+        sources = allSources.filter(s => provider.sources[s.id] !== false);
+      }
+    } catch {
+      // Provider not found or invalid — return all sources as fallback
+    }
+  }
+
+  res.json({ items: sources });
 });
 
 /**
  * List drives for a specific source
  * GET /api/integrations/googledrive/drives/:source
  */
-router.get('/drives/:source', authRequired, async (req, res) => {
+router.get('/drives/:source', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
+      throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
     }
 
     const { source } = req.params;
@@ -162,13 +141,13 @@ router.get('/drives/:source', authRequired, async (req, res) => {
         ];
         break;
       default:
-        return sendBadRequest(res, 'Source must be one of: myDrive, sharedDrives, sharedWithMe');
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Source must be one of: myDrive, sharedDrives, sharedWithMe'
+        );
     }
 
-    res.json({
-      success: true,
-      drives
-    });
+    res.json({ items: drives });
   } catch (error) {
     logger.error('Error listing Google Drive drives', {
       component: 'Google Drive',
@@ -176,9 +155,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
-
-    return sendInternalError(res, error, 'list Google Drive drives');
+    throw integrationAuthRequiredError(error, requestedProviderId(req)) ?? error;
   }
 });
 
@@ -186,10 +163,10 @@ router.get('/drives/:source', authRequired, async (req, res) => {
  * List items in a drive folder
  * GET /api/integrations/googledrive/items?driveId=xxx&folderId=xxx&search=xxx&source=xxx
  */
-router.get('/items', authRequired, async (req, res) => {
+router.get('/items', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
+      throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
     }
 
     const { driveId, folderId, search, source } = req.query;
@@ -218,19 +195,14 @@ router.get('/items', authRequired, async (req, res) => {
       );
     }
 
-    res.json({
-      success: true,
-      items
-    });
+    res.json({ items });
   } catch (error) {
     logger.error('Error listing Google Drive items:', {
       component: 'Google Drive',
       error: error.message
     });
 
-    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
-
-    return sendInternalError(res, error, 'list Google Drive items');
+    throw integrationAuthRequiredError(error, requestedProviderId(req)) ?? error;
   }
 });
 
@@ -238,21 +210,21 @@ router.get('/items', authRequired, async (req, res) => {
  * Download a file from Google Drive
  * GET /api/integrations/googledrive/download?fileId=xxx
  */
-router.get('/download', authRequired, async (req, res) => {
+router.get('/download', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id || req.user.id === 'anonymous') {
-      return sendAuthRequired(res);
+      throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
     }
 
     const { fileId } = req.query;
     const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (!fileId) {
-      return sendBadRequest(res, 'fileId query parameter is required');
+      throw new ServiceError('BAD_REQUEST', 'fileId query parameter is required');
     }
 
     if (!isValidFileId(fileId)) {
-      return sendBadRequest(res, 'fileId must be a valid Google Drive file identifier');
+      throw new ServiceError('BAD_REQUEST', 'fileId must be a valid Google Drive file identifier');
     }
 
     const file = await GoogleDriveService.downloadFile(req.user.id, fileId, providerId);
@@ -274,9 +246,7 @@ router.get('/download', authRequired, async (req, res) => {
       error: error.message
     });
 
-    if (respondIfAuthRequired(res, error, requestedProviderId(req))) return;
-
-    return sendInternalError(res, error, 'download Google Drive file');
+    throw integrationAuthRequiredError(error, requestedProviderId(req)) ?? error;
   }
 });
 

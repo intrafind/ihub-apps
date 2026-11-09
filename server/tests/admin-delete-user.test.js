@@ -69,12 +69,14 @@ jest.unstable_mockModule('../services/userDeletion.js', () => ({
 }));
 
 const { default: registerAdminAuthRoutes } = await import('../routes/admin/auth.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 function buildApp() {
   const app = express();
   app.use(testRateLimiter);
   app.use(express.json());
   registerAdminAuthRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
@@ -98,8 +100,7 @@ describe('DELETE /api/admin/auth/users/:userId', () => {
   test('removes the record and answers without waiting for the cleanup', async () => {
     const res = await del('user_alice');
 
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ message: 'User deleted successfully' });
+    expect(res.status).toBe(204);
     expect(Object.keys(state.written.users)).toEqual(['user_bob']);
   });
 
@@ -138,5 +139,41 @@ describe('DELETE /api/admin/auth/users/:userId', () => {
     expect(res.status).toBe(403);
     expect(state.cleanup).toBeNull();
     expect(state.written).toBeNull();
+  });
+});
+
+describe('user routes answer errors in the shared shape', () => {
+  test('an unknown user is NOT_FOUND and the last admin cannot be deleted', async () => {
+    const missing = await del('user_nobody');
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ code: 'NOT_FOUND', detail: 'User not found' });
+
+    state.lastAdmin = true;
+    const last = await del('user_alice');
+    expect(last.status).toBe(403);
+    expect(last.body.code).toBe('FORBIDDEN');
+    expect(last.body.detail).toMatch(/last admin user/);
+    expect(state.written).toBeNull();
+  });
+
+  test('a new user without a name or with a short password is BAD_REQUEST', async () => {
+    const noName = await request(buildApp()).post('/api/admin/auth/users').send({});
+    expect(noName.status).toBe(400);
+    expect(noName.body).toMatchObject({ code: 'BAD_REQUEST', detail: 'Username is required' });
+
+    const shortPassword = await request(buildApp())
+      .post('/api/admin/auth/users')
+      .send({ username: 'carol', password: '123' });
+    expect(shortPassword.status).toBe(400);
+    expect(shortPassword.body.code).toBe('BAD_REQUEST');
+    expect(shortPassword.body.detail).toMatch(/at least 6 characters/);
+  });
+
+  test('a username that exists is CONFLICT', async () => {
+    const res = await request(buildApp())
+      .post('/api/admin/auth/users')
+      .send({ username: 'alice', password: 'secret123' });
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({ code: 'CONFLICT', detail: 'Username already exists' });
   });
 });

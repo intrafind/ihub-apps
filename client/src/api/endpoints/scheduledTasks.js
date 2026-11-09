@@ -51,11 +51,11 @@ export const updateScheduledTask = (taskId, body) =>
 export const deleteScheduledTask = (taskId, { deleteChats = false } = {}) =>
   call(() => apiClient.delete(task(taskId), { params: deleteChats ? { deleteChats: 1 } : {} }));
 
-export const runScheduledTaskNow = taskId => call(() => apiClient.post(`${task(taskId)}/run`));
-export const pauseScheduledTask = taskId => call(() => apiClient.post(`${task(taskId)}/pause`));
-export const resumeScheduledTask = taskId => call(() => apiClient.post(`${task(taskId)}/resume`));
+export const runScheduledTaskNow = taskId => call(() => apiClient.post(`${task(taskId)}/_run`));
+export const pauseScheduledTask = taskId => call(() => apiClient.post(`${task(taskId)}/_pause`));
+export const resumeScheduledTask = taskId => call(() => apiClient.post(`${task(taskId)}/_resume`));
 export const duplicateScheduledTask = taskId =>
-  call(() => apiClient.post(`${task(taskId)}/duplicate`));
+  call(() => apiClient.post(`${task(taskId)}/_duplicate`));
 
 /** A page of runs, newest first. */
 export const fetchScheduledTaskRuns = (taskId, { limit = 20, cursor = null } = {}) =>
@@ -67,17 +67,29 @@ export const fetchScheduledTaskRun = (taskId, runId) =>
   call(() => apiClient.get(`${task(taskId)}/runs/${encodeURIComponent(runId)}`));
 
 /**
- * Delete finished runs (and by default their chats).
+ * Delete finished runs (and by default their chats): the listed runs one by one
+ * (`DELETE …/runs/:runId`), or every finished run (`DELETE …/runs`) with `all`.
  *
  * @param {string} taskId
  * @param {{runIds?: string[], all?: boolean, deleteChats?: boolean}} selection
  * @returns {Promise<{deleted: number, chatsDeleted: number, skipped: number}>}
  */
 export const deleteScheduledTaskRuns = (taskId, selection) =>
-  call(() => apiClient.post(`${task(taskId)}/runs/delete`, selection));
+  call(async () => {
+    const params = selection?.deleteChats === false ? { deleteChats: 0 } : {};
+    if (selection?.all) return apiClient.delete(`${task(taskId)}/runs`, { params });
+    const total = { deleted: 0, chatsDeleted: 0, skipped: 0 };
+    for (const runId of selection?.runIds || []) {
+      const { data } = await apiClient.delete(`${task(taskId)}/runs/${encodeURIComponent(runId)}`, {
+        params
+      });
+      for (const key of Object.keys(total)) total[key] += data?.[key] || 0;
+    }
+    return { data: total };
+  });
 
 export const cancelScheduledTaskRun = (taskId, runId) =>
-  call(() => apiClient.post(`${task(taskId)}/runs/${encodeURIComponent(runId)}/cancel`));
+  call(() => apiClient.post(`${task(taskId)}/runs/${encodeURIComponent(runId)}/_cancel`));
 
 /**
  * The notes a task keeps between runs, with their version and the limits.
@@ -160,7 +172,7 @@ export const fetchScheduledTaskNotifications = () =>
 
 /** Mark runs seen (all of them without `runIds`). */
 export const markScheduledTaskNotificationsSeen = runIds =>
-  call(() => apiClient.post(`${base}/_notifications/seen`, runIds ? { runIds } : {}));
+  call(() => apiClient.post(`${base}/_notifications/_mark-seen`, runIds ? { runIds } : {}));
 
 /**
  * Files attached to a task (`/api/scheduled-tasks/:taskId/files`): reference

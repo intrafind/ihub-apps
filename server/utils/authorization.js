@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
+import { ServiceError } from './ServiceError.js';
 import logger from './logger.js';
 import configCache from '../configCache.js';
 import { hasIdCaseInsensitive } from './resourceLookup.js';
@@ -851,20 +851,20 @@ export function createAuthorizationMiddleware(options = {}) {
     // Check if authentication is required
     if (requireAuth && (!req.user || req.user.id === 'anonymous')) {
       if (!isAnonymousAccessAllowed(platform)) {
-        return sendAuthRequired(res);
+        return next(new ServiceError('AUTH_REQUIRED', 'Authentication required'));
       }
     }
 
     // Check admin access
     if (requireAdmin && !req.user?.isAdmin) {
-      return sendInsufficientPermissions(res, 'Admin access');
+      return next(new ServiceError('FORBIDDEN', 'Insufficient permissions: Admin access required'));
     }
 
     // Check group-based access
     if (allowedGroups.length > 0 && req.user?.groups) {
       const hasAllowedGroup = req.user.groups.some(group => allowedGroups.includes(group));
       if (!hasAllowedGroup) {
-        return sendInsufficientPermissions(res);
+        return next(new ServiceError('FORBIDDEN', 'Insufficient permissions'));
       }
     }
 

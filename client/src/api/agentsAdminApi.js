@@ -26,7 +26,7 @@ export async function updateAgentProfile(profileId, payload) {
 }
 
 export async function toggleAgentProfile(profileId) {
-  return await makeAdminApiCall(`/admin/agents/profiles/${profileId}/toggle`, {
+  return await makeAdminApiCall(`/admin/agents/profiles/${profileId}/_toggle`, {
     method: 'POST'
   });
 }
@@ -126,14 +126,14 @@ export async function fetchAgentRun(runId) {
 }
 
 export async function cancelAgentRun(runId, reason) {
-  return await makeAdminApiCall(`/agents/runs/${runId}/cancel`, {
+  return await makeAdminApiCall(`/agents/runs/${runId}/_cancel`, {
     method: 'POST',
     body: { reason }
   });
 }
 
 export async function resumeAgentRun(runId) {
-  return await makeAdminApiCall(`/agents/runs/${runId}/resume`, {
+  return await makeAdminApiCall(`/agents/runs/${runId}/_resume`, {
     method: 'POST',
     body: {}
   });

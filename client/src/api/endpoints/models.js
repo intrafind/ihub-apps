@@ -16,7 +16,7 @@ export const fetchModels = async (options = {}) => {
     cacheKey = type ? buildCacheKey(CACHE_KEYS.MODELS_LIST, { type }) : CACHE_KEYS.MODELS_LIST;
   }
 
-  return handleApiResponse(
+  const data = await handleApiResponse(
     () => {
       const headers = {};
 
@@ -35,18 +35,20 @@ export const fetchModels = async (options = {}) => {
     true,
     true // Enable ETag handling
   );
+  return data?.items ?? [];
 };
 
 // Fetch text-to-speech models (modelType: 'tts') this user may use, for read
 // aloud. Same sanitized shape as the transcription list; not cached under the
 // chat models key.
 export const fetchTtsModels = async () => {
-  return handleApiResponse(
+  const data = await handleApiResponse(
     () => apiClient.get('/models', { params: { type: 'tts' } }),
     null,
     null,
     false
   );
+  return data?.items ?? [];
 };
 
 export const fetchModelDetails = async (modelId, options = {}) => {

@@ -47,8 +47,14 @@ import configCache from '../../configCache.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
+import {
+  limitFrom,
+  nextOffsetCursor,
+  offsetFromCursor,
+  pageOfList
+} from '../../utils/pagination.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 const checkWorkflowsFeature = requireFeature('workflows');
 
 /** Where workflow definitions live, relative to `contents/`. */
@@ -382,7 +388,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       const workflows = await loadWorkflows();
       const filtered = filterByPermissions(workflows, req.user);
 
-      res.json(filtered);
+      res.json({ items: filtered });
     }
   );
 
@@ -412,16 +418,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         schema:
    *           type: integer
    *           default: 20
-   *         description: Maximum number of results
+   *         description: Maximum number of results (at most 200)
    *       - in: query
-   *         name: offset
+   *         name: cursor
    *         schema:
-   *           type: integer
-   *           default: 0
-   *         description: Number of results to skip
+   *           type: string
+   *         description: The `nextCursor` of the previous page
    *     responses:
    *       200:
-   *         description: List of user's executions
+   *         description: "`{ items, nextCursor }`: the user's executions, newest first"
    *       401:
    *         description: Authentication required
    *       500:
@@ -433,17 +438,17 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     authRequired,
     async (req, res) => {
       const userId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
-      const { status, limit = 20, offset = 0, includeArchived } = req.query;
+      const { status, limit, cursor, includeArchived } = req.query;
 
       const registry = getExecutionRegistry();
       const executions = await registry.getByUser(userId, {
         status,
-        includeArchived: includeArchived === 'true' || includeArchived === '1',
-        limit: Number.parseInt(limit, 10),
-        offset: Number.parseInt(offset, 10)
+        includeArchived: includeArchived === 'true' || includeArchived === '1'
       });
 
-      res.json(executions);
+      res.json(
+        pageOfList(executions, { limit: limitFrom(limit, { fallback: 20, max: 200 }), cursor })
+      );
     }
   );
 
@@ -489,7 +494,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       // Validate ID for security
       assertValidId(id, 'workflow');
 
-      const workflows = await loadWorkflows();
+      const workflows = await loadWorkflows(isAdmin(req.user));
       const workflow = findByIdCaseInsensitive(workflows, id);
 
       if (!workflow) {
@@ -575,10 +580,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         workflowId: workflowData.id
       });
 
-      res.status(201).json({
-        message: 'Workflow created successfully',
-        workflow: validation.data
-      });
+      sendCreated(res, `/api/workflows/${segment(workflowData.id)}`, validation.data);
 
       // Refresh workflow cache after successful creation
       configCache.refreshWorkflowsCache?.();
@@ -667,10 +669,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         workflowId: id
       });
 
-      res.json({
-        message: 'Workflow updated successfully',
-        workflow: validation.data
-      });
+      res.json(validation.data);
 
       // Refresh workflow cache after successful update
       configCache.refreshWorkflowsCache?.();
@@ -735,9 +734,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         workflowId: id
       });
 
-      res.json({
-        message: 'Workflow deleted successfully'
-      });
+      res.status(204).end();
 
       // Refresh workflow cache after successful deletion
       configCache.refreshWorkflowsCache?.();
@@ -1071,9 +1068,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         ephemeral: chatApp.ephemeral === true
       });
       if (!storage.stored) {
-        return sendErrorResponse(res, 503, 'Chat storage is unavailable', {
-          code: 'CHAT_STORAGE_UNAVAILABLE'
-        });
+        throw new ServiceError('CHAT_STORAGE_UNAVAILABLE', 'Chat storage is unavailable');
       }
 
       const state = await workflowEngine.getState(executionId);
@@ -1108,13 +1103,13 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         chatId,
         appId: chatApp.id
       });
-      res.status(201).json({ chatId, appId: chatApp.id });
+      sendCreated(res, `/api/chats/${segment(chatId)}`, { chatId, appId: chatApp.id });
     }
   );
 
   /**
    * @swagger
-   * /api/workflows/executions/{executionId}/restart:
+   * /api/workflows/executions/{executionId}/_restart:
    *   post:
    *     summary: Restart a cancelled or failed execution
    *     description: |
@@ -1136,7 +1131,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *           type: string
    */
   app.post(
-    buildServerPath('/api/workflows/executions/:executionId/restart'),
+    buildServerPath('/api/workflows/executions/:executionId/_restart'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1180,7 +1175,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   /**
    * @swagger
-   * /api/workflows/executions/{executionId}/cancel:
+   * /api/workflows/executions/{executionId}/_cancel:
    *   post:
    *     summary: Cancel execution
    *     description: |
@@ -1221,7 +1216,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/workflows/executions/:executionId/cancel'),
+    buildServerPath('/api/workflows/executions/:executionId/_cancel'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1243,11 +1238,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           userId: req.user?.id
         });
 
-        res.json({
-          success: true,
-          executionId: state.executionId,
-          status: state.status
-        });
+        res.json({ executionId: state.executionId, status: state.status });
       } catch (error) {
         if (error.code === 'EXECUTION_NOT_FOUND') {
           throw new ServiceError('NOT_FOUND', 'Execution not found', { cause: error });
@@ -1331,7 +1322,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         userId: execution.userId
       });
 
-      res.json({ success: true });
+      res.status(204).end();
     }
   );
 
@@ -1714,7 +1705,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   /**
    * @swagger
-   * /api/admin/workflows/{id}/toggle:
+   * /api/admin/workflows/{id}/_toggle:
    *   post:
    *     summary: Toggle workflow enabled/disabled status
    *     description: |
@@ -1744,7 +1735,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/admin/workflows/:id/toggle'),
+    buildServerPath('/api/admin/workflows/:id/_toggle'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
@@ -1781,7 +1772,6 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       });
 
       res.json({
-        message: `Workflow ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
         workflow,
         enabled: newEnabledState
       });
@@ -1825,16 +1815,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         schema:
    *           type: integer
    *           default: 100
-   *         description: Maximum number of results
+   *         description: Maximum number of results (at most 500)
    *       - in: query
-   *         name: offset
+   *         name: cursor
    *         schema:
-   *           type: integer
-   *           default: 0
-   *         description: Number of results to skip
+   *           type: string
+   *         description: The `nextCursor` of the previous page
    *     responses:
    *       200:
-   *         description: Execution summaries with stats
+   *         description: "`{ items, nextCursor, total, stats }`: execution summaries"
    *       401:
    *         description: Authentication required
    *       403:
@@ -1847,12 +1836,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
-      const { status, search, limit = 100, offset = 0 } = req.query;
+      const { status, search, limit, cursor } = req.query;
       const registry = getExecutionRegistry();
 
       if (status === 'all' || status) {
-        const parsedOffset = Number.parseInt(offset, 10) || 0;
-        const parsedLimit = Number.parseInt(limit, 10) || 100;
+        const parsedOffset = offsetFromCursor(cursor);
+        const parsedLimit = limitFrom(limit, { fallback: 100, max: 500 });
 
         // One listing call: the registry filters, searches, orders and
         // pages the shared execution records, and reports the statistics
@@ -1865,11 +1854,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         });
 
         res.json({
-          executions,
+          items: executions,
+          nextCursor: nextOffsetCursor({ offset: parsedOffset, limit: parsedLimit, total }),
           total,
-          stats,
-          offset: parsedOffset,
-          limit: parsedLimit
+          stats
         });
       } else {
         // Default behavior: return only active executions from WorkflowEngine
@@ -1877,11 +1865,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const stats = await registry.getStats();
 
         res.json({
-          executions: activeExecutions,
+          items: activeExecutions,
+          nextCursor: null,
           total: activeExecutions.length,
-          stats,
-          offset: 0,
-          limit: activeExecutions.length
+          stats
         });
       }
     }
@@ -1954,7 +1941,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       // Save to history. version comes from workflow.version which is
       // schema-validated as semver, so it's a safe filename component;
       // timestamp is generated above and id was checked by
-      // validateIdForPath. The store creates the directory on first write.
+      // assertValidId. The store creates the directory on first write.
       await configStore.writeJson(`${historyDirFor(id)}/${version}-${timestamp}.json`, snapshot);
 
       // Update workflow status
@@ -1968,7 +1955,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         version
       });
 
-      res.json({ success: true, version, publishedAt: snapshot._publishedAt });
+      res.json({ version, publishedAt: snapshot._publishedAt });
     }
   );
 

@@ -15,13 +15,9 @@
 import net from 'node:net';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
-import {
-  sendInternalError,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import { proxyConfigSchema } from '../../validators/platformConfigSchema.js';
@@ -401,17 +397,13 @@ export default function registerAdminProxyRoutes(app) {
    *                   description: Placeholders that no environment variable resolved
    */
   app.get(buildServerPath('/api/admin/proxy/config'), adminAuth, async (req, res) => {
-    try {
-      // Read the file, not the cache: configCache substitutes `${ENV_VAR}` on
-      // load, so the cached block holds the resolved URL. Handing that to the
-      // editor would overwrite the placeholder with its current value on the
-      // next save — exactly the indirection the operator asked for, gone.
-      const onDisk = await configStore.readJson(PLATFORM_FILE);
-      const storedProxy = onDisk?.proxy || configCache.getPlatform()?.proxy || {};
-      res.json(buildConfigResponse(storedProxy));
-    } catch (error) {
-      return sendInternalError(res, error, 'get proxy configuration');
-    }
+    // Read the file, not the cache: configCache substitutes `${ENV_VAR}` on
+    // load, so the cached block holds the resolved URL. Handing that to the
+    // editor would overwrite the placeholder with its current value on the
+    // next save — exactly the indirection the operator asked for, gone.
+    const onDisk = await configStore.readJson(PLATFORM_FILE);
+    const storedProxy = onDisk?.proxy || configCache.getPlatform()?.proxy || {};
+    res.json(buildConfigResponse(storedProxy));
   });
 
   /**
@@ -457,64 +449,60 @@ export default function registerAdminProxyRoutes(app) {
    *         description: Invalid proxy configuration
    */
   app.put(buildServerPath('/api/admin/proxy/config'), adminAuth, async (req, res) => {
-    try {
-      const parsed = proxyConfigSchema.safeParse(req.body || {});
-      if (!parsed.success) {
-        const details = parsed.error.issues.map(issue => ({
-          field: ['proxy', ...issue.path].join('.'),
-          message: issue.message
-        }));
-        return sendBadRequest(
-          res,
-          `Invalid proxy configuration: ${details.map(d => `${d.field} ${d.message}`).join('; ')}`,
-          details
-        );
-      }
-
-      // readJsonStrict, not readJson: a read that fails must not be mistaken for
-      // "there was nothing here" and turn this save into a full file replacement.
-      const platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
-      if (!platformConfig) throw new Error(`${PLATFORM_FILE} is missing`);
-      const existing = platformConfig.proxy || {};
-
-      // Masked passwords come back from the UI unchanged; put the stored one back
-      // before anything is written or encrypted.
-      const http = restoreProxyUrlSecret(parsed.data.http.trim(), decryptStored(existing.http));
-      const https = restoreProxyUrlSecret(parsed.data.https.trim(), decryptStored(existing.https));
-
-      const nextProxy = {
-        ...existing,
-        enabled: parsed.data.enabled,
-        http: encryptForStorage(http),
-        https: encryptForStorage(https),
-        // Stored as sent: a comma-separated string and an array are both valid,
-        // and getProxyConfig() normalizes either one to an array.
-        noProxy: parsed.data.noProxy,
-        urlPatterns: parsed.data.urlPatterns
-      };
-
-      platformConfig.proxy = nextProxy;
-      await configStore.writeJson(PLATFORM_FILE, platformConfig);
-      await configCache.refreshCacheEntry(PLATFORM_FILE);
-
-      const response = buildConfigResponse(nextProxy);
-      // Log what is actually in effect after the save, not what was submitted:
-      // an environment variable can still win over an empty platform field.
-      logger.info('Proxy configuration updated', {
-        component: 'AdminProxy',
-        effective: response.effective,
-        provenance: response.provenance
-      });
-
-      res.json({ message: 'Proxy configuration updated successfully', ...response });
-    } catch (error) {
-      return sendInternalError(res, error, 'update proxy configuration');
+    const parsed = proxyConfigSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      const details = parsed.error.issues.map(issue => ({
+        field: ['proxy', ...issue.path].join('.'),
+        message: issue.message
+      }));
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid proxy configuration: ${details.map(d => `${d.field} ${d.message}`).join('; ')}`,
+        { details }
+      );
     }
+
+    // readJsonStrict, not readJson: a read that fails must not be mistaken for
+    // "there was nothing here" and turn this save into a full file replacement.
+    const platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
+    if (!platformConfig) throw new Error(`${PLATFORM_FILE} is missing`);
+    const existing = platformConfig.proxy || {};
+
+    // Masked passwords come back from the UI unchanged; put the stored one back
+    // before anything is written or encrypted.
+    const http = restoreProxyUrlSecret(parsed.data.http.trim(), decryptStored(existing.http));
+    const https = restoreProxyUrlSecret(parsed.data.https.trim(), decryptStored(existing.https));
+
+    const nextProxy = {
+      ...existing,
+      enabled: parsed.data.enabled,
+      http: encryptForStorage(http),
+      https: encryptForStorage(https),
+      // Stored as sent: a comma-separated string and an array are both valid,
+      // and getProxyConfig() normalizes either one to an array.
+      noProxy: parsed.data.noProxy,
+      urlPatterns: parsed.data.urlPatterns
+    };
+
+    platformConfig.proxy = nextProxy;
+    await configStore.writeJson(PLATFORM_FILE, platformConfig);
+    await configCache.refreshCacheEntry(PLATFORM_FILE);
+
+    const response = buildConfigResponse(nextProxy);
+    // Log what is actually in effect after the save, not what was submitted:
+    // an environment variable can still win over an empty platform field.
+    logger.info('Proxy configuration updated', {
+      component: 'AdminProxy',
+      effective: response.effective,
+      provenance: response.provenance
+    });
+
+    res.json({ ...response });
   });
 
   /**
    * @swagger
-   * /api/admin/proxy/test:
+   * /api/admin/proxy/_test:
    *   post:
    *     summary: Test outbound connectivity for a URL
    *     description: |
@@ -553,196 +541,191 @@ export default function registerAdminProxyRoutes(app) {
    *       403:
    *         description: Target blocked by the SSRF guard
    */
-  app.post(buildServerPath('/api/admin/proxy/test'), adminAuth, async (req, res) => {
-    try {
-      const { url, timeoutMs, config: draft } = req.body || {};
+  app.post(buildServerPath('/api/admin/proxy/_test'), adminAuth, async (req, res) => {
+    const { url, timeoutMs, config: draft } = req.body || {};
 
-      if (!url || typeof url !== 'string') {
-        return sendBadRequest(res, 'Invalid proxy test: url is required');
-      }
-      let targetUrl;
-      try {
-        targetUrl = new URL(url.trim());
-      } catch {
-        return sendBadRequest(res, `Invalid proxy test: "${url}" is not a valid URL`);
-      }
-      if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
-        return sendBadRequest(
-          res,
-          `Invalid proxy test: unsupported scheme "${targetUrl.protocol.replace(':', '')}" (expected http or https)`
+    if (!url || typeof url !== 'string') {
+      throw new ServiceError('BAD_REQUEST', 'Invalid proxy test: url is required');
+    }
+    let targetUrl;
+    try {
+      targetUrl = new URL(url.trim());
+    } catch {
+      throw new ServiceError('BAD_REQUEST', `Invalid proxy test: "${url}" is not a valid URL`);
+    }
+    if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid proxy test: unsupported scheme "${targetUrl.protocol.replace(':', '')}" (expected http or https)`
+      );
+    }
+
+    let proxyConfig;
+    if (draft && typeof draft === 'object') {
+      const parsed = proxyConfigSchema.safeParse(draft);
+      if (!parsed.success) {
+        const details = parsed.error.issues.map(issue => ({
+          field: ['proxy', ...issue.path].join('.'),
+          message: issue.message
+        }));
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `Invalid proxy configuration: ${details.map(d => `${d.field} ${d.message}`).join('; ')}`,
+          { details }
         );
       }
-
-      let proxyConfig;
-      if (draft && typeof draft === 'object') {
-        const parsed = proxyConfigSchema.safeParse(draft);
-        if (!parsed.success) {
-          const details = parsed.error.issues.map(issue => ({
-            field: ['proxy', ...issue.path].join('.'),
-            message: issue.message
-          }));
-          return sendBadRequest(
-            res,
-            `Invalid proxy configuration: ${details.map(d => `${d.field} ${d.message}`).join('; ')}`,
-            details
-          );
-        }
-        // A draft is evaluated as sent, except that a masked password falls back
-        // to the stored one so "test before save" works without retyping it.
-        // Read from disk for the same reason the GET does: the cache holds
-        // substituted values, not what the editor round-trips.
-        const platformProxy = (await configStore.readJson(PLATFORM_FILE))?.proxy || {};
-        proxyConfig = {
-          enabled: parsed.data.enabled,
-          // resolveEnvVars is what configCache applies on load, so a draft holding
-          // `${HTTPS_PROXY}` is tested against the proxy it would actually use once
-          // saved, instead of being reported as "no proxy configured for this URL".
-          http: resolveEnvVars(
-            restoreProxyUrlSecret(parsed.data.http.trim(), decryptStored(platformProxy.http))
-          ),
-          https: resolveEnvVars(
-            restoreProxyUrlSecret(parsed.data.https.trim(), decryptStored(platformProxy.https))
-          ),
-          noProxy: normalizeNoProxy(resolveEnvVars(parsed.data.noProxy)),
-          urlPatterns: parsed.data.urlPatterns
-        };
-        // Whatever no environment variable resolved is not a proxy URL.
-        if (isUnresolvedPlaceholder(proxyConfig.http)) proxyConfig.http = '';
-        if (isUnresolvedPlaceholder(proxyConfig.https)) proxyConfig.https = '';
-      }
-
-      const routing = describeProxyRouting(targetUrl.toString(), proxyConfig || null);
-      const viaProxy = routing.decision === 'proxied';
-
-      // Honor the SSRF guard: a target that resolves into a private range is
-      // refused unless an admin listed it in ssrf.allowedHosts. A DNS failure is
-      // not refused here — it is reported as a classified test result below,
-      // which is more useful (and is the expected state on a proxy-only host,
-      // where the proxy does egress DNS).
-      try {
-        await assertSafeHost(targetUrl.hostname, [], true);
-      } catch (guardError) {
-        if (guardError.code === 'SSRF_BLOCKED') {
-          return sendErrorResponse(
-            res,
-            403,
-            `${guardError.message}. Add the host to ssrf.allowedHosts (Security → SSRF Allowlist) to test against it.`
-          );
-        }
-        // DNS_RESOLUTION_FAILED and anything else: continue and let the request
-        // itself produce the classified error.
-      }
-
-      const timeout = clampTestTimeout(timeoutMs);
-
-      let proxyProbe;
-      if (viaProxy) {
-        const endpoint = proxyEndpoint(routing.proxyUrl);
-        proxyProbe = endpoint
-          ? {
-              attempted: true,
-              host: endpoint.host,
-              port: endpoint.port,
-              ...(await probeProxyReachable(endpoint, timeout))
-            }
-          : {
-              attempted: true,
-              reachable: false,
-              durationMs: 0,
-              error: 'proxy URL is not parseable'
-            };
-      }
-
-      // Reported alongside the result so a relaxed TLS check is visible rather than
-      // implied; httpFetch() below applies the decision itself.
-      const ignoreInvalidCertificates = shouldIgnoreSSLForURL(targetUrl.toString(), getSSLConfig());
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeout);
-      const requestStartedAt = Date.now();
-      let status;
-      let statusText;
-      let redirectLocation;
-      let requestError;
-      try {
-        // httpFetch() is the platform's one outbound path, so the probe is
-        // transported exactly like the traffic it is meant to diagnose — same agent
-        // construction, same SSL decision, same scheme validation. `proxyConfig`
-        // carries the unsaved draft, if one was supplied.
-        //
-        // The target is admin-supplied by design; probing one is what this endpoint
-        // is for. It is constrained before it gets here: the scheme must be http(s),
-        // assertSafeHost() refuses anything resolving into a private range unless an
-        // admin listed it in ssrf.allowedHosts, redirects are not followed and the
-        // response body is never read or returned.
-        const response = await httpFetch(targetUrl.toString(), {
-          method: 'GET',
-          // No redirect following: the point is what *this* URL does, and a
-          // redirect could otherwise walk the probe to a host the guard cleared.
-          redirect: 'manual',
-          proxyConfig: proxyConfig || undefined,
-          signal: controller.signal,
-          headers: { 'user-agent': 'iHub-Apps proxy connectivity test' }
-        });
-        status = response.status;
-        statusText = response.statusText;
-        redirectLocation = response.headers.get('location') || undefined;
-        // Response bodies are never read or returned — close the stream instead.
-        response.body?.destroy?.();
-      } catch (error) {
-        requestError = error;
-      } finally {
-        clearTimeout(timer);
-      }
-      const requestMs = Date.now() - requestStartedAt;
-
-      const verdict = classifyProxyTestResult({
-        error: requestError,
-        status,
-        proxyProbe,
-        viaProxy
-      });
-
-      const result = {
-        target: targetUrl.toString(),
-        ok: verdict.classification === 'ok',
-        classification: verdict.classification,
-        message: verdict.message,
-        nextStep: verdict.nextStep,
-        routing: {
-          decision: routing.decision,
-          reason: routing.reason,
-          proxyUrl: routing.proxyUrl ? maskProxyUrl(routing.proxyUrl) : undefined
-        },
-        ssl: { ignoreInvalidCertificates },
-        proxy: proxyProbe
-          ? {
-              host: proxyProbe.host,
-              port: proxyProbe.port,
-              reachable: proxyProbe.reachable,
-              error: proxyProbe.error
-            }
-          : undefined,
-        response: status === undefined ? undefined : { status, statusText, redirectLocation },
-        timings: {
-          proxyConnectMs: proxyProbe?.durationMs,
-          requestMs,
-          totalMs: (proxyProbe?.durationMs || 0) + requestMs
-        }
+      // A draft is evaluated as sent, except that a masked password falls back
+      // to the stored one so "test before save" works without retyping it.
+      // Read from disk for the same reason the GET does: the cache holds
+      // substituted values, not what the editor round-trips.
+      const platformProxy = (await configStore.readJson(PLATFORM_FILE))?.proxy || {};
+      proxyConfig = {
+        enabled: parsed.data.enabled,
+        // resolveEnvVars is what configCache applies on load, so a draft holding
+        // `${HTTPS_PROXY}` is tested against the proxy it would actually use once
+        // saved, instead of being reported as "no proxy configured for this URL".
+        http: resolveEnvVars(
+          restoreProxyUrlSecret(parsed.data.http.trim(), decryptStored(platformProxy.http))
+        ),
+        https: resolveEnvVars(
+          restoreProxyUrlSecret(parsed.data.https.trim(), decryptStored(platformProxy.https))
+        ),
+        noProxy: normalizeNoProxy(resolveEnvVars(parsed.data.noProxy)),
+        urlPatterns: parsed.data.urlPatterns
       };
-
-      logger.info('Proxy connectivity test finished', {
-        component: 'AdminProxy',
-        target: redactUrlSecrets(result.target),
-        decision: routing.decision,
-        classification: result.classification,
-        status,
-        totalMs: result.timings.totalMs
-      });
-
-      res.json(result);
-    } catch (error) {
-      return sendInternalError(res, error, 'test proxy connectivity');
+      // Whatever no environment variable resolved is not a proxy URL.
+      if (isUnresolvedPlaceholder(proxyConfig.http)) proxyConfig.http = '';
+      if (isUnresolvedPlaceholder(proxyConfig.https)) proxyConfig.https = '';
     }
+
+    const routing = describeProxyRouting(targetUrl.toString(), proxyConfig || null);
+    const viaProxy = routing.decision === 'proxied';
+
+    // Honor the SSRF guard: a target that resolves into a private range is
+    // refused unless an admin listed it in ssrf.allowedHosts. A DNS failure is
+    // not refused here — it is reported as a classified test result below,
+    // which is more useful (and is the expected state on a proxy-only host,
+    // where the proxy does egress DNS).
+    try {
+      await assertSafeHost(targetUrl.hostname, [], true);
+    } catch (guardError) {
+      if (guardError.code === 'SSRF_BLOCKED') {
+        throw new ServiceError(
+          'FORBIDDEN',
+          `${guardError.message}. Add the host to ssrf.allowedHosts (Security → SSRF Allowlist) to test against it.`
+        );
+      }
+      // DNS_RESOLUTION_FAILED and anything else: continue and let the request
+      // itself produce the classified error.
+    }
+
+    const timeout = clampTestTimeout(timeoutMs);
+
+    let proxyProbe;
+    if (viaProxy) {
+      const endpoint = proxyEndpoint(routing.proxyUrl);
+      proxyProbe = endpoint
+        ? {
+            attempted: true,
+            host: endpoint.host,
+            port: endpoint.port,
+            ...(await probeProxyReachable(endpoint, timeout))
+          }
+        : {
+            attempted: true,
+            reachable: false,
+            durationMs: 0,
+            error: 'proxy URL is not parseable'
+          };
+    }
+
+    // Reported alongside the result so a relaxed TLS check is visible rather than
+    // implied; httpFetch() below applies the decision itself.
+    const ignoreInvalidCertificates = shouldIgnoreSSLForURL(targetUrl.toString(), getSSLConfig());
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    const requestStartedAt = Date.now();
+    let status;
+    let statusText;
+    let redirectLocation;
+    let requestError;
+    try {
+      // httpFetch() is the platform's one outbound path, so the probe is
+      // transported exactly like the traffic it is meant to diagnose — same agent
+      // construction, same SSL decision, same scheme validation. `proxyConfig`
+      // carries the unsaved draft, if one was supplied.
+      //
+      // The target is admin-supplied by design; probing one is what this endpoint
+      // is for. It is constrained before it gets here: the scheme must be http(s),
+      // assertSafeHost() refuses anything resolving into a private range unless an
+      // admin listed it in ssrf.allowedHosts, redirects are not followed and the
+      // response body is never read or returned.
+      const response = await httpFetch(targetUrl.toString(), {
+        method: 'GET',
+        // No redirect following: the point is what *this* URL does, and a
+        // redirect could otherwise walk the probe to a host the guard cleared.
+        redirect: 'manual',
+        proxyConfig: proxyConfig || undefined,
+        signal: controller.signal,
+        headers: { 'user-agent': 'iHub-Apps proxy connectivity test' }
+      });
+      status = response.status;
+      statusText = response.statusText;
+      redirectLocation = response.headers.get('location') || undefined;
+      // Response bodies are never read or returned — close the stream instead.
+      response.body?.destroy?.();
+    } catch (error) {
+      requestError = error;
+    } finally {
+      clearTimeout(timer);
+    }
+    const requestMs = Date.now() - requestStartedAt;
+
+    const verdict = classifyProxyTestResult({
+      error: requestError,
+      status,
+      proxyProbe,
+      viaProxy
+    });
+
+    const result = {
+      target: targetUrl.toString(),
+      ok: verdict.classification === 'ok',
+      classification: verdict.classification,
+      message: verdict.message,
+      nextStep: verdict.nextStep,
+      routing: {
+        decision: routing.decision,
+        reason: routing.reason,
+        proxyUrl: routing.proxyUrl ? maskProxyUrl(routing.proxyUrl) : undefined
+      },
+      ssl: { ignoreInvalidCertificates },
+      proxy: proxyProbe
+        ? {
+            host: proxyProbe.host,
+            port: proxyProbe.port,
+            reachable: proxyProbe.reachable,
+            error: proxyProbe.error
+          }
+        : undefined,
+      response: status === undefined ? undefined : { status, statusText, redirectLocation },
+      timings: {
+        proxyConnectMs: proxyProbe?.durationMs,
+        requestMs,
+        totalMs: (proxyProbe?.durationMs || 0) + requestMs
+      }
+    };
+
+    logger.info('Proxy connectivity test finished', {
+      component: 'AdminProxy',
+      target: redactUrlSecrets(result.target),
+      decision: routing.decision,
+      classification: result.classification,
+      status,
+      totalMs: result.timings.totalMs
+    });
+
+    res.json(result);
   });
 }

@@ -140,7 +140,7 @@ that changes the owner id chats are listed under (see
 [Ownership and identity](#ownership-and-identity)).
 
 API: `GET /api/admin/chat-history`, `PUT /api/admin/chat-history/settings`,
-`POST /api/admin/chat-history/retention/run` (body `{ "target": "chats" | "ledger" | "all" }`).
+`POST /api/admin/chat-history/retention/_run` (body `{ "target": "chats" | "ledger" | "all" }`).
 
 ## The chat history UI
 

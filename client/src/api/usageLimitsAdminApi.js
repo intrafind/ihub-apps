@@ -14,7 +14,8 @@ export const saveUsageLimitSettings = async settings =>
 /**
  * One page of users with their buckets.
  *
- * @param {{search?: string, status?: string, modelId?: string, page?: number, pageSize?: number}} query
+ * @param {{search?: string, status?: string, modelId?: string, cursor?: string, limit?: number}} query
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number}>}
  */
 export const fetchUsageLimitUsers = async (query = {}) => {
   const params = new URLSearchParams();
@@ -36,7 +37,7 @@ export const fetchUsageLimitGroups = async () =>
 /** Reset a user's current-window counts (optionally one model / one window). */
 export const resetUsageLimitUser = async (userKey, body = {}) =>
   (
-    await makeAdminApiCall(`/admin/usage/limits/users/${encodeURIComponent(userKey)}/reset`, {
+    await makeAdminApiCall(`/admin/usage/limits/users/${encodeURIComponent(userKey)}/_reset`, {
       method: 'POST',
       body
     })

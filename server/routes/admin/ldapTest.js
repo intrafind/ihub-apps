@@ -6,6 +6,7 @@ import tls from 'node:tls';
 import { authenticateResult, AUTH_RESULT_SUCCESS } from 'ldap-authentication';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
 import credentialService from '../../services/CredentialService.js';
 import {
@@ -24,7 +25,6 @@ import {
 } from '../../utils/ldapProviderConfig.js';
 import { DiagnosticsReport, STATUS } from '../../services/integrations/integrationDiagnostics.js';
 import logger from '../../utils/logger.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 
 /**
  * Admin route that dry-runs an LDAP login.
@@ -316,14 +316,17 @@ export default function registerAdminLdapTestRoutes(app) {
     const password = typeof body.password === 'string' ? body.password : '';
 
     if (!username) {
-      return sendBadRequest(res, 'A username is required to test the LDAP configuration');
+      throw new ServiceError(
+        'BAD_REQUEST',
+        'A username is required to test the LDAP configuration'
+      );
     }
 
     let provider;
     try {
       provider = selectProvider(body);
     } catch (error) {
-      return sendBadRequest(res, error.message);
+      throw new ServiceError('BAD_REQUEST', error.message);
     }
 
     const report = new DiagnosticsReport();
@@ -353,6 +356,7 @@ export default function registerAdminLdapTestRoutes(app) {
       });
 
       if (problems.length > 0) {
+        // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
         return res.json({
           success: false,
           message: 'The provider configuration is incomplete.',
@@ -401,6 +405,7 @@ export default function registerAdminLdapTestRoutes(app) {
       );
 
       if (connectivityStep.status === STATUS.FAIL) {
+        // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
         return res.json({
           success: false,
           message: 'The LDAP server could not be reached.',
@@ -425,6 +430,7 @@ export default function registerAdminLdapTestRoutes(app) {
               `Check that the credential profile "${resolved.adminPasswordRef}" exists under Admin → Credentials.`
             ]
           });
+          // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
           return res.json({
             success: false,
             message: 'The bind password could not be resolved.',
@@ -482,6 +488,7 @@ export default function registerAdminLdapTestRoutes(app) {
         );
 
         if (lookupStep.status === STATUS.FAIL) {
+          // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
           return res.json({
             success: false,
             message: `The user "${username}" could not be found in the directory.`,
@@ -522,6 +529,7 @@ export default function registerAdminLdapTestRoutes(app) {
         });
 
         if (loginStep.status === STATUS.FAIL && !entry) {
+          // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
           return res.json({
             success: false,
             message: 'The login was rejected by the directory.',
@@ -538,6 +546,7 @@ export default function registerAdminLdapTestRoutes(app) {
       }
 
       if (!entry) {
+        // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
         return res.json({
           success: false,
           message: 'No directory entry was read, so there is nothing to map.',
@@ -690,16 +699,13 @@ export default function registerAdminLdapTestRoutes(app) {
         message: described.message,
         hints: described.hints
       });
-      try {
-        return res.json({
-          success: false,
-          message: described.message,
-          summary: report.summary(),
-          steps: report.steps
-        });
-      } catch (responseError) {
-        return sendInternalError(res, responseError, 'test LDAP configuration');
-      }
+      // api-guidelines-ignore: a directory test answers 200 with its report: that it failed is the result
+      return res.json({
+        success: false,
+        message: described.message,
+        summary: report.summary(),
+        steps: report.steps
+      });
     }
   });
 }

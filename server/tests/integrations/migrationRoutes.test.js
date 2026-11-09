@@ -305,7 +305,6 @@ describe('POST _migrate', () => {
       request(app).post('/api/admin/integrations/installed/pending/_migrate')
     ).expect(200);
     expect(res.body).toMatchObject({
-      success: true,
       result: 'migrated',
       logEntry: { from: '1.2.0', to: '1.4.0', result: 'migrated', by: 'admin', trigger: 'manual' },
       instance: { id: 'pending', status: null, definitionVersion: '1.4.0' }
@@ -378,7 +377,6 @@ describe('POST _restore and _adopt', () => {
       request(app).post('/api/admin/integrations/installed/collide/_restore').send({})
     ).expect(200);
     expect(res.body).toMatchObject({
-      success: true,
       backup: { representedVersion: '1.2.0', kind: 'pre-migration' },
       logEntry: { result: 'restored' },
       instance: { id: 'collide', definitionVersion: '1.2.0', status: 'migrationPending' }
@@ -406,7 +404,6 @@ describe('POST _restore and _adopt', () => {
       request(app).post('/api/admin/integrations/installed/review/_adopt')
     ).expect(200);
     expect(res.body).toMatchObject({
-      success: true,
       logEntry: { result: 'adopted', to: '1.2.1' },
       instance: { id: 'review', status: null, definitionVersion: '1.2.1' }
     });
@@ -444,7 +441,6 @@ describe('POST _revert', () => {
         .send({ backup: snapshot.id })
     ).expect(200);
     expect(res.body).toMatchObject({
-      success: true,
       backup: { id: snapshot.id, representedVersion: '1.4.0', hasDefinition: false },
       logEntry: { result: 'reverted', trigger: 'revert' },
       instance: { id: 'current', status: null, definitionVersion: '1.4.0' }
@@ -512,8 +508,8 @@ describe('an ordinary save', () => {
       status: 'needsReview',
       migrationLog: []
     }).expect(200);
-    expect(res.body.instance.definitionVersion).toBe('1.2.1');
-    expect(res.body.instance.status).toBeUndefined();
+    expect(res.body.definitionVersion).toBe('1.2.1');
+    expect(res.body.status).toBeUndefined();
   });
 });
 

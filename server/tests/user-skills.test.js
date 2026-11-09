@@ -169,8 +169,8 @@ const route = {
   remove: handlersFor(userRoutes, 'delete', '/api/user-skills/:skillId'),
   shares: handlersFor(userRoutes, 'put', '/api/user-skills/:skillId/shares'),
   owner: handlersFor(userRoutes, 'put', '/api/user-skills/:skillId/owner'),
-  duplicate: handlersFor(userRoutes, 'post', '/api/user-skills/:skillId/duplicate'),
-  duplicateGlobal: handlersFor(userRoutes, 'post', '/api/skills/:name/duplicate'),
+  duplicate: handlersFor(userRoutes, 'post', '/api/user-skills/:skillId/_duplicate'),
+  duplicateGlobal: handlersFor(userRoutes, 'post', '/api/skills/:name/_duplicate'),
   versions: handlersFor(userRoutes, 'get', '/api/user-skills/:skillId/versions'),
   version: handlersFor(userRoutes, 'get', '/api/user-skills/:skillId/versions/:revision'),
   restore: handlersFor(userRoutes, 'post', '/api/user-skills/:skillId/versions/:revision/restore'),
@@ -505,7 +505,7 @@ describe('ownership, copies and history', () => {
     assert.ok((await list(GRACE, 'mine')).some(item => item.id === skill.id));
 
     const removed = await drive(route.remove, { user: GRACE, params: { skillId: skill.id } });
-    assert.equal(removed.statusCode, 200);
+    assert.equal(removed.statusCode, 204);
     const documents = readFacet(getStorage(), 'documents');
     const marker = await documents.get(
       USER_SKILL_SHARES_NAMESPACE,
@@ -948,12 +948,16 @@ describe('from the marketplace', () => {
       writing.body.items.map(item => item.name),
       ['plain', 'gone']
     );
-    const paged = await browse(ADA, { limit: '1', page: '2' });
-    assert.equal(paged.body.totalPages, 3);
+    const firstPage = await browse(ADA, { limit: '1' });
+    assert.equal(firstPage.body.total, 3);
+    assert.equal(firstPage.body.items.length, 1);
+    const paged = await browse(ADA, { limit: '1', cursor: firstPage.body.nextCursor });
     assert.deepEqual(
       paged.body.items.map(item => item.name),
       ['plain']
     );
+    const lastPage = await browse(ADA, { limit: '5', cursor: paged.body.nextCursor });
+    assert.equal(lastPage.body.nextCursor, null);
     const otherRegistry = await browse(ADA, { registry: 'off-reg' });
     assert.equal(otherRegistry.body.total, 0);
   });

@@ -48,9 +48,7 @@ export function useChatAttachedProjects({ chatId, stored, value, onChange }) {
     try {
       const result = await setChatAttachedProjects(origin, next);
       if (currentChatIdRef.current !== origin) return;
-      onChange(
-        Array.isArray(result?.chat?.attachedProjectIds) ? result.chat.attachedProjectIds : next
-      );
+      onChange(Array.isArray(result?.attachedProjectIds) ? result.attachedProjectIds : next);
     } catch (err) {
       if (currentChatIdRef.current === origin) {
         setFailure({ chatId: origin, message: projectErrorMessage(err, t) });

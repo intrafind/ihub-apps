@@ -255,7 +255,7 @@ function ProxyConfig() {
     setTestResult(null);
     setTestError('');
     try {
-      const response = await makeAdminApiCall('/admin/proxy/test', {
+      const response = await makeAdminApiCall('/admin/proxy/_test', {
         method: 'POST',
         // The unsaved editor state is tested, so an admin can find a working
         // proxy before committing it.

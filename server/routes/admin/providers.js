@@ -38,6 +38,7 @@ import { computeGatewayDrift } from '../../services/gatewayDrift.js';
 import { applyGatewayDrift } from '../../services/gatewaySyncApply.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /** The provider configuration, as a path relative to `contents/`. */
 const PROVIDERS_FILE = 'config/providers.json';
@@ -342,7 +343,7 @@ export default function registerAdminProvidersRoutes(app) {
     });
 
     res.setHeader('ETag', providersEtag);
-    res.json(maskedProviders);
+    res.json({ items: maskedProviders });
   });
 
   /**
@@ -574,13 +575,11 @@ export default function registerAdminProvidersRoutes(app) {
     const { data: providers } = configCache.getProviders(true);
     // LLM providers only: other categories (web search, …) read their keys
     // from places this check does not cover, so a verdict would mislead.
-    const statuses = Object.fromEntries(
-      providers
-        .filter(p => BUILT_IN_LLM_PROVIDERS.includes(p.id) || p.category === 'llm')
-        .map(provider => [provider.id, inspectProviderApiKey(provider)])
-    );
+    const items = providers
+      .filter(p => BUILT_IN_LLM_PROVIDERS.includes(p.id) || p.category === 'llm')
+      .map(provider => ({ id: provider.id, ...inspectProviderApiKey(provider) }));
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ statuses });
+    res.json({ items });
   });
 
   app.get(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
@@ -700,9 +699,7 @@ export default function registerAdminProvidersRoutes(app) {
     await configCache.refreshProvidersCache();
     const updatedModels = await syncLinkedModelsApiType(updatedProvider);
 
-    // api-guidelines-ignore: existing success body, changed in its own API change
     res.json({
-      message: 'Provider updated successfully',
       provider: updatedProvider,
       updatedModels
     });
@@ -794,7 +791,7 @@ export default function registerAdminProvidersRoutes(app) {
     await configStore.writeJson(PROVIDERS_FILE, { providers });
     await configCache.refreshProvidersCache();
 
-    res.status(201).json({ message: 'Provider created successfully', provider: newProvider }); // api-guidelines-ignore: existing success body, changed in its own API change
+    sendCreated(res, `/api/admin/providers/${segment(newProvider.id)}`, newProvider);
   });
 
   /**
@@ -869,6 +866,6 @@ export default function registerAdminProvidersRoutes(app) {
     await configStore.writeJson(PROVIDERS_FILE, { providers });
     await configCache.refreshProvidersCache();
 
-    res.json({ message: 'Provider deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.status(204).end();
   });
 }

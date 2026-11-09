@@ -166,7 +166,7 @@ describe('Jira OAuth routes', () => {
     JiraService.oauthStrategy = originalStrategy;
   });
 
-  /** The sign-in as `POST /api/integrations/jira/connect` starts it (the one connect flow). */
+  /** The sign-in as `POST /api/integrations/jira/_connect` starts it (the one connect flow). */
   async function startFlow() {
     let authorize;
     await new Promise((resolve, reject) =>

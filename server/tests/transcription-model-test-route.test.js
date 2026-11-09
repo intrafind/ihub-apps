@@ -3,7 +3,7 @@
 
 /**
  * Route test for the "Test" action on a transcription model (Admin → Models):
- * `POST /api/admin/models/:modelId/test` starts a session upstream instead of
+ * `POST /api/admin/models/:modelId/_test` starts a session upstream instead of
  * asking for a chat completion, and reports the outcome in the shape every
  * model test uses. The upstream check itself (`testTranscriptionModel`) is a
  * fake here; realtimeTranscription.test.js covers it.
@@ -62,13 +62,12 @@ app.use(express.json());
 registerAdminModelsRoutes(app);
 app.use(errorHandler);
 
-const url = '/api/admin/models/voxtral-mini-realtime/test';
+const url = '/api/admin/models/voxtral-mini-realtime/_test';
 
 test('a working endpoint passes, and the key is not echoed', async () => {
   const res = await request(app).post(url);
   expect(res.status).toBe(200);
   expect(res.body).toMatchObject({
-    success: true,
     messageKey: 'testSuccessful',
     response: 'Connected — the endpoint started a session'
   });

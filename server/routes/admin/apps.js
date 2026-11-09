@@ -14,6 +14,7 @@ import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { appConfigSchema } from '../../validators/appConfigSchema.js';
 import { describeIssues } from '../../validators/userPromptSchema.js';
 import { getIntegrationStatus } from '../../integrationRegistry.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 /**
  * Validate an app configuration an admin is about to save, and answer 400 when
@@ -299,7 +300,7 @@ export default function registerAdminAppsRoutes(app) {
   app.get(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
     const { data: apps, etag: appsEtag } = configCache.getApps(true);
     res.setHeader('ETag', appsEtag);
-    res.json(apps);
+    res.json({ items: apps });
   });
 
   /**
@@ -353,7 +354,7 @@ export default function registerAdminAppsRoutes(app) {
     const { data: apps, etag: appsEtag } = configCache.getApps(true);
     const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
     res.setHeader('ETag', appsEtag);
-    res.json(templates);
+    res.json({ items: templates });
   });
 
   /**
@@ -616,7 +617,7 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: appId,
       summary: `Updated app ${appId}`
     });
-    res.json({ message: 'App updated successfully', app: updatedApp }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json(updatedApp);
   });
 
   /**
@@ -735,94 +736,7 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: newApp.id,
       summary: `Created app ${newApp.id}`
     });
-    res.json({ message: 'App created successfully', app: newApp }); // api-guidelines-ignore: existing success body, changed in its own API change
-  });
-
-  /**
-   * @swagger
-   * /api/admin/apps/{appId}/toggle:
-   *   post:
-   *     summary: Toggle application enabled/disabled status
-   *     description: |
-   *       Toggles the enabled status of a specific application.
-   *       If the app is currently enabled, it will be disabled, and vice versa.
-   *       Updates the application file and refreshes the cache.
-   *     tags:
-   *       - Admin
-   *       - Applications
-   *     security:
-   *       - adminAuth: []
-   *     parameters:
-   *       - in: path
-   *         name: appId
-   *         required: true
-   *         description: Unique identifier of the application to toggle
-   *         schema:
-   *           type: string
-   *           example: "chat-assistant"
-   *     responses:
-   *       200:
-   *         description: Application status successfully toggled
-   *         content:
-   *           application/json:
-   *             schema:
-   *               $ref: '#/components/schemas/AppOperation'
-   *             examples:
-   *               enabled:
-   *                 summary: App enabled
-   *                 value:
-   *                   message: "App enabled successfully"
-   *                   enabled: true
-   *                   app:
-   *                     id: "chat-assistant"
-   *                     enabled: true
-   *               disabled:
-   *                 summary: App disabled
-   *                 value:
-   *                   message: "App disabled successfully"
-   *                   enabled: false
-   *                   app:
-   *                     id: "chat-assistant"
-   *                     enabled: false
-   *       404:
-   *         description: Application not found
-   *       500:
-   *         description: Internal server error
-   */
-  app.post(buildServerPath('/api/admin/apps/:appId/toggle'), contentAdminAuth, async (req, res) => {
-    const { appId } = req.params;
-
-    // Validate appId for security
-    assertValidId(appId, 'app');
-
-    const { data: apps } = configCache.getApps(true);
-    const app = apps.find(a => a.id === appId);
-    if (!app) {
-      throw new ServiceError('NOT_FOUND', 'App not found');
-    }
-    const newEnabledState = !app.enabled;
-    app.enabled = newEnabledState;
-    // Find the actual file for this app ID (may not match ${appId}.json)
-    const appFilePath = await configStore.resolveIdToPath('apps', appId, {
-      createIfMissing: false
-    });
-    if (!appFilePath) {
-      throw new ServiceError('NOT_FOUND', 'App file not found');
-    }
-    await configStore.writeJson(appFilePath, app);
-    await configCache.refreshAppsCache();
-    await logAudit({
-      req,
-      action: 'toggle',
-      resource: 'app',
-      resourceId: appId,
-      summary: `${newEnabledState ? 'Enabled' : 'Disabled'} app ${appId}`
-    });
-    res.json({
-      message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-      app: app,
-      enabled: newEnabledState
-    });
+    sendCreated(res, `/api/admin/apps/${segment(newApp.id)}`, newApp);
   });
 
   /**
@@ -1036,7 +950,7 @@ export default function registerAdminAppsRoutes(app) {
       summary: `Reordered ${ids.length} apps (${updated.length} changed)`
     });
 
-    res.json({ message: 'App order updated successfully', ids, updated }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.json({ ids, updated });
   });
 
   /**
@@ -1148,7 +1062,6 @@ export default function registerAdminAppsRoutes(app) {
         summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} apps`
       });
       res.json({
-        message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
         enabled,
         ids: resolvedIds
       });
@@ -1242,6 +1155,6 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: appId,
       summary: `Deleted app ${appId}`
     });
-    res.json({ message: 'App deleted successfully' }); // api-guidelines-ignore: existing success body, changed in its own API change
+    res.status(204).end();
   });
 }

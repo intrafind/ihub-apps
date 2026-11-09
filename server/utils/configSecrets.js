@@ -68,3 +68,36 @@ export function decryptPlatformSecrets(platformData) {
   }
   return platformData;
 }
+
+/**
+ * The inverse of {@link decryptPlatformSecrets}, for the way back to disk.
+ *
+ * The runtime cache holds the Azure Speech subscription key decrypted, so a
+ * route that builds the file it saves from the cache would store the key in
+ * plain text. This encrypts it again; an environment variable placeholder
+ * (`${NAME}`) and a value that is already encrypted stay as they are, so
+ * calling it twice is harmless.
+ *
+ * @param {Object} platformData - The platform configuration about to be saved
+ * @returns {Promise<Object>} `platformData` itself when it holds no plain-text secret,
+ *   otherwise a copy with the secret encrypted (the argument is not modified)
+ */
+export async function encryptPlatformSecrets(platformData) {
+  const key = platformData?.speech?.azure?.subscriptionKey;
+  if (!key || typeof key !== 'string') return platformData;
+  if (/^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(key)) return platformData;
+  if (tokenStorageService.isEncrypted(key)) return platformData;
+  // The file is also saved early in startup (migrations), before the server
+  // has set the key up.
+  if (!tokenStorageService.encryptionKey) await tokenStorageService.initializeEncryptionKey();
+  return {
+    ...platformData,
+    speech: {
+      ...platformData.speech,
+      azure: {
+        ...platformData.speech.azure,
+        subscriptionKey: tokenStorageService.encryptString(key)
+      }
+    }
+  };
+}

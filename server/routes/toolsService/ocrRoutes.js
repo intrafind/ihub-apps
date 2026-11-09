@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import express from 'express';
+import { ServiceError } from '../../utils/ServiceError.js';
 import multer from 'multer';
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
 import configCache from '../../configCache.js';
 import { createJob } from './jobStore.js';
 import { processOcrJob } from './processors/ocrProcessor.js';
-import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 import { recordUpload } from '../../telemetry/metrics.js';
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
 
@@ -74,97 +74,97 @@ router.post(
               : 'rejected_other'
             : 'rejected_other';
         recordUpload('ocr', outcome);
+        // A callback cannot throw into Express: hand the error to `next`.
         if (err instanceof multer.MulterError) {
-          return sendBadRequest(res, `Upload error: ${err.message}`);
+          return next(new ServiceError('BAD_REQUEST', `Upload error: ${err.message}`));
         }
-        return sendBadRequest(res, err.message);
+        return next(new ServiceError('BAD_REQUEST', err.message));
       }
       next();
     });
   },
   async (req, res) => {
-    try {
-      const files = req.files;
-      if (!files || files.length === 0) {
-        recordUpload('ocr', 'rejected_other');
-        return sendBadRequest(res, 'At least one file is required');
-      }
-      for (const f of files) {
-        recordUpload('ocr', 'accepted', f.size);
-      }
-
-      const { modelId, prompt, ocrMode = 'full', debugMode } = req.body;
-
-      // Validate ocrMode
-      if (!VALID_OCR_MODES.includes(ocrMode)) {
-        return sendBadRequest(res, `ocrMode must be one of: ${VALID_OCR_MODES.join(', ')}`);
-      }
-
-      // Validate prompt
-      if (prompt !== undefined && typeof prompt !== 'string') {
-        return sendBadRequest(res, 'prompt must be a string');
-      }
-      if (prompt && estimateTokens(prompt) > MAX_PROMPT_TOKENS) {
-        return sendBadRequest(res, `prompt must be at most ${MAX_PROMPT_TOKENS} tokens`);
-      }
-
-      const jobs = [];
-
-      for (const file of files) {
-        const isPdf =
-          file.mimetype === 'application/pdf' || file.originalname?.toLowerCase().endsWith('.pdf');
-
-        // Derive output filename
-        let outputFilename = 'ocr-result.pdf';
-        if (file.originalname) {
-          const sanitized = file.originalname.replace(/[^\w.\-() ]/g, '_');
-          const ext = sanitized.split('.').pop()?.toLowerCase();
-          outputFilename =
-            ext === 'pdf' ? sanitized : sanitized.replace(/\.[^.]+$/, '.pdf') || sanitized + '.pdf';
-        }
-
-        if (isPdf) {
-          const job = createJob('ocr', req.user?.id, {
-            inputType: 'pdf',
-            fileBuffer: file.buffer,
-            modelId: modelId || null,
-            prompt: prompt || null,
-            ocrMode,
-            outputFilename,
-            debugMode: debugMode === 'true'
-          });
-
-          // We'll determine total pages during processing (server-side)
-          job.progress = { current: 0, total: 0 };
-          jobs.push({ jobId: job.id, fileName: file.originalname, totalPages: 0 });
-
-          // Start processing asynchronously
-          processOcrJob(job);
-        } else {
-          // Image file — convert to base64 for the existing image pipeline
-          const base64 = file.buffer.toString('base64');
-
-          const job = createJob('ocr', req.user?.id, {
-            inputType: 'images',
-            pageImages: [base64],
-            modelId: modelId || null,
-            prompt: prompt || null,
-            ocrMode: 'full', // images always use full VLM
-            outputFilename,
-            debugMode: debugMode === 'true'
-          });
-
-          job.progress = { current: 0, total: 1 };
-          jobs.push({ jobId: job.id, fileName: file.originalname, totalPages: 1 });
-
-          processOcrJob(job);
-        }
-      }
-
-      res.json({ jobs });
-    } catch (err) {
-      return sendInternalError(res, err, 'start OCR job');
+    const files = req.files;
+    if (!files || files.length === 0) {
+      recordUpload('ocr', 'rejected_other');
+      throw new ServiceError('BAD_REQUEST', 'At least one file is required');
     }
+    for (const f of files) {
+      recordUpload('ocr', 'accepted', f.size);
+    }
+
+    const { modelId, prompt, ocrMode = 'full', debugMode } = req.body;
+
+    // Validate ocrMode
+    if (!VALID_OCR_MODES.includes(ocrMode)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `ocrMode must be one of: ${VALID_OCR_MODES.join(', ')}`
+      );
+    }
+
+    // Validate prompt
+    if (prompt !== undefined && typeof prompt !== 'string') {
+      throw new ServiceError('BAD_REQUEST', 'prompt must be a string');
+    }
+    if (prompt && estimateTokens(prompt) > MAX_PROMPT_TOKENS) {
+      throw new ServiceError('BAD_REQUEST', `prompt must be at most ${MAX_PROMPT_TOKENS} tokens`);
+    }
+
+    const jobs = [];
+
+    for (const file of files) {
+      const isPdf =
+        file.mimetype === 'application/pdf' || file.originalname?.toLowerCase().endsWith('.pdf');
+
+      // Derive output filename
+      let outputFilename = 'ocr-result.pdf';
+      if (file.originalname) {
+        const sanitized = file.originalname.replace(/[^\w.\-() ]/g, '_');
+        const ext = sanitized.split('.').pop()?.toLowerCase();
+        outputFilename =
+          ext === 'pdf' ? sanitized : sanitized.replace(/\.[^.]+$/, '.pdf') || sanitized + '.pdf';
+      }
+
+      if (isPdf) {
+        const job = createJob('ocr', req.user?.id, {
+          inputType: 'pdf',
+          fileBuffer: file.buffer,
+          modelId: modelId || null,
+          prompt: prompt || null,
+          ocrMode,
+          outputFilename,
+          debugMode: debugMode === 'true'
+        });
+
+        // We'll determine total pages during processing (server-side)
+        job.progress = { current: 0, total: 0 };
+        jobs.push({ jobId: job.id, fileName: file.originalname, totalPages: 0 });
+
+        // Start processing asynchronously
+        processOcrJob(job);
+      } else {
+        // Image file — convert to base64 for the existing image pipeline
+        const base64 = file.buffer.toString('base64');
+
+        const job = createJob('ocr', req.user?.id, {
+          inputType: 'images',
+          pageImages: [base64],
+          modelId: modelId || null,
+          prompt: prompt || null,
+          ocrMode: 'full', // images always use full VLM
+          outputFilename,
+          debugMode: debugMode === 'true'
+        });
+
+        job.progress = { current: 0, total: 1 };
+        jobs.push({ jobId: job.id, fileName: file.originalname, totalPages: 1 });
+
+        processOcrJob(job);
+      }
+    }
+
+    res.json({ items: jobs });
   }
 );
 
@@ -173,23 +173,19 @@ router.post(
  * Get list of models suitable for OCR (vision-capable).
  */
 router.get('/ocr/models', authRequired, async (req, res) => {
-  try {
-    const { data: models } = await configCache.getModelsForUser(req.user);
-    if (!models) {
-      return res.json([]);
-    }
-
-    const ocrModels = models.map(m => ({
-      id: m.id,
-      name: m.name,
-      supportsVision: !!(m.supportsImages || m.supportsVision),
-      isDefault: !!m.default
-    }));
-
-    res.json(ocrModels);
-  } catch (err) {
-    return sendInternalError(res, err, 'list OCR models');
+  const { data: models } = await configCache.getModelsForUser(req.user);
+  if (!models) {
+    return res.json([]);
   }
+
+  const ocrModels = models.map(m => ({
+    id: m.id,
+    name: m.name,
+    supportsVision: !!(m.supportsImages || m.supportsVision),
+    isDefault: !!m.default
+  }));
+
+  res.json(ocrModels);
 });
 
 export function registerOcrRoutes(parentRouter) {

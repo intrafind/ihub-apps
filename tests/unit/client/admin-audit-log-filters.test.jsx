@@ -99,7 +99,9 @@ function setup(search = '') {
     if (url.startsWith('/admin/audit-log/retention')) {
       return Promise.resolve({ data: { retentionDays: 365, cleanupEnabled: true } });
     }
-    return Promise.resolve({ data: { entries: [ENTRY], total: 400, facets: FACETS } });
+    return Promise.resolve({
+      data: { items: [ENTRY], nextCursor: 'c2', total: 400, facets: FACETS }
+    });
   });
 
   return render(
@@ -180,21 +182,24 @@ describe('AdminAuditLogPage filters reach the URL and the server', () => {
     expect(decodeURIComponent(lastListCall())).toContain('actionExclude=login');
   });
 
-  it('resets to page 1 in the same navigation that changes a filter', async () => {
-    // Start on page 4 so the reset has something to undo — without this the
-    // test passes even with the page-reset wiring removed.
-    setup('?page=4');
+  it('starts again at the first page when a filter changes', async () => {
+    setup();
     await waitForFacets();
-    expect(urlSearch()).toContain('page=4');
-    expect(decodeURIComponent(lastListCall())).toContain('offset=150');
+    expect(decodeURIComponent(lastListCall())).not.toContain('cursor=');
+
+    // Next page: the cursor the server handed out goes back unchanged.
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await waitFor(() => expect(decodeURIComponent(lastListCall())).toContain('cursor=c2'));
 
     openFilter('Resource');
     fireEvent.click(checkboxFor('auth'));
     await waitFor(() => expect(urlSearch()).toContain('resourceExclude=auth'));
 
-    // `page` is omitted when it is 1, so the filter survives and the page is gone.
-    expect(urlSearch()).not.toContain('page=');
-    await waitFor(() => expect(decodeURIComponent(lastListCall())).toContain('offset=0'));
+    // The new filter has its own first page: no cursor of the old list is sent.
+    await waitFor(() =>
+      expect(decodeURIComponent(lastListCall())).toContain('resourceExclude=auth')
+    );
+    expect(decodeURIComponent(lastListCall())).not.toContain('cursor=');
   });
 
   it('clamps a page size larger than the table offers', async () => {
@@ -273,7 +278,9 @@ describe('AdminAuditLogPage reads existing filter links', () => {
       if (url.startsWith('/admin/audit-log/retention')) {
         return Promise.resolve({ data: { retentionDays: 365, cleanupEnabled: true } });
       }
-      return Promise.resolve({ data: { entries: [ENTRY], total: 1, facets: FACETS } });
+      return Promise.resolve({
+        data: { items: [ENTRY], nextCursor: null, total: 1, facets: FACETS }
+      });
     });
     return render(
       <MemoryRouter initialEntries={[`/admin/audit-log${search}`]}>

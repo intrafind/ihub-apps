@@ -336,7 +336,7 @@ function AdminOfficeIntegrationPage() {
 
   const handleToggle = async () => {
     if (!status) return;
-    const action = status.enabled ? 'disable' : 'enable';
+    const action = status.enabled ? '_disable' : '_enable';
     try {
       setToggling(true);
       setMessage(null);
@@ -469,14 +469,14 @@ function AdminOfficeIntegrationPage() {
     );
 
     // The two halves answer different questions, so neither waits on the other.
-    const serverCheck = makeAdminApiCall('/admin/office-integration/office-js/test', {
+    const serverCheck = makeAdminApiCall('/admin/office-integration/office-js/_test', {
       method: 'POST',
       body: { urls }
     })
       .then(res => {
         setOfficeJsReach(prev => {
           const next = { ...prev };
-          for (const r of res.data?.results || []) {
+          for (const r of res.data?.items || []) {
             next[r.url] = {
               ...next[r.url],
               server: r.reachable ? 'ok' : 'blocked',

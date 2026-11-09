@@ -94,6 +94,11 @@ describe('run routes: errors', () => {
     expect(Array.isArray(res.body.errors)).toBe(true);
   });
 
+  it('lists the pending interactions of a run as { items }', async () => {
+    const res = await request(app).get('/api/runs/run1/interactions').expect(200);
+    expect(res.body).toEqual({ items: [] });
+  });
+
   it('answers an interaction of another run with NOT_FOUND', async () => {
     state.interaction = { id: 'i1', runId: 'other', policy: {} };
     const res = await request(app).post(answerUrl).send({ decision: 'approve' }).expect(404);

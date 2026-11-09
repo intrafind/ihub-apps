@@ -19,7 +19,7 @@ export const fetchIntegrationCatalog = async () => (await makeAdminApiCall(`${BA
 
 /** One definition with its install fields, auth modes and actions. */
 export const fetchIntegrationDefinition = async definitionId =>
-  (await makeAdminApiCall(definitionPath(definitionId))).data.definition;
+  (await makeAdminApiCall(definitionPath(definitionId))).data;
 
 /** Test an unsaved instance of a definition. */
 export const testIntegrationDraft = async (definitionId, draft) =>
@@ -28,7 +28,7 @@ export const testIntegrationDraft = async (definitionId, draft) =>
       method: 'POST',
       ...json(draft)
     })
-  ).data.result;
+  ).data;
 
 /**
  * A Markdown companion file of a definition (a release's notes, its README),
@@ -59,10 +59,10 @@ export const fetchInstalledIntegration = async id =>
 
 /** Install (create an instance). `payload.secrets` carries sensitive values. */
 export const installIntegration = async payload =>
-  (await makeAdminApiCall(`${BASE}/installed`, { method: 'POST', ...json(payload) })).data.instance;
+  (await makeAdminApiCall(`${BASE}/installed`, { method: 'POST', ...json(payload) })).data;
 
 export const updateInstalledIntegration = async (id, payload) =>
-  (await makeAdminApiCall(instancePath(id), { method: 'PUT', ...json(payload) })).data.instance;
+  (await makeAdminApiCall(instancePath(id), { method: 'PUT', ...json(payload) })).data;
 
 /**
  * Set the tool approval of an installation (#2945): `{ default?, actions? }`, or
@@ -74,7 +74,7 @@ export const setInstalledIntegrationApproval = async (id, approval) =>
       method: 'PUT',
       ...json({ approval })
     })
-  ).data.instance;
+  ).data;
 
 /**
  * Mark actions of an installation as reviewed (#2916): their current
@@ -98,7 +98,7 @@ const actionPath = (id, action) => `${instancePath(id)}/actions/${encodeURICompo
  * and the connections a test can run with.
  */
 export const fetchIntegrationAction = async (id, action) =>
-  (await makeAdminApiCall(actionPath(id, action))).data.detail;
+  (await makeAdminApiCall(actionPath(id, action))).data;
 
 /**
  * Change the admin override of one action: `{ description?, guidance?,
@@ -124,7 +124,7 @@ export const testIntegrationAction = async (id, action, { args, connection, conf
       method: 'POST',
       ...json({ args, connection, confirm: confirm === true })
     })
-  ).data.result;
+  ).data;
 
 /** Set (or with null remove) the installation's own model instructions. */
 export const saveIntegrationInstructions = async (id, instructions) =>
@@ -133,7 +133,7 @@ export const saveIntegrationInstructions = async (id, instructions) =>
       method: 'PUT',
       ...json({ instructions })
     })
-  ).data.instance;
+  ).data;
 
 export const deleteInstalledIntegration = async id => {
   await makeAdminApiCall(instancePath(id), { method: 'DELETE' });
@@ -145,7 +145,7 @@ export const setInstalledIntegrationEnabled = async (id, enabled) =>
       method: 'POST',
       ...json({})
     })
-  ).data.instance;
+  ).data;
 
 /**
  * The example apps an installation offers (`GET …/installed/:id/example-apps`):
@@ -167,12 +167,11 @@ export const fetchExampleApps = async id =>
  */
 export const createExampleApp = async (id, body) =>
   (await makeAdminApiCall(`${instancePath(id)}/example-apps`, { method: 'POST', ...json(body) }))
-    .data.app;
+    .data;
 
 /** Test a saved instance (optionally with an edited, unsaved body). */
 export const testInstalledIntegration = async (id, draft = {}) =>
-  (await makeAdminApiCall(`${instancePath(id)}/_test`, { method: 'POST', ...json(draft) })).data
-    .result;
+  (await makeAdminApiCall(`${instancePath(id)}/_test`, { method: 'POST', ...json(draft) })).data;
 
 /**
  * Run (or re-run) the definition migration of an installation
@@ -231,7 +230,7 @@ export const adoptInstalledIntegration = async id =>
 
 /** Users who connected their own account to an installation that signs every user in. */
 export const fetchIntegrationConnections = async id =>
-  (await makeAdminApiCall(`${instancePath(id)}/connections`)).data.connections || [];
+  (await makeAdminApiCall(`${instancePath(id)}/connections`)).data.items || [];
 
 /** Disconnect one user: revoke where possible, delete the stored tokens. */
 export const disconnectIntegrationUser = async (id, userId) =>
@@ -278,7 +277,7 @@ export const approveIntegrationRequest = async (id, { note } = {}) =>
       method: 'POST',
       ...json(note ? { note } : {})
     })
-  ).data.request;
+  ).data;
 
 /** Decline a request; `hide` also hides its definition from every user. */
 export const declineIntegrationRequest = async (id, { note, hide = false } = {}) =>
@@ -303,8 +302,8 @@ export const showHiddenIntegration = async definition => {
  * when it belongs to one. Replaces the removed `GET /api/admin/tools`.
  */
 export const fetchAdminToolCatalog = async () => {
-  const data = (await makeAdminApiCall(`${BASE}/tools`)).data;
-  return Array.isArray(data) ? data : [];
+  const items = (await makeAdminApiCall(`${BASE}/tools`)).data?.items;
+  return Array.isArray(items) ? items : [];
 };
 
 // --- Integration builder (Admin → Integrations → Add manually) -------------

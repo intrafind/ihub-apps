@@ -38,7 +38,7 @@ const path = id => `/integrations/${encodeURIComponent(id)}`;
  */
 export async function fetchUserIntegrations() {
   const { data } = await apiClient.get('/integrations', QUIET);
-  return Array.isArray(data?.integrations) ? data.integrations : [];
+  return Array.isArray(data?.items) ? data.items : [];
 }
 
 /**
@@ -49,7 +49,7 @@ export async function fetchUserIntegrations() {
 export async function fetchUserIntegration(id) {
   try {
     const { data } = await apiClient.get(path(id), QUIET);
-    return data?.integration || null;
+    return data || null;
   } catch (error) {
     if (error?.response?.status === 404) return null;
     throw error;
@@ -72,7 +72,7 @@ export async function requestConnectUrl(id, { returnUrl, reconnect = false, scop
     ...(reconnect && Array.isArray(scopes) && scopes.length ? { scopes } : {})
   };
   const { data } = await apiClient.post(
-    `${path(id)}/${reconnect ? 'reconnect' : 'connect'}`,
+    `${path(id)}/_${reconnect ? 'reconnect' : 'connect'}`,
     body,
     QUIET
   );
@@ -85,10 +85,10 @@ export async function requestConnectUrl(id, { returnUrl, reconnect = false, scop
 /**
  * Disconnect the user from an integration (revokes at the vendor where supported).
  * @param {string} id - Installation id
- * @returns {Promise<{success: boolean, removed: boolean, revoked: boolean}>}
+ * @returns {Promise<{removed: boolean, revoked: boolean}>}
  */
 export async function disconnectUserIntegration(id) {
-  const { data } = await apiClient.post(`${path(id)}/disconnect`, {}, QUIET);
+  const { data } = await apiClient.post(`${path(id)}/_disconnect`, {}, QUIET);
   return data;
 }
 
@@ -125,5 +125,5 @@ export async function requestIntegration(definition, reason) {
     { definition, ...(trimmed ? { reason: trimmed } : {}) },
     QUIET
   );
-  return data?.request || null;
+  return data || null;
 }

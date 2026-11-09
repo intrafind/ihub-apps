@@ -264,7 +264,7 @@ call:
   "integration": "okta",
   "reason": "not_connected",
   "message": "Connect Okta directory to use this tool. Ask the user to connect Okta directory with the Connect card in the chat.",
-  "connectUrl": "/api/integrations/okta/connect"
+  "connectUrl": "/api/integrations/okta/_connect"
 }
 ```
 
@@ -335,7 +335,7 @@ per-user sign-in for the Streamable HTTP and SSE transports only.
 - Scope step-up: a call refused with `403` and `error="insufficient_scope"`
   returns `reason: "insufficient_scope"` with `scopes` (the union of the
   granted and the challenged scopes) and `connectUrl` =
-  `/api/integrations/<server id>/reconnect`; the Connect card shows the new
+  `/api/integrations/<server id>/_reconnect`; the Connect card shows the new
   permission and its **Reconnect** asks for those scopes. The user
   re-authorizes once; a refusal for scopes already granted is an ordinary
   error.
@@ -357,8 +357,8 @@ per-user sign-in for the Streamable HTTP and SSE transports only.
 
 Routes (`serverId` is the installation id):
 
-- `POST /api/integrations/:serverId/connect` `{ "returnUrl" }` → `{ "url" }`,
-  `POST …/reconnect` `{ "returnUrl", "scopes"? }`, `POST …/disconnect` — the one
+- `POST /api/integrations/:serverId/_connect` `{ "returnUrl" }` → `{ "url" }`,
+  `POST …/_reconnect` `{ "returnUrl", "scopes"? }`, `POST …/_disconnect` — the one
   connect flow of every integration.
 - `GET /api/integrations` — the caller's integrations with their connection
   status (per-user servers have `connection.mode: "personal"`).

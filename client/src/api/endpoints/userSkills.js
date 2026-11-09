@@ -118,7 +118,7 @@ export const transferUserSkill = async (skillId, ownerId) =>
  * @returns {Promise<Object>} The copy (detail).
  */
 export const duplicateUserSkill = async (skillId, body = {}) =>
-  write(() => apiClient.post(`${skillPath(skillId)}/duplicate`, body));
+  write(() => apiClient.post(`${skillPath(skillId)}/_duplicate`, body));
 
 /**
  * Copy a global skill into the caller's own skills ("Copy to my skills").
@@ -128,7 +128,7 @@ export const duplicateUserSkill = async (skillId, body = {}) =>
  * @returns {Promise<Object>} The copy (detail).
  */
 export const duplicateGlobalSkill = async (skillName, body = {}) =>
-  write(() => apiClient.post(`/skills/${encodeURIComponent(skillName)}/duplicate`, body));
+  write(() => apiClient.post(`/skills/${encodeURIComponent(skillName)}/_duplicate`, body));
 
 /* -------------------------------------------------------------------------- */
 /*  Marketplace (needs the marketplace feature and userSkills.allowMarketplace) */
@@ -143,8 +143,8 @@ const marketplaceItemPath = (registryId, name) =>
  * caller already added it (`added: { id, name }`) and whether a global skill
  * of that name is available to them (`availableAsGlobal`).
  *
- * @param {{search?: string, registry?: string, category?: string, page?: number, limit?: number}} [params]
- * @returns {Promise<{items: Object[], total: number, page: number, limit: number, totalPages: number, registries: Array<{id: string, name: string, count: number}>, categories: string[]}>}
+ * @param {{search?: string, registry?: string, category?: string, cursor?: string, limit?: number}} [params]
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number, registries: Array<{id: string, name: string, count: number}>, categories: string[]}>}
  */
 export const fetchMarketplaceSkills = async (params = {}) =>
   read(() => apiClient.get('/user-skills/marketplace', { params }));

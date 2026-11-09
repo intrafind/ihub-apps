@@ -1,0 +1,6615 @@
+{
+  "GET /.well-known/agent-card.json": {
+    "skipped": "an external specification"
+  },
+  "GET /.well-known/jwks.json": {
+    "skipped": "an external specification"
+  },
+  "GET /.well-known/oauth-authorization-server": {
+    "skipped": "an external specification"
+  },
+  "GET /.well-known/oauth-authorization-server/{*issuerPath}": {
+    "skipped": "an external specification"
+  },
+  "GET /.well-known/oauth-protected-resource": {
+    "skipped": "an external specification"
+  },
+  "GET /.well-known/oauth-protected-resource/{*resourcePath}": {
+    "skipped": "an external specification"
+  },
+  "GET /.well-known/openid-configuration": {
+    "skipped": "an external specification"
+  },
+  "GET /a2a/.well-known/agent-card.json": {
+    "skipped": "an external specification"
+  },
+  "GET /a2a/skills/:skillId/.well-known/agent-card.json": {
+    "skipped": "an external specification"
+  },
+  "GET /api/admin/agents/inboxes": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "inboxId": "string",
+          "openCount": "number",
+          "totalCount": "number",
+          "updatedAt": "string",
+          "updatedBy": "string",
+          "version": "number"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/agents/inboxes/:inboxId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/admin/agents/memory/shaper-prompt": {
+    "status": 200,
+    "shape": {
+      "prompt": "string"
+    }
+  },
+  "GET /api/admin/agents/profiles": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "apps": [],
+          "artifacts": "object",
+          "budgets": "object",
+          "color": "string",
+          "concurrency": "object",
+          "description": "object",
+          "dynamicTasks": "object",
+          "enabled": "boolean",
+          "groups": [],
+          "hitl": "object",
+          "icon": "string",
+          "id": "string",
+          "inboxId?": "string",
+          "maxIterations?": "number",
+          "memory": "object",
+          "name": "object",
+          "nodeModels?": "object",
+          "planner": "object",
+          "preferredModel?": "string",
+          "review": "object",
+          "serviceAccount": "object",
+          "skills": [],
+          "synthesizer": "object",
+          "systemTools": [],
+          "workflow": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/agents/profiles/:profileId": {
+    "status": 200,
+    "shape": {
+      "apps": [],
+      "artifacts": {
+        "outputDir": "string",
+        "primary": "string"
+      },
+      "budgets": {
+        "maxTokensPerRun": "number",
+        "maxToolRoundsPerNode": "number",
+        "maxWallTimeSec": "number"
+      },
+      "color": "string",
+      "concurrency": {
+        "maxConcurrent": "number"
+      },
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "dynamicTasks": {
+        "enabled": "boolean",
+        "maxDepth": "number"
+      },
+      "enabled": "boolean",
+      "groups": [],
+      "hitl": {
+        "approverGroups": []
+      },
+      "icon": "string",
+      "id": "string",
+      "inboxId": "string",
+      "maxIterations": "number",
+      "memory": {
+        "autoInclude": "boolean",
+        "enabled": "boolean",
+        "maxBytes": "number"
+      },
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "planner": {
+        "enabled": "boolean",
+        "maxTasks": "number"
+      },
+      "preferredModel": "string",
+      "review": {
+        "enabled": "boolean",
+        "maxRounds": "number",
+        "strictness": "string"
+      },
+      "serviceAccount": {
+        "groups": ["string"]
+      },
+      "skills": [],
+      "synthesizer": {
+        "enabled": "boolean",
+        "maxTokens": "number"
+      },
+      "systemTools": [],
+      "workflow": {
+        "ref": "string",
+        "workflowId": "string"
+      }
+    }
+  },
+  "GET /api/admin/agents/profiles/:profileId/memory": {
+    "status": 200,
+    "shape": {
+      "body": "string",
+      "frontmatter": {
+        "profileId": "string",
+        "version": "number"
+      },
+      "profileId": "string",
+      "raw": "string",
+      "updatedAt": "null",
+      "updatedBy": "null",
+      "version": "number"
+    }
+  },
+  "GET /api/admin/apps": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "allowEmptyContent": "boolean",
+          "allowInheritance": "boolean",
+          "autoStart": "boolean",
+          "category?": "string",
+          "color": "string",
+          "customResponseRenderer?": "string",
+          "description": "object",
+          "disallowModelSelection": "boolean",
+          "enabled": "boolean",
+          "ephemeral": "boolean",
+          "features?": "object",
+          "greeting?": "object",
+          "iassistant?": "object",
+          "icon": "string",
+          "id": "string",
+          "inheritanceLevel?": "number",
+          "inputMode?": "object",
+          "integrations?": "object",
+          "messagePlaceholder?": "object",
+          "name": "object",
+          "order": "number",
+          "outputSchema?": "object",
+          "overriddenFields?": "array",
+          "parentId?": "string",
+          "preferredModel?": "string",
+          "preferredOutputFormat?": "string",
+          "preferredStyle?": "string",
+          "projects?": "array",
+          "prompt?": "object",
+          "redirectConfig?": "object",
+          "rendererConfig?": "object",
+          "requiredFeatures?": "array",
+          "sendChatHistory": "boolean",
+          "settings?": "object",
+          "skillSettings?": "object",
+          "skills?": "array",
+          "starterPrompts?": "[]|array",
+          "system?": "object",
+          "thinking?": "object",
+          "type": "string",
+          "upload?": "object",
+          "variables?": "[]|array",
+          "websearch?": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/apps/:appId": {
+    "status": 200,
+    "shape": {
+      "allowEmptyContent": "boolean",
+      "allowInheritance": "boolean",
+      "autoStart": "boolean",
+      "color": "string",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "disallowModelSelection": "boolean",
+      "enabled": "boolean",
+      "ephemeral": "boolean",
+      "greeting": {
+        "de": {
+          "subtitle": "string",
+          "title": "string"
+        },
+        "en": {
+          "subtitle": "string",
+          "title": "string"
+        }
+      },
+      "icon": "string",
+      "id": "string",
+      "inputMode": {
+        "microphone": {
+          "enabled": "boolean",
+          "mode": "string",
+          "showTranscript": "boolean"
+        },
+        "rows": "number",
+        "type": "string"
+      },
+      "messagePlaceholder": {
+        "de": "string",
+        "en": "string"
+      },
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "order": "number",
+      "preferredOutputFormat": "string",
+      "preferredStyle": "string",
+      "projects": [
+        {
+          "id": "string",
+          "mode": "string",
+          "write": "boolean"
+        }
+      ],
+      "sendChatHistory": "boolean",
+      "settings": {
+        "chatHistory": {
+          "enabled": "boolean"
+        },
+        "enabled": "boolean",
+        "model": {
+          "enabled": "boolean"
+        },
+        "outputFormat": {
+          "enabled": "boolean"
+        },
+        "style": {
+          "enabled": "boolean"
+        }
+      },
+      "system": {
+        "de": "string",
+        "en": "string"
+      },
+      "type": "string",
+      "upload": {
+        "allowMultiple": "boolean",
+        "enabled": "boolean",
+        "fileUpload": {
+          "comments": "string",
+          "enabled": "boolean",
+          "maxFileSizeMB": "number",
+          "speakerNotes": "string",
+          "supportedFormats": "array",
+          "trackedChanges": "string"
+        },
+        "imageUpload": {
+          "enabled": "boolean",
+          "maxFileSizeMB": "number",
+          "resizeImages": "boolean",
+          "supportedFormats": "array"
+        }
+      }
+    }
+  },
+  "GET /api/admin/apps/:appId/inheritance": {
+    "status": 200,
+    "shape": {
+      "app": {
+        "allowEmptyContent": "boolean",
+        "allowInheritance": "boolean",
+        "autoStart": "boolean",
+        "color": "string",
+        "description": {
+          "de": "string",
+          "en": "string"
+        },
+        "disallowModelSelection": "boolean",
+        "enabled": "boolean",
+        "ephemeral": "boolean",
+        "greeting": {
+          "de": "object",
+          "en": "object"
+        },
+        "icon": "string",
+        "id": "string",
+        "inputMode": {
+          "microphone": "object",
+          "rows": "number",
+          "type": "string"
+        },
+        "messagePlaceholder": {
+          "de": "string",
+          "en": "string"
+        },
+        "name": {
+          "de": "string",
+          "en": "string"
+        },
+        "order": "number",
+        "preferredOutputFormat": "string",
+        "preferredStyle": "string",
+        "projects": ["object"],
+        "sendChatHistory": "boolean",
+        "settings": {
+          "chatHistory": "object",
+          "enabled": "boolean",
+          "model": "object",
+          "outputFormat": "object",
+          "style": "object"
+        },
+        "system": {
+          "de": "string",
+          "en": "string"
+        },
+        "type": "string",
+        "upload": {
+          "allowMultiple": "boolean",
+          "enabled": "boolean",
+          "fileUpload": "object",
+          "imageUpload": "object"
+        }
+      },
+      "children": [],
+      "parent": "null"
+    }
+  },
+  "GET /api/admin/apps/integration-status": {
+    "status": 200,
+    "shape": {
+      "com.intrafind/entra-directory": "boolean",
+      "com.intrafind/ihub": "boolean",
+      "com.intrafind/ldap-directory": "boolean",
+      "drawio": "boolean",
+      "entra": "boolean",
+      "excalidraw": "boolean",
+      "ihub": "boolean",
+      "mcp/drawio": "boolean",
+      "mcp/excalidraw": "boolean",
+      "type:people-directory": "boolean",
+      "x500bund": "boolean"
+    }
+  },
+  "GET /api/admin/apps/templates": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/admin/audit-log": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "action": "string",
+          "actor": "object",
+          "id": "string",
+          "ip": "string",
+          "requestId": "string",
+          "resource": "string",
+          "resourceId": "string",
+          "result": "string",
+          "source": "string",
+          "summary": "string",
+          "ts": "string"
+        }
+      ],
+      "nextCursor": "null",
+      "total": "number"
+    }
+  },
+  "GET /api/admin/audit-log/export": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/audit-log/retention": {
+    "status": 200,
+    "shape": {
+      "anonymizeIp": "string",
+      "cleanupEnabled": "boolean",
+      "retentionDays": "number"
+    }
+  },
+  "GET /api/admin/audit-log/settings": {
+    "status": 200,
+    "shape": {
+      "anonymizeIp": "string",
+      "cleanupEnabled": "boolean",
+      "retentionDays": "number"
+    }
+  },
+  "GET /api/admin/auth/demo-accounts": {
+    "status": 200,
+    "shape": {
+      "accounts": ["string"],
+      "showDemoAccounts": "boolean",
+      "warn": "boolean"
+    }
+  },
+  "GET /api/admin/auth/status": {
+    "status": 200,
+    "shape": {
+      "authRequired": "boolean",
+      "authenticated": "boolean"
+    }
+  },
+  "GET /api/admin/auth/users": {
+    "status": 200,
+    "shape": {
+      "metadata": {
+        "description": "string",
+        "lastUpdated": "string",
+        "migratedFrom": "string",
+        "migrationDate": "string",
+        "version": "string"
+      },
+      "users": {
+        "user_demo_admin": {
+          "active": "boolean",
+          "createdAt": "string",
+          "email": "string",
+          "id": "string",
+          "internalGroups": "array",
+          "name": "string",
+          "updatedAt": "string",
+          "username": "string"
+        },
+        "user_demo_user": {
+          "active": "boolean",
+          "createdAt": "string",
+          "email": "string",
+          "id": "string",
+          "internalGroups": "array",
+          "name": "string",
+          "updatedAt": "string",
+          "username": "string"
+        }
+      }
+    }
+  },
+  "GET /api/admin/backup/export": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/browser-extension/download.crx": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/browser-extension/download.zip": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/browser-extension/status": {
+    "status": 200,
+    "shape": {
+      "allowedGroups": ["string"],
+      "configUrl": "string",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "displayName": {
+        "de": "string",
+        "en": "string"
+      },
+      "downloadAvailable": "boolean",
+      "downloadCrxUrl": "string",
+      "downloadZipUrl": "string",
+      "enabled": "boolean",
+      "extensionIds": [],
+      "oauthClientId": "string",
+      "signingKey": "null",
+      "starterPrompts": [
+        {
+          "message": "object",
+          "title": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/cache/stats": {
+    "status": 200,
+    "shape": {
+      "cacheTTL": "number",
+      "entries": {
+        "config/agents.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/apps.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/credentials.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/features.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/groups.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/installations.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/integrations.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/mimetypes.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/models.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/oauth-clients.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/platform.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/projects.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/prompts.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/providers.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/registries.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/styles.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/ui.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/users.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/workflows.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "locales/de.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "locales/en.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "skills": {
+          "age": "number",
+          "sizeApprox": "number"
+        }
+      },
+      "isInitialized": "boolean",
+      "sync": {
+        "announced": "number",
+        "failed": "number",
+        "pending": "number",
+        "received": "number",
+        "reloaded": "number"
+      },
+      "totalEntries": "number"
+    }
+  },
+  "GET /api/admin/changelog": {
+    "status": 200,
+    "shape": {
+      "currentVersion": "string",
+      "previousVersion": "null",
+      "versions": [
+        {
+          "counts": "object",
+          "installed": "boolean",
+          "isNew": "boolean",
+          "unreleased": "boolean",
+          "version": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/changelog/:version": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/admin/changes/:resource/:id": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/changes/:resource/:id/:filename": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/chat-history": {
+    "status": 200,
+    "shape": {
+      "generatedAt": "string",
+      "settings": {
+        "chats": {
+          "enabled": "boolean",
+          "maxChatsPerUser": "number",
+          "maxMessagesPerChat": "number",
+          "retentionDays": "number",
+          "temporaryRetentionHours": "number"
+        },
+        "runLog": {
+          "cleanupEnabled": "boolean",
+          "enabled": "boolean",
+          "flushIntervalMs": "number",
+          "identityMode": "string",
+          "retentionDays": "number",
+          "spillThresholdBytes": "number"
+        },
+        "sharing": {
+          "allowArtifacts": "boolean",
+          "allowAuthenticated": "boolean",
+          "allowPublic": "boolean",
+          "allowUsers": "boolean",
+          "defaultExpiryDays": "number",
+          "embedAllowedOrigins": [],
+          "embedEnabled": "boolean",
+          "enabled": "boolean",
+          "maxExpiryDays": "number",
+          "maxViewsCap": "number"
+        },
+        "uploads": {
+          "enabled": "boolean",
+          "evictOldestOriginalsOnQuota": "boolean",
+          "originalRetentionDays": "number",
+          "quotas": "object",
+          "storageMode": "string"
+        }
+      },
+      "stats": {
+        "chats": {
+          "activeLast24h": "number",
+          "activeLast7d": "number",
+          "available": "boolean",
+          "byStatus": "object",
+          "newestActivityAt": "string",
+          "oldestActivityAt": "string",
+          "retention": "object",
+          "scanned": "number",
+          "temporaryChats": "number",
+          "topApps": "array",
+          "topUsers": "array",
+          "totalChats": "number",
+          "totalMessages": "number",
+          "totalUsers": "number",
+          "truncated": "boolean"
+        },
+        "ledger": {
+          "byKind": "object",
+          "byStatus": "object",
+          "totalExecutions": "number",
+          "totalUsers": "number"
+        },
+        "shares": {
+          "activeByMode": "object",
+          "byMode": "object",
+          "byState": "object",
+          "total": "number",
+          "truncated": "boolean",
+          "views": "number"
+        }
+      },
+      "status": {
+        "chatPersistenceActive": "boolean",
+        "chatSharingActive": "boolean",
+        "chatsEnabled": "boolean",
+        "featureChatPersistence": "boolean",
+        "featureChatSharing": "boolean",
+        "featureRunLog": "boolean",
+        "ledgerActive": "boolean",
+        "ledgerForcedByChats": "boolean",
+        "runLogEnabled": "boolean",
+        "sharingEnabled": "boolean",
+        "storageProvider": "string",
+        "storageReady": "boolean"
+      }
+    }
+  },
+  "GET /api/admin/chat-history/shares": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "appId": "string",
+          "chatId": "string",
+          "createdAt": "string",
+          "embeddable": "boolean",
+          "expiresAt": "null",
+          "id": "string",
+          "lastViewedAt": "null",
+          "maxViews": "null",
+          "mode": "string",
+          "ownerId": "string",
+          "ownerName": "string",
+          "recipientCount": "number",
+          "revokedAt": "null",
+          "state": "string",
+          "target": "string",
+          "title": "string",
+          "viewCount": "number"
+        }
+      ],
+      "truncated": "boolean"
+    }
+  },
+  "GET /api/admin/configs/platform": {
+    "status": 200,
+    "shape": {
+      "anonymousAuth": {
+        "defaultGroups": ["string"],
+        "enabled": "boolean"
+      },
+      "artifacts": {
+        "enabled": "boolean",
+        "maxBytes": "number",
+        "maxPerBatch": "number",
+        "maxZipBytes": "number",
+        "maxZipFiles": "number"
+      },
+      "audit": {
+        "anonymizeIp": "string",
+        "cleanupEnabled": "boolean",
+        "includeEmail": "boolean",
+        "retentionDays": "number",
+        "verbosity": "string",
+        "winstonMirror": "boolean"
+      },
+      "auth": {
+        "authenticatedGroup": "string",
+        "debug": {
+          "enabled": "boolean",
+          "includeRawData": "boolean",
+          "maskTokens": "boolean",
+          "providers": "object",
+          "redactPasswords": "boolean"
+        },
+        "mode": "string",
+        "sessionTimeoutMinutes": "number"
+      },
+      "browserExtension": {
+        "description": {
+          "de": "string",
+          "en": "string"
+        },
+        "displayName": {
+          "de": "string",
+          "en": "string"
+        },
+        "enabled": "boolean",
+        "oauthClientId": "string",
+        "starterPrompts": ["object"]
+      },
+      "chats": {
+        "enabled": "boolean",
+        "maxChatsPerUser": "number",
+        "maxMessagesPerChat": "number",
+        "retentionDays": "number",
+        "sharing": {
+          "allowArtifacts": "boolean",
+          "allowAuthenticated": "boolean",
+          "allowPublic": "boolean",
+          "allowUsers": "boolean",
+          "defaultExpiryDays": "number",
+          "embedAllowedOrigins": [],
+          "embedEnabled": "boolean",
+          "enabled": "boolean",
+          "maxExpiryDays": "number",
+          "maxViewsCap": "number"
+        },
+        "temporaryRetentionHours": "number"
+      },
+      "cookieSettings": {
+        "disableSecure": "boolean"
+      },
+      "copilotAgent": {
+        "appId": "string",
+        "conversationStarters": [],
+        "description": "string",
+        "enabled": "boolean",
+        "instructions": "string",
+        "name": "string",
+        "oauthClientId": "string",
+        "oauthReferenceId": "string"
+      },
+      "cors": {
+        "allowedHeaders": ["string"],
+        "credentials": "boolean",
+        "maxAge": "number",
+        "methods": ["string"],
+        "origin": []
+      },
+      "defaultLanguage": "string",
+      "globalPromptVariables": {
+        "context": "string",
+        "variables": {}
+      },
+      "jwt": {
+        "algorithm": "string"
+      },
+      "llm": {
+        "connectTimeoutMs": "number",
+        "streamIdleTimeoutMs": "number"
+      },
+      "localAuth": {
+        "enabled": "boolean",
+        "lockout": {
+          "durationMinutes": "number",
+          "enabled": "boolean",
+          "maxAttempts": "number"
+        },
+        "showDemoAccounts": "boolean"
+      },
+      "logging": {
+        "anonymizeIp": "string",
+        "file": {
+          "enabled": "boolean",
+          "maxFiles": "number",
+          "maxSize": "number",
+          "path": "string"
+        },
+        "format": "string",
+        "level": "string"
+      },
+      "mcpServer": {
+        "a2a": {
+          "enabled": "boolean"
+        },
+        "defaultScopes": ["string"],
+        "enabled": "boolean",
+        "expose": {
+          "apps": "boolean",
+          "resources": "boolean",
+          "tools": "boolean",
+          "workflows": "boolean"
+        },
+        "publicUrl": "string",
+        "requireConsent": "boolean",
+        "transports": {
+          "streamableHttp": "object"
+        }
+      },
+      "nextcloudEmbed": {
+        "allowedHostOrigins": [],
+        "description": {
+          "de": "string",
+          "en": "string"
+        },
+        "displayName": {
+          "de": "string",
+          "en": "string"
+        },
+        "enabled": "boolean",
+        "oauthClientId": "string",
+        "starterPrompts": ["object"]
+      },
+      "oauth": {
+        "enabled": {
+          "clients": "boolean"
+        }
+      },
+      "officeIntegration": {
+        "calendarStarterPrompts": ["object"],
+        "defaultMailAction": "string",
+        "description": {
+          "de": "string",
+          "en": "string"
+        },
+        "displayName": {
+          "de": "string",
+          "en": "string"
+        },
+        "enabled": "boolean",
+        "oauthClientId": "string",
+        "officeJsCdnUrl": "string",
+        "officeJsCustomUrl": "string",
+        "officeJsMode": "string",
+        "startPage": {
+          "defaultPage": "string",
+          "featuredAppIds": []
+        },
+        "starterPrompts": ["object"]
+      },
+      "pdfExport": {
+        "defaultTemplate": "string",
+        "templates": {
+          "default": "object",
+          "minimal": "object",
+          "professional": "object"
+        },
+        "watermark": {
+          "enabled": "boolean",
+          "opacity": "number",
+          "position": "string",
+          "text": "string"
+        }
+      },
+      "projects": {
+        "encryption": {
+          "keyProvider": "string"
+        },
+        "kinds": {},
+        "limits": {
+          "maxFileBytes": "number",
+          "maxFiles": "number",
+          "maxProjectBytes": "number",
+          "maxProjectsPerUser": "number"
+        },
+        "loadAllMaxTokens": "number",
+        "retentionDays": "number",
+        "sharing": {
+          "allowCatalog": "boolean",
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean"
+        },
+        "tierPolicy": "string"
+      },
+      "proxyAuth": {
+        "enabled": "boolean",
+        "sharedSecretHeader": "string",
+        "trustedProxies": ["string"]
+      },
+      "rateLimit": {
+        "adminApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        },
+        "authApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        },
+        "default": {
+          "legacyHeaders": "boolean",
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "skipSuccessfulRequests": "boolean",
+          "standardHeaders": "boolean",
+          "windowMs": "number"
+        },
+        "inferenceApi": {
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "oauthApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        },
+        "oauthTokenApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "skipSuccessfulRequests": "boolean",
+          "windowMs": "number"
+        },
+        "publicApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        }
+      },
+      "refreshSalt": {
+        "lastUpdated": "string",
+        "salt": "number"
+      },
+      "requestBodyLimitMB": "number",
+      "requestConcurrency": "number",
+      "runLog": {
+        "cleanupEnabled": "boolean",
+        "enabled": "boolean",
+        "flushIntervalMs": "number",
+        "identityMode": "string",
+        "retentionDays": "number",
+        "spillThresholdBytes": "number"
+      },
+      "scheduledTasks": {
+        "approvalTimeoutHours": "number",
+        "catchUpWindowHours": "number",
+        "enabled": "boolean",
+        "maxConcurrentRuns": "number",
+        "maxConcurrentRunsPerUser": "number",
+        "maxConsecutiveFailures": "number",
+        "maxHistoryReadChars": "number",
+        "maxInstructionLength": "number",
+        "maxRunChatsPerTask": "number",
+        "maxRunMinutes": "number",
+        "maxRunsPerTask": "number",
+        "maxTasksPerUser": "number",
+        "memoryEnabled": "boolean",
+        "memoryMaxChars": "number",
+        "minIntervalMinutes": "number",
+        "runRetentionDays": "number",
+        "staggerMinutes": "number"
+      },
+      "setup": {
+        "configured": "boolean",
+        "disabled": "boolean"
+      },
+      "shortLinks": {
+        "allowedHosts": []
+      },
+      "skills": {
+        "maxCatalogTokens": "number",
+        "maxSkillBodyTokens": "number"
+      },
+      "speech": {
+        "azure": {
+          "enabled": "boolean",
+          "host": "string",
+          "region": "string",
+          "subscriptionKey": "string"
+        },
+        "defaultService": "string",
+        "dictation": {
+          "modelId": "string"
+        },
+        "tts": {
+          "defaultModelId": "string",
+          "enabled": "boolean"
+        },
+        "voiceMode": {
+          "appDefault": "boolean",
+          "bargeIn": "boolean",
+          "enabled": "boolean",
+          "endOfTurnSilenceMs": "number",
+          "listeningStyle": "string",
+          "maxSessionMinutes": "number",
+          "systemPrompt": "object",
+          "thinkingLevel": "string",
+          "ttsModelId": "string"
+        }
+      },
+      "ssl": {
+        "domainWhitelist": [],
+        "ignoreInvalidCertificates": "boolean"
+      },
+      "ssrf": {
+        "allowedHosts": []
+      },
+      "storage": {
+        "filesystem": {
+          "dataDir": "string",
+          "flushIntervalMs": "number"
+        },
+        "provider": "string"
+      },
+      "swagger": {
+        "enabled": "boolean",
+        "requireAuth": "boolean"
+      },
+      "telemetry": {
+        "activitySummary": {
+          "enabled": "boolean",
+          "intervalSeconds": "number",
+          "windowMinutes": "number"
+        },
+        "autoInstrumentation": "boolean",
+        "enabled": "boolean",
+        "events": {
+          "enabled": "boolean",
+          "includeCompletions": "boolean",
+          "includePrompts": "boolean",
+          "maxEventSize": "number"
+        },
+        "exporters": {
+          "otlp": "object",
+          "prometheus": "object"
+        },
+        "logs": {
+          "enabled": "boolean",
+          "level": "string"
+        },
+        "metrics": {
+          "enabled": "boolean",
+          "exportInterval": "number"
+        },
+        "provider": "string",
+        "resource": {
+          "deployment": "object",
+          "deployment.environment": "string",
+          "service": "object",
+          "service.name": "string",
+          "service.version": "string"
+        },
+        "spans": {
+          "enabled": "boolean",
+          "includeOptInAttributes": "boolean",
+          "sampleRate": "number"
+        }
+      },
+      "trustProxy": "number",
+      "update": {
+        "allowUnsigned": "boolean",
+        "maxUploadSizeMB": "number",
+        "trustedPublicKeys": []
+      },
+      "usageLimits": {
+        "allModels": {},
+        "resets": {
+          "dailyAt": "string",
+          "monthlyAt": "string",
+          "timezone": "null",
+          "weeklyAt": "string",
+          "weeklyOn": "string"
+        }
+      },
+      "usageTracking": {
+        "dailyRetentionDays": "number",
+        "eventRetentionDays": "number",
+        "feedbackRetentionDays": "number",
+        "monthlyRetentionDays": "number"
+      },
+      "userPrompts": {
+        "enabled": "boolean",
+        "maxPromptsPerUser": "number",
+        "maxVersions": "number",
+        "sharing": {
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean",
+          "restrictToGroups": []
+        }
+      },
+      "userSkills": {
+        "allowMarketplace": "boolean",
+        "enabled": "boolean",
+        "maxFilesPerSkill": "number",
+        "maxSkillSizeKB": "number",
+        "maxSkillsPerUser": "number",
+        "maxVersions": "number",
+        "sharing": {
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean",
+          "restrictToGroups": []
+        }
+      },
+      "workflowState": {
+        "cleanupEnabled": "boolean",
+        "retentionDays": "number"
+      }
+    }
+  },
+  "GET /api/admin/content-access/:type/:id": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/copilot-agent/package.zip": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/copilot-agent/status": {
+    "status": 200,
+    "shape": {
+      "appId": "string",
+      "conversationStarters": [],
+      "defaultInstructions": "string",
+      "description": "string",
+      "enabled": "boolean",
+      "instructions": "string",
+      "limits": {
+        "description": "number",
+        "instructions": "number",
+        "name": "number",
+        "pluginDescription": "number",
+        "pluginName": "number",
+        "referenceId": "number",
+        "shortDescription": "number",
+        "starterText": "number",
+        "starterTitle": "number",
+        "starters": "number"
+      },
+      "mcpUrl": "string",
+      "name": "string",
+      "oauthClientId": "string",
+      "oauthReferenceId": "string",
+      "packageReady": "boolean",
+      "prerequisites": {
+        "appsExposed": "boolean",
+        "mcpGateway": "boolean",
+        "oauthClient": "boolean",
+        "oauthServer": "boolean",
+        "publicHttps": "boolean"
+      },
+      "registration": {
+        "authorizationEndpoint": "string",
+        "baseUrl": "string",
+        "clientId": "string",
+        "pkce": "boolean",
+        "redirectUri": "string",
+        "refreshEndpoint": "string",
+        "scope": "string",
+        "tokenEndpoint": "string"
+      }
+    }
+  },
+  "GET /api/admin/cors/config": {
+    "status": 200,
+    "shape": {
+      "allowedHeaders": ["string"],
+      "credentials": "boolean",
+      "maxAge": "number",
+      "methods": ["string"],
+      "origin": []
+    }
+  },
+  "GET /api/admin/credentials": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "id": "string",
+          "name": "string",
+          "token": "string",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/credentials/:id": {
+    "status": 200,
+    "shape": {
+      "id": "string",
+      "name": "string",
+      "token": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/docs/page": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/docs/search": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "query": "string"
+    }
+  },
+  "GET /api/admin/docs/toc": {
+    "status": 200,
+    "shape": {
+      "toc": [
+        {
+          "children": "array",
+          "path": "string",
+          "title": "string"
+        }
+      ],
+      "unlisted": []
+    }
+  },
+  "GET /api/admin/document-templates": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "brand": "object",
+          "default": "boolean",
+          "description": "object",
+          "document": "object",
+          "docx": "object",
+          "enabled": "boolean",
+          "fonts": [],
+          "id": "string",
+          "name": "object",
+          "pdf": "object",
+          "pptx": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/document-templates/:id": {
+    "status": 200,
+    "shape": {
+      "files": {},
+      "template": {
+        "brand": {},
+        "default": "boolean",
+        "description": {
+          "en": "string"
+        },
+        "document": {},
+        "docx": {},
+        "enabled": "boolean",
+        "fonts": [],
+        "id": "string",
+        "name": {
+          "en": "string"
+        },
+        "pdf": {},
+        "pptx": {}
+      }
+    }
+  },
+  "GET /api/admin/document-templates/:id/files/:slot": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/features": {
+    "status": 200,
+    "shape": {
+      "categories": {
+        "ai": {
+          "name": "object",
+          "order": "number"
+        },
+        "analytics": {
+          "name": "object",
+          "order": "number"
+        },
+        "content": {
+          "name": "object",
+          "order": "number"
+        },
+        "platform": {
+          "name": "object",
+          "order": "number"
+        },
+        "preview": {
+          "name": "object",
+          "order": "number"
+        }
+      },
+      "items": [
+        {
+          "category": "string",
+          "default": "boolean",
+          "description": "object",
+          "enabled": "boolean",
+          "id": "string",
+          "name": "object",
+          "preview?": "boolean"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/groups": {
+    "status": 200,
+    "shape": {
+      "groups": {
+        "admins": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": "array",
+          "name": "string",
+          "permissions": "object"
+        },
+        "agent-operators": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": [],
+          "name": "string",
+          "permissions": "object"
+        },
+        "agents": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": [],
+          "name": "string",
+          "permissions": "object"
+        },
+        "anonymous": {
+          "description": "string",
+          "id": "string",
+          "mappings": "array",
+          "name": "string",
+          "permissions": "object"
+        },
+        "authenticated": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": [],
+          "name": "string",
+          "permissions": "object"
+        },
+        "browser-extension": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": [],
+          "name": "string",
+          "permissions": "object"
+        },
+        "content-admins": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": [],
+          "name": "string",
+          "permissions": "object"
+        },
+        "nextcloud-embed": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": [],
+          "name": "string",
+          "permissions": "object"
+        },
+        "users": {
+          "description": "string",
+          "id": "string",
+          "inherits": "array",
+          "mappings": "array",
+          "name": "string",
+          "permissions": "object"
+        }
+      },
+      "metadata": {
+        "description": "string",
+        "lastModified": "string",
+        "version": "string"
+      }
+    }
+  },
+  "GET /api/admin/groups/resources": {
+    "status": 200,
+    "shape": {
+      "apps": [
+        {
+          "id": "string",
+          "name": "object"
+        }
+      ],
+      "models": [
+        {
+          "id": "string",
+          "name": "object"
+        }
+      ],
+      "prompts": [
+        {
+          "id": "string",
+          "name": "object"
+        }
+      ],
+      "skills": [
+        {
+          "id": "string",
+          "name": "object"
+        }
+      ],
+      "workflows": [
+        {
+          "id": "string",
+          "name": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/integrations/builder/:id": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/integrations/catalog": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "actionCount": "number",
+          "alwaysInstalled": "boolean",
+          "authModes": "array",
+          "builtIn": "boolean",
+          "capabilities": "array",
+          "categories": "array",
+          "compatibility": "object",
+          "compatible": "boolean",
+          "defaultAuthMode": "string",
+          "description": "string",
+          "docsUrl": "string",
+          "dynamicActions": "boolean",
+          "exampleAppCount": "number",
+          "icon?": "string",
+          "id": "string",
+          "installedInstances": "[]|array",
+          "name": "string",
+          "protocol": "string",
+          "publisher": "object",
+          "releaseCount": "number",
+          "requires": "string",
+          "runs?": "string",
+          "runsCode": "boolean",
+          "source": "string",
+          "status": "string",
+          "statusReason": "null",
+          "supported": "boolean",
+          "supportedAuthModes": "array",
+          "type": "null|string",
+          "update": "null",
+          "version": "string"
+        }
+      ],
+      "marketplace": {
+        "enabled": "boolean",
+        "registries": []
+      },
+      "serverVersion": "string",
+      "supportedProtocols": ["string"]
+    }
+  },
+  "GET /api/admin/integrations/catalog/:definitionId": {
+    "status": 200,
+    "shape": {
+      "actionCount": "number",
+      "actions": [],
+      "alwaysInstalled": "boolean",
+      "approvalPreset": "string",
+      "auth": {
+        "default": "string",
+        "modes": ["string"],
+        "oauthClient": {
+          "field": "string"
+        },
+        "serviceAccount": {
+          "field": "string",
+          "kind": "string"
+        }
+      },
+      "authModes": ["string"],
+      "builtIn": "boolean",
+      "capabilities": ["string"],
+      "categories": ["string"],
+      "compatibility": {
+        "ihub": "string",
+        "schema": "number"
+      },
+      "compatible": "boolean",
+      "defaultAuthMode": "string",
+      "description": "string",
+      "descriptionLocalized": {
+        "de": "string",
+        "en": "string"
+      },
+      "docsUrl": "string",
+      "dynamicActions": "boolean",
+      "exampleAppCount": "number",
+      "health": "null",
+      "id": "string",
+      "install": [
+        {
+          "advanced": "boolean",
+          "choices?": "array",
+          "default?": "number|string",
+          "description?": "object",
+          "key": "string",
+          "max?": "number",
+          "min?": "number",
+          "multiple": "boolean",
+          "pattern?": "string",
+          "required": "boolean",
+          "scope": "string",
+          "sensitive": "boolean",
+          "title": "object",
+          "type": "string",
+          "when?": "object"
+        }
+      ],
+      "installedInstances": [],
+      "instructions": "string",
+      "license": "null",
+      "migrations": [],
+      "name": "string",
+      "nameLocalized": {
+        "de": "string",
+        "en": "string"
+      },
+      "protocol": "string",
+      "publisher": {
+        "name": "string",
+        "verification": "string"
+      },
+      "releaseCount": "number",
+      "releases": [
+        {
+          "date": "string",
+          "migration": "null",
+          "notes": "object",
+          "summary": "string",
+          "version": "string"
+        }
+      ],
+      "requires": "string",
+      "runsCode": "boolean",
+      "scopes": "null",
+      "source": "string",
+      "status": "string",
+      "statusReason": "null",
+      "supported": "boolean",
+      "supportedAuthModes": ["string"],
+      "test": "null",
+      "type": "null",
+      "update": "null",
+      "version": "string"
+    }
+  },
+  "GET /api/admin/integrations/catalog/:definitionId/_file": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/integrations/ifinder/assistants": {
+    "status": 409,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/integrations/ifinder/search-profiles": {
+    "status": 409,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/integrations/installed": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "actions": "object",
+          "auth": "object",
+          "builtIn": "boolean",
+          "currentVersion": "string",
+          "definition": "string",
+          "definitionMissing": "boolean",
+          "definitionName": "string",
+          "definitionVersion": "string",
+          "description?": "object",
+          "enabled": "boolean",
+          "id": "string",
+          "incompatible": "boolean",
+          "incompatibleReason": "null",
+          "installedAt?": "string",
+          "label": "string",
+          "labelLocalized": "null|object",
+          "latestVersion": "null",
+          "liveStatus": "null|object",
+          "locked": "boolean",
+          "migration": "null",
+          "migrationLog": "[]|array",
+          "perUser": "boolean",
+          "protocol": "string",
+          "status": "null",
+          "statusReason": "null",
+          "type": "null|string",
+          "update": "null",
+          "updateAvailable": "boolean",
+          "updatedAt?": "string",
+          "values": "object"
+        }
+      ],
+      "security": {
+        "allowedHosts": [],
+        "blockPrivateIps": "boolean"
+      },
+      "updatesAvailable": "number"
+    }
+  },
+  "GET /api/admin/integrations/installed/:id": {
+    "status": 200,
+    "shape": {
+      "actions": [],
+      "definition": {
+        "actionCount": "number",
+        "actions": [],
+        "alwaysInstalled": "boolean",
+        "approvalPreset": "string",
+        "auth": {
+          "default": "string",
+          "modes": "array"
+        },
+        "authModes": ["string"],
+        "builtIn": "boolean",
+        "capabilities": ["string"],
+        "categories": ["string"],
+        "compatibility": {
+          "ihub": "string",
+          "schema": "number"
+        },
+        "compatible": "boolean",
+        "defaultAuthMode": "string",
+        "description": "string",
+        "descriptionLocalized": {
+          "de": "string",
+          "en": "string"
+        },
+        "docsUrl": "string",
+        "dynamicActions": "boolean",
+        "exampleAppCount": "number",
+        "health": "null",
+        "id": "string",
+        "install": ["object"],
+        "installedInstances": ["string"],
+        "instructions": "string",
+        "license": "null",
+        "migrations": [],
+        "name": "string",
+        "nameLocalized": {
+          "de": "string",
+          "en": "string"
+        },
+        "protocol": "string",
+        "publisher": {
+          "name": "string"
+        },
+        "releaseCount": "number",
+        "releases": [],
+        "requires": "string",
+        "runs": "string",
+        "runsCode": "boolean",
+        "scopes": "null",
+        "source": "string",
+        "status": "string",
+        "statusReason": "null",
+        "supported": "boolean",
+        "supportedAuthModes": ["string"],
+        "test": "null",
+        "type": "null",
+        "update": "null",
+        "version": "string"
+      },
+      "instance": {
+        "actions": {
+          "disabled": [],
+          "enabled": "array",
+          "overrides": "object"
+        },
+        "auth": {
+          "mode": "string"
+        },
+        "builtIn": "boolean",
+        "currentVersion": "string",
+        "definition": "string",
+        "definitionMissing": "boolean",
+        "definitionName": "string",
+        "definitionVersion": "string",
+        "enabled": "boolean",
+        "id": "string",
+        "incompatible": "boolean",
+        "incompatibleReason": "null",
+        "label": "string",
+        "labelLocalized": "null",
+        "latestVersion": "null",
+        "liveStatus": {
+          "connected": "boolean",
+          "lastError": "null",
+          "perUser": "boolean",
+          "toolCount": "null",
+          "unhealthy": "boolean"
+        },
+        "locked": "boolean",
+        "migration": "null",
+        "migrationLog": [],
+        "perUser": "boolean",
+        "protocol": "string",
+        "status": "null",
+        "statusReason": "null",
+        "type": "null",
+        "update": "null",
+        "updateAvailable": "boolean",
+        "values": {}
+      },
+      "instructions": {
+        "own": "null",
+        "source": "null",
+        "text": "string"
+      },
+      "values": {}
+    }
+  },
+  "GET /api/admin/integrations/installed/:id/actions/:action": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/integrations/installed/:id/connections": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/admin/integrations/installed/:id/example-apps": {
+    "status": 200,
+    "shape": {
+      "enabled": "boolean",
+      "grantedToYou": "boolean",
+      "templates": [
+        {
+          "color": "string",
+          "description": "string",
+          "icon": "string",
+          "key": "string",
+          "name": "string",
+          "source": "string",
+          "suggestedId": "string",
+          "templateId": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/integrations/people-directories/editor-context": {
+    "status": 200,
+    "shape": {
+      "browse": {
+        "defaults": {
+          "maxResults": "number"
+        },
+        "limits": {
+          "maxResults": "number"
+        }
+      },
+      "defaultPreset": "string",
+      "defaults": {
+        "concurrency": "number",
+        "maxResults": "number",
+        "requestDelayMs": "number",
+        "timeoutMs": "number"
+      },
+      "entraEnvironment": {
+        "clientId": {
+          "set": "boolean",
+          "variable": "string"
+        },
+        "clientSecret": {
+          "set": "boolean",
+          "variable": "string"
+        },
+        "tenantId": {
+          "set": "boolean",
+          "variable": "string"
+        }
+      },
+      "fields": ["string"],
+      "ldapProviders": [],
+      "limits": {
+        "concurrency": "number",
+        "maxResults": "number",
+        "requestDelayMs": "number",
+        "timeoutMs": "number"
+      },
+      "presets": [
+        {
+          "attributeMapping": "object",
+          "id": "string",
+          "label": "string",
+          "personFilter": "string",
+          "searchAttributes": "array"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/integrations/requests": {
+    "status": 200,
+    "shape": {
+      "hidden": [],
+      "openCount": "number",
+      "requests": []
+    }
+  },
+  "GET /api/admin/integrations/tools": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "description": "string",
+          "id": "string",
+          "integration?": "object",
+          "name": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/integrations/updates": {
+    "status": 200,
+    "shape": {
+      "count": "number",
+      "definitions": [],
+      "installations": []
+    }
+  },
+  "GET /api/admin/llm-timeouts": {
+    "status": 200,
+    "shape": {
+      "defaults": {
+        "connectTimeoutMs": "number",
+        "streamIdleTimeoutMs": "number"
+      },
+      "effective": {
+        "connectTimeoutMs": "number",
+        "streamIdleTimeoutMs": "number"
+      },
+      "saved": {
+        "connectTimeoutMs": "number",
+        "streamIdleTimeoutMs": "number"
+      }
+    }
+  },
+  "GET /api/admin/logging/config": {
+    "status": 200,
+    "shape": {
+      "anonymizeIp": "string",
+      "file": {
+        "enabled": "boolean",
+        "maxFiles": "number",
+        "maxSize": "number",
+        "path": "string"
+      },
+      "format": "string",
+      "level": "string"
+    }
+  },
+  "GET /api/admin/marketplace": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/marketplace/installations": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/marketplace/registries": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/marketplace/registries/:registryId": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/marketplace/registries/:registryId/items/:type/:name": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/marketplace/registries/:registryId/items/integration/:name/_file": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/marketplace/updates": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/mcp/gateway": {
+    "status": 200,
+    "shape": {
+      "gateway": {
+        "a2a": {
+          "enabled": "boolean"
+        },
+        "defaultScopes": ["string"],
+        "enabled": "boolean",
+        "expose": {
+          "apps": "boolean",
+          "resources": "boolean",
+          "tools": "boolean",
+          "workflows": "boolean"
+        },
+        "publicUrl": "string",
+        "requireConsent": "boolean",
+        "transports": {
+          "streamableHttp": "object"
+        }
+      }
+    }
+  },
+  "GET /api/admin/models": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "apiKey?": "string",
+          "apiKeySet": "boolean",
+          "autoDiscovery": "boolean",
+          "config?": "object",
+          "contextWindow?": "null|number",
+          "default": "boolean",
+          "description": "object",
+          "enabled": "boolean",
+          "id": "string",
+          "maxOutputTokens": "number",
+          "modelId": "string",
+          "modelType": "string",
+          "name": "object",
+          "provider": "string",
+          "streamIdleTimeoutMs?": "number",
+          "supportsImageGeneration": "boolean",
+          "supportsImages?": "boolean",
+          "supportsTools": "string",
+          "thinking?": "object",
+          "url?": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/models/:modelId": {
+    "status": 200,
+    "shape": {
+      "apiKeySet": "boolean",
+      "autoDiscovery": "boolean",
+      "contextWindow": "number",
+      "default": "boolean",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "enabled": "boolean",
+      "id": "string",
+      "maxOutputTokens": "number",
+      "modelId": "string",
+      "modelType": "string",
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "provider": "string",
+      "supportsImageGeneration": "boolean",
+      "supportsTools": "string",
+      "url": "string"
+    }
+  },
+  "GET /api/admin/models/:modelId/tts/voices": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/models/:modelId/tts/voices/:voiceId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/admin/models/_key-status": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "enabled": "boolean",
+          "envVar": "null",
+          "id": "string",
+          "source": "string",
+          "state": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/nextcloud-embed/status": {
+    "status": 200,
+    "shape": {
+      "allowedHostOrigins": [],
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "displayName": {
+        "de": "string",
+        "en": "string"
+      },
+      "embedUrl": "string",
+      "enabled": "boolean",
+      "oauthClientId": "string",
+      "starterPrompts": [
+        {
+          "message": "object",
+          "title": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/oauth/clients": {
+    "status": 200,
+    "shape": {
+      "cimdClients": [],
+      "clients": [
+        {
+          "active": "boolean",
+          "allowedApps": "array",
+          "allowedGroups": [],
+          "allowedModels": "array",
+          "allowedPrompts": "array",
+          "clientId": "string",
+          "clientType": "string",
+          "connectionCount": "number",
+          "consentRequired": "boolean",
+          "createdAt": "string",
+          "createdBy": "string",
+          "description": "string",
+          "grantTypes": "array",
+          "id": "string",
+          "lastRotated": "string",
+          "lastUsed": "null",
+          "metadata": "object",
+          "name": "string",
+          "ownerEmail": "null",
+          "ownerGroups": [],
+          "ownerName": "null",
+          "ownerUserId": "null",
+          "ownerUsername": "null",
+          "personal": "boolean",
+          "postLogoutRedirectUris": [],
+          "redirectUris": "array",
+          "scopes": "array",
+          "tokenExpirationMinutes": "number",
+          "trusted": "boolean"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/oauth/clients/:clientId": {
+    "status": 200,
+    "shape": {
+      "active": "boolean",
+      "allowedApps": ["string"],
+      "allowedGroups": [],
+      "allowedModels": ["string"],
+      "allowedPrompts": ["string"],
+      "clientId": "string",
+      "clientType": "string",
+      "consentRequired": "boolean",
+      "createdAt": "string",
+      "createdBy": "string",
+      "description": "string",
+      "grantTypes": ["string"],
+      "id": "string",
+      "lastRotated": "string",
+      "lastUsed": "null",
+      "metadata": {},
+      "name": "string",
+      "ownerEmail": "null",
+      "ownerGroups": [],
+      "ownerName": "null",
+      "ownerUserId": "null",
+      "ownerUsername": "null",
+      "personal": "boolean",
+      "postLogoutRedirectUris": [],
+      "redirectUris": ["string"],
+      "scopes": ["string"],
+      "tokenExpirationMinutes": "number",
+      "trusted": "boolean"
+    }
+  },
+  "GET /api/admin/oauth/clients/cimd/:encodedClientId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/oauth/connections": {
+    "status": 200,
+    "shape": {
+      "cimdClients": [],
+      "items": [],
+      "nextCursor": "null",
+      "total": "number"
+    }
+  },
+  "GET /api/admin/oauth/public-key/base64": {
+    "status": 200,
+    "type": "text/plain"
+  },
+  "GET /api/admin/oauth/public-key/pem": {
+    "status": 200,
+    "type": "application/x-pem-file"
+  },
+  "GET /api/admin/office-integration/status": {
+    "status": 200,
+    "shape": {
+      "addinId": "string",
+      "addinIdIsShared": "boolean",
+      "appAccess": "null",
+      "defaultMailAction": "string",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "displayName": {
+        "de": "string",
+        "en": "string"
+      },
+      "enabled": "boolean",
+      "manifestUrl": "string",
+      "oauthClientId": "string",
+      "officeJsCdnPresets": [
+        {
+          "id": "string",
+          "url": "string"
+        }
+      ],
+      "officeJsCdnUrl": "string",
+      "officeJsCustomUrl": "string",
+      "officeJsMode": "string",
+      "officeJsResolvedMode": "string",
+      "officeJsResolvedUrl": "string",
+      "startPage": {
+        "defaultPage": "string",
+        "featuredAppIds": []
+      },
+      "starterPrompts": [
+        {
+          "message": "object",
+          "title": "object"
+        }
+      ],
+      "taskpaneUrl": "string"
+    }
+  },
+  "GET /api/admin/overview/stats": {
+    "status": 200,
+    "shape": {
+      "apps": {
+        "enabled": "number",
+        "total": "number"
+      },
+      "auth": {
+        "anonymous": "boolean",
+        "ldapProviders": "number",
+        "local": "boolean",
+        "mode": "string",
+        "oauth": {
+          "authz": "boolean",
+          "clients": "boolean"
+        },
+        "oidcProviders": "number",
+        "proxy": "boolean"
+      },
+      "groups": "number",
+      "integrations": {
+        "enabled": "number",
+        "incompatible": "number",
+        "total": "number",
+        "updatesAvailable": "number"
+      },
+      "models": {
+        "enabled": "number",
+        "total": "number"
+      },
+      "projects": {
+        "enabled": "number",
+        "total": "number"
+      },
+      "providers": {
+        "enabled": "number",
+        "total": "number"
+      },
+      "storage": {
+        "available": "number",
+        "status": "string",
+        "total": "number",
+        "usedPercent": "number"
+      },
+      "users": "number"
+    }
+  },
+  "GET /api/admin/pages": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "allowedGroups": [],
+          "authRequired": "boolean",
+          "contentType": "string",
+          "id": "string",
+          "title": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/pages/:pageId": {
+    "status": 200,
+    "shape": {
+      "allowedGroups": [],
+      "authRequired": "boolean",
+      "content": {
+        "de": "string",
+        "en": "string"
+      },
+      "contentType": "string",
+      "id": "string",
+      "title": {
+        "de": "string",
+        "en": "string"
+      }
+    }
+  },
+  "GET /api/admin/projects": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "category": "string",
+          "createdAt": "string",
+          "createdBy": "string",
+          "defaultAppId": "null",
+          "description": "object",
+          "enabled": "boolean",
+          "id": "string",
+          "instructions": "string",
+          "items": "array",
+          "lastActivityAt": "string",
+          "members": [],
+          "name": "object",
+          "owner": "null",
+          "ownership": "string",
+          "permissions": "object",
+          "published": "boolean",
+          "role": "string",
+          "tags": "[]|array",
+          "tier": "string",
+          "updatedAt": "string",
+          "updatedBy": "string",
+          "usage": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/projects/:id": {
+    "status": 200,
+    "shape": {
+      "category": "string",
+      "createdAt": "string",
+      "createdBy": "string",
+      "defaultAppId": "null",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "enabled": "boolean",
+      "id": "string",
+      "instructions": "string",
+      "items": [
+        {
+          "createdAt": "string",
+          "error": "null",
+          "id": "string",
+          "kind": "string",
+          "name": "string",
+          "pinned": "boolean",
+          "provenance": "object",
+          "ref": "object",
+          "snapshotAt": "null",
+          "status": "string",
+          "storage": "string",
+          "text": "object",
+          "updatedAt": "string"
+        }
+      ],
+      "lastActivityAt": "string",
+      "members": [],
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "owner": "null",
+      "ownership": "string",
+      "permissions": {
+        "canDelete": "boolean",
+        "canEdit": "boolean",
+        "canHoldChats": "boolean",
+        "canShare": "boolean",
+        "canTransfer": "boolean",
+        "canUse": "boolean",
+        "isOwner": "boolean",
+        "readOnly": "boolean",
+        "readsAllChats": "boolean"
+      },
+      "published": "boolean",
+      "role": "string",
+      "tags": [],
+      "tier": "string",
+      "updatedAt": "string",
+      "updatedBy": "string",
+      "usage": {
+        "bytes": "number",
+        "items": "number"
+      }
+    }
+  },
+  "GET /api/admin/projects/:id/items/:itemId/text": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/projects/_config": {
+    "status": 200,
+    "shape": {
+      "limits": {
+        "maxFileBytes": "number",
+        "maxFiles": "number",
+        "maxProjectBytes": "number",
+        "maxProjectsPerUser": "number"
+      },
+      "loadAllMaxTokens": "number",
+      "scan": {
+        "provider": "string"
+      },
+      "upload": {
+        "accept": ["string"],
+        "available": "boolean",
+        "mimeTypes": ["string"],
+        "summary": "string"
+      }
+    }
+  },
+  "GET /api/admin/projects/_dependencies/:id": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/projects/_kinds": {
+    "status": 200,
+    "shape": [
+      {
+        "credentials": "string",
+        "enabled": "boolean",
+        "icon": "string",
+        "id": "string",
+        "name": {
+          "de": "string",
+          "en": "string"
+        },
+        "picker": {
+          "mode?": "string",
+          "provider?": "string",
+          "type": "string"
+        },
+        "storage": "string"
+      }
+    ]
+  },
+  "GET /api/admin/projects/_settings": {
+    "status": 200,
+    "shape": {
+      "defaultAppId": "string",
+      "sharing": {
+        "allowCatalog": "boolean",
+        "allowEveryone": "boolean",
+        "allowGroups": "boolean",
+        "allowUsers": "boolean"
+      },
+      "tierPolicy": "string"
+    }
+  },
+  "GET /api/admin/projects/_stats": {
+    "status": 200,
+    "shape": {
+      "admin": {
+        "byKind": {
+          "page": "number",
+          "upload": "number",
+          "url": "number"
+        },
+        "disabled": "number",
+        "enabled": "number",
+        "total": "number"
+      },
+      "limits": {
+        "maxFileBytes": "number",
+        "maxFiles": "number",
+        "maxProjectBytes": "number",
+        "maxProjectsPerUser": "number"
+      },
+      "user": {
+        "bytes": "number",
+        "items": "number",
+        "owners": "number",
+        "total": "number"
+      }
+    }
+  },
+  "GET /api/admin/projects/_tokens": {
+    "status": 200,
+    "shape": {
+      "loadAllBudgetTokens": "number",
+      "projects": {
+        "<id>": {
+          "bytes": "number",
+          "items": "number",
+          "links": "number",
+          "pending": "number",
+          "tokens": "null|number"
+        }
+      },
+      "toolResultBudgetTokens": "number"
+    }
+  },
+  "GET /api/admin/prompts": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "appId?": "string",
+          "category": "string",
+          "description": "object",
+          "enabled": "boolean",
+          "icon": "string",
+          "id": "string",
+          "name": "object",
+          "outputSchema?": "object",
+          "prompt": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/prompts/:promptId": {
+    "status": 200,
+    "shape": {
+      "id": "string",
+      "integrations": [
+        {
+          "actions": "array",
+          "id": "string"
+        }
+      ],
+      "language": "string",
+      "prompt": "string"
+    }
+  },
+  "GET /api/admin/prompts/app-generator": {
+    "status": 200,
+    "shape": {
+      "id": "string",
+      "integrations": [
+        {
+          "actions": "array",
+          "id": "string"
+        }
+      ],
+      "language": "string",
+      "prompt": "string"
+    }
+  },
+  "GET /api/admin/prompts/user-settings": {
+    "status": 200,
+    "shape": {
+      "settings": {
+        "enabled": "boolean",
+        "maxPromptsPerUser": "number",
+        "maxVersions": "number",
+        "sharing": {
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean",
+          "restrictToGroups": []
+        }
+      },
+      "storageAvailable": "boolean"
+    }
+  },
+  "GET /api/admin/providers": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "apiKeySet": "boolean",
+          "apiType?": "string",
+          "baseUrl?": "string",
+          "category?": "string",
+          "description": "string",
+          "enabled": "boolean",
+          "id": "string",
+          "name": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/providers/:providerId": {
+    "status": 200,
+    "shape": {
+      "apiKeySet": "boolean",
+      "baseUrl": "string",
+      "description": "string",
+      "enabled": "boolean",
+      "id": "string",
+      "name": "string"
+    }
+  },
+  "GET /api/admin/providers/:providerId/_model-drift": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "details": {
+        "providerId": "string"
+      },
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/providers/:providerId/schema": {
+    "status": 200,
+    "shape": {
+      "fields": []
+    }
+  },
+  "GET /api/admin/providers/_key-status": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "envVar": "null|string",
+          "id": "string",
+          "source": "string",
+          "state": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/proxy/config": {
+    "status": 200,
+    "shape": {
+      "config": {
+        "enabled": "boolean",
+        "http": "string",
+        "https": "string",
+        "noProxy": [],
+        "urlPatterns": []
+      },
+      "effective": {
+        "enabled": "boolean",
+        "http": "string",
+        "https": "string",
+        "noProxy": [],
+        "urlPatterns": []
+      },
+      "provenance": {
+        "enabled": "string",
+        "http": "string",
+        "https": "string",
+        "noProxy": "string",
+        "urlPatterns": "string"
+      },
+      "unresolvedPlaceholders": {}
+    }
+  },
+  "GET /api/admin/rate-limits": {
+    "status": 200,
+    "shape": {
+      "limiters": {
+        "adminApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "authApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "inferenceApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "oauthApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "oauthTokenApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "publicApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        }
+      },
+      "restartRequired": "boolean",
+      "running": {
+        "adminApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "authApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "inferenceApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "oauthApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "oauthTokenApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "publicApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        }
+      }
+    }
+  },
+  "GET /api/admin/scheduled-tasks": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "activeRun": "null",
+          "allowedTools": [],
+          "appId": "string",
+          "consecutiveFailures": "number",
+          "createdAt": "string",
+          "createdVia": "string",
+          "description": "string",
+          "effectiveRetention": "object",
+          "enabledTools": "null",
+          "id": "string",
+          "instructions": "string",
+          "integrationScopes": "null",
+          "lastRun": "null",
+          "lastRunAt": "null",
+          "lastSuccessfulRunAt": "null",
+          "memory": "object",
+          "memorySummary": "null",
+          "modelId": "null",
+          "name": "string",
+          "nextRunAt": "null",
+          "nextSlotAt": "null",
+          "notify": "string",
+          "owner": "object",
+          "ownerId": "string",
+          "retention": "null",
+          "runNumber": "number",
+          "schedule": "object",
+          "scheduleDescription": "string",
+          "scheduledRunCount": "number",
+          "schemaVersion": "number",
+          "staggerMinutes": "number",
+          "status": "string",
+          "statusReason": "null",
+          "unseenCount": "number",
+          "unseenRuns": [],
+          "upcomingRuns": [],
+          "updatedAt": "string",
+          "variables": "null",
+          "websearchEnabled": "null"
+        }
+      ],
+      "scheduler": {
+        "owner": "boolean",
+        "sources": {
+          "scheduled-tasks": "object",
+          "workflow-triggers": []
+        }
+      },
+      "settings": {
+        "approvalTimeoutHours": "number",
+        "catchUpWindowHours": "number",
+        "enabled": "boolean",
+        "maxConcurrentRuns": "number",
+        "maxConcurrentRunsPerUser": "number",
+        "maxConsecutiveFailures": "number",
+        "maxHistoryReadChars": "number",
+        "maxInstructionLength": "number",
+        "maxRunChatsPerTask": "number",
+        "maxRunMinutes": "number",
+        "maxRunsPerTask": "number",
+        "maxTasksPerUser": "number",
+        "memoryEnabled": "boolean",
+        "memoryMaxChars": "number",
+        "minIntervalMinutes": "number",
+        "runRetentionDays": "number",
+        "staggerMinutes": "number"
+      },
+      "status": {
+        "active": "boolean",
+        "chatPersistence": "boolean",
+        "featureEnabled": "boolean",
+        "platformEnabled": "boolean",
+        "storageReady": "boolean"
+      }
+    }
+  },
+  "GET /api/admin/scheduled-tasks/:taskId": {
+    "status": 200,
+    "shape": {
+      "activeRun": "null",
+      "allowedTools": [],
+      "appId": "string",
+      "consecutiveFailures": "number",
+      "createdAt": "string",
+      "createdVia": "string",
+      "description": "string",
+      "effectiveRetention": {
+        "maxAgeDays": "number",
+        "maxRuns": "number"
+      },
+      "enabledTools": "null",
+      "id": "string",
+      "instructions": "string",
+      "integrationScopes": "null",
+      "lastRun": "null",
+      "lastRunAt": "null",
+      "lastSuccessfulRunAt": "null",
+      "memory": {
+        "enabled": "boolean"
+      },
+      "memorySummary": "null",
+      "modelId": "null",
+      "name": "string",
+      "nextRunAt": "null",
+      "nextSlotAt": "null",
+      "notify": "string",
+      "owner": {
+        "authMode": "string",
+        "email": "string",
+        "groups": ["string"],
+        "name": "string",
+        "userId": "string",
+        "username": "string"
+      },
+      "ownerId": "string",
+      "retention": "null",
+      "runNumber": "number",
+      "schedule": {
+        "type": "string"
+      },
+      "scheduleDescription": "string",
+      "scheduledRunCount": "number",
+      "schemaVersion": "number",
+      "staggerMinutes": "number",
+      "status": "string",
+      "statusReason": "null",
+      "unseenCount": "number",
+      "unseenRuns": [],
+      "upcomingRuns": [],
+      "updatedAt": "string",
+      "variables": "null",
+      "websearchEnabled": "null"
+    }
+  },
+  "GET /api/admin/scheduled-tasks/:taskId/memory": {
+    "status": 200,
+    "shape": {
+      "chars": "number",
+      "enabled": "boolean",
+      "platformEnabled": "boolean",
+      "updatedAt": "null",
+      "updatedBy": "null",
+      "version": "number"
+    }
+  },
+  "GET /api/admin/scheduled-tasks/:taskId/runs": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/admin/schemas": {
+    "status": 200,
+    "shape": {
+      "app": {
+        "$schema": "string",
+        "additionalProperties": "boolean",
+        "description": "string",
+        "examples": ["object"],
+        "properties": {
+          "allowEmptyContent": "object",
+          "allowInheritance": "object",
+          "allowUserTemplateUploads": "object",
+          "allowedModels": "object",
+          "apps": "object",
+          "autoStart": "object",
+          "category": "object",
+          "color": "object",
+          "customResponseRenderer": "object",
+          "description": "object",
+          "disallowModelSelection": "object",
+          "documentTemplate": "object",
+          "enabled": "object",
+          "ephemeral": "object",
+          "features": "object",
+          "greeting": "object",
+          "iassistant": "object",
+          "icon": "object",
+          "id": "object",
+          "iframeConfig": "object",
+          "imageGeneration": "object",
+          "inheritanceLevel": "object",
+          "inputMode": "object",
+          "integrations": "object",
+          "messagePlaceholder": "object",
+          "name": "object",
+          "order": "object",
+          "outputSchema": "object",
+          "overriddenFields": "object",
+          "parentId": "object",
+          "preferredModel": "object",
+          "preferredOutputFormat": "object",
+          "preferredStyle": "object",
+          "projects": "object",
+          "prompt": "object",
+          "redirectConfig": "object",
+          "rendererConfig": "object",
+          "requiredFeatures": "object",
+          "requiredIntegrations": "object",
+          "sendChatHistory": "object",
+          "settings": "object",
+          "skillSettings": "object",
+          "skills": "object",
+          "startForm": "object",
+          "starterPrompts": "object",
+          "system": "object",
+          "thinking": "object",
+          "toolApproval": "object",
+          "toolChoice": "object",
+          "type": "object",
+          "upload": "object",
+          "uploads": "object",
+          "usageGuide": "object",
+          "variables": "object",
+          "variablesPanel": "object",
+          "websearch": "object",
+          "workflows": "object"
+        },
+        "required": ["string"],
+        "title": "string",
+        "type": "string"
+      },
+      "group": {
+        "$schema": "string",
+        "additionalProperties": {},
+        "description": "string",
+        "examples": ["object"],
+        "properties": {
+          "description": "object",
+          "enabled": "object",
+          "id": "object",
+          "inherits": "object",
+          "mappings": "object",
+          "name": "object",
+          "permissions": "object",
+          "usageLimits": "object"
+        },
+        "required": ["string"],
+        "title": "string",
+        "type": "string"
+      },
+      "model": {
+        "$schema": "string",
+        "additionalProperties": "boolean",
+        "description": "string",
+        "examples": ["object"],
+        "properties": {
+          "apiKey": "object",
+          "autoDiscovery": "object",
+          "concurrency": "object",
+          "config": "object",
+          "connectTimeoutMs": "object",
+          "contextWindow": "object",
+          "default": "object",
+          "description": "object",
+          "enabled": "object",
+          "hint": "object",
+          "id": "object",
+          "imageGeneration": "object",
+          "maxOutputTokens": "object",
+          "modelId": "object",
+          "modelType": "object",
+          "name": "object",
+          "nativeWebSearch": "object",
+          "promptCaching": "object",
+          "provider": "object",
+          "providerId": "object",
+          "requestDelayMs": "object",
+          "sampling": "object",
+          "streamIdleTimeoutMs": "object",
+          "supportsAudio": "object",
+          "supportsImageGeneration": "object",
+          "supportsImages": "object",
+          "supportsStructuredOutput": "object",
+          "supportsTemperature": "object",
+          "supportsTools": "object",
+          "supportsUsageTracking": "object",
+          "supportsVision": "object",
+          "thinking": "object",
+          "tts": "object",
+          "url": "object",
+          "usageLimits": "object"
+        },
+        "required": ["string"],
+        "title": "string",
+        "type": "string"
+      },
+      "platform": {
+        "$schema": "string",
+        "additionalProperties": {},
+        "description": "string",
+        "examples": ["object"],
+        "properties": {
+          "anonymousAuth": "object",
+          "artifacts": "object",
+          "audit": "object",
+          "auth": "object",
+          "chats": "object",
+          "cloudStorage": "object",
+          "defaultLanguage": "object",
+          "ldapAuth": "object",
+          "llm": "object",
+          "localAuth": "object",
+          "logging": "object",
+          "ntlmAuth": "object",
+          "oidcAuth": "object",
+          "projects": "object",
+          "proxy": "object",
+          "proxyAuth": "object",
+          "rateLimit": "object",
+          "runLog": "object",
+          "scheduledTasks": "object",
+          "setup": "object",
+          "shortLinks": "object",
+          "speech": "object",
+          "ssl": "object",
+          "ssrf": "object",
+          "storage": "object",
+          "toolApproval": "object",
+          "trustProxy": "object",
+          "update": "object",
+          "uploads": "object",
+          "usageLimits": "object",
+          "usageTracking": "object",
+          "userPrompts": "object",
+          "userSkills": "object",
+          "webSearch": "object",
+          "workflowState": "object"
+        },
+        "title": "string",
+        "type": "string"
+      },
+      "prompt": {
+        "$schema": "string",
+        "additionalProperties": "boolean",
+        "description": "string",
+        "examples": ["object"],
+        "properties": {
+          "actions": "object",
+          "appId": "object",
+          "category": "object",
+          "createdAt": "object",
+          "createdBy": "object",
+          "description": "object",
+          "enabled": "object",
+          "icon": "object",
+          "id": "object",
+          "name": "object",
+          "order": "object",
+          "outputSchema": "object",
+          "prompt": "object",
+          "sourcePromptId": "object",
+          "updatedAt": "object",
+          "updatedBy": "object",
+          "variables": "object"
+        },
+        "required": ["string"],
+        "title": "string",
+        "type": "string"
+      },
+      "user": {
+        "$schema": "string",
+        "additionalProperties": {},
+        "description": "string",
+        "examples": ["object"],
+        "properties": {
+          "createdAt": "object",
+          "email": "object",
+          "enabled": "object",
+          "externalId": "object",
+          "fullName": "object",
+          "groups": "object",
+          "id": "object",
+          "lastLogin": "object",
+          "password": "object",
+          "passwordHash": "object",
+          "provider": "object",
+          "settings": "object",
+          "usageLimits": "object",
+          "username": "object"
+        },
+        "required": ["string"],
+        "title": "string",
+        "type": "string"
+      }
+    }
+  },
+  "GET /api/admin/schemas/:type": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/admin/search": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/skills": {
+    "status": 200,
+    "shape": {
+      "settings": {
+        "maxCatalogTokens": "number",
+        "maxSkillBodyTokens": "number"
+      },
+      "skills": [
+        {
+          "allowedTools": "null|string",
+          "compatibility": "null",
+          "description": "string",
+          "displayName": "string",
+          "enabled": "boolean",
+          "isSystem": "boolean",
+          "license": "null|string",
+          "metadata": "object",
+          "modelInvocable": "boolean",
+          "name": "string",
+          "path": "string",
+          "providedTools": "[]|array"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/skills/:name": {
+    "status": 200,
+    "shape": {
+      "allowedTools": "string",
+      "assets": [],
+      "body": "string",
+      "compatibility": "null",
+      "description": "string",
+      "displayName": "string",
+      "enabled": "boolean",
+      "files": ["string"],
+      "frontmatter": {
+        "allowed-tools": "string",
+        "description": "string",
+        "metadata": {
+          "author": "string",
+          "version": "string"
+        },
+        "name": "string"
+      },
+      "isSystem": "boolean",
+      "license": "null",
+      "metadata": {
+        "author": "string",
+        "version": "string"
+      },
+      "modelInvocable": "boolean",
+      "name": "string",
+      "path": "string",
+      "providedTools": ["string"],
+      "references": [],
+      "scripts": []
+    }
+  },
+  "GET /api/admin/skills/:name/export": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/skills/:name/files/*filePath": {
+    "skipped": "not an API answer"
+  },
+  "GET /api/admin/ssl/config": {
+    "status": 200,
+    "shape": {
+      "domainWhitelist": [],
+      "ignoreInvalidCertificates": "boolean"
+    }
+  },
+  "GET /api/admin/ssrf/config": {
+    "status": 200,
+    "shape": {
+      "allowedHosts": []
+    }
+  },
+  "GET /api/admin/system/resources": {
+    "status": 200,
+    "shape": {
+      "cluster": {
+        "configuredWorkers": "number",
+        "missingWorkers": [],
+        "mode": "string",
+        "primaryReported": "null"
+      },
+      "collectedAt": "string",
+      "host": {
+        "arch": "string",
+        "cpu": {
+          "cores": "number",
+          "limitCores": "null",
+          "loadAverage": "array",
+          "model": "string",
+          "utilizationPercent": "null"
+        },
+        "hostname": "string",
+        "memory": {
+          "available": "number",
+          "containerLimited": "boolean",
+          "hostTotal": "number",
+          "total": "number",
+          "used": "number",
+          "usedPercent": "number"
+        },
+        "nodeVersion": "string",
+        "osRelease": "string",
+        "platform": "string",
+        "uptimeSeconds": "number"
+      },
+      "processes": [
+        {
+          "cpuPercent": "number",
+          "current": "boolean",
+          "eventLoopDelayMs": "null",
+          "memory": "object",
+          "pid": "number",
+          "role": "string",
+          "sampledAt": "null",
+          "uptimeSeconds": "number",
+          "workerIndex": "null"
+        }
+      ],
+      "storage": {
+        "status": "string",
+        "thresholds": {
+          "criticalPercent": "number",
+          "warningPercent": "number"
+        },
+        "volumes": ["object"]
+      }
+    }
+  },
+  "GET /api/admin/system/storage": {
+    "status": 200,
+    "shape": {
+      "storage": {
+        "available": "number",
+        "status": "string",
+        "total": "number",
+        "usedPercent": "number"
+      }
+    }
+  },
+  "GET /api/admin/translations/:lang": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/ui/assets": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/admin/ui/config": {
+    "status": 200,
+    "shape": {
+      "appsList": {
+        "categories": {
+          "enabled": "boolean",
+          "list": "array",
+          "showAll": "boolean"
+        },
+        "search": {
+          "enabled": "boolean",
+          "placeholder": "object",
+          "width": "string"
+        },
+        "sort": {
+          "default": "string",
+          "enabled": "boolean"
+        },
+        "subtitle": {
+          "de": "string",
+          "en": "string"
+        },
+        "title": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "disclaimer": {
+        "hint": {
+          "de": "string",
+          "en": "string"
+        },
+        "link": "string",
+        "text": {
+          "de": "string",
+          "en": "string"
+        },
+        "updated": "string",
+        "version": "string"
+      },
+      "errorPages": {
+        "forbidden": {
+          "message": "object",
+          "title": "object"
+        },
+        "generic": {
+          "description": "object",
+          "title": "object"
+        },
+        "noApps": {
+          "message": "object",
+          "title": "object"
+        },
+        "notFound": {
+          "message": "object",
+          "title": "object"
+        },
+        "serverError": {
+          "message": "object",
+          "subtitle": "object",
+          "title": "object"
+        },
+        "unauthorized": {
+          "message": "object",
+          "title": "object"
+        }
+      },
+      "footer": {
+        "links": ["object"],
+        "text": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "header": {
+        "defaultColor": "string",
+        "favicon": "string",
+        "links": ["object"],
+        "logo": {
+          "alt": "object",
+          "url": "string"
+        },
+        "tagline": {
+          "de": "string",
+          "en": "string"
+        },
+        "titleBold": {
+          "de": "string",
+          "en": "string"
+        },
+        "titleLight": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "pages": {
+        "faq": {
+          "filePath": "object",
+          "title": "object"
+        },
+        "nda-guide": {
+          "filePath": "object",
+          "title": "object"
+        },
+        "privacy": {
+          "filePath": "object",
+          "title": "object"
+        },
+        "terms": {
+          "filePath": "object",
+          "title": "object"
+        }
+      },
+      "promptsList": {
+        "categories": {
+          "enabled": "boolean",
+          "list": "array",
+          "showAll": "boolean"
+        },
+        "sort": {
+          "default": "string",
+          "enabled": "boolean"
+        }
+      },
+      "pwa": {
+        "backgroundColor": "string",
+        "description": "string",
+        "display": "string",
+        "enabled": "boolean",
+        "icons": {
+          "icon192": "string",
+          "icon512": "string",
+          "iconApple": "string"
+        },
+        "name": "string",
+        "shortName": "string",
+        "themeColor": "string"
+      },
+      "startPage": {
+        "appsCount": "number",
+        "appsMode": "string",
+        "defaultPage": "string",
+        "featuredAppIds": [],
+        "showDefaultApp": "boolean",
+        "showUserName": "boolean",
+        "sidebarAppsCount": "number",
+        "subtitle": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "theme": {
+        "accentColor": "string",
+        "backgroundColor": "string",
+        "darkMode": {
+          "backgroundColor": "string",
+          "primaryColor": "string",
+          "surfaceColor": "string",
+          "textColor": "string",
+          "textMutedColor": "string"
+        },
+        "primaryColor": "string",
+        "primaryDark": "string",
+        "surfaceColor": "string",
+        "textColor": "string",
+        "textMutedColor": "string"
+      },
+      "title": {
+        "de": "string",
+        "en": "string"
+      }
+    }
+  },
+  "GET /api/admin/update/local-candidates": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/update/status": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/usage/breakdown": {
+    "status": 200,
+    "shape": {
+      "dimension": "string",
+      "from": "string",
+      "granularity": "string",
+      "order": "string",
+      "range": "string",
+      "rows": [
+        {
+          "cacheHitRate": "number",
+          "cacheReadTokens": "number",
+          "cacheWriteTokens": "number",
+          "completionTokens": "number",
+          "errorRate": "number",
+          "errors": "number",
+          "estimated": "number",
+          "key": "string",
+          "lastTs": "string",
+          "latencyAvg": "number",
+          "latencyP50": "number",
+          "latencyP95": "number",
+          "models": "array",
+          "promptTokens": "number",
+          "reasoningTokens": "number",
+          "requests": "number",
+          "toolCalls": "number",
+          "totalTokens": "number",
+          "ttftAvg": "number",
+          "webSearchRequests": "number"
+        }
+      ],
+      "sort": "string",
+      "to": "string"
+    }
+  },
+  "GET /api/admin/usage/calls": {
+    "status": 200,
+    "shape": {
+      "from": "string",
+      "items": [
+        {
+          "app": "string",
+          "cid": "string",
+          "ct": "number",
+          "grp": "array",
+          "id": "string",
+          "lat": "number",
+          "model": "string",
+          "prov": "string",
+          "pt": "number",
+          "rid": "string",
+          "src": "string",
+          "st": "string",
+          "surf": "string",
+          "tc": "number",
+          "ts": "string",
+          "ttft": "number",
+          "type": "string",
+          "uid": "string",
+          "v": "number"
+        }
+      ],
+      "nextCursor": "null",
+      "to": "string"
+    }
+  },
+  "GET /api/admin/usage/export": {
+    "skipped": "a download"
+  },
+  "GET /api/admin/usage/feedback": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null",
+      "total": "number"
+    }
+  },
+  "GET /api/admin/usage/feedback/summary": {
+    "status": 200,
+    "shape": {
+      "averageRating": "number",
+      "from": "string",
+      "granularity": "string",
+      "perApp": {},
+      "perModel": {},
+      "perUser": {},
+      "range": "string",
+      "ratings": {
+        "1": "number",
+        "2": "number",
+        "3": "number",
+        "4": "number",
+        "5": "number"
+      },
+      "to": "string",
+      "total": "number"
+    }
+  },
+  "GET /api/admin/usage/limits/groups": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "groupId": "string",
+          "inherits": "[]|array",
+          "members": "number",
+          "name": "string",
+          "tokens": "object",
+          "usageLimits": "null",
+          "usersExceeded": "number",
+          "usersWarning": "number"
+        }
+      ]
+    }
+  },
+  "GET /api/admin/usage/limits/models": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "activeUsers": "number",
+          "limited": "boolean",
+          "limits": "object",
+          "modelId": "string",
+          "name": "object",
+          "tokens": "object",
+          "usersExceeded": "number",
+          "usersWarning": "number"
+        }
+      ],
+      "resets": {
+        "day": {
+          "key": "string",
+          "resetAt": "string"
+        },
+        "month": {
+          "key": "string",
+          "resetAt": "string"
+        },
+        "week": {
+          "key": "string",
+          "resetAt": "string"
+        }
+      }
+    }
+  },
+  "GET /api/admin/usage/limits/near": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "threshold": "number",
+      "total": "number"
+    }
+  },
+  "GET /api/admin/usage/limits/settings": {
+    "status": 200,
+    "shape": {
+      "allModels": {},
+      "effectiveTimezone": "string",
+      "nextResets": {
+        "day": "string",
+        "month": "string",
+        "week": "string"
+      },
+      "resets": {
+        "dailyAt": "string",
+        "monthlyAt": "string",
+        "timezone": "null",
+        "weeklyAt": "string",
+        "weeklyOn": "string"
+      }
+    }
+  },
+  "GET /api/admin/usage/limits/users": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "buckets": [],
+          "email": "string",
+          "fileLimit": "number",
+          "files": "object",
+          "groups": "array",
+          "guest": "boolean",
+          "hasPersonalLimits": "boolean",
+          "lastSeen": "null|string",
+          "name": "string",
+          "status": "string",
+          "stored": "boolean",
+          "tokens": "object",
+          "userKey": "string",
+          "username": "string",
+          "worst": "null"
+        }
+      ],
+      "nextCursor": "null",
+      "total": "number"
+    }
+  },
+  "GET /api/admin/usage/limits/users/:userKey": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/admin/usage/meta": {
+    "status": 200,
+    "shape": {
+      "trackingMode": "string"
+    }
+  },
+  "GET /api/admin/usage/reliability": {
+    "status": 200,
+    "shape": {
+      "byError": [],
+      "byModel": [
+        {
+          "cacheHitRate": "number",
+          "cacheReadTokens": "number",
+          "cacheWriteTokens": "number",
+          "completionTokens": "number",
+          "errorRate": "number",
+          "errors": "number",
+          "estimated": "number",
+          "key": "string",
+          "lastTs": "string",
+          "latencyAvg": "number",
+          "latencyP50": "number",
+          "latencyP95": "number",
+          "promptTokens": "number",
+          "reasoningTokens": "number",
+          "requests": "number",
+          "toolCalls": "number",
+          "totalTokens": "number",
+          "ttftAvg": "number",
+          "webSearchRequests": "number"
+        }
+      ],
+      "byOutcome": {
+        "ok": "number"
+      },
+      "byProvider": [
+        {
+          "cacheHitRate": "number",
+          "cacheReadTokens": "number",
+          "cacheWriteTokens": "number",
+          "completionTokens": "number",
+          "errorRate": "number",
+          "errors": "number",
+          "estimated": "number",
+          "key": "string",
+          "lastTs": "string",
+          "latencyAvg": "number",
+          "latencyP50": "number",
+          "latencyP95": "number",
+          "promptTokens": "number",
+          "reasoningTokens": "number",
+          "requests": "number",
+          "toolCalls": "number",
+          "totalTokens": "number",
+          "ttftAvg": "number",
+          "webSearchRequests": "number"
+        }
+      ],
+      "from": "string",
+      "granularity": "string",
+      "range": "string",
+      "series": [
+        {
+          "errorRate": "number",
+          "errors": "number",
+          "requests": "number",
+          "t": "string"
+        }
+      ],
+      "to": "string"
+    }
+  },
+  "GET /api/admin/usage/summary": {
+    "status": 200,
+    "shape": {
+      "byOutcome": {
+        "ok": "number"
+      },
+      "dataStart": "string",
+      "from": "string",
+      "generatedAt": "string",
+      "granularity": "string",
+      "previous": {
+        "activeUsers": "number",
+        "averageRating": "null",
+        "cacheHitRate": "number",
+        "cacheReadTokens": "number",
+        "cacheWriteTokens": "number",
+        "completionTokens": "number",
+        "errorRate": "number",
+        "errors": "number",
+        "estimated": "number",
+        "feedbackCount": "number",
+        "lastTs": "null",
+        "latencyAvg": "null",
+        "latencyP50": "null",
+        "latencyP95": "null",
+        "promptTokens": "number",
+        "reasoningTokens": "number",
+        "requests": "number",
+        "toolCalls": "number",
+        "totalTokens": "number",
+        "ttftAvg": "null",
+        "webSearchRequests": "number"
+      },
+      "range": "string",
+      "series": [
+        {
+          "cacheReadTokens": "number",
+          "cacheWriteTokens": "number",
+          "completionTokens": "number",
+          "errors": "number",
+          "promptTokens": "number",
+          "reasoningTokens": "number",
+          "requests": "number",
+          "t": "string",
+          "toolCalls": "number",
+          "webSearchRequests": "number"
+        }
+      ],
+      "to": "string",
+      "topApps": [
+        {
+          "cacheHitRate": "number",
+          "cacheReadTokens": "number",
+          "cacheWriteTokens": "number",
+          "completionTokens": "number",
+          "errorRate": "number",
+          "errors": "number",
+          "estimated": "number",
+          "key": "string",
+          "lastTs": "string",
+          "latencyAvg": "number",
+          "latencyP50": "number",
+          "latencyP95": "number",
+          "models": "array",
+          "promptTokens": "number",
+          "reasoningTokens": "number",
+          "requests": "number",
+          "toolCalls": "number",
+          "totalTokens": "number",
+          "ttftAvg": "number",
+          "webSearchRequests": "number"
+        }
+      ],
+      "topModels": [
+        {
+          "cacheHitRate": "number",
+          "cacheReadTokens": "number",
+          "cacheWriteTokens": "number",
+          "completionTokens": "number",
+          "errorRate": "number",
+          "errors": "number",
+          "estimated": "number",
+          "key": "string",
+          "lastTs": "string",
+          "latencyAvg": "number",
+          "latencyP50": "number",
+          "latencyP95": "number",
+          "promptTokens": "number",
+          "reasoningTokens": "number",
+          "requests": "number",
+          "toolCalls": "number",
+          "totalTokens": "number",
+          "ttftAvg": "number",
+          "webSearchRequests": "number"
+        }
+      ],
+      "totals": {
+        "activeUsers": "number",
+        "averageRating": "null",
+        "cacheHitRate": "number",
+        "cacheReadTokens": "number",
+        "cacheWriteTokens": "number",
+        "completionTokens": "number",
+        "errorRate": "number",
+        "errors": "number",
+        "estimated": "number",
+        "feedbackCount": "number",
+        "lastTs": "string",
+        "latencyAvg": "number",
+        "latencyP50": "number",
+        "latencyP95": "number",
+        "promptTokens": "number",
+        "reasoningTokens": "number",
+        "requests": "number",
+        "toolCalls": "number",
+        "totalTokens": "number",
+        "ttftAvg": "number",
+        "webSearchRequests": "number"
+      }
+    }
+  },
+  "GET /api/admin/user-skills": {
+    "status": 200,
+    "shape": {
+      "available": "boolean",
+      "skills": [],
+      "truncated": "boolean"
+    }
+  },
+  "GET /api/admin/user-skills/settings": {
+    "status": 200,
+    "shape": {
+      "settings": {
+        "allowMarketplace": "boolean",
+        "enabled": "boolean",
+        "maxFilesPerSkill": "number",
+        "maxSkillSizeKB": "number",
+        "maxSkillsPerUser": "number",
+        "maxVersions": "number",
+        "sharing": {
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean",
+          "restrictToGroups": []
+        }
+      },
+      "storageAvailable": "boolean"
+    }
+  },
+  "GET /api/admin/version": {
+    "status": 200,
+    "shape": {
+      "app": "string",
+      "client": "string",
+      "node": "string",
+      "server": "string"
+    }
+  },
+  "GET /api/admin/version/check-update": {
+    "skipped": "reaches the network"
+  },
+  "GET /api/admin/workflows": {
+    "status": 200,
+    "shape": [
+      {
+        "allowedGroups?": ["string"],
+        "canvas?": {
+          "offsetX": "number",
+          "offsetY": "number",
+          "zoom": "number"
+        },
+        "chatIntegration?": {
+          "enabled": "boolean",
+          "outputFormat": "string"
+        },
+        "config?": {
+          "allowCycles?": "boolean",
+          "defaultModelId?": "string",
+          "errorHandling?": "string",
+          "humanInLoop?": "string",
+          "maxExecutionTime?": "number",
+          "maxIterations?": "number",
+          "maxNodes?": "number",
+          "observability?": "string",
+          "persistence?": "string"
+        },
+        "description": {
+          "de?": "string",
+          "en": "string"
+        },
+        "edges": ["object"],
+        "enabled": "boolean",
+        "id": "string",
+        "name": {
+          "de?": "string",
+          "en": "string"
+        },
+        "nodes": ["object"],
+        "projects?": ["object"],
+        "status?": "string",
+        "version": "string"
+      }
+    ]
+  },
+  "GET /api/admin/workflows/executions": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null",
+      "stats": {
+        "byStatus": {},
+        "totalExecutions": "number",
+        "totalUsers": "number"
+      },
+      "total": "number"
+    }
+  },
+  "GET /api/agents/runs": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/agents/runs/:runId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/agents/runs/:runId/artifacts": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/agents/runs/:runId/artifacts/:name": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/agents/runs/:runId/stream": {
+    "skipped": "streams"
+  },
+  "GET /api/apps": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "allowEmptyContent": "boolean",
+          "allowInheritance": "boolean",
+          "autoStart": "boolean",
+          "category?": "string",
+          "color": "string",
+          "customResponseRenderer?": "string",
+          "description": "object",
+          "disallowModelSelection": "boolean",
+          "enabled": "boolean",
+          "ephemeral": "boolean",
+          "features?": "object",
+          "greeting?": "object",
+          "icon": "string",
+          "id": "string",
+          "iframeConfig?": "object",
+          "imageGeneration?": "object",
+          "inheritanceLevel?": "number",
+          "inputMode?": "object",
+          "integrations?": "object",
+          "messagePlaceholder?": "object",
+          "name": "object",
+          "order?": "number",
+          "outputSchema?": "object",
+          "overriddenFields?": "array",
+          "parentId?": "string",
+          "preferredOutputFormat?": "string",
+          "preferredStyle?": "string",
+          "projects?": "array",
+          "prompt?": "object",
+          "redirectConfig?": "object",
+          "rendererConfig?": "object",
+          "requiredFeatures?": "array",
+          "sendChatHistory": "boolean",
+          "settings?": "object",
+          "skillSettings?": "object",
+          "skills?": "array",
+          "starterPrompts?": "[]|array",
+          "system?": "object",
+          "type": "string",
+          "upload?": "object",
+          "variables?": "[]|array",
+          "websearch?": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/apps/:appId": {
+    "status": 200,
+    "shape": {
+      "allowEmptyContent": "boolean",
+      "allowInheritance": "boolean",
+      "autoStart": "boolean",
+      "color": "string",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "disallowModelSelection": "boolean",
+      "enabled": "boolean",
+      "ephemeral": "boolean",
+      "greeting": {
+        "de": {
+          "subtitle": "string",
+          "title": "string"
+        },
+        "en": {
+          "subtitle": "string",
+          "title": "string"
+        }
+      },
+      "icon": "string",
+      "id": "string",
+      "inputMode": {
+        "microphone": {
+          "enabled": "boolean",
+          "mode": "string",
+          "showTranscript": "boolean"
+        },
+        "rows": "number",
+        "type": "string"
+      },
+      "messagePlaceholder": {
+        "de": "string",
+        "en": "string"
+      },
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "order": "number",
+      "preferredOutputFormat": "string",
+      "preferredStyle": "string",
+      "projects": [
+        {
+          "id": "string",
+          "mode": "string",
+          "write": "boolean"
+        }
+      ],
+      "sendChatHistory": "boolean",
+      "settings": {
+        "chatHistory": {
+          "enabled": "boolean"
+        },
+        "enabled": "boolean",
+        "model": {
+          "enabled": "boolean"
+        },
+        "outputFormat": {
+          "enabled": "boolean"
+        },
+        "style": {
+          "enabled": "boolean"
+        }
+      },
+      "system": {
+        "de": "string",
+        "en": "string"
+      },
+      "type": "string",
+      "upload": {
+        "allowMultiple": "boolean",
+        "enabled": "boolean",
+        "fileUpload": {
+          "comments": "string",
+          "enabled": "boolean",
+          "maxFileSizeMB": "number",
+          "speakerNotes": "string",
+          "supportedFormats": "array",
+          "trackedChanges": "string"
+        },
+        "imageUpload": {
+          "enabled": "boolean",
+          "maxFileSizeMB": "number",
+          "resizeImages": "boolean",
+          "supportedFormats": "array"
+        }
+      }
+    }
+  },
+  "GET /api/apps/:appId/chat/:chatId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/apps/:appId/chat/:chatId/status": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/auth/ntlm/login": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/auth/oidc-logout": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/auth/oidc/:provider": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/auth/oidc/:provider/callback": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/auth/status": {
+    "status": 200,
+    "shape": {
+      "anonymousAuth": {
+        "defaultGroups": ["string"],
+        "enabled": "boolean"
+      },
+      "authMethods": {
+        "ldap": {
+          "enabled": "boolean",
+          "providers": []
+        },
+        "local": {
+          "enabled": "boolean",
+          "showDemoAccounts": "boolean"
+        },
+        "ntlm": {
+          "enabled": "boolean",
+          "type": "string"
+        },
+        "oidc": {
+          "enabled": "boolean",
+          "providers": []
+        },
+        "proxy": {
+          "enabled": "boolean"
+        }
+      },
+      "authMode": "string",
+      "authenticated": "boolean",
+      "autoRedirect": "null",
+      "bearerTokenRejected": "boolean",
+      "cloudStorage": {
+        "enabled": "boolean",
+        "providers": []
+      },
+      "gateUI": {
+        "appName": "string",
+        "logoUrl": "string",
+        "primaryColor": "string"
+      },
+      "jira": {
+        "enabled": "boolean"
+      },
+      "setup": {
+        "configured": "boolean",
+        "disabled": "boolean"
+      },
+      "user": {
+        "email": "string",
+        "groups": ["string"],
+        "id": "string",
+        "isAdmin": "boolean",
+        "name": "string",
+        "permissions": {
+          "adminAccess": "boolean",
+          "apps": "object",
+          "contentAdmin": "boolean",
+          "integrations": "object",
+          "models": "object",
+          "projectSharing": "boolean",
+          "projects": "boolean",
+          "prompts": "object",
+          "scheduledTasks": "boolean",
+          "skills": "object",
+          "workflows": "object"
+        },
+        "username": "string"
+      }
+    }
+  },
+  "GET /api/auth/teams/client-config": {
+    "status": 200,
+    "shape": {
+      "enabled": "boolean"
+    }
+  },
+  "GET /api/auth/user": {
+    "status": 200,
+    "shape": {
+      "user": {
+        "email": "string",
+        "groups": ["string"],
+        "id": "string",
+        "isAdmin": "boolean",
+        "name": "string",
+        "permissions": {
+          "adminAccess": "boolean",
+          "apps": "object",
+          "contentAdmin": "boolean",
+          "integrations": "object",
+          "models": "object",
+          "projectSharing": "boolean",
+          "projects": "boolean",
+          "prompts": "object",
+          "scheduledTasks": "boolean",
+          "skills": "object",
+          "workflows": "object"
+        },
+        "username": "string"
+      }
+    }
+  },
+  "GET /api/chats": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "activeRunId": "null",
+          "appId": "string",
+          "createdAt": "string",
+          "hasUnseenActivity": "boolean",
+          "id": "string",
+          "identityMode": "string",
+          "lastMessageAt": "string",
+          "messageCount": "number",
+          "modelId": "string",
+          "origin": "object",
+          "ownerId": "string",
+          "runIds": "array",
+          "settings": "null",
+          "status": "string",
+          "title": "string",
+          "titleSetByUser": "boolean"
+        }
+      ],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/chats/:chatId": {
+    "status": 200,
+    "shape": {
+      "chat": {
+        "activeRunId": "null",
+        "appId": "string",
+        "createdAt": "string",
+        "hasUnseenActivity": "boolean",
+        "id": "string",
+        "identityMode": "string",
+        "lastMessageAt": "string",
+        "messageCount": "number",
+        "modelId": "string",
+        "origin": {
+          "createdVia": "string"
+        },
+        "ownerId": "string",
+        "runIds": ["string"],
+        "settings": "null",
+        "status": "string",
+        "title": "string",
+        "titleSetByUser": "boolean"
+      },
+      "messages": [
+        {
+          "activity?": "object",
+          "clientMessageId?": "string",
+          "content": "string",
+          "finishReason?": "string",
+          "id": "string",
+          "role": "string",
+          "runId": "string",
+          "ts": "string",
+          "usage?": "object"
+        }
+      ],
+      "version": "number"
+    }
+  },
+  "GET /api/chats/:chatId/artifacts": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/chats/:chatId/artifacts/:artifactId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/chats/:chatId/files": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/chats/:chatId/files/:fileId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/chats/:chatId/shares": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "appId": "string",
+          "artifactIds": [],
+          "chatId": "string",
+          "createdAt": "string",
+          "expiresAt": "null",
+          "id": "string",
+          "identityMode": "string",
+          "lastViewedAt": "null",
+          "maxViews": "null",
+          "messageCount": "number",
+          "mode": "string",
+          "ownerId": "string",
+          "ownerName": "string",
+          "recipientDetails": [],
+          "recipientViews": "object",
+          "recipients": [],
+          "revokedAt": "null",
+          "showOwnerName": "boolean",
+          "state": "string",
+          "target": "string",
+          "title": "string",
+          "uploadedFilesAccess": "string",
+          "version": "number",
+          "viewCount": "number"
+        }
+      ]
+    }
+  },
+  "GET /api/configs/mimetypes": {
+    "status": 200,
+    "shape": {
+      "categories": {
+        "audio": {
+          "description": "object",
+          "mimeTypes": "array",
+          "name": "object"
+        },
+        "documents": {
+          "description": "object",
+          "mimeTypes": "array",
+          "name": "object"
+        },
+        "images": {
+          "description": "object",
+          "mimeTypes": "array",
+          "name": "object"
+        },
+        "video": {
+          "description": "object",
+          "mimeTypes": "array",
+          "name": "object"
+        }
+      },
+      "mimeTypes": {
+        "application/javascript": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/json": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/pdf": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.ms-excel": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.ms-outlook": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.ms-powerpoint": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.oasis.opendocument.presentation": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.oasis.opendocument.spreadsheet": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.oasis.opendocument.text": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "audio/flac": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "audio/mp3": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "audio/mp4": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "audio/mpeg": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "audio/ogg": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "audio/wav": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "image/gif": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "image/jpeg": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "image/jpg": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "image/png": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "image/tif": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "image/tiff": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "image/webp": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "message/rfc822": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/*": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": []
+        },
+        "text/css": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/csv": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/html": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/javascript": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/markdown": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/plain": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/vtt": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "text/xml": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "video/mp4": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "video/mpeg": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "video/ogg": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "video/quicktime": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        },
+        "video/webm": {
+          "category": "string",
+          "displayName": "string",
+          "extensions": "array"
+        }
+      }
+    }
+  },
+  "GET /api/configs/platform": {
+    "status": 200,
+    "shape": {
+      "chats": {
+        "persistence": "boolean",
+        "sharing": {
+          "allowArtifacts": "boolean",
+          "defaultExpiryDays": "number",
+          "embedEnabled": "boolean",
+          "enabled": "boolean",
+          "maxExpiryDays": "number",
+          "maxViewsCap": "number",
+          "modes": "object",
+          "ownerNameHidden": "boolean"
+        },
+        "temporaryRetentionHours": "number"
+      },
+      "cors": {
+        "credentials": "boolean",
+        "methods": ["string"]
+      },
+      "defaultLanguage": "string",
+      "features": [
+        {
+          "category": "string",
+          "default": "boolean",
+          "description": "object",
+          "enabled": "boolean",
+          "id": "string",
+          "name": "object",
+          "preview?": "boolean"
+        }
+      ],
+      "globalPromptVariables": {
+        "context": "string",
+        "variables": {}
+      },
+      "pdfExport": {
+        "defaultTemplate": "string",
+        "templates": {
+          "default": "object",
+          "minimal": "object",
+          "professional": "object"
+        },
+        "watermark": {
+          "enabled": "boolean",
+          "opacity": "number",
+          "position": "string",
+          "text": "string"
+        }
+      },
+      "projects": {
+        "defaultAppId": "string",
+        "enabled": "boolean",
+        "limits": {
+          "maxFileBytes": "number",
+          "maxFiles": "number",
+          "maxProjectBytes": "number",
+          "maxProjectsPerUser": "number"
+        },
+        "retentionDays": "number",
+        "sharing": {
+          "allowCatalog": "boolean",
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean"
+        },
+        "tierPolicy": "string",
+        "tiers": ["string"],
+        "userProjects": "boolean"
+      },
+      "rateLimit": {
+        "adminApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        },
+        "authApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        },
+        "default": {
+          "legacyHeaders": "boolean",
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "skipSuccessfulRequests": "boolean",
+          "standardHeaders": "boolean",
+          "windowMs": "number"
+        },
+        "inferenceApi": {
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "oauthApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        },
+        "oauthTokenApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "skipSuccessfulRequests": "boolean",
+          "windowMs": "number"
+        },
+        "publicApi": {
+          "limit": "number",
+          "skipFailedRequests": "boolean",
+          "windowMs": "number"
+        }
+      },
+      "requestBodyLimitMB": "number",
+      "requestConcurrency": "number",
+      "scheduledTasks": {
+        "enabled": "boolean",
+        "maxInstructionLength": "number",
+        "maxRunsPerTask": "number",
+        "maxTasksPerUser": "number",
+        "memoryEnabled": "boolean",
+        "memoryMaxChars": "number",
+        "minIntervalMinutes": "number",
+        "runRetentionDays": "number",
+        "staggerMinutes": "number"
+      },
+      "speech": {
+        "azure": {
+          "enabled": "boolean",
+          "host": "string",
+          "keyConfigured": "boolean",
+          "region": "string"
+        },
+        "defaultService": "string",
+        "dictation": {
+          "available": "boolean",
+          "modelId": "string"
+        },
+        "tts": {
+          "defaultModelId": "string",
+          "enabled": "boolean"
+        },
+        "voiceMode": {
+          "appDefault": "boolean",
+          "bargeIn": "boolean",
+          "enabled": "boolean",
+          "endOfTurnSilenceMs": "number",
+          "listeningStyle": "string",
+          "maxSessionMinutes": "number",
+          "thinkingLevel": "string",
+          "ttsModelId": "string"
+        }
+      },
+      "ssl": {
+        "ignoreInvalidCertificates": "boolean"
+      },
+      "swagger": {
+        "enabled": "boolean",
+        "requireAuth": "boolean"
+      },
+      "telemetry": {
+        "enabled": "boolean",
+        "logs": {
+          "enabled": "boolean",
+          "level": "string"
+        },
+        "metrics": {
+          "enabled": "boolean",
+          "exportInterval": "number"
+        }
+      },
+      "uploads": {
+        "enabled": "boolean",
+        "originalRetentionDays": "number",
+        "quotas": {
+          "maxApiBytes": "number",
+          "maxApiFiles": "number",
+          "maxChatBytes": "number",
+          "maxChatFiles": "number",
+          "maxFileBytes": "number",
+          "maxServerBytes": "number",
+          "maxUserBytes": "number"
+        },
+        "storageMode": "string"
+      },
+      "userPrompts": {
+        "enabled": "boolean",
+        "maxPromptsPerUser": "number",
+        "sharing": {
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean",
+          "restricted": "boolean"
+        }
+      },
+      "userSkills": {
+        "enabled": "boolean",
+        "marketplace": "boolean",
+        "maxFilesPerSkill": "number",
+        "maxSkillSizeKB": "number",
+        "maxSkillsPerUser": "number",
+        "sharing": {
+          "allowEveryone": "boolean",
+          "allowGroups": "boolean",
+          "allowUsers": "boolean",
+          "restricted": "boolean"
+        }
+      }
+    }
+  },
+  "GET /api/configs/ui": {
+    "status": 200,
+    "shape": {
+      "admin": {},
+      "appsList": {
+        "categories": {
+          "enabled": "boolean",
+          "list": "array",
+          "showAll": "boolean"
+        },
+        "search": {
+          "enabled": "boolean",
+          "placeholder": "object",
+          "width": "string"
+        },
+        "sort": {
+          "default": "string",
+          "enabled": "boolean"
+        },
+        "subtitle": {
+          "de": "string",
+          "en": "string"
+        },
+        "title": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "computedRefreshSalt": "string",
+      "defaultLanguage": "string",
+      "disclaimer": {
+        "hint": {
+          "de": "string",
+          "en": "string"
+        },
+        "link": "string",
+        "text": {
+          "de": "string",
+          "en": "string"
+        },
+        "updated": "string",
+        "version": "string"
+      },
+      "errorPages": {
+        "forbidden": {
+          "message": "object",
+          "title": "object"
+        },
+        "generic": {
+          "description": "object",
+          "title": "object"
+        },
+        "noApps": {
+          "message": "object",
+          "title": "object"
+        },
+        "notFound": {
+          "message": "object",
+          "title": "object"
+        },
+        "serverError": {
+          "message": "object",
+          "subtitle": "object",
+          "title": "object"
+        },
+        "unauthorized": {
+          "message": "object",
+          "title": "object"
+        }
+      },
+      "footer": {
+        "links": ["object"],
+        "text": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "header": {
+        "defaultColor": "string",
+        "favicon": "string",
+        "links": ["object"],
+        "logo": {
+          "alt": "object",
+          "url": "string"
+        },
+        "tagline": {
+          "de": "string",
+          "en": "string"
+        },
+        "titleBold": {
+          "de": "string",
+          "en": "string"
+        },
+        "titleLight": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "pages": {
+        "faq": {
+          "filePath": "object",
+          "title": "object"
+        },
+        "nda-guide": {
+          "filePath": "object",
+          "title": "object"
+        },
+        "privacy": {
+          "filePath": "object",
+          "title": "object"
+        },
+        "terms": {
+          "filePath": "object",
+          "title": "object"
+        }
+      },
+      "promptsList": {
+        "categories": {
+          "enabled": "boolean",
+          "list": "array",
+          "showAll": "boolean"
+        },
+        "sort": {
+          "default": "string",
+          "enabled": "boolean"
+        }
+      },
+      "pwa": {
+        "backgroundColor": "string",
+        "description": "string",
+        "display": "string",
+        "enabled": "boolean",
+        "icons": {
+          "icon192": "string",
+          "icon512": "string",
+          "iconApple": "string"
+        },
+        "name": "string",
+        "shortName": "string",
+        "themeColor": "string"
+      },
+      "startPage": {
+        "appsCount": "number",
+        "appsMode": "string",
+        "defaultPage": "string",
+        "featuredAppIds": [],
+        "showDefaultApp": "boolean",
+        "showUserName": "boolean",
+        "sidebarAppsCount": "number",
+        "subtitle": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "theme": {
+        "accentColor": "string",
+        "backgroundColor": "string",
+        "darkMode": {
+          "backgroundColor": "string",
+          "primaryColor": "string",
+          "surfaceColor": "string",
+          "textColor": "string",
+          "textMutedColor": "string"
+        },
+        "primaryColor": "string",
+        "primaryDark": "string",
+        "surfaceColor": "string",
+        "textColor": "string",
+        "textMutedColor": "string"
+      },
+      "title": {
+        "de": "string",
+        "en": "string"
+      },
+      "version": "string"
+    }
+  },
+  "GET /api/docs": {
+    "skipped": "API documentation"
+  },
+  "GET /api/docs/admin": {
+    "skipped": "API documentation"
+  },
+  "GET /api/docs/admin/swagger.json": {
+    "skipped": "API documentation"
+  },
+  "GET /api/docs/normal": {
+    "skipped": "API documentation"
+  },
+  "GET /api/docs/normal/swagger.json": {
+    "skipped": "API documentation"
+  },
+  "GET /api/docs/openai": {
+    "skipped": "API documentation"
+  },
+  "GET /api/docs/openai/swagger.json": {
+    "skipped": "API documentation"
+  },
+  "GET /api/document-templates": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "default": "boolean",
+          "description": "string",
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "pinned": "null"
+    }
+  },
+  "GET /api/health": {
+    "status": 200,
+    "shape": {
+      "basePathConfig": {
+        "basePath": "string",
+        "headerName": "string",
+        "isSubpath": "boolean",
+        "isValid": "boolean",
+        "nodeEnv": "string"
+      },
+      "environment": "string",
+      "relativePath": "string",
+      "requestPath": "string",
+      "requestUrl": "string",
+      "status": "string",
+      "storage": {
+        "provider": "string",
+        "ready": "boolean"
+      },
+      "timestamp": "string",
+      "version": "string"
+    }
+  },
+  "GET /api/inference/v1/conversations/:conversationId": {
+    "skipped": "an external specification"
+  },
+  "GET /api/inference/v1/conversations/:conversationId/items": {
+    "skipped": "an external specification"
+  },
+  "GET /api/inference/v1/conversations/:conversationId/items/:itemId": {
+    "skipped": "an external specification"
+  },
+  "GET /api/inference/v1/files": {
+    "skipped": "an external specification"
+  },
+  "GET /api/inference/v1/files/:file_id": {
+    "skipped": "an external specification"
+  },
+  "GET /api/inference/v1/files/:file_id/content": {
+    "skipped": "a download"
+  },
+  "GET /api/inference/v1/models": {
+    "skipped": "an external specification"
+  },
+  "GET /api/integrations": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "actions": "array",
+          "apps": "array",
+          "capabilities": "array",
+          "categories": "array",
+          "connection": "object",
+          "definition": "string",
+          "description": "string",
+          "effects": "array",
+          "icon": "null",
+          "id": "string",
+          "name": "string",
+          "protocol": "string",
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "GET /api/integrations/:id": {
+    "status": 200,
+    "shape": {
+      "actions": [
+        {
+          "description": "string",
+          "name": "string",
+          "sideEffect": "string",
+          "title": "string"
+        }
+      ],
+      "apps": [
+        {
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "capabilities": ["string"],
+      "categories": ["string"],
+      "connection": {
+        "account": "null",
+        "connectable": "boolean",
+        "connectedAt": "null",
+        "expiresAt": "null",
+        "lastUsedAt": "null",
+        "mode": "string",
+        "reason": "null",
+        "renewable": "null",
+        "scopes": [],
+        "sharedWith": [],
+        "signInHost": "null",
+        "status": "string"
+      },
+      "definition": "string",
+      "description": "string",
+      "effects": ["string"],
+      "icon": "null",
+      "id": "string",
+      "name": "string",
+      "protocol": "string",
+      "type": "null"
+    }
+  },
+  "GET /api/integrations/:integration/files": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/:integration/files/:id": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/integrations/:integration/files/:id/content": {
+    "skipped": "a download"
+  },
+  "GET /api/integrations/:integration/files/:id/content/:filename": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/integrations/:integrationId/scopes": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/api-keys": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/api-keys/:keyId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/integrations/browser-extension/config": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/connections": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/googledrive/:providerId/callback": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/integrations/googledrive/download": {
+    "skipped": "a download"
+  },
+  "GET /api/integrations/googledrive/drives/:source": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/integrations/googledrive/items": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/googledrive/sources": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/ifinder/authorization": {
+    "status": 200,
+    "shape": {
+      "enabled": "boolean"
+    }
+  },
+  "GET /api/integrations/jira/attachment/:attachmentId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/integrations/jira/callback": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/integrations/nextcloud-embed/config": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/nextcloud/:providerId/callback": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/integrations/nextcloud/download": {
+    "skipped": "a download"
+  },
+  "GET /api/integrations/nextcloud/drives/:source": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/integrations/nextcloud/items": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/nextcloud/sources": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/oauth/callback": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/integrations/office-addin/config": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/office-addin/manifest.xml": {
+    "skipped": "a download"
+  },
+  "GET /api/integrations/office365/:providerId/callback": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/integrations/office365/download": {
+    "skipped": "a download"
+  },
+  "GET /api/integrations/office365/drives/:source": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/integrations/office365/items": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/office365/sources": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/picker": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/preferences": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/requests": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "actionCount": "number",
+          "capabilities": "array",
+          "categories": "array",
+          "definition": "string",
+          "description": "string",
+          "effects": "[]|array",
+          "icon": "null",
+          "name": "string",
+          "publisher": "string",
+          "request": "null"
+        }
+      ]
+    }
+  },
+  "GET /api/integrations/requests/:requestId": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/integrations/scopes": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/interactions/pending": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/mcp-apps/resource": {
+    "status": 400,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "errors": [
+        {
+          "code": "string",
+          "message": "string",
+          "pointer": "string"
+        }
+      ],
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/mcp-apps/sandbox": {
+    "status": 200,
+    "type": "text/html"
+  },
+  "GET /api/mcp/oauth/callback/:serverId": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/mcp/oauth/client-metadata/:serverId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/models": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "autoDiscovery": "boolean",
+          "contextWindow": "number",
+          "default": "boolean",
+          "description": "object",
+          "enabled": "boolean",
+          "id": "string",
+          "maxOutputTokens": "number",
+          "modelId": "string",
+          "modelType": "string",
+          "name": "object",
+          "provider": "string",
+          "supportsImageGeneration": "boolean",
+          "supportsTools": "string",
+          "url": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/models/:modelId": {
+    "status": 200,
+    "shape": {
+      "autoDiscovery": "boolean",
+      "contextWindow": "number",
+      "default": "boolean",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "enabled": "boolean",
+      "id": "string",
+      "maxOutputTokens": "number",
+      "modelId": "string",
+      "modelType": "string",
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "provider": "string",
+      "supportsImageGeneration": "boolean",
+      "supportsTools": "string",
+      "url": "string"
+    }
+  },
+  "GET /api/models/:modelId/chat/test": {
+    "status": 200,
+    "shape": {
+      "content": "string",
+      "finishReason": "string",
+      "model": "string",
+      "usage": {
+        "completion_tokens": "number",
+        "prompt_tokens": "number",
+        "total_tokens": "number"
+      }
+    }
+  },
+  "GET /api/oauth/authorize": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/oauth/logout": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /api/oauth/userinfo": {
+    "skipped": "an external specification"
+  },
+  "GET /api/pages/:pageId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/projects": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "audience?": "object",
+          "catalog?": "null",
+          "category?": "string",
+          "createdAt": "string",
+          "createdBy": "string",
+          "defaultAppId": "null",
+          "description": "object|string",
+          "enabled?": "boolean",
+          "id": "string",
+          "instructions": "string",
+          "lastActivityAt": "string",
+          "memberCount?": "number",
+          "members?": [],
+          "name": "object|string",
+          "owner": "null|object",
+          "ownership": "string",
+          "permissions": "object",
+          "published?": "boolean",
+          "role": "string",
+          "subscribed?": "boolean",
+          "tags?": "[]|array",
+          "tier": "string",
+          "updatedAt": "string",
+          "updatedBy": "string",
+          "usage": "object"
+        }
+      ],
+      "nextCursor": "null",
+      "warnings": []
+    }
+  },
+  "GET /api/projects/:projectId": {
+    "status": 200,
+    "shape": {
+      "category": "string",
+      "createdAt": "string",
+      "createdBy": "string",
+      "defaultAppId": "null",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "enabled": "boolean",
+      "id": "string",
+      "instructions": "string",
+      "items": [
+        {
+          "createdAt": "string",
+          "error": "null",
+          "id": "string",
+          "kind": "string",
+          "name": "string",
+          "pinned": "boolean",
+          "provenance": "object",
+          "ref": "object",
+          "snapshotAt": "null",
+          "status": "string",
+          "storage": "string",
+          "text": "object",
+          "updatedAt": "string"
+        }
+      ],
+      "lastActivityAt": "string",
+      "memberCount": "number",
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "owner": "null",
+      "ownership": "string",
+      "permissions": {
+        "canDelete": "boolean",
+        "canEdit": "boolean",
+        "canHoldChats": "boolean",
+        "canShare": "boolean",
+        "canTransfer": "boolean",
+        "canUse": "boolean",
+        "isOwner": "boolean",
+        "readOnly": "boolean",
+        "readsAllChats": "boolean"
+      },
+      "published": "boolean",
+      "role": "string",
+      "tags": ["string"],
+      "tier": "string",
+      "updatedAt": "string",
+      "updatedBy": "string",
+      "usage": {
+        "bytes": "number",
+        "items": "number"
+      }
+    }
+  },
+  "GET /api/projects/:projectId/chats": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null",
+      "total": "number"
+    }
+  },
+  "GET /api/projects/:projectId/items": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "createdAt": "string",
+          "error": "null",
+          "id": "string",
+          "kind": "string",
+          "name": "string",
+          "pinned": "boolean",
+          "provenance": "object",
+          "ref": "object",
+          "snapshotAt": "null",
+          "status": "string",
+          "storage": "string",
+          "text": "object",
+          "updatedAt": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/projects/:projectId/items/:itemId": {
+    "status": 200,
+    "shape": {
+      "createdAt": "string",
+      "error": "null",
+      "id": "string",
+      "kind": "string",
+      "name": "string",
+      "pinned": "boolean",
+      "provenance": {
+        "at": "string",
+        "by": {
+          "id": "string",
+          "name": "string"
+        },
+        "origin": "string",
+        "run": "null",
+        "source": "null"
+      },
+      "ref": {
+        "bytes": "number",
+        "contentType": "string"
+      },
+      "snapshotAt": "null",
+      "status": "string",
+      "storage": "string",
+      "text": {
+        "bytes": "number",
+        "chars": "number",
+        "extractedAt": "string",
+        "original": {
+          "bytes": "number",
+          "contentType": "string"
+        },
+        "sha256": "string",
+        "tokens": "number",
+        "truncated": "boolean"
+      },
+      "updatedAt": "string"
+    }
+  },
+  "GET /api/projects/:projectId/items/:itemId/text": {
+    "status": 200,
+    "type": "text/plain"
+  },
+  "GET /api/projects/_catalog": {
+    "status": 200,
+    "shape": {
+      "enabled": "boolean",
+      "items": []
+    }
+  },
+  "GET /api/projects/_collections": {
+    "status": 200,
+    "shape": {
+      "available": "boolean",
+      "items": [],
+      "truncated": "boolean",
+      "warnings": []
+    }
+  },
+  "GET /api/projects/_config": {
+    "status": 200,
+    "shape": {
+      "defaultAppId": "string",
+      "enabled": "boolean",
+      "ifinder": {
+        "available": "boolean",
+        "maxDocuments": "number",
+        "writable": "boolean"
+      },
+      "kinds": [
+        {
+          "credentials": "string",
+          "icon": "string",
+          "id": "string",
+          "name": "object",
+          "picker": "object",
+          "storage": "string"
+        }
+      ],
+      "limits": {
+        "maxFileBytes": "number",
+        "maxFiles": "number",
+        "maxProjectBytes": "number",
+        "maxProjectsPerUser": "number"
+      },
+      "retentionDays": "number",
+      "sharing": {
+        "allowCatalog": "boolean",
+        "allowEveryone": "boolean",
+        "allowGroups": "boolean",
+        "allowUsers": "boolean"
+      },
+      "tierPolicy": "string",
+      "tiers": ["string"],
+      "upload": {
+        "accept": ["string"],
+        "available": "boolean",
+        "mimeTypes": ["string"],
+        "summary": "string"
+      },
+      "userProjects": {
+        "canCreate": "boolean",
+        "canShare": "boolean",
+        "enabled": "boolean",
+        "maxProjects": "number",
+        "used": "number"
+      }
+    }
+  },
+  "GET /api/projects/pickers/cloud": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/projects/pickers/ifinder/metadata": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/projects/pickers/ifinder/profiles": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/projects/pickers/ifinder/search": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/projects/pickers/pages": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "id": "string",
+          "languages": "array",
+          "title": "object"
+        }
+      ]
+    }
+  },
+  "GET /api/projects/share-targets": {
+    "status": 200,
+    "shape": {
+      "allowed": {
+        "everyone": "boolean",
+        "group": "boolean",
+        "user": "boolean"
+      },
+      "groups": [
+        {
+          "description": "string",
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "users": []
+    }
+  },
+  "GET /api/prompts": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "access?": "string",
+          "appId?": "null|string",
+          "category": "null|string",
+          "copiedFrom?": "null",
+          "createdAt?": "string",
+          "createdBy?": "string",
+          "description": "object|string",
+          "enabled?": "boolean",
+          "icon": "null|string",
+          "id": "string",
+          "name": "object|string",
+          "outputSchema?": "object",
+          "owner": "null|object",
+          "permissions": "object",
+          "promotedTo?": "null",
+          "prompt": "object|string",
+          "readOnly?": "boolean",
+          "revision?": "number",
+          "scope": "string",
+          "shared?": "boolean",
+          "shares?": [],
+          "updatedAt?": "string",
+          "updatedBy?": "string",
+          "variables?": []
+        }
+      ]
+    }
+  },
+  "GET /api/prompts/:promptId": {
+    "status": 200,
+    "shape": {
+      "category": "string",
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "enabled": "boolean",
+      "icon": "string",
+      "id": "string",
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "outputSchema": {
+        "properties": {
+          "category": "object",
+          "color": "object",
+          "description": "object",
+          "icon": "object",
+          "id": "object",
+          "name": "object",
+          "prompt": "object",
+          "sendChatHistory": "object",
+          "system": "object",
+          "variables": "object",
+          "websearch": "object"
+        },
+        "required": ["string"],
+        "type": "string"
+      },
+      "owner": "null",
+      "permissions": {
+        "canDelete": "boolean",
+        "canDuplicate": "boolean",
+        "canEdit": "boolean",
+        "canShare": "boolean",
+        "canTransfer": "boolean"
+      },
+      "prompt": {
+        "de": "string",
+        "en": "string"
+      },
+      "scope": "string"
+    }
+  },
+  "GET /api/prompts/:promptId/versions": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/prompts/preferences": {
+    "status": 200,
+    "shape": {
+      "available": "boolean",
+      "favorites": [],
+      "recents": [],
+      "stored": "boolean"
+    }
+  },
+  "GET /api/prompts/share-targets": {
+    "status": 200,
+    "shape": {
+      "allowed": {
+        "everyone": "boolean",
+        "group": "boolean",
+        "user": "boolean"
+      },
+      "groups": [
+        {
+          "description": "string",
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "users": []
+    }
+  },
+  "GET /api/prompts/variables": {
+    "status": 200,
+    "shape": {
+      "autoNames": ["string"],
+      "values": {
+        "date": "string",
+        "date_iso": "string",
+        "day_of_week": "string",
+        "locale": "string",
+        "month": "string",
+        "platform_context": "string",
+        "time": "string",
+        "timezone": "string",
+        "user_email": "string",
+        "user_name": "string",
+        "year": "string"
+      }
+    }
+  },
+  "GET /api/renderers": {
+    "status": 200,
+    "shape": [
+      {
+        "filename": "string",
+        "id": "string",
+        "source": "string"
+      }
+    ]
+  },
+  "GET /api/renderers/:id": {
+    "status": 200,
+    "shape": {
+      "code": "string",
+      "enabled": "boolean",
+      "filename": "string",
+      "id": "string",
+      "source": "string"
+    }
+  },
+  "GET /api/runs": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "anonymous": "boolean",
+          "endedAt": "string",
+          "finishReason": "string",
+          "kind": "string",
+          "parentRunId": "null",
+          "principalId": "string",
+          "refs": "object",
+          "runId": "string",
+          "startedAt": "string",
+          "status": "string",
+          "ts": "string",
+          "usage": "object"
+        }
+      ],
+      "persisted": "boolean"
+    }
+  },
+  "GET /api/runs/:runId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/runs/:runId/events": {
+    "skipped": "streams"
+  },
+  "GET /api/runs/:runId/interactions": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/scheduled-tasks": {
+    "status": 200,
+    "shape": {
+      "canCreate": "boolean",
+      "items": [
+        {
+          "activeRun": "null",
+          "allowedTools": [],
+          "appId": "string",
+          "consecutiveFailures": "number",
+          "createdAt": "string",
+          "createdVia": "string",
+          "description": "string",
+          "effectiveRetention": "object",
+          "enabledTools": "null",
+          "id": "string",
+          "instructions": "string",
+          "integrationScopes": "null",
+          "lastRun": "null",
+          "lastRunAt": "null",
+          "lastSuccessfulRunAt": "null",
+          "memory": "object",
+          "memorySummary": "null",
+          "modelId": "null",
+          "name": "string",
+          "nextRunAt": "null",
+          "nextSlotAt": "null",
+          "notify": "string",
+          "owner": "object",
+          "ownerId": "string",
+          "retention": "null",
+          "runNumber": "number",
+          "schedule": "object",
+          "scheduleDescription": "string",
+          "scheduledRunCount": "number",
+          "schemaVersion": "number",
+          "staggerMinutes": "number",
+          "status": "string",
+          "statusReason": "null",
+          "unseenCount": "number",
+          "unseenRuns": [],
+          "upcomingRuns": [],
+          "updatedAt": "string",
+          "variables": "null",
+          "websearchEnabled": "null"
+        }
+      ],
+      "limits": {
+        "maxInstructionLength": "number",
+        "maxRunChatsPerTask": "number",
+        "maxRunsPerTask": "number",
+        "maxTasksPerUser": "number",
+        "minIntervalMinutes": "number",
+        "runRetentionDays": "number",
+        "staggerMinutes": "number"
+      }
+    }
+  },
+  "GET /api/scheduled-tasks/:taskId": {
+    "status": 200,
+    "shape": {
+      "activeRun": "null",
+      "allowedTools": [],
+      "appId": "string",
+      "consecutiveFailures": "number",
+      "createdAt": "string",
+      "createdVia": "string",
+      "description": "string",
+      "effectiveRetention": {
+        "maxAgeDays": "number",
+        "maxRuns": "number"
+      },
+      "enabledTools": "null",
+      "id": "string",
+      "instructions": "string",
+      "integrationScopes": "null",
+      "lastRun": "null",
+      "lastRunAt": "null",
+      "lastSuccessfulRunAt": "null",
+      "memory": {
+        "enabled": "boolean"
+      },
+      "memorySummary": "null",
+      "modelId": "null",
+      "name": "string",
+      "nextRunAt": "null",
+      "nextSlotAt": "null",
+      "notify": "string",
+      "owner": {
+        "name": "string",
+        "userId": "string",
+        "username": "string"
+      },
+      "ownerId": "string",
+      "retention": "null",
+      "runNumber": "number",
+      "schedule": {
+        "type": "string"
+      },
+      "scheduleDescription": "string",
+      "scheduledRunCount": "number",
+      "schemaVersion": "number",
+      "staggerMinutes": "number",
+      "status": "string",
+      "statusReason": "null",
+      "unseenCount": "number",
+      "unseenRuns": [],
+      "upcomingRuns": [],
+      "updatedAt": "string",
+      "variables": "null",
+      "websearchEnabled": "null"
+    }
+  },
+  "GET /api/scheduled-tasks/:taskId/files": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/scheduled-tasks/:taskId/files/:fileId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/scheduled-tasks/:taskId/memory": {
+    "status": 200,
+    "shape": {
+      "body": "string",
+      "chars": "number",
+      "enabled": "boolean",
+      "maxChars": "number",
+      "platformEnabled": "boolean",
+      "updatedAt": "null",
+      "updatedBy": "null",
+      "version": "number"
+    }
+  },
+  "GET /api/scheduled-tasks/:taskId/runs": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/scheduled-tasks/:taskId/runs/:runId": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/scheduled-tasks/_apps/:appId/tools": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/scheduled-tasks/_notifications": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/setup/status": {
+    "status": 200,
+    "shape": {
+      "configured": "boolean",
+      "disabled": "boolean"
+    }
+  },
+  "GET /api/shares/:shareId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/shares/:shareId/artifacts": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/shares/:shareId/artifacts/:artifactId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/shares/:shareId/files": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/shares/:shareId/files/:fileId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/shares/with-me": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/shortlinks": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "appId": "string",
+          "code": "string",
+          "createdAt": "string",
+          "expiresAt": "null",
+          "includeParams": "boolean",
+          "ownerId": "string",
+          "params": "null",
+          "path": "null",
+          "url": "string",
+          "usage": "number"
+        }
+      ]
+    }
+  },
+  "GET /api/shortlinks/:code": {
+    "status": 200,
+    "shape": {
+      "appId": "string",
+      "code": "string",
+      "createdAt": "string",
+      "expiresAt": "null",
+      "includeParams": "boolean",
+      "ownerId": "string",
+      "params": "null",
+      "path": "null",
+      "url": "string",
+      "usage": "number"
+    }
+  },
+  "GET /api/skills": {
+    "status": 200,
+    "shape": [
+      {
+        "description": "string",
+        "displayName": "string",
+        "id": "string",
+        "isSystem?": "boolean",
+        "metadata?": {
+          "author?": "string",
+          "version?": "string"
+        },
+        "name": "string",
+        "owner?": {
+          "name": "string"
+        },
+        "scope": "string"
+      }
+    ]
+  },
+  "GET /api/skills/:name": {
+    "status": 200,
+    "shape": {
+      "compatibility": "null",
+      "description": "string",
+      "displayName": "string",
+      "license": "null",
+      "metadata": {
+        "author": "string",
+        "version": "string"
+      },
+      "name": "string"
+    }
+  },
+  "GET /api/skills/:name/content": {
+    "skipped": "a download"
+  },
+  "GET /api/skills/:name/files/*filePath": {
+    "skipped": "not an API answer"
+  },
+  "GET /api/styles": {
+    "status": 200,
+    "shape": {
+      "analytical": "string",
+      "assertive": "string",
+      "casual": "string",
+      "concise": "string",
+      "creative": "string",
+      "detailed": "string",
+      "einfache, leichte Sprache": "string",
+      "empathetic": "string",
+      "explanatory": "string",
+      "formal": "string",
+      "friendly": "string",
+      "humorous": "string",
+      "keep": "string",
+      "normal": "string",
+      "persuasive": "string",
+      "technical": "string"
+    }
+  },
+  "GET /api/theme.css": {
+    "status": 200,
+    "type": "text/css"
+  },
+  "GET /api/tools-service/jobs": {
+    "status": 200,
+    "shape": []
+  },
+  "GET /api/tools-service/jobs/:jobId/download": {
+    "skipped": "a download"
+  },
+  "GET /api/tools-service/jobs/:jobId/progress": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/tools-service/ocr/models": {
+    "status": 200,
+    "shape": [
+      {
+        "id": "string",
+        "isDefault": "boolean",
+        "name": {
+          "de": "string",
+          "en": "string"
+        },
+        "supportsVision": "boolean"
+      }
+    ]
+  },
+  "GET /api/translations/:lang": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/usage/me": {
+    "status": 200,
+    "shape": {
+      "apps": [
+        {
+          "appId": "string",
+          "tokens": "number"
+        }
+      ],
+      "buckets": [],
+      "files": {
+        "fileCount": "number",
+        "limit": "number",
+        "source": "string",
+        "usedBytes": "number"
+      },
+      "models": [
+        {
+          "exceeded": "boolean",
+          "limited": "boolean",
+          "modelId": "string",
+          "name": "string",
+          "usage": "object",
+          "warning": "boolean"
+        }
+      ],
+      "resets": {
+        "day": "string",
+        "month": "string",
+        "schedule": {
+          "dailyAt": "string",
+          "monthlyAt": "string",
+          "timezone": "string",
+          "weeklyAt": "string",
+          "weeklyOn": "string"
+        },
+        "week": "string"
+      },
+      "totals": {
+        "day": "number",
+        "month": "number",
+        "week": "number"
+      }
+    }
+  },
+  "GET /api/user-skills": {
+    "status": 200,
+    "shape": [
+      {
+        "access": "string",
+        "copiedFrom": "null",
+        "createdAt": "string",
+        "createdBy": "string",
+        "description": "string",
+        "fileCount": "number",
+        "id": "string",
+        "name": "string",
+        "owner": {
+          "active": "boolean",
+          "id": "string",
+          "name": "string"
+        },
+        "permissions": {
+          "canDelete": "boolean",
+          "canDuplicate": "boolean",
+          "canEdit": "boolean",
+          "canShare": "boolean",
+          "canTransfer": "boolean"
+        },
+        "promotedTo": "null",
+        "readOnly": "boolean",
+        "revision": "number",
+        "scope": "string",
+        "shared": "boolean",
+        "shares": [],
+        "size": "number",
+        "updatedAt": "string",
+        "updatedBy": "string"
+      }
+    ]
+  },
+  "GET /api/user-skills/:skillId": {
+    "status": 200,
+    "shape": {
+      "access": "string",
+      "body": "string",
+      "copiedFrom": "null",
+      "createdAt": "string",
+      "createdBy": "string",
+      "description": "string",
+      "fileCount": "number",
+      "files": [],
+      "id": "string",
+      "name": "string",
+      "owner": {
+        "active": "boolean",
+        "id": "string",
+        "name": "string"
+      },
+      "permissions": {
+        "canDelete": "boolean",
+        "canDuplicate": "boolean",
+        "canEdit": "boolean",
+        "canShare": "boolean",
+        "canTransfer": "boolean"
+      },
+      "promotedTo": "null",
+      "readOnly": "boolean",
+      "revision": "number",
+      "scope": "string",
+      "shared": "boolean",
+      "shares": [],
+      "size": "number",
+      "updatedAt": "string",
+      "updatedBy": "string"
+    }
+  },
+  "GET /api/user-skills/:skillId/versions": {
+    "status": 200,
+    "shape": [
+      {
+        "description": "string",
+        "name": "string",
+        "revision": "number",
+        "savedAt": "string",
+        "savedBy": {
+          "id": "string",
+          "name": "string"
+        }
+      }
+    ]
+  },
+  "GET /api/user-skills/:skillId/versions/:revision": {
+    "status": 404,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/user-skills/marketplace": {
+    "status": 200,
+    "shape": {
+      "categories": [],
+      "items": [],
+      "nextCursor": "null",
+      "registries": [],
+      "total": "number"
+    }
+  },
+  "GET /api/user-skills/marketplace/:registryId/:name": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/user-skills/share-targets": {
+    "status": 200,
+    "shape": {
+      "allowed": {
+        "everyone": "boolean",
+        "group": "boolean",
+        "user": "boolean"
+      },
+      "groups": [
+        {
+          "description": "string",
+          "id": "string",
+          "name": "string"
+        }
+      ],
+      "users": []
+    }
+  },
+  "GET /api/users/lookup": {
+    "status": 200,
+    "shape": {
+      "items": []
+    }
+  },
+  "GET /api/voice/azure/token": {
+    "status": 503,
+    "shape": {
+      "code": "string",
+      "detail": "string",
+      "status": "number",
+      "title": "string",
+      "type": "string"
+    }
+  },
+  "GET /api/workflows": {
+    "status": 200,
+    "shape": {
+      "items": [
+        {
+          "allowedGroups?": "[]|array",
+          "canvas?": "object",
+          "chatIntegration?": "object",
+          "config?": "object",
+          "description": "object",
+          "edges": "array",
+          "enabled": "boolean",
+          "id": "string",
+          "name": "object",
+          "nodes": "array",
+          "projects?": "array",
+          "status?": "string",
+          "version": "string"
+        }
+      ]
+    }
+  },
+  "GET /api/workflows/:id": {
+    "status": 200,
+    "shape": {
+      "allowedGroups": [],
+      "config": {
+        "allowCycles": "boolean",
+        "defaultModelId": "string",
+        "maxIterations": "number"
+      },
+      "description": {
+        "de": "string",
+        "en": "string"
+      },
+      "edges": [
+        {
+          "condition?": "object",
+          "id": "string",
+          "source": "string",
+          "target": "string"
+        }
+      ],
+      "enabled": "boolean",
+      "id": "string",
+      "name": {
+        "de": "string",
+        "en": "string"
+      },
+      "nodes": [
+        {
+          "config": "object",
+          "id": "string",
+          "name": "object",
+          "position": "object",
+          "type": "string"
+        }
+      ],
+      "version": "string"
+    }
+  },
+  "GET /api/workflows/executions/:executionId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/workflows/executions/:executionId/export": {
+    "skipped": "a download"
+  },
+  "GET /api/workflows/executions/:executionId/stream": {
+    "skipped": "streams"
+  },
+  "GET /api/workflows/my-executions": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /manifest.json": {
+    "skipped": "not an API answer"
+  },
+  "GET /mcp": {
+    "skipped": "an external specification"
+  },
+  "GET /mcp/.well-known": {
+    "skipped": "an external specification"
+  },
+  "GET /nextcloud/callback.html": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /nextcloud/full-embed.html": {
+    "skipped": "not an API answer"
+  },
+  "GET /office/callback.html": {
+    "skipped": "a redirect or sign-in flow"
+  },
+  "GET /office/commands.html": {
+    "skipped": "not an API answer"
+  },
+  "GET /office/taskpane.html": {
+    "skipped": "not an API answer"
+  },
+  "GET /s/:code": {
+    "skipped": "not an API answer"
+  },
+  "GET /share/:shareId/embed": {
+    "skipped": "not an API answer"
+  },
+  "GET /sw.js": {
+    "skipped": "not an API answer"
+  }
+}

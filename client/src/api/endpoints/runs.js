@@ -22,7 +22,7 @@ import { handleApiResponse } from '../utils/requestHandler';
  * @param {Object} answer - `{ value?, data?, decision?, reason?, skipped? }`
  * @param {Object} [options]
  * @param {'chat'|'run_page'|'queue'|'api'} [options.channel='run_page'] - where the answer was given
- * @returns {Promise<{ success: boolean, interaction: Object }>} the response body
+ * @returns {Promise<Object>} the answered interaction
  */
 export const answerInteraction = async (runId, interactionId, answer, options = {}) => {
   const { channel = 'run_page' } = options;
@@ -41,7 +41,7 @@ export const answerInteraction = async (runId, interactionId, answer, options = 
 /**
  * Pending interactions of one run.
  * @param {string} runId
- * @returns {Promise<{ runId: string, interactions: Object[] }>} the response body
+ * @returns {Promise<{ items: Object[] }>} the response body
  */
 export const fetchRunInteractions = async runId => {
   return handleApiResponse(
@@ -84,13 +84,16 @@ export const sendHumanEvent = async (runId, event) => {
  * Ledger events of a run (re-sync a live stream from a sequence number).
  * @param {string} runId
  * @param {Object} [options]
- * @param {number} [options.after=0]
+ * @param {string} [options.cursor] - The `nextCursor` of the previous page
+ * @param {number} [options.limit]
  * @param {'sse'} [options.view] - `sse` returns SSE v2 envelopes
- * @returns {Promise<{ runId: string, after: number, events: Object[], lastSeq: number }>} the response body
+ * @returns {Promise<{ runId: string, items: Object[], nextCursor: string|null }>} the response body
  */
 export const fetchRunEvents = async (runId, options = {}) => {
-  const { after = 0, view } = options;
-  const params = new URLSearchParams({ after: String(after) });
+  const { cursor, limit, view } = options;
+  const params = new URLSearchParams();
+  if (cursor) params.set('cursor', cursor);
+  if (limit) params.set('limit', String(limit));
   if (view) params.set('view', view);
   return handleApiResponse(
     () => apiClient.get(`/runs/${encodeURIComponent(runId)}/events?${params.toString()}`),

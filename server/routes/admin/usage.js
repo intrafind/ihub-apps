@@ -20,6 +20,7 @@
  */
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { runRollups } from '../../services/UsageAggregator.js';
@@ -32,12 +33,10 @@ import {
   getUsageReliability,
   getFeedbackSummary,
   getDataStart,
-  clearUsageQueryCache,
-  UsageQueryError
+  clearUsageQueryCache
 } from '../../services/usage/usageQuery.js';
 import { readFeedbackPage } from '../../feedbackStorage.js';
 import { queryCalls } from '../../services/usage/callLog.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { escapeCsvField } from '../../utils/csv.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -62,15 +61,10 @@ function rangeParams(query) {
 }
 
 /** A GET handler for one usage query: 400 on a bad range, 500 otherwise. */
-function queryRoute(query, label) {
+function queryRoute(query) {
   return async (req, res) => {
-    try {
-      res.set('Cache-Control', 'no-store');
-      res.json(await query(rangeParams(req.query)));
-    } catch (error) {
-      if (error instanceof UsageQueryError) return sendBadRequest(res, error.message);
-      return sendInternalError(res, error, label);
-    }
+    res.set('Cache-Control', 'no-store');
+    res.json(await query(rangeParams(req.query)));
   };
 }
 
@@ -130,10 +124,10 @@ export default function registerAdminUsageRoutes(app) {
   app.get(
     buildServerPath('/api/admin/usage/summary'),
     adminAuth,
-    queryRoute(
-      async params => ({ ...(await getUsageSummary(params)), dataStart: await getDataStart() }),
-      'load usage summary'
-    )
+    queryRoute(async params => ({
+      ...(await getUsageSummary(params)),
+      dataStart: await getDataStart()
+    }))
   );
 
   /**
@@ -151,11 +145,7 @@ export default function registerAdminUsageRoutes(app) {
    *       200: { description: Rows with per-model sub-rows }
    *       400: { description: Invalid parameters }
    */
-  app.get(
-    buildServerPath('/api/admin/usage/breakdown'),
-    adminAuth,
-    queryRoute(getUsageBreakdown, 'load usage breakdown')
-  );
+  app.get(buildServerPath('/api/admin/usage/breakdown'), adminAuth, queryRoute(getUsageBreakdown));
 
   /**
    * @swagger
@@ -169,7 +159,7 @@ export default function registerAdminUsageRoutes(app) {
   app.get(
     buildServerPath('/api/admin/usage/reliability'),
     adminAuth,
-    queryRoute(getUsageReliability, 'load usage reliability')
+    queryRoute(getUsageReliability)
   );
 
   /**
@@ -184,7 +174,7 @@ export default function registerAdminUsageRoutes(app) {
   app.get(
     buildServerPath('/api/admin/usage/feedback/summary'),
     adminAuth,
-    queryRoute(getFeedbackSummary, 'load feedback summary')
+    queryRoute(getFeedbackSummary)
   );
 
   /**
@@ -211,50 +201,38 @@ export default function registerAdminUsageRoutes(app) {
    *       200: { description: "{ items, nextCursor }" }
    *       400: { description: Invalid parameters }
    */
-  app.get(
-    buildServerPath('/api/admin/usage/calls'),
-    adminAuth,
-    queryRoute(queryCalls, 'load usage calls')
-  );
+  app.get(buildServerPath('/api/admin/usage/calls'), adminAuth, queryRoute(queryCalls));
 
   app.get(buildServerPath('/api/admin/usage/meta'), adminAuth, (req, res) => {
     res.json({ trackingMode: getUsageTrackingMode() });
   });
 
   app.put(buildServerPath('/api/admin/usage/meta'), adminAuth, async (req, res) => {
-    try {
-      const { trackingMode } = req.body || {};
-      const validModes = ['anonymous', 'pseudonymous', 'identified'];
-      if (!validModes.includes(trackingMode)) {
-        return sendBadRequest(
-          res,
-          `Invalid tracking mode. Must be one of: ${validModes.join(', ')}`
-        );
-      }
-      // An unreadable platform.json starts fresh here, as it always has: the
-      // tracking mode is a single flag and refusing to set it would strand the
-      // admin with no way to turn tracking off.
-      const platform = (await configStore.readJson('config/platform.json')) || {};
-      if (!platform.features) platform.features = {};
-      platform.features.usageTrackingMode = trackingMode;
-      await configStore.writeJson('config/platform.json', platform);
-      await configCache.refreshCacheEntry('config/platform.json');
-      res.json({ trackingMode, message: 'Tracking mode updated successfully' });
-    } catch (error) {
-      return sendInternalError(res, error, 'update tracking mode');
+    const { trackingMode } = req.body || {};
+    const validModes = ['anonymous', 'pseudonymous', 'identified'];
+    if (!validModes.includes(trackingMode)) {
+      throw new ServiceError(
+        'BAD_REQUEST',
+        `Invalid tracking mode. Must be one of: ${validModes.join(', ')}`
+      );
     }
+    // An unreadable platform.json starts fresh here, as it always has: the
+    // tracking mode is a single flag and refusing to set it would strand the
+    // admin with no way to turn tracking off.
+    const platform = (await configStore.readJson('config/platform.json')) || {};
+    if (!platform.features) platform.features = {};
+    platform.features.usageTrackingMode = trackingMode;
+    await configStore.writeJson('config/platform.json', platform);
+    await configCache.refreshCacheEntry('config/platform.json');
+    res.json({ trackingMode });
   });
 
   // Roll up now (normally hourly). `?all=1` rebuilds every day.
   app.post(buildServerPath('/api/admin/usage/_rollup'), adminAuth, async (req, res) => {
-    try {
-      const retention = configCache.getPlatform?.()?.usageTracking || {};
-      const stats = await runRollups(retention, { all: req.query.all === '1' });
-      clearUsageQueryCache();
-      res.json({ message: 'Rollup generation completed successfully', ...stats });
-    } catch (error) {
-      return sendInternalError(res, error, 'generate rollups');
-    }
+    const retention = configCache.getPlatform?.()?.usageTracking || {};
+    const stats = await runRollups(retention, { all: req.query.all === '1' });
+    clearUsageQueryCache();
+    res.json({ ...stats });
   });
 
   /**
@@ -273,12 +251,7 @@ export default function registerAdminUsageRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/usage/export'), adminAuth, async (req, res) => {
     let resolved;
-    try {
-      resolved = resolveRange(rangeParams(req.query));
-    } catch (error) {
-      if (error instanceof UsageQueryError) return sendBadRequest(res, error.message);
-      return sendInternalError(res, error, 'export usage data');
-    }
+    resolved = resolveRange(rangeParams(req.query));
     try {
       await flushQueue().catch(() => {});
       const fromIso = new Date(resolved.from).toISOString();
@@ -314,17 +287,14 @@ export default function registerAdminUsageRoutes(app) {
       if (!csv) res.write(']}');
       res.end();
     } catch (error) {
+      // Part of the body is on the wire: all that is left is to end the response.
       if (res.headersSent) return res.end();
-      return sendInternalError(res, error, 'export usage data');
+      throw error;
     }
   });
 
   // Stored feedback entries (with comments), newest first, one page at a time.
   app.get(buildServerPath('/api/admin/usage/feedback'), adminAuth, async (req, res) => {
-    try {
-      res.json(await readFeedbackPage({ limit: req.query.limit, offset: req.query.offset }));
-    } catch (error) {
-      return sendInternalError(res, error, 'load feedback entries');
-    }
+    res.json(await readFeedbackPage({ limit: req.query.limit, cursor: req.query.cursor }));
   });
 }

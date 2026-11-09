@@ -32,6 +32,7 @@ const { default: request } = await import('supertest');
 const { default: configCache } = await import('../configCache.js');
 const { default: registerShortLinkRoutes } = await import('../routes/shortLinkRoutes.js');
 const { setupMiddleware } = await import('../middleware/setup.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const GROUPS = {
   groups: {
@@ -84,6 +85,7 @@ function buildApp() {
     next();
   });
   registerShortLinkRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
@@ -123,20 +125,20 @@ describe('short link ownership', () => {
     const { body: theirs } = await create(app, 'bob', { appId: 'list-app' });
 
     const alice = await as(request(app).get('/api/shortlinks?appId=list-app'), 'alice');
-    expect(alice.body.map(l => l.code)).toEqual([mine.code]);
+    expect(alice.body.items.map(l => l.code)).toEqual([mine.code]);
 
     // A user cannot widen the list to someone else's links.
     const widened = await as(request(app).get('/api/shortlinks?ownerId=bob'), 'alice');
-    expect(widened.body.every(l => l.ownerId === 'alice')).toBe(true);
+    expect(widened.body.items.every(l => l.ownerId === 'alice')).toBe(true);
 
     const admin = await as(request(app).get('/api/shortlinks?appId=list-app'), 'admin');
-    expect(admin.body.map(l => l.code).sort()).toEqual([mine.code, theirs.code].sort());
+    expect(admin.body.items.map(l => l.code).sort()).toEqual([mine.code, theirs.code].sort());
 
     const byOwner = await as(
       request(app).get('/api/shortlinks?appId=list-app&ownerId=bob'),
       'admin'
     );
-    expect(byOwner.body.map(l => l.code)).toEqual([theirs.code]);
+    expect(byOwner.body.items.map(l => l.code)).toEqual([theirs.code]);
   });
 
   test('another user sees only that a code is taken', async () => {
@@ -155,6 +157,11 @@ describe('short link ownership', () => {
       url: '/apps/other'
     });
     expect(put.status).toBe(403);
+    expect(put.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(put.body).toMatchObject({
+      code: 'FORBIDDEN',
+      detail: 'You do not own this short link.'
+    });
     expect((await as(request(app).delete(`/api/shortlinks/${link.code}`), 'bob')).status).toBe(403);
 
     const own = await as(request(app).put(`/api/shortlinks/${link.code}`), 'alice').send({
@@ -172,7 +179,7 @@ describe('short link ownership', () => {
     expect(adminPut.body.ownerId).toBe('alice');
 
     expect((await as(request(app).delete(`/api/shortlinks/${link.code}`), 'admin')).status).toBe(
-      200
+      204
     );
   });
 
@@ -224,6 +231,27 @@ describe('short link targets', () => {
       url: 'https://elsewhere.example/'
     });
     expect(put.status).toBe(400);
+    expect(put.body.code).toBe('BAD_REQUEST');
+    expect(put.body.detail).toMatch(/allowed host/);
+  });
+
+  test('answers an unknown code with NOT_FOUND, a missing target with BAD_REQUEST and a taken code with CONFLICT', async () => {
+    const app = buildApp();
+    const missing = await as(request(app).get('/api/shortlinks/nosuchcode'), 'alice');
+    expect(missing.status).toBe(404);
+    expect(missing.body).toMatchObject({ code: 'NOT_FOUND', detail: 'Short link not found' });
+
+    const none = await create(app, 'alice', {});
+    expect(none.status).toBe(400);
+    expect(none.body).toMatchObject({
+      code: 'BAD_REQUEST',
+      detail: 'appId or url or path required'
+    });
+
+    await create(app, 'alice', { appId: 'chat', code: 'taken1' });
+    const dup = await create(app, 'bob', { appId: 'chat', code: 'taken1' });
+    expect(dup.status).toBe(409);
+    expect(dup.body).toMatchObject({ code: 'CONFLICT', detail: 'Code already exists' });
   });
 
   test('/s/:code redirects to an allowed target', async () => {

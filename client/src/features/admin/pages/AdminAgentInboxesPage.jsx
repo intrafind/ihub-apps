@@ -26,7 +26,7 @@ export default function AdminAgentInboxesPage() {
     setLoading(true);
     try {
       const res = await fetchInboxes();
-      setInboxes(res?.data || []);
+      setInboxes(res?.data?.items ?? []);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
     } finally {

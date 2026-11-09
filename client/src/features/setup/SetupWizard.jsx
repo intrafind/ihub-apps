@@ -160,8 +160,8 @@ export default function SetupWizard() {
     })
       .then(response => (response.ok ? response.json() : null))
       .then(data => {
-        if (!data?.statuses) return;
-        const enabled = Object.values(data.statuses).filter(status => status.enabled);
+        if (!Array.isArray(data?.items)) return;
+        const enabled = data.items.filter(status => status.enabled);
         const ready = enabled.filter(s => s.state === 'ok' || s.state === 'keyless').length;
         setKeyCheck({ ready, blocked: enabled.length - ready });
       })
@@ -191,7 +191,7 @@ export default function SetupWizard() {
     setTesting(true);
     setTestResult(null);
     try {
-      const response = await fetch(buildApiUrl('setup/test'), {
+      const response = await fetch(buildApiUrl('setup/_test'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -264,7 +264,7 @@ export default function SetupWizard() {
       }
       if (window.confirm(warning + t('setup.skipConfirm'))) {
         try {
-          const response = await fetch(buildApiUrl('setup/disable'), {
+          const response = await fetch(buildApiUrl('setup/_disable'), {
             method: 'POST',
             credentials: 'include'
           });

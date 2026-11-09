@@ -525,8 +525,8 @@ export default function ChatHistoryPage() {
       patchChatInCache(chat.id, { title, titleSetByUser: true });
       try {
         const result = await renameChat(chat.id, title);
-        if (typeof result?.chat?.title === 'string') {
-          patchChatInCache(chat.id, { title: result.chat.title });
+        if (typeof result?.title === 'string') {
+          patchChatInCache(chat.id, { title: result.title });
         }
         setActionStatus(t('chatHistory.renamed', 'Chat renamed'));
         invalidateChatsCache();

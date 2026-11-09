@@ -250,7 +250,7 @@ describe('action detail', () => {
 
   it('describes what the model sees, the sources of side effect and approval, and the bindings', async () => {
     const res = await admin(request(app).get(`${base}/actions/search`)).expect(200);
-    const { detail } = res.body;
+    const detail = res.body;
     expect(detail.action).toMatchObject({
       name: 'search',
       toolId: 'portal__search',
@@ -288,7 +288,7 @@ describe('action detail', () => {
   });
 
   it('suggests the side effect of an undeclared OpenAPI operation from its method', async () => {
-    const { detail } = (await admin(request(app).get(`${base}/actions/guess`)).expect(200)).body;
+    const detail = (await admin(request(app).get(`${base}/actions/guess`)).expect(200)).body;
     expect(detail.effect).toMatchObject({
       sideEffect: 'unknown',
       declaredSideEffect: 'unknown',
@@ -372,13 +372,13 @@ describe('action detail', () => {
         .put(`${base}/instructions`)
         .send({ instructions: { en: 'Use the notes.' } })
     ).expect(200);
-    expect(set.body.instance.instructions).toEqual({ en: 'Use the notes.' });
+    expect(set.body.instructions).toEqual({ en: 'Use the notes.' });
     const page = await admin(request(app).get(base)).expect(200);
     expect(page.body.instructions).toMatchObject({ text: 'Use the notes.', source: 'admin' });
     const removed = await admin(
       request(app).put(`${base}/instructions`).send({ instructions: null })
     ).expect(200);
-    expect(removed.body.instance.instructions).toBeUndefined();
+    expect(removed.body.instructions).toBeUndefined();
     await admin(
       request(app)
         .put(`${base}/instructions`)
@@ -394,7 +394,7 @@ describe('action test', () => {
         .post(`${base}/actions/search/_test`)
         .send({ args: { q: 'monday', note: 'apiKey-free' } })
     ).expect(200);
-    const { result } = res.body;
+    const result = res.body;
     expect(result).toMatchObject({
       status: 'ok',
       httpStatus: 201,
@@ -425,7 +425,7 @@ describe('action test', () => {
 
     // A test counts as a test, never as a call.
     const detail = await admin(request(app).get(`${base}/actions/search`)).expect(200);
-    expect(detail.body.detail.usage).toMatchObject({ calls: 0, tests: 1 });
+    expect(detail.body.usage).toMatchObject({ calls: 0, tests: 1 });
   });
 
   it('redacts secret arguments in the shown request and in the audit entry', async () => {
@@ -434,8 +434,8 @@ describe('action test', () => {
         .post(`${base}/actions/search/_test`)
         .send({ args: { q: 'x', password: 'arg-secret-value-1' } })
     ).expect(200);
-    expect(res.body.result.request.args.password).toBe('[redacted]');
-    expect(JSON.stringify(res.body.result)).not.toContain('arg-secret-value-1');
+    expect(res.body.request.args.password).toBe('[redacted]');
+    expect(JSON.stringify(res.body)).not.toContain('arg-secret-value-1');
     expect(audits.at(-1).summary).not.toContain('arg-secret-value-1');
     expect(audits.at(-1).summary).toContain('[redacted]');
   });
@@ -467,7 +467,7 @@ describe('action test', () => {
         .post(`${base}/actions/create_note/_test`)
         .send({ args: { note: 'hello' }, confirm: true })
     ).expect(200);
-    expect(ran.body.result).toMatchObject({ status: 'ok', confirmed: true, sideEffect: 'write' });
+    expect(ran.body).toMatchObject({ status: 'ok', confirmed: true, sideEffect: 'write' });
     expect(runCalls).toHaveLength(1);
   });
 

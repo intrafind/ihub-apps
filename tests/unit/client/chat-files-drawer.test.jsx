@@ -85,13 +85,11 @@ function makeUploaded(overrides = {}) {
   return {
     list: jest.fn(async () => ({ items: FILES })),
     fetchText: jest.fn(async id => ({
-      file: {
-        id,
-        text:
-          id === 'file_mail'
-            ? 'From: ada@example.com\nTo: grace@example.com\nSubject: Offer\n\nPlease find the offer.'
-            : '# Plan\n\nLaunch in March.'
-      }
+      id,
+      text:
+        id === 'file_mail'
+          ? 'From: ada@example.com\nTo: grace@example.com\nSubject: Offer\n\nPlease find the offer.'
+          : '# Plan\n\nLaunch in March.'
     })),
     fetchBlob: jest.fn(async () => textBlob('%PDF-1.4')),
     remove: jest.fn(async () => ({ deleted: true })),

@@ -130,10 +130,14 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user } = {}
   const res = makeResponse();
   for (const handler of handlers) {
     let advanced = false;
+    let refusal = null;
     try {
-      await handler(req, res, () => {
-        advanced = true;
+      await handler(req, res, error => {
+        // `next(error)` is what Express hands to the global handler, not a step forward.
+        if (error) refusal = error;
+        else advanced = true;
       });
+      if (refusal) throw refusal;
     } catch (error) {
       // What Express does with a thrown error: the global handler answers.
       errorHandler(error, req, res, () => {});
@@ -480,6 +484,8 @@ describe('user projects', () => {
     const project = await create(ADA);
     const everyone = await setMembers(ADA, project.id, [{ type: 'everyone', role: 'user' }]);
     assert.equal(everyone.statusCode, 403, 'everyone is off by default');
+    assert.equal(everyone.body.code, 'SHARE_TARGET_NOT_ALLOWED');
+    assert.deepEqual(everyone.body.details, { type: 'everyone' });
     setProjectSettings({ sharing: { allowEveryone: true } });
     assert.equal(
       (await setMembers(ADA, project.id, [{ type: 'everyone', role: 'user' }])).statusCode,
@@ -527,9 +533,9 @@ describe('user projects', () => {
       body: { kind: 'url', ref: { url: 'https://example.com/policy' }, pinned: true }
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
-    assert.equal(added.body.item.status, 'ready');
-    assert.equal(added.body.item.pinned, true);
-    assert.equal(added.body.item.text, null);
+    assert.equal(added.body.status, 'ready');
+    assert.equal(added.body.pinned, true);
+    assert.equal(added.body.text, null);
     const items = await drive(route.items, { user: ADA, params: { projectId: project.id } });
     assert.equal(items.body.items.length, 1);
     const upload = await drive(route.addItem, {
@@ -541,7 +547,7 @@ describe('user projects', () => {
     assert.equal(upload.body.code, 'INVALID_REF');
     const removed = await drive(route.removeItem, {
       user: ADA,
-      params: { projectId: project.id, itemId: added.body.item.id }
+      params: { projectId: project.id, itemId: added.body.id }
     });
     assert.equal(removed.statusCode, 204);
     assert.equal(
@@ -644,13 +650,13 @@ describe('documents linked from another project', () => {
 
     const linked = await addLink(ADA, target.id, {
       projectId: source.id,
-      itemId: original.body.item.id
+      itemId: original.body.id
     });
     assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
-    assert.equal(linked.body.item.name, 'Install guide');
-    assert.equal(linked.body.item.storage, 'link');
-    assert.equal(linked.body.item.status, 'ready');
-    assert.deepEqual(linked.body.item.provenance.source, {
+    assert.equal(linked.body.name, 'Install guide');
+    assert.equal(linked.body.storage, 'link');
+    assert.equal(linked.body.status, 'ready');
+    assert.deepEqual(linked.body.provenance.source, {
       site: 'Delivery',
       url: `/projects/${source.id}`
     });
@@ -664,18 +670,18 @@ describe('documents linked from another project', () => {
     const third = await create(ADA, { name: 'Third' });
     const chained = await addLink(ADA, third.id, {
       projectId: target.id,
-      itemId: linked.body.item.id
+      itemId: linked.body.id
     });
     assert.equal(chained.statusCode, 201, JSON.stringify(chained.body));
-    assert.deepEqual(chained.body.item.ref, {
+    assert.deepEqual(chained.body.ref, {
       projectId: source.id,
-      itemId: original.body.item.id
+      itemId: original.body.id
     });
 
     // Its own documents are already in the project.
     const own = await addLink(ADA, source.id, {
       projectId: source.id,
-      itemId: original.body.item.id
+      itemId: original.body.id
     });
     assert.equal(own.statusCode, 400);
     assert.equal(own.body.code, 'INVALID_REF');
@@ -688,7 +694,7 @@ describe('documents linked from another project', () => {
       params: { projectId: source.id },
       body: { kind: 'url', ref: { url: 'https://example.com/notes' } }
     });
-    const ref = { projectId: source.id, itemId: original.body.item.id };
+    const ref = { projectId: source.id, itemId: original.body.id };
     for (const user of [GRACE, ROOT]) {
       const target = await create(user, { name: `${user.name}'s project` });
       const res = await addLink(user, target.id, ref);
@@ -713,7 +719,7 @@ describe('documents linked from another project', () => {
     const target = await create(GRACE, { name: 'Grace space' });
     const fromShared = await addLink(GRACE, target.id, {
       projectId: shared.id,
-      itemId: original.body.item.id
+      itemId: original.body.id
     });
     assert.equal(fromShared.statusCode, 403, JSON.stringify(fromShared.body));
     assert.equal(fromShared.body.code, 'PERMISSION_DENIED');
@@ -735,7 +741,7 @@ describe('documents linked from another project', () => {
         body: { published: true }
       });
       assert.equal(published.statusCode, 200, JSON.stringify(published.body));
-      assert.equal(published.body.project.published, true);
+      assert.equal(published.body.published, true);
       const linked = await addLink(GRACE, target.id, ref);
       assert.equal(linked.statusCode, 201, JSON.stringify(linked.body));
       const listed = await drive(route.list, { user: GRACE, query: { scope: 'all' } });
@@ -763,7 +769,7 @@ describe('documents linked from another project', () => {
       body: { kind: 'url', ref: { url: 'https://example.com/handbook' } }
     });
     const target = await create(ADA, { name: 'Team space' });
-    await addLink(ADA, target.id, { projectId: source.id, itemId: original.body.item.id });
+    await addLink(ADA, target.id, { projectId: source.id, itemId: original.body.id });
     await setMembers(ADA, target.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
 
     // A member of the linking project is not a member of the source.
@@ -773,7 +779,7 @@ describe('documents linked from another project', () => {
 
     await drive(route.removeItem, {
       user: ADA,
-      params: { projectId: source.id, itemId: original.body.item.id }
+      params: { projectId: source.id, itemId: original.body.id }
     });
     assert.deepEqual(await linkState(ADA, target.id), { state: 'gone' });
   });
@@ -820,7 +826,7 @@ describe('the project catalog', () => {
       drive(route.addItem, {
         user,
         params: { projectId },
-        body: { kind: 'project-item', ref: { projectId: source.id, itemId: original.body.item.id } }
+        body: { kind: 'project-item', ref: { projectId: source.id, itemId: original.body.id } }
       });
 
     const target = await create(GRACE, { name: 'From the catalog' });
@@ -1047,7 +1053,7 @@ describe('admin projects', () => {
       body: { id: 'faq', name: { en: 'FAQ', de: 'FAQ' }, instructions: 'Cite the FAQ' }
     });
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
-    assert.equal(created.body.project.ownership, 'admin');
+    assert.equal(created.body.ownership, 'admin');
     const again = await drive(route.adminCreate, {
       user: EDITOR,
       body: { id: 'faq', name: { en: 'FAQ' } }
@@ -1085,7 +1091,7 @@ describe('admin projects', () => {
       body: { kind: 'page', ref: { pageId: 'faq' } }
     });
     assert.equal(item.statusCode, 201, JSON.stringify(item.body));
-    assert.equal(item.body.item.provenance.origin, 'linked');
+    assert.equal(item.body.provenance.origin, 'linked');
     assert.equal(
       (await drive(route.items, { user: NOBODY, params: { projectId: 'faq' } })).body.items.length,
       1
@@ -1103,7 +1109,7 @@ describe('admin projects', () => {
       body: { kind: 'url', ref: { url: 'https://example.com/old', maxContentLength: 1000 } }
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
-    const { id: itemId, name } = added.body.item;
+    const { id: itemId, name } = added.body;
     assert.equal(name, 'https://example.com/old');
 
     // An item still named after its address follows the new one.
@@ -1113,10 +1119,10 @@ describe('admin projects', () => {
       body: { ref: { url: 'https://example.com/new' } }
     });
     assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
-    assert.equal(moved.body.item.ref.url, 'https://example.com/new');
-    assert.equal(moved.body.item.name, 'https://example.com/new');
-    assert.equal(moved.body.item.provenance.source.url, 'https://example.com/new');
-    assert.equal(moved.body.item.status, 'ready');
+    assert.equal(moved.body.ref.url, 'https://example.com/new');
+    assert.equal(moved.body.name, 'https://example.com/new');
+    assert.equal(moved.body.provenance.source.url, 'https://example.com/new');
+    assert.equal(moved.body.status, 'ready');
     const stored = await getProjectRepository().get('web');
     assert.equal(stored.items[0].ref.url, 'https://example.com/new');
     // The reference is replaced as sent: a limit that was not sent is gone.
@@ -1128,14 +1134,14 @@ describe('admin projects', () => {
       params: { id: 'web', itemId },
       body: { name: 'Handbook', ref: { url: 'https://example.com/third' } }
     });
-    assert.equal(renamed.body.item.name, 'Handbook');
+    assert.equal(renamed.body.name, 'Handbook');
     const kept = await drive(route.adminUpdateItem, {
       user: EDITOR,
       params: { id: 'web', itemId },
       body: { ref: { url: 'https://example.com/fourth' } }
     });
-    assert.equal(kept.body.item.name, 'Handbook');
-    assert.equal(kept.body.item.ref.url, 'https://example.com/fourth');
+    assert.equal(kept.body.name, 'Handbook');
+    assert.equal(kept.body.ref.url, 'https://example.com/fourth');
 
     // The reference is checked against the item's own kind.
     for (const ref of [{ url: 'ftp://example.com/x' }, { pageId: 'faq' }, {}]) {
@@ -1168,7 +1174,7 @@ describe('admin projects', () => {
       body: { kind: 'url', ref: { url: 'https://example.com/a' } }
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
-    const { id: itemId } = added.body.item;
+    const { id: itemId } = added.body;
     setProjectSettings({ kinds: { url: false } });
     try {
       const refused = await drive(route.adminUpdateItem, {
@@ -1237,7 +1243,7 @@ describe('admin projects', () => {
       body: { id: 'faq-default', name: { en: 'FAQ' }, defaultAppId: 'support' }
     });
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
-    assert.equal(created.body.project.defaultAppId, 'support');
+    assert.equal(created.body.defaultAppId, 'support');
 
     const patched = await drive(route.adminPatch, {
       user: EDITOR,
@@ -1245,14 +1251,14 @@ describe('admin projects', () => {
       body: { defaultAppId: 'chat' }
     });
     assert.equal(patched.statusCode, 200, JSON.stringify(patched.body));
-    assert.equal(patched.body.project.defaultAppId, 'chat');
+    assert.equal(patched.body.defaultAppId, 'chat');
 
     const cleared = await drive(route.adminPatch, {
       user: EDITOR,
       params: { id: 'faq-default' },
       body: { defaultAppId: null }
     });
-    assert.equal(cleared.body.project.defaultAppId, null);
+    assert.equal(cleared.body.defaultAppId, null);
   });
 
   it('refuses import pointers and managed files from API callers', async () => {
@@ -1357,7 +1363,7 @@ describe('admin projects', () => {
       }
     });
     assert.equal(built.statusCode, 201, JSON.stringify(built.body));
-    const [item] = built.body.project.items;
+    const [item] = built.body.items;
     assert.equal(item.id, 'policy');
     assert.equal(item.storage, 'link');
     assert.equal(item.status, 'ready');
@@ -1457,7 +1463,7 @@ describe('admin projects', () => {
       body: { tags: ['help'] }
     });
     assert.equal(patched.statusCode, 200);
-    assert.deepEqual(patched.body.project.tags, ['help']);
+    assert.deepEqual(patched.body.tags, ['help']);
     // Admin names are localized records, on update as on create — through
     // the user route as well, where a content admin may edit it.
     const plain = await drive(route.adminPatch, {
@@ -1497,7 +1503,7 @@ describe('admin projects', () => {
       body: { id: 'faq', name: { en: 'FAQ' }, tags: ['help'] }
     });
     assert.equal(put.statusCode, 200, JSON.stringify(put.body));
-    assert.deepEqual(put.body.project.tags, ['help']);
+    assert.deepEqual(put.body.tags, ['help']);
 
     const unlinked = await drive(route.adminCreate, {
       user: EDITOR,
@@ -1535,7 +1541,7 @@ describe('admin projects', () => {
     const asEditor = await drive(route.adminList, { user: EDITOR, query: { ownership: 'user' } });
     assert.equal(asEditor.statusCode, 403);
     const admin = await drive(route.adminList, { user: EDITOR });
-    assert.ok(Array.isArray(admin.body) && admin.body.some(p => p.id === 'faq'));
+    assert.ok(Array.isArray(admin.body.items) && admin.body.items.some(p => p.id === 'faq'));
   });
 });
 
@@ -1761,7 +1767,7 @@ describe('chats in a project', () => {
       body: { attachedProjectIds: [mine.id, other.id, mine.id] }
     });
     assert.equal(attached.statusCode, 200, JSON.stringify(attached.body));
-    assert.deepEqual(attached.body.chat.attachedProjectIds, [mine.id, other.id]);
+    assert.deepEqual(attached.body.attachedProjectIds, [mine.id, other.id]);
     assert.deepEqual((await chats.getChat(chat.id)).attachedProjectIds, [mine.id, other.id]);
 
     // The list replaces the attached ones: taking a project away is the same call.
@@ -1771,7 +1777,7 @@ describe('chats in a project', () => {
       body: { attachedProjectIds: [other.id] }
     });
     assert.equal(removed.statusCode, 200);
-    assert.deepEqual(removed.body.chat.attachedProjectIds, [other.id]);
+    assert.deepEqual(removed.body.attachedProjectIds, [other.id]);
 
     // A project the caller may not use is a 404 and nothing changes.
     const refused = await drive(route.chatPatch, {
@@ -1789,7 +1795,7 @@ describe('chats in a project', () => {
       body: { attachedProjectIds: [] }
     });
     assert.equal(clearing.statusCode, 200);
-    assert.deepEqual(clearing.body.chat.attachedProjectIds, []);
+    assert.deepEqual(clearing.body.attachedProjectIds, []);
 
     const bad = await drive(route.chatPatch, {
       user: ADA,
@@ -1942,7 +1948,7 @@ describe('chats in a project', () => {
     const project = await create(ADA, { name: 'Erasures' });
     await joinProject(chat, project.id);
     const erased = await drive(route.chatDelete, { user: ADA, params: { chatId: chat.id } });
-    assert.equal(erased.statusCode, 200, JSON.stringify(erased.body));
+    assert.equal(erased.statusCode, 204, JSON.stringify(erased.body));
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
   });
 

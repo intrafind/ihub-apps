@@ -3,11 +3,11 @@
 
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { resolveFeatures, featureCategories, featureRegistry } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 
 export default function registerAdminFeaturesRoutes(app) {
@@ -31,7 +31,7 @@ export default function registerAdminFeaturesRoutes(app) {
   app.get(buildServerPath('/api/admin/features'), adminAuth, (req, res) => {
     const featureConfig = configCache.getFeatures();
     res.json({
-      features: resolveFeatures(featureConfig),
+      items: resolveFeatures(featureConfig),
       categories: featureCategories
     });
   });
@@ -66,52 +66,47 @@ export default function registerAdminFeaturesRoutes(app) {
    *         description: Internal server error
    */
   app.put(buildServerPath('/api/admin/features'), adminAuth, async (req, res) => {
-    try {
-      const updates = req.body;
+    const updates = req.body;
 
-      if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
-        return sendBadRequest(res, 'Request body must be an object of feature flags');
-      }
-
-      // Validate that all keys are known feature IDs and values are booleans
-      const knownIds = new Set(featureRegistry.map(f => f.id));
-      for (const [key, value] of Object.entries(updates)) {
-        if (!knownIds.has(key)) {
-          return sendBadRequest(res, `Unknown feature ID: ${key}`);
-        }
-        if (typeof value !== 'boolean') {
-          return sendBadRequest(res, `Feature "${key}" must be a boolean value`);
-        }
-      }
-
-      // features.json is a sparse override map: no file means every flag is at
-      // its registry default, so an absent one starts fresh rather than failing.
-      const existing = (await configStore.readJson('config/features.json')) || {};
-      const merged = { ...existing, ...updates };
-      await configStore.writeJson('config/features.json', merged);
-
-      // Refresh cache
-      await configCache.refreshCacheEntry('config/features.json');
-
-      logger.info('Feature flags updated', {
-        component: 'AdminFeatures',
-        updates
-      });
-
-      await logAudit({
-        req,
-        action: 'update',
-        resource: 'feature',
-        resourceId: Object.keys(updates).join(','),
-        summary: `Updated features: ${Object.keys(updates).join(', ')}`
-      });
-      res.json({
-        message: 'Features updated successfully',
-        features: resolveFeatures(merged),
-        categories: featureCategories
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'update feature flags');
+    if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
+      throw new ServiceError('BAD_REQUEST', 'Request body must be an object of feature flags');
     }
+
+    // Validate that all keys are known feature IDs and values are booleans
+    const knownIds = new Set(featureRegistry.map(f => f.id));
+    for (const [key, value] of Object.entries(updates)) {
+      if (!knownIds.has(key)) {
+        throw new ServiceError('BAD_REQUEST', `Unknown feature ID: ${key}`);
+      }
+      if (typeof value !== 'boolean') {
+        throw new ServiceError('BAD_REQUEST', `Feature "${key}" must be a boolean value`);
+      }
+    }
+
+    // features.json is a sparse override map: no file means every flag is at
+    // its registry default, so an absent one starts fresh rather than failing.
+    const existing = (await configStore.readJson('config/features.json')) || {};
+    const merged = { ...existing, ...updates };
+    await configStore.writeJson('config/features.json', merged);
+
+    // Refresh cache
+    await configCache.refreshCacheEntry('config/features.json');
+
+    logger.info('Feature flags updated', {
+      component: 'AdminFeatures',
+      updates
+    });
+
+    await logAudit({
+      req,
+      action: 'update',
+      resource: 'feature',
+      resourceId: Object.keys(updates).join(','),
+      summary: `Updated features: ${Object.keys(updates).join(', ')}`
+    });
+    res.json({
+      items: resolveFeatures(merged),
+      categories: featureCategories
+    });
   });
 }

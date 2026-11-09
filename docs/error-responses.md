@@ -31,8 +31,8 @@ A rate limit sets the `Retry-After` header and `details.retryAfterMs`. The media
 
 OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) and bearer-token errors keep the RFC 6749 / 6750
 shape, `{ "error", "error_description" }`. The OpenAI-compatible endpoints keep the OpenAI error
-object. The voice routes keep their kebab-case protocol codes (`invalid-voice`, `not-permitted`),
-which are shared with the voice WebSocket and are not in the registry.
+object. The codes of the voice WebSocket (`unknown-model`, `not-permitted`, …) are protocol codes and are
+not in the registry; the read-aloud routes (`/api/voice/*`) use registry codes like every other route.
 
 ## For developers
 
@@ -53,8 +53,7 @@ A code the registry does not know (a protocol code of another subsystem) still a
 
 Where throwing is not possible, because a surrounding `try` would catch the error and answer a second time, write the
 same response in place with `sendErrorResponse(res, status, message, { code?, details? })` from `server/utils/responseHelpers.js`.
-`sendNotFound`, `sendBadRequest` and `sendInternalError` are shorthands of it. A code passed as `details.code` (the
-older convention) is taken as the `code` of the response, and a list of problems passed as `details` becomes `errors`. It never writes `{ error }` itself: it
+`sendInternalError` is the shorthand of it for a plain 500. A list of problems passed as `details` becomes `errors`; the code is `options.code`, never `details.code`. It never writes `{ error }` itself: it
 goes through the same mapper, so the body is identical.
 
 ### What a 5xx message may contain

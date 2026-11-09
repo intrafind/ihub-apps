@@ -41,12 +41,14 @@ import installedIntegrationService from '../../services/integrations/InstalledIn
 import {
   MAX_REASON_LENGTH,
   getIntegrationRequestService,
-  isDefinitionId
+  isDefinitionId,
+  isRequestId
 } from '../../services/integrations/IntegrationRequestService.js';
 import {
   isRequestable,
   requestCatalogEntry
 } from '../../services/integrations/integrationRequestCatalog.js';
+import { sendCreated, segment } from '../../utils/created.js';
 
 const router = express.Router();
 
@@ -133,6 +135,42 @@ router.get('/', requireFeature('integrations'), authRequired, async (req, res) =
 
 /**
  * @swagger
+ * /api/integrations/requests/{requestId}:
+ *   get:
+ *     summary: Read one of the caller's integration requests
+ *     description: The `Location` a create answers with. Only the requester can read it.
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - name: requestId
+ *         in: path
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: The request, as the requester sees it
+ *       401:
+ *         description: Not signed in
+ *       404:
+ *         description: No such request for this user
+ */
+router.get('/:requestId', requireFeature('integrations'), authRequired, async (req, res) => {
+  if (isAnonymous(req.user)) throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
+  const { requestId } = req.params;
+  const request = isRequestId(requestId)
+    ? await getIntegrationRequestService().get(requestId)
+    : null;
+  // Someone else's request reads as absent, never as forbidden.
+  if (!request || String(request.requester?.id) !== String(req.user.id)) {
+    throw new ServiceError('REQUEST_NOT_FOUND', 'Request not found');
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(userRequestView(request));
+});
+
+/**
+ * @swagger
  * /api/integrations/requests:
  *   post:
  *     summary: Request a catalog integration
@@ -210,7 +248,11 @@ router.post('/', requireFeature('integrations'), authRequired, async (req, res) 
       resourceId: definition,
       summary: `Requested integration "${definition}"${request.reason ? ' with a reason' : ''}`
     });
-    return res.status(201).json({ request: userRequestView(request) });
+    return sendCreated(
+      res,
+      `/api/integrations/requests/${segment(request.id)}`,
+      userRequestView(request)
+    );
   }
 });
 

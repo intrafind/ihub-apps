@@ -105,7 +105,7 @@ export function registerTriggerRoutes(app) {
         initialData
       });
 
-      res.json({ success: true, message: 'Webhook processed' });
+      res.status(204).end();
     }
   );
 }

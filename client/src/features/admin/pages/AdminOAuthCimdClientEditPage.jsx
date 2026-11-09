@@ -53,7 +53,7 @@ function AdminOAuthCimdClientEditPage() {
     setLoading(true);
     try {
       const response = await makeAdminApiCall(`/admin/oauth/clients/cimd/${encodedClientId}`);
-      const loaded = response.data?.client;
+      const loaded = response.data;
       setClient(loaded);
       setForm({
         allowedGroups: loaded?.policy?.allowedGroups ?? null,
@@ -79,18 +79,18 @@ function AdminOAuthCimdClientEditPage() {
 
   useEffect(() => {
     const loadOptions = async () => {
-      const read = async (path, key) => {
+      const read = async path => {
         try {
           const response = await makeAdminApiCall(path);
-          const data = response.data;
-          return Array.isArray(data) ? data : Object.values(data?.[key] || {});
+          const items = response.data?.items;
+          return Array.isArray(items) ? items : [];
         } catch {
           return [];
         }
       };
-      setAvailableApps(await read('/admin/apps', 'apps'));
-      setAvailableModels(await read('/admin/models', 'models'));
-      setAvailablePrompts(await read('/admin/prompts', 'prompts'));
+      setAvailableApps(await read('/admin/apps'));
+      setAvailableModels(await read('/admin/models'));
+      setAvailablePrompts(await read('/admin/prompts'));
     };
     void loadOptions();
   }, []);

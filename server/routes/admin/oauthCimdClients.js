@@ -13,15 +13,14 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import configCache from '../../configCache.js';
-import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 
-import { sendErrorResponse } from '../../utils/responseHelpers.js';
 /**
  * Admin routes for governing clients identified by a metadata document.
  *
  * Two things make these routes different from the stored-client ones.
  *
- * **The id is a URL.** `validateIdForPath()` rejects one on sight, and rightly
+ * **The id is a URL.** `assertValidId()` rejects one on sight, and rightly
  * so — it exists to keep a path segment from becoming a file path. Here the
  * value is a *store key*, never a path, so it travels base64url-encoded in the
  * URL and is decoded back to the exact key, the same way `oauthConnections.js`
@@ -57,10 +56,6 @@ function decodeClientId(encoded) {
  * Guard shared by every route here: the feature has to be on, and the id has to
  * decode.
  *
- * @param {import('express').Request} req - Express request
- * @param {import('express').Response} res - Express response
- * @returns {{platform: Object, clientId: string}|null} Null when already answered
- */
 /** Policy fields that must be arrays of strings when they are set. */
 const LIST_FIELDS = Object.freeze([
   'allowedGroups',
@@ -70,17 +65,23 @@ const LIST_FIELDS = Object.freeze([
   'scopes'
 ]);
 
-function requireCimdClient(req, res) {
+/**
+ * Guard shared by every route here: the feature has to be on, and the id has to
+ * decode.
+ *
+ * @param {import('express').Request} req - Express request
+ * @returns {{platform: Object, clientId: string}} The platform config and decoded client id
+ * @throws {ServiceError} `BAD_REQUEST` when OAuth clients are off or the id does not decode
+ */
+function requireCimdClient(req) {
   const platform = configCache.getPlatform() || {};
   if (!platform.oauth?.enabled?.clients) {
-    sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
-    return null;
+    throw new ServiceError('BAD_REQUEST', 'OAuth clients are not enabled on this server');
   }
 
   const clientId = decodeClientId(req.params.encodedClientId);
   if (!clientId) {
-    sendErrorResponse(res, 400, 'Invalid client identifier');
-    return null;
+    throw new ServiceError('BAD_REQUEST', 'Invalid client identifier');
   }
 
   return { platform, clientId };
@@ -111,19 +112,13 @@ export default function registerAdminOAuthCimdRoutes(app) {
     buildServerPath('/api/admin/oauth/clients/cimd/:encodedClientId'),
     adminAuth,
     async (req, res) => {
-      try {
-        const context = requireCimdClient(req, res);
-        if (!context) return;
+      const context = requireCimdClient(req);
 
-        const client = getCimdClientRow(context.clientId, context.platform);
-        if (!client) {
-          return sendErrorResponse(res, 404, 'Client not found');
-        }
-        res.json({ success: true, client });
-      } catch (error) {
-        logger.error('[OAuth Admin] Get CIMD client error', { component: 'OAuthAdmin', error });
-        sendErrorResponse(res, 500, 'Failed to load the client');
+      const client = getCimdClientRow(context.clientId, context.platform);
+      if (!client) {
+        throw new ServiceError('NOT_FOUND', 'Client not found');
       }
+      res.json(client);
     }
   );
 
@@ -174,152 +169,138 @@ export default function registerAdminOAuthCimdRoutes(app) {
     buildServerPath('/api/admin/oauth/clients/cimd/:encodedClientId'),
     adminAuth,
     async (req, res) => {
-      try {
-        const context = requireCimdClient(req, res);
-        if (!context) return;
-        const { platform, clientId } = context;
-        const oauthConfig = platform.oauth || {};
+      const context = requireCimdClient(req);
+      const { platform, clientId } = context;
+      const oauthConfig = platform.oauth || {};
 
-        const body = req.body || {};
-        const patch = {};
-        for (const field of CIMD_POLICY_FIELDS) {
-          if (body[field] !== undefined) patch[field] = body[field];
-        }
-
-        if (Object.keys(patch).length === 0) {
-          return sendErrorResponse(res, 400, 'No policy fields to update');
-        }
-
-        // `null` is the way a field is handed back to the global default, so it
-        // passes every shape check below on purpose.
-        for (const field of LIST_FIELDS) {
-          const value = patch[field];
-          if (value === null || value === undefined) continue;
-          if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
-            return sendErrorResponse(res, 400, `${field} must be an array of strings`);
-          }
-        }
-
-        if (patch.active !== undefined && typeof patch.active !== 'boolean') {
-          return sendErrorResponse(res, 400, 'active must be a boolean');
-        }
-
-        if (
-          patch.approvalState !== undefined &&
-          !['pending', 'approved', 'auto'].includes(patch.approvalState)
-        ) {
-          return sendErrorResponse(res, 400, 'Invalid approval state');
-        }
-
-        if (patch.tokenExpirationMinutes !== undefined && patch.tokenExpirationMinutes !== null) {
-          const minutes = Number(patch.tokenExpirationMinutes);
-          const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440;
-          if (!Number.isFinite(minutes) || minutes < 1 || minutes > maxExpiration) {
-            return sendErrorResponse(
-              res,
-              400,
-              `Token expiration must be between 1 and ${maxExpiration} minutes`
-            );
-          }
-          patch.tokenExpirationMinutes = minutes;
-        }
-
-        const clientsFilePath = clientsFileFor(platform);
-        const before = findCimdClientPolicy(clientId, clientsFilePath);
-        const savedBy = req.user?.id || 'admin';
-        const existingRow = getCimdClientRow(clientId, platform);
-        const displayName = existingRow?.name || clientId;
-
-        // Approving and blocking leave a trail on the record, not only in the
-        // audit log: the Clients page has to answer "who let this in?" without
-        // a log search.
-        const metadata = { displayName };
-        if (patch.approvalState === 'approved' && before?.approvalState !== 'approved') {
-          metadata.approvedBy = savedBy;
-          metadata.approvedAt = new Date().toISOString();
-        }
-        if (patch.active === false) {
-          metadata.blockedBy = savedBy;
-          metadata.blockedAt = new Date().toISOString();
-        } else if (patch.active === true) {
-          // Cleared on unblock, so `blockedAt` always answers "is this client
-          // blocked right now" rather than "was it ever blocked" — which is
-          // what tells a blocked-and-pending row apart from a merely pending
-          // one.
-          metadata.blockedBy = '';
-          metadata.blockedAt = null;
-        }
-        if (!before?.metadata?.firstSeenAt) {
-          metadata.firstSeenAt = existingRow?.firstSeenAt || new Date().toISOString();
-        }
-
-        const record = await upsertCimdClientPolicy(
-          clientId,
-          { ...patch, metadata },
-          clientsFilePath,
-          savedBy
-        );
-
-        // A block that leaves live refresh tokens behind is not a block. The
-        // client's users must go back through sign-in and consent — which the
-        // block itself then refuses until it is lifted.
-        let revoked = null;
-        if (patch.active === false && before?.active !== false) {
-          revoked = await revokeConnectionsForClient(clientId);
-          logAudit({
-            req,
-            action: 'delete',
-            resource: 'oauthConnection',
-            resourceId: clientId,
-            summary: `Revoked all ${revoked.connectionsRevoked} connection(s) of ${displayName} because the client was blocked`
-          });
-        }
-
-        if (patch.active !== undefined && before?.active !== patch.active) {
-          logAudit({
-            req,
-            action: 'toggle',
-            resource: 'oauthCimdClient',
-            resourceId: clientId,
-            summary: `${patch.active === false ? 'Blocked' : 'Unblocked'} the client-metadata client ${displayName}`
-          });
-        }
-
-        if (patch.approvalState !== undefined && before?.approvalState !== patch.approvalState) {
-          logAudit({
-            req,
-            action: 'update',
-            resource: 'oauthCimdClient',
-            resourceId: clientId,
-            summary: `Set the approval state of ${displayName} to ${patch.approvalState}`
-          });
-        }
-
-        const policyFields = Object.keys(patch).filter(
-          field => field !== 'active' && field !== 'approvalState'
-        );
-        if (policyFields.length > 0) {
-          logAudit({
-            req,
-            action: 'update',
-            resource: 'oauthCimdClient',
-            resourceId: clientId,
-            summary: `Updated the policy of ${displayName} (${policyFields.join(', ')})`
-          });
-        }
-
-        res.json({
-          success: true,
-          client: getCimdClientRow(clientId, platform) || record,
-          revoked
-        });
-      } catch (error) {
-        logger.error('[OAuth Admin] Update CIMD client policy error', {
-          component: 'OAuthAdmin',
-          error
-        });
-        sendErrorResponse(res, 500, 'Failed to save the client policy');
+      const body = req.body || {};
+      const patch = {};
+      for (const field of CIMD_POLICY_FIELDS) {
+        if (body[field] !== undefined) patch[field] = body[field];
       }
+
+      if (Object.keys(patch).length === 0) {
+        throw new ServiceError('BAD_REQUEST', 'No policy fields to update');
+      }
+
+      // `null` is the way a field is handed back to the global default, so it
+      // passes every shape check below on purpose.
+      for (const field of LIST_FIELDS) {
+        const value = patch[field];
+        if (value === null || value === undefined) continue;
+        if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string')) {
+          throw new ServiceError('BAD_REQUEST', `${field} must be an array of strings`);
+        }
+      }
+
+      if (patch.active !== undefined && typeof patch.active !== 'boolean') {
+        throw new ServiceError('BAD_REQUEST', 'active must be a boolean');
+      }
+
+      if (
+        patch.approvalState !== undefined &&
+        !['pending', 'approved', 'auto'].includes(patch.approvalState)
+      ) {
+        throw new ServiceError('BAD_REQUEST', 'Invalid approval state');
+      }
+
+      if (patch.tokenExpirationMinutes !== undefined && patch.tokenExpirationMinutes !== null) {
+        const minutes = Number(patch.tokenExpirationMinutes);
+        const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440;
+        if (!Number.isFinite(minutes) || minutes < 1 || minutes > maxExpiration) {
+          throw new ServiceError(
+            'BAD_REQUEST',
+            `Token expiration must be between 1 and ${maxExpiration} minutes`
+          );
+        }
+        patch.tokenExpirationMinutes = minutes;
+      }
+
+      const clientsFilePath = clientsFileFor(platform);
+      const before = findCimdClientPolicy(clientId, clientsFilePath);
+      const savedBy = req.user?.id || 'admin';
+      const existingRow = getCimdClientRow(clientId, platform);
+      const displayName = existingRow?.name || clientId;
+
+      // Approving and blocking leave a trail on the record, not only in the
+      // audit log: the Clients page has to answer "who let this in?" without
+      // a log search.
+      const metadata = { displayName };
+      if (patch.approvalState === 'approved' && before?.approvalState !== 'approved') {
+        metadata.approvedBy = savedBy;
+        metadata.approvedAt = new Date().toISOString();
+      }
+      if (patch.active === false) {
+        metadata.blockedBy = savedBy;
+        metadata.blockedAt = new Date().toISOString();
+      } else if (patch.active === true) {
+        // Cleared on unblock, so `blockedAt` always answers "is this client
+        // blocked right now" rather than "was it ever blocked" — which is
+        // what tells a blocked-and-pending row apart from a merely pending
+        // one.
+        metadata.blockedBy = '';
+        metadata.blockedAt = null;
+      }
+      if (!before?.metadata?.firstSeenAt) {
+        metadata.firstSeenAt = existingRow?.firstSeenAt || new Date().toISOString();
+      }
+
+      const record = await upsertCimdClientPolicy(
+        clientId,
+        { ...patch, metadata },
+        clientsFilePath,
+        savedBy
+      );
+
+      // A block that leaves live refresh tokens behind is not a block. The
+      // client's users must go back through sign-in and consent — which the
+      // block itself then refuses until it is lifted.
+      let revoked = null;
+      if (patch.active === false && before?.active !== false) {
+        revoked = await revokeConnectionsForClient(clientId);
+        logAudit({
+          req,
+          action: 'delete',
+          resource: 'oauthConnection',
+          resourceId: clientId,
+          summary: `Revoked all ${revoked.connectionsRevoked} connection(s) of ${displayName} because the client was blocked`
+        });
+      }
+
+      if (patch.active !== undefined && before?.active !== patch.active) {
+        logAudit({
+          req,
+          action: 'toggle',
+          resource: 'oauthCimdClient',
+          resourceId: clientId,
+          summary: `${patch.active === false ? 'Blocked' : 'Unblocked'} the client-metadata client ${displayName}`
+        });
+      }
+
+      if (patch.approvalState !== undefined && before?.approvalState !== patch.approvalState) {
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'oauthCimdClient',
+          resourceId: clientId,
+          summary: `Set the approval state of ${displayName} to ${patch.approvalState}`
+        });
+      }
+
+      const policyFields = Object.keys(patch).filter(
+        field => field !== 'active' && field !== 'approvalState'
+      );
+      if (policyFields.length > 0) {
+        logAudit({
+          req,
+          action: 'update',
+          resource: 'oauthCimdClient',
+          resourceId: clientId,
+          summary: `Updated the policy of ${displayName} (${policyFields.join(', ')})`
+        });
+      }
+
+      res.json({ client: getCimdClientRow(clientId, platform) || record, revoked });
     }
   );
 
@@ -356,39 +337,34 @@ export default function registerAdminOAuthCimdRoutes(app) {
     buildServerPath('/api/admin/oauth/clients/:encodedClientId/connections'),
     adminAuth,
     async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        if (!platform.oauth?.enabled?.clients) {
-          return sendErrorResponse(res, 400, 'OAuth clients are not enabled on this server');
-        }
-
-        // A stored client id is a plain string and a CIMD one is a URL; both
-        // arrive encoded so one endpoint can serve either.
-        let clientId;
-        try {
-          clientId = Buffer.from(req.params.encodedClientId || '', 'base64url').toString('utf8');
-        } catch {
-          clientId = '';
-        }
-        if (!clientId) {
-          return sendErrorResponse(res, 400, 'Invalid client identifier');
-        }
-
-        const result = await revokeConnectionsForClient(clientId);
-
-        logAudit({
-          req,
-          action: 'delete',
-          resource: 'oauthConnection',
-          resourceId: clientId,
-          summary: `Revoked all connections of ${clientId}: ${result.connectionsRevoked} connection(s), ${result.refreshTokensRevoked} refresh token(s)`
-        });
-
-        res.json({ success: true, ...result });
-      } catch (error) {
-        logger.error('[OAuth Admin] Bulk revoke error', { component: 'OAuthAdmin', error });
-        sendErrorResponse(res, 500, "Failed to revoke the client's connections");
+      const platform = configCache.getPlatform() || {};
+      if (!platform.oauth?.enabled?.clients) {
+        throw new ServiceError('BAD_REQUEST', 'OAuth clients are not enabled on this server');
       }
+
+      // A stored client id is a plain string and a CIMD one is a URL; both
+      // arrive encoded so one endpoint can serve either.
+      let clientId;
+      try {
+        clientId = Buffer.from(req.params.encodedClientId || '', 'base64url').toString('utf8');
+      } catch {
+        clientId = '';
+      }
+      if (!clientId) {
+        throw new ServiceError('BAD_REQUEST', 'Invalid client identifier');
+      }
+
+      const result = await revokeConnectionsForClient(clientId);
+
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'oauthConnection',
+        resourceId: clientId,
+        summary: `Revoked all connections of ${clientId}: ${result.connectionsRevoked} connection(s), ${result.refreshTokensRevoked} refresh token(s)`
+      });
+
+      res.json({ ...result });
     }
   );
 }

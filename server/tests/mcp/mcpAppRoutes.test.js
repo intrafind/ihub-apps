@@ -17,7 +17,7 @@ const findTool = jest.fn();
 const hasServer = jest.fn(() => false);
 const connectionForUser = jest.fn();
 const withUserConnection = jest.fn();
-const connectUrlFor = jest.fn(id => `/api/integrations/${id}/connect`);
+const connectUrlFor = jest.fn(id => `/api/integrations/${id}/_connect`);
 
 let platform = { anonymousAuth: { enabled: false }, auth: {} };
 
@@ -284,7 +284,7 @@ describe('per-user OAuth servers', () => {
       detail: 'Connect this integration first',
       details: {
         integration: 'excalidraw',
-        connectUrl: '/api/integrations/excalidraw/connect'
+        connectUrl: '/api/integrations/excalidraw/_connect'
       }
     });
   });

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useCursorPager } from '../../../../shared/hooks/useCursorPager';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { fetchAdminFeedbackEntries } from '../../../../api/adminApi';
@@ -106,17 +107,17 @@ function FeedbackEntriesCard() {
   const { t } = useTranslation();
   const [feedbackData, setFeedbackData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(0);
+  const { cursor, page, hasPrevious, goNext, goPrevious } = useCursorPager();
   const pageSize = 20;
 
   useEffect(() => {
     void loadFeedback();
-  }, [page]);
+  }, [cursor]);
 
   const loadFeedback = async () => {
     try {
       setLoading(true);
-      const data = await fetchAdminFeedbackEntries(pageSize, page * pageSize);
+      const data = await fetchAdminFeedbackEntries(pageSize, cursor);
       setFeedbackData(data);
     } catch (e) {
       console.error('Failed to load feedback entries', e);
@@ -157,8 +158,8 @@ function FeedbackEntriesCard() {
     );
   }
 
-  const { feedbackEntries = [], total = 0 } = feedbackData || {};
-  const totalPages = Math.ceil(total / pageSize);
+  const { items: feedbackEntries = [], nextCursor = null, total = 0 } = feedbackData || {};
+  const totalPages = Math.max(Math.ceil(total / pageSize), page);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
@@ -216,21 +217,21 @@ function FeedbackEntriesCard() {
           </div>
 
           {/* Pagination */}
-          {totalPages > 1 && (
+          {(hasPrevious || nextCursor) && (
             <div className="flex justify-center items-center space-x-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button
-                onClick={() => setPage(p => Math.max(0, p - 1))}
-                disabled={page === 0}
+                onClick={goPrevious}
+                disabled={!hasPrevious}
                 className="px-3 py-1 rounded-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 {t('admin.usage.previous', 'Previous')}
               </button>
               <span className="text-sm text-gray-600 dark:text-gray-400">
-                {t('admin.usage.pageInfo', `Page ${page + 1} of ${totalPages}`)}
+                {t('admin.usage.pageInfo', `Page ${page} of ${totalPages}`)}
               </span>
               <button
-                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
+                onClick={() => goNext(nextCursor)}
+                disabled={!nextCursor}
                 className="px-3 py-1 rounded-sm border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
               >
                 {t('admin.usage.next', 'Next')}

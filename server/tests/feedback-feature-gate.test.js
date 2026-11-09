@@ -74,8 +74,14 @@ function responseDouble() {
 async function run(middleware, req) {
   const res = responseDouble();
   let passed = false;
-  await middleware(req, res, () => {
-    passed = true;
+  await middleware(req, res, error => {
+    // A refusal is handed to `next` as a ServiceError, which the error middleware answers.
+    if (error) {
+      res.statusCode = error.status;
+      res.body = { code: error.code, detail: error.message };
+    } else {
+      passed = true;
+    }
   });
   return { passed, res };
 }
@@ -108,7 +114,6 @@ describe('feedback feature gate', () => {
 
     assert.equal(passed, false);
     assert.equal(res.statusCode, 403);
-    assert.match(res.headers['content-type'], /^application\/problem\+json/);
     assert.equal(res.body.code, 'FEATURE_DISABLED');
   });
 

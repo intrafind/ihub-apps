@@ -112,7 +112,7 @@ describe('GET /api/admin/docs/search', () => {
   test('finds the section with its mdBook anchor', async () => {
     const res = await request(app).get('/api/admin/docs/search').query({ q: 'minIhubVersion' });
     expect(res.status).toBe(200);
-    expect(res.body.results[0]).toMatchObject({
+    expect(res.body.items[0]).toMatchObject({
       path: 'integrations.md',
       anchor: 'version-compatibility-and-release-notes'
     });
@@ -122,12 +122,12 @@ describe('GET /api/admin/docs/search', () => {
     const res = await request(app)
       .get('/api/admin/docs/search')
       .query({ q: 'models nonexistentterm' });
-    expect(res.body.results).toEqual([]);
+    expect(res.body.items).toEqual([]);
   });
 
   test('an empty query returns nothing', async () => {
     const res = await request(app).get('/api/admin/docs/search').query({ q: ' ' });
-    expect(res.body.results).toEqual([]);
+    expect(res.body.items).toEqual([]);
   });
 });
 

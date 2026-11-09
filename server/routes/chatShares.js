@@ -71,6 +71,7 @@ import {
 import { loadUsers } from '../utils/userManager.js';
 import { localUsersFile } from '../utils/contentsPath.js';
 import { isAdmin } from '../utils/authorization.js';
+import { sendCreated, segment } from '../utils/created.js';
 
 const COMPONENT = 'ChatShareRoutes';
 
@@ -460,7 +461,7 @@ async function handleCreateShare(req, res, { artifactId = null } = {}) {
         : `with ${mode === 'users' ? `${share.recipients.length} user(s)` : 'signed-in users'}`
     }`
   });
-  res.status(201).json({ share: ownerView(share) });
+  sendCreated(res, `/api/shares/${segment(share.id)}`, ownerView(share));
 }
 
 /**
@@ -591,17 +592,15 @@ export default function registerChatShareRoutes(app) {
       // The viewer gets the text and what describes it, nothing of the
       // owner's storage bookkeeping.
       return res.json({
-        file: {
-          id: textFile.id,
-          name: textFile.name,
-          mimeType: textFile.mimeType,
-          formatLabel: textFile.formatLabel,
-          bytes: textFile.bytes,
-          pages: textFile.pages,
-          origin: textFile.origin,
-          text: textFile.text,
-          hasOriginal: textFile.hasOriginal && access === 'original'
-        }
+        id: textFile.id,
+        name: textFile.name,
+        mimeType: textFile.mimeType,
+        formatLabel: textFile.formatLabel,
+        bytes: textFile.bytes,
+        pages: textFile.pages,
+        origin: textFile.origin,
+        text: textFile.text,
+        hasOriginal: textFile.hasOriginal && access === 'original'
       });
     }
 
@@ -717,7 +716,7 @@ export default function registerChatShareRoutes(app) {
       resourceId: shareId,
       summary: `Revoked share of chat ${share.chatId} (${share.mode})`
     });
-    res.json({ share: ownerView(revoked) });
+    res.json(ownerView(revoked));
   });
 
   app.get(

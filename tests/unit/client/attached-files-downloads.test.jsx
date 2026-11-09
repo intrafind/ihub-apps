@@ -196,7 +196,7 @@ describe('the chip of a file the server fetched (a stub)', () => {
       anchorClicks.push(this.download);
     });
     fetchChatFileBlob.mockReset().mockResolvedValue(new Blob(['%PDF original']));
-    fetchChatFileText.mockReset().mockResolvedValue({ file: { text: 'The extracted text' } });
+    fetchChatFileText.mockReset().mockResolvedValue({ text: 'The extracted text' });
   });
   afterEach(() => {
     jest.restoreAllMocks();

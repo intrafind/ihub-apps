@@ -67,7 +67,7 @@ const WorkflowMentionSearch = forwardRef((props, ref) => {
 
     try {
       const response = await apiClient.get('/workflows');
-      const allWorkflows = response.data || [];
+      const allWorkflows = response.data?.items ?? [];
 
       const available = allWorkflows
         .filter(w => appWorkflowIds.includes(w.id))

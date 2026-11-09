@@ -479,8 +479,8 @@ describe('task files from a connected system', () => {
     const task = await tasks.createTask(user, taskInput());
     const res = await attach(user, task.id, { source: { ...SOURCE, refreshOnRun: true } });
     assert.equal(res.statusCode, 201, JSON.stringify(res.body));
-    assert.equal(res.body.file.source.refreshOnRun, true);
-    assert.equal(res.body.file.origin, 'connector');
+    assert.equal(res.body.source.refreshOnRun, true);
+    assert.equal(res.body.origin, 'connector');
     await cleanup(user);
   });
 

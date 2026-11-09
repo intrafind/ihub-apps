@@ -212,9 +212,7 @@ describe('useChatFilePreUpload', () => {
         new Promise(resolve => {
           options.onProgress(40);
           finish = () =>
-            resolve({
-              file: { id: 'file_9', hasOriginal: true, canUseAsTemplate: false, pages: 3 }
-            });
+            resolve({ id: 'file_9', hasOriginal: true, canUseAsTemplate: false, pages: 3 });
         })
     );
     const entry = documentEntry();
@@ -241,7 +239,7 @@ describe('useChatFilePreUpload', () => {
 
   it('uploads the extracted text only in client_text_only mode', async () => {
     mockUploads = { enabled: true, storageMode: 'client_text_only' };
-    mockUpload.mockResolvedValue({ file: { id: 'file_1' } });
+    mockUpload.mockResolvedValue({ id: 'file_1' });
     const { result } = renderHook(() => useComposer());
     act(() => result.current.setSelectedFile(documentEntry()));
     await waitFor(() => expect(mockUpload).toHaveBeenCalled());
@@ -278,14 +276,14 @@ describe('useChatFilePreUpload', () => {
   });
 
   it('does not upload a file twice when the uploader hands back a stale copy', async () => {
-    mockUpload.mockResolvedValue({ file: { id: 'file_1' } });
+    mockUpload.mockResolvedValue({ id: 'file_1' });
     const entry = documentEntry();
     const { result } = renderHook(() => useComposer());
     act(() => result.current.setSelectedFile(entry));
     await waitFor(() => expect(result.current.selectedFile.fileId).toBe('file_1'));
     // A second file is added: the uploader reports [stale copy of the first, second].
     const second = documentEntry({ fileName: 'second.pdf', fileSize: 9 });
-    mockUpload.mockResolvedValue({ file: { id: 'file_2' } });
+    mockUpload.mockResolvedValue({ id: 'file_2' });
     act(() => result.current.setSelectedFile([entry, second]));
     await waitFor(() =>
       expect(result.current.selectedFile.map(f => f.fileId)).toEqual(['file_1', 'file_2'])
@@ -294,7 +292,7 @@ describe('useChatFilePreUpload', () => {
   });
 
   it('deletes the stored file when the user removes it from the composer', async () => {
-    mockUpload.mockResolvedValue({ file: { id: 'file_1' } });
+    mockUpload.mockResolvedValue({ id: 'file_1' });
     const { result } = renderHook(() => useComposer());
     act(() => result.current.setSelectedFile(documentEntry()));
     await waitFor(() => expect(result.current.selectedFile.fileId).toBe('file_1'));

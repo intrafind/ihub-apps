@@ -95,11 +95,13 @@ jest.unstable_mockModule('../services/runtime/RunSummaryRepository.js', () => ({
 }));
 
 const { default: registerAdminChatHistoryRoutes } = await import('../routes/admin/chatHistory.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 function createTestApp() {
   const app = express();
   app.use(express.json());
   registerAdminChatHistoryRoutes(app);
+  app.use(errorHandler);
   return app;
 }
 
@@ -312,10 +314,10 @@ describe('uploaded files settings (platform.uploads)', () => {
   });
 });
 
-describe('POST /api/admin/chat-history/retention/run', () => {
+describe('POST /api/admin/chat-history/retention/_run', () => {
   test('sweeps chats and the ledger with the configured settings', async () => {
     const response = await request(createTestApp())
-      .post('/api/admin/chat-history/retention/run')
+      .post('/api/admin/chat-history/retention/_run')
       .send({});
 
     expect(response.status).toBe(200);
@@ -328,7 +330,7 @@ describe('POST /api/admin/chat-history/retention/run', () => {
   test('with the chat history off, sweeps only temporary chats — never the kept ones', async () => {
     state.features.chatPersistence = false;
     const response = await request(createTestApp())
-      .post('/api/admin/chat-history/retention/run')
+      .post('/api/admin/chat-history/retention/_run')
       .send({ target: 'chats' });
 
     expect(response.status).toBe(200);
@@ -345,7 +347,7 @@ describe('POST /api/admin/chat-history/retention/run', () => {
   test('never sweeps anything while storage is down', async () => {
     state.storageReady = false;
     const response = await request(createTestApp())
-      .post('/api/admin/chat-history/retention/run')
+      .post('/api/admin/chat-history/retention/_run')
       .send({ target: 'chats' });
 
     expect(response.status).toBe(200);
@@ -356,7 +358,7 @@ describe('POST /api/admin/chat-history/retention/run', () => {
   test('skips the ledger when its cleanup is disabled', async () => {
     state.stored.runLog.cleanupEnabled = false;
     const response = await request(createTestApp())
-      .post('/api/admin/chat-history/retention/run')
+      .post('/api/admin/chat-history/retention/_run')
       .send({ target: 'ledger' });
 
     expect(response.body.ledger).toMatchObject({ ran: false, reason: 'cleanupDisabled' });
@@ -365,7 +367,7 @@ describe('POST /api/admin/chat-history/retention/run', () => {
 
   test('rejects an unknown target', async () => {
     const response = await request(createTestApp())
-      .post('/api/admin/chat-history/retention/run')
+      .post('/api/admin/chat-history/retention/_run')
       .send({ target: 'everything' });
 
     expect(response.status).toBe(400);

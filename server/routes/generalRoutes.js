@@ -9,15 +9,11 @@ import {
 } from '../utils/authorization.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
 import { describeWebSearchAvailability } from '../services/tools/webSearchResolver.js';
 import { withoutUsageGuideContent } from '../utils/appUsageGuide.js';
-import {
-  sendInternalError,
-  sendFailedOperationError,
-  sendErrorResponse
-} from '../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -172,35 +168,31 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    *                   error: "Internal server error"
    */
   app.get(buildServerPath('/api/apps'), authRequired, async (req, res) => {
-    try {
-      const platformConfig = configCache.getPlatform() || {};
-      const authConfig = platformConfig.auth || {};
+    const platformConfig = configCache.getPlatform() || {};
+    const authConfig = platformConfig.auth || {};
 
-      // Force permission enhancement if not already done
-      if (req.user && !req.user.permissions) {
-        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-      }
-
-      // Create anonymous user if none exists and anonymous access is allowed
-      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-      }
-
-      // Use centralized method to get filtered apps with user-specific ETag
-      const { data: apps, etag: userSpecificEtag } = await configCache.getAppsForUser(
-        req.user,
-        platformConfig
-      );
-
-      if (!apps) {
-        return sendFailedOperationError(res, 'load apps configuration', new Error('apps is null'));
-      }
-
-      res.setHeader('ETag', userSpecificEtag);
-      res.json(withoutUsageGuideContent(apps));
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch apps');
+    // Force permission enhancement if not already done
+    if (req.user && !req.user.permissions) {
+      req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
     }
+
+    // Create anonymous user if none exists and anonymous access is allowed
+    if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+      req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+    }
+
+    // Use centralized method to get filtered apps with user-specific ETag
+    const { data: apps, etag: userSpecificEtag } = await configCache.getAppsForUser(
+      req.user,
+      platformConfig
+    );
+
+    if (!apps) {
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to load apps configuration');
+    }
+
+    res.setHeader('ETag', userSpecificEtag);
+    res.json({ items: withoutUsageGuideContent(apps) });
   });
 
   /**
@@ -312,70 +304,62 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
    */
   // Health check endpoint with base path information
   app.get(buildServerPath('/api/health'), async (req, res) => {
-    try {
-      const { getBasePathInfo } = await import('../utils/basePath.js');
-      const basePathInfo = getBasePathInfo();
+    const { getBasePathInfo } = await import('../utils/basePath.js');
+    const basePathInfo = getBasePathInfo();
 
-      res.json({
-        status: 'OK',
-        timestamp: new Date().toISOString(),
-        version: process.env.npm_package_version || '1.0.0',
-        basePathConfig: basePathInfo,
-        requestPath: req.path,
-        requestUrl: req.url,
-        relativePath: getRelativeRequestPath(req.path),
-        environment: process.env.NODE_ENV || 'development',
-        // Storage down is not fatal by design — the features built on it fall
-        // back to their in-memory behaviour — so `status` stays OK. But until
-        // this field existed there was no way to *find out*: a misspelt
-        // provider name or a data directory the container user cannot write
-        // leaves one `logger.error` at boot and nothing else, and every
-        // consumer then degrades in silence. The run ledger records nothing,
-        // configuration quietly takes the filesystem path, and
-        // `chats.persistence` reports false, which is indistinguishable from
-        // the feature being switched off. The probe stays green and, once the
-        // boot log has rotated, there is nothing left to query.
-        storage: { ready: isStorageReady(), provider: getStorage()?.name ?? null }
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'health check');
-    }
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.0.0',
+      basePathConfig: basePathInfo,
+      requestPath: req.path,
+      requestUrl: req.url,
+      relativePath: getRelativeRequestPath(req.path),
+      environment: process.env.NODE_ENV || 'development',
+      // Storage down is not fatal by design — the features built on it fall
+      // back to their in-memory behaviour — so `status` stays OK. But until
+      // this field existed there was no way to *find out*: a misspelt
+      // provider name or a data directory the container user cannot write
+      // leaves one `logger.error` at boot and nothing else, and every
+      // consumer then degrades in silence. The run ledger records nothing,
+      // configuration quietly takes the filesystem path, and
+      // `chats.persistence` reports false, which is indistinguishable from
+      // the feature being switched off. The probe stays green and, once the
+      // boot log has rotated, there is nothing left to query.
+      storage: { ready: isStorageReady(), provider: getStorage()?.name ?? null }
+    });
   });
 
   // No appAccessRequired here: it answers 403, while this route gives one
   // answer (404) for an app that does not exist and one the caller may not use.
   app.get(buildServerPath('/api/apps/:appId'), authRequired, async (req, res) => {
-    try {
-      const { appId } = req.params;
-      const platform = configCache.getPlatform() || {};
-      const defaultLang = platform?.defaultLanguage || 'en';
-      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+    const { appId } = req.params;
+    const platform = configCache.getPlatform() || {};
+    const defaultLang = platform?.defaultLanguage || 'en';
+    const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-      // Try to get apps from cache first
-      const { data: apps } = configCache.getApps();
+    // Try to get apps from cache first
+    const { data: apps } = configCache.getApps();
 
-      if (!apps) {
-        return sendFailedOperationError(res, 'load apps configuration', new Error('apps is null'));
-      }
-      const appData = findByIdCaseInsensitive(apps, appId);
-      if (!appData) {
-        const errorMessage = await getLocalizedError('appNotFound', {}, language);
-        return sendErrorResponse(res, 404, errorMessage);
-      }
-
-      // Fails closed: without a principal carrying permissions nothing is granted.
-      if (!canUserAccessResource(req.user, 'apps', appData.id)) {
-        const errorMessage = await getLocalizedError('appNotFound', {}, language);
-        return sendErrorResponse(res, 404, errorMessage);
-      }
-
-      // Whether web search can work for this app, per model (the model
-      // picker marks the models it works with): native search, or the app's
-      // engine as far as this user's groups grant it.
-      const websearchAvailability = await describeWebSearchAvailability(appData, req.user);
-      res.json(websearchAvailability ? { ...appData, websearchAvailability } : appData);
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch app details');
+    if (!apps) {
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to load apps configuration');
     }
+    const appData = findByIdCaseInsensitive(apps, appId);
+    if (!appData) {
+      const errorMessage = await getLocalizedError('appNotFound', {}, language);
+      throw new ServiceError('NOT_FOUND', errorMessage);
+    }
+
+    // Fails closed: without a principal carrying permissions nothing is granted.
+    if (!canUserAccessResource(req.user, 'apps', appData.id)) {
+      const errorMessage = await getLocalizedError('appNotFound', {}, language);
+      throw new ServiceError('NOT_FOUND', errorMessage);
+    }
+
+    // Whether web search can work for this app, per model (the model
+    // picker marks the models it works with): native search, or the app's
+    // engine as far as this user's groups grant it.
+    const websearchAvailability = await describeWebSearchAvailability(appData, req.user);
+    res.json(websearchAvailability ? { ...appData, websearchAvailability } : appData);
   });
 }
