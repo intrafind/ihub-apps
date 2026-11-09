@@ -418,3 +418,12 @@ On a desktop, an app whose only quick action was file upload (no magic prompt, n
 showed no paper clip when it also offered web search; turning on magic prompt made it appear. The
 browser extension's side panel, with its "Include page" option, had the same problem when opened
 wide. The paper clip now shows in both cases.
+
+## Base Path Installations: The Logo Shows When Its URL Holds the Base Path
+
+On an installation under a base path (for example `/ihub`), a header logo URL that already started
+with the base path (`/ihub/uploads/assets/logo.png`, the address the browser shows) was requested as
+`/ihub/ihub/…`, so the logo in the sidebar, the header, the start page and the sign-in screen did
+not load behind a reverse proxy that forwards the prefix. Such URLs are now used as they are, as
+are `data:image/…` logos, which were not shown on any installation. `/uploads/assets/logo.png`
+keeps working as before.
