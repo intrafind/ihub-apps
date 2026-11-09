@@ -205,17 +205,18 @@ function useRunStream({
    * @param {string} [runId] - Defaults to the root run
    * @param {Object} [opts]
    * @param {number} [opts.attempts] - fetch attempts before giving up
-   * @returns {Promise<{runId: string, events: Array, lastSeq: number|null}|null>}
+   * @returns {Promise<{runId: string, events: Array}|null>}
    *   the collected projection or null on failure
    */
   const resync = useCallback(async (runId, { attempts = RESYNC_ATTEMPTS } = {}) => {
     const rid = runId || rootRunIdRef.current || streamIdRef.current;
     if (!rid) return null;
     const fetchProjection = () =>
-      fetchAllLedgerEvents(async (after, limit) => {
+      fetchAllLedgerEvents(async (cursor, limit) => {
+        const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
         const res = await fetchWithAuthRetry(
           buildApiUrl(
-            `runs/${encodeURIComponent(rid)}/events?after=${after}&limit=${limit}&view=sse`
+            `runs/${encodeURIComponent(rid)}/events?limit=${limit}${cursorParam}&view=sse`
           ),
           { method: 'GET', headers: { Accept: 'application/json' } }
         );
@@ -224,11 +225,11 @@ function useRunStream({
       });
     for (let attempt = 1; attempt <= attempts; attempt++) {
       try {
-        const { events: envelopes, lastSeq, complete } = await fetchProjection();
+        const { events: envelopes, complete } = await fetchProjection();
         if (!mountedRef.current) return null;
         if (complete) {
           dispatch({ type: ACTION.REBUILD, runId: rid, envelopes });
-          return { runId: rid, events: envelopes, lastSeq };
+          return { runId: rid, events: envelopes };
         }
         // The page bound was hit before the ledger's end: a truncated
         // projection must not replace the live state as if it were complete,

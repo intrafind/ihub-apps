@@ -160,21 +160,20 @@ export default function registerAdminUsageLimitRoutes(app) {
    *       - { in: query, name: search, schema: { type: string } }
    *       - { in: query, name: status, schema: { type: string, enum: [all, limited, warning, exceeded] } }
    *       - { in: query, name: modelId, schema: { type: string } }
-   *       - { in: query, name: page, schema: { type: integer } }
-   *       - { in: query, name: pageSize, schema: { type: integer } }
+   *       - { in: query, name: limit, schema: { type: integer, default: 25, maximum: 200 } }
+   *       - { in: query, name: cursor, schema: { type: string } }
    *     responses:
-   *       200: { description: "{ items, total, page, pageSize }" }
+   *       200: { description: "{ items, nextCursor, total }" }
    */
   app.get(buildServerPath('/api/admin/usage/limits/users'), adminAuth, async (req, res) => {
-    // api-guidelines-ignore: existing page/pageSize paging, changed in its own API change
-    const { search, status, modelId, page, pageSize } = req.query;
+    const { search, status, modelId, limit, cursor } = req.query;
     res.json(
       await listQuotaUsers({
         search: typeof search === 'string' ? search : '',
         status: ['all', 'limited', 'warning', 'exceeded'].includes(status) ? status : 'all',
         modelId: typeof modelId === 'string' && modelId ? modelId : null,
-        page: Number(page) || 1,
-        pageSize: Number(pageSize) || 25
+        limit,
+        cursor
       })
     );
   });

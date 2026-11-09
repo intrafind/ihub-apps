@@ -14,7 +14,8 @@ export const saveUsageLimitSettings = async settings =>
 /**
  * One page of users with their buckets.
  *
- * @param {{search?: string, status?: string, modelId?: string, page?: number, pageSize?: number}} query
+ * @param {{search?: string, status?: string, modelId?: string, cursor?: string, limit?: number}} query
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number}>}
  */
 export const fetchUsageLimitUsers = async (query = {}) => {
   const params = new URLSearchParams();

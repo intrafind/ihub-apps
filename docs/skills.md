@@ -296,7 +296,7 @@ global skills keep working.
 | GET | `/api/user-skills/:id/versions` | Versions, newest first; `/versions/:revision` returns one with its content |
 | POST | `/api/user-skills/:id/versions/:revision/restore` | Restore a version |
 | GET | `/api/user-skills/share-targets?q=` | Users and groups the caller may share with |
-| GET | `/api/user-skills/marketplace?search=&category=&registry=&page=&limit=` | Skills of the enabled registries, with the registries and categories to filter by; each says whether the caller added it already (`added`) |
+| GET | `/api/user-skills/marketplace?search=&category=&registry=&cursor=&limit=` | Skills of the enabled registries, with the registries and categories to filter by; each says whether the caller added it already (`added`) |
 | GET | `/api/user-skills/marketplace/:registryId/:name` | One marketplace skill with a preview of its instructions and files |
 | POST | `/api/user-skills/marketplace/:registryId/:name/add` | Copy it into My skills (`name` optional); the response lists `skippedFiles` |
 | GET | `/api/admin/user-skills` | User skills shared with a group or everyone (admins and content admins) |

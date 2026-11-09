@@ -18,6 +18,7 @@
  */
 
 import { ServiceError } from '../../utils/ServiceError.js';
+import { limitFrom, pageOfList } from '../../utils/pagination.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { catalogItemVersionSchema, validateCatalog } from '../../validators/catalogSchema.js';
 import {
@@ -996,7 +997,7 @@ class RegistryService {
   /**
    * Get all catalog items across all enabled registries, merged with installation status.
    * Supports filtering by type, search text, category, registry, and status.
-   * Supports pagination via page/limit query parameters.
+   * Supports pagination via limit/cursor query parameters.
    *
    * @param {object} [filters={}] - Optional filter/pagination parameters
    * @param {string} [filters.type] - Filter by content type ('app'|'model'|'prompt'|'skill'|'workflow'|'all')
@@ -1004,9 +1005,9 @@ class RegistryService {
    * @param {string} [filters.category] - Filter by category string
    * @param {string} [filters.registry] - Filter by registry ID
    * @param {string} [filters.status] - Filter by installation status ('installed'|'local'|'available'|'all')
-   * @param {number|string} [filters.page=1] - Page number (1-based)
-   * @param {number|string} [filters.limit=24] - Items per page
-   * @returns {Promise<{ items: Array, total: number, page: number, limit: number, totalPages: number }>}
+   * @param {string} [filters.cursor] - The `nextCursor` of the previous page
+   * @param {number|string} [filters.limit=24] - Items per page, at most 1000
+   * @returns {Promise<{ items: Array, nextCursor: string|null, total: number }>}
    */
   async getAllItems(filters = {}) {
     const cc = await this._getConfigCache();
@@ -1078,20 +1079,11 @@ class RegistryService {
       );
     }
 
-    // Pagination
-    const page = Number.parseInt(filters.page) || 1;
-    const limit = Number.parseInt(filters.limit) || 24;
-    const total = filtered.length;
-    const start = (page - 1) * limit;
-    const items = filtered.slice(start, start + limit);
+    // Pagination: `limit` (default 24, at most 1000) and the opaque `cursor`
+    const limit = limitFrom(filters.limit, { fallback: 24, max: 1000 });
+    const { items, nextCursor } = pageOfList(filtered, { limit, cursor: filters.cursor });
 
-    return {
-      items,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit)
-    };
+    return { items, nextCursor, total: filtered.length };
   }
 
   /**

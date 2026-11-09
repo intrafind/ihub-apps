@@ -28,7 +28,7 @@ jest.unstable_mockModule('../services/AuditLogService.js', () => ({
   logAudit: () => {}
 }));
 jest.unstable_mockModule('../services/oauth/ConnectionService.js', () => ({
-  listConnections: () => ({ connections: [] }),
+  listConnections: () => ({ items: [], nextCursor: null, total: 0 }),
   revokeConnection
 }));
 jest.unstable_mockModule('../services/oauth/CimdGovernanceService.js', () => ({

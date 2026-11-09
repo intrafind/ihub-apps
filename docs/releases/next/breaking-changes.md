@@ -584,3 +584,29 @@ needs no change; scripts that call these endpoints must use the new path.
 
 `POST /api/integrations/:id/_disconnect` answers `{ "removed", "revoked" }`; the `success` member is
 gone. The `connectUrl` that an integration sign-in error carries points at `_connect`.
+
+## Lists Page by `limit` and `cursor`
+
+Every list that the server pages answers `{ "items": [...], "nextCursor": "…" }` and takes `limit`
+and `cursor`, as `docs/api-guidelines.md` requires. The cursor is opaque: pass back what
+`nextCursor` gave you; `nextCursor` is `null` on the last page. `page`, `pageSize` and `offset` are
+gone, and an unknown cursor is answered `400` with the code `INVALID_CURSOR`. A `limit` above the
+maximum is capped, not refused. The web app ships with the server and needs no change; its admin
+tables now step with **Previous** and **Next** instead of jumping to a page number.
+
+| Endpoint | Was | Now |
+| --- | --- | --- |
+| `GET /api/admin/audit-log` | `offset` → `{ entries, total, facets }` | `limit`, `cursor` → `{ items, nextCursor, total, facets }` |
+| `GET /api/admin/usage/limits/users` | `page`, `pageSize` → `{ items, total, page, pageSize }` | `limit`, `cursor` → `{ items, nextCursor, total }` |
+| `GET /api/admin/usage/feedback` | `offset` → `{ feedbackEntries, total, limit, offset }` | `cursor` → `{ items, nextCursor, total }` |
+| `GET /api/admin/oauth/connections` | `page`, `pageSize` → `{ success, connections, total, page, pageSize, cimdClients }` | `limit`, `cursor` → `{ items, nextCursor, total, cimdClients }` |
+| `GET /api/admin/translations/:lang` | `offset` → `entries`, `offset`, `limit` | `cursor` → `items`, `nextCursor` |
+| `GET /api/admin/marketplace` | `page` → `{ items, total, page, limit, totalPages }` | `cursor` → `{ items, nextCursor, total }` |
+| `GET /api/user-skills/marketplace` | `page` → `{ …, page, limit, totalPages }` | `cursor` → `{ items, nextCursor, total, registries, categories }` |
+| `GET /api/workflows/my-executions` | `offset` → a bare array | `cursor` → `{ items, nextCursor }` |
+| `GET /api/admin/workflows/executions` | `offset` → `{ executions, total, stats, offset, limit }` | `cursor` → `{ items, nextCursor, total, stats }` |
+| `GET /api/runs/:runId/events` | `after` → `{ runId, after, nextAfter, events }` | `cursor` → `{ runId, items, nextCursor }` |
+
+The run ledger cursor stands for the last raw sequence a page read. A page that read nothing has no
+`nextCursor`, and a client keeps following the cursor, not the number of items, because a page of
+raw events can project to none.

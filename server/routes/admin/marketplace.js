@@ -306,7 +306,8 @@ export default function registerAdminMarketplaceRoutes(app) {
   /**
    * GET /api/admin/marketplace
    * Browse all items across all enabled registries.
-   * Query params: type, search, category, registry, status, page, limit
+   * Query params: type, search, category, registry, status, limit, cursor.
+   * Answers `{ items, nextCursor, total }`.
    */
   app.get(buildServerPath('/api/admin/marketplace'), adminAuth, featureGuard, async (req, res) => {
     const filters = {
@@ -315,7 +316,7 @@ export default function registerAdminMarketplaceRoutes(app) {
       category: req.query.category,
       registry: req.query.registry,
       status: req.query.status,
-      page: req.query.page,
+      cursor: req.query.cursor,
       limit: req.query.limit
     };
     const result = await registryService.getAllItems(filters);

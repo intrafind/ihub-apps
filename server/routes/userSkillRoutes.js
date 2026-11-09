@@ -481,9 +481,10 @@ export default function registerUserSkillRoutes(app) {
    *         schema:
    *           type: string
    *       - in: query
-   *         name: page
+   *         name: cursor
    *         schema:
-   *           type: integer
+   *           type: string
+   *         description: The `nextCursor` of the previous page
    *       - in: query
    *         name: limit
    *         schema:
@@ -497,7 +498,7 @@ export default function registerUserSkillRoutes(app) {
       search: typeof query.search === 'string' ? query.search.slice(0, 200) : '',
       registry: typeof query.registry === 'string' ? query.registry : '',
       category: typeof query.category === 'string' ? query.category : '',
-      page: query.page,
+      cursor: query.cursor,
       limit: query.limit
     });
     const copies = marketplaceCopiesByItem(await deps.repo.listOwned(String(req.user.id)));

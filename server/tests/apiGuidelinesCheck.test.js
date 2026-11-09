@@ -84,6 +84,11 @@ describe('check-api-guidelines', () => {
     assert.deepEqual(rules('const p = req.query.page;'), ['pagination-param']);
     assert.deepEqual(rules('const { limit, offset = 0 } = req.query;'), ['pagination-param']);
     assert.deepEqual(rules('const s = req.query.per_page;'), ['pagination-param']);
+    // A handler that reads the parameters through an alias of req.query.
+    assert.deepEqual(rules('const query = req.query || {};\nconst page = query.page;'), [
+      'pagination-param'
+    ]);
+    assert.deepEqual(rules('const query = req.query || {};\nconst q = query.cursor;'), []);
     assert.deepEqual(rules('const s = req.query.sort_by;'), ['query-naming']);
     assert.deepEqual(rules('const { limit, cursor, appId } = req.query;'), []);
   });

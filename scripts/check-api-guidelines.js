@@ -111,6 +111,8 @@ const RULES = [
 const ROUTE = /\b(?:app|router)\.(get|post|put|patch|delete)\(\s*(['"`])([^'"`]*)\2/g;
 const QUERY_PARAM = /\breq\.query\.([A-Za-z_]\w*)/g;
 const QUERY_DESTRUCTURE = /\{([^{}]*)\}\s*=\s*req\.query\b/g;
+/** `const query = req.query || {}`: the name the rest of the handler reads the parameters by. */
+const QUERY_ALIAS = /\b(?:const|let)\s+([A-Za-z_]\w*)\s*=\s*req\.query\b/g;
 
 /** 1-based line number of the character at |index|. */
 function lineOf(source, index) {
@@ -217,6 +219,12 @@ function checkQueryName(name, index, endIndex, add) {
 }
 
 function checkQueryParams(source, add) {
+  for (const [, alias] of source.matchAll(QUERY_ALIAS)) {
+    const aliased = new RegExp(`\\b${alias}\\.([A-Za-z_]\\w*)`, 'g');
+    for (const match of source.matchAll(aliased)) {
+      checkQueryName(match[1], match.index, match.index + match[0].length, add);
+    }
+  }
   for (const match of source.matchAll(QUERY_PARAM)) {
     checkQueryName(match[1], match.index, match.index + match[0].length, add);
   }

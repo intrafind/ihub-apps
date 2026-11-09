@@ -12,6 +12,7 @@
  *
  * @module services/quota/quotaAdmin
  */
+import { limitFrom, nextOffsetCursor, offsetFromCursor } from '../../utils/pagination.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import {
@@ -170,15 +171,15 @@ function summarize(row) {
  * @param {string} [query.search]
  * @param {'all'|'warning'|'exceeded'|'limited'} [query.status]
  * @param {string} [query.modelId] - Only users with a bucket of this model
- * @param {number} [query.page] - 1-based
- * @param {number} [query.pageSize]
+ * @param {number} [query.limit] - page size, at most 200
+ * @param {string} [query.cursor] - the `nextCursor` of the previous page
  */
 export async function listQuotaUsers({
   search = '',
   status = 'all',
   modelId = null,
-  page = 1,
-  pageSize = 25
+  limit = 25,
+  cursor = null
 } = {}) {
   const needle = String(search || '')
     .trim()
@@ -206,10 +207,10 @@ export async function listQuotaUsers({
       (b.summary.tokens.month || 0) - (a.summary.tokens.month || 0)
   );
 
-  const size = Math.min(Math.max(Number(pageSize) || 25, 1), 200);
+  const size = limitFrom(limit, { fallback: 25, max: 200 });
   const total = rows.length;
-  const current = Math.max(Number(page) || 1, 1);
-  const slice = rows.slice((current - 1) * size, current * size);
+  const offset = offsetFromCursor(cursor);
+  const slice = rows.slice(offset, offset + size);
   const items = await Promise.all(
     slice.map(async ({ row, summary }) => {
       const files =
@@ -217,7 +218,7 @@ export async function listQuotaUsers({
       return { ...summary, files: files ? { ...files, limit: summary.fileLimit } : null };
     })
   );
-  return { items, total, page: current, pageSize: size };
+  return { items, nextCursor: nextOffsetCursor({ offset, limit: size, total }), total };
 }
 
 /**

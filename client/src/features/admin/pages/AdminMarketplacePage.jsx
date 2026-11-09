@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
+import { useCursorPager } from '../../../shared/hooks/useCursorPager';
 import { browseMarketplace, fetchMarketplaceRegistries } from '../../../api/adminApi';
 import MarketplaceItemCard from '../components/marketplace/MarketplaceItemCard';
 import MarketplaceTypeTabs from '../components/marketplace/MarketplaceTypeTabs';
@@ -28,7 +29,7 @@ function AdminMarketplacePage() {
   const { t } = useTranslation();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
+  const [nextCursor, setNextCursor] = useState(null);
   const [loading, setLoading] = useState(true);
   const [registries, setRegistries] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
@@ -38,7 +39,7 @@ function AdminMarketplacePage() {
   const [search, setSearch] = useFilterState('q', '');
   const [selectedRegistry, setSelectedRegistry] = useFilterState('registry', '');
   const [statusFilter, setStatusFilter] = useFilterState('status', 'all');
-  const [page, setPage] = useState(1);
+  const { cursor, page, hasPrevious, goNext, goPrevious, reset: resetPaging } = useCursorPager();
 
   // Type badge counts derived from a full unfiltered fetch
   const [typeCounts, setTypeCounts] = useState({});
@@ -55,19 +56,19 @@ function AdminMarketplacePage() {
         search: search || undefined,
         registry: selectedRegistry || undefined,
         status: statusFilter !== 'all' ? statusFilter : undefined,
-        page,
+        cursor: cursor || undefined,
         limit: 24
       });
       setItems(result?.items || []);
       setTotal(result?.total || 0);
-      setTotalPages(result?.totalPages || 1);
+      setNextCursor(result?.nextCursor || null);
     } catch (err) {
       console.error('Error loading marketplace items:', err);
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [activeType, search, selectedRegistry, statusFilter, page]);
+  }, [activeType, search, selectedRegistry, statusFilter, cursor]);
 
   /**
    * Loads all items without type filter to compute per-type counts for tabs.
@@ -112,7 +113,7 @@ function AdminMarketplacePage() {
    */
   const handleTypeChange = type => {
     setActiveType(type);
-    setPage(1);
+    resetPaging();
   };
 
   /**
@@ -122,7 +123,7 @@ function AdminMarketplacePage() {
    */
   const handleSearch = e => {
     setSearch(e.target.value);
-    setPage(1);
+    resetPaging();
   };
 
   /**
@@ -210,7 +211,7 @@ function AdminMarketplacePage() {
                   value={selectedRegistry}
                   onChange={e => {
                     setSelectedRegistry(e.target.value);
-                    setPage(1);
+                    resetPaging();
                   }}
                   className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                 >
@@ -226,7 +227,7 @@ function AdminMarketplacePage() {
                   value={statusFilter}
                   onChange={e => {
                     setStatusFilter(e.target.value);
-                    setPage(1);
+                    resetPaging();
                   }}
                   className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                 >
@@ -275,21 +276,21 @@ function AdminMarketplacePage() {
                   </div>
 
                   {/* Pagination controls */}
-                  {totalPages > 1 && (
+                  {(hasPrevious || nextCursor) && (
                     <div className="flex justify-center gap-2">
                       <button
-                        disabled={page <= 1}
-                        onClick={() => setPage(p => p - 1)}
+                        disabled={!hasPrevious}
+                        onClick={goPrevious}
                         className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
                       >
                         &#x2190;
                       </button>
                       <span className="px-3 py-1 text-sm text-gray-600 dark:text-gray-400">
-                        {page} / {totalPages}
+                        {page} / {Math.max(Math.ceil(total / 24), page)}
                       </span>
                       <button
-                        disabled={page >= totalPages}
-                        onClick={() => setPage(p => p + 1)}
+                        disabled={!nextCursor}
+                        onClick={() => goNext(nextCursor)}
                         className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm disabled:opacity-50 text-gray-700 dark:text-gray-300"
                       >
                         &#x2192;

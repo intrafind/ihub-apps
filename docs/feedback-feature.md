@@ -558,7 +558,7 @@ Ratings in a range (`range` = `today`, `24h`, `7d`, `30d`, `90d`, `12m`, or `cus
 
 #### GET /api/admin/usage/feedback
 
-Stored feedback entries with comments, newest first (`limit`, `offset`).
+Stored feedback entries with comments, newest first (`limit`, `cursor`; answers `{ items, nextCursor, total }`).
 
 #### GET /api/admin/usage/export
 

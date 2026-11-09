@@ -149,7 +149,7 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
 
       // Recent activity from the audit log (top 8 entries already sorted newest-first)
       if (auditResult.status === 'fulfilled') {
-        const entries = auditResult.value?.data?.entries;
+        const entries = auditResult.value?.data?.items;
         if (Array.isArray(entries)) {
           setRecentActivity(entries);
         }

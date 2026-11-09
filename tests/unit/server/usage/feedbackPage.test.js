@@ -40,18 +40,41 @@ function writeFeedback(n) {
 describe('readFeedbackPage', () => {
   it('returns pages newest first without reading the rest', async () => {
     writeFeedback(10);
-    const first = await readFeedbackPage({ limit: 3, offset: 0 });
+    const first = await readFeedbackPage({ limit: 3 });
     expect(first.total).toBe(11);
-    expect(first.feedbackEntries.map(e => e.id)).toEqual([9, 8, 7]);
-    const second = await readFeedbackPage({ limit: 3, offset: 3 });
-    expect(second.feedbackEntries.map(e => e.id)).toEqual([6, 5, 4]);
+    expect(first.items.map(e => e.id)).toEqual([9, 8, 7]);
+    const second = await readFeedbackPage({ limit: 3, cursor: first.nextCursor });
+    expect(second.items.map(e => e.id)).toEqual([6, 5, 4]);
+  });
+
+  it('keeps its place when entries are appended between pages, and ends with a null cursor', async () => {
+    writeFeedback(5);
+    const first = await readFeedbackPage({ limit: 3 });
+    fs.appendFileSync(
+      path.join(mockRoot, 'data', 'feedback.jsonl'),
+      JSON.stringify({ id: 99, timestamp: 'new' }) + '\n'
+    );
+    const second = await readFeedbackPage({ limit: 3, cursor: first.nextCursor });
+    expect(second.items.map(e => e.id)).toEqual([1, 0]);
+    expect(second.nextCursor).toBeNull();
+  });
+
+  it('refuses a cursor it did not issue', async () => {
+    writeFeedback(2);
+    await expect(readFeedbackPage({ cursor: 'garbage' })).rejects.toMatchObject({
+      code: 'INVALID_CURSOR'
+    });
   });
 
   it('skips malformed lines and handles a missing file', async () => {
     writeFeedback(4);
     const all = await readFeedbackPage({ limit: 100 });
-    expect(all.feedbackEntries.map(e => e.id)).toEqual([3, 2, 1, 0]);
+    expect(all.items.map(e => e.id)).toEqual([3, 2, 1, 0]);
     fs.rmSync(path.join(mockRoot, 'data'), { recursive: true });
-    await expect(readFeedbackPage()).resolves.toMatchObject({ feedbackEntries: [], total: 0 });
+    await expect(readFeedbackPage()).resolves.toMatchObject({
+      items: [],
+      nextCursor: null,
+      total: 0
+    });
   });
 });

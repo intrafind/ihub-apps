@@ -872,8 +872,8 @@ export const deleteCredential = async id => {
  * @param {string} [params.status] - Filter by status ('all', 'running', 'paused', 'completed', 'failed', 'cancelled')
  * @param {string} [params.search] - Search by user ID or workflow name
  * @param {number} [params.limit] - Maximum number of results
- * @param {number} [params.offset] - Number of results to skip
- * @returns {Promise<Object>} Response containing executions array, total count, and stats
+ * @param {string} [params.cursor] - The `nextCursor` of the previous page
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number, stats: Object}>}
  */
 export const fetchAdminExecutions = async (params, { signal } = {}) => {
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
@@ -1079,9 +1079,9 @@ export const testMarketplaceRegistry = async data => {
  * @param {string} [params.search] - Search query string
  * @param {string} [params.registry] - Filter by registry ID
  * @param {string} [params.status] - Filter by installation status (available, installed)
- * @param {number} [params.page] - Page number for pagination
- * @param {number} [params.limit] - Number of items per page
- * @returns {Promise<Object>} Paginated result with items, total, and totalPages
+ * @param {string} [params.cursor] - The `nextCursor` of the previous page
+ * @param {number} [params.limit] - Number of items per page (default 24, at most 1000)
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number}>}
  */
 export const browseMarketplace = async (params = {}) => {
   const query = new URLSearchParams(
@@ -1265,7 +1265,15 @@ export const setAppFeedbackEnabled = async (appId, enabled) => {
   return response.data;
 };
 
-export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
-  const response = await makeAdminApiCall(`/admin/usage/feedback?limit=${limit}&offset=${offset}`);
+/**
+ * One page of feedback entries, newest first.
+ * @param {number} [limit]
+ * @param {string|null} [cursor] - The `nextCursor` of the previous page
+ * @returns {Promise<{items: Object[], nextCursor: string|null, total: number}>}
+ */
+export const fetchAdminFeedbackEntries = async (limit = 100, cursor = null) => {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+  const response = await makeAdminApiCall(`/admin/usage/feedback?${params}`);
   return response.data;
 };

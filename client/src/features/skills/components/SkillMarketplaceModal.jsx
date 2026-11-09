@@ -358,7 +358,6 @@ function SkillMarketplaceModal({ onClose, onAdded }) {
   const [registry, setRegistry] = useState('');
   const [result, setResult] = useState(null);
   const [items, setItems] = useState([]);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
@@ -373,7 +372,7 @@ function SkillMarketplaceModal({ onClose, onAdded }) {
   }, [search]);
 
   const load = useCallback(
-    async (nextPage, { append = false } = {}) => {
+    async (cursor, { append = false } = {}) => {
       const request = ++requestRef.current;
       setLoading(true);
       setError(null);
@@ -382,12 +381,11 @@ function SkillMarketplaceModal({ onClose, onAdded }) {
           search: query || undefined,
           category: category || undefined,
           registry: registry || undefined,
-          page: nextPage,
+          cursor: cursor || undefined,
           limit: PAGE_SIZE
         });
         if (request !== requestRef.current) return;
         setResult(data);
-        setPage(data.page || nextPage);
         setItems(prev => (append ? [...prev, ...(data.items || [])] : data.items || []));
       } catch (err) {
         if (request !== requestRef.current) return;
@@ -400,7 +398,7 @@ function SkillMarketplaceModal({ onClose, onAdded }) {
   );
 
   useEffect(() => {
-    load(1);
+    load(null);
   }, [load]);
 
   const quickAdd = async skill => {
@@ -419,7 +417,7 @@ function SkillMarketplaceModal({ onClose, onAdded }) {
   const registries = result?.registries || [];
   const categories = result?.categories || [];
   const filtered = Boolean(query || category || registry);
-  const hasMore = result && page < (result.totalPages || 1);
+  const hasMore = Boolean(result?.nextCursor);
 
   return (
     <Modal
@@ -558,7 +556,7 @@ function SkillMarketplaceModal({ onClose, onAdded }) {
                   <div className="mt-4 flex justify-center">
                     <button
                       type="button"
-                      onClick={() => load(page + 1, { append: true })}
+                      onClick={() => load(result.nextCursor, { append: true })}
                       disabled={loading}
                       className={secondaryButton}
                     >

@@ -26,6 +26,7 @@
  *
  * @module services/oauth/ConnectionService
  */
+import { limitFrom, pageOfList } from '../../utils/pagination.js';
 import { listConsents, revokeConsent, revokeConsentsForUser } from '../../utils/consentStore.js';
 import {
   listRefreshTokenUserIds,
@@ -115,24 +116,18 @@ export function listConnectionsForUser(userId) {
  * @param {string} [options.clientId] - Only this client
  * @param {string} [options.userId] - Only this user
  * @param {string} [options.host] - Only clients seen on this hostname
- * @param {number} [options.page=1] - 1-based page number
- * @param {number} [options.pageSize=50] - Entries per page
- * @returns {{connections: Array<Object>, total: number, page: number, pageSize: number}}
+ * @param {number} [options.limit=50] - Entries per page, at most 500
+ * @param {string} [options.cursor] - The `nextCursor` of the previous page
+ * @returns {{items: Array<Object>, nextCursor: string|null, total: number}}
  */
-export function listConnections({ clientId, userId, host, page = 1, pageSize = 50 } = {}) {
+export function listConnections({ clientId, userId, host, limit, cursor } = {}) {
   const clientName = clientNameLookup();
   const all = listConsents({ clientId, userId, host }).map(entry =>
     toConnection(entry, clientName)
   );
-  const safePage = Math.max(1, Number(page) || 1);
-  const safePageSize = Math.min(Math.max(1, Number(pageSize) || 50), 500);
-  const start = (safePage - 1) * safePageSize;
-
   return {
-    connections: all.slice(start, start + safePageSize),
-    total: all.length,
-    page: safePage,
-    pageSize: safePageSize
+    ...pageOfList(all, { limit: limitFrom(limit, { fallback: 50, max: 500 }), cursor }),
+    total: all.length
   };
 }
 
