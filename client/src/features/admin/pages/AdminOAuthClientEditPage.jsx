@@ -84,11 +84,8 @@ function AdminOAuthClientEditPage() {
 
       // Load available models
       const modelsResponse = await makeAdminApiCall('/admin/models');
-      const modelsData = modelsResponse.data;
-      const modelsList = Array.isArray(modelsData)
-        ? modelsData
-        : Object.values(modelsData.models || {});
-      setAvailableModels(modelsList);
+      const modelsList = modelsResponse.data?.items;
+      setAvailableModels(Array.isArray(modelsList) ? modelsList : []);
 
       // Load available prompts
       try {

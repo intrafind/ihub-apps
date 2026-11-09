@@ -2502,6 +2502,13 @@
     "status": 200,
     "shape": {
       "defaultAppId": "string",
+      "limits": {
+        "maxFileBytes": "number",
+        "maxFiles": "number",
+        "maxProjectBytes": "number",
+        "maxProjectsPerUser": "number"
+      },
+      "maxFilesCeiling": "number",
       "sharing": {
         "allowCatalog": "boolean",
         "allowEveryone": "boolean",

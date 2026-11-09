@@ -5,13 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { projectDependencyHref } from '../utils/projectAdmin';
 
 /** Where the admin edits each kind of dependent resource. */
-const DEPENDENCY_LINKS = {
-  app: id => `/admin/apps/${encodeURIComponent(id)}`,
-  workflow: id => `/admin/workflows/${encodeURIComponent(id)}`,
-  agent: id => `/admin/agents/${encodeURIComponent(id)}`
-};
 
 /**
  * Explains why a project cannot be deleted: the apps, workflows and agents
@@ -26,6 +23,7 @@ const DEPENDENCY_LINKS = {
  */
 function ProjectDependenciesDialog({ blocked, onClose }) {
   const { t } = useTranslation();
+  const featureFlags = useFeatureFlags();
   const typeLabels = {
     app: t('admin.projects.dependencies.types.app', 'App'),
     workflow: t('admin.projects.dependencies.types.workflow', 'Workflow'),
@@ -53,7 +51,7 @@ function ProjectDependenciesDialog({ blocked, onClose }) {
             </p>
             <ul className="mt-4 space-y-2" data-testid="project-dependencies">
               {(blocked?.dependencies || []).map(dependency => {
-                const href = DEPENDENCY_LINKS[dependency.type]?.(dependency.id);
+                const href = projectDependencyHref(dependency, featureFlags);
                 const label = dependency.name || dependency.id;
                 return (
                   <li

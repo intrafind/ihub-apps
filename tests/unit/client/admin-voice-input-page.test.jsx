@@ -175,7 +175,7 @@ beforeEach(() => {
       return { data: {} };
     }
     if (url === '/admin/models' && method === 'GET') {
-      return { data: MODELS };
+      return { data: { items: MODELS } };
     }
     if (url === '/admin/voice/azure/_test') {
       return {
