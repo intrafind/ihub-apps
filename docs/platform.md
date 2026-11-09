@@ -778,10 +778,9 @@ Windows NTLM authentication for domain-joined environments. iHub checks the NTLM
   "ntlmAuth": {
     "enabled": true,
     "domain": "COMPANY",
-    "domainController": "dc.company.com",
+    "domainController": "ldaps://dc.company.com:636",
     "debug": false,
-    "getUserInfo": true,
-    "getGroups": true,
+    "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["users"],
     "sessionTimeoutMinutes": 480,
     "generateJwtToken": true
@@ -793,12 +792,9 @@ Windows NTLM authentication for domain-joined environments. iHub checks the NTLM
 | --------------------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------- |
 | `enabled`                   | Boolean | `false`  | Enable NTLM authentication                                                                           |
 | `domain`                    | String  | -        | Windows domain name (NetBIOS format, e.g., `COMPANY`)                                               |
-| `domainController`          | String  | -        | Domain controller hostname or IP address                                                             |
+| `domainController`          | String  | -        | LDAP URL of the domain controller that checks the sign-in (`ldaps://…` or `ldap://…`). Without it, every NTLM sign-in is accepted unchecked |
 | `debug`                     | Boolean | `false`  | Enable verbose NTLM debugging output                                                                 |
-| `getUserInfo`               | Boolean | `true`   | Fetch user display name and email from Active Directory after authentication                         |
-| `getGroups`                 | Boolean | `true`   | Fetch group memberships from Active Directory                                                        |
-| `domainControllerUser`      | String  | -        | Service account username for AD lookups (required when `getUserInfo` or `getGroups` is `true`)      |
-| `domainControllerPassword`  | String  | -        | Service account password. Encrypted at rest; supports `${ENV_VAR}` references                       |
+| `ldapGroupLookupProvider`   | String  | -        | Name of an entry in `ldapAuth.providers` that supplies the user's groups at sign-in. NTLM itself returns none |
 | `defaultGroups`             | Array   | `[]`     | Groups automatically assigned to all NTLM-authenticated users                                       |
 | `sessionTimeoutMinutes`     | Number  | `480`    | Session lifetime in minutes                                                                          |
 | `generateJwtToken`          | Boolean | `true`   | Issue a JWT token after successful NTLM authentication so subsequent requests use standard auth      |

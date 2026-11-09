@@ -629,7 +629,7 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
 
 1. The browser answers iHub's `WWW-Authenticate: NTLM` challenge automatically (no login form required for SSO)
 2. `server/middleware/ntlmAuth.js` handles the multi-round NTLM handshake
-3. Active Directory groups are queried via LDAP using the configured bind credentials
+3. The domain controller checks the sign-in; it returns no groups. When `ldapGroupLookupProvider` names an LDAP provider, the user's groups are looked up there
 4. Groups are mapped to iHub internal groups and a JWT token is optionally generated
 
 #### Configuration
@@ -640,10 +640,7 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
     "enabled": true,
     "domain": "COMPANY",
     "domainController": "ldaps://dc.company.com:636",
-    "domainControllerUser": "CN=Service Account,OU=Users,DC=company,DC=com",
-    "domainControllerPassword": "${NTLM_LDAP_PASSWORD}",
-    "getGroups": true,
-    "getUserInfo": true,
+    "ldapGroupLookupProvider": "corporate-ldap",
     "generateJwtToken": true,
     "defaultGroups": ["authenticated"],
     "sessionTimeoutMinutes": 480
@@ -651,12 +648,7 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
 }
 ```
 
-LDAP credentials can also be supplied via environment variables instead of the configuration file:
-
-```bash
-export NTLM_LDAP_USER="CN=Service Account,OU=Users,DC=company,DC=com"
-export NTLM_LDAP_PASSWORD="secure-password"
-```
+`corporate-ldap` is an entry in `ldapAuth.providers` with admin bind credentials and group search; its credentials are configured there. Without `ldapGroupLookupProvider`, NTLM users get only `defaultGroups`.
 
 #### Multiple Provider Co-existence
 
@@ -673,8 +665,7 @@ NTLM authentication is automatically skipped for requests proxied through Vite's
 
 #### Security Notes
 
-- The `domainControllerPassword` field is encrypted at rest using AES-256-GCM (see [Security Guide](security.md))
-- NTLM requires a domain controller with LDAP access for group retrieval
+- Without `domainController`, every NTLM sign-in is accepted without checking the password; always set it in production
 - For production deployments, use LDAPS (`ldaps://`) for the domain controller URL
 
 ## API Endpoints

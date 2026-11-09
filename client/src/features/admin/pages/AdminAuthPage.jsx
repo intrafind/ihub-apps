@@ -70,8 +70,6 @@ function AdminAuthPage() {
       domain: '',
       domainController: '',
       debug: false,
-      getUserInfo: true,
-      getGroups: true,
       ldapGroupLookupProvider: '',
       defaultGroups: [],
       sessionTimeoutMinutes: 480,

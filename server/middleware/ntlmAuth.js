@@ -3,7 +3,6 @@
 
 import expressNtlm from 'express-ntlm';
 import configCache from '../configCache.js';
-import credentialService from '../services/CredentialService.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
@@ -56,7 +55,7 @@ function createNtlmDebugFn(enabled) {
   };
 }
 
-const SUMMARISED_TLS_KEYS = [
+const SUMMARISED_TLS_KEYS = new Set([
   'rejectUnauthorized',
   'ca',
   'cert',
@@ -65,7 +64,7 @@ const SUMMARISED_TLS_KEYS = [
   'servername',
   'minVersion',
   'maxVersion'
-];
+]);
 
 /**
  * Summarise tlsOptions so the log makes the *effective* TLS behaviour visible.
@@ -87,7 +86,7 @@ function summarizeTlsOptions(tls) {
     ...(tls.servername && { servername: tls.servername }),
     ...(tls.minVersion && { minVersion: tls.minVersion }),
     ...(tls.maxVersion && { maxVersion: tls.maxVersion }),
-    otherKeys: Object.keys(tls).filter(k => !SUMMARISED_TLS_KEYS.includes(k))
+    otherKeys: Object.keys(tls).filter(k => !SUMMARISED_TLS_KEYS.has(k))
   };
 }
 
@@ -97,30 +96,17 @@ function summarizeTlsOptions(tls) {
  * @returns {Function} Express middleware
  */
 export function createNtlmMiddleware(ntlmConfig = {}) {
-  // Support environment variables for LDAP credentials (more secure).
-  // The domain controller password is an optional secret resolved from the
-  // central credential store via domainControllerPasswordRef, falling back to
-  // the NTLM_LDAP_PASSWORD environment variable.
-  const ldapUser = ntlmConfig.domainControllerUser || process.env.NTLM_LDAP_USER;
-  const ldapPassword =
-    credentialService.tryResolveSecret(ntlmConfig.domainControllerPasswordRef) ||
-    process.env.NTLM_LDAP_PASSWORD;
-
   // NTLM tracing is driven either by the provider-local `ntlmAuth.debug` flag or
   // by the central authentication-debug toggle (auth.debug), so admins can turn
   // it on from the single Logging page without a second, NTLM-only switch.
   const ntlmDebug = ntlmConfig.debug === true || authDebugService.isDebugEnabled('ntlm');
 
+  // express-ntlm only checks the sign-in: it relays the NTLM messages to
+  // `domaincontroller` and returns the user, domain and workstation. It never
+  // reads user details or groups; those come from `ldapGroupLookupProvider`.
   const options = {
     domain: ntlmConfig.domain,
     domaincontroller: ntlmConfig.domainController,
-    // Optional: specify which fields to return
-    getUserInfo: ntlmConfig.getUserInfo !== false, // Default true
-    // Optional: specify if we should get user groups
-    getGroups: ntlmConfig.getGroups !== false, // Default true
-    // LDAP bind credentials (required for group queries)
-    domaincontrolleruser: ldapUser,
-    domaincontrollerpassword: ldapPassword,
     // TLS options for ldaps:// connections with self-signed/internal CA certs
     ...(ntlmConfig.tlsOptions && { tlsOptions: ntlmConfig.tlsOptions }),
     // Pipe express-ntlm's internal debug output through our logger
@@ -183,29 +169,20 @@ export function createNtlmMiddleware(ntlmConfig = {}) {
     component: 'NtlmAuth',
     domain: options.domain || 'default',
     domainController: options.domaincontroller || 'NOT CONFIGURED',
-    getGroups: options.getGroups,
-    ldapBindUserConfigured: !!options.domaincontrolleruser,
-    ldapBindPasswordConfigured: !!options.domaincontrollerpassword,
+    ldapGroupLookupProvider: ntlmConfig.ldapGroupLookupProvider || 'none',
     debugMode: ntlmDebug,
     tlsOptions: summarizeTlsOptions(ntlmConfig.tlsOptions)
   });
 
-  // Warn if getGroups is enabled but no domain controller is configured
-  if (options.getGroups && !options.domaincontroller) {
+  if (!options.domaincontroller) {
     logger.warn(
-      'NTLM Auth: getGroups is enabled but no domain controller is configured, users will be assigned default groups only',
+      'NTLM Auth: no domain controller configured — every NTLM sign-in is accepted without checking the password',
       { component: 'NtlmAuth' }
     );
   }
-
-  // Warn if getGroups is enabled but LDAP credentials are missing
-  if (
-    options.getGroups &&
-    options.domaincontroller &&
-    (!options.domaincontrolleruser || !options.domaincontrollerpassword)
-  ) {
-    logger.warn(
-      'NTLM Auth: getGroups is enabled with domain controller but LDAP credentials are missing',
+  if (!ntlmConfig.ldapGroupLookupProvider) {
+    logger.info(
+      'NTLM Auth: no ldapGroupLookupProvider set — NTLM users get only ntlmAuth.defaultGroups',
       { component: 'NtlmAuth' }
     );
   }
@@ -286,21 +263,12 @@ export function processNtlmUser(req, ntlmConfig) {
     groups = ntlmUser.Groups;
     logger.debug('NTLM Auth: found groups in ntlmUser.Groups', { component: 'NtlmAuth', groups });
   } else {
-    logger.debug('NTLM Auth: no groups found in NTLM data', {
+    // The usual case: express-ntlm returns no groups. They are added from
+    // `ldapGroupLookupProvider`, when one is set, after this.
+    logger.debug('NTLM Auth: no groups in NTLM data', {
       component: 'NtlmAuth',
-      availableFields: Object.keys(ntlmUser),
-      getGroups: ntlmConfig.getGroups,
-      domainController: ntlmConfig.domainController || 'NOT CONFIGURED'
+      availableFields: Object.keys(ntlmUser)
     });
-
-    if (ntlmConfig.getGroups && !ntlmConfig.domainController) {
-      logger.warn(
-        'NTLM Auth: groups cannot be retrieved without a domain controller configuration',
-        {
-          component: 'NtlmAuth'
-        }
-      );
-    }
   }
 
   logger.debug('NTLM Auth: extracted groups before mapping', { component: 'NtlmAuth', groups });
