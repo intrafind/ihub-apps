@@ -90,6 +90,6 @@ export default function registerAdminLoggingRoutes(app) {
 
     logger.info('Logging configuration updated', { component: 'AdminLogging', newLoggingConfig });
 
-    res.json({ config: platformConfig.logging });
+    res.json(platformConfig.logging);
   });
 }

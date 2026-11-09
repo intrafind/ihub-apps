@@ -122,10 +122,8 @@ export default function registerAdminSSLRoutes(app) {
     });
 
     res.json({
-      config: {
-        ignoreInvalidCertificates,
-        domainWhitelist
-      }
+      ignoreInvalidCertificates,
+      domainWhitelist
     });
   });
 }

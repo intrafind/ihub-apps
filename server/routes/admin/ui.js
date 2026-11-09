@@ -229,7 +229,7 @@ export default function registerAdminUIRoutes(app) {
   app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, (req, res) => {
     const uiConfig = configCache.getUI();
 
-    res.json({ config: uiConfig?.data || {} });
+    res.json(uiConfig?.data || {});
   });
 
   /**

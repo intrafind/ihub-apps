@@ -189,6 +189,6 @@ export default function registerAdminAuditLogRoutes(app) {
       anonymizeIp
     });
 
-    res.json({ settings: getAuditSettings() });
+    res.json(getAuditSettings());
   });
 }
