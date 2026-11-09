@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  NORMALIZERS,
   diffSnapshots,
   firstId,
   mergeShapes,
@@ -86,4 +87,27 @@ test('notRequestedReason: streams, downloads and external specifications are lef
   assert.ok(notRequestedReason('/api/admin/browser-extension/download.zip'));
   assert.ok(notRequestedReason('/api/oauth/token'));
   assert.equal(notRequestedReason('/api/admin/apps'), null);
+});
+
+test('normalizers: token counts that are a number or null in the background look the same', () => {
+  const counted = { projects: { a: { tokens: 'number' }, b: { tokens: 'number' } } };
+  const pending = { projects: { a: { tokens: 'number' }, b: { tokens: 'null' } } };
+  const allPending = { projects: { a: { tokens: 'null' }, b: { tokens: 'null' } } };
+  const normalize = NORMALIZERS['/api/admin/projects/_tokens'];
+  // However the race went, the description is the same, and never a project's id.
+  const expected = { projects: { '<id>': { tokens: 'null|number' } } };
+  assert.deepEqual(normalize(counted), expected);
+  assert.deepEqual(normalize(pending), expected);
+  assert.deepEqual(normalize(allPending), expected);
+});
+
+test('normalizers: the transient import state of a project item is not part of the shape', () => {
+  const normalize = NORMALIZERS['/api/admin/projects/:id'];
+  assert.deepEqual(normalize({ items: [{ id: 'string', import: 'object' }] }), {
+    items: [{ id: 'string' }]
+  });
+  assert.deepEqual(normalize({ items: [{ id: 'string', 'import?': 'object' }] }), {
+    items: [{ id: 'string' }]
+  });
+  assert.deepEqual(normalize({ name: 'string' }), { name: 'string' });
 });

@@ -108,6 +108,30 @@ export function mergeShapes(shapes) {
   return names.length === 1 ? shapes[0] : names.join('|');
 }
 
+/**
+ * Parts of an answer that depend on timing, not on the code: they are described in a
+ * way that holds however the race went. Keyed by route template.
+ */
+export const NORMALIZERS = {
+  // Token counts are computed in the background: a project has a number once counted, null
+  // before. Whichever it is, the description is the same one.
+  '/api/admin/projects/_tokens': shape => {
+    const projects = shape?.projects;
+    if (!projects || typeof projects !== 'object' || Array.isArray(projects)) return shape;
+    const merged = mergeShapes(Object.values(projects));
+    if (!merged || typeof merged !== 'object') return shape;
+    return { ...shape, projects: { '<id>': { ...merged, tokens: 'null|number' } } };
+  },
+  // `import` is the transient state of an item that is still being ingested.
+  '/api/admin/projects/:id': shape => {
+    if (!Array.isArray(shape?.items) || !shape.items[0] || typeof shape.items[0] !== 'object') {
+      return shape;
+    }
+    const { import: _import, 'import?': _optional, ...element } = shape.items[0];
+    return { ...shape, items: [element] };
+  }
+};
+
 /** Why a route is not requested, or null. */
 export function notRequestedReason(routePath) {
   for (const [pattern, reason] of NOT_REQUESTED) if (pattern.test(routePath)) return reason;
@@ -146,11 +170,16 @@ function freePort() {
 
 async function startServer(contentsDir) {
   const port = await freePort();
+  // Answers must not depend on the machine: a developer's proxy variables would show up
+  // in `/api/admin/proxy/config`, a runner's would not.
+  const environment = Object.fromEntries(
+    Object.entries(process.env).filter(([name]) => !/^(all|http|https|no)_proxy$/i.test(name))
+  );
   const child = spawn(process.execPath, ['server/server.js'], {
     cwd: root,
     stdio: 'ignore',
     env: {
-      ...process.env,
+      ...environment,
       NODE_ENV: 'production',
       WORKERS: '1',
       HOST: '127.0.0.1',
@@ -370,7 +399,10 @@ export async function collectShapes({ base, cookie, routes }) {
     const answer = await request(base, cookie, resolved.path);
     out[key] =
       answer.type === 'json'
-        ? { status: answer.status, shape: shapeOf(answer.body) }
+        ? {
+            status: answer.status,
+            shape: (NORMALIZERS[routePath] ?? (x => x))(shapeOf(answer.body))
+          }
         : { status: answer.status, type: answer.type };
   };
   // One request at a time: the seed's state and the rate limit stay simple.
