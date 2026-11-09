@@ -85,13 +85,15 @@ function Layout() {
       !pathnameEquals(location.pathname, '/apps/'),
     [location.pathname]
   );
-  // Pages that paint their own full-bleed background and padding; everything
+  // Pages that bring their own full-height layout and padding; everything
   // else (prompts, CMS pages, workflows, settings) keeps the classic centered
-  // container it had under the old header.
+  // container it had under the old header. All of them sit on the shell's
+  // white (dark: gray-900) surface, the same as the chat.
   const isFullBleedPage = useMemo(
     () =>
       isAppPage ||
       pathnameEquals(location.pathname, '/') ||
+      pathnameEquals(location.pathname, '/start') ||
       pathnameEquals(location.pathname, '/apps') ||
       pathnameEquals(location.pathname, '/apps/') ||
       pathnameStartsWith(location.pathname, '/chats') ||

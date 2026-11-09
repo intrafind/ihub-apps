@@ -334,7 +334,7 @@ export default function IntegrationsPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Icon name="lock" className="w-12 h-12 text-gray-500 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -349,9 +349,9 @@ export default function IntegrationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
+    <div className="min-h-screen py-6">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white dark:bg-gray-800 shadow-sm rounded-lg">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm rounded-lg">
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">

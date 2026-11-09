@@ -602,7 +602,7 @@ export default function ChatHistoryPage() {
   const showLoadError = !loading && !!error && resolvedChats.length === 0;
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
+    <div className="min-h-full px-6 py-10">
       <div className="max-w-3xl mx-auto">
         {/* Header */}
         <div className="flex items-end justify-between gap-4 mb-6 flex-wrap">

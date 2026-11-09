@@ -154,14 +154,14 @@ export default function TaskDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
+      <div className="min-h-full px-6 py-10">
         <p className="max-w-5xl mx-auto text-gray-500">{t('common.loading', 'Loading…')}</p>
       </div>
     );
   }
   if (!task) {
     return (
-      <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
+      <div className="min-h-full px-6 py-10">
         <div className="max-w-5xl mx-auto">
           <Link to="/tasks" className="text-sm text-indigo-600 hover:underline">
             ← {t('scheduledTasks.backToTasks', 'Scheduled tasks')}
@@ -177,7 +177,7 @@ export default function TaskDetailPage() {
   const runningNow = task.activeRun && isRunActive(task.activeRun.status);
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-8">
+    <div className="min-h-full px-4 sm:px-6 py-8">
       <div className="max-w-5xl mx-auto space-y-6">
         <div>
           <Link

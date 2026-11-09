@@ -283,7 +283,7 @@ export default function TaskEditorPage() {
 
   if (loading) {
     return (
-      <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-6 py-10">
+      <div className="min-h-full px-6 py-10">
         <p className="max-w-3xl mx-auto text-gray-500">{t('common.loading', 'Loading…')}</p>
       </div>
     );
@@ -292,7 +292,7 @@ export default function TaskEditorPage() {
   const variableFields = Array.isArray(app?.variables) ? app.variables : [];
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-900 px-4 sm:px-6 py-8">
+    <div className="min-h-full px-4 sm:px-6 py-8">
       <form className="max-w-3xl mx-auto space-y-6" onSubmit={handleSubmit} noValidate>
         <div>
           <Link

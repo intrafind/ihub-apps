@@ -951,7 +951,8 @@ easier to read. The user's own messages sit in a neutral grey bubble on the righ
   gains that width. The `icons.userMessage` and `icons.assistantMessage` settings in `ui.json` no
   longer have a visible effect.
 - The main area of the app is now white and the sidebar light grey, which was the other way round
-  before.
+  before. This holds on every page, not just in the chat: the start page, the apps list, all
+  chats, scheduled tasks, projects, the integrations settings and a shared chat look the same.
 - Error messages keep their red callout.
 
 ## Projects: Try a Project in a Chat Before You Link It
