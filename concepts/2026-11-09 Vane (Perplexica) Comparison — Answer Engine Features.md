@@ -397,10 +397,18 @@ request gets a new field `researchDepth`, and the server maps it to per-answer b
   - engine searches are counted before they run, and past the cap the call returns a "budget
     reached" result instead of searching;
   - for native search, each model call gets `max_uses` = the searches remaining, where the
-    provider supports it. Where it does not (OpenAI Responses, Gemini), a capped preset turns
-    native search **off before the first model call** and searches through an engine, which the
-    counter gates. One uncapped native call can search several times, so dropping native search
-    only after the counter is spent would not enforce the cap.
+    provider supports it (Anthropic).
+    - When **no searches remain**, the loop removes the native-search directive from the next
+      call entirely. Passing 0 would not stop it: `normalizeMaxUses` in `webSearchResolver.js`
+      turns 0 into the default of 5, and the Anthropic adapter leaves out `max_uses` for 0.
+    - Where the provider has no per-call cap (OpenAI Responses, Gemini), a capped preset turns
+      native search **off before the first model call** and searches through an engine, which
+      the counter gates. One uncapped native call can search several times, so dropping native
+      search only after the counter is spent would not enforce the cap.
+    - That switch needs an engine the user may use. Native search works without any engine
+      installed or permitted, so on such an installation the capped preset is **not offered**.
+      The selector shows it as unavailable with the reason, and the app keeps its uncapped
+      native search for the other presets. It never silently ends up with no search at all.
 
   Searches already reported by a provider (grounding metadata, `web_search_call` items) count
   toward the same number.
@@ -502,6 +510,10 @@ default production engine.
      match length is enough.
   2. **Map each span to its source** with `numberOfUrl` / `numberOfMarker`. A span with no
      matching source gets no annotation, just as the UI leaves such links plain.
+     `url_citation` needs a web URL, but a matched marker can point to a document without
+     one, for example an iAssistant or iFinder document with no `http(s)` URL. Such a span also
+     gets **no** annotation; it stays plain text in the API answer. A later, additive extension
+     could carry those as a separate, iHub-specific annotation type.
 
   Offsets refer to the text exactly as sent to the client, after any marker rewriting.
 - This is an additive change under the API guidelines. **Do not** build a separate `/api/search`.
