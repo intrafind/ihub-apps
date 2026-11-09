@@ -231,6 +231,13 @@ describe('generated files', () => {
     assert.deepEqual(generatedFilesOf([{ ...descriptor, id: '../x' }]), []);
     assert.deepEqual(generatedFilesOf([{ ...descriptor, mimeType: 'text/html' }]), []);
     assert.deepEqual(generatedFilesOf('nope'), []);
+    // A file regenerated under the same name replaces the earlier version in its place.
+    const html = { name: 'page.html', mimeType: 'text/plain', bytes: 1 };
+    const v1 = { ...html, id: '1'.repeat(32) };
+    const v2 = { ...html, id: '2'.repeat(32), bytes: 2 };
+    const other = { ...html, id: '3'.repeat(32), name: 'other.html' };
+    assert.deepEqual(generatedFilesOf([v1, other, v2]), [v2, other]);
+    assert.equal(generatedFilesOf([v1, { ...v2, mimeType: 'application/pdf' }]).length, 2);
     assert.equal(safeFileName('../../etc/Report: Q3?', 'pdf'), 'etc Report Q3.pdf');
     assert.equal(safeFileName('', 'pdf'), 'document.pdf');
   });

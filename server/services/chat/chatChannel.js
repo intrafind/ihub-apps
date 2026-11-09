@@ -13,6 +13,10 @@
  */
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
+import { matchTool } from '../loop/toolArgs.js';
+import { toolDisplayOf } from '../../utils/toolDisplay.js';
+
+const PREPARING_UPDATE_MS = 1000;
 
 function thoughtToDelta(thought) {
   if (typeof thought === 'string') return { content: thought };
@@ -60,10 +64,49 @@ export function createChatChannel({ chatId, stream }) {
     }
   };
 
+  // A tool call is announced as soon as its name streams in, not when its
+  // arguments are complete: a long call (a whole web page for
+  // `create_web_artifact`) otherwise streams for minutes behind a bare
+  // spinner. `tool/started` follows once the call runs and replaces the row.
+  // While the arguments stream, the same frame repeats at most once per
+  // PREPARING_UPDATE_MS with how many characters are written so far: no
+  // provider says how long the call will be or streams its token count.
+  const announced = new Map();
+  const announceToolCalls = (chunk, ctx) => {
+    for (const delta of chunk.tool_calls || []) {
+      if (delta?.index === undefined || delta?.index === null) continue;
+      const key = `${ctx.iteration}:${delta.index}`;
+      const seen = announced.get(key) || { chars: 0, sentAt: null };
+      seen.id = seen.id || delta.id || null;
+      seen.name = seen.name || delta.function?.name || delta.name || null;
+      const args = delta.function?.arguments;
+      if (typeof args === 'string') seen.chars += args.length;
+      announced.set(key, seen);
+      if (!seen.toolDef) seen.toolDef = seen.name ? matchTool(seen.name, ctx.tools) : null;
+      if (!seen.toolDef) continue;
+      const now = Date.now();
+      if (seen.sentAt !== null && now - seen.sentAt < PREPARING_UPDATE_MS) continue;
+      seen.sentAt = now;
+      emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+        step: ctx.iteration,
+        // The same id the call's `tool/started` will carry (`callIdOf` in chatSeams).
+        callId: String(seen.id || delta.index),
+        phase: 'tool.preparing',
+        data: {
+          toolId: String(seen.toolDef.id || seen.name),
+          name: seen.name,
+          ...toolDisplayOf(seen.toolDef),
+          chars: seen.chars
+        }
+      });
+    }
+  };
+
   return {
     state,
     onChunk(chunk, ctx) {
       const step = ctx.iteration;
+      if (chunk.tool_calls?.length) announceToolCalls(chunk, ctx);
       for (const text of chunk.content || []) {
         if (!text) continue;
         state.answerOutput = true;

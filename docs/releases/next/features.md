@@ -424,6 +424,8 @@ Two new system skills, enabled per app by adding `xlsx` and `web-artifacts` to i
   contact other sites.
   Links in an artifact (sources, details, menu items) open content inside the file instead of
   pointing nowhere; a link the preview cannot follow is flagged so the model rebuilds it.
+  A rebuilt artifact replaces the earlier version: the answer shows one card per file name, not one
+  per attempt.
 - **Previews:** PDFs, HTML, SVG, CSV/TSV tables and Jupyter notebooks open in the panel, with a
   **Preview | Code** switch.
 - **Open:** the Files panel's preview has an **Open** button (or double-click a file) that opens the
@@ -1293,3 +1295,11 @@ about half the pane — so a long prompt can be read and edited without scrollin
 A web page added to a project without a name now shows the page's title instead of its URL. A name
 you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
 page that cannot be read when it is added keeps its URL as the name.
+
+## Chat: A Tool Call Shows Up While the Model Is Still Writing It
+
+The activity list now shows a tool call ("Create interactive web artifact", "Search the web") as
+soon as the model starts writing it, not only when it runs. A long call, like a whole web page, used
+to leave the chat with nothing but a spinner for a minute or more; now the row appears straight
+away and counts up how many characters the model has written so far ("31K characters written").
+A call the user stops before it is written disappears from the list.
