@@ -140,6 +140,8 @@ export function offerItemInfo(project, item, metadata) {
   Promise.resolve()
     .then(() => infoRecorder(project, item, { title, description }))
     .catch(error => {
+      // Not recorded: a later read may try again.
+      infoOffered.delete(key);
       logger.debug('Could not record what a link item is about', {
         component: COMPONENT,
         projectId: project.id,

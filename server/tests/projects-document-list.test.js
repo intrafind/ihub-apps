@@ -415,4 +415,22 @@ describe('iHub pages and iFinder documents', () => {
       setItemInfoRecorder(null);
     }
   });
+
+  test('a failed recording is offered again on the next read', async () => {
+    let calls = 0;
+    setItemInfoRecorder(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('storage down');
+    });
+    try {
+      const doc = { id: 'itm_f', kind: 'url', ref: { url: 'https://example.com/' } };
+      offerItemInfo({ id: 'prj_f' }, doc, { title: 'Example' });
+      await new Promise(resolve => setImmediate(resolve));
+      offerItemInfo({ id: 'prj_f' }, doc, { title: 'Example' });
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(calls, 2);
+    } finally {
+      setItemInfoRecorder(null);
+    }
+  });
 });
