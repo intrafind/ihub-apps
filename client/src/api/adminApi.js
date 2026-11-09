@@ -298,7 +298,7 @@ const adminProjectItemPath = (projectId, itemId) =>
  */
 export const fetchAdminProjects = async () => {
   const response = await makeAdminApiCall(ADMIN_PROJECTS_PATH);
-  return Array.isArray(response.data) ? response.data : [];
+  return Array.isArray(response.data?.items) ? response.data.items : [];
 };
 
 /**
