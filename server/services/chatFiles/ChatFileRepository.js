@@ -169,6 +169,54 @@ export class ChatFileQuotaError extends ServiceError {
   }
 }
 
+/** Throws when one file is larger than a file may be. */
+function assertFileSize(quotas, size) {
+  if (!(quotas.maxFileBytes > 0 && size > quotas.maxFileBytes)) return;
+  throw new ChatFileQuotaError(
+    'QUOTA_FILE_BYTES',
+    `File exceeds maximum size of ${Math.floor(quotas.maxFileBytes / (1024 * 1024))} MB`,
+    { limit: quotas.maxFileBytes, size },
+    413
+  );
+}
+
+/** The limits of the files of a scope: an Inference API user's (scope `user`) are their own. */
+function scopeLimits(scope, quotas) {
+  const isApi = scope.type === 'user';
+  return {
+    isApi,
+    maxFiles: isApi ? quotas.maxApiFiles : quotas.maxChatFiles,
+    maxBytes: isApi ? quotas.maxApiBytes : quotas.maxChatBytes
+  };
+}
+
+/** Throws when a chat, task or API user already holds the most files it may. */
+function assertScopeSlots(scope, limits, slotsUsed) {
+  if (!(limits.maxFiles > 0 && slotsUsed >= limits.maxFiles)) return;
+  throw new ChatFileQuotaError(
+    limits.isApi ? 'QUOTA_API_FILES' : 'QUOTA_CHAT_FILES',
+    limits.isApi
+      ? `You already have the maximum of ${limits.maxFiles} files in the Inference API`
+      : `This ${scope.type} already has the maximum of ${limits.maxFiles} uploaded files`,
+    { limit: limits.maxFiles, used: slotsUsed },
+    413
+  );
+}
+
+/** Throws when adding `totalBytes` would take a chat, task or API user over its byte quota. */
+function assertScopeBytes(scope, limits, scopeBytes, totalBytes) {
+  if (!(limits.maxBytes > 0 && scopeBytes + totalBytes > limits.maxBytes)) return;
+  const megabytes = Math.floor(limits.maxBytes / (1024 * 1024));
+  throw new ChatFileQuotaError(
+    limits.isApi ? 'QUOTA_API_BYTES' : 'QUOTA_CHAT_BYTES',
+    limits.isApi
+      ? `Your Inference API files exceed the storage quota of ${megabytes} MB`
+      : `This ${scope.type} exceeds the storage quota of ${megabytes} MB`,
+    { limit: limits.maxBytes, used: scopeBytes, size: totalBytes },
+    413
+  );
+}
+
 /**
  * Validate a scope, or return null when it cannot address storage.
  *
@@ -545,106 +593,95 @@ export class ChatFileRepository {
     replaces = null,
     origin = 'upload'
   }) {
-    const { quotas, evictOldestOriginalsOnQuota } = settings;
+    assertFileSize(settings.quotas, singleFileSize);
+    await this._enforceScopeQuota({ scope, totalBytes, quotas: settings.quotas, replaces, origin });
+    await this._enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces });
+    await this._enforceServerQuota({ scope, totalBytes, settings, replaces });
+  }
 
-    if (quotas.maxFileBytes > 0 && singleFileSize > quotas.maxFileBytes) {
+  /**
+   * Tier 1: the quota of a chat or a task. The files of an Inference API user (`/v1/files`, scope
+   * `user`) have limits of their own.
+   *
+   * @private
+   */
+  async _enforceScopeQuota({ scope, totalBytes, quotas, replaces, origin }) {
+    const limits = scopeLimits(scope, quotas);
+    if (!(limits.maxFiles > 0 || limits.maxBytes > 0)) return;
+    const existing = (await this.list(scope)).filter(
+      item => !replaces || chatFileKey(scope, item.id) !== replaces.key
+    );
+    // A picture the user attached takes no slot: a chat of screenshots must not leave no room
+    // for a document. Its bytes count below like any file's.
+    if (origin !== 'image') {
+      assertScopeSlots(scope, limits, existing.filter(item => item.origin !== 'image').length);
+    }
+    const scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
+    assertScopeBytes(scope, limits, scopeBytes, totalBytes);
+  }
+
+  /**
+   * Tier 2: the quota of a user, with eviction of the oldest chat originals.
+   *
+   * @private
+   */
+  async _enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces }) {
+    const { quotas, evictOldestOriginalsOnQuota } = settings;
+    if (!ownerId || !(quotas.maxUserBytes > 0)) return;
+    const ownerDocs = await this._listOwnerDocs(ownerId);
+    let used =
+      ownerDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0) -
+      (replaces?.bytes || 0);
+    if (used + totalBytes > quotas.maxUserBytes && evictOldestOriginalsOnQuota) {
+      used -= await this._evictOldestOriginals(ownerDocs, used + totalBytes - quotas.maxUserBytes, {
+        excludeScope: scope,
+        reason: 'quota_evicted'
+      });
+    }
+    if (used + totalBytes > quotas.maxUserBytes) {
       throw new ChatFileQuotaError(
-        'QUOTA_FILE_BYTES',
-        `File exceeds maximum size of ${Math.floor(quotas.maxFileBytes / (1024 * 1024))} MB`,
-        { limit: quotas.maxFileBytes, size: singleFileSize },
+        'QUOTA_USER_BYTES',
+        `Your uploaded file storage quota (${Math.floor(quotas.maxUserBytes / (1024 * 1024))} MB) is full`,
+        { limit: quotas.maxUserBytes, used, size: totalBytes },
         413
       );
     }
+  }
 
-    // Tier 1: Per-Chat / Per-Task quota. The files of an Inference API user
-    // (`/v1/files`, scope `user`) have limits of their own.
-    const isApiScope = scope.type === 'user';
-    const maxScopeFiles = isApiScope ? quotas.maxApiFiles : quotas.maxChatFiles;
-    const maxScopeBytes = isApiScope ? quotas.maxApiBytes : quotas.maxChatBytes;
-    if (maxScopeFiles > 0 || maxScopeBytes > 0) {
-      const existing = (await this.list(scope)).filter(
-        item => !replaces || chatFileKey(scope, item.id) !== replaces.key
-      );
-      // A picture the user attached takes no slot: a chat of screenshots must not leave no room
-      // for a document. Its bytes count below like any file's.
-      const slotsUsed = existing.filter(item => item.origin !== 'image').length;
-      if (origin !== 'image' && maxScopeFiles > 0 && slotsUsed >= maxScopeFiles) {
-        throw new ChatFileQuotaError(
-          isApiScope ? 'QUOTA_API_FILES' : 'QUOTA_CHAT_FILES',
-          isApiScope
-            ? `You already have the maximum of ${maxScopeFiles} files in the Inference API`
-            : `This ${scope.type} already has the maximum of ${maxScopeFiles} uploaded files`,
-          { limit: maxScopeFiles, used: slotsUsed },
-          413
-        );
-      }
-      const scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
-      if (maxScopeBytes > 0 && scopeBytes + totalBytes > maxScopeBytes) {
-        throw new ChatFileQuotaError(
-          isApiScope ? 'QUOTA_API_BYTES' : 'QUOTA_CHAT_BYTES',
-          isApiScope
-            ? `Your Inference API files exceed the storage quota of ${Math.floor(maxScopeBytes / (1024 * 1024))} MB`
-            : `This ${scope.type} exceeds the storage quota of ${Math.floor(maxScopeBytes / (1024 * 1024))} MB`,
-          { limit: maxScopeBytes, used: scopeBytes, size: totalBytes },
-          413
-        );
-      }
+  /**
+   * Tier 3: the quota of the whole server, with eviction of the oldest chat originals. The total
+   * is read from a short-lived cache, not from every document of the namespace on every upload; a
+   * full read is made only when the upload could come close to the limit, where the answer has to
+   * be exact.
+   *
+   * @private
+   */
+  async _enforceServerQuota({ scope, totalBytes, settings, replaces }) {
+    const { quotas, evictOldestOriginalsOnQuota } = settings;
+    if (!(quotas.maxServerBytes > 0)) return;
+    const limit = quotas.maxServerBytes;
+    let used = await this._serverUsedBytes();
+    if (used + totalBytes > limit * SERVER_QUOTA_EXACT_FRACTION) {
+      used = await this._serverUsedBytes({ exact: true });
     }
-
-    // Tier 2: Per-User quota (with LRU eviction of oldest chat originals)
-    if (ownerId && quotas.maxUserBytes > 0) {
-      let ownerDocs = await this._listOwnerDocs(ownerId);
-      let usedUserBytes =
-        ownerDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0) -
-        (replaces?.bytes || 0);
-      if (usedUserBytes + totalBytes > quotas.maxUserBytes && evictOldestOriginalsOnQuota) {
-        const needed = usedUserBytes + totalBytes - quotas.maxUserBytes;
-        const freed = await this._evictOldestOriginals(ownerDocs, needed, {
+    used -= replaces?.bytes || 0;
+    if (used + totalBytes > limit && evictOldestOriginalsOnQuota) {
+      used -= await this._evictOldestOriginals(
+        await this._listAllDocs(),
+        used + totalBytes - limit,
+        {
           excludeScope: scope,
           reason: 'quota_evicted'
-        });
-        usedUserBytes -= freed;
-      }
-      if (usedUserBytes + totalBytes > quotas.maxUserBytes) {
-        throw new ChatFileQuotaError(
-          'QUOTA_USER_BYTES',
-          `Your uploaded file storage quota (${Math.floor(quotas.maxUserBytes / (1024 * 1024))} MB) is full`,
-          { limit: quotas.maxUserBytes, used: usedUserBytes, size: totalBytes },
-          413
-        );
-      }
+        }
+      );
     }
-
-    // Tier 3: Server-Total quota (with LRU eviction of oldest chat originals).
-    // The total is read from a short-lived cache, not from every document of the
-    // namespace on every upload; a full read is made only when the upload could
-    // come close to the limit, where the answer has to be exact.
-    if (quotas.maxServerBytes > 0) {
-      const limit = quotas.maxServerBytes;
-      let used = await this._serverUsedBytes();
-      if (used + totalBytes > limit * SERVER_QUOTA_EXACT_FRACTION) {
-        used = await this._serverUsedBytes({ exact: true });
-      }
-      used -= replaces?.bytes || 0;
-      if (used + totalBytes > limit && evictOldestOriginalsOnQuota) {
-        const freed = await this._evictOldestOriginals(
-          await this._listAllDocs(),
-          used + totalBytes - limit,
-          {
-            excludeScope: scope,
-            reason: 'quota_evicted'
-          }
-        );
-        used -= freed;
-      }
-      if (used + totalBytes > limit) {
-        throw new ChatFileQuotaError(
-          'QUOTA_SERVER_BYTES',
-          'Server file upload storage quota is full',
-          { limit, used, size: totalBytes },
-          507
-        );
-      }
+    if (used + totalBytes > limit) {
+      throw new ChatFileQuotaError(
+        'QUOTA_SERVER_BYTES',
+        'Server file upload storage quota is full',
+        { limit, used, size: totalBytes },
+        507
+      );
     }
   }
 

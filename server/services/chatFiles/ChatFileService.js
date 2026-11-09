@@ -717,7 +717,9 @@ export async function prepareTurnFiles({
   }
 
   // The pictures and sounds of the turn are described next to its documents. A picture is also
-  // stored, so its thumbnail survives a reload.
+  // stored, so its thumbnail survives a reload. One at a time, on purpose: the same picture twice
+  // in a turn is found by the first store, and each store reads the quotas as the one before left
+  // them.
   for (const image of listOf(message?.imageData)) {
     const stored = await storeTurnImage({ repo: activeRepo, scope, ownerId, image, appConfig });
     if (stored && seenIds.has(stored.id)) continue;

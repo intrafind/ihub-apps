@@ -31,7 +31,7 @@ const SIGNATURES = [
   },
   { mime: 'image/bmp', test: b => b.length > 14 && b[0] === 0x42 && b[1] === 0x4d }
 ];
-const DATA_URL = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/i;
+const DATA_URL = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/]+={0,2})$/i;
 
 /**
  * The raster media type of some bytes, or `null` when they are not a PNG, JPEG, GIF, WebP or
