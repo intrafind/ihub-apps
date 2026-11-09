@@ -435,6 +435,10 @@
     "maxChatsPerUser": 200,
     "maxMessagesPerChat": 2000,
     "temporaryRetentionHours": 24,
+    "titles": {
+      "enabled": false,
+      "modelId": ""
+    },
     "sharing": {
       "enabled": true,
       "allowUsers": true,

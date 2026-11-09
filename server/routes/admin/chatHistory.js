@@ -30,6 +30,7 @@ import { getChatRepository } from '../../services/chat/ChatRepository.js';
 import {
   CHAT_PERSISTENCE_FEATURE,
   chatRetentionSettings,
+  chatTitleSettings,
   isChatHistoryConfigured,
   isChatStorageAvailable,
   MAX_TEMPORARY_RETENTION_HOURS
@@ -75,6 +76,16 @@ const runLogSettingsSchema = z
     cleanupEnabled: z.boolean(),
     flushIntervalMs: z.number().int().positive(),
     spillThresholdBytes: z.number().int().positive()
+  })
+  .partial()
+  .strict();
+
+// The title block lives under `platform.chats.titles` and is edited next to
+// the retention rules but as its own section, like sharing.
+const titlesSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    modelId: z.string().trim().max(200)
   })
   .partial()
   .strict();
@@ -125,6 +136,7 @@ const uploadsSettingsSchema = z
 const settingsBodySchema = z
   .object({
     chats: chatsSettingsSchema.optional(),
+    titles: titlesSettingsSchema.optional(),
     runLog: runLogSettingsSchema.optional(),
     sharing: sharingSettingsSchema.optional(),
     uploads: uploadsSettingsSchema.optional()
@@ -145,7 +157,7 @@ let retentionRunning = false;
  * The effective settings, defaults filled in, in the shape the page edits.
  *
  * @param {Object} platform - Platform configuration.
- * @returns {{chats: Object, sharing: Object, uploads: Object, runLog: Object}}
+ * @returns {{chats: Object, titles: Object, sharing: Object, uploads: Object, runLog: Object}}
  */
 function resolveSettings(platform) {
   const chats = platform?.chats || {};
@@ -155,6 +167,7 @@ function resolveSettings(platform) {
       enabled: chats.enabled !== false,
       ...chatRetentionSettings(platform)
     },
+    titles: chatTitleSettings(platform),
     sharing: chatSharingSettings(platform),
     uploads: (() => {
       const { enabled, storageMode, originalRetentionDays, evictOldestOriginalsOnQuota, quotas } =
@@ -252,7 +265,7 @@ export default function registerAdminChatHistoryRoutes(app) {
           .join('; ')}`
       );
     }
-    const { chats, runLog: ledger, sharing, uploads } = parsed.data;
+    const { chats, runLog: ledger, titles, sharing, uploads } = parsed.data;
     const platformConfig = await configStore.readJson('config/platform.json');
     if (!platformConfig) throw new Error('Unable to read config/platform.json');
 
@@ -270,6 +283,15 @@ export default function registerAdminChatHistoryRoutes(app) {
         platformConfig[block] = { ...platformConfig[block], [key]: value };
         changed.push(`${block}.${key}`);
       }
+    }
+    // The titles form section is `platform.chats.titles` on disk.
+    for (const [key, value] of Object.entries(titles || {})) {
+      if (current.titles[key] === value) continue;
+      platformConfig.chats = {
+        ...platformConfig.chats,
+        titles: { ...platformConfig.chats?.titles, [key]: value }
+      };
+      changed.push(`chats.titles.${key}`);
     }
     // The sharing form section is `platform.chats.sharing` on disk.
     const nextSharing = { ...current.sharing, ...sharing };

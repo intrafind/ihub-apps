@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 const inputClass =
   'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
@@ -220,7 +221,7 @@ function CheckboxField({ id, label, help, checked, onChange }) {
 }
 
 function AdminChatHistoryPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -231,6 +232,9 @@ function AdminChatHistoryPage() {
   const [dirty, setDirty] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [shares, setShares] = useState({ items: [], truncated: false });
+  // Text models an admin can pick as the chat title model. From the admin model
+  // list: the public one is filtered by the admin's own model permissions.
+  const [titleModels, setTitleModels] = useState([]);
 
   const loadShares = useCallback(async () => {
     try {
@@ -276,6 +280,27 @@ function AdminChatHistoryPage() {
     loadShares();
   }, [loadOverview, loadShares]);
 
+  useEffect(() => {
+    let active = true;
+    makeAdminApiCall('/admin/models')
+      .then(response => {
+        if (!active) return;
+        const all = Array.isArray(response?.data) ? response.data : [];
+        setTitleModels(
+          all.filter(
+            m =>
+              m.enabled !== false &&
+              !m.supportsImageGeneration &&
+              (m.modelType || 'chat') === 'chat'
+          )
+        );
+      })
+      .catch(err => console.error('Failed to load models for chat titles:', err));
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const updateSetting = (block, key, value) => {
     setSettings(prev => ({ ...prev, [block]: { ...prev[block], [key]: value } }));
     setDirty(true);
@@ -297,6 +322,7 @@ function AdminChatHistoryPage() {
         method: 'PUT',
         body: {
           chats: settings.chats,
+          titles: settings.titles,
           runLog: settings.runLog,
           sharing: settings.sharing,
           uploads: settings.uploads
@@ -1121,6 +1147,62 @@ function AdminChatHistoryPage() {
                 bytes={settings.uploads.quotas.maxApiBytes}
                 onChange={value => updateUploadQuota('maxApiBytes', value)}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* Chat titles settings */}
+        <div className={cardClass}>
+          <h2 className={headingClass}>
+            <Icon name="edit" className="w-5 h-5 mr-2 text-blue-500" />
+            {t('admin.chatHistory.titles.title', 'Chat titles')}
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            {t(
+              'admin.chatHistory.titles.description',
+              'A chat is first named after its first message. With this on, a short model call after the first answer replaces that with a headline. A title a user set is never replaced.'
+            )}
+          </p>
+          <div className="space-y-4">
+            <CheckboxField
+              id="titles-enabled"
+              label={t('admin.chatHistory.titles.enabled', 'Generate chat titles')}
+              help={t(
+                'admin.chatHistory.titles.enabledHelp',
+                'Sends the first message and the first answer of every chat (cut to about 600 characters each) to the title model below. Off by default.'
+              )}
+              checked={settings.titles.enabled}
+              onChange={value => updateSetting('titles', 'enabled', value)}
+            />
+            <div>
+              <label
+                htmlFor="titles-model-id"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+              >
+                {t('admin.chatHistory.titles.modelId', 'Title model')}
+              </label>
+              <select
+                id="titles-model-id"
+                value={settings.titles.modelId}
+                onChange={e => updateSetting('titles', 'modelId', e.target.value)}
+                className={inputClass}
+                disabled={!settings.titles.enabled}
+              >
+                <option value="">
+                  {t('admin.chatHistory.titles.modelChat', "The chat's own model")}
+                </option>
+                {titleModels.map(model => (
+                  <option key={model.id} value={model.id}>
+                    {getLocalizedContent(model.name, i18n.language) || model.id}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.chatHistory.titles.modelIdHelp',
+                  "A small, cheap model is enough. It is used only for users whose groups may use it; for everyone else the chat's own model writes the title. No other model is ever used."
+                )}
+              </p>
             </div>
           </div>
         </div>

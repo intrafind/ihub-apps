@@ -686,6 +686,10 @@
           "maxExpiryDays": "number",
           "maxViewsCap": "number"
         },
+        "titles": {
+          "enabled": "boolean",
+          "modelId": "string"
+        },
         "uploads": {
           "enabled": "boolean",
           "evictOldestOriginalsOnQuota": "boolean",
@@ -834,7 +838,11 @@
           "maxExpiryDays": "number",
           "maxViewsCap": "number"
         },
-        "temporaryRetentionHours": "number"
+        "temporaryRetentionHours": "number",
+        "titles": {
+          "enabled": "boolean",
+          "modelId": "string"
+        }
       },
       "cookieSettings": {
         "disableSecure": "boolean"
