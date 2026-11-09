@@ -417,43 +417,6 @@ export async function describeSkillCatalog({ app, user }) {
   return { entries, ...catalog };
 }
 
-/**
- * The catalog entries that match `query` best, for `find_skill`: each word of
- * at least two characters counts three times in the name and once in the
- * description. Ties keep the catalog order. A query without such a word
- * matches nothing.
- *
- * @param {Array<{name: string, displayName?: string, description?: string}>} entries
- * @param {string} query
- * @param {number} [limit]
- * @returns {Array<Object>} The matching entries
- */
-export function searchSkillCatalog(entries, query, limit = MAX_FOUND_SKILLS) {
-  const words = [
-    ...new Set(
-      String(query || '')
-        .toLowerCase()
-        .split(/[^\p{L}\p{N}]+/u)
-        .filter(word => word.length >= 2)
-    )
-  ];
-  if (words.length === 0 || !Array.isArray(entries)) return [];
-  return entries
-    .map((entry, index) => {
-      const name = `${entry.name} ${entry.displayName || ''}`.toLowerCase();
-      const description = String(entry.description || '').toLowerCase();
-      const score = words.reduce(
-        (sum, word) => sum + (name.includes(word) ? 3 : 0) + (description.includes(word) ? 1 : 0),
-        0
-      );
-      return { entry, score, index };
-    })
-    .filter(match => match.score > 0)
-    .sort((a, b) => b.score - a.score || a.index - b.index)
-    .slice(0, limit)
-    .map(match => match.entry);
-}
-
 /** How many skills may be active at once when the app does not set `skillSettings.maxActiveSkills`. */
 export const DEFAULT_MAX_ACTIVE_SKILLS = 3;
 

@@ -2,26 +2,26 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Running a tool: `runTool` dispatches a call to the built-in actions, the
- * skill, knowledge and integration tools, MCP and A2A, or a tool script.
+ * Running a tool: `runTool` dispatches a call to the skill, knowledge, chat
+ * context, workflow and app tools, to the tools of installed integrations
+ * (MCP servers and A2A agents among them), or to a platform tool script.
  */
 
 import configCache from '../../configCache.js';
 import {
+  MAX_FOUND_SKILLS,
   activeSkillsOf,
   describeSkillCatalog,
   getAssignedSkillIds,
   isModelInvocable,
-  loadUsableSkill,
-  searchSkillCatalog
+  loadUsableSkill
 } from '../skillAccess.js';
+import { searchCatalog } from '../../utils/catalogSearch.js';
 import { actionTracker } from '../../actionTracker.js';
 import { emitToolProgress } from '../loop/RunStream.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { runToolScript } from './toolScriptRunner.js';
-import mcpClientManager from '../mcp/McpClientManager.js';
-import a2aClientManager from '../a2a/A2aClientManager.js';
 import logger from '../../utils/logger.js';
 import { isKnowledgeTool, runKnowledgeTool } from '../knowledge/knowledgeTools.js';
 import { isChatContextTool } from '../chat/chatContextToolIds.js';
@@ -226,7 +226,7 @@ export async function runTool(toolId, params = {}, options = {}) {
       return 'Give a few keywords that describe the task, e.g. "weekly newsletter draft".';
     }
     const { entries } = await describeSkillCatalog({ app: params.appConfig, user: params.user });
-    const matches = searchSkillCatalog(entries, query);
+    const matches = searchCatalog(entries, query, MAX_FOUND_SKILLS);
     logger.info('Searching skills', {
       component: 'ToolLoader',
       query,
@@ -302,7 +302,10 @@ export async function runTool(toolId, params = {}, options = {}) {
     throw new Error(`Tool ${toolId} not found`);
   }
 
-  // Tools of installed integrations run through their protocol adapter.
+  // Tools of installed integrations run through their protocol adapter. That
+  // includes every MCP server tool and every skill of a remote A2A agent: they
+  // are installations too (the MCP adapter hands the call to McpClientManager,
+  // the A2A adapter to A2aClientManager, with the turn's abort signal).
   if (tool._integration) {
     logger.info('Dispatching integration tool call', {
       component: 'ToolLoader',
@@ -313,40 +316,7 @@ export async function runTool(toolId, params = {}, options = {}) {
     return await runIntegrationTool(tool, params, options);
   }
 
-  // MCP tools are dispatched through McpClientManager.callTool.
-  if (tool._mcp) {
-    logger.info('Dispatching MCP tool call', {
-      component: 'ToolLoader',
-      toolId,
-      serverId: tool._mcp.serverId
-    });
-    return await mcpClientManager.callTool(toolId, params, {
-      onRawResult: options.onMcpAppResult
-    });
-  }
-
-  // Skills of remote A2A agents are dispatched through A2aClientManager.callTool.
-  if (tool._a2a) {
-    logger.info('Dispatching A2A agent tool call', {
-      component: 'ToolLoader',
-      toolId,
-      agentId: tool._a2a.agentId
-    });
-    // `signal` is the chat turn's abort signal: a user stop ends the remote
-    // request and cancels a running task.
-    return await a2aClientManager.callTool(toolId, params, { signal: options.signal });
-  }
-
-  // Check if this is a special tool (like Google Search) that doesn't have a script
-  if (tool.isSpecialTool) {
-    // Special tools are handled by the model provider directly, not executed here
-    logger.info('Special tool is handled by provider, skipping execution', {
-      component: 'ToolLoader',
-      toolId
-    });
-    return { handled_by_provider: true };
-  }
-
+  // What is left is a platform tool of workflows and agents: it runs its script.
   const scriptName = tool.script || `${toolId}.js`;
   if (!isValidId(scriptName.replace(/\.js$/, ''))) {
     throw new Error('Invalid script name');
