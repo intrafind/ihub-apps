@@ -302,14 +302,14 @@ test('seams without a streamEnd hook are unaffected', async () => {
 
 test('ctx.resolveTool finds the offered tool by id or by the name the provider saw, and nothing else', async () => {
   const seen = [];
-  const mcpTool = { id: 'mcp_a__do.it', name: 'mcp_a__do.it', parameters: { type: 'object' } };
+  const mcpTool = { id: 'mcp a/do it', name: 'mcp a/do it', parameters: { type: 'object' } };
   const { loop } = makeLoop([textTurn('x')], {
     seams: [
       {
         onChunk: ctx => {
           seen.push(
             ctx.resolveTool('create_file')?.id,
-            ctx.resolveTool('mcp_a__do_it')?.id,
+            ctx.resolveTool('mcp_a_do_it')?.id,
             ctx.resolveTool('hallucinated'),
             ctx.resolveTool('')
           );
@@ -318,7 +318,7 @@ test('ctx.resolveTool finds the offered tool by id or by the name the provider s
     ]
   });
   await run(loop, { tools: [tool, mcpTool] });
-  assert.deepEqual(seen.slice(0, 4), ['create_file', 'mcp_a__do.it', null, null]);
+  assert.deepEqual(seen.slice(0, 4), ['create_file', 'mcp a/do it', null, null]);
 });
 
 test('ctx.resolveTool does not offer a circuit-broken tool', async () => {

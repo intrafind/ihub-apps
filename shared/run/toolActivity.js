@@ -345,6 +345,111 @@ function callsInOrder(run) {
 }
 
 /**
+ * The row of one call, with the time it first appeared (for placing skill
+ * rows among the calls); null for a call with its own UI or one the server
+ * runs elsewhere (clarifications, workflows launched from the chat).
+ */
+function callRow(run, { tool, stream }, finished) {
+  const toolId = tool?.toolId ?? stream.toolId;
+  if ((tool?.execution && tool.execution !== 'server') || HIDDEN_TOOL_IDS.has(toolId)) {
+    return null;
+  }
+  // The server decides the row (`utils/toolDisplay`); a call it said nothing
+  // about is a plain call.
+  const activityKind = tool?.activityKind || stream?.activityKind;
+  const kind = ['search', 'fetch'].includes(activityKind) ? activityKind : 'tool';
+  const status = statusOf(run, tool, stream, finished);
+  const args = tool?.args;
+  const query = kind === 'search' ? queryOf(args) : null;
+  const url = kind === 'fetch' ? urlOf(args) : null;
+  const documentId = kind === 'fetch' ? documentIdOf(args) : null;
+  const title = tool?.title || stream?.title || null;
+  return {
+    // A call that announced itself appeared when its first frame did.
+    at: Date.parse(stream?.firstSeenAt ?? tool?.startedAt),
+    item: {
+      id: tool?.callId ?? stream.callId,
+      kind,
+      toolId,
+      // The action as the user reads it ("Search people"), else the id the model used.
+      name: title || tool?.name || stream?.name || toolId,
+      titled: Boolean(title),
+      // The integration, MCP server or agent it ran against ("Munich AD").
+      integration: tool?.integration || stream?.integration || null,
+      status,
+      scope: kind === 'tool' ? null : tool?.activityScope === 'documents' ? 'documents' : 'web',
+      query,
+      url,
+      documentId,
+      details: toolDetails(args, shownArgs(args, { query, url, documentId })),
+      sources: Array.isArray(tool?.sources) ? tool.sources : [],
+      error: tool?.error?.message || null,
+      // A page read the per-turn cap (`websearch.maxPageReads`) refused.
+      limitReached: kind === 'fetch' && tool?.result?.limitReached === true,
+      durationMs: tool?.durationMs ?? null,
+      // Whether the call itself started (the row has its arguments).
+      started: Boolean(tool),
+      ...(stream ? streamFields(stream, status) : {})
+    }
+  };
+}
+
+/** The row of a provider-run web search (no tool call of ours), or null without queries. */
+function nativeSearchRow(run, finished) {
+  const queries = nativeSearchQueries(run);
+  if (!queries.length) return null;
+  return {
+    id: 'native-web-search',
+    kind: 'search',
+    native: true,
+    scope: 'web',
+    toolId: 'webSearch',
+    name: 'webSearch',
+    // The provider reports no end of its search; once the answer streams,
+    // the search is behind it.
+    status: finished || run.text ? 'completed' : 'running',
+    queries,
+    details: [],
+    sources: [],
+    error: null,
+    durationMs: null
+  };
+}
+
+/**
+ * The idle line: the model call has shown nothing for a while. Only a turn
+ * that is still going can be silent. `reasoning` is the server's statement,
+ * never inferred here.
+ */
+function idleOf(run, finished) {
+  if (finished || run.status !== 'running' || !run.waiting) return null;
+  return {
+    kind: run.waiting.reasoning ? 'thinking' : 'waiting',
+    elapsedMs: run.waiting.elapsedMs,
+    receivedAt: run.waiting.receivedAt,
+    step: run.waiting.step
+  };
+}
+
+/**
+ * The page being fetched right now: the newest fetch frame, while a search or
+ * fetch is still in flight.
+ */
+function readingOf(run, items, finished) {
+  if (finished || !items.some(item => item.status === 'running' && item.kind !== 'tool')) {
+    return null;
+  }
+  const progress = run.progress || [];
+  for (let i = progress.length - 1; i >= 0; i--) {
+    const entry = progress[i];
+    if (entry.kind === 'tool/progress' && String(entry.phase || '').startsWith('fetch.')) {
+      return typeof entry.data?.url === 'string' ? entry.data.url : null;
+    }
+  }
+  return null;
+}
+
+/**
  * @param {Object|null} run - RunState from the run reducer
  * @returns {{items: Array<Object>, reading: string|null, idle?: Object, answering?: boolean}|null}
  *   null when the turn used no tools and has no idle line. `idle`
@@ -355,105 +460,20 @@ function callsInOrder(run) {
 export function buildToolActivity(run) {
   if (!run) return null;
   const finished = ['completed', 'aborted', 'error', 'budget_exhausted'].includes(run.status);
-  const toolRows = [];
-
-  for (const { tool, stream } of callsInOrder(run)) {
-    const toolId = tool?.toolId ?? stream.toolId;
-    if ((tool?.execution && tool.execution !== 'server') || HIDDEN_TOOL_IDS.has(toolId)) {
-      continue;
-    }
-    // The server decides the row (`utils/toolDisplay`); a call it said nothing
-    // about is a plain call.
-    const activityKind = tool?.activityKind || stream?.activityKind;
-    const kind = ['search', 'fetch'].includes(activityKind) ? activityKind : 'tool';
-    const status = statusOf(run, tool, stream, finished);
-    const args = tool?.args;
-    const query = kind === 'search' ? queryOf(args) : null;
-    const url = kind === 'fetch' ? urlOf(args) : null;
-    const documentId = kind === 'fetch' ? documentIdOf(args) : null;
-    const title = tool?.title || stream?.title || null;
-    const activityScope = tool?.activityScope;
-    toolRows.push({
-      // A call that announced itself appeared when its first frame did.
-      at: Date.parse(stream?.firstSeenAt ?? tool?.startedAt),
-      item: {
-        id: tool?.callId ?? stream.callId,
-        kind,
-        toolId,
-        // The action as the user reads it ("Search people"), else the id the model used.
-        name: title || tool?.name || stream?.name || toolId,
-        titled: Boolean(title),
-        // The integration, MCP server or agent it ran against ("Munich AD").
-        integration: tool?.integration || stream?.integration || null,
-        status,
-        scope: kind === 'tool' ? null : activityScope === 'documents' ? 'documents' : 'web',
-        query,
-        url,
-        documentId,
-        details: toolDetails(args, shownArgs(args, { query, url, documentId })),
-        sources: Array.isArray(tool?.sources) ? tool.sources : [],
-        error: tool?.error?.message || null,
-        // A page read the per-turn cap (`websearch.maxPageReads`) refused.
-        limitReached: kind === 'fetch' && tool?.result?.limitReached === true,
-        durationMs: tool?.durationMs ?? null,
-        // Whether the call itself started (the row has its arguments).
-        started: Boolean(tool),
-        ...(stream ? streamFields(stream, status) : {})
-      }
-    });
-  }
+  const toolRows = callsInOrder(run)
+    .map(call => callRow(run, call, finished))
+    .filter(Boolean);
   const items = mergeSkillRows(toolRows, skillRows(run)).map(row => row.item);
+  const native = nativeSearchRow(run, finished);
+  if (native) items.push(native);
 
-  const nativeQueries = nativeSearchQueries(run);
-  if (nativeQueries.length) {
-    items.push({
-      id: 'native-web-search',
-      kind: 'search',
-      native: true,
-      scope: 'web',
-      toolId: 'webSearch',
-      name: 'webSearch',
-      // The provider reports no end of its search; once the answer streams,
-      // the search is behind it.
-      status: finished || run.text ? 'completed' : 'running',
-      queries: nativeQueries,
-      details: [],
-      sources: [],
-      error: null,
-      durationMs: null
-    });
-  }
-
-  // Only a turn that is still going can be silent or answering.
-  const live = !finished && run.status === 'running';
-  const idle =
-    live && run.waiting
-      ? {
-          kind: run.waiting.reasoning ? 'thinking' : 'waiting',
-          elapsedMs: run.waiting.elapsedMs,
-          receivedAt: run.waiting.receivedAt,
-          step: run.waiting.step
-        }
-      : null;
+  const idle = idleOf(run, finished);
   if (!items.length) return idle ? { items, reading: null, idle } : null;
   resolveDocuments(items);
 
-  // The page being fetched right now: the newest fetch frame, while a search
-  // or fetch is still in flight.
-  let reading = null;
-  if (!finished && items.some(item => item.status === 'running' && item.kind !== 'tool')) {
-    for (let i = (run.progress || []).length - 1; i >= 0; i--) {
-      const entry = run.progress[i];
-      if (entry.kind === 'tool/progress' && String(entry.phase || '').startsWith('fetch.')) {
-        reading = typeof entry.data?.url === 'string' ? entry.data.url : null;
-        break;
-      }
-    }
-  }
-
   return {
     items,
-    reading,
+    reading: readingOf(run, items, finished),
     ...(idle ? { idle } : {}),
     ...(!finished && run.text ? { answering: true } : {})
   };
