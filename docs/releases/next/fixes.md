@@ -456,3 +456,11 @@ On phones, the backdrop behind the **Sources** panel was darker than intended, a
 found two identical **Sources** dialogs. The chat keeps a phone and a desktop layout of each answer
 on the page, and both opened their own panel on top of each other. The panel now opens once, from
 whichever layout is shown.
+
+## Projects: HTML Files Keep Only the Page's Content, Not Its Menus
+
+An HTML file added to a project — uploaded, or picked from OneDrive / SharePoint or Google Drive —
+was read as the whole page: skip links, menus, page trees, breadcrumbs and footers (on a saved
+Confluence page, about half of the text) ended up in the project and in every answer drawn from it.
+HTML files are now read like a web page added by URL: only the main content is kept, with its
+headings, lists, tables and links.

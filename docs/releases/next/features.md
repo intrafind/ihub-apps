@@ -1273,3 +1273,9 @@ get the space back. **New chat** brings the configured rows back.
   makes the one-line input taller.
 - While a multi-line message is being written, **Ctrl + Enter to send** (**⌘ + Enter** on a Mac)
   shows next to the token count, and screen readers announce how to send.
+
+## Projects: A Web Page Is Named After Its Title
+
+A web page added to a project without a name now shows the page's title instead of its URL. A name
+you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
+page that cannot be read when it is added keeps its URL as the name.

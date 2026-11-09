@@ -48,7 +48,23 @@ export const urlKind = registerItemKind({
       maxContentLength: z.number().int().positive().max(5_000_000).optional()
     })
     .strict(),
-  describe: ref => ({ name: ref.url, url: ref.url, site: hostOf(ref.url) })
+  describe: ref => ({ name: ref.url, url: ref.url, site: hostOf(ref.url) }),
+  // The page's title as the item's name, unless the caller named it. The read
+  // lands in the page reader's cache, so the item's first use does not fetch
+  // again. A page that cannot be read now is still added, named by its URL.
+  async prepare(ref, { name } = {}) {
+    if (name) return null;
+    try {
+      const { default: readPage } = await import('../../../tools/webContentExtractor.js');
+      const page = await readPage({ url: ref.url, maxLength: 1 });
+      const title = String(page?.title || '')
+        .replaceAll(/\s+/g, ' ')
+        .trim();
+      return title ? { name: title } : null;
+    } catch {
+      return null;
+    }
+  }
 });
 
 export const pageKind = registerItemKind({
