@@ -389,8 +389,10 @@ request gets a new field `researchDepth`, and the server maps it to per-answer b
   - engine searches are counted before they run, and past the cap the call returns a "budget
     reached" result instead of searching;
   - for native search, each model call gets `max_uses` = the searches remaining, where the
-    provider supports it. Where it does not, use the engine path for capped presets, or drop
-    native search from the call once the counter is spent.
+    provider supports it. Where it does not (OpenAI Responses, Gemini), a capped preset turns
+    native search **off before the first model call** and searches through an engine, which the
+    counter gates. One uncapped native call can search several times, so dropping native search
+    only after the counter is spent would not enforce the cap.
 
   Searches already reported by a provider (grounding metadata, `web_search_call` items) count
   toward the same number.
