@@ -16,7 +16,8 @@ All input validation and path security functions live in **`server/utils/pathSec
 |----------|-----------|----------|
 | `isValidId` | `(id) → boolean` | Checking any user-supplied ID (app, model, source, tool, prompt, page, renderer, skill, group, provider, client) |
 | `validateIdForPath` | `(id, idType, res?) → boolean` | Express handler — sends 400 and returns `false` on invalid. Pass `res` to auto-respond |
-| `validateIdsForPath` | `(ids, idType, res) → string[] \| false` | Batch validation. Accepts comma-separated string, array, or `'*'` wildcard |
+| `assertValidId` | `(id, idType) → void` | Express handler — throws `BAD_REQUEST` (`ServiceError`) on invalid; the global error middleware answers |
+| `assertValidIds` | `(ids, idType) → string[]` | Batch validation, throws `BAD_REQUEST`. Accepts comma-separated string, array, or `'*'` wildcard |
 
 ### Language Code Validation
 

@@ -144,8 +144,7 @@ export function isValidExtensionId(id) {
 }
 
 /**
- * Throws a 400 `BAD_REQUEST` unless every ID of `ids` is a safe path segment. The throwing form
- * of {@link validateIdsForPath}.
+ * Throws a 400 `BAD_REQUEST` unless every ID of `ids` is a safe path segment (batch operations).
  *
  * @param {string|string[]} ids - Single ID, comma-separated string, array of IDs, or `'*'` (all)
  * @param {string} idType - The type of ID for the message ("app", "model", ...)
@@ -166,46 +165,6 @@ export function assertValidIds(ids, idType) {
     );
   }
   for (const id of idArray) assertValidId(id, idType);
-  return idArray;
-}
-
-/**
- * Validates multiple IDs (e.g., for batch operations).
- *
- * @param {string|string[]} ids - Single ID, comma-separated string, or array of IDs
- * @param {string} idType - The type of ID for error messages
- * @param {object} res - Express response object
- * @returns {string[]|boolean} - Array of valid IDs if all are valid, false if any are invalid
- */
-export function validateIdsForPath(ids, idType, res) {
-  // Handle special case for '*' (all items)
-  if (ids === '*') {
-    return ['*'];
-  }
-
-  // Convert to array
-  let idArray;
-  if (typeof ids === 'string') {
-    idArray = ids.split(',').map(id => id.trim());
-  } else if (Array.isArray(ids)) {
-    idArray = ids;
-  } else {
-    sendErrorResponse(res, 400, `Invalid ${idType} IDs format. Expected string or array.`);
-    return false;
-  }
-
-  // Validate each ID
-  for (const id of idArray) {
-    if (!isValidId(id)) {
-      sendErrorResponse(
-        res,
-        400,
-        `Invalid ${idType} ID '${id}'. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
-      );
-      return false;
-    }
-  }
-
   return idArray;
 }
 
