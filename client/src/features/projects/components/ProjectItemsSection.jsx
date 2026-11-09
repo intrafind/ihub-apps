@@ -32,6 +32,7 @@ const IFINDER_ALLOWED_KINDS = [IFINDER_DOCUMENT_KIND];
 import AddProjectItemDialog from './AddProjectItemDialog';
 import EditItemDialog from './EditItemDialog';
 import EstimateTokensButton from './EstimateTokensButton';
+import ItemSelectionBar, { SelectionDeleteButton } from './ItemSelectionBar';
 import ProjectEstimatePanel from './ProjectEstimatePanel';
 import ProjectItemsTable from './ProjectItemsTable';
 import { useProjectItemDocumentActions } from './ProjectItemDocumentActions';
@@ -72,6 +73,40 @@ function userItemApi(errorMessage) {
   };
 }
 
+/**
+ * The wording of deleting the ticked documents. A smart collection from iFinder
+ * only removes them from the collection: the documents stay in iFinder.
+ *
+ * @param {Function} t
+ * @param {boolean} isIFinder
+ * @param {number} count - The documents the confirmation is for.
+ * @returns {{action: string, title: string, message: string, confirm: string}}
+ */
+function bulkRemoveTexts(t, isIFinder, count) {
+  if (isIFinder) {
+    return {
+      action: t('projects.items.removeSelected', 'Remove'),
+      title: t('projects.items.removeSelectedTitle', 'Remove selected documents'),
+      message: t(
+        'projects.items.removeSelectedFromCollectionConfirm',
+        'Remove {{count}} documents from the collection? The documents stay in iFinder.',
+        { count }
+      ),
+      confirm: t('projects.items.removeSelectedAction', 'Remove documents')
+    };
+  }
+  return {
+    action: t('projects.items.deleteSelected', 'Delete'),
+    title: t('projects.items.deleteSelectedTitle', 'Delete selected documents'),
+    message: t(
+      'projects.items.deleteSelectedConfirm',
+      'Delete {{count}} documents from the project? This cannot be undone.',
+      { count }
+    ),
+    confirm: t('projects.items.deleteSelectedAction', 'Delete documents')
+  };
+}
+
 /** From this many documents on, the table scrolls inside its card. */
 const ITEMS_SCROLL_FROM = 6;
 
@@ -82,7 +117,7 @@ const fetchItemText = (...args) => fetchProjectItemText(...args);
  * The items of a project (spec 1 §3, spec 3 §9): the usage against the
  * quotas, the table with each item's status, and — for the owner and editors
  * — adding (every enabled kind, with the cloud pickers), pinning, renaming,
- * editing a link item, refreshing and removing.
+ * editing a link item, refreshing, removing, and removing every ticked item at once.
  *
  * @param {Object} props
  * @param {Object} props.project
@@ -109,6 +144,10 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   const [renaming, setRenaming] = useState(null);
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  // The ticked items a removal waits to be confirmed for (none: no dialog), and whether it runs.
+  const [bulkRemove, setBulkRemove] = useState([]);
+  const [bulkRemoving, setBulkRemoving] = useState(false);
   const actions = useProjectItemActions({ projectId: project.id, setProject, reload });
   const documentActions = useProjectItemDocumentActions(project.id);
   // Stable for the dialogs' effects as long as the language does not change.
@@ -130,6 +169,26 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
     run: runEstimate,
     clear: clearEstimate
   } = useProjectEstimate(estimateCall, messageOf);
+
+  // The selection as it is now: an item removed since it was ticked (here, by
+  // someone else, or found gone by the poll) is not selected any more. The table
+  // offers ticking only to those who may change the items.
+  const selectedItems = (project.items || []).filter(item => selectedIds.has(item.id));
+  const bulkTexts = bulkRemoveTexts(t, isIFinder, bulkRemove.length);
+
+  const handleBulkRemove = async () => {
+    const items = bulkRemove;
+    setBulkRemove([]);
+    if (items.length === 0) return;
+    clearEstimate();
+    setBulkRemoving(true);
+    try {
+      const removed = await actions.removeMany(items);
+      setSelectedIds(prev => new Set([...prev].filter(itemId => !removed.has(itemId))));
+    } finally {
+      setBulkRemoving(false);
+    }
+  };
 
   return (
     <section
@@ -203,6 +262,20 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         </div>
       )}
 
+      {editable && selectedItems.length > 0 && (
+        <ItemSelectionBar
+          label={t('projects.items.selectedCount', '{{count}} documents selected', {
+            count: selectedItems.length
+          })}
+          busy={bulkRemoving}
+          onClear={() => setSelectedIds(new Set())}
+        >
+          <SelectionDeleteButton busy={bulkRemoving} onClick={() => setBulkRemove(selectedItems)}>
+            {bulkTexts.action}
+          </SelectionDeleteButton>
+        </ItemSelectionBar>
+      )}
+
       {/* A long list scrolls inside its card instead of pushing the page down. */}
       <div
         className={
@@ -238,6 +311,8 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           onRename={isIFinder ? undefined : setRenaming}
           onEdit={isIFinder ? undefined : setEditing}
           onRemove={setRemoving}
+          selectedIds={new Set(selectedItems.map(item => item.id))}
+          onSelectionChange={setSelectedIds}
         />
       </div>
 
@@ -318,6 +393,15 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           void actions.remove(item);
         }}
         onDeny={() => setRemoving(null)}
+      />
+      <ConfirmDialog
+        isOpen={bulkRemove.length > 0}
+        title={bulkTexts.title}
+        message={bulkTexts.message}
+        confirmLabel={bulkTexts.confirm}
+        danger
+        onConfirm={handleBulkRemove}
+        onDeny={() => setBulkRemove([])}
       />
     </section>
   );
