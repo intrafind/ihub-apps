@@ -2302,9 +2302,9 @@ describe('routes', () => {
     editText: handlersFor(routes, 'put', '/api/projects/:projectId/items/:itemId/text'),
     refresh: handlersFor(routes, 'post', '/api/projects/:projectId/items/:itemId/_refresh'),
     pages: handlersFor(routes, 'get', '/api/projects/pickers/pages'),
-    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/check'),
+    urlCheck: handlersFor(routes, 'post', '/api/projects/pickers/url/_check'),
     urlPreview: handlersFor(routes, 'post', '/api/projects/pickers/url/_preview'),
-    urlCrawl: handlersFor(routes, 'post', '/api/projects/pickers/url/crawl')
+    urlCrawl: handlersFor(routes, 'post', '/api/projects/pickers/url/_crawl')
   };
 
   async function create() {

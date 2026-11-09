@@ -670,3 +670,9 @@ scheduled-task, change-log, configuration and Copilot-agent calls, the agent run
 and history deletion, project item calls, prompt calls, and workflow trigger calls. Calls that
 return something (a run, a count, a resource) keep that body. Scripts that read `ok`, `deleted`
 or `revoked` must read the status instead.
+
+## Project Picker URL Calls Are `_action` Segments
+
+`POST /api/projects/pickers/url/check` is now `…/url/_check` and `…/url/crawl` is `…/url/_crawl`, like
+`…/url/_preview` already was. The bodies are unchanged. The API guidelines check now reads routes
+registered through a file-local `route('…')` helper and rejects `check` and `crawl` as bare verbs.

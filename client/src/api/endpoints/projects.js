@@ -402,7 +402,7 @@ export const searchPickerIFinder = async (query, { profile, limit } = {}) => {
  * @returns {Promise<{ok: boolean, error?: string}>}
  */
 export const checkPickerUrl = async url => {
-  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/check`, { url }));
+  const data = await call(() => apiClient.post(`${PROJECTS_PATH}/pickers/url/_check`, { url }));
   return data || { ok: false };
 };
 
@@ -436,7 +436,7 @@ export const CRAWL_REQUEST_TIMEOUT_MS = 45_000;
 export const crawlPickerUrl = async (url, options = {}) => {
   const data = await call(() =>
     apiClient.post(
-      `${PROJECTS_PATH}/pickers/url/crawl`,
+      `${PROJECTS_PATH}/pickers/url/_crawl`,
       { url, ...options },
       { timeout: CRAWL_REQUEST_TIMEOUT_MS }
     )

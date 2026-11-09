@@ -439,7 +439,7 @@ export function registerProjectPickerRoutes(app) {
     res.json({ metadata });
   });
 
-  app.post(route('/url/check'), ...gate, async (req, res) => {
+  app.post(route('/url/_check'), ...gate, async (req, res) => {
     const parsed = urlCheckSchema.safeParse(req.body || {});
     if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A http(s) URL is required');
     try {
@@ -487,7 +487,7 @@ export function registerProjectPickerRoutes(app) {
   // The pages of a site below a start URL, for picking several at once. One
   // crawl per user at a time (per server process), cancelled when the client
   // goes away.
-  app.post(route('/url/crawl'), ...gate, async (req, res) => {
+  app.post(route('/url/_crawl'), ...gate, async (req, res) => {
     const parsed = urlCrawlSchema.safeParse(req.body || {});
     if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A http(s) URL is required');
     const userId = req.user.id;

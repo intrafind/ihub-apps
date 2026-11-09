@@ -77,6 +77,9 @@ describe('check-api-guidelines', () => {
       rules("app.post(\n  buildServerPath('/api/admin/proxy/_test'),\n  adminAuth,\n  h\n);"),
       []
     );
+    // a file-local route('…') prefix helper is read the same way
+    assert.deepEqual(rules("app.post(route('/url/check'), ...gate, h);"), ['route-verb']);
+    assert.deepEqual(rules("app.post(route('/url/_check'), ...gate, h);"), []);
     assert.deepEqual(rules('app.post(`${base}/:id/duplicate`, handler);'), ['route-verb']);
     assert.deepEqual(rules("router.post('/:keyId/_rotate', handler);"), []);
     assert.deepEqual(rules('app.post(`${base}/_preview`, handler);'), []);
