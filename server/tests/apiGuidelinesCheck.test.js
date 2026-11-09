@@ -26,7 +26,10 @@ describe('check-api-guidelines', () => {
 
   it('accepts a thrown ServiceError and a success body that has an error member', () => {
     assert.deepEqual(rules("throw new ServiceError('NOT_FOUND', 'Task not found');"), []);
-    assert.deepEqual(rules("res.status(200).json({ ok: false, error: 'probe failed' });"), []);
+    assert.deepEqual(
+      rules("res.status(200).json({ status: 'failed', error: 'probe failed' });"),
+      []
+    );
     assert.deepEqual(rules('res.status(201).json({ error: null });'), []);
     assert.deepEqual(rules('res.json({ error: null });'), []);
   });

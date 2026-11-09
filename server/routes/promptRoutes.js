@@ -860,7 +860,7 @@ export default function registerPromptRoutes(app) {
           ? `Deleted user prompt "${removed.name}"`
           : `Deleted user prompt "${removed.name}" owned by ${removed.ownerName || removed.ownerId}`
       });
-      res.json({ message: 'Prompt deleted', id: promptId });
+      res.status(204).end();
     }
   );
 

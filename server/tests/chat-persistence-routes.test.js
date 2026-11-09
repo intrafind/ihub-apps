@@ -93,6 +93,8 @@ function makeResponse() {
     res.body = value;
     return res;
   };
+  // A `204` goes out through `end`.
+  res.end = () => res;
   res.headers = {};
   res.setHeader = (name, value) => {
     res.headers[String(name).toLowerCase()] = value;
@@ -420,8 +422,7 @@ describe('DELETE /api/chats/:chatId cascades', () => {
       user: ADA
     });
 
-    assert.equal(res.statusCode, 200);
-    assert.deepEqual(res.body, { deleted: true });
+    assert.equal(res.statusCode, 204);
     assert.deepEqual(deleted.runs.sort(), ['run-cascade-1', 'run-cascade-3', 'run-cascade-boom']);
     assert.deepEqual(deleted.states.sort(), ['run-cascade-1', 'run-cascade-3', 'run-cascade-boom']);
     assert.equal(await getChatRepository().getChat('chat-delete-cascade'), null);
@@ -450,7 +451,7 @@ describe('DELETE /api/chats/:chatId cascades', () => {
         params: { chatId: 'chat-delete-running' },
         user: ADA
       });
-      assert.equal(res.statusCode, 200);
+      assert.equal(res.statusCode, 204);
       assert.equal(aborted, true, 'the in-flight turn was aborted');
     } finally {
       activeRequests.delete('chat-delete-running');
@@ -484,7 +485,7 @@ describe('DELETE /api/chats/:chatId cascades', () => {
       user: ADA
     });
 
-    assert.equal(res.statusCode, 200);
+    assert.equal(res.statusCode, 204);
     assert.ok(deleted.states.includes('run-iso-boom'), 'the failing run still lost its state');
     assert.ok(deleted.states.includes('run-iso-after'), 'the run after it was reached');
   });
@@ -532,7 +533,7 @@ describe('temporary chats and guests', () => {
         params: { chatId: 'chat-tmp-history-off' },
         user: ADA
       });
-      assert.equal(gone.statusCode, 200);
+      assert.equal(gone.statusCode, 204);
       assert.equal(await getChatRepository().getChat('chat-tmp-history-off'), null);
     });
   });
@@ -568,7 +569,7 @@ describe('temporary chats and guests', () => {
       params: { chatId: 'chat-guest-own' },
       user: guest(GUEST_A)
     });
-    assert.equal(del.statusCode, 200);
+    assert.equal(del.statusCode, 204);
   });
 
   it('a temporary chat is kept by PATCH { temporary: false }, and never made temporary', async () => {

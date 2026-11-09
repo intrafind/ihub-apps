@@ -67,6 +67,8 @@ function makeResponse() {
     res.body = value;
     return res;
   };
+  // A `204` goes out through `end`.
+  res.end = () => res;
   res.setHeader = (name, value) => {
     res.headers[name] = value;
     return res;
@@ -127,7 +129,7 @@ describe('task file routes', () => {
       params: { taskId: task.id, fileId: created.body.file.id },
       user
     });
-    assert.deepEqual(removed.body, { deleted: true });
+    assert.equal(removed.statusCode, 204);
     const again = await call('delete', '/:taskId/files/:fileId', {
       params: { taskId: task.id, fileId: created.body.file.id },
       user

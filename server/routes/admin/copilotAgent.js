@@ -334,7 +334,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
       resourceId: 'copilotAgent',
       summary: 'Disabled the Microsoft 365 Copilot agent'
     });
-    res.json({ message: 'Copilot agent disabled' });
+    res.status(204).end();
   });
 
   /**
@@ -396,7 +396,7 @@ export default function registerAdminCopilotAgentRoutes(app) {
       resourceId: 'copilotAgent',
       summary: `Updated the Microsoft 365 Copilot agent settings (${Object.keys(result.value).join(', ')})`
     });
-    res.json({ message: 'Settings saved' });
+    res.status(204).end();
   });
 
   /**

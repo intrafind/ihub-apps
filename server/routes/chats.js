@@ -723,6 +723,6 @@ export default function registerChatRoutes(app) {
     }
     // True even when a concurrent delete won the race: the postcondition the
     // caller asked for — this chat no longer exists — holds either way.
-    res.json({ deleted: true });
+    res.status(204).end();
   });
 }

@@ -559,7 +559,7 @@ export default function registerScheduledTaskRoutes(app) {
     const deleted = await store.delete(scope, req.params.fileId);
     if (!deleted) throw new ServiceError('NOT_FOUND', 'File not found');
     audit(req, 'file-remove', task.id, 'Removed a file from scheduled task');
-    res.json({ deleted: true });
+    res.status(204).end();
   });
 
   app.get(`${base}/:taskId/runs`, ...guard, async (req, res) => {

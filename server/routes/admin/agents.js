@@ -205,7 +205,7 @@ export default function registerAdminAgentsRoutes(app) {
       profileId: profile.id,
       actor: req.user?.id
     });
-    res.status(201).json({ ok: true, profile });
+    res.status(201).json({ profile });
   });
 
   // ── Update ────────────────────────────────────────────────────────────────
@@ -228,7 +228,7 @@ export default function registerAdminAgentsRoutes(app) {
       profileId,
       actor: req.user?.id
     });
-    res.json({ ok: true, profile });
+    res.json({ profile });
   });
 
   // ── Toggle enabled ────────────────────────────────────────────────────────
@@ -245,7 +245,7 @@ export default function registerAdminAgentsRoutes(app) {
       const updated = { ...profile, enabled: !profile.enabled };
       await configStore.writeJson(profileRelPath(profileId), updated);
       await configCache.refreshAgentProfilesCache();
-      res.json({ ok: true, enabled: updated.enabled });
+      res.json({ enabled: updated.enabled });
     }
   );
 
@@ -265,7 +265,7 @@ export default function registerAdminAgentsRoutes(app) {
         profileId,
         actor: req.user?.id
       });
-      res.json({ ok: true });
+      res.status(204).end();
     }
   );
 
@@ -298,7 +298,7 @@ export default function registerAdminAgentsRoutes(app) {
         expectedVersion,
         updatedBy: req.user?.id || 'admin'
       });
-      res.json({ ok: true, version: result.version });
+      res.json({ version: result.version });
     }
   );
 
@@ -386,13 +386,7 @@ export default function registerAdminAgentsRoutes(app) {
         version: writeResult.version
       });
 
-      res.json({
-        ok: true,
-        version: writeResult.version,
-        section: section.trim(),
-        toolId,
-        shaped
-      });
+      res.json({ version: writeResult.version, section: section.trim(), toolId, shaped });
     }
   );
 }

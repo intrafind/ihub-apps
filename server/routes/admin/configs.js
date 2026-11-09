@@ -539,6 +539,7 @@ export default function registerAdminConfigRoutes(app) {
           : { ok: false, code: 'token-failed', message: result.error }
       );
     }
+    // api-guidelines-ignore: a key test answers 200 with its outcome (`ok`): that it failed is the result
     return res.json({
       ok: true,
       code: 'token-issued',

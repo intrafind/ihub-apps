@@ -445,8 +445,10 @@ export function registerProjectPickerRoutes(app) {
     try {
       const { createSourceManager } = await import('../sources/index.js');
       const result = await createSourceManager().testSource('url', { url: parsed.data.url });
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.json({ ok: true, ...result });
     } catch (error) {
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.status(200).json({
         ok: false,
         error: error.message,
@@ -467,6 +469,7 @@ export function registerProjectPickerRoutes(app) {
       const { content, metadata } = await createSourceManager()
         .getHandler('url')
         .loadContent({ url: parsed.data.url });
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.json({
         ok: true,
         title: metadata?.title || '',
@@ -476,6 +479,7 @@ export function registerProjectPickerRoutes(app) {
         truncated: metadata?.truncated === true
       });
     } catch (error) {
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       res.status(200).json({ ok: false, error: error.message });
     }
   });
@@ -488,6 +492,7 @@ export function registerProjectPickerRoutes(app) {
     if (!parsed.success) throw new ServiceError('BAD_REQUEST', 'A http(s) URL is required');
     const userId = req.user.id;
     if (crawlsRunning.has(userId)) {
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       return res.status(200).json({
         ok: false,
         code: 'CRAWL_RUNNING',
@@ -502,9 +507,11 @@ export function registerProjectPickerRoutes(app) {
     try {
       const { crawlSite } = await import('../services/projects/siteCrawler.js');
       const result = await crawlSite({ ...parsed.data, signal: controller.signal });
+      // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
       if (!controller.signal.aborted) res.json({ ok: true, ...result });
     } catch (error) {
       if (!controller.signal.aborted) {
+        // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
         res.status(200).json({
           ok: false,
           error: error.message,

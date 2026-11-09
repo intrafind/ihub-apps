@@ -327,7 +327,6 @@ export default function registerAdminChatHistoryRoutes(app) {
 
     const platform = configCache.getPlatform?.() || platformConfig;
     res.json({
-      ok: true,
       changed,
       settings: resolveSettings(platform),
       status: resolveStatus(platform, configCache.getFeatures?.() || {}),
@@ -387,7 +386,7 @@ export default function registerAdminChatHistoryRoutes(app) {
         resourceId: shareId,
         summary: `Admin revoked share of chat ${revoked.chatId} (${revoked.mode})`
       });
-      res.json({ ok: true, share: { ...revoked, views: undefined, state: 'revoked' } });
+      res.json({ share: { ...revoked, views: undefined, state: 'revoked' } });
     }
   );
 
@@ -456,7 +455,7 @@ export default function registerAdminChatHistoryRoutes(app) {
           resourceId: 'chat-history-retention',
           summary: `Retention run (${target}): chats removed ${result.chats?.removed ?? 0}, runs removed ${result.ledger?.removed ?? 0}`
         });
-        res.json({ ok: true, target, ...result });
+        res.json({ target, ...result });
       } finally {
         retentionRunning = false;
       }

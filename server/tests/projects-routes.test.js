@@ -1948,7 +1948,7 @@ describe('chats in a project', () => {
     const project = await create(ADA, { name: 'Erasures' });
     await joinProject(chat, project.id);
     const erased = await drive(route.chatDelete, { user: ADA, params: { chatId: chat.id } });
-    assert.equal(erased.statusCode, 200, JSON.stringify(erased.body));
+    assert.equal(erased.statusCode, 204, JSON.stringify(erased.body));
     assert.deepEqual(await getProjectRepository().listChatMarkers(project.id), []);
   });
 

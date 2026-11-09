@@ -14,7 +14,8 @@
  *
  *   hand-rolled-error  `res.status(4xx|5xx).json({ error … })` — throw a ServiceError instead
  *                      (a body with `error_description` is RFC 6749/6750 and stays)
- *   success-envelope   `.json({ success: … })` / `.json({ message: '… successfully' })`
+ *   success-envelope   `.json({ success: … })`, `.json({ ok: … })`, `.json({ deleted: true })`, a body that
+ *                      is only `{ message }`, or `{ message: '… successfully' }`
  *   status-422         `res.status(422)` — validation is 400 VALIDATION_FAILED
  *   route-verb         `router.post('/:id/run')` — a non-CRUD operation is an `_action` segment
  *   route-naming       a literal path segment that is not lower-case kebab-case
@@ -99,6 +100,24 @@ const RULES = [
     pattern: /\.json\(\s*\{[^}]*?\bmessage\s*:\s*(['"`])[^'"`\n]*\bsuccessfully\b/gs,
     message:
       "No { message: '… successfully' } envelope: return the resource, or 204 for a delete (docs/api-guidelines.md#2-methods-and-status-codes)."
+  },
+  {
+    id: 'success-envelope',
+    pattern: /\.json\(\s*\{\s*ok\s*:/g,
+    message:
+      'No { ok } envelope: the status code carries success. Return the resource, or 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
+  },
+  {
+    id: 'success-envelope',
+    pattern: /\.json\(\s*\{\s*(?:deleted|saved|updated|revoked)\s*:\s*true\s*\}\s*\)/g,
+    message:
+      'No { deleted: true } body: a delete answers 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
+  },
+  {
+    id: 'success-envelope',
+    pattern: /\.json\(\s*\{\s*message\s*:\s*(['"`])[^'"`\n]*\1\s*\}\s*\)/g,
+    message:
+      'No { message } body that only confirms: answer the resource, or 204 (docs/api-guidelines.md#2-methods-and-status-codes).'
   },
   {
     id: 'status-422',
