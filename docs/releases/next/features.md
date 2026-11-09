@@ -1293,3 +1293,14 @@ about half the pane — so a long prompt can be read and edited without scrollin
 A web page added to a project without a name now shows the page's title instead of its URL. A name
 you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
 page that cannot be read when it is added keeps its URL as the name.
+
+## Projects: Up to 200 Items, and the Limits Are Set in the Admin UI
+
+A project can now hold up to 200 items, the same number of documents an iFinder smart collection
+holds. Admins set the project limits under **Admin → Projects → Project settings** instead of
+editing `platform.json`, and a change applies at once, without a restart.
+
+- Four limits: items per project (25 by default, at most 200), size of one file and size of one
+  project (in MB), and projects per user (0 for no limit).
+- Lowering a limit removes nothing; it only refuses what would go past it.
+- Adding several iFinder documents to a smart collection project at once takes up to 200 per call.

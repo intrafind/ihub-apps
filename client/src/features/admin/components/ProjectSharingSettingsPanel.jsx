@@ -10,6 +10,7 @@ import {
 } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
+import { LIMIT_FIELDS, LIMIT_LABELS, limitInputsOf, parseLimits } from '../utils/projectLimits';
 
 const TIER_POLICIES = [
   {
@@ -43,8 +44,9 @@ const TIER_POLICIES = [
  * (`platform.projects.sharing`: specific users, groups, everyone signed in and
  * the catalog of published projects) and the tier policy
  * (`platform.projects.tierPolicy`: whether iFinder smart collections can be
- * added) and the default app of project chats (`platform.projects.defaultAppId`).
- * Full admins only: for anyone else the panel is not shown.
+ * added), the default app of project chats (`platform.projects.defaultAppId`)
+ * and the limits of the local tier (`platform.projects.limits`). Every change
+ * applies at once, without a restart. Full admins only: for anyone else the panel is not shown.
  *
  * @returns {JSX.Element|null}
  */
@@ -52,6 +54,7 @@ function ProjectSharingSettingsPanel() {
   const { t } = useTranslation();
   const [stored, setStored] = useState(null);
   const [draft, setDraft] = useState(null);
+  const [limitInputs, setLimitInputs] = useState({});
   const [forbidden, setForbidden] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -66,6 +69,7 @@ function ProjectSharingSettingsPanel() {
         if (!active) return;
         setStored(settings);
         setDraft(settings);
+        setLimitInputs(limitInputsOf(settings.limits));
       })
       .catch(err => {
         if (!active) return;
@@ -86,7 +90,16 @@ function ProjectSharingSettingsPanel() {
     ) : null;
   }
 
-  const dirty = JSON.stringify(draft) !== JSON.stringify(stored);
+  const ceiling = stored.maxFilesCeiling;
+  const limits = parseLimits(limitInputs, stored.limits || {}, ceiling);
+  const limitsChanged = LIMIT_FIELDS.some(
+    ({ key }) => limits.invalid.includes(key) || limits.values[key] !== stored.limits?.[key]
+  );
+  const dirty = JSON.stringify(draft) !== JSON.stringify(stored) || limitsChanged;
+  const updateLimit = (key, text) => {
+    setLimitInputs(previous => ({ ...previous, [key]: text }));
+    setSaved(false);
+  };
   const update = patch => {
     setDraft(previous => ({ ...previous, sharing: { ...previous.sharing, ...patch } }));
     setSaved(false);
@@ -104,10 +117,18 @@ function ProjectSharingSettingsPanel() {
     setSaving(true);
     setError(null);
     try {
-      const settings = await saveProjectSettings(draft);
-      if (settings?.defaultAppId !== stored?.defaultAppId) refreshConfig?.();
+      const { sharing, tierPolicy, defaultAppId } = draft;
+      const settings = await saveProjectSettings({
+        sharing,
+        tierPolicy,
+        defaultAppId,
+        ...(limitsChanged ? { limits: limits.values } : {})
+      });
+      // The default app and the limits reach the project pages through the platform config.
+      if (settings?.defaultAppId !== stored?.defaultAppId || limitsChanged) refreshConfig?.();
       setStored(settings);
       setDraft(settings);
+      setLimitInputs(limitInputsOf(settings.limits));
       setSaved(true);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
@@ -218,6 +239,51 @@ function ProjectSharingSettingsPanel() {
             'Users also need the "projectSharing" permission of their group.'
           )}
         </p>
+        <fieldset className="space-y-3">
+          <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('admin.projects.limits.legend', 'Limits of user projects')}
+          </legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {LIMIT_FIELDS.map(({ key, min, decimals }) => {
+              const id = `project-settings-limit-${key}`;
+              const invalid = limits.invalid.includes(key);
+              return (
+                <div key={key} className="space-y-1">
+                  <label htmlFor={id} className="block text-sm text-gray-700 dark:text-gray-300">
+                    {t(`admin.projects.limits.${key}`, LIMIT_LABELS[key][0])}
+                  </label>
+                  <input
+                    id={id}
+                    type="number"
+                    inputMode={decimals ? 'decimal' : 'numeric'}
+                    min={min}
+                    max={key === 'maxFiles' ? ceiling : undefined}
+                    step={decimals ? 'any' : 1}
+                    value={limitInputs[key] ?? ''}
+                    onChange={e => updateLimit(key, e.target.value)}
+                    aria-invalid={invalid || undefined}
+                    aria-describedby={`${id}-help`}
+                    className="block w-full max-w-[12rem] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2 aria-[invalid=true]:border-red-500"
+                  />
+                  <p id={`${id}-help`} className="text-xs text-gray-500 dark:text-gray-400">
+                    {invalid && (
+                      <span className="block text-red-600 dark:text-red-400">
+                        {t('admin.projects.limits.invalid', 'Enter a number in the allowed range.')}
+                      </span>
+                    )}
+                    {t(`admin.projects.limits.${key}Help`, LIMIT_LABELS[key][1], { max: ceiling })}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.projects.limits.applyHint',
+              'Changes apply at once. Lowering a limit removes nothing; it only refuses what would go past it.'
+            )}
+          </p>
+        </fieldset>
         {error && (
           <p role="alert" className="text-sm text-red-600 dark:text-red-400">
             {error}
@@ -232,7 +298,7 @@ function ProjectSharingSettingsPanel() {
           <button
             type="button"
             onClick={save}
-            disabled={!dirty || saving}
+            disabled={!dirty || saving || limits.invalid.length > 0}
             className="px-4 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {t('common.save', 'Save')}

@@ -500,7 +500,11 @@ export const urlCrawlSchema = z
   })
   .strict();
 
-/** What `PUT /api/admin/projects/_settings` accepts: the sharing audiences. */
+/**
+ * What `PUT /api/admin/projects/_settings` accepts: the sharing audiences, the
+ * tier policy, the default app and the limits of the local tier. Each limit
+ * is optional; `maxProjectsPerUser` of 0 means no cap.
+ */
 export const projectSharingSettingsSchema = z
   .object({
     sharing: z
@@ -515,13 +519,24 @@ export const projectSharingSettingsSchema = z
       .optional(),
     tierPolicy: z.enum(['ihub', 'both', 'ifinder']).optional(),
     // The app a project chat starts in when the project names none; '' clears it.
-    defaultAppId: z.union([zSafeId.min(1).max(100), z.literal('')]).optional()
+    defaultAppId: z.union([zSafeId.min(1).max(100), z.literal('')]).optional(),
+    limits: z
+      .object({
+        maxFiles: z.number().int().min(1).max(MAX_FILES_CEILING),
+        maxFileBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        maxProjectBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        maxProjectsPerUser: z.number().int().min(0).max(100_000)
+      })
+      .partial()
+      .strict()
+      .optional()
   })
   .strict()
   .refine(
     body =>
       body.sharing !== undefined ||
       body.tierPolicy !== undefined ||
-      body.defaultAppId !== undefined,
-    { message: 'Send sharing, tierPolicy or defaultAppId' }
+      body.defaultAppId !== undefined ||
+      body.limits !== undefined,
+    { message: 'Send sharing, tierPolicy, defaultAppId or limits' }
   );
