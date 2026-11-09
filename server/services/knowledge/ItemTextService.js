@@ -105,13 +105,30 @@ export function setItemInfoRecorder(recorder) {
 }
 
 /**
- * Hand what a web page said about itself to the recorder, once per item and
- * process, when the item has no title or description yet.
+ * What a link item's source says about it: a web page its title and
+ * description, an iFinder document its title field, else its file name.
+ */
+export function linkInfoOf(item, metadata) {
+  if (item.kind === 'url') return { title: metadata?.title, description: metadata?.description };
+  if (item.kind === 'ifinder-document') {
+    return { title: firstText(metadata?.title) || firstText(metadata?.filename) };
+  }
+  return {};
+}
+
+/** One value of an iFinder field, which may hold a list. */
+function firstText(value) {
+  const first = Array.isArray(value) ? value.find(Boolean) : value;
+  return typeof first === 'string' ? first : '';
+}
+
+/**
+ * Hand what a link item's source said about it to the recorder, once per item
+ * and process, when the item has no title or description yet.
  */
 function offerItemInfo(project, item, metadata) {
-  if (!infoRecorder || item.kind !== 'url' || item.title || item.description) return;
-  const title = metadata?.title;
-  const description = metadata?.description;
+  if (!infoRecorder || item.title || item.description) return;
+  const { title, description } = linkInfoOf(item, metadata);
   if (!title && !description) return;
   const key = `${project.id}/${item.id}`;
   if (infoOffered.has(key)) return;

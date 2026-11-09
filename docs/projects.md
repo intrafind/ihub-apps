@@ -419,11 +419,16 @@ The **title and description** are captured, not typed:
 | --------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
 | Upload, picked or written   | The document's metadata title (PDF, HTML), else its first heading or short first line | The HTML meta description, else its first paragraph |
 | Web page (URL item)         | The page's title                                              | The page's meta description                          |
-| iHub page, iFinder document | none                                                          | none                                                 |
+| iHub page | The page's configured title, in the item's language (else English, else the page id) | none |
+| iFinder document | The document's `title` field, else its file name | none |
 
 An upload records them when it is extracted, and again on every new version or refresh. A web
 page records them when it is added or its URL changes; a web page added before this existed, or
-one that could not be read when it was added, records them the first time it is read. A title the
+one that could not be read when it was added, records them the first time it is read. An iFinder
+document records its title the first time it is read. An iHub page's title is not stored: it is
+read from the page configuration each time, so a renamed page is listed by its new title. In a
+smart collection (the iFinder tier) a document is named by its title, else its file name, as the
+reader may see it. A title the
 same as the document's name is not repeated in the list. `knowledge_list` returns both, as `title`
 and `description`, beside the other fields.
 

@@ -519,12 +519,20 @@ function itemOf(collection, documentId, title, user) {
   };
 }
 
+/** One trimmed value of an iFinder field, which may hold a list. */
+function textOf(value) {
+  const first = Array.isArray(value)
+    ? value.find(entry => typeof entry === 'string' && entry.trim())
+    : value;
+  return typeof first === 'string' ? first.trim() : '';
+}
+
 /**
  * The titles of documents, as the user may see them. One search per
  * {@link TITLE_BATCH} documents that are not cached for this principal, with
  * the user's own rights, so a document they may not see has no title (and is
- * named by its id). Best effort: a failure leaves the ids as names, and is not
- * cached.
+ * named by its id). A document without a title is named by its file name.
+ * Best effort: a failure leaves the ids as names, and is not cached.
  *
  * @param {Object} user
  * @param {string} principal
@@ -554,7 +562,7 @@ async function titlesFor(user, principal, tenant, collectionId, documentIds, sig
         chatId: `project-collection-${collectionId}`,
         user,
         maxResults: batch.length,
-        returnFields: ['id', 'title'],
+        returnFields: ['id', 'title', 'file.name'],
         returnFacets: [],
         queryLogging: false,
         signal
@@ -564,7 +572,8 @@ async function titlesFor(user, principal, tenant, collectionId, documentIds, sig
         const id = hit?.id === undefined ? '' : String(hit.id);
         if (!id || !batch.includes(id)) continue;
         answered.add(id);
-        const title = typeof hit.title === 'string' ? hit.title.trim().slice(0, 300) : '';
+        // The document's title field, else its file name (#3539).
+        const title = (textOf(hit.title) || textOf(hit.filename)).slice(0, 300);
         titles.set(keyFor(tenant, principal, 'title', id), title, TTL.title);
         if (title) found.set(id, title);
       }

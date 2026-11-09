@@ -1303,7 +1303,8 @@ directly, instead of searching blindly first.
 - Each listed document shows its name, size and, for web pages, its URL, plus the document's own
   title and a short description when iHub knows them.
 - The title and description are captured automatically: from an uploaded file's metadata or first
-  heading and paragraph, and from a web page's title and description when it is added (or, for
-  pages added earlier, the first time it is read).
+  heading and paragraph, from a web page's title and description when it is added (or, for
+  pages added earlier, the first time it is read), from an iHub page's configured title, and from
+  an iFinder document's title, else its file name.
 - The list stops at 50 documents per project; the model is told how many more there are and how to
   list them all.

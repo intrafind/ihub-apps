@@ -22,6 +22,8 @@ import { docOf } from '../services/knowledge/types.js';
 import { estimateTokens } from '../../shared/tokenEstimator.js';
 import { cleanItemInfo, infoFromText, applyItemInfo } from '../services/projects/itemInfo.js';
 import { projectItemSchema } from '../validators/projectSchema.js';
+import configCache from '../configCache.js';
+import { linkInfoOf } from '../services/knowledge/ItemTextService.js';
 
 function item(n, extra = {}) {
   return {
@@ -292,5 +294,39 @@ describe('what an item is about', () => {
     assert.equal(doc.title, 'T');
     assert.equal(doc.description, 'D');
     assert.equal(docOf({ id: 'p' }, item(2)).title, null);
+  });
+});
+
+describe('iHub pages and iFinder documents', () => {
+  test("an iHub page is listed by its configured title, in the item's language", () => {
+    const previous = configCache.getUI?.();
+    configCache.setCacheEntry('config/ui.json', {
+      ...(previous?.data || previous || {}),
+      pages: { faq: { title: { en: 'FAQ', de: 'Häufige Fragen' } }, bare: {} }
+    });
+    try {
+      const page = language =>
+        docOf({ id: 'p' }, item(1, { kind: 'page', ref: { pageId: 'faq', language }, text: null }));
+      assert.equal(page('de').title, 'Häufige Fragen');
+      assert.equal(page('fr').title, 'FAQ', 'English when the language has none');
+      const bare = docOf(
+        { id: 'p' },
+        item(2, { kind: 'page', ref: { pageId: 'bare', language: 'en' }, text: null })
+      );
+      assert.equal(bare.title, 'bare', 'a page without a title by its id');
+    } finally {
+      configCache.setCacheEntry('config/ui.json', previous?.data || previous || {});
+    }
+  });
+
+  test('an iFinder document records its title field, else its file name', () => {
+    const doc = { kind: 'ifinder-document' };
+    assert.deepEqual(linkInfoOf(doc, { title: ['Lease 2026'], filename: 'lease.pdf' }), {
+      title: 'Lease 2026'
+    });
+    assert.deepEqual(linkInfoOf(doc, { title: '', filename: ['lease.pdf'] }), {
+      title: 'lease.pdf'
+    });
+    assert.deepEqual(linkInfoOf({ kind: 'ifinder-query' }, { title: 'x' }), {});
   });
 });

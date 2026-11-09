@@ -48,23 +48,24 @@ export class KnowledgeError extends ServiceError {
  * @returns {import('./KnowledgeProvider.js').KnowledgeDoc}
  */
 export function docOf(project, item) {
+  // What the kind says about the reference: the URL, and for an iHub page its
+  // title as configured now (pages are not stored, so neither is their title).
+  const described = getItemKind(item.kind)?.describe?.(item.ref || {}) || {};
   return {
     id: item.id,
     projectId: project.id,
     kind: item.kind,
     name: item.name,
-    title: typeof item.title === 'string' && item.title ? item.title : null,
+    title:
+      (typeof item.title === 'string' && item.title) ||
+      (typeof described.title === 'string' && described.title) ||
+      null,
     description: typeof item.description === 'string' && item.description ? item.description : null,
     status: item.status,
     pinned: item.pinned === true,
     chars: Number.isFinite(item.text?.chars) ? item.text.chars : null,
     tokens: Number.isFinite(item.text?.tokens) ? item.text.tokens : null,
-    url:
-      item.provenance?.source?.url ||
-      item.ref?.url ||
-      item.ref?.webUrl ||
-      getItemKind(item.kind)?.describe?.(item.ref || {})?.url ||
-      null,
+    url: item.provenance?.source?.url || item.ref?.url || item.ref?.webUrl || described.url || null,
     provenance: item.provenance || { origin: 'linked' },
     snapshotAt: item.snapshotAt || null,
     updatedAt: item.updatedAt || item.createdAt || null
