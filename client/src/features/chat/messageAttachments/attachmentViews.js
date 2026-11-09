@@ -120,7 +120,7 @@ function fromLive(entry, index) {
 function readOfStored(descriptor, kind) {
   if (kind === 'image' || kind === 'audio') return { kind };
   if (!Number.isFinite(descriptor.textBytes)) return null;
-  const pageImages = Number(descriptor.pageImageCount) > 0 ? Number(descriptor.pageImageCount) : 0;
+  const pageImages = Math.max(0, Number(descriptor.pageImageCount) || 0);
   return {
     kind: 'document',
     stub: true,
@@ -130,6 +130,21 @@ function readOfStored(descriptor, kind) {
     truncated: descriptor.truncated === true,
     originalKept: descriptor.hasOriginal === true
   };
+}
+
+/**
+ * Whether the original of a stored file is kept, as far as the descriptor says. The server writes
+ * `hasOriginal` only when it is true, so for a descriptor that carries the numbers of a document
+ * its absence means that only the text is kept; without the numbers it proves nothing.
+ *
+ * @param {Object} descriptor
+ * @param {'image'|'audio'|'document'} kind
+ * @param {Object|null} read - What `readOfStored` made of the descriptor
+ * @returns {boolean|null}
+ */
+function storedOriginalKept(descriptor, kind, read) {
+  if (typeof descriptor.hasOriginal === 'boolean') return descriptor.hasOriginal;
+  return kind === 'document' && read ? false : null;
 }
 
 /**
@@ -150,14 +165,7 @@ function fromStored(descriptor, index) {
   const mimeType = typeof rawType === 'string' && rawType.includes('/') ? rawType : null;
   const kind = storedKindOf(rawType);
   const read = readOfStored(descriptor, kind);
-  // The server writes `hasOriginal` only when it is true, so for a descriptor that carries the
-  // numbers of a document its absence means that only the text is kept
-  const originalKept =
-    typeof descriptor.hasOriginal === 'boolean'
-      ? descriptor.hasOriginal
-      : kind === 'document' && read
-        ? false
-        : null;
+  const originalKept = storedOriginalKept(descriptor, kind, read);
   return {
     key: `${index}:${fileId || name}`,
     id: fileId,

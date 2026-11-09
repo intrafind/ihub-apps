@@ -30,6 +30,9 @@ function exportableAttachment(view) {
   };
 }
 
+/** What a message of the page holds for the next send: the files themselves, never exported. */
+const PAYLOAD_FIELDS = ['fileData', 'imageData', 'audioData'];
+
 /**
  * A message as the JSON and JSONL exports write it.
  *
@@ -38,7 +41,9 @@ function exportableAttachment(view) {
  */
 export function exportableMessage(message) {
   if (!message || typeof message !== 'object') return message;
-  const { imageData: _image, fileData: _file, audioData: _audio, attachments, ...rest } = message;
+  // `rest` is a copy: dropping the payload fields does not touch the message of the page
+  const { attachments, ...rest } = message;
+  for (const field of PAYLOAD_FIELDS) delete rest[field];
   return Array.isArray(attachments) && attachments.length > 0
     ? { ...rest, attachments: attachments.map(exportableAttachment) }
     : rest;

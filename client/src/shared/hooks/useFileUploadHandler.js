@@ -7,6 +7,21 @@ import { modelInputCapabilities } from '../utils/modelInputCapabilities';
 import { storageProvidersBoundBy } from '../../../../shared/storageBindings.js';
 
 /**
+ * Whether the uploader takes a kind of file (image, audio, video) now, and whether the model alone
+ * is the reason it does not: the app allows the kind and the selected model cannot take it, as
+ * against the app not offering it. The two get different messages.
+ *
+ * @param {{ enabled?: boolean }|undefined} kindConfig - The app's setting of the kind
+ * @param {boolean} modelTakesIt - Whether the selected model can take the kind
+ * @returns {{ enabled: boolean, blockedByModel: boolean }}
+ */
+function uploadGateOf(kindConfig, modelTakesIt) {
+  const allowedByApp = kindConfig?.enabled !== false;
+  const enabled = allowedByApp && Boolean(modelTakesIt);
+  return { enabled, blockedByModel: allowedByApp && !enabled };
+}
+
+/**
  * Custom hook for handling file uploads in chat applications.
  * Manages file selection state and creates upload configurations from app settings.
  * @returns {Object} File upload utilities
@@ -125,17 +140,13 @@ export function useFileUploadHandler() {
 
     // Audio goes to the selected model: one that takes audio, or a
     // transcription model, whose only input it is.
-    const imageUploadEnabled =
-      imageConfig?.enabled !== false && isVisionModel && !transcriptionModel;
-    const audioUploadEnabled =
-      audioConfig?.enabled !== false && (isAudioModel || transcriptionModel);
-    const videoUploadEnabled =
-      videoConfig?.enabled !== false && (isAudioModel || transcriptionModel);
+    const image = uploadGateOf(imageConfig, isVisionModel && !transcriptionModel);
+    const audio = uploadGateOf(audioConfig, isAudioModel || transcriptionModel);
+    const video = uploadGateOf(videoConfig, isAudioModel || transcriptionModel);
+    const imageUploadEnabled = image.enabled;
+    const audioUploadEnabled = audio.enabled;
+    const videoUploadEnabled = video.enabled;
     const fileUploadEnabled = fileConfig?.enabled !== false && !transcriptionModel;
-    // The app allows the kind and the model cannot take it (as against: the app does not offer it)
-    const imageBlockedByModel = imageConfig?.enabled !== false && !imageUploadEnabled;
-    const audioBlockedByModel = audioConfig?.enabled !== false && !audioUploadEnabled;
-    const videoBlockedByModel = videoConfig?.enabled !== false && !videoUploadEnabled;
 
     return {
       enabled: true,
@@ -155,7 +166,7 @@ export function useFileUploadHandler() {
       // Image-specific settings
       imageUpload: {
         enabled: imageUploadEnabled,
-        blockedByModel: imageBlockedByModel,
+        blockedByModel: image.blockedByModel,
         resizeImages: imageConfig?.resizeImages !== false,
         maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
         supportedFormats: imageConfig?.supportedFormats || [
@@ -170,7 +181,7 @@ export function useFileUploadHandler() {
       // Audio-specific settings
       audioUpload: {
         enabled: audioUploadEnabled,
-        blockedByModel: audioBlockedByModel,
+        blockedByModel: audio.blockedByModel,
         maxFileSizeMB: audioConfig?.maxFileSizeMB || 20,
         supportedFormats: audioConfig?.supportedFormats || [
           'audio/mpeg',
@@ -184,7 +195,7 @@ export function useFileUploadHandler() {
       // Video-specific settings
       videoUpload: {
         enabled: videoUploadEnabled,
-        blockedByModel: videoBlockedByModel,
+        blockedByModel: video.blockedByModel,
         extractAudio: videoConfig?.extractAudio !== false,
         maxFileSizeMB: videoConfig?.maxFileSizeMB || 50,
         supportedFormats: videoConfig?.supportedFormats || [
