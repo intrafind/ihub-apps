@@ -49,7 +49,7 @@ const realAuth = await import('../middleware/authRequired.js');
 jest.unstable_mockModule('../middleware/authRequired.js', () => ({
   ...realAuth,
   authRequired: (req, res, next) => {
-    req.user = { id: 'ada', groups: [] };
+    req.user = { id: 'ada', groups: [], isAdmin: req.headers['x-test-admin'] === '1' };
     next();
   }
 }));
@@ -61,6 +61,7 @@ jest.unstable_mockModule('../utils/logger.js', () => ({
 }));
 
 const { default: configCache } = await import('../configCache.js');
+const { default: configStore } = await import('../services/config/ConfigStore.js');
 const { default: registerWorkflowRoutes } = await import('../routes/workflow/workflowRoutes.js');
 const { default: registerTriggerRoutes } = await import('../routes/workflow/triggerRoutes.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
@@ -235,5 +236,27 @@ describe('workflow webhook route', () => {
   it('refuses a cursor it did not issue with INVALID_CURSOR', async () => {
     const res = await request(app).get('/api/workflows/my-executions?cursor=bogus').expect(400);
     expect(res.body.code).toBe('INVALID_CURSOR');
+  });
+});
+
+describe('GET /api/workflows/:id', () => {
+  const workflow = { id: 'wf-off', name: { en: 'Off' }, enabled: false };
+
+  beforeEach(() => {
+    jest.spyOn(configStore, 'listDocuments').mockResolvedValue([{ data: workflow }]);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('hides a disabled workflow from a regular user', async () => {
+    const res = await request(app).get('/api/workflows/wf-off').expect(404);
+    expect(res.body.code).toBe('NOT_FOUND');
+  });
+
+  it('answers a disabled workflow to an admin, so the Location of a create resolves', async () => {
+    const res = await request(app)
+      .get('/api/workflows/wf-off')
+      .set('x-test-admin', '1')
+      .expect(200);
+    expect(res.body.id).toBe('wf-off');
   });
 });

@@ -1123,3 +1123,11 @@ Nothing else changes: addresses (`/admin/models`, `/admin/providers`), permissio
 still decides whether the **Providers** tab is shown), data files and the API stay as they are.
 
 See [Admin UI → Managing Models](../../admin-ui.md#managing-models).
+
+## Created Resources Can Be Read Back From Their `Location`
+
+Two creates answered a `Location` that had no matching read. `GET /api/integrations/api-keys/{keyId}`
+now answers the metadata of one of your personal API keys (never its secret), and
+`GET /api/integrations/requests/{requestId}` answers one of your own integration requests. Both
+answer `404` for an id that is not yours. `GET /api/workflows/{id}` now also answers a disabled
+workflow to an administrator, so the `Location` of a create that saved it as disabled resolves.
