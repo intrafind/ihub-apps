@@ -12,6 +12,11 @@
  *    found), a `fetch` (the page or document it read) or a plain `tool` call
  *  - `activityScope`: for a search or fetch, whether it looked at the public
  *    `web` or the organisation's `documents`
+ *  - `outputKind`: for the built-in creators of a file or a document (a web
+ *    artifact, a PDF, a workbook …), what they produce. It is sent on the
+ *    `args` progress frames while the arguments still stream, where the chat
+ *    words "Creating {{what}}…"; `tool/started` and the run ledger do not carry
+ *    it ({@link startedDisplayOf})
  *
  * @module utils/toolDisplay
  */
@@ -64,9 +69,38 @@ export function activityScopeOf(toolId, source) {
     : 'web';
 }
 
+/** What the built-in creator tools produce; the chat words each one. */
+export const OUTPUT_KINDS = Object.freeze([
+  'webArtifact',
+  'document',
+  'presentation',
+  'workbook',
+  'pdf',
+  'file',
+  'archive'
+]);
+
+/**
+ * What a tool produces, when it is one of the built-in creators of a file or a
+ * document. The kind is data on the tool definition (`outputKind`, set by the
+ * creator's own definition and carried over by `systemSkillToolsFor`), never
+ * guessed from the tool id; only a system-skill tool counts, so a tool an admin
+ * or an MCP server provides cannot claim one.
+ *
+ * @param {Object|null|undefined} toolDef - the resolved tool definition
+ * @returns {'webArtifact'|'document'|'presentation'|'workbook'|'pdf'|'file'|'archive'|undefined}
+ *   `undefined` for every other tool (also `preview_pdf`, which creates nothing)
+ */
+export function outputKindOf(toolDef) {
+  if (!toolDef || typeof toolDef !== 'object' || toolDef.isSystemSkillTool !== true) {
+    return undefined;
+  }
+  return OUTPUT_KINDS.includes(toolDef.outputKind) ? toolDef.outputKind : undefined;
+}
+
 /**
  * @param {Object|null|undefined} toolDef - the resolved (localized) tool definition
- * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string}}
+ * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string, outputKind?: string}}
  *   the fields that are known; nothing for an unknown tool (a plain call)
  */
 export function toolDisplayOf(toolDef) {
@@ -95,10 +129,27 @@ export function toolDisplayOf(toolDef) {
   // The loop's own tools (skills, tool search) are plain calls, whatever their id says.
   const activityKind = toolDef.isInternalTool ? 'tool' : activityKindOf(toolDef.id, source);
 
+  const outputKind = outputKindOf(toolDef);
+
   return {
     ...(title ? { title } : {}),
     ...(integration ? { integration } : {}),
     activityKind,
-    ...(activityKind === 'tool' ? {} : { activityScope: activityScopeOf(toolDef.id, source) })
+    ...(activityKind === 'tool' ? {} : { activityScope: activityScopeOf(toolDef.id, source) }),
+    ...(outputKind ? { outputKind } : {})
   };
+}
+
+/**
+ * The display fields `tool/started` and the run ledger's `tool/call` carry:
+ * {@link toolDisplayOf} without `outputKind`. Those frames, and the stored
+ * activity built from them, are the same as before the arguments progress
+ * existed; the kind rides on the `args` progress frames only.
+ *
+ * @param {Object|null|undefined} toolDef
+ * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string}}
+ */
+export function startedDisplayOf(toolDef) {
+  const { outputKind: _outputKind, ...display } = toolDisplayOf(toolDef);
+  return display;
 }

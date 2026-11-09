@@ -187,6 +187,9 @@ export function systemSkillToolsFor(
         description,
         parameters,
         isSystemSkillTool: true,
+        // What the tool produces (`utils/toolDisplay.js` `outputKindOf`), for the
+        // creators of a file or a document; the other tools bring none.
+        ...(definition.outputKind ? { outputKind: definition.outputKind } : {}),
         skillName: skill.name
       });
     }

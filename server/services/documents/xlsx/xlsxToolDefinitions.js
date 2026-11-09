@@ -9,6 +9,7 @@
 
 export const CREATE_XLSX_TOOL = {
   id: 'create_xlsx',
+  outputKind: 'workbook',
   name: { en: 'Create Excel workbook', de: 'Excel-Arbeitsmappe erstellen' },
   description: {
     en: 'Create a formatted Excel workbook (.xlsx) on the server, styled in the company\'s corporate design, and give it to the user as a download. Pass "sheets" as a JSON array of worksheets; each sheet has a "name", "columns" (headers with optional format: "currency", "integer", "decimal", "percent", "date", "text", or an Excel numFmt like "#,##0.00 €") and "rows" (numbers, strings, ISO dates "YYYY-MM-DD", or live Excel formulas starting with "=", e.g. "=SUM(B2:B10)"). Row 1 is the column header row; rows[0] is Row 2. The user sees a download card in the chat, so do not paste a link. Activate the "xlsx" skill first for formula and financial-modelling conventions.',
