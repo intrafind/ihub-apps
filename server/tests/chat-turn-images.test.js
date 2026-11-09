@@ -292,6 +292,101 @@ describe('a picture of a turn', () => {
   });
 });
 
+describe('only a picture is stored as a picture', () => {
+  let tmpDir;
+  let provider;
+  let repo;
+  const scope = { type: 'chat', id: 'chat-img-origin' };
+  const oneSlot = () => ({ quotas: { maxChatFiles: 1 } });
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-turn-img-origin-'));
+    provider = new FilesystemStorageProvider({ baseDir: tmpDir });
+    await provider.initialize();
+    repo = new ChatFileRepository({
+      documents: provider.documents,
+      blobs: provider.blobs,
+      policy: oneSlot
+    });
+  });
+
+  afterEach(async () => {
+    await provider?.shutdown?.();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  const put = file =>
+    repo.put(scope, { ownerId: 'jonas', mimeType: 'text/plain', origin: 'image', ...file });
+
+  it('a document that asks for the image origin is an ordinary upload and takes a slot', async () => {
+    const first = await put({ name: 'a.txt', text: 'Quarterly numbers' });
+    assert.equal(first.origin, 'upload');
+    await assert.rejects(
+      put({ name: 'b.txt', text: 'More numbers' }),
+      error => error.code === 'QUOTA_CHAT_FILES'
+    );
+  });
+
+  it('is an ordinary upload when it holds text next to the picture', async () => {
+    const stored = await put({
+      name: 'a.png',
+      mimeType: 'image/png',
+      text: 'caption',
+      originalBuffer: PNG
+    });
+    assert.equal(stored.origin, 'upload');
+  });
+
+  it('is an ordinary upload when the bytes are not a raster image', async () => {
+    const stored = await put({ name: 'x.png', mimeType: 'image/png', originalBuffer: SVG });
+    assert.equal(stored.origin, 'upload');
+  });
+
+  it('is a picture when the bytes are one', async () => {
+    const stored = await put({ name: 'a.png', mimeType: 'image/png', originalBuffer: PNG });
+    assert.equal(stored.origin, 'image');
+  });
+
+  it('keeps the other origins as asked and falls back for an unknown one', async () => {
+    const open = new ChatFileRepository({ documents: provider.documents, blobs: provider.blobs });
+    const email = await open.put(scope, {
+      name: 'a.eml',
+      mimeType: 'message/rfc822',
+      text: 'x',
+      origin: 'email'
+    });
+    const odd = await open.put(scope, {
+      name: 'b.txt',
+      mimeType: 'text/plain',
+      text: 'y',
+      origin: 'nope'
+    });
+    assert.equal(email.origin, 'email');
+    assert.equal(odd.origin, 'upload');
+  });
+
+  it('a document sent with the image origin in a turn is described as an upload', async () => {
+    const { attachments } = await prepareTurnFiles({
+      chatId: scope.id,
+      ownerId: 'jonas',
+      message: {
+        role: 'user',
+        content: 'x',
+        fileData: {
+          type: 'document',
+          fileName: 'sneaky.txt',
+          fileType: 'text/plain',
+          content: 'Quarterly numbers',
+          origin: 'image'
+        }
+      },
+      store: repo
+    });
+    assert.equal(attachments[0].origin, undefined);
+    assert.equal((await repo.getDescriptor(scope, attachments[0].id)).origin, 'upload');
+  });
+});
+
 describe('a stored picture over time', () => {
   let tmpDir;
   let provider;

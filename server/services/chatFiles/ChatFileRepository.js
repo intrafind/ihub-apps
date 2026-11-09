@@ -27,6 +27,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { isValidId } from '../../utils/pathSecurity.js';
+import { sniffRasterImage } from './rasterImage.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import {
@@ -71,6 +72,27 @@ export const CHAT_FILE_ORIGINS = Object.freeze([
   'mcp',
   'a2a'
 ]);
+
+/**
+ * The origin a file is stored with. `image` is what the server makes of a picture the user
+ * attached, so a file may carry it only when it is one: raster image bytes and nothing else (no
+ * text, no page images). Anything else that claims it, such as a document whose request said
+ * `origin: 'image'` to skip the file-slot limit, is an ordinary upload.
+ *
+ * @param {unknown} origin - What the caller asked for
+ * @param {{ rawOriginal: Buffer|null, textBuf: Buffer, pagesBuf: Buffer|null }} content
+ * @returns {string} One of {@link CHAT_FILE_ORIGINS}
+ */
+function effectiveOrigin(origin, { rawOriginal, textBuf, pagesBuf }) {
+  if (!CHAT_FILE_ORIGINS.includes(origin)) return 'upload';
+  if (origin !== 'image') return origin;
+  const isPicture =
+    Boolean(rawOriginal) &&
+    textBuf.length === 0 &&
+    !pagesBuf &&
+    sniffRasterImage(rawOriginal) !== null;
+  return isPicture ? 'image' : 'upload';
+}
 
 /** Largest serialized `meta` a file keeps (it rides on every listing). */
 export const MAX_CHAT_FILE_META_BYTES = 8 * 1024;
@@ -459,6 +481,7 @@ export class ChatFileRepository {
       return null;
     }
 
+    const fileOrigin = effectiveOrigin(origin, { rawOriginal, textBuf, pagesBuf });
     const textBytes = textBuf.length + (pagesBuf ? pagesBuf.length : 0);
     const originalBytes = rawOriginal ? rawOriginal.length : 0;
     const totalBytes = textBytes + originalBytes;
@@ -492,7 +515,7 @@ export class ChatFileRepository {
       totalBytes,
       settings,
       replaces,
-      origin
+      origin: fileOrigin
     });
 
     const cleanName =
@@ -536,7 +559,7 @@ export class ChatFileRepository {
       ...(Number.isFinite(pages) ? { pages } : {}),
       ...(validPages.length > 0 ? { pageImageCount: validPages.length } : {}),
       ...(truncated === true ? { truncated: true } : {}),
-      origin: CHAT_FILE_ORIGINS.includes(origin) ? origin : 'upload',
+      origin: fileOrigin,
       ...(sanitizeFileMeta(meta) ? { meta: sanitizeFileMeta(meta) } : {}),
       ...(sanitizeFileSource(source) ? { source: sanitizeFileSource(source) } : {}),
       ...(mode === 'server_text_only' && candidateOriginal

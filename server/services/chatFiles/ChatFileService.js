@@ -617,7 +617,12 @@ export async function prepareTurnFiles({
 
     if (activeRepo?.isAvailable() && (text || (pageImages && pageImages.length > 0))) {
       try {
-        const origin = CHAT_FILE_ORIGINS.includes(file.origin) ? file.origin : 'upload';
+        // `image` is the server's own for a picture it stores (see `storeTurnImage`): a document
+        // that asks for it is an ordinary upload
+        const origin =
+          CHAT_FILE_ORIGINS.includes(file.origin) && file.origin !== 'image'
+            ? file.origin
+            : 'upload';
         const meta = file.meta && typeof file.meta === 'object' ? file.meta : null;
         // An e-mail, meeting or page that is sent with every turn is stored once
         // per chat (by the item's id or URL); a changed one replaces the stored copy.
