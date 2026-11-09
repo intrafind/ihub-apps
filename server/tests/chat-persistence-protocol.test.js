@@ -320,7 +320,11 @@ before(async () => {
 
 after(async () => {
   await shutdownStorageBootstrap();
-  await fs.rm(baseDir, { recursive: true, force: true });
+  // The filesystem provider does not refuse a write that was already under
+  // way at shutdown, so on a slow runner a straggling chat write can create an
+  // entry while `rm` empties the directory, and its final `rmdir` fails with
+  // ENOTEMPTY. `rm` retries exactly that when asked to.
+  await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
 });
 
 describe('POST /api/apps/:appId/chat/:chatId: the server owns the history', () => {

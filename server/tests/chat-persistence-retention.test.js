@@ -562,8 +562,7 @@ describe('startChatRetentionSweep', () => {
             'a pending sweep must never keep the process alive'
           );
         } finally {
-          stop();
-          await delay(POLL_MS * 2);
+          await stop();
         }
       });
     });
@@ -597,9 +596,8 @@ describe('startChatRetentionSweep', () => {
           assert.equal(reads, 1, 'the second start must not add a second sweep');
           assert.equal(timers.length, 1);
         } finally {
-          stop();
-          stopAgain();
-          await delay(POLL_MS * 2);
+          await stop();
+          await stopAgain();
         }
       });
     });
@@ -630,8 +628,7 @@ describe('startChatRetentionSweep', () => {
             'an admin turning the feature off is not asking for a purge'
           );
         } finally {
-          stop();
-          await delay(POLL_MS * 2);
+          await stop();
         }
       });
     });
@@ -667,8 +664,7 @@ describe('startChatRetentionSweep', () => {
             'an expired chat survives while the feature is off'
           );
         } finally {
-          stop();
-          await delay(POLL_MS * 2);
+          await stop();
         }
       });
     });
@@ -699,8 +695,7 @@ describe('startChatRetentionSweep', () => {
           assert.equal(reads, 0, 'the tick stops before it reads anything');
           assert.ok(await repository.getChat('chat-ancient'));
         } finally {
-          stop();
-          await delay(POLL_MS * 2);
+          await stop();
         }
       });
     });
@@ -739,10 +734,9 @@ describe('startChatRetentionSweep', () => {
             'a later tick to pick up the lowered limit'
           );
         } finally {
-          stop();
-          // Let an in-flight tick clear the module's re-entrancy guard, or the
-          // next test's sweep would find it still set and skip itself.
-          await delay(POLL_MS * 2);
+          // Wait for an in-flight tick to clear the module's re-entrancy guard,
+          // or the next test's sweep would find it still set and skip itself.
+          await stop();
         }
       });
     });
@@ -919,8 +913,7 @@ describe('temporary chats', () => {
         );
         assert.ok(await repository.getChat('kept-ancient'), 'history off is not a purge');
       } finally {
-        stop();
-        await delay(POLL_MS * 2);
+        await stop();
       }
     });
   });

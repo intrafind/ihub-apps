@@ -406,7 +406,6 @@ export const platformConfigSchema = z
         enabled: z.boolean().prefault(false),
         domain: z.string().optional(),
         domainController: z.string().optional(),
-        type: z.enum(['ntlm', 'negotiate']).prefault('ntlm'),
         debug: z.boolean().prefault(false),
         getUserInfo: z.boolean().prefault(true),
         getGroups: z.boolean().prefault(true),

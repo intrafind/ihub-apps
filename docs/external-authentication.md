@@ -21,7 +21,7 @@ The platform supports seven authentication methods:
 3. **Local Authentication** - Built-in user database
 4. **Proxy Authentication** - Reverse proxy headers
 5. **LDAP Authentication** - Directory server authentication (Active Directory, OpenLDAP)
-6. **NTLM Authentication** - Windows integrated/Kerberos authentication
+6. **NTLM Authentication** - Windows integrated authentication (NTLM; Kerberos only through proxy authentication or an OIDC identity provider)
 7. **Anonymous** - No authentication (default)
 
 - **Proxy Mode**: Authentication handled by reverse proxy or external service
@@ -623,11 +623,11 @@ LDAP groups are mapped to iHub groups using the `mappings` array in `groups.json
 
 ### 5. NTLM Authentication
 
-NTLM (Windows Integrated Authentication) allows users on domain-joined Windows machines to authenticate transparently using their Windows credentials via the NTLM/Negotiate protocol. This is implemented using the `express-ntlm` package.
+NTLM (Windows Integrated Authentication) allows users on domain-joined Windows machines to authenticate transparently using their Windows credentials via the NTLM protocol. This is implemented using the `express-ntlm` package, which relays the NTLM messages to the domain controller over LDAP. Kerberos (`Negotiate`) is not supported; see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md#kerberos) for alternatives.
 
 #### How It Works
 
-1. The browser sends an NTLM negotiate request automatically (no login form required for SSO)
+1. The browser answers iHub's `WWW-Authenticate: NTLM` challenge automatically (no login form required for SSO)
 2. `server/middleware/ntlmAuth.js` handles the multi-round NTLM handshake
 3. Active Directory groups are queried via LDAP using the configured bind credentials
 4. Groups are mapped to iHub internal groups and a JWT token is optionally generated

@@ -269,7 +269,6 @@ bare account name under a setting that promises a qualified one.
 ### Features
 
 - Windows Integrated Authentication
-- Support for NTLM and Negotiate protocols
 - Automatic user and group information extraction
 - Domain-aware authentication
 - JWT token generation for API access
@@ -284,7 +283,6 @@ Add NTLM configuration to your `contents/config/platform.json`:
     "enabled": true,
     "domain": "EXAMPLE",
     "domainController": "ldaps://dc.example.com:636",
-    "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
     "getGroups": true,
@@ -301,10 +299,9 @@ Add NTLM configuration to your `contents/config/platform.json`:
 | ----------------------- | -------------------------------------------------------------- | -------- | ------- |
 | `enabled`               | Enable NTLM authentication                                     | Yes      | `false` |
 | `domain`                | Windows domain name                                            | No       | -       |
-| `domainController`          | Domain controller URL (e.g., `ldaps://dc.example.com:636`)     | No       | -       |
+| `domainController`          | URL of the domain controller that checks the sign-in (e.g., `ldaps://dc.example.com:636`). **Without it, every NTLM sign-in is accepted without checking the password.** | Yes      | -       |
 | `domainControllerUser`      | LDAP service account username for group lookup (optional)       | No       | -       |
 | `domainControllerPassword`  | LDAP service account password for group lookup (optional)       | No       | -       |
-| `type`                      | Authentication type (`ntlm` or `negotiate`)                     | No       | `ntlm`  |
 | `debug`                 | Enable debug logging                                           | No       | `false` |
 | `getUserInfo`           | Retrieve user information                                      | No       | `true`  |
 | `getGroups`             | Retrieve user groups                                           | No       | `true`  |
@@ -312,6 +309,23 @@ Add NTLM configuration to your `contents/config/platform.json`:
 | `sessionTimeoutMinutes` | JWT token timeout                                              | No       | `480`   |
 | `generateJwtToken`      | Generate JWT for API access                                    | No       | `true`  |
 | `ldapGroupLookupProvider` | Name of an LDAP provider to use for group lookup (see below) | No       | -       |
+
+### How the Sign-In Is Checked
+
+iHub does not check the NTLM response itself. It passes the browser's NTLM messages to the domain controller in `domainController` as an LDAP bind, and the domain controller decides. Every NTLM variant the domain controller accepts works, including NTLMv2-only domains. There is no NTLM version after NTLMv2.
+
+Because the sign-in is relayed over LDAP, the domain controller's LDAP hardening applies to it:
+
+- **LDAP signing required** (the default for new Windows Server 2025 domains): use `ldaps://`. An encrypted connection meets the signing requirement; iHub cannot sign a relayed bind itself.
+- **LDAP channel binding** (`LdapEnforceChannelBinding`): with `2` ("Always"), a relayed sign-in over `ldaps://` is refused, because the browser's NTLM message cannot carry the binding for iHub's connection to the domain controller. With `1` ("When supported", the default for new Windows Server 2025 domains), it is refused when the browser sends a channel binding of its own, which a browser reaching iHub over HTTPS can do: that binding names iHub's certificate, not the domain controller's. Use one of the alternatives below.
+- **NTLM restricted or denied in the domain**: NTLM cannot work. Use one of the alternatives below.
+
+### Kerberos
+
+iHub's Windows sign-in is NTLM only; it does not accept Kerberos (`Negotiate`). For Kerberos single sign-on:
+
+- Put a reverse proxy that handles Kerberos in front of iHub (for example Apache with `mod_auth_gssapi`, or IIS) and use [proxy authentication](external-authentication.md) with `ldapGroupLookupProvider` for groups.
+- Or sign in through an identity provider that does Windows single sign-on (ADFS, Keycloak with Kerberos, Entra ID) using OIDC — see the [ADFS guide](ADFS-AUTHENTICATION-GUIDE.md).
 
 ### LDAP Group Lookup for NTLM Users
 
@@ -638,15 +652,24 @@ async function makeAuthenticatedRequest(url) {
 
 1. **Not Working on Linux**
    - NTLM works best on Windows servers
-   - Consider using Kerberos instead
    - Check domain configuration
 
-2. **Connection Refused**
+2. **403 Forbidden after the browser sent its credentials**
+   - The domain controller refused the relayed sign-in (wrong credentials, or its LDAP hardening — see [How the Sign-In Is Checked](#how-the-sign-in-is-checked))
+   - Use `ldaps://` for `domainController`
+   - Channel binding (`LdapEnforceChannelBinding` `1` or `2`) or NTLM restricted at the domain controller: see [Kerberos](#kerberos) for alternatives
+
+3. **500 Internal Server Error during sign-in**
+   - Usually the second NTLM message arrived on a different connection than the first, or the domain controller could not be reached
+   - NTLM authenticates the TCP connection, and iHub remembers the signed-in user per connection. Connect clients directly, or use a proxy that keeps one dedicated backend connection per client connection. Never put NTLM behind a shared or pooled upstream connection: it can hand one user's sign-in to another
+   - Otherwise sign in at the proxy and use [proxy authentication](external-authentication.md)
+
+4. **Connection Refused**
    - Ensure no proxy between client and server
    - Verify domain controller is accessible
    - Check Windows authentication settings
 
-3. **Groups Not Retrieved**
+5. **Groups Not Retrieved**
    - Enable `getGroups` option
    - Check domain permissions
    - Review user account settings
@@ -675,7 +698,7 @@ async function makeAuthenticatedRequest(url) {
 
 ### NTLM Security
 
-- NTLM is considered legacy; prefer Kerberos when possible
+- NTLM is considered legacy and Microsoft plans to disable it by default; prefer Kerberos through a proxy or an identity provider (see [Kerberos](#kerberos))
 - Ensure secure network channels
 - Monitor for NTLM relay attacks
 - Use strong domain policies

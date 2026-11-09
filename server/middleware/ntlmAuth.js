@@ -25,12 +25,78 @@ import { clearOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 let ntlmMiddlewareInstance = null;
 let ntlmMiddlewareConfig = null;
 
+/** One express-ntlm debug argument as log text. */
+function formatNtlmDebugArg(arg) {
+  if (arg instanceof Error) return arg.stack || arg.message;
+  if (typeof arg === 'object') {
+    try {
+      return JSON.stringify(arg);
+    } catch {
+      return String(arg);
+    }
+  }
+  return String(arg);
+}
+
+/**
+ * The `debug` function handed to express-ntlm. express-ntlm calls it for every
+ * internal step (negotiate, bind, parse). When NTLM debug is on, each line goes
+ * to our logger so admins can see exactly where the handshake is failing —
+ * particularly important for diagnosing 403 responses from the AD SASL bind step.
+ * @param {boolean} enabled - Whether NTLM debug logging is on.
+ * @returns {Function}
+ */
+function createNtlmDebugFn(enabled) {
+  if (!enabled) return () => {};
+  return (...args) => {
+    // First arg is the prefix ("[express-ntlm]"); strip it so we don't double-tag.
+    const [, ...rest] = args;
+    const msg = rest.map(formatNtlmDebugArg).join(' ');
+    logger.info('[express-ntlm] ' + msg, { component: 'NtlmAuth' });
+  };
+}
+
+const SUMMARISED_TLS_KEYS = [
+  'rejectUnauthorized',
+  'ca',
+  'cert',
+  'key',
+  'pfx',
+  'servername',
+  'minVersion',
+  'maxVersion'
+];
+
+/**
+ * Summarise tlsOptions so the log makes the *effective* TLS behaviour visible.
+ * Logging only the keys hides whether `rejectUnauthorized` is true or false —
+ * exactly the diagnostic we need for self-signed AD certs. Sensitive material
+ * (ca/cert/key/pfx) is reported as a presence flag only.
+ * @param {Object|undefined} tls - The configured tlsOptions.
+ * @returns {Object|string}
+ */
+function summarizeTlsOptions(tls) {
+  if (!tls) return 'none';
+  return {
+    rejectUnauthorized:
+      typeof tls.rejectUnauthorized === 'boolean' ? tls.rejectUnauthorized : 'default(true)',
+    hasCa: !!tls.ca,
+    hasCert: !!tls.cert,
+    hasKey: !!tls.key,
+    hasPfx: !!tls.pfx,
+    ...(tls.servername && { servername: tls.servername }),
+    ...(tls.minVersion && { minVersion: tls.minVersion }),
+    ...(tls.maxVersion && { maxVersion: tls.maxVersion }),
+    otherKeys: Object.keys(tls).filter(k => !SUMMARISED_TLS_KEYS.includes(k))
+  };
+}
+
 /**
  * Create NTLM middleware with configuration
  * @param {Object} ntlmConfig - NTLM configuration
  * @returns {Function} Express middleware
  */
-function createNtlmMiddleware(ntlmConfig = {}) {
+export function createNtlmMiddleware(ntlmConfig = {}) {
   // Support environment variables for LDAP credentials (more secure).
   // The domain controller password is an optional secret resolved from the
   // central credential store via domainControllerPasswordRef, falling back to
@@ -45,38 +111,11 @@ function createNtlmMiddleware(ntlmConfig = {}) {
   // it on from the single Logging page without a second, NTLM-only switch.
   const ntlmDebug = ntlmConfig.debug === true || authDebugService.isDebugEnabled('ntlm');
 
-  // express-ntlm calls this for every internal step (negotiate, bind, parse).
-  // When NTLM debug is on, forward each line to our logger so admins can
-  // see exactly where the handshake is failing — particularly important for
-  // diagnosing 403 responses from the AD SASL bind step.
-  const debugFn = ntlmDebug
-    ? (...args) => {
-        // First arg is the prefix ("[express-ntlm]"); strip it so we don't double-tag.
-        const [, ...rest] = args;
-        const msg = rest
-          .map(a => {
-            if (a instanceof Error) return a.stack || a.message;
-            if (typeof a === 'object') {
-              try {
-                return JSON.stringify(a);
-              } catch {
-                return String(a);
-              }
-            }
-            return String(a);
-          })
-          .join(' ');
-        logger.info('[express-ntlm] ' + msg, { component: 'NtlmAuth' });
-      }
-    : () => {};
-
   const options = {
     domain: ntlmConfig.domain,
     domaincontroller: ntlmConfig.domainController,
     // Optional: specify which fields to return
     getUserInfo: ntlmConfig.getUserInfo !== false, // Default true
-    // Optional: specify authentication type
-    type: ntlmConfig.type || 'ntlm', // 'ntlm' or 'negotiate'
     // Optional: specify if we should get user groups
     getGroups: ntlmConfig.getGroups !== false, // Default true
     // LDAP bind credentials (required for group queries)
@@ -85,7 +124,7 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     // TLS options for ldaps:// connections with self-signed/internal CA certs
     ...(ntlmConfig.tlsOptions && { tlsOptions: ntlmConfig.tlsOptions }),
     // Pipe express-ntlm's internal debug output through our logger
-    debug: debugFn,
+    debug: createNtlmDebugFn(ntlmDebug),
     // Wrap the default response handlers so we see exactly which path fired and
     // what the request looked like when express-ntlm gave up. The 403 path is
     // the most useful: it means the AD SASL bind with the user's NTLM Type 3
@@ -121,57 +160,24 @@ function createNtlmMiddleware(ntlmConfig = {}) {
       response.sendStatus(400);
     },
     unauthorized: (request, response /* , next */) => {
-      // Send the NTLM/Negotiate challenge. Header scheme follows the configured
-      // `type` so Negotiate deployments advertise correctly to the browser
-      // (express-ntlm 2.7 itself hardcodes NTLM, but matching the config is the
-      // forward-compatible behaviour). Logged at debug to avoid noise — this
-      // fires on every initial request before the handshake completes.
-      const scheme = ntlmConfig.type === 'negotiate' ? 'Negotiate' : 'NTLM';
+      // Always challenge with NTLM, never Negotiate. express-ntlm only parses
+      // `Authorization: NTLM …` and answers anything else with 400, and it
+      // cannot verify a Kerberos ticket: it relays the NTLM messages to the
+      // domain controller's LDAP port. Advertising Negotiate makes a browser
+      // send Kerberos (or SPNEGO-wrapped NTLM), which then fails on every
+      // request. Logged at debug to avoid noise — this fires on every initial
+      // request before the handshake completes.
       logger.debug('NTLM Auth: sending 401 challenge', {
         component: 'NtlmAuth',
-        scheme,
         url: request.originalUrl,
         hadAuthHeader: !!request.headers.authorization
       });
       response.statusCode = 401;
-      response.setHeader('WWW-Authenticate', scheme);
+      response.setHeader('WWW-Authenticate', 'NTLM');
       response.end();
     },
     ...ntlmConfig.options
   };
-
-  // Summarise tlsOptions so the log makes the *effective* TLS behaviour
-  // visible. Logging only the keys hides whether `rejectUnauthorized` is true
-  // or false — exactly the diagnostic we need for self-signed AD certs.
-  // Sensitive material (ca/cert/key/pfx) is reported as a presence flag only.
-  let tlsOptionsSummary = 'none';
-  if (ntlmConfig.tlsOptions) {
-    const tls = ntlmConfig.tlsOptions;
-    tlsOptionsSummary = {
-      rejectUnauthorized:
-        typeof tls.rejectUnauthorized === 'boolean' ? tls.rejectUnauthorized : 'default(true)',
-      hasCa: !!tls.ca,
-      hasCert: !!tls.cert,
-      hasKey: !!tls.key,
-      hasPfx: !!tls.pfx,
-      ...(tls.servername && { servername: tls.servername }),
-      ...(tls.minVersion && { minVersion: tls.minVersion }),
-      ...(tls.maxVersion && { maxVersion: tls.maxVersion }),
-      otherKeys: Object.keys(tls).filter(
-        k =>
-          ![
-            'rejectUnauthorized',
-            'ca',
-            'cert',
-            'key',
-            'pfx',
-            'servername',
-            'minVersion',
-            'maxVersion'
-          ].includes(k)
-      )
-    };
-  }
 
   logger.info('NTLM Auth: configuring NTLM middleware', {
     component: 'NtlmAuth',
@@ -181,8 +187,7 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     ldapBindUserConfigured: !!options.domaincontrolleruser,
     ldapBindPasswordConfigured: !!options.domaincontrollerpassword,
     debugMode: ntlmDebug,
-    challengeScheme: ntlmConfig.type === 'negotiate' ? 'Negotiate' : 'NTLM',
-    tlsOptions: tlsOptionsSummary
+    tlsOptions: summarizeTlsOptions(ntlmConfig.tlsOptions)
   });
 
   // Warn if getGroups is enabled but no domain controller is configured

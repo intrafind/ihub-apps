@@ -83,7 +83,6 @@ Add to `contents/config/platform.json`:
     "enabled": true,
     "domain": "EXAMPLE",
     "domainController": "ldaps://dc.example.com:636",
-    "type": "ntlm",
     "debug": false,
     "getUserInfo": true,
     "getGroups": true,

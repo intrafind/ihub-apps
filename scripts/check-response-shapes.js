@@ -128,12 +128,14 @@ export const NORMALIZERS = {
     if (!merged || typeof merged !== 'object') return shape;
     return { ...shape, projects: { '<id>': { ...merged, tokens: 'null|number' } } };
   },
-  // `import` is the transient state of an item that is still being ingested.
+  // `import` is the transient state of an item that is still being ingested, and
+  // `text` is null until the ingest job has stored the item's text, an object after.
   '/api/admin/projects/:id': shape => {
     if (!Array.isArray(shape?.items) || !shape.items[0] || typeof shape.items[0] !== 'object') {
       return shape;
     }
     const { import: _import, 'import?': _optional, ...element } = shape.items[0];
+    if (['null', 'object', 'null|object'].includes(element.text)) element.text = 'null|object';
     return { ...shape, items: [element] };
   }
 };

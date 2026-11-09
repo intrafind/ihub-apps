@@ -111,3 +111,15 @@ test('normalizers: the transient import state of a project item is not part of t
   });
   assert.deepEqual(normalize({ name: 'string' }), { name: 'string' });
 });
+
+test('normalizers: a project item reads the same before and after its text is stored', () => {
+  const normalize = NORMALIZERS['/api/admin/projects/:id'];
+  const expected = { items: [{ id: 'string', text: 'null|object' }] };
+  assert.deepEqual(normalize({ items: [{ id: 'string', text: 'null' }] }), expected);
+  assert.deepEqual(normalize({ items: [{ id: 'string', text: 'object' }] }), expected);
+  assert.deepEqual(normalize({ items: [{ id: 'string' }] }), { items: [{ id: 'string' }] });
+  // Any other type is a real change and must stay visible to the check.
+  assert.deepEqual(normalize({ items: [{ id: 'string', text: 'number' }] }), {
+    items: [{ id: 'string', text: 'number' }]
+  });
+});

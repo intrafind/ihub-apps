@@ -729,8 +729,7 @@ export default function registerAuthRoutes(app) {
         },
         ntlm: {
           enabled: ntlmAuthConfig.enabled ?? false,
-          domain: ntlmAuthConfig.domain,
-          type: ntlmAuthConfig.type || 'ntlm'
+          domain: ntlmAuthConfig.domain
         }
       },
       // The storage providers (no secrets): every installation of Office 365,

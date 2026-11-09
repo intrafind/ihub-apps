@@ -5,7 +5,7 @@ import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
 
 /**
- * NtlmAuthSection - Windows Integrated Authentication (NTLM/Negotiate) settings,
+ * NtlmAuthSection - Windows Integrated Authentication (NTLM) settings,
  * including the optional LDAP-backed group lookup.
  */
 function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
@@ -85,22 +85,6 @@ function NtlmAuthSection({ config, onChange, t, availableGroups = [] }) {
               'Select a stored credential profile holding the domain controller password.'
             )}
           />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Authentication Type
-          </label>
-          <select
-            value={config.ntlmAuth?.type || 'ntlm'}
-            onChange={e => updateNtlmAuth('type', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-          >
-            <option value="ntlm">NTLM</option>
-            <option value="negotiate">Negotiate</option>
-          </select>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Protocol to use for Windows authentication
-          </p>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
