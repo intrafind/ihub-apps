@@ -10,7 +10,8 @@ export const DEFAULT_MAX_LINES = { multiline: 12, singleline: 5 };
  * An app's `inputMode.rows` are for the empty chat, where a user often starts
  * with a long request. Once the conversation has started (`compact`), the
  * composer is one line that grows as the user types. A host cap (`maxRows`,
- * the Outlook task pane's 3) wins over the app's rows.
+ * the Outlook task pane's 3) wins over the app's rows; without one, rows above
+ * the default cap raise it for the empty chat.
  *
  * @param {Object} options
  * @param {boolean} options.multiline - The app's input is multi-line.
@@ -20,8 +21,13 @@ export const DEFAULT_MAX_LINES = { multiline: 12, singleline: 5 };
  * @returns {{ minLines: number, maxLines: number }}
  */
 export function composerLineLimits({ multiline, rows, compact = false, maxRows = null }) {
-  const defaultMaxLines = multiline ? DEFAULT_MAX_LINES.multiline : DEFAULT_MAX_LINES.singleline;
-  const maxLines = typeof maxRows === 'number' && maxRows > 0 ? maxRows : defaultMaxLines;
   const configuredLines = multiline ? Math.max(1, Number(rows) || 2) : 1;
-  return { minLines: Math.min(compact ? 1 : configuredLines, maxLines), maxLines };
+  const startLines = compact ? 1 : configuredLines;
+  if (typeof maxRows === 'number' && maxRows > 0) {
+    return { minLines: Math.min(startLines, maxRows), maxLines: maxRows };
+  }
+  // Without a host cap, an app may ask for more rows (up to 20) than the
+  // composer grows to: the empty chat shows them all.
+  const defaultMaxLines = multiline ? DEFAULT_MAX_LINES.multiline : DEFAULT_MAX_LINES.singleline;
+  return { minLines: startLines, maxLines: Math.max(defaultMaxLines, startLines) };
 }

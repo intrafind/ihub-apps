@@ -114,6 +114,22 @@ describe('composerLineLimits', () => {
     });
   });
 
+  test('an app may ask for more rows than the composer grows to', () => {
+    // The schema and the admin field allow up to 20.
+    expect(composerLineLimits({ multiline: true, rows: 16 })).toEqual({
+      minLines: 16,
+      maxLines: 16
+    });
+    expect(composerLineLimits({ multiline: true, rows: 16, compact: true })).toEqual({
+      minLines: 1,
+      maxLines: DEFAULT_MAX_LINES.multiline
+    });
+    expect(composerLineLimits({ multiline: true, rows: 16, maxRows: 3 })).toEqual({
+      minLines: 3,
+      maxLines: 3
+    });
+  });
+
   test('a single-line app is one line, whatever its rows', () => {
     expect(composerLineLimits({ multiline: false, rows: 8 })).toEqual({
       minLines: 1,
