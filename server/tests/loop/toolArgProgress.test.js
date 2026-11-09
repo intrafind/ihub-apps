@@ -37,7 +37,14 @@ const creator = {
   isSystemSkillTool: true,
   outputKind: 'webArtifact'
 };
-const createFile = { id: 'create_file', name: 'create_file', isSystemSkillTool: true };
+const createFile = {
+  id: 'create_file',
+  name: 'create_file',
+  isSystemSkillTool: true,
+  outputKind: 'file'
+};
+// A system-skill tool that makes nothing: its arguments are not a deliverable.
+const previewPdf = { id: 'preview_pdf', name: 'preview_pdf', isSystemSkillTool: true };
 const mcpTool = {
   id: 'mcp_wiki__create_page',
   name: 'mcp_wiki__create_page',
@@ -47,6 +54,7 @@ const search = { id: 'webSearch', name: 'webSearch' };
 const catalogue = [
   creator,
   createFile,
+  previewPdf,
   mcpTool,
   search,
   { id: 'activate_skill', name: 'Activate Skill', isInternalTool: true },
@@ -115,6 +123,18 @@ test('any other tool is announced only once its arguments are still streaming af
   assert.equal(frame.data.integration, 'Wiki');
   assert.equal(frame.data.argBytes, 2000);
   assert.equal(frame.data.elapsedMs, ANNOUNCE_AFTER_MS, 'counted from the first fragment');
+  assert.equal('outputKind' in frame.data, false);
+});
+
+test('a system-skill tool that makes nothing waits for the 1.5 s rule like any other tool', () => {
+  const now = clock();
+  const tracker = createToolArgTracker({ now });
+  assert.deepEqual(tracker.observe([entry(0, 'p1', 'preview_pdf', 10)], resolveTool), []);
+  assert.equal(tracker.hasOpenCalls(), false, 'not announced at once');
+  now.advance(ANNOUNCE_AFTER_MS);
+  const [frame] = tracker.observe([entry(0, 'p1', 'preview_pdf', 3000)], resolveTool);
+  assert.equal(frame.phase, 'args');
+  assert.equal(frame.toolId, 'preview_pdf');
   assert.equal('outputKind' in frame.data, false);
 });
 

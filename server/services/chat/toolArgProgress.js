@@ -26,7 +26,7 @@
  * @module services/chat/toolArgProgress
  */
 import { repairToolArguments } from '../loop/toolArgs.js';
-import { toolDisplayOf } from '../../utils/toolDisplay.js';
+import { outputKindOf, toolDisplayOf } from '../../utils/toolDisplay.js';
 
 /** Every timing of the feature, in one place so product can tune it. */
 export const TOOL_ARG_PROGRESS = Object.freeze({
@@ -178,9 +178,11 @@ function classifyCall(call, resolveTool) {
   }
   call.toolDef = toolDef;
   call.toolId = String(toolDef.id);
-  // A system-skill tool's arguments are the deliverable: announce at once. Any
-  // other tool only when its arguments keep streaming.
-  call.stage = toolDef.isSystemSkillTool === true ? 'immediate' : 'deferred';
+  // The arguments of a creator (a tool that declares what it makes, see
+  // `outputKindOf`) are the deliverable: announce at once. Any other tool, a
+  // system-skill tool that makes nothing (`preview_pdf`) included, only when its
+  // arguments keep streaming.
+  call.stage = outputKindOf(toolDef) ? 'immediate' : 'deferred';
 }
 
 /** Whether a call that is on screen has news worth a frame (throttled). */

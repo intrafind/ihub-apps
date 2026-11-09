@@ -87,10 +87,12 @@ not send them. Logic and every timing: `server/services/chat/toolArgProgress.js`
 - **Which calls.** The call name must resolve to a tool the loop offered that the
   server runs and the chat shows: never an unknown or hallucinated name,
   `activate_skill` and the other loop tools, `ask_user`, a passthrough (workflow)
-  tool or a caller-executed tool. A system-skill tool (the document and artifact
-  creators, `isSystemSkillTool`) is announced as soon as its name and call id are
-  known; any other tool only once its arguments are still streaming 1.5 s after
-  its name was seen, so a fast search never flickers.
+  tool or a caller-executed tool. A creator (a built-in tool that declares what
+  it makes, `outputKind`: the document, file, archive and web-artifact tools) is
+  announced as soon as its name and call id are known; any other tool, a system
+  skill tool that makes nothing such as `preview_pdf` included, only once its
+  arguments are still streaming 1.5 s after its name was seen, so a fast search
+  never flickers.
 - **Call id.** `callId` is the id `tool/started` and `tool/completed` will carry.
   Nothing is sent before the provider has sent the id.
 - **First frame** (the announcement): `name` (the name the model called),

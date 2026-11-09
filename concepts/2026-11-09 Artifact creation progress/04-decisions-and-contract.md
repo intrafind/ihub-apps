@@ -65,9 +65,11 @@ Rules:
 3. **Which calls are announced** (server-side, no tool id list in the feature code): the call must
    resolve to a known, visible, server-executed tool (not `activate_skill`, `ask_user`, passthrough,
    clarification or caller-executed tools, never an unknown or hallucinated name). It is announced
-   **immediately** when the tool definition has `isSystemSkillTool` (the document and artifact
-   creators), and **after 1.5 s** of still-streaming arguments for any other such tool (MCP tools, so a
-   fast search never flickers).
+   **immediately** when the tool definition declares an `outputKind` (the seven document, file,
+   archive and web-artifact creators), and **after 1.5 s** of still-streaming arguments for any other
+   such tool (MCP tools, and system-skill tools that make nothing such as `preview_pdf`, so a fast
+   search never flickers). Changed after implementation: the first draft said `isSystemSkillTool`,
+   which also matched `preview_pdf`.
 4. **Throttle.** At most one `args` frame per second per call, at least one every 2 s while fragments
    flow, absolute values only, a final `args.ended` frame always. At most 130 frames and 40 KB per call
    over 120 s (AC-15).
