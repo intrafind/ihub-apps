@@ -147,7 +147,7 @@ router.post('/', authRequired, async (req, res) => {
 
 /**
  * @swagger
- * /api/integrations/api-keys/{keyId}/rotate:
+ * /api/integrations/api-keys/{keyId}/_rotate:
  *   post:
  *     summary: Rotate a personal API key
  *     description: |
@@ -167,7 +167,7 @@ router.post('/', authRequired, async (req, res) => {
  *       404:
  *         description: No such key for this user
  */
-router.post('/:keyId/rotate', authRequired, async (req, res) => {
+router.post('/:keyId/_rotate', authRequired, async (req, res) => {
   const context = requireKeyManager(req);
 
   // Checked after the feature gate so a disabled feature still answers 404 for

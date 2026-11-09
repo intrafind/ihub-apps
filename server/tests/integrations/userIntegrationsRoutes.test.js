@@ -5,7 +5,7 @@
  * The integrations of the signed-in user and the one connect flow (#2917):
  *
  *   GET  /api/integrations, GET /api/integrations/:id
- *   POST /api/integrations/:id/connect | reconnect | disconnect
+ *   POST /api/integrations/:id/_connect | reconnect | disconnect
  *
  * - the listing never shows an installation the user's groups do not allow,
  *   and says how each one runs (personal, service account, shared key, none);
@@ -202,7 +202,7 @@ const post = (url, user = 'member', body = {}) =>
 
 /** Connect `member` to Jira through the real callback (the alias handler). */
 async function connectJira(user = 'member') {
-  const started = await post('/api/integrations/jira/connect', user, { returnUrl: '/apps/a/c/1' });
+  const started = await post('/api/integrations/jira/_connect', user, { returnUrl: '/apps/a/c/1' });
   assert.equal(started.status, 200, JSON.stringify(started.body));
   const state = new URL(started.body.url).searchParams.get('state');
   const outcome = await connections.completeConnect({
@@ -301,9 +301,9 @@ describe('GET /api/integrations', () => {
   });
 });
 
-describe('POST /api/integrations/:id/connect', () => {
+describe('POST /api/integrations/:id/_connect', () => {
   it('answers the authorization URL with PKCE and an opaque, server-side state', async () => {
-    const res = await post('/api/integrations/jira/connect', 'member', {
+    const res = await post('/api/integrations/jira/_connect', 'member', {
       returnUrl: '/apps/a/c/1'
     });
     assert.equal(res.status, 200);
@@ -315,18 +315,18 @@ describe('POST /api/integrations/:id/connect', () => {
   });
 
   it('checks the id against the registry and the groups', async () => {
-    assert.equal((await post('/api/integrations/nope/connect')).status, 404);
-    assert.equal((await post('/api/integrations/..%2Fetc/connect')).status, 404);
-    const notGranted = await post('/api/integrations/nc-legal/connect');
+    assert.equal((await post('/api/integrations/nope/_connect')).status, 404);
+    assert.equal((await post('/api/integrations/..%2Fetc/_connect')).status, 404);
+    const notGranted = await post('/api/integrations/nc-legal/_connect');
     assert.equal(notGranted.status, 404);
     assert.equal(notGranted.body.code, 'INTEGRATION_NOT_FOUND');
-    assert.equal((await post('/api/integrations/jira/connect', 'outsider')).status, 404);
+    assert.equal((await post('/api/integrations/jira/_connect', 'outsider')).status, 404);
     // Admins configure and test integrations: they pass the group check
     // (Jira); an installation's own rule (a storage provider's grant) still holds.
-    assert.equal((await post('/api/integrations/jira/connect', 'admin')).status, 200);
-    assert.equal((await post('/api/integrations/nc-legal/connect', 'admin')).status, 404);
+    assert.equal((await post('/api/integrations/jira/_connect', 'admin')).status, 200);
+    assert.equal((await post('/api/integrations/nc-legal/_connect', 'admin')).status, 404);
     // An integration that takes no personal connection.
-    const shared = await post('/api/integrations/brave/connect');
+    const shared = await post('/api/integrations/brave/_connect');
     assert.equal(shared.status, 400);
     assert.equal(shared.body.code, 'NOT_CONNECTABLE');
   });
@@ -339,30 +339,30 @@ describe('POST /api/integrations/:id/connect', () => {
       'javascript://127.0.0.1/%0Aalert(1)',
       'data:text/html,x'
     ]) {
-      const res = await post('/api/integrations/jira/connect', 'member', { returnUrl: evil });
+      const res = await post('/api/integrations/jira/_connect', 'member', { returnUrl: evil });
       assert.equal(res.status, 400, evil);
       assert.equal(res.body.code, 'INVALID_RETURN_URL');
       assert.equal(res.body.url, undefined);
     }
-    const sameOrigin = await post('/api/integrations/jira/connect', 'member', {
+    const sameOrigin = await post('/api/integrations/jira/_connect', 'member', {
       returnUrl: 'http://127.0.0.1/apps/a/c/1'
     });
     assert.equal(sameOrigin.status, 200);
   });
 
   it('refuses anonymous, delegated and non-JSON requests (CSRF)', async () => {
-    assert.equal((await request(app).post('/api/integrations/jira/connect').send({})).status, 401);
-    assert.equal((await post('/api/integrations/jira/connect', 'client')).status, 403);
+    assert.equal((await request(app).post('/api/integrations/jira/_connect').send({})).status, 401);
+    assert.equal((await post('/api/integrations/jira/_connect', 'client')).status, 403);
     // A personal API key is a bearer token too, even with the user's own groups.
-    const keyConnect = await post('/api/integrations/jira/connect', 'memberKey');
+    const keyConnect = await post('/api/integrations/jira/_connect', 'memberKey');
     assert.equal(keyConnect.status, 403);
     assert.equal(keyConnect.body.code, 'INTERACTIVE_SESSION_REQUIRED');
-    assert.equal((await post('/api/integrations/jira/reconnect', 'memberKey')).status, 403);
-    assert.equal((await post('/api/integrations/jira/disconnect', 'memberKey')).status, 403);
+    assert.equal((await post('/api/integrations/jira/_reconnect', 'memberKey')).status, 403);
+    assert.equal((await post('/api/integrations/jira/_disconnect', 'memberKey')).status, 403);
     // An admin's personal key gets neither the connect nor the admin bypass.
-    assert.equal((await post('/api/integrations/jira/connect', 'adminKey')).status, 403);
+    assert.equal((await post('/api/integrations/jira/_connect', 'adminKey')).status, 403);
     const form = await request(app)
-      .post('/api/integrations/jira/connect')
+      .post('/api/integrations/jira/_connect')
       .set('x-test-user', 'member')
       .type('form')
       .send('returnUrl=/x');
@@ -370,7 +370,7 @@ describe('POST /api/integrations/:id/connect', () => {
   });
 
   it('binds the state to the user: another user cannot complete it', async () => {
-    const started = await post('/api/integrations/jira/connect', 'member', {
+    const started = await post('/api/integrations/jira/_connect', 'member', {
       returnUrl: '/apps/a/c/1'
     });
     const state = new URL(started.body.url).searchParams.get('state');
@@ -387,14 +387,14 @@ describe('POST /api/integrations/:id/connect', () => {
   });
 });
 
-describe('POST /api/integrations/:id/reconnect and /disconnect', () => {
+describe('POST /api/integrations/:id/_reconnect and /_disconnect', () => {
   it('reconnect asks for the granted plus the new scopes and keeps the connection id', async () => {
     await connectJira();
     const id = connectionIdFor('jira', { type: 'user', id: 'member' });
     const before = await connections.getConnection(id);
     assert.deepEqual(before.scopesGranted, ['read:jira-work', 'offline_access']);
 
-    const res = await post('/api/integrations/jira/reconnect', 'member', {
+    const res = await post('/api/integrations/jira/_reconnect', 'member', {
       returnUrl: '/apps/a/c/1',
       scopes: ['write:jira-work', 'bad scope "x"']
     });
@@ -421,16 +421,16 @@ describe('POST /api/integrations/:id/reconnect and /disconnect', () => {
   it("disconnect removes only the caller's tokens", async () => {
     await connectJira('member');
     await connectJira('other');
-    const res = await post('/api/integrations/jira/disconnect', 'member');
+    const res = await post('/api/integrations/jira/_disconnect', 'member');
     assert.equal(res.status, 200);
-    assert.equal(res.body.success, true);
+    assert.equal(res.body.success, undefined);
     assert.equal(res.body.removed, true);
     const member = await request(app).get('/api/integrations/jira').set('x-test-user', 'member');
     assert.equal(member.body.integration.connection.status, 'not_connected');
     const other = await request(app).get('/api/integrations/jira').set('x-test-user', 'other');
     assert.equal(other.body.integration.connection.status, 'connected');
-    assert.equal((await post('/api/integrations/nope/disconnect')).status, 404);
-    assert.equal((await post('/api/integrations/brave/disconnect')).status, 404);
+    assert.equal((await post('/api/integrations/nope/_disconnect')).status, 404);
+    assert.equal((await post('/api/integrations/brave/_disconnect')).status, 404);
   });
 
   it('parses requested scopes defensively', () => {
@@ -462,7 +462,7 @@ describe('the "connect first" result of the adapters', () => {
           error: INTEGRATION_AUTH_REQUIRED,
           integration: 'jira',
           reason: 'not_connected',
-          connectUrl: '/api/integrations/jira/connect'
+          connectUrl: '/api/integrations/jira/_connect'
         }
       );
       assert.equal(called, false, 'nothing ran at the vendor');
@@ -480,14 +480,14 @@ describe('the "connect first" result of the adapters', () => {
     const expired = await connections.resolve({ type: 'user', id: 'member' }, 'jira');
     assert.equal(expired.ok, false);
     assert.equal(expired.error.reason, 'expired');
-    assert.equal(expired.error.connectUrl, '/api/integrations/jira/connect');
+    assert.equal(expired.error.connectUrl, '/api/integrations/jira/_connect');
 
     await connections.updateConnection(id, { status: 'active' });
     const scoped = await connections.resolve({ type: 'user', id: 'member' }, 'jira', {
       requiredScopes: ['write:jira-work']
     });
     assert.equal(scoped.error.reason, 'insufficient_scope');
-    assert.equal(scoped.error.connectUrl, '/api/integrations/jira/reconnect');
+    assert.equal(scoped.error.connectUrl, '/api/integrations/jira/_reconnect');
     assert.ok(scoped.error.scopes.includes('write:jira-work'));
     const result = connections.authRequiredResult(scoped.error);
     assert.equal(result.error, INTEGRATION_AUTH_REQUIRED);
@@ -500,7 +500,7 @@ describe('the "connect first" result of the adapters', () => {
       integration: 'okta',
       reason: 'not_connected',
       message: 'm',
-      connectUrl: '/api/integrations/okta/connect'
+      connectUrl: '/api/integrations/okta/_connect'
     });
     const error = new IntegrationAuthRequiredError({
       integration: 'x',

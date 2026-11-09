@@ -975,7 +975,7 @@ export async function cancelRun(user, taskId, runId) {
     await userAbortCause('task_run_cancelled', user, {
       mode: task.owner?.identityMode,
       ownerId: task.ownerId,
-      via: 'POST /api/scheduled-tasks/:taskId/runs/:runId/cancel',
+      via: 'POST /api/scheduled-tasks/:taskId/runs/:runId/_cancel',
       related: { taskId, runId }
     })
   );

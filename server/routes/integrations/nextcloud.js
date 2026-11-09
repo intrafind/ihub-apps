@@ -47,7 +47,7 @@ const nextcloudApiLimiter = createCloudStorageLimiter();
 
 // The OAuth callback registered in the vendor app: an alias of the one integration
 // callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
-// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
+// are the one connect flow (POST /api/integrations/:id/_connect|_disconnect).
 // The sign-in runs through the connection service (PKCE, server-side state).
 registerIntegrationCallbackAlias(router, {
   providerKey: 'nextcloud',

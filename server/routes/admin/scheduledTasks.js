@@ -9,7 +9,7 @@
  *   PATCH  /api/admin/scheduled-tasks/:taskId         { status: paused|active|disabled, reason? }
  *   DELETE /api/admin/scheduled-tasks/:taskId        ?deleteChats=1
  *   GET    /api/admin/scheduled-tasks/:taskId/runs    run history (cursor-paged)
- *   POST   /api/admin/scheduled-tasks/:taskId/runs/delete  delete `{ runIds }` or `{ all: true }` finished runs
+ *   DELETE /api/admin/scheduled-tasks/:taskId/runs        delete all finished runs of the task
  *   PUT    /api/admin/scheduled-tasks/settings        update `platform.scheduledTasks`
  *
  * An admin can stop any task but never runs one or edits what it does: a run
@@ -36,7 +36,7 @@ import {
 import * as tasks from '../../services/scheduler/tasks/taskService.js';
 import { getScheduler } from '../../services/scheduler/SchedulerService.js';
 import { getScheduledTaskRepository } from '../../services/scheduler/tasks/ScheduledTaskRepository.js';
-import { requestLanguage } from '../scheduledTasks.js';
+import { requestLanguage, runDeletionFromQuery } from '../scheduledTasks.js';
 
 const int = (min, max) => z.number().int().min(min).max(max);
 
@@ -346,14 +346,9 @@ export default function registerAdminScheduledTaskRoutes(app) {
     );
   });
 
-  app.post(`${base}/:taskId/runs/delete`, adminAuth, async (req, res) => {
+  app.delete(`${base}/:taskId/runs`, adminAuth, async (req, res) => {
     assertValidId(req.params.taskId, 'task');
-    const body = req.body || {};
-    const result = await tasks.adminDeleteRuns(req.params.taskId, {
-      runIds: body.runIds,
-      all: body.all === true,
-      deleteChats: body.deleteChats !== false
-    });
+    const result = await tasks.adminDeleteRuns(req.params.taskId, runDeletionFromQuery(req.query));
     logAudit({
       req,
       action: 'delete',

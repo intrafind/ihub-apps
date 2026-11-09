@@ -170,7 +170,7 @@ Download ticket attachments.
 ### OAuth 2.0 Flow Details
 
 1. **Initial Request**: User attempts to use a Jira tool without a connection (the app binds the `jira` installation)
-2. **Connect card**: the tool answers `INTEGRATION_AUTH_REQUIRED` before calling Atlassian, and the chat shows the one Connect card of every integration: why iHub needs to act as the user in Jira, the permissions (the enabled actions as read / write), that the sign-in is at `auth.atlassian.com`, **Connect** and **Not now** (also under **Settings → Integrations**). Connect calls `POST /api/integrations/jira/connect` with the current chat as return URL.
+2. **Connect card**: the tool answers `INTEGRATION_AUTH_REQUIRED` before calling Atlassian, and the chat shows the one Connect card of every integration: why iHub needs to act as the user in Jira, the permissions (the enabled actions as read / write), that the sign-in is at `auth.atlassian.com`, **Connect** and **Not now** (also under **Settings → Integrations**). Connect calls `POST /api/integrations/jira/_connect` with the current chat as return URL.
 3. **OAuth Initiation**: 
    - Generates PKCE code verifier and challenge for enhanced security
    - Redirects to: `https://auth.atlassian.com/authorize`
@@ -201,7 +201,7 @@ The JIRA connector provides comprehensive error handling:
 
 - **INTEGRATION_AUTH_REQUIRED** (`integration: "jira"`, `reason: not_connected | expired`): the
   user needs to connect (or reconnect) their JIRA account; the result carries the `connectUrl`
-  (`/api/integrations/jira/connect`) and is returned before any call to Atlassian.
+  (`/api/integrations/jira/_connect`) and is returned before any call to Atlassian.
   It replaces the former `JIRA_AUTH_REQUIRED`. A scheduled run whose owner has no Jira
   connection fails with the same code when it calls a Jira tool.
 - **Authentication Expired**: Automatic token refresh or re-authentication prompt; the tokens are
@@ -246,7 +246,7 @@ server/
 ├── tools/jira.js                           # Tool wrapper
 ├── routes/integrations/jira.js             # The attachment proxy, the connection test, the /callback alias
 ├── routes/integrations/oauthIntegrationFactory.js # The vendor-registered callback aliases
-├── routes/integrations/userIntegrations.js # GET /api/integrations, POST /api/integrations/:id/connect|reconnect|disconnect
+├── routes/integrations/userIntegrations.js # GET /api/integrations, POST /api/integrations/:id/_connect|_reconnect|_disconnect
 ├── routes/integrations/oauthCallback.js    # The one integration OAuth callback
 └── services/integrations/auth/             # Shared OAuth client and connection service
 

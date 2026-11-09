@@ -181,10 +181,10 @@ router.get('/jobs/:jobId/download', authRequired, downloadLimiter, async (req, r
 });
 
 /**
- * PATCH /jobs/:jobId/cancel
- * Cancel a running job.
+ * POST /jobs/:jobId/_cancel
+ * Cancel a running job. Answers the job as it is now: `{ id, status: 'cancelled' }`.
  */
-router.patch('/jobs/:jobId/cancel', authRequired, async (req, res) => {
+router.post('/jobs/:jobId/_cancel', authRequired, async (req, res) => {
   const found = await findJob(req.params.jobId);
   const job = found?.job;
   if (!job || !canAccessJob(job, req.user)) {
@@ -200,7 +200,7 @@ router.patch('/jobs/:jobId/cancel', authRequired, async (req, res) => {
   if (!outcome) throw new ServiceError('NOT_FOUND', 'Job not found');
   if (outcome.error) throw new ServiceError('BAD_REQUEST', outcome.error);
 
-  res.json({ success: true, status: 'cancelled' });
+  res.json({ id: job.id, status: 'cancelled' });
 });
 
 export function registerJobRoutes(parentRouter) {

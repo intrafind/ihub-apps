@@ -8,7 +8,7 @@
  *   POST   /api/scheduled-tasks                          create
  *   POST   /api/scheduled-tasks/_preview                 validate a schedule, describe it, next runs
  *   GET    /api/scheduled-tasks/_notifications           runs the caller has not seen
- *   POST   /api/scheduled-tasks/_notifications/seen      mark them seen
+ *   POST   /api/scheduled-tasks/_notifications/_mark-seen mark them seen
  *   GET    /api/scheduled-tasks/_apps/:appId/tools       tools a task of this app may use
  *                                                         (`?select=` resolves a chat's tool references)
  *   GET    /api/scheduled-tasks/:taskId                  one task
@@ -18,15 +18,15 @@
  *   POST   /api/scheduled-tasks/:taskId/run              run now
  *   POST   /api/scheduled-tasks/:taskId/pause            pause
  *   POST   /api/scheduled-tasks/:taskId/resume           resume
- *   POST   /api/scheduled-tasks/:taskId/duplicate        copy
+ *   POST   /api/scheduled-tasks/:taskId/_duplicate       copy
  *   GET    /api/scheduled-tasks/:taskId/memory           the notes the task keeps between runs
  *   PUT    /api/scheduled-tasks/:taskId/memory           replace them { content, expectedVersion }
  *   DELETE /api/scheduled-tasks/:taskId/memory           clear them
  *   GET    /api/scheduled-tasks/:taskId/runs             run history, newest first (cursor-paged)
  *   GET    /api/scheduled-tasks/:taskId/runs/:runId      one run
  *   DELETE /api/scheduled-tasks/:taskId/runs/:runId      delete one finished run (and its chat)
- *   POST   /api/scheduled-tasks/:taskId/runs/delete      delete `{ runIds }` or `{ all: true }` finished runs
- *   POST   /api/scheduled-tasks/:taskId/runs/:runId/cancel
+ *   DELETE /api/scheduled-tasks/:taskId/runs             delete all finished runs; one run: DELETE …/runs/:runId
+ *   POST   /api/scheduled-tasks/:taskId/runs/:runId/_cancel
  *   POST   /api/scheduled-tasks/:taskId/runs/:runId/approval   { decision, alwaysAllow }
  *   GET    /api/scheduled-tasks/:taskId/files            files attached to the task (kept until the task is deleted)
  *   POST   /api/scheduled-tasks/:taskId/files            attach a file (multipart `file`, or JSON `text` / `data`)
@@ -127,6 +127,14 @@ export function requestLanguage(req) {
 }
 
 /** The file store for a request; throws a 503 while it is down. */
+/**
+ * `DELETE …/runs` removes every finished run of the task; one run is `DELETE …/runs/:runId`.
+ * Chats of the deleted runs go too unless the caller sends `?deleteChats=0`.
+ */
+export function runDeletionFromQuery(query = {}) {
+  return { all: true, deleteChats: query.deleteChats !== '0' };
+}
+
 function taskFileStore() {
   const store = getChatFileRepository();
   if (!store.isAvailable()) {
@@ -283,7 +291,7 @@ export default function registerScheduledTaskRoutes(app) {
     res.json({ items: await tasks.listNotifications(req.user) });
   });
 
-  app.post(`${base}/_notifications/seen`, ...guard, async (req, res) => {
+  app.post(`${base}/_notifications/_mark-seen`, ...guard, async (req, res) => {
     const runIds = Array.isArray(req.body?.runIds)
       ? req.body.runIds.filter(id => typeof id === 'string').slice(0, 200)
       : undefined;
@@ -352,7 +360,7 @@ export default function registerScheduledTaskRoutes(app) {
     res.json(result);
   });
 
-  app.post(`${base}/:taskId/run`, ...guard, runLimiter, async (req, res) => {
+  app.post(`${base}/:taskId/_run`, ...guard, runLimiter, async (req, res) => {
     assertValidId(req.params.taskId, 'task');
     const run = await tasks.requestRun(req.user, req.params.taskId);
     audit(req, 'execute', req.params.taskId, 'Started a scheduled task run manually');
@@ -363,7 +371,7 @@ export default function registerScheduledTaskRoutes(app) {
     ['pause', 'paused'],
     ['resume', 'active']
   ]) {
-    app.post(`${base}/:taskId/${action}`, ...guard, async (req, res) => {
+    app.post(`${base}/:taskId/_${action}`, ...guard, async (req, res) => {
       assertValidId(req.params.taskId, 'task');
       if (status === 'active') tasks.assertPrincipal(req.user);
       const task = await tasks.setTaskStatus(req.user, req.params.taskId, status);
@@ -372,7 +380,7 @@ export default function registerScheduledTaskRoutes(app) {
     });
   }
 
-  app.post(`${base}/:taskId/duplicate`, ...guard, createLimiter, async (req, res) => {
+  app.post(`${base}/:taskId/_duplicate`, ...guard, createLimiter, async (req, res) => {
     assertValidId(req.params.taskId, 'task');
     const task = await tasks.duplicateTask(req.user, req.params.taskId, {
       language: requestLanguage(req)
@@ -580,13 +588,10 @@ export default function registerScheduledTaskRoutes(app) {
     res.json(result);
   });
 
-  app.post(`${base}/:taskId/runs/delete`, ...guard, async (req, res) => {
+  app.delete(`${base}/:taskId/runs`, ...guard, async (req, res) => {
     assertValidId(req.params.taskId, 'task');
-    const body = req.body || {};
     const result = await tasks.deleteRuns(req.user, req.params.taskId, {
-      runIds: body.runIds,
-      all: body.all === true,
-      deleteChats: body.deleteChats !== false
+      ...runDeletionFromQuery(req.query)
     });
     audit(
       req,
@@ -597,7 +602,7 @@ export default function registerScheduledTaskRoutes(app) {
     res.json(result);
   });
 
-  app.post(`${base}/:taskId/runs/:runId/cancel`, ...guard, async (req, res) => {
+  app.post(`${base}/:taskId/runs/:runId/_cancel`, ...guard, async (req, res) => {
     assertValidId(req.params.taskId, 'task');
     assertValidId(req.params.runId, 'run');
     const run = await tasks.cancelRun(req.user, req.params.taskId, req.params.runId);

@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-// The one connect flow (`POST /api/integrations/:id/connect|disconnect`,
+// The one connect flow (`POST /api/integrations/:id/_connect|_disconnect`,
 // routes/integrations/userIntegrations.js) and the vendor-registered callback
 // aliases of the four providers (routes/integrations/oauthIntegrationFactory.js),
 // exercised through the real routers, and the security parity of their
@@ -180,8 +180,8 @@ const member = id => ({ id, groups: ['users'], permissions: { integrations: ['*'
 
 const s256 = verifier => crypto.createHash('sha256').update(verifier).digest('base64url');
 
-const connectHandler = lastHandler(userIntegrationsRouter, '/:id/connect', 'post');
-const disconnectHandler = lastHandler(userIntegrationsRouter, '/:id/disconnect', 'post');
+const connectHandler = lastHandler(userIntegrationsRouter, '/:id/_connect', 'post');
+const disconnectHandler = lastHandler(userIntegrationsRouter, '/:id/_disconnect', 'post');
 
 for (const p of providers) {
   console.log(`\n🧪 ${p.key}`);
@@ -209,11 +209,11 @@ for (const p of providers) {
     check(`${p.key} ${path} is rate limited`, routeFor(router, path)?.stack.length === 3);
   }
   check(
-    'POST /api/integrations/:id/connect is rate limited',
-    routeFor(userIntegrationsRouter, '/:id/connect', 'post').stack.length === 4
+    'POST /api/integrations/:id/_connect is rate limited',
+    routeFor(userIntegrationsRouter, '/:id/_connect', 'post').stack.length === 4
   );
 
-  // ---- POST /api/integrations/:id/connect
+  // ---- POST /api/integrations/:id/_connect
   const anon = await run(connectHandler, { params: { id: providerId }, user: { id: 'anonymous' } });
   check('connect refuses the anonymous principal', anon.status === 401 && !anon.body?.url);
   const noUser = await run(connectHandler, { params: { id: providerId }, user: { id: '' } });
@@ -415,14 +415,14 @@ for (const p of providers) {
   );
   delete service.oauthStrategy;
 
-  // ---- POST /api/integrations/:id/disconnect
+  // ---- POST /api/integrations/:id/_disconnect
   const disconnect = req => run(disconnectHandler, { params: { id: providerId }, ...req });
   const anonDisconnect = await disconnect({ user: { id: 'anonymous' } });
   check('disconnect refuses the anonymous principal', anonDisconnect.status === 401);
   const unknown = await disconnect({ params: { id: 'not-installed' }, user: member('u1') });
   check('disconnect of an unknown installation answers 404', unknown.status === 404);
   const done = await disconnect({ user: member('u1') });
-  check("disconnect removes the caller's tokens", done.body?.success === true && done.body.removed);
+  check("disconnect removes the caller's tokens", done.body?.removed === true);
   let stillConnected = true;
   try {
     await connections.getUserTokens({ installationId: providerId, userId: 'u1' });

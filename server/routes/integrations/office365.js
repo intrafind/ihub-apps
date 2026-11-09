@@ -36,7 +36,7 @@ const office365ApiLimiter = createCloudStorageLimiter();
 
 // The OAuth callback registered in the vendor app: an alias of the one integration
 // callback (see oauthIntegrationFactory.js). Connecting, the status and disconnecting
-// are the one connect flow (POST /api/integrations/:id/connect|disconnect).
+// are the one connect flow (POST /api/integrations/:id/_connect|_disconnect).
 registerIntegrationCallbackAlias(router, {
   providerKey: 'office365',
   requiresProviderId: true,

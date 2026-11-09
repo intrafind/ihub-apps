@@ -66,7 +66,7 @@ export default function JobListPage() {
 
   const handleCancel = async jobId => {
     try {
-      await apiClient.patch(`/tools-service/jobs/${jobId}/cancel`);
+      await apiClient.post(`/tools-service/jobs/${jobId}/_cancel`);
       fetchJobs();
     } catch {
       // Job may already be done

@@ -222,15 +222,15 @@ checked and disconnected through one API, and a missing connection is reported w
 
 | Removed | Use instead |
 | --- | --- |
-| `GET /api/integrations/jira/auth` | `POST /api/integrations/jira/connect` `{ "returnUrl" }` → `{ "url" }` |
+| `GET /api/integrations/jira/auth` | `POST /api/integrations/jira/_connect` `{ "returnUrl" }` → `{ "url" }` |
 | `GET /api/integrations/jira/status` | `GET /api/integrations/jira` (`connection.status`) |
 | `POST /api/integrations/jira/refresh` | none: tokens refresh on use |
-| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<id>` | `POST /api/integrations/<id>/connect` |
+| `GET /api/integrations/{office365,googledrive,nextcloud}/auth?providerId=<id>` | `POST /api/integrations/<id>/_connect` |
 | `GET /api/integrations/{office365,googledrive,nextcloud}/status?providerId=<id>` | `GET /api/integrations/<id>` |
-| `POST /api/integrations/{office365,googledrive,nextcloud}/disconnect` | `POST /api/integrations/<id>/disconnect` |
-| `GET /api/mcp/oauth/authorize?serverId=<id>&scope=` | `POST /api/integrations/<id>/connect`, or `…/reconnect` `{ "scopes" }` |
+| `POST /api/integrations/{office365,googledrive,nextcloud}/disconnect` | `POST /api/integrations/<id>/_disconnect` |
+| `GET /api/mcp/oauth/authorize?serverId=<id>&scope=` | `POST /api/integrations/<id>/_connect`, or `…/_reconnect` `{ "scopes" }` |
 | `GET /api/mcp/oauth/connections` | `GET /api/integrations` (per-user servers: `connection.mode: "personal"`) |
-| `POST /api/mcp/oauth/disconnect` `{ "serverId" }` | `POST /api/integrations/<id>/disconnect` |
+| `POST /api/mcp/oauth/disconnect` `{ "serverId" }` | `POST /api/integrations/<id>/_disconnect` |
 
 - **Error code:** Jira tools returned `JIRA_AUTH_REQUIRED` with `authUrl`, per-user MCP tools
   `MCP_AUTH_REQUIRED`; both now return `{ "error": "INTEGRATION_AUTH_REQUIRED", "integration":
@@ -243,7 +243,7 @@ checked and disconnected through one API, and a missing connection is reported w
 - **Run events:** `tool/completed` carries `authRequired` as `{ "integration", "name", "reason",
   "action"?, "scopes"? }` for any integration (was `{ "serverId", "serverName", "connectUrl" }`,
   MCP only), without a URL. A client rendering a Connect card starts the sign-in with
-  `POST /api/integrations/<integration>/connect`. Connect cards stored with older answers are not
+  `POST /api/integrations/<integration>/_connect`. Connect cards stored with older answers are not
   shown again.
 - **Return parameters:** after a sign-in the browser comes back with
   `integration_connected=<installation id>` or `integration_error=<code>&integration=<id>`, instead
@@ -565,3 +565,22 @@ and the members that used to sit next to it moved into `details`:
 a failed call must read `detail`, and should branch on `code`. A client that checks the response
 content type for exactly `application/json` must also accept `application/problem+json`. The web
 app, the Office add-ins and the browser extension ship with the server and need no change.
+
+## Operations Are `_action` Segments
+
+An operation that is not create, read, update or delete is now an `_action` segment, as
+`docs/api-guidelines.md` has required for new endpoints. The web app ships with the server and
+needs no change; scripts that call these endpoints must use the new path.
+
+| Was | Is now |
+| --- | --- |
+| `PATCH /api/tools-service/jobs/:jobId/cancel` → `{ "success": true }` | `POST /api/tools-service/jobs/:jobId/_cancel` → `{ "id", "status": "cancelled" }` |
+| `POST /api/scheduled-tasks/:taskId/run` · `/pause` · `/resume` · `/duplicate` | `POST …/_run` · `/_pause` · `/_resume` · `/_duplicate` |
+| `POST /api/scheduled-tasks/:taskId/runs/:runId/cancel` | `POST …/runs/:runId/_cancel` |
+| `POST /api/scheduled-tasks/_notifications/seen` | `POST /api/scheduled-tasks/_notifications/_mark-seen` |
+| `POST /api/scheduled-tasks/:taskId/runs/delete` `{ "runIds", "all", "deleteChats" }` and the same under `/api/admin/scheduled-tasks` | `DELETE …/runs/:runId` for one run, `DELETE …/runs` for all finished runs (`?deleteChats=0` keeps the chats) |
+| `POST /api/integrations/:id/connect` · `/reconnect` · `/disconnect` | `POST …/_connect` · `/_reconnect` · `/_disconnect` |
+| `POST /api/integrations/api-keys/:keyId/rotate` | `POST …/api-keys/:keyId/_rotate` |
+
+`POST /api/integrations/:id/_disconnect` answers `{ "removed", "revoked" }`; the `success` member is
+gone. The `connectUrl` that an integration sign-in error carries points at `_connect`.

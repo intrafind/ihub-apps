@@ -288,7 +288,7 @@ server/
 ├── services/integrations/OAuthIntegrationBase.js # Provider config, callback URL, 401 retry (tokens via the connection service)
 ├── routes/integrations/googledrive.js            # Browsing API routes and the /callback alias
 ├── routes/integrations/oauthIntegrationFactory.js # The vendor-registered /callback aliases
-├── routes/integrations/userIntegrations.js       # GET /api/integrations, POST /api/integrations/:id/connect|reconnect|disconnect
+├── routes/integrations/userIntegrations.js       # GET /api/integrations, POST /api/integrations/:id/_connect|_reconnect|_disconnect
 ├── routes/integrations/oauthCallback.js        # The one integration OAuth callback
 └── services/integrations/auth/                 # Shared OAuth client and connection service
 

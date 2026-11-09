@@ -8,9 +8,9 @@
  *   GET  /api/integrations                    the installations the user's groups allow,
  *                                             with capabilities, actions and connection status
  *   GET  /api/integrations/:id                one of them
- *   POST /api/integrations/:id/connect        { returnUrl? }           → { url }
- *   POST /api/integrations/:id/reconnect      { returnUrl?, scopes? }  → { url }
- *   POST /api/integrations/:id/disconnect     → { success, removed, revoked }
+ *   POST /api/integrations/:id/_connect        { returnUrl? }           → { url }
+ *   POST /api/integrations/:id/_reconnect      { returnUrl?, scopes? }  → { url }
+ *   POST /api/integrations/:id/_disconnect     → { removed, revoked }
  *   GET  /api/integrations/picker?app=        the chat picker's rows for an app (#2923)
  *   GET  /api/integrations/preferences?app=   what a new chat of the app starts with
  *   PUT  /api/integrations/preferences?app=   save that default
@@ -491,7 +491,7 @@ router.get('/:id', async (req, res, next) => {
 
 /**
  * @swagger
- * /api/integrations/{id}/connect:
+ * /api/integrations/{id}/_connect:
  *   post:
  *     summary: Start the sign-in to an integration
  *     description: |
@@ -523,7 +523,7 @@ router.get('/:id', async (req, res, next) => {
  *         description: No JSON body
  */
 router.post(
-  '/:id/connect',
+  '/:id/_connect',
   requireFeature('integrations'),
   authRequired,
   connectLimiter,
@@ -532,7 +532,7 @@ router.post(
 
 /**
  * @swagger
- * /api/integrations/{id}/reconnect:
+ * /api/integrations/{id}/_reconnect:
  *   post:
  *     summary: Sign in to an integration again, optionally with more scopes
  *     description: |
@@ -558,7 +558,7 @@ router.post(
  *         description: "{ url }"
  */
 router.post(
-  '/:id/reconnect',
+  '/:id/_reconnect',
   requireFeature('integrations'),
   authRequired,
   connectLimiter,
@@ -567,7 +567,7 @@ router.post(
 
 /**
  * @swagger
- * /api/integrations/{id}/disconnect:
+ * /api/integrations/{id}/_disconnect:
  *   post:
  *     summary: Disconnect the caller from an integration
  *     description: |
@@ -582,11 +582,11 @@ router.post(
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: "{ success: true, removed, revoked }"
+ *         description: "{ removed, revoked }"
  *       404:
  *         description: No such installation
  */
-router.post('/:id/disconnect', requireFeature('integrations'), authRequired, async (req, res) => {
+router.post('/:id/_disconnect', requireFeature('integrations'), authRequired, async (req, res) => {
   const { installationId } = checkPost(req);
   const descriptor = await describeInstallation(installationId).catch(() => null);
   if (!descriptor || descriptor.kind !== 'oauth-user') {
@@ -597,8 +597,7 @@ router.post('/:id/disconnect', requireFeature('integrations'), authRequired, asy
     userId: String(req.user.id),
     req
   });
-  // api-guidelines-ignore: existing success body, changed in its own API change
-  return res.json({ success: true, ...result });
+  return res.json(result);
 });
 
 export default router;

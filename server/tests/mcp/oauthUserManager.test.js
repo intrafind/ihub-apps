@@ -179,7 +179,7 @@ describe('tool calls on a per-user server', () => {
       error: 'INTEGRATION_AUTH_REQUIRED',
       integration: 'okta',
       reason: 'not_connected',
-      connectUrl: '/api/integrations/okta/connect'
+      connectUrl: '/api/integrations/okta/_connect'
     };
     // Headless: no user (gateway, A2A, a workflow without a user).
     expect(await mcpClientManager.callTool('okta__get-current-user', {})).toMatchObject(expected);
@@ -280,13 +280,13 @@ describe('admin tests of a per-user server', () => {
     const admin = { id: 'admin', groups: ['admins'] };
     expect(await mcpClientManager.testConnection('okta', admin)).toEqual({
       status: 'auth_required',
-      connectUrl: '/api/integrations/okta/connect',
+      connectUrl: '/api/integrations/okta/_connect',
       tools: [],
       catalog: []
     });
     expect(await mcpClientManager.testConfig(OKTA, admin)).toMatchObject({
       status: 'auth_required',
-      connectUrl: '/api/integrations/okta/connect'
+      connectUrl: '/api/integrations/okta/_connect'
     });
     expect(await mcpClientManager.testConfig(OKTA, null)).toMatchObject({
       status: 'auth_required'
@@ -300,7 +300,7 @@ describe('chat projection of auth_required', () => {
     integration: 'okta',
     reason: 'not_connected',
     message: 'Connect Okta MCP to use this tool.',
-    connectUrl: '/api/integrations/okta/connect'
+    connectUrl: '/api/integrations/okta/_connect'
   };
   const card = { integration: 'okta', name: 'okta', reason: 'not_connected' };
 
