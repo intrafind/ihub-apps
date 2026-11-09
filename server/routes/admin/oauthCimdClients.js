@@ -20,7 +20,7 @@ import { ServiceError } from '../../utils/ServiceError.js';
  *
  * Two things make these routes different from the stored-client ones.
  *
- * **The id is a URL.** `validateIdForPath()` rejects one on sight, and rightly
+ * **The id is a URL.** `assertValidId()` rejects one on sight, and rightly
  * so — it exists to keep a path segment from becoming a file path. Here the
  * value is a *store key*, never a path, so it travels base64url-encoded in the
  * URL and is decoded back to the exact key, the same way `oauthConnections.js`

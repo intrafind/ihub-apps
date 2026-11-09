@@ -8,6 +8,7 @@
  *
  * @module services/projects/projectErrors
  */
+import { ServiceError } from '../../utils/ServiceError.js';
 
 /** HTTP status per error code. */
 export const STATUS_BY_CODE = Object.freeze({
@@ -58,18 +59,15 @@ export const STATUS_BY_CODE = Object.freeze({
 /**
  * An error the routes know how to answer.
  */
-export class ProjectError extends Error {
+export class ProjectError extends ServiceError {
   /**
    * @param {string} code - One of the codes of spec 1 §5.4.
    * @param {string} message
    * @param {Object} [details]
    */
   constructor(code, message, details = undefined) {
-    super(message);
+    super(code, message, { status: STATUS_BY_CODE[code] || 400, details: details || undefined });
     this.name = 'ProjectError';
-    this.code = code;
-    this.status = STATUS_BY_CODE[code] || 400;
-    if (details) this.details = details;
   }
 }
 

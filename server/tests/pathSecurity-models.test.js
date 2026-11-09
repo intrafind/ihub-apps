@@ -10,79 +10,30 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { validateIdForPath, assertValidIds } from '../utils/pathSecurity.js';
+import { assertValidId, assertValidIds } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
 
 describe('Model API Path Security Integration', () => {
-  describe('validateIdForPath with model IDs containing dots', () => {
-    it('should validate gemini-2.5-flash model ID', () => {
-      const mockRes = {
-        status: () => mockRes,
-        json: () => {}
-      };
-      const result = validateIdForPath('gemini-2.5-flash', 'model', mockRes);
-      assert.strictEqual(result, true, 'gemini-2.5-flash should be valid');
-    });
+  describe('assertValidId with model IDs containing dots', () => {
+    for (const id of ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro']) {
+      it(`should validate ${id} model ID`, () => {
+        assert.doesNotThrow(() => assertValidId(id, 'model'), `${id} should be valid`);
+      });
+    }
 
-    it('should validate gemini-2.0-flash model ID', () => {
-      const mockRes = {
-        status: () => mockRes,
-        json: () => {}
-      };
-      const result = validateIdForPath('gemini-2.0-flash', 'model', mockRes);
-      assert.strictEqual(result, true, 'gemini-2.0-flash should be valid');
-    });
-
-    it('should validate gemini-2.5-pro model ID', () => {
-      const mockRes = {
-        status: () => mockRes,
-        json: () => {}
-      };
-      const result = validateIdForPath('gemini-2.5-pro', 'model', mockRes);
-      assert.strictEqual(result, true, 'gemini-2.5-pro should be valid');
-    });
-
-    it('should reject path traversal attempts', () => {
-      let statusCalled = false;
-      let body = null;
-      let contentType = null;
-      const mockRes = {
-        setHeader: (name, value) => {
-          if (name === 'Content-Type') contentType = value;
-        },
-        status: code => {
-          statusCalled = true;
-          assert.strictEqual(code, 400);
-          return mockRes;
-        },
-        json: data => {
-          body = data;
-        }
-      };
-
-      const result = validateIdForPath('../../../etc/passwd', 'model', mockRes);
-      assert.strictEqual(result, false, 'Path traversal should be rejected');
-      assert.strictEqual(statusCalled, true, 'Status should be set to 400');
-      assert.strictEqual(contentType, 'application/problem+json');
-      assert.strictEqual(body.status, 400);
-      assert.strictEqual(body.code, 'BAD_REQUEST');
-      assert.ok(body.detail.includes('Invalid'), 'Detail should indicate invalid ID');
+    it('should reject path traversal attempts with a 400 BAD_REQUEST', () => {
+      assert.throws(
+        () => assertValidId('../../../etc/passwd', 'model'),
+        error =>
+          error.status === 400 && error.code === 'BAD_REQUEST' && error.message.includes('Invalid')
+      );
     });
 
     it('should reject double dots', () => {
-      let statusCalled = false;
-      const mockRes = {
-        setHeader() {},
-        status: code => {
-          statusCalled = true;
-          return mockRes;
-        },
-        json: () => {}
-      };
-
-      const result = validateIdForPath('model..config', 'model', mockRes);
-      assert.strictEqual(result, false, 'Double dots should be rejected');
-      assert.strictEqual(statusCalled, true, 'Status should be set to 400');
+      assert.throws(
+        () => assertValidId('model..config', 'model'),
+        error => error.status === 400
+      );
     });
   });
 

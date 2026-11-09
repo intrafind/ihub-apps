@@ -884,6 +884,12 @@ used to be an HTML or plain text page.
   `RATE_LIMITED` (429, with `Retry-After`) for a locked account. They still fail closed: any other failure inside a
   sign-in handler answers 401, never a 500, and the cause stays in the server log. The wording of the messages is
   unchanged.
+- The project routes (`/api/projects`, `/api/projects/{id}/items`, the pickers, the smart collections and
+  `/api/admin/projects`) answer with the project's own error code in `code`, as every other route does, instead of
+  inside `details.code`. `details` now holds only the extras (`limit`, `used`, `required`, `reason`, …). The client
+  reads `code` first. New registry codes carry the English and German texts: `PROJECT_NOT_FOUND`, `PROJECT_EXISTS`,
+  `QUOTA_FILES`, `ITEM_NOT_READY`, `KIND_DISABLED`, `IFINDER_REJECTED` and the other codes of the project service.
+  The access guards still fail closed: a refused request never reaches the route behind it.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

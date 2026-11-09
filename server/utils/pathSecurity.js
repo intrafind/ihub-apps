@@ -13,7 +13,6 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { ServiceError } from './ServiceError.js';
 
-import { sendErrorResponse } from './responseHelpers.js';
 /**
  * Regular expression that allows only safe characters for IDs:
  * - Letters (a-z, A-Z)
@@ -72,31 +71,8 @@ export function isValidId(id) {
 }
 
 /**
- * Validates an ID and throws an error with appropriate HTTP status if invalid.
- * This is a helper function for Express route handlers.
- *
- * @param {string} id - The ID to validate
- * @param {string} idType - The type of ID (e.g., 'app', 'model', 'prompt') for error messages
- * @param {object} res - Express response object (optional; when omitted only returns boolean)
- * @returns {boolean} - True if valid, false if invalid (and response has been sent when res provided)
- */
-export function validateIdForPath(id, idType, res) {
-  if (!isValidId(id)) {
-    if (res) {
-      sendErrorResponse(
-        res,
-        400,
-        `Invalid ${idType} ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.`
-      );
-    }
-    return false;
-  }
-  return true;
-}
-
-/**
- * Throws a 400 `BAD_REQUEST` unless `id` is a safe path segment. The throwing
- * form of {@link validateIdForPath}: the global error middleware answers.
+ * Throws a 400 `BAD_REQUEST` unless `id` is a safe path segment. The global error
+ * middleware answers.
  *
  * @param {string} id - The ID to validate
  * @param {string} idType - Name of the ID for the message ("chat", "file", ...)

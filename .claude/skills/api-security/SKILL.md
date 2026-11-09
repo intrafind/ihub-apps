@@ -15,7 +15,6 @@ All input validation and path security functions live in **`server/utils/pathSec
 | Function | Signature | Use When |
 |----------|-----------|----------|
 | `isValidId` | `(id) → boolean` | Checking any user-supplied ID (app, model, source, tool, prompt, page, renderer, skill, group, provider, client) |
-| `validateIdForPath` | `(id, idType, res?) → boolean` | Express handler — sends 400 and returns `false` on invalid. Pass `res` to auto-respond |
 | `assertValidId` | `(id, idType) → void` | Express handler — throws `BAD_REQUEST` (`ServiceError`) on invalid; the global error middleware answers |
 | `assertValidIds` | `(ids, idType) → string[]` | Batch validation, throws `BAD_REQUEST`. Accepts comma-separated string, array, or `'*'` wildcard |
 
@@ -39,11 +38,11 @@ All input validation and path security functions live in **`server/utils/pathSec
 
 When creating or modifying any route that accepts user input:
 
-1. **Validate `:param` IDs first** — call `validateIdForPath(id, type, res)` as the very first operation in the handler. Return immediately if it returns `false`.
+1. **Validate `:param` IDs first** — call `assertValidId(id, type)` as the very first operation in the handler. It throws a 400 `BAD_REQUEST`, which the global error middleware answers.
 
 ```js
 app.get('/api/things/:thingId', async (req, res) => {
-  if (!validateIdForPath(req.params.thingId, 'thing', res)) return;
+  assertValidId(req.params.thingId, 'thing');
   // ... safe to proceed
 });
 ```

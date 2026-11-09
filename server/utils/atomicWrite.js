@@ -10,7 +10,7 @@ import { randomBytes } from 'node:crypto';
  * This prevents data corruption from partial writes
  *
  * NOTE: `filePath` is trusted by this utility. Callers are responsible for
- * validating any user-derived component (e.g. via `validateIdForPath()` +
+ * validating any user-derived component (e.g. via `assertValidId()` +
  * `resolveAndValidatePath()` from `utils/pathSecurity.js`) before passing
  * it in. CodeQL flags the fs operations below because the data flow from
  * `req.params.*` reaches this function; the `lgtm` annotations suppress

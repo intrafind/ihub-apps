@@ -484,6 +484,8 @@ describe('user projects', () => {
     const project = await create(ADA);
     const everyone = await setMembers(ADA, project.id, [{ type: 'everyone', role: 'user' }]);
     assert.equal(everyone.statusCode, 403, 'everyone is off by default');
+    assert.equal(everyone.body.code, 'SHARE_TARGET_NOT_ALLOWED');
+    assert.deepEqual(everyone.body.details, { type: 'everyone' });
     setProjectSettings({ sharing: { allowEveryone: true } });
     assert.equal(
       (await setMembers(ADA, project.id, [{ type: 'everyone', role: 'user' }])).statusCode,

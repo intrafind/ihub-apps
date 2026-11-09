@@ -16,6 +16,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { collectionDocument, generatePrivateKeyPem, startMockIFinder } from './mockIFinder.js';
 import { installationsFor } from './installedIFinder.js';
+import { answerWithError } from './answerError.js';
 
 export const GROUP = ['authenticated'];
 
@@ -182,9 +183,18 @@ export async function createHarness({ users: userList }) {
         params.projectId === undefined ? [] : projects.guards.flatMap(guard => guard.handlers);
       for (const handler of [...guards, ...handlers]) {
         let advanced = false;
-        await handler(req, res, () => {
-          advanced = true;
-        });
+        let refusal = null;
+        try {
+          await handler(req, res, error => {
+            // `next(error)` is what Express hands to the global handler, not a step forward.
+            if (error) refusal = error;
+            else advanced = true;
+          });
+          if (refusal) throw refusal;
+        } catch (error) {
+          answerWithError(res, error);
+          break;
+        }
         if (!advanced) break;
       }
       return res;

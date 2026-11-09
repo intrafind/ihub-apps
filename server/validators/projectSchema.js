@@ -63,7 +63,7 @@ const actorSchema = z
 
 /**
  * An item id as the item routes accept it (`isValidId`, the predicate behind
- * `validateIdForPath`) and as the blob keys need it (no `__`, the separator
+ * `assertValidId`) and as the blob keys need it (no `__`, the separator
  * of `<project>__<item>__<version>`).
  */
 const itemIdSchema = zSafeId
