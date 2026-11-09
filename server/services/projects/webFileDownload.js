@@ -60,16 +60,20 @@ function dropBody(body) {
  * @returns {string}
  */
 export function fileNameOf(disposition, url) {
-  const header = String(disposition || '');
-  const extended = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(header);
-  const plain = /filename\s*=\s*("([^"]*)"|[^;]+)/i.exec(header);
+  const params = dispositionParams(disposition);
   let name = '';
-  try {
-    if (extended) name = decodeURIComponent(extended[2].trim());
-  } catch {
-    name = '';
+  const extended = params.get('filename*');
+  if (extended) {
+    // RFC 5987: charset'language'percent-encoded value.
+    const quote = extended.indexOf("'");
+    const second = quote >= 0 ? extended.indexOf("'", quote + 1) : -1;
+    try {
+      name = decodeURIComponent(second >= 0 ? extended.slice(second + 1) : extended);
+    } catch {
+      name = '';
+    }
   }
-  if (!name && plain) name = (plain[2] ?? plain[1]).trim();
+  if (!name) name = params.get('filename') || '';
   if (!name) {
     try {
       const segment = new URL(url).pathname.split('/').pop() || '';
@@ -83,7 +87,32 @@ export function fileNameOf(disposition, url) {
     }
   }
   // Only the base name: a header must not name a path.
-  return path.basename(name.replace(/\\/g, '/')).slice(0, MAX_NAME_CHARS);
+  return path.basename(name.replaceAll('\\', '/')).slice(0, MAX_NAME_CHARS);
+}
+
+/**
+ * The parameters of a `Content-Disposition` header, by lower-case name, with
+ * the quotes of a quoted value removed. Split by hand: a header is the
+ * website's, and a backtracking pattern over it could be made slow.
+ *
+ * @param {string|null} header
+ * @returns {Map<string, string>}
+ */
+function dispositionParams(header) {
+  const params = new Map();
+  for (const part of String(header || '')
+    .slice(0, 2048)
+    .split(';')) {
+    const at = part.indexOf('=');
+    if (at <= 0) continue;
+    const key = part.slice(0, at).trim().toLowerCase();
+    let value = part.slice(at + 1).trim();
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1);
+    }
+    if (key && value && !params.has(key)) params.set(key, value);
+  }
+  return params;
 }
 
 /** The declared length of a response, or null. */

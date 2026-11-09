@@ -80,13 +80,14 @@ export function refreshTtlChoices(current) {
 /**
  * A select's value back to a TTL: `''` is "inherit" (null).
  *
- * @param {string} value
+ * @param {string|null|undefined} value
  * @returns {number|'never'|null}
  */
 export function parseRefreshTtl(value) {
-  if (value === '' || value === null || value === undefined) return null;
-  if (value === REFRESH_NEVER) return REFRESH_NEVER;
-  const seconds = Number(value);
+  const text = String(value ?? '');
+  if (text === '') return null;
+  if (text === REFRESH_NEVER) return REFRESH_NEVER;
+  const seconds = Number(text);
   return Number.isFinite(seconds) ? seconds : null;
 }
 

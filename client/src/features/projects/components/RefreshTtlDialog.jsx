@@ -31,8 +31,8 @@ import {
  *
  * @param {Object} props
  * @param {'project'|'item'} props.scope
- * @param {number|'never'|null} props.value - The TTL set at this level, or null.
- * @param {number|'never'|null} [props.inherited] - What applies without one.
+ * @param {number|'never'|null|undefined} props.value - The TTL set at this level, or null.
+ * @param {number|'never'|null|undefined} [props.inherited] - What applies without one.
  * @param {Object} [props.item] - The item (scope `item`), for its schedule.
  * @param {() => void} props.onClose
  * @param {(ttl: number|'never'|null) => Promise<boolean>} props.onSave - Resolves `true` on
@@ -42,11 +42,12 @@ import {
 function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose, onSave }) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
-  const [choice, setChoice] = useState(value === null || value === undefined ? '' : String(value));
+  const current = value ?? null;
+  const [choice, setChoice] = useState(current === null ? '' : String(current));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const selectRef = useRef(null);
-  const changed = parseRefreshTtl(choice) !== (value ?? null);
+  const changed = parseRefreshTtl(choice) !== current;
   const live = item?.kind === 'url';
   const schedule = item?.refresh;
 
@@ -65,8 +66,7 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
     if (ok) onClose();
   };
 
-  const inheritedLabel =
-    inherited !== null && inherited !== undefined ? refreshTtlLabel(inherited, t) : '';
+  const inheritedLabel = inherited ? refreshTtlLabel(inherited, t) : '';
 
   return (
     <Modal isOpen onClose={onClose} labelledBy="refresh-ttl-title" initialFocusRef={selectRef}>
