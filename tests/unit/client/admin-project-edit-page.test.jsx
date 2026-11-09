@@ -492,7 +492,9 @@ describe('AdminProjectEditPage – items', () => {
       if (itemId === 'i2') throw new Error('The project is locked');
       // Someone else deleted it meanwhile: it is gone, which is what was asked.
       if (itemId === 'i3')
-        throw Object.assign(new Error('Item not found'), { response: { status: 404 } });
+        throw Object.assign(new Error('Item not found'), {
+          response: { status: 404, data: { code: 'ITEM_NOT_FOUND' } }
+        });
     });
     renderAt('/admin/projects/handbook/edit');
 

@@ -475,7 +475,9 @@ A project page shows:
   page pages its list the same way; a list on these pages never grows with its content.
 - **Documents** with status, provenance and size, and the usage against the limits; from six
   documents on the list scrolls inside its card. Owners and editors pin, rename, refresh, preview
-  and remove documents and retry failed cloud documents. **Estimate tokens** shows what each
+  and remove documents and retry failed cloud documents. They can also tick several documents and
+  choose **Delete** to delete them all after one confirmation. A document that cannot be deleted
+  stays ticked, and the page says why. **Estimate tokens** shows what each
   document and the project weigh. An iFinder document offers what a cited iFinder document offers
   in a chat, to everyone who may read the project: **Open in iFinder** (its deep link), and under
   **More actions** **Preview (PDF)**, **Download** and **Details** (iFinder's metadata, such as
@@ -711,7 +713,8 @@ The project of a collection keeps what iFinder does not have: a **default app**,
 and the **chats** started in it. The documents stay in the collection and are read from iFinder
 every time, with the owner's rights; the project stores no document. Its owner can **rename** it
 (the collection is renamed in iFinder too), **add** iFinder documents and **remove** them (the
-membership only, never the document), and **delete** it: the dialog asks whether to delete the
+membership only, never the document; tick several and choose **Remove** to remove them at once),
+and **delete** it: the dialog asks whether to delete the
 collection in iFinder as well; without that, the collection stays in iFinder and can be added again.
 **New project → As an iFinder smart collection** creates a collection in iFinder and its project at
 once. A collection that was deleted in iFinder keeps its project, marked **Deleted in iFinder**: its

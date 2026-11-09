@@ -1189,11 +1189,13 @@ installed. A description you set replaces the one in `SKILL.md` wherever the ski
 marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
 `contents/config/skills.json`, a new file that a fresh install and an upgrade create.
 
-## Projects: Delete Several Items at Once
+## Projects: Delete Several Documents at Once
 
-**Admin → Projects → (a project)** now offers **Delete** next to **Move to…** and **Copy to…** when
-items are selected. After one confirmation, every selected item is removed from the project.
+Tick documents in a project and choose **Delete** to delete them all after one confirmation.
 
-- Each removal is recorded in the audit log, as when an item is removed on its own.
-- An item that cannot be deleted stays in the list and stays selected, and the page says why, so
+- **Admin → Projects → (a project):** **Delete** sits next to **Move to…** and **Copy to…**.
+- **A user's project page:** owners and editors tick documents and choose **Delete**. In an iFinder
+  smart collection the button is **Remove**: the documents leave the collection and stay in iFinder.
+- Each document is removed on its own and recorded like a single removal.
+- A document that cannot be deleted stays in the list and stays ticked, and the page says why, so
   you can try it again.

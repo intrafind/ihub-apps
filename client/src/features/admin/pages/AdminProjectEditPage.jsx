@@ -309,7 +309,7 @@ function AdminProjectEditPageContent({ id }) {
         await deleteAdminProjectItem(id, item.id);
         deleted.add(item.id);
       } catch (err) {
-        if (err?.response?.status === 404) deleted.add(item.id);
+        if (err?.response?.data?.code === 'ITEM_NOT_FOUND') deleted.add(item.id);
         else failed.push(getAdminApiErrorMessage(err));
       }
     }
