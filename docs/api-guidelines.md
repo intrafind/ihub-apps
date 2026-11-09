@@ -254,3 +254,22 @@ The check finds the mechanical violations; the [checklist](#checklist) still cov
 - **Success bodies, verbs, pagination:** migrate when an endpoint is touched. The check fails a new
   `{ success }` envelope, a bare verb in a route and a `page` / `offset` parameter; a grep for
   `json({ success`, `json({ message:` and `/run`, `/duplicate`, `/cancel` finds the candidates.
+
+## Checks that keep the API and its clients in step
+
+| Check                                    | What it catches                                                                                                    | Run it                                           |
+| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| API guidelines (CI)                      | New lines that break the rules above                                                                               | `scripts/check-api-guidelines.js` (diff on stdin) |
+| Client contract (`test-quick`)           | A client calls a route or method the server no longer registers                                                    | `scripts/check-client-api-contract.js`            |
+| Removed routes (CI)                      | A route removed or renamed without a mention in `docs/releases/next`                                               | `scripts/check-route-changes.js --strict`         |
+| Response shapes (CI)                     | A key renamed or moved in an answer. The shape of every readable `GET` route is committed in `tests/contract/response-shapes.json` | `npm run check:response-shapes`                   |
+| Route crawl (CI, `tests/e2e`)            | A page that fails an API call, throws or logs an error; also on a path prefix (`npm run test:e2e:subpath`)        | `npm run test:e2e:crawl`                          |
+| Upgrade check                            | The previous release's data no longer starts on this checkout                                                      | `scripts/check-upgrade.js`                        |
+
+The response-shape check starts the server on seeded contents (`tests/config/e2e-contents.mjs`, plus a
+record of each kind created by the check itself), requests the readable `GET` routes as the default admin and
+compares keys and types, never values. When an answer changes on purpose, run
+`node scripts/check-response-shapes.js --update`, read the diff of the snapshot, and check the clients that read
+that answer: the snapshot shows the change, not whether the client follows it. It cannot see `POST`, `PUT` or
+`DELETE` answers, routes whose data the seed does not have (the report lists the lists that answered empty), and
+integrations that need a real credential.
