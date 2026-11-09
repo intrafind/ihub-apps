@@ -358,21 +358,28 @@ const attributeValue = value => String(value).replace(/["\\]/g, '\\$&');
  * found again by its number; else the entry, if it is shown. Nothing when none
  * of them is on the page — focus is not moved somewhere unrelated.
  *
+ * Candidates are tried in turn until one takes focus: a page can render the
+ * same answer twice (AppChat keeps a phone and a desktop layout, one of them
+ * `display: none`), and an element in the hidden copy does not take it.
+ *
  * @param {string} messageKey
  * @param {{current: HTMLElement|null}} entryRef
  */
 function returnFocus(messageKey, entryRef) {
   const opener = sourcesOpener();
-  const badge =
+  const badges =
     opener?.n != null
-      ? document.querySelector(
-          `[data-citations-of="${attributeValue(messageKey)}"] [data-source-citation="${opener.n}"]`
-        )
-      : null;
-  const target = [opener?.element, badge, entryRef.current].find(
-    element => element && element.isConnected
-  );
-  target?.focus({ preventScroll: true });
+      ? [
+          ...document.querySelectorAll(
+            `[data-citations-of="${attributeValue(messageKey)}"] [data-source-citation="${opener.n}"]`
+          )
+        ]
+      : [];
+  for (const element of [opener?.element, ...badges, entryRef.current]) {
+    if (!element?.isConnected) continue;
+    element.focus({ preventScroll: true });
+    if (document.activeElement === element) return;
+  }
 }
 
 /**
