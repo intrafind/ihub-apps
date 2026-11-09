@@ -350,7 +350,7 @@ fall back to memory or to older file layouts.
 - **Token files.** Migration V218 renames single-slot cloud-storage token files
   (`<userId>.json`) to the per-provider name once, instead of on every start. Jira's single token
   slot is unchanged.
-  
+
 ## Legacy Config Shapes Are No Longer Read
 
 Four old shapes that the server still tolerated are gone. Migrations V220-V222 convert existing
@@ -373,7 +373,7 @@ data on the first start.
   `gen_ai_client_token_usage`. Setting an `IHUB_PLATFORM__I_FINDER__*` or
   `IHUB_PLATFORM__I_ASSISTANT__*` variable no longer logs a warning (it has had no effect since
   V192).
-  
+
 ## Sign-in Tokens Leave the URL; Legacy Integration Token Files Are Deleted
 
 - **OIDC sign-in no longer puts the session token in the redirect URL.** After the provider callback
@@ -386,7 +386,7 @@ data on the first start.
   (installations from before 5.4.16) are removed without being decrypted; the server no longer
   reads that format. The affected users connect the service again under **Settings →
   Integrations**. AES-256-GCM files are not touched.
-  
+
 ## Unused API Endpoints Removed
 
 Endpoints that nothing in iHub itself (web client, browser extension, Office add-in, Nextcloud app,

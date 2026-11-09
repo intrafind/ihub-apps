@@ -1114,7 +1114,7 @@ or the text was shortened.
   carries the markup of a file badge.
 - **Images and a model without vision:** an image attached before switching to a model that cannot
   see images now stops the message with a note instead of sending it; audio already did.
-  
+
 ## LLM Timeouts Configurable for All Providers and Per Provider
 
 A model that goes silent for a while — Gemini with thinking switched on, for example — could stop with
