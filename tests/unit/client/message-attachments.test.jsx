@@ -378,3 +378,54 @@ describe('MessageAttachments: the look of a card', () => {
     expect(tileOf(other).className).toContain('bg-gray-100');
   });
 });
+
+describe('MessageAttachments: after a reload, what the server recorded', () => {
+  test('says what the assistant got from a stored document', () => {
+    render(
+      <MessageAttachments
+        attachments={viewsOf([stored('f1', 'Contract.pdf', { textBytes: 12400 })])}
+      />
+    );
+    expect(screen.getByText('Text extracted on the server: 12.1 KB')).toBeInTheDocument();
+  });
+
+  test('says a scan went as page images, and that a text was shortened', () => {
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          stored('f1', 'scan.pdf', { textBytes: 900, pageImageCount: 3 }),
+          stored('f2', 'long.pdf', { textBytes: 48000, truncated: true })
+        ])}
+      />
+    );
+    expect(screen.getByText('scan without text: 3 page image(s) sent instead')).toBeInTheDocument();
+    expect(screen.getByText(/shortened to fit/)).toBeInTheDocument();
+  });
+
+  test('says an image and a sound file were sent to the model', () => {
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          { type: 'image/png', name: 'a.png', bytes: 5 },
+          { type: 'audio/mpeg', name: 'a.mp3', bytes: 5 }
+        ])}
+      />
+    );
+    expect(screen.getByText('Image sent to the model')).toBeInTheDocument();
+    expect(screen.getByText('Audio sent to the model')).toBeInTheDocument();
+  });
+
+  test('a text-only file shows no file size: the number would be that of the text, not the file', () => {
+    // `bytes` is 2.3 MB in the descriptor; the text is 40 KB
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          stored('f1', 'Old.pdf', { hasOriginal: undefined, textBytes: 41000 })
+        ])}
+      />
+    );
+    const card = screen.getByTestId('message-attachment');
+    expect(card).not.toHaveTextContent('2.3 MB');
+    expect(card).toHaveTextContent('only the text is kept in this chat');
+  });
+});

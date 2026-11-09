@@ -35,15 +35,22 @@ optionally the original. Scopes:
   inside its text: a message's content is exactly the text that was typed. A card shows the name,
   the type and, while the original is kept, the size. For a message sent in the current session it
   also says what the assistant got from the file (the same line as the composer chip) and an image
-  has a thumbnail. After a reload the same cards show name, type and size: the server stores
-  neither the images nor the audio of a message, and a stored document opens in the Files drawer
-  with a click or Enter. Audio is a card without a player. More than four cards fold into **+N more
+  has a thumbnail. After a reload the same cards show name, type and size, and the same line for
+  a document the server stored (the characters or page images it read, shortened, text only): the
+  server keeps those numbers on the file's descriptor. A message stored before that shows no line
+  rather than a guess. The server stores neither the images nor the audio of a message, so after a
+  reload an image is a named tile without a thumbnail (its line says only that it was sent to the
+  model). A stored document opens in the Files drawer with a click or Enter. Audio is a card
+  without a player. More than four cards fold into **+N more
   files** (more than three on a narrow screen). In a shared chat a card follows the share: a file
   the owner did not share is marked as such and does not open.
 - **Which files a model takes.** Images are offered only when the selected model has vision, audio
   only when it takes audio (or is a transcription model); documents are offered to every model
   but a transcription one. An image attached before the model was switched to one without vision
-  stops the message with a note, as audio does.
+  stops the message with a note, as audio does. When the app allows an image, sound or video and the
+  selected model cannot take it, the uploader says so ("… is not supported by the selected model.
+  Please choose a different model"); when the app itself does not offer the type, it answers with the
+  list of formats it does accept.
 - **Files drawer.** The chat header's button opens the **Files** drawer with two tabs, **Uploaded**
   (what the user and the add-ins put into the chat, including e-mails, meetings and pages) and
   **Generated** (see [Artifacts](artifacts.md#the-artifacts-panel)). Each uploaded file shows its type,
@@ -51,6 +58,10 @@ optionally the original. Scopes:
   the assistant reads, and the actions **Download original**, **Download text** and **Delete file**. A
   file card above a message opens the file in the drawer. In the Outlook task pane, while a mail is
   being written, **Attach to email** attaches the file to it.
+- **Export.** The JSON and JSONL export of a chat carry a message's text and, for a message with
+  files, a short list per file (id, kind, name, type and size; no size once only the text is kept).
+  They never carry the contents of a file, the images or the audio, which a message sent in the
+  current session still holds in memory. Markdown, HTML and text exports are unchanged.
 - **Task editor.** A scheduled task's form has an **Attached files** section to upload and remove
   files. Files from a connected system with `refreshOnRun` are set through the API; if a refresh
   fails, the run uses the last stored version and says so (see

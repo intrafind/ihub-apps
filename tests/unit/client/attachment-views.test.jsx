@@ -282,3 +282,66 @@ describe('keys', () => {
     expect(new Set(live.map(view => view.key)).size).toBe(2);
   });
 });
+
+describe('toAttachmentViews: what the server read, kept on a stored message', () => {
+  const doc = extra => ({
+    id: 'file_a',
+    type: 'application/pdf',
+    name: 'a.pdf',
+    bytes: 2400000,
+    ...extra
+  });
+  const viewOf = descriptor => toAttachmentViews({ stored: [descriptor] })[0];
+
+  test('a document with the numbers says what the assistant got, as the composer does', () => {
+    const view = viewOf(doc({ hasOriginal: true, textBytes: 12400 }));
+    expect(view.read).toEqual({
+      kind: 'document',
+      stub: true,
+      textBytes: 12400,
+      pageImages: 0,
+      truncated: false,
+      originalKept: true
+    });
+    expect(view.originalKept).toBe(true);
+  });
+
+  test('a scan has page images and no text to size', () => {
+    const view = viewOf(doc({ hasOriginal: true, textBytes: 90000, pageImageCount: 3 }));
+    expect(view.read).toMatchObject({ pageImages: 3, textBytes: 0 });
+  });
+
+  test('a shortened text says so', () => {
+    expect(
+      viewOf(doc({ hasOriginal: true, textBytes: 48000, truncated: true })).read
+    ).toMatchObject({
+      truncated: true
+    });
+  });
+
+  test('only the text is kept: no original, so no file size to show', () => {
+    const view = viewOf(doc({ textBytes: 120 }));
+    expect(view.originalKept).toBe(false);
+    expect(view.read).toMatchObject({ originalKept: false });
+  });
+
+  test('a message stored before the numbers existed claims nothing', () => {
+    const view = viewOf(doc({ hasOriginal: true }));
+    expect(view.read).toBeNull();
+    const noOriginal = viewOf(doc({}));
+    expect(noOriginal.read).toBeNull();
+    // Without the numbers its absence of `hasOriginal` is not proof that the original is gone
+    expect(noOriginal.originalKept).toBeNull();
+  });
+
+  test('an image and an audio file were sent to the model', () => {
+    const [image, audio] = toAttachmentViews({
+      stored: [
+        { type: 'image/png', name: 'a.png', bytes: 5 },
+        { type: 'audio/mpeg', name: 'a.mp3', bytes: 5 }
+      ]
+    });
+    expect(image.read).toEqual({ kind: 'image' });
+    expect(audio.read).toEqual({ kind: 'audio' });
+  });
+});

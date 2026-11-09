@@ -418,7 +418,13 @@ export function describeStored(stored) {
     bytes,
     ...(stored.origin && stored.origin !== 'upload' ? { origin: stored.origin } : {}),
     ...(stored.hasOriginal ? { hasOriginal: true } : {}),
-    ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {})
+    ...(stored.canUseAsTemplate ? { canUseAsTemplate: true } : {}),
+    // What the server read from the file, so the transcript can still say what the
+    // assistant got after a reload: the size of the text, the page images of a scan, and
+    // whether the text was shortened. `textBytes` is only kept when it is known.
+    ...(Number.isFinite(stored.textBytes) ? { textBytes: stored.textBytes } : {}),
+    ...(stored.pageImageCount > 0 ? { pageImageCount: stored.pageImageCount } : {}),
+    ...(stored.truncated === true ? { truncated: true } : {})
   };
 }
 

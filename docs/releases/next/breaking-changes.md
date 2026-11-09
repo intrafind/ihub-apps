@@ -808,3 +808,18 @@ ordinary entry. The web app, including the setup wizard, is updated.
   not `{ file }`, like the same read on chats and scheduled tasks.
 - `GET /api/runs/{runId}/interactions` answers `{ items }` (was `{ runId, interactions }`).
 - `GET /api/prompts/{promptId}/versions` answers `{ revision, items }` (was `{ revision, versions }`).
+
+## Chat JSON and JSONL Export Leave Out the Contents of Attached Files
+
+The JSON and JSONL export (**Export** in the chat menu) wrote every field of a message. For a message
+sent in the current session that included the files attached to it: the extracted text of a
+document (`fileData.content`), the data of an image or a sound file (`imageData`, `audioData`) as
+base64 and the file's own data. An export of such a chat could therefore be much larger than the
+conversation and carry a confidential document in full.
+
+An exported message now has its text and, if it came with files, `attachments`: one entry per file
+with `id` (a stored file), `kind` (`document`, `image` or `audio`), `name`, `mimeType` and `bytes`
+(left out once only the text is kept). `fileData`, `imageData` and `audioData` are no longer
+exported. Nothing else about the export changes, and there is no compatibility option: a script that
+read the contents out of an export now reads them from the chat's files (`GET
+/api/chats/{chatId}/files/{fileId}?format=text`).

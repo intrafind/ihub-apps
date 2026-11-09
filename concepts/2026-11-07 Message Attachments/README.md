@@ -95,17 +95,33 @@ Unit tests passed throughout; running the app with Playwright found what they co
 
 ## What is still open
 
-1. **Persist what the assistant read** (`textBytes`, `pageImageCount`, `truncated`) on the stored
-   descriptor, an additive server change, so the card keeps that line after a reload.
-2. **JSON and JSONL export** still dump the whole message object, including the attached files'
-   contents for a message sent in the session. Dropping them for the stored descriptors is a small
-   breaking change to an accidental contract; it needs a decision.
-3. **Images that survive a reload** need user images stored on the server (quota, retention and
+Done since the first release:
+
+- **What the assistant read survives a reload.** `describeStored` writes `textBytes`,
+  `pageImageCount` and `truncated` on the descriptor (additive; `normalizeAttachments` keeps them),
+  and `attachmentViews.readOfStored` rebuilds the same line the composer chip shows. A message stored
+  before that shows no line and claims nothing, not even that the original was discarded.
+- **JSON and JSONL export** no longer dump file contents. `exportableMessage` replaces
+  `fileData`/`imageData`/`audioData` by a short `attachments` list (a deliberate clean break, listed
+  in the breaking changes; one generator now serves the export dialog and `chatExport.js`).
+- **The refusal says why.** An image, sound or video the app allows and the selected model cannot
+  take is refused with the model-specific text. The cause was two layers: the format list is empty
+  exactly when the upload is switched off, and `Uploader` checked it before the processor ran.
+  `createUploadConfig` now marks `blockedByModel`, `uploadGate.capabilityRefusal` decides, and
+  `Uploader` asks its `refuseFile` prop before the format check. An app that does not offer the type
+  still gets the generic list of accepted formats.
+- **Sonar:** `AttachmentCard` (complexity 28) is split into `TileContent`, `GridBody`, `RowBody`,
+  `RowMeta` and `RowLine` with the DOM unchanged (checked against the old render for rows, grid,
+  openable and plain, wide and compact). The two other criticals are in
+  `mockups/attachments.html`, a static prototype that is not refactored.
+
+Still open (each needs a decision or its own design):
+
+1. **Images that survive a reload** need user images stored on the server (quota, retention and
    privacy decision).
-4. **Office task pane**: the cards are static there; mounting a Files view needs its own design.
-5. **Edit-and-resend** of a turn that is only files: Send stays disabled on empty text.
-6. **The refusal message for an image or sound on a model that cannot take it** is the generic
-   "Unsupported file format. Please use: …". The model-specific text already exists
-   (`errors.imageUploadDisabled`, `errors.audioUploadDisabled`) but is unreachable: the gate checks
-   a format list that is empty exactly when the upload is disabled.
-7. **Close PR #1933** as superseded and re-scope #1786; a comment on each is not posted from here.
+2. **Office task pane**: the cards are static there; mounting a Files view needs its own design.
+3. **Edit-and-resend** of a turn that is only files: an empty or unchanged edit is a deliberate
+   no-op and the Resend button covers it, so this is not treated as a defect.
+4. **Sonar smells** (about 70 minor findings from the first release) are not addressed beyond the
+   criticals.
+5. PR #1933 is closed as superseded and #1786 is closed by the first release.

@@ -7,6 +7,7 @@ import { exportPdfOnServer } from '../../../api/endpoints/exports';
 import { buildChatExportFilename, buildChatExportTitle } from '../../../utils/exportNaming';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { htmlToMarkdown } from '../../../utils/markdownUtils';
+import { exportableMessage } from '../messageAttachments/exportMessage';
 
 // Chat export (PDF, HTML, JSON, JSONL, Markdown). Lives with the chat feature,
 // next to its only consumer (ExportDialog); `api/endpoints/apps.js` stays a
@@ -578,7 +579,7 @@ const downloadFile = (content, filename, mimeType) => {
 };
 
 // Helper functions for generating export content
-const generateJSON = (messages, settings) => {
+export const generateJSON = (messages, settings) => {
   const buildMetadata = () => ({
     model: settings?.model,
     style: settings?.style,
@@ -586,10 +587,10 @@ const generateJSON = (messages, settings) => {
     variables: settings?.variables
   });
 
-  return JSON.stringify({ ...buildMetadata(), messages }, null, 2);
+  return JSON.stringify({ ...buildMetadata(), messages: messages.map(exportableMessage) }, null, 2);
 };
 
-const generateJSONL = (messages, settings) => {
+export const generateJSONL = (messages, settings) => {
   const buildMetadata = () => ({
     model: settings?.model,
     style: settings?.style,
@@ -598,7 +599,7 @@ const generateJSONL = (messages, settings) => {
   });
 
   const lines = [JSON.stringify({ meta: buildMetadata() })];
-  messages.forEach(m => lines.push(JSON.stringify(m)));
+  messages.forEach(m => lines.push(JSON.stringify(exportableMessage(m))));
   return lines.join('\n');
 };
 

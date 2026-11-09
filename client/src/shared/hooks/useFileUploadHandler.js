@@ -132,6 +132,10 @@ export function useFileUploadHandler() {
     const videoUploadEnabled =
       videoConfig?.enabled !== false && (isAudioModel || transcriptionModel);
     const fileUploadEnabled = fileConfig?.enabled !== false && !transcriptionModel;
+    // The app allows the kind and the model cannot take it (as against: the app does not offer it)
+    const imageBlockedByModel = imageConfig?.enabled !== false && !imageUploadEnabled;
+    const audioBlockedByModel = audioConfig?.enabled !== false && !audioUploadEnabled;
+    const videoBlockedByModel = videoConfig?.enabled !== false && !videoUploadEnabled;
 
     return {
       enabled: true,
@@ -151,6 +155,7 @@ export function useFileUploadHandler() {
       // Image-specific settings
       imageUpload: {
         enabled: imageUploadEnabled,
+        blockedByModel: imageBlockedByModel,
         resizeImages: imageConfig?.resizeImages !== false,
         maxResizeDimension: imageConfig?.maxResizeDimension || 1024,
         supportedFormats: imageConfig?.supportedFormats || [
@@ -165,6 +170,7 @@ export function useFileUploadHandler() {
       // Audio-specific settings
       audioUpload: {
         enabled: audioUploadEnabled,
+        blockedByModel: audioBlockedByModel,
         maxFileSizeMB: audioConfig?.maxFileSizeMB || 20,
         supportedFormats: audioConfig?.supportedFormats || [
           'audio/mpeg',
@@ -178,6 +184,7 @@ export function useFileUploadHandler() {
       // Video-specific settings
       videoUpload: {
         enabled: videoUploadEnabled,
+        blockedByModel: videoBlockedByModel,
         extractAudio: videoConfig?.extractAudio !== false,
         maxFileSizeMB: videoConfig?.maxFileSizeMB || 50,
         supportedFormats: videoConfig?.supportedFormats || [
