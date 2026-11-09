@@ -69,6 +69,19 @@ function isNoise(line) {
 }
 
 /**
+ * The text of a Markdown ATX heading (`## Title ##`), or '' for any other
+ * line. Parsed without a backtracking pattern: the text is user-controlled
+ * and a line may be thousands of characters long.
+ */
+function markdownHeading(line) {
+  const marks = /^#{1,6}/.exec(line)?.[0].length || 0;
+  if (!marks || !/\s/.test(line[marks] || '')) return '';
+  let end = line.length;
+  while (end > marks && line[end - 1] === '#') end--;
+  return line.slice(marks, end).trim();
+}
+
+/**
  * A title and description read from extracted text: the first Markdown
  * heading (or, without one, a short first line) and the first paragraph of
  * prose after it.
@@ -84,9 +97,9 @@ export function infoFromText(text) {
   let title = '';
   let titleAt = -1;
   for (let at = 0; at < lines.length && at < 200; at++) {
-    const heading = /^#{1,6}\s+(.+?)\s*#*$/.exec(lines[at]);
+    const heading = markdownHeading(lines[at]);
     if (heading) {
-      title = heading[1];
+      title = heading;
       titleAt = at;
       break;
     }

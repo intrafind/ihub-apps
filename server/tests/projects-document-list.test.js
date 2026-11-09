@@ -248,6 +248,15 @@ describe('what an item is about', () => {
     });
   });
 
+  test('strips closing hashes, and a long crafted line stays fast', () => {
+    assert.equal(infoFromText('## Setup ##\nText.').title, 'Setup');
+    assert.equal(infoFromText('#NoSpace\nText.').title, 'NoSpace', 'no heading: the first line');
+    const crafted = `# a${' '.repeat(19990)}x\n`.repeat(200);
+    const started = Date.now();
+    infoFromText(crafted);
+    assert.ok(Date.now() - started < 200, `${Date.now() - started} ms`);
+  });
+
   test('a first sentence is not a title', () => {
     assert.equal(infoFromText('This is a sentence.\nAnd another.').title, undefined);
   });
