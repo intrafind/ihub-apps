@@ -34,6 +34,7 @@ import { estimateTokens } from '../../../shared/tokenEstimator.js';
 import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
+import { docOf } from './types.js';
 
 export const CONTEXT_SHARE = 0.4;
 
@@ -246,7 +247,9 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
       overBudget: false,
       injected,
       cut: [],
-      unavailable
+      unavailable,
+      // The usable documents, for the list a searched project shows the model.
+      catalog: usable.map(item => docOf(project, item))
     });
   }
   // The hard limit bounds the whole prompt, not each project of it, and
@@ -267,10 +270,21 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
     planned.overBudget = planned.tokens > budgetTokens || cut.length > 0;
     if (planned.mode === 'searched') tools = true;
   });
+  // The document lists of the searched projects share one budget, spent in
+  // scope order, so many searched projects cannot crowd a small window.
+  let listRoom = listBudget(model, limitTokens, usedTokens);
+  const listBudgetTokens = listRoom;
+  for (const planned of projects) {
+    if (planned.mode !== 'searched') continue;
+    const list = documentListLines(planned, listRoom);
+    planned.documentList = list.lines;
+    listRoom = Math.max(0, listRoom - list.tokens);
+  }
   return {
     projects,
     budgetTokens,
     limitTokens,
+    listBudgetTokens,
     usedTokens: Math.min(budgetTokens, usedTokens),
     tools
   };
@@ -290,10 +304,11 @@ function escapeAttribute(value) {
  * gives its content blocks, whose tags are escaped here too.
  */
 const PROJECT_TAG_RE =
-  /<(\/?)(projects|project-instructions|project|document)((?:\s[^<>]*)?\/?)>/gi;
+  /<(\/?)(projects|project-instructions|project|document-list|document)((?:\s[^<>]*)?\/?)>/gi;
 
 /**
- * Text from a document or a project's instructions as it goes into the
+ * Text from a document, a document's name, title or description, or a
+ * project's instructions as it goes into the
  * prompt: the structural tags escaped, everything else as it is.
  *
  * @param {string} text
@@ -305,6 +320,115 @@ export function neutralizeProjectText(text) {
     (match, slash, name, rest = '') => `&lt;${slash}${name}${rest}&gt;`
   );
   return neutralizeStructuralTags(escaped);
+}
+
+/** Most documents a searched project lists in the prompt. */
+export const MAX_LISTED_DOCUMENTS = 50;
+
+/** Most tokens the document list of one searched project may take. */
+export const MAX_LIST_TOKENS = 2000;
+
+/**
+ * The share of the model's context window the document lists of a whole
+ * scope may take together: four searched projects must not add 8,000 tokens
+ * to every turn of a model with an 8k window.
+ */
+export const LIST_CONTEXT_SHARE = 0.1;
+
+/**
+ * The tokens the document lists of a scope may take together: a share of the
+ * context window (four full lists when the window is unknown), and never more
+ * than the hard limit leaves beside the injected text.
+ *
+ * @param {{contextWindow?: number}|null} model
+ * @param {number} limitTokens - {@link hardLimit}
+ * @param {number} injectedTokens - What the plan's documents take.
+ * @returns {number}
+ */
+export function listBudget(model, limitTokens, injectedTokens) {
+  const window = Number(model?.contextWindow);
+  const share =
+    Number.isFinite(window) && window > 0
+      ? Math.floor(window * LIST_CONTEXT_SHARE)
+      : MAX_LIST_TOKENS * 4;
+  return Math.max(0, Math.min(share, limitTokens - injectedTokens));
+}
+
+/** Longest description a list line carries, in characters. */
+const LIST_DESCRIPTION_CHARS = 160;
+
+/** One line of user-controlled text for the list: no line breaks, bounded, tags escaped. */
+function listText(value, max = 300) {
+  let text = String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (text.length > max) text = `${text.slice(0, max - 1).trimEnd()}…`;
+  return neutralizeProjectText(text);
+}
+
+/** One document of a searched project's list, about 20 tokens without a description. */
+function listLine(doc) {
+  const name = listText(doc.name);
+  const facts = [];
+  if (Number.isFinite(doc.tokens)) facts.push(`${doc.tokens} tokens`);
+  if (doc.pinned) facts.push('pinned');
+  let line = `- ${listText(doc.id, 100)} "${name}"`;
+  if (facts.length) line += ` (${facts.join(', ')})`;
+  if (doc.url) line += ` ${listText(doc.url, 300)}`;
+  const title = doc.title ? listText(doc.title) : '';
+  const about = [
+    title && title !== name ? title : '',
+    doc.description ? listText(doc.description, LIST_DESCRIPTION_CHARS) : ''
+  ].filter(Boolean);
+  if (about.length) line += ` — ${about.join(': ')}`;
+  return line;
+}
+
+/**
+ * The document list of a searched project: the documents that are not in the
+ * prompt already, pinned ones first, within {@link MAX_LISTED_DOCUMENTS} and
+ * `budgetTokens` (the list's lines included). Without it the model knows a
+ * count and nothing it could read; with it, it can read the page it needs
+ * instead of searching. What does not fit is counted and left to
+ * `knowledge_list`.
+ *
+ * @param {Object} project - A planned project.
+ * @param {number} [budgetTokens] - At most {@link MAX_LIST_TOKENS}.
+ * @returns {{lines: string[], tokens: number}} The lines of the
+ *   `<document-list>` element, none when every document is in the prompt.
+ */
+function documentListLines(project, budgetTokens = MAX_LIST_TOKENS) {
+  const inPrompt = new Set(project.injected.map(({ doc }) => doc.id));
+  const docs = (project.catalog || []).filter(doc => !inPrompt.has(doc.id));
+  if (!docs.length) return { lines: [], tokens: 0 };
+  const ordered = [...docs.filter(doc => doc.pinned), ...docs.filter(doc => !doc.pinned)];
+  const intro =
+    'Read a listed document directly with knowledge_read (its id), or search them all with knowledge_search.';
+  const more = count =>
+    `${count} ${count === ordered.length ? '' : 'more '}${count === 1 ? 'document is' : 'documents are'} not listed here: call knowledge_list with project="${escapeAttribute(project.id)}" for the complete list.`;
+  const frame = (listedCount, withMore) => [
+    `    <document-list documents="${ordered.length}" listed="${listedCount}">`,
+    intro,
+    ...(withMore ? [more(ordered.length - listedCount)] : []),
+    '    </document-list>'
+  ];
+  const cap = Math.min(MAX_LIST_TOKENS, Math.max(0, budgetTokens));
+  // The frame of a cut list is what the documents share the room with.
+  const room = cap - estimateTokens(frame(0, true).join('\n'));
+  const listed = [];
+  let used = 0;
+  for (const doc of ordered) {
+    if (listed.length >= MAX_LISTED_DOCUMENTS) break;
+    const line = listLine(doc);
+    const tokens = estimateTokens(line);
+    if (used + tokens > room) break;
+    listed.push(line);
+    used += tokens;
+  }
+  const left = ordered.length - listed.length;
+  const [open, introLine, ...rest] = frame(listed.length, left > 0);
+  const lines = [open, introLine, ...listed, ...rest];
+  return { lines, tokens: estimateTokens(lines.join('\n')) };
 }
 
 /**
@@ -339,7 +463,12 @@ export function renderProjectsBlock(plan) {
         'reason="iFinder could not be reached. The documents of this project are missing from this answer: say so to the user instead of answering as if you had searched them."'
       );
     }
-    if (project.mode !== 'loaded' && !project.injected.length) {
+    // A searched project names what it holds beyond what is in the prompt.
+    // The planner sized it against the scope's list budget; a plan built
+    // elsewhere (a test) gets a list within the per-project cap.
+    const listLines =
+      project.mode === 'searched' ? project.documentList || documentListLines(project).lines : [];
+    if (project.mode !== 'loaded' && !project.injected.length && !listLines.length) {
       lines.push(`  <project ${attrs.join(' ')}/>`);
       continue;
     }
@@ -359,6 +488,7 @@ export function renderProjectsBlock(plan) {
         '    </document>'
       );
     }
+    lines.push(...listLines);
     lines.push('  </project>');
   }
   lines.push('</projects>');

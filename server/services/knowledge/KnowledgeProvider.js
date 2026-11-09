@@ -36,6 +36,8 @@ import { KnowledgeError } from './types.js';
  * @property {string} projectId
  * @property {string} kind
  * @property {string} name
+ * @property {string|null} title - The document's own title (metadata or first heading), when known.
+ * @property {string|null} description - A short description of the document, when known.
  * @property {string} status
  * @property {boolean} pinned
  * @property {number|null} chars

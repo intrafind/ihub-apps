@@ -40,6 +40,7 @@ import {
   normalizeText
 } from './extractText.js';
 import { storeText, evictItemKeys } from './ItemTextStore.js';
+import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
 
 const COMPONENT = 'ProjectIngestService';
@@ -383,7 +384,12 @@ export class ProjectIngestService {
       let extracted = null;
       if (text !== null) {
         const normalized = normalizeText(text, { maxChars });
-        extracted = { text: normalized.text, contentType, truncated: normalized.truncated };
+        extracted = {
+          text: normalized.text,
+          contentType,
+          truncated: normalized.truncated,
+          ...infoFromText(normalized.text)
+        };
         if (!extracted.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
       } else {
         const started = Date.now();
@@ -422,6 +428,9 @@ export class ProjectIngestService {
           delete item.refreshingAt;
           delete item.ingestAttempt;
           item.text = block;
+          // What the document is about, read from this text: a new version
+          // replaces what the old one said.
+          applyItemInfo(item, { title: extracted.title, description: extracted.description });
           if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
             item.snapshotAt = block.extractedAt;
           }

@@ -41,6 +41,7 @@ import { extractXlsxText } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
 import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
 import { extractHtmlPage } from '../../tools/lib/pageContent.js';
+import { cleanItemInfo, infoFromText } from './itemInfo.js';
 
 /** The most characters one item keeps (about 10 MB of text). */
 export const MAX_TEXT_CHARS = MAX_ITEM_TEXT_CHARS;
@@ -482,8 +483,12 @@ function htmlText(html) {
  * when nothing is found, or when the main content is longer than the reader
  * keeps (the reader's cap would silently drop the rest).
  */
-function htmlFileText(html) {
+function htmlFileText(html, report) {
   const page = extractHtmlPage(html);
+  if (report) {
+    if (page.title) report.title = page.title;
+    if (page.description) report.description = page.description;
+  }
   return page.markdown && !page.capped ? page.markdown : htmlText(html);
 }
 
@@ -912,7 +917,9 @@ export function normalizeText(text, { maxChars = MAX_TEXT_CHARS } = {}) {
  * @param {{maxChars?: number, maxPages?: number, sheetRows?: number, speakerNotes?: 'include'|'ignore'}} [options]
  *   The limits; `maxPages` and `sheetRows` default to the extractors' own. `speakerNotes`
  *   (presentations) defaults to `include`.
- * @returns {Promise<{text: string, contentType: string, pages?: number, truncated: boolean}>}
+ * @returns {Promise<{text: string, contentType: string, pages?: number, truncated: boolean,
+ *   title?: string, description?: string}>} `title` and `description` from the document's
+ *   metadata, or else from its first heading and paragraph.
  * @throws {ExtractionError} `UNSUPPORTED_TYPE`, `EXTRACTION_FAILED`, `NO_TEXT`
  */
 export async function extractText(
@@ -934,7 +941,7 @@ export async function extractText(
     } else if (PACKAGES.has(type)) {
       raw = await PACKAGES.get(type).extract(bytes, { report, sheetRows, speakerNotes });
     } else if (type === HTML_MIME) {
-      raw = htmlFileText(decodeText(bytes, name));
+      raw = htmlFileText(decodeText(bytes, name), report);
     } else if (type === EML_MIME) {
       raw = emailText(bytes);
     } else if (type === MSG_MIME) {
@@ -963,7 +970,14 @@ export async function extractText(
   } else if (!text) {
     throw new ExtractionError('NO_TEXT', `${name || 'The file'} holds no text`);
   }
-  return { text, contentType: type, ...(pages ? { pages } : {}), truncated };
+  // What the document is about, for the list a searched project shows the
+  // model (#3539): its own metadata first, else its first heading and paragraph.
+  const fromText = infoFromText(text);
+  const info = cleanItemInfo({
+    title: report.title || fromText.title,
+    description: report.description || fromText.description
+  });
+  return { text, contentType: type, ...(pages ? { pages } : {}), truncated, ...info };
 }
 
 export default extractText;

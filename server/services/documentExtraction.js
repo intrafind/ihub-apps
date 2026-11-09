@@ -260,8 +260,9 @@ export async function extractOdfDocument(bytes, options = {}) {
  * them. Empty when no page has a text layer (a scan).
  *
  * @param {Buffer} bytes
- * @param {{maxPages?: number, maxChars?: number, report?: {truncated?: boolean}}} [limits]
- *   `report.truncated` is set when the PDF has more pages than `maxPages`.
+ * @param {{maxPages?: number, maxChars?: number, report?: {truncated?: boolean, title?: string}}} [limits]
+ *   `report.truncated` is set when the PDF has more pages than `maxPages`; `report.title` to the
+ *   document's metadata title, when it has one.
  * @returns {Promise<string>}
  */
 export async function extractPdfDocument(
@@ -272,6 +273,16 @@ export async function extractPdfDocument(
   const pdf = await pdfjs.getDocument({ data: new Uint8Array(bytes), verbosity: 0 }).promise;
   if (report && pdf.numPages > maxPages) report.truncated = true;
   try {
+    if (report) {
+      // The document's own title, when its author set one: what a project
+      // lists the document as (#3539). A PDF without metadata has none.
+      try {
+        const title = (await pdf.getMetadata())?.info?.Title;
+        if (typeof title === 'string' && title.trim()) report.title = title.trim();
+      } catch {
+        // Metadata is optional; the text is what matters.
+      }
+    }
     return await extractPdfText(pdf, { maxPages, maxChars });
   } finally {
     await pdf.destroy?.();

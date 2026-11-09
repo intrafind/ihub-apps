@@ -333,7 +333,11 @@ export async function startMockIFinder({ tls } = {}) {
             .filter(hit => hit.document)
             .slice(0, size)
             .map(hit => ({
-              document: { id: [hit.id], title: [hit.document.title] },
+              document: {
+                id: [hit.id],
+                ...(hit.document.title ? { title: [hit.document.title] } : {}),
+                ...(hit.document.filename ? { 'file.name': [hit.document.filename] } : {})
+              },
               metadata: { score: 1 }
             }));
           return send(res, 200, { results: hits, metadata: { total_hits: hits.length, took: 1 } });
@@ -402,8 +406,8 @@ export async function startMockIFinder({ tls } = {}) {
     addCollection(collection) {
       state.collections.set(collection.id, collection);
     },
-    addDocument(id, { title, content = '', hiddenFrom = [] }) {
-      state.documents.set(id, { title, content, hiddenFrom: new Set(hiddenFrom) });
+    addDocument(id, { title, filename, content = '', hiddenFrom = [] }) {
+      state.documents.set(id, { title, filename, content, hiddenFrom: new Set(hiddenFrom) });
     },
     close() {
       server.closeAllConnections?.();

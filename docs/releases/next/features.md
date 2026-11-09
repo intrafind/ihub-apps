@@ -1310,6 +1310,21 @@ editing `platform.json`, and a change applies at once, without a restart.
 - Lowering a limit removes nothing; it only refuses what would go past it.
 - Adding several iFinder documents to a smart collection project at once takes up to 200 per call.
 
+## Projects: The Model Knows Which Documents a Searched Project Holds
+
+When a project is too large to load in full and is searched instead, the model now sees a list of
+its documents, not just a count. It can pick the page or file that answers the question and read it
+directly, instead of searching blindly first.
+
+- Each listed document shows its name, size and, for web pages, its URL, plus the document's own
+  title and a short description when iHub knows them.
+- The title and description are captured automatically: from an uploaded file's metadata or first
+  heading and paragraph, from a web page's title and description when it is added (or, for
+  pages added earlier, the first time it is read), from an iHub page's configured title, and from
+  an iFinder document's title, else its file name.
+- The list stops at 50 documents per project; the model is told how many more there are and how to
+  list them all.
+
 ## Chat: A Tool Call Shows Up While the Model Is Still Writing It
 
 The activity list now shows a tool call ("Create interactive web artifact", "Search the web") as

@@ -49,8 +49,8 @@
     },
     "read": {
       "description": {
-        "en": "Read one document in full, or one of its sections, by the document id from a search result or from knowledge_list. A long document comes back as an outline; pass a section id or heading to read that section.",
-        "de": "Ein Dokument vollständig oder abschnittsweise lesen, anhand der Dokument-ID aus einem Suchergebnis oder aus knowledge_list. Ein langes Dokument wird als Gliederung geliefert; mit einer Abschnitts-ID oder Überschrift den Abschnitt lesen."
+        "en": "Read one document in full, or one of its sections, by the document id from a search result, from knowledge_list or from the document list of a searched project in the system prompt: a listed document can be read directly, without searching first. A long document comes back as an outline; pass a section id or heading to read that section.",
+        "de": "Ein Dokument vollständig oder abschnittsweise lesen, anhand der Dokument-ID aus einem Suchergebnis, aus knowledge_list oder aus der Dokumentliste eines durchsuchten Projekts im Systemprompt: Ein gelistetes Dokument kann direkt gelesen werden, ohne vorher zu suchen. Ein langes Dokument wird als Gliederung geliefert; mit einer Abschnitts-ID oder Überschrift den Abschnitt lesen."
       },
       "parameters": {
         "type": "object",
@@ -82,8 +82,8 @@
     },
     "list": {
       "description": {
-        "en": "List the documents of the available projects with their id, name, kind, size, status and origin (uploaded, picked, linked, written). A long list comes in pages: when the result has a nextCursor, call again with that cursor for the rest.",
-        "de": "Dokumente der verfügbaren Projekte mit ID, Name, Art, Größe, Status und Herkunft (hochgeladen, ausgewählt, verlinkt, geschrieben) auflisten. Eine lange Liste kommt seitenweise: Enthält das Ergebnis einen nextCursor, mit diesem Cursor erneut aufrufen, um den Rest zu erhalten."
+        "en": "List the documents of the available projects with their id, name, title and short description (when known), kind, size, status and origin (uploaded, picked, linked, written). Read a listed document directly with knowledge_read. The system prompt lists the documents of a searched project only up to a limit; call this for the rest. A long list comes in pages: when the result has a nextCursor, call again with that cursor for the rest.",
+        "de": "Dokumente der verfügbaren Projekte mit ID, Name, Titel und Kurzbeschreibung (soweit bekannt), Art, Größe, Status und Herkunft (hochgeladen, ausgewählt, verlinkt, geschrieben) auflisten. Ein gelistetes Dokument direkt mit knowledge_read lesen. Der Systemprompt listet die Dokumente eines durchsuchten Projekts nur bis zu einer Grenze; für den Rest dieses Tool aufrufen. Eine lange Liste kommt seitenweise: Enthält das Ergebnis einen nextCursor, mit diesem Cursor erneut aufrufen, um den Rest zu erhalten."
       },
       "parameters": {
         "type": "object",

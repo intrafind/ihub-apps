@@ -17,6 +17,8 @@ import { zSafeId, isHttpUrl } from '../../../validators/common.js';
 import { registerItemKind } from './registry.js';
 import { isIFinderConfigured } from '../../integrations/ifinderConfig.js';
 import { ProjectError } from '../projectErrors.js';
+import { cleanItemInfo } from '../itemInfo.js';
+import configCache from '../../../configCache.js';
 
 /** Default cache lifetime of a link item's text, in seconds (the URL handler's). */
 export const DEFAULT_LINK_TTL_SECONDS = 7200;
@@ -49,23 +51,46 @@ export const urlKind = registerItemKind({
     })
     .strict(),
   describe: ref => ({ name: ref.url, url: ref.url, site: hostOf(ref.url) }),
-  // The page's title as the item's name, unless the caller named it. The read
+  // The page's title as the item's name, unless the caller named it, and its
+  // title and description as what the item is about (`info`, #3539). The read
   // lands in the page reader's cache, so the item's first use does not fetch
-  // again. A page that cannot be read now is still added, named by its URL.
+  // again. A page that cannot be read now is still added, named by its URL,
+  // and records what it is about on its first read.
   async prepare(ref, { name } = {}) {
-    if (name) return null;
     try {
       const { default: readPage } = await import('../../../tools/webContentExtractor.js');
       const page = await readPage({ url: ref.url, maxLength: 1 });
-      const title = String(page?.title || '')
-        .replaceAll(/\s+/g, ' ')
-        .trim();
-      return title ? { name: title } : null;
+      const info = cleanItemInfo({ title: page?.title, description: page?.description });
+      const prepared = {};
+      if (!name && info.title) prepared.name = info.title;
+      if (info.title || info.description) prepared.info = info;
+      return Object.keys(prepared).length ? prepared : null;
     } catch {
       return null;
     }
   }
 });
+
+/**
+ * An iHub page's title as the page configuration (`ui.json` → `pages`) has it
+ * now, in the item's language, else English, else any; the page id when the
+ * page has none. Read at use time, so a renamed page is listed by its new
+ * title (#3539).
+ *
+ * @param {{pageId?: string, language?: string}} ref
+ * @returns {string}
+ */
+export function pageTitle(ref = {}) {
+  const page = configCache.getUI?.()?.data?.pages?.[ref.pageId];
+  const title = page?.title;
+  const text =
+    typeof title === 'string'
+      ? title
+      : title && typeof title === 'object'
+        ? title[ref.language] || title.en || Object.values(title).find(Boolean)
+        : '';
+  return String(text || ref.pageId || '').trim();
+}
 
 export const pageKind = registerItemKind({
   id: 'page',
@@ -86,7 +111,8 @@ export const pageKind = registerItemKind({
       ref.language && ref.language !== 'en'
         ? `/${ref.language}/pages/${ref.pageId}`
         : `/pages/${ref.pageId}`,
-    site: 'iHub'
+    site: 'iHub',
+    title: pageTitle(ref)
   })
 });
 

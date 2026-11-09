@@ -86,6 +86,71 @@ export function setTextReader(reader) {
   textReader = typeof reader === 'function' ? reader : null;
 }
 
+let infoRecorder = null;
+
+/** Items (by reference) whose first read already offered what they are about, in this process. */
+const infoOffered = new Set();
+
+/**
+ * Register the recorder of what a link item is about, learned on its first
+ * read: `(project, item, {title, description}) → Promise`. The project
+ * service registers it at startup (#3539); it runs in the background and its
+ * failure never fails the read.
+ *
+ * @param {((project: Object, item: Object, info: Object) => Promise<unknown>)|null} recorder
+ */
+export function setItemInfoRecorder(recorder) {
+  infoRecorder = typeof recorder === 'function' ? recorder : null;
+  infoOffered.clear();
+}
+
+/**
+ * What a link item's source says about it: a web page its title and
+ * description, an iFinder document its title field, else its file name.
+ */
+export function linkInfoOf(item, metadata) {
+  if (item.kind === 'url') return { title: metadata?.title, description: metadata?.description };
+  if (item.kind === 'ifinder-document') {
+    return { title: firstText(metadata?.title) || firstText(metadata?.filename) };
+  }
+  return {};
+}
+
+/** One value of an iFinder field, which may hold a list. */
+function firstText(value) {
+  const first = Array.isArray(value) ? value.find(Boolean) : value;
+  return typeof first === 'string' ? first : '';
+}
+
+/**
+ * Hand what a link item's source said about it to the recorder, once per item
+ * and process, when the item has no title or description yet.
+ */
+export function offerItemInfo(project, item, metadata) {
+  if (!infoRecorder || item.title || item.description) return;
+  const { title, description } = linkInfoOf(item, metadata);
+  if (!title && !description) return;
+  // The reference is part of the key: an item pointed elsewhere has lost its
+  // title (applyItemRef) and records the new one on its next read.
+  const key = `${project.id}/${item.id}/${JSON.stringify(item.ref || {})}`;
+  if (infoOffered.has(key)) return;
+  // Bounded: forgetting only means a later read offers again, which records nothing twice.
+  if (infoOffered.size >= 10000) infoOffered.clear();
+  infoOffered.add(key);
+  Promise.resolve()
+    .then(() => infoRecorder(project, item, { title, description }))
+    .catch(error => {
+      // Not recorded: a later read may try again.
+      infoOffered.delete(key);
+      logger.debug('Could not record what a link item is about', {
+        component: COMPONENT,
+        projectId: project.id,
+        itemId: item.id,
+        error: error?.message
+      });
+    });
+}
+
 /** The handler type and config a link item's fetch runs with. */
 function handlerCallOf(item, ctx) {
   const ref = item.ref || {};
@@ -243,6 +308,7 @@ export async function getItemText(project, item, ctx = {}) {
     const result = await handler.getCachedContent(call.config);
     const text =
       typeof result?.content === 'string' ? result.content : String(result?.content || '');
+    offerItemInfo(project, item, result?.metadata);
     return { text, cached: false, ...completenessOf(result?.metadata) };
   } catch (error) {
     const message = String(error?.message || 'fetch failed');
