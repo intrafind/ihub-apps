@@ -67,7 +67,7 @@ export default function registerShortLinkRoutes(app) {
           : undefined
         : req.user.id;
       const links = await searchLinks({ appId, ownerId });
-      res.json(links);
+      res.json({ items: links });
     }
   );
 

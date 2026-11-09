@@ -30,7 +30,7 @@ function WorkflowsSelector({ selectedWorkflows = [], onWorkflowsChange }) {
       try {
         setIsLoading(true);
         const response = await apiClient.get('/workflows');
-        setAvailableWorkflows(response.data || []);
+        setAvailableWorkflows(response.data?.items ?? []);
       } catch (error) {
         console.error('Failed to fetch workflows:', error);
         setAvailableWorkflows([]);

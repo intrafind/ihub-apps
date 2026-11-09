@@ -171,7 +171,7 @@ const route = {
 async function list(user, scope) {
   const res = await drive(route.list, { user, query: scope ? { scope } : {} });
   assert.equal(res.statusCode, 200, JSON.stringify(res.body));
-  return res.body;
+  return res.body.items;
 }
 
 async function create(user, body = {}) {
