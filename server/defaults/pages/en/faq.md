@@ -34,7 +34,7 @@ Custom app creation is available to premium users. Navigate to the 'Create App' 
 
 ### How is my data handled?
 
-We take data privacy seriously. Please refer to our [Privacy Policy](/page/privacy) for detailed information on how we collect, use, and protect your data.
+We take data privacy seriously. Please refer to our [Privacy Policy](/pages/privacy) for detailed information on how we collect, use, and protect your data.
 
 ### Are my conversations stored?
 

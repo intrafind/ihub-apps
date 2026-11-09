@@ -725,8 +725,8 @@ export default function AdminOverview() {
 
         {/* Content stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {statCards.map(card => (
-            <StatCard key={card.key} {...card} />
+          {statCards.map(({ key, ...card }) => (
+            <StatCard key={key} {...card} />
           ))}
         </div>
 
@@ -762,8 +762,8 @@ export default function AdminOverview() {
       {/* Stat cards */}
       {!isFreshInstance && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {statCards.map(card => (
-            <StatCard key={card.key} {...card} />
+          {statCards.map(({ key, ...card }) => (
+            <StatCard key={key} {...card} />
           ))}
         </div>
       )}

@@ -166,7 +166,7 @@ The `footer` section controls the appearance and content of the application foot
         "en": "Privacy Policy",
         "de": "Datenschutzerklärung"
       },
-      "url": "/page/privacy"
+      "url": "/pages/privacy"
     },
     // More footer links...
   ]
@@ -606,7 +606,7 @@ Each page has:
 
 ### URL Routing
 
-Static pages can be accessed through URL routes using the pattern `/page/{pageId}`, where `{pageId}` corresponds to the key in the `pages` object (e.g., `/page/privacy` for the privacy policy).
+Static pages can be accessed through URL routes using the pattern `/pages/{pageId}`, where `{pageId}` corresponds to the key in the `pages` object (e.g., `/pages/privacy` for the privacy policy).
 
 Navigation links pointing to pages are automatically hidden if the current user does not meet the `authRequired` or `allowedGroups` restrictions.
 These settings can also be managed via the admin interface at `/admin/pages`.

@@ -395,3 +395,11 @@ integrations in its brief and answers with `integrations`; the wizard turns the 
 app's `integrations` bindings (only installations that exist are kept). Migration V231 updates the
 stored `app-generator` prompt: it drops the `actions` example and the `tools` answer field and adds
 the fields the wizard applies; the rest of an edited prompt is left alone.
+
+## Privacy Link in the FAQ, and OAuth Connection Counts
+
+The default FAQ page linked its privacy policy to `/page/privacy`, a URL that does not exist (pages
+are served under `/pages/{pageId}`); the link now points to `/pages/privacy`, in English and German.
+New installations get the corrected text; an existing FAQ page keeps its own copy, so change the link
+there if you use it. **Admin → OAuth** showed no connection count and **Admin → Users → View** no
+OAuth connections for a user, because both read a list key the server no longer sends.
