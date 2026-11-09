@@ -52,7 +52,7 @@ export function questionSeam({
       const toolMessage = payload => ({
         role: 'tool',
         tool_call_id: call.id,
-        name: info.name,
+        name: info.wireName || info.name,
         content: JSON.stringify(payload)
       });
       if (headless) {

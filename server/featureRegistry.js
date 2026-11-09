@@ -87,6 +87,17 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'toolSearch',
+    name: { en: 'Tool Search', de: 'Tool-Suche' },
+    description: {
+      en: 'An app with more integration tools than fit a request sends its biggest integrations as a list and a search instead of in full: the model finds a tool with search_tools and runs it with call_tool. Keeps requests small and tool choice sharp on apps with many integrations. Each app can switch it off or keep an integration always loaded',
+      de: 'Eine App mit mehr Integrations-Tools, als in eine Anfrage passen, sendet ihre größten Integrationen als Liste und Suche statt vollständig: Das Modell findet ein Tool mit search_tools und führt es mit call_tool aus. Hält Anfragen klein und die Tool-Wahl treffsicher bei Apps mit vielen Integrationen. Jede App kann es abschalten oder eine Integration immer geladen halten'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'projects',
     name: { en: 'Projects', de: 'Projekte' },
     description: {

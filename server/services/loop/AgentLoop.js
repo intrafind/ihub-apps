@@ -30,7 +30,7 @@ import { loopPoliciesSchema } from './contracts/loop.js';
 import { LLMError, LLM_ERROR_CODES, isLLMError, isAbortError } from './contracts/errors.js';
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { addUsage, normalizeUsage } from './llmUsage.js';
-import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
+import { repairToolArguments, matchTool, resolveToolCall } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
 import { toolDisplayOf } from '../../utils/toolDisplay.js';
 import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
@@ -169,6 +169,8 @@ export class AgentLoop {
    * @param {Object} request.model - resolved model object
    * @param {Array} request.messages - starting transcript (not mutated)
    * @param {Array} [request.tools] - tool specs offered to the model
+   * @param {Object} [request.toolSearch] - `createToolSearch()`: tools left out of `tools`,
+   *   what `search_tools` answers and how `call_tool` resolves to the tool it names
    * @param {'server'|'caller'} [request.toolExecution='server']
    * @param {Object} [request.policies] - partial loop policies (see contracts/loop.js)
    * @param {Object} [request.options] - LLMClient options (maxTokens, responseSchema, thinking*, …)
@@ -193,6 +195,9 @@ export class AgentLoop {
     const policies = resolvePolicies(request.policies);
     // Copied: the native web search fallback may add a tool for this run only.
     const tools = Array.isArray(request.tools) ? [...request.tools] : [];
+    // Tools left out of `tools` that the model finds with `search_tools` and
+    // runs with `call_tool` (services/tools/toolSearch.js).
+    const toolSearch = request.toolSearch || null;
     const toolExecution = request.toolExecution === 'caller' ? 'caller' : 'server';
     const seams = [...this._seams, ...(request.seams || [])];
     const runId = request.runId || null;
@@ -241,6 +246,7 @@ export class AgentLoop {
       kind: request.kind || 'agent',
       model,
       tools,
+      toolSearch,
       policies,
       messages: [...request.messages],
       stream: null,
@@ -408,12 +414,24 @@ export class AgentLoop {
       if (request.resume?.toolCall && toolExecution === 'server') {
         const resumed = request.resume;
         const call = resumed.toolCall;
+        const named = matchTool(call.function?.name, tools);
+        // A call the model made through `call_tool` was approved as the tool
+        // it names: run that one, with the arguments that were approved.
+        const viaCallTool = named?.toolSearchRole === 'call';
+        const approvedTool = viaCallTool
+          ? toolSearch?.findDeferred(resumed.toolId) ||
+            matchTool(
+              resumed.toolId,
+              tools.filter(tool => !tool.toolSearchRole)
+            )
+          : named;
         const item = {
           call,
-          toolDef: matchTool(call.function?.name, tools),
+          toolDef: approvedTool,
           args: resumed.args && typeof resumed.args === 'object' ? resumed.args : {},
           argsRepaired: false,
-          position: 0
+          position: 0,
+          ...(viaCallTool ? { viaCallTool: true, requestedName: resumed.toolId } : {})
         };
         ctx.iteration = 0;
         const outcome = await this._executeOne(ctx, item, {
@@ -725,12 +743,15 @@ export class AgentLoop {
         ctx.messages.push(assistantMessage);
 
         // ── execute the tool calls (segment planner → batches) ──────────
-        const resolved = toolCalls.map((call, i) => {
-          const toolDef = matchTool(call.function.name, tools);
-          const repair = repairs[i];
-          const args = applyParameterDefaults(repair.args, toolDef);
-          return { call, toolDef, args, argsRepaired: repair.repaired };
-        });
+        const resolved = toolCalls.map((call, i) =>
+          resolveToolCall({
+            call,
+            repair: repairs[i],
+            tools,
+            toolSearch,
+            disabledTools: ctx.disabledTools
+          })
+        );
         const batches = planToolBatches(resolved, policies.tools);
         const outcomes = new Array(resolved.length);
         let aborted = false;
@@ -945,14 +966,30 @@ export class AgentLoop {
    * @returns {Promise<{position:number, messages:Array, terminate?:Object}>}
    */
   async _executeOne(ctx, item, { seams, iteration, groupIndex, toolExecution }) {
-    const { call, toolDef, args, argsRepaired, position } = item;
-    const toolId = toolDef?.id || call.function.name;
-    const name = call.function.name;
+    const { call, toolDef, args, argsRepaired, position, viaCallTool, requestedName, rejection } =
+      item;
+    const toolId = toolDef?.id || requestedName || call.function.name;
+    // What the model called: the tool messages carry it, so the provider can
+    // match them to the call (Gemini matches a response by name).
+    const wireName = call.function.name;
+    // What frames, logs and approvals call the tool: for a call through
+    // `call_tool`, the tool it names.
+    const name = viaCallTool || requestedName ? toolId : wireName;
     const ledgerId = ctx.ledgerId;
     const runId = ctx.runId;
     const started = Date.now();
     const messages = [];
-    const info = { call, toolDef, toolId, name, args, argsRepaired, iteration, groupIndex };
+    const info = {
+      call,
+      toolDef,
+      toolId,
+      name,
+      wireName,
+      args,
+      argsRepaired,
+      iteration,
+      groupIndex
+    };
     const display = toolDisplayOf(toolDef);
 
     if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
@@ -1006,7 +1043,7 @@ export class AgentLoop {
       message = {
         role: 'tool',
         tool_call_id: call.id,
-        name,
+        name: wireName,
         content: JSON.stringify(rawResult)
       };
       await runHooks(seams, 'onHallucinated', ctx, {
@@ -1016,30 +1053,40 @@ export class AgentLoop {
       });
     } else {
       try {
-        if (typeof ctx.request.executeTool !== 'function') {
-          throw new LLMError(`No tool executor configured for '${toolId}'`, {
-            code: LLM_ERROR_CODES.INVALID_REQUEST,
-            providerCode: 'NO_TOOL_EXECUTOR'
-          });
+        if (rejection) {
+          // A `call_tool` call that must not run (arguments that do not fit,
+          // a tool the circuit breaker withheld): the model is told why and
+          // nothing runs. It counts as a failed call of `call_tool`.
+          rawResult = { error: true, reason: 'invalid_tool_call', message: rejection };
+        } else if (toolDef.toolSearchRole === 'search' && ctx.toolSearch) {
+          // `search_tools` answers from the tools this request left out.
+          rawResult = ctx.toolSearch.search(args);
+        } else {
+          if (typeof ctx.request.executeTool !== 'function') {
+            throw new LLMError(`No tool executor configured for '${toolId}'`, {
+              code: LLM_ERROR_CODES.INVALID_REQUEST,
+              providerCode: 'NO_TOOL_EXECUTOR'
+            });
+          }
+          rawResult = await raceAbort(
+            () =>
+              runToolCallScope(
+                reported,
+                () =>
+                  ctx.request.executeTool(call, {
+                    toolDef,
+                    toolId,
+                    args,
+                    ctx,
+                    info,
+                    signal: ctx.signal
+                  }),
+                ctx.toolTurn
+              ),
+            ctx.signal,
+            () => abortError('Agent loop aborted (cancelled or timed out)')
+          );
         }
-        rawResult = await raceAbort(
-          () =>
-            runToolCallScope(
-              reported,
-              () =>
-                ctx.request.executeTool(call, {
-                  toolDef,
-                  toolId,
-                  args,
-                  ctx,
-                  info,
-                  signal: ctx.signal
-                }),
-              ctx.toolTurn
-            ),
-          ctx.signal,
-          () => abortError('Agent loop aborted (cancelled or timed out)')
-        );
         if (
           rawResult &&
           typeof rawResult === 'object' &&
@@ -1059,7 +1106,7 @@ export class AgentLoop {
           message = {
             role: 'tool',
             tool_call_id: call.id,
-            name,
+            name: wireName,
             content: serializeToolContent(rawResult)
           };
         }
@@ -1070,7 +1117,12 @@ export class AgentLoop {
           error: true,
           message: `Tool execution failed: ${err.message || 'Unknown error'}`
         };
-        message = { role: 'tool', tool_call_id: call.id, name, content: JSON.stringify(rawResult) };
+        message = {
+          role: 'tool',
+          tool_call_id: call.id,
+          name: wireName,
+          content: JSON.stringify(rawResult)
+        };
       }
     }
 
@@ -1165,7 +1217,7 @@ export class AgentLoop {
             reason,
             count,
             message: verdict.message,
-            isSearch: isCitationProducingTool(key)
+            isSearch: !toolDef?.isInternalTool && isCitationProducingTool(key)
           })
         )
       );

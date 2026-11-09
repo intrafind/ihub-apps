@@ -494,6 +494,7 @@ class ChatService {
       model,
       llmMessages,
       tools = [],
+      toolSearch = null,
       maxTokens,
       responseFormat,
       responseSchema,
@@ -822,7 +823,10 @@ class ChatService {
             type: 'function',
             function: { name: resume.call.name, arguments: JSON.stringify(resume.args || {}) }
           },
-          args: resume.args || {}
+          args: resume.args || {},
+          // The tool that was approved: a call the model made through
+          // `call_tool` is stored under that name, and runs as this tool.
+          toolId: resume.call.toolId
         };
       } else {
         const payload = approvalRefusalPayload(resume.outcome, toolName);
@@ -856,6 +860,7 @@ class ChatService {
         messages: loopMessages,
         ...(loopResume ? { resume: loopResume } : {}),
         tools: loopTools,
+        toolSearch,
         toolExecution: 'server',
         policies: {
           budgets: {
@@ -1578,6 +1583,7 @@ class ChatService {
         model,
         llmMessages,
         tools = [],
+        toolSearch = null,
         maxTokens,
         responseFormat,
         responseSchema,
@@ -1633,6 +1639,7 @@ class ChatService {
         model,
         messages: llmMessages,
         tools: markInteractiveTools(tools),
+        toolSearch,
         toolExecution: 'server',
         policies: {
           budgets: { maxToolRounds: CHAT_MAX_TOOL_ROUNDS, maxWallClockMs },

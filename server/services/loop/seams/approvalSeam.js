@@ -214,10 +214,12 @@ export function approvalSeam({
       if (!needsApproval(policy)) return null;
       if (await isGranted(info, ctx, policy)) return null;
 
+      // The message carries the name the model called (a call through
+      // `call_tool` is a call of `call_tool`), whatever the frames name the tool.
       const toolMessage = payload => ({
         role: 'tool',
         tool_call_id: call?.id,
-        name: info.name,
+        name: info.wireName || info.name,
         content: JSON.stringify(payload)
       });
       const canAsk = typeof raise === 'function' && !headless;

@@ -44,6 +44,7 @@ We propose one **integrations platform** with three layers, the shape every comp
 | [2026-11-02 · Action detail and test runner](2026-11-02%20Action%20detail%20and%20test%20runner.md) | Implementation notes for #2974: action detail drawer, guidance in the system prompt, the test runner with redaction and server-side confirmation, per-action usage counter |
 | [2026-11-02 · Custom integration builder](2026-11-02%20Custom%20integration%20builder.md) | Implementation notes for #2975 / #2915 item 1: the builder (sources, steps, routes), the `http` adapter, fixed tool ids for custom definitions, migration V211 from tool files, the removed `/api/admin/tools*` |
 | [2026-11-02 · Built-ins own the shipped tools](2026-11-02%20Built-ins%20own%20the%20shipped%20tools.md) | Implementation notes for #2973: the tool ownership test, the side-effect/data-flow snapshot, the tool-id regression fixture and the iAssistant `ask` action |
+| [2026-11-09 · Tool search](2026-11-09%20Tool%20search.md) | Implementation notes for #2889: leaving the biggest integrations out of the request, `search_tools` and `call_tool`, unwrapping in the loop before the approval gate, settings, what was cleaned up |
 | [mockups/integrations.html](mockups/integrations.html) | Clickable low-fidelity mockup of the admin catalog, install wizard, installed list, instance page with action detail and test, user settings page and chat picker |
 
 ## Goals

@@ -306,6 +306,21 @@ export function boundInstanceIds(app) {
 }
 
 /**
+ * The installations the app binds with `alwaysLoaded: true`: their tools are
+ * always sent to the model in full, never left to tool search.
+ * @param {object} app
+ * @returns {Set<string>} installation ids
+ */
+export function alwaysLoadedInstanceIds(app) {
+  const ids = new Set();
+  if (!app?.integrations || typeof app.integrations !== 'object') return ids;
+  for (const instance of installedIntegrationService.list()) {
+    if (appBindingFor(app, instance)?.alwaysLoaded === true) ids.add(instance.id);
+  }
+  return ids;
+}
+
+/**
  * The integration tools an app offers, from the already loaded tool list.
  * @param {object} app
  * @param {Array} allTools - result of `loadTools()`

@@ -31,8 +31,16 @@ import { implicitActionNames, selectedActionNames, toggleBindingAction } from '.
  * @param {(binding: Object|null) => void} props.onBindingChange - null unbinds
  * @param {React.ReactNode} [props.notice] - shown under the row's name, e.g. the
  *   warnings a definition migration left on this binding
+ * @param {boolean} [props.toolSearchEnabled] - the platform's tool search feature is on
  */
-function IntegrationBindingRow({ item, binding, detail, onBindingChange, notice = null }) {
+function IntegrationBindingRow({
+  item,
+  binding,
+  detail,
+  onBindingChange,
+  notice = null,
+  toolSearchEnabled = false
+}) {
   const { t } = useTranslation();
   const bound = Boolean(binding);
   const current = binding || {};
@@ -139,6 +147,7 @@ function IntegrationBindingRow({ item, binding, detail, onBindingChange, notice 
             onBindingChange={onBindingChange}
             scopes={scopes}
             requiredHelp={item.requiredHelp}
+            toolSearchEnabled={toolSearchEnabled}
           />
         </div>
       )}
