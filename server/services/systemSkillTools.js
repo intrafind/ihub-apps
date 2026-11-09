@@ -167,34 +167,54 @@ export function systemSkillToolsFor(
   skills,
   { language = 'en', model = null, templates = null } = {}
 ) {
-  const tools = [];
   const seen = new Set();
-  const acceptsImages = model
-    ? model.supportsImages === true || model.supportsVision === true
-    : true;
+  const acceptsImages = !model || model.supportsImages === true || model.supportsVision === true;
+  const tools = [];
   for (const skill of skills || []) {
-    if (!skill?.isSystem || !Array.isArray(skill.providedTools)) continue;
-    for (const toolId of skill.providedTools) {
-      const entry = REGISTRY.get(toolId);
-      if (!entry || seen.has(toolId)) continue;
-      if (entry.definition.requiresImageInput && !acceptsImages) continue;
-      seen.add(toolId);
-      const { definition } = entry;
-      const { description, parameters } = withTemplates(definition, templates, language);
-      tools.push({
-        id: definition.id,
-        name: getLocalizedString(definition.name, language),
-        description,
-        parameters,
-        isSystemSkillTool: true,
-        // What the tool produces (`utils/toolDisplay.js` `outputKindOf`), for the
-        // creators of a file or a document; the other tools bring none.
-        ...(definition.outputKind ? { outputKind: definition.outputKind } : {}),
-        skillName: skill.name
-      });
+    for (const { definition } of providedEntries(skill, seen, acceptsImages)) {
+      tools.push(toolOfDefinition(definition, skill.name, { templates, language }));
     }
   }
   return tools;
+}
+
+/**
+ * The registered tools a system skill provides that are still to be offered:
+ * not offered through an earlier skill, and not one that needs image input for
+ * a model that cannot see images. Marks what it returns in `seen`.
+ *
+ * @param {{ isSystem?: boolean, providedTools?: string[] }} skill
+ * @param {Set<string>} seen - tool ids already offered (mutated)
+ * @param {boolean} acceptsImages
+ * @returns {Array<{ definition: Object }>}
+ */
+function providedEntries(skill, seen, acceptsImages) {
+  if (!skill?.isSystem || !Array.isArray(skill.providedTools)) return [];
+  const entries = [];
+  for (const toolId of skill.providedTools) {
+    const entry = REGISTRY.get(toolId);
+    if (!entry || seen.has(toolId)) continue;
+    if (entry.definition.requiresImageInput && !acceptsImages) continue;
+    seen.add(toolId);
+    entries.push(entry);
+  }
+  return entries;
+}
+
+/** A tool definition as the model is offered it: localized, adjusted to the templates, marked as a system-skill tool. */
+function toolOfDefinition(definition, skillName, { templates, language }) {
+  const { description, parameters } = withTemplates(definition, templates, language);
+  return {
+    id: definition.id,
+    name: getLocalizedString(definition.name, language),
+    description,
+    parameters,
+    isSystemSkillTool: true,
+    // What the tool produces (`utils/toolDisplay.js` `outputKindOf`), for the
+    // creators of a file or a document; the other tools bring none.
+    ...(definition.outputKind ? { outputKind: definition.outputKind } : {}),
+    skillName
+  };
 }
 
 /**

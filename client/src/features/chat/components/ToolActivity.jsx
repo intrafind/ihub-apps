@@ -60,7 +60,7 @@ function ToolActivity({ activity, loading = false }) {
 
   const items = activity?.items || [];
   const idle = activity?.idle || null;
-  const anyActive = items.some(isActiveItem) || Boolean(idle);
+  const anyActive = items.some(item => isActiveItem(item)) || Boolean(idle);
   // The clock only runs while something is going on.
   const now = useNow(anyActive);
 
@@ -250,9 +250,15 @@ function SkillRow({ item }) {
   );
 }
 
+/** The queries a search row shows: a provider-run search lists its own, a tool call has one. */
+function queriesOf(item) {
+  if (item.native) return item.queries;
+  return item.query ? [item.query] : [];
+}
+
 function SearchRow({ item }) {
   const { t } = useTranslation();
-  const queries = item.native ? item.queries : item.query ? [item.query] : [];
+  const queries = queriesOf(item);
   return (
     <li>
       <div className="flex flex-wrap items-center gap-1.5">

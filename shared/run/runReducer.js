@@ -461,6 +461,54 @@ function foldLiveProgress(run, frame, envelope) {
   return frame.phase === WAITING_PHASE ? foldWaitingFrame(run, frame, when) : null;
 }
 
+/** The skill a `skill.activation` frame names, for `foldSkill`. */
+function activatedSkillOf(frame) {
+  const detail = frame.data;
+  return {
+    name: detail?.skillName || frame.message,
+    description: detail?.description || '',
+    // The global skill name or user skill id the next turns of the chat keep
+    // the skill active by (`name` is for display).
+    ...(typeof detail?.skillId === 'string' && detail.skillId ? { id: detail.skillId } : {}),
+    // Who activated it: a skill only users may start stays active only when a
+    // user did.
+    ...(detail?.activatedBy === 'user' || detail?.activatedBy === 'model'
+      ? { activatedBy: detail.activatedBy }
+      : {})
+  };
+}
+
+/**
+ * Fold a `tool/progress` frame. Arguments being written and the model's
+ * silence have their own state (see `ARG_PHASE`) and never reach
+ * `run.progress`; every other phase is appended to it, and a few also fold
+ * into state of their own.
+ */
+function foldToolProgress(run, frame, envelope) {
+  const live = foldLiveProgress(run, frame, envelope);
+  if (live) return live;
+  const { ts, seq, runId } = envelope;
+  const entry = { kind: 'tool/progress', at: ts, seq, runId, ...frame };
+  const appended = { ...run, progress: [...run.progress, entry] };
+  switch (frame.phase) {
+    case 'search.status':
+      return {
+        ...appended,
+        searchStatus: frame.data ?? null,
+        searchSummary: accumulateSearch(appended.searchSummary, frame.data)
+      };
+    case 'skill.activation':
+      // `run.skills` is the set of skills the turn used, one entry each. Every
+      // activation (the user's `/name`, each time the model loads it) stays on
+      // `run.progress` for the thought chain to list.
+      return { ...appended, skills: foldSkill(appended.skills, activatedSkillOf(frame)) };
+    case 'grounding':
+      return { ...appended, grounding: mergeGrounding(appended.grounding, frame.data) };
+    default:
+      return appended;
+  }
+}
+
 /**
  * Fold one envelope into the stream state. Unknown or malformed envelopes are
  * ignored (the state object is returned unchanged).
@@ -731,51 +779,8 @@ export function reduceRunEvent(state, envelope) {
       return withRun(next, run);
     }
 
-    case SSE_V2_EVENTS.TOOL_PROGRESS: {
-      // Arguments being written and the model's silence have their own state:
-      // see `ARG_PHASE`. They never reach `run.progress`.
-      const live = foldLiveProgress(run, data, envelope);
-      if (live) return withRun(next, live);
-      const entry = { kind: 'tool/progress', at: ts, seq, runId, ...data };
-      run = { ...run, progress: [...run.progress, entry] };
-      switch (data.phase) {
-        case 'search.status':
-          run = {
-            ...run,
-            searchStatus: data.data ?? null,
-            searchSummary: accumulateSearch(run.searchSummary, data.data)
-          };
-          break;
-        case 'skill.activation':
-          // `run.skills` is the set of skills the turn used, one entry each.
-          // Every activation (the user's `/name`, each time the model loads it)
-          // stays on `run.progress` for the thought chain to list.
-          run = {
-            ...run,
-            skills: foldSkill(run.skills, {
-              name: data.data?.skillName || data.message,
-              description: data.data?.description || '',
-              // The global skill name or user skill id the next turns of the
-              // chat keep the skill active by (`name` is for display).
-              ...(typeof data.data?.skillId === 'string' && data.data.skillId
-                ? { id: data.data.skillId }
-                : {}),
-              // Who activated it: a skill only users may start stays active
-              // only when a user did.
-              ...(data.data?.activatedBy === 'user' || data.data?.activatedBy === 'model'
-                ? { activatedBy: data.data.activatedBy }
-                : {})
-            })
-          };
-          break;
-        case 'grounding':
-          run = { ...run, grounding: mergeGrounding(run.grounding, data.data) };
-          break;
-        default:
-          break;
-      }
-      return withRun(next, run);
-    }
+    case SSE_V2_EVENTS.TOOL_PROGRESS:
+      return withRun(next, foldToolProgress(run, data, envelope));
 
     case SSE_V2_EVENTS.PROGRESS_NODE: {
       const nodeId = data.nodeId;

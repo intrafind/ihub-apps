@@ -177,7 +177,7 @@ export function ArgumentProgress({
   if (parts.length === 0) return null;
   return (
     <span aria-hidden="true" className={`tabular-nums ${className}`}>
-      <bdi>{(lead ? '· ' : '') + parts.join(SEPARATOR)}</bdi>
+      <bdi>{(lead ? SEPARATOR : '') + parts.join(SEPARATOR)}</bdi>
     </span>
   );
 }

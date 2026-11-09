@@ -27,7 +27,9 @@ export function useGracedActivity(activity) {
   // Wake up when the next row's grace ends: its frame brought no re-render of its own.
   useEffect(() => {
     const clock = performance.now();
-    const waits = (activity?.items || []).map(item => paintsIn(item, clock)).filter(Boolean);
+    const waits = (activity?.items || [])
+      .map(item => paintsIn(item, clock))
+      .filter(wait => wait !== null);
     if (waits.length === 0) return undefined;
     const timer = setTimeout(() => setNow(performance.now()), Math.min(...waits) + 1);
     return () => clearTimeout(timer);

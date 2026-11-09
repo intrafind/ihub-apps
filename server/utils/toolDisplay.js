@@ -150,6 +150,7 @@ export function toolDisplayOf(toolDef) {
  * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string}}
  */
 export function startedDisplayOf(toolDef) {
-  const { outputKind: _outputKind, ...display } = toolDisplayOf(toolDef);
+  const display = toolDisplayOf(toolDef);
+  delete display.outputKind;
   return display;
 }

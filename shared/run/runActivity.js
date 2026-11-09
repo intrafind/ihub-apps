@@ -104,6 +104,17 @@ export function answerSourceOf(run) {
 }
 
 /**
+ * The tool activity kept with a stored answer: the rows, and nothing that is
+ * only true while the turn runs. `reading` is the page a search is fetching
+ * right now: never true of a finished run, and meaningless once stored. The
+ * idle line is live-only too, so a run with no rows has nothing to keep.
+ */
+function storedToolActivity(run) {
+  const toolActivity = buildToolActivity(run);
+  return toolActivity?.items.length ? { items: toolActivity.items, reading: null } : null;
+}
+
+/**
  * The provenance of a finished message: the chat run behind it and the
  * workflow runs a tool launched inside it (`parentRunId === run.runId`), or
  * the workflow run itself for an `@mention` launch.
@@ -120,13 +131,8 @@ export function buildRunActivity(run, childRuns = []) {
   if (!run) return null;
   const activity = {};
 
-  const toolActivity = buildToolActivity(run);
-  // `reading` is the page a search is fetching right now: never true of a
-  // finished run, and meaningless once stored.
-  // A run with no rows has nothing to keep (its idle line is live-only).
-  if (toolActivity?.items.length) {
-    activity.toolActivity = { items: toolActivity.items, reading: null };
-  }
+  const toolActivity = storedToolActivity(run);
+  if (toolActivity) activity.toolActivity = toolActivity;
   if (run.searchSummary) activity.searchSummary = { ...run.searchSummary, searching: false };
   if (run.skills?.length) activity.activeSkills = run.skills;
   const answerSource = answerSourceOf(run);

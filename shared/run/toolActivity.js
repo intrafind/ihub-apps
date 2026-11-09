@@ -196,8 +196,9 @@ function uniqueStrings(values) {
 function nativeSearchQueries(run) {
   const stepGrounding = Object.values(run.steps || {})
     .map(step => step.groundingMetadata)
-    .filter(Boolean);
-  const metadata = stepGrounding.length ? stepGrounding : run.grounding ? [run.grounding] : [];
+    .filter(grounding => grounding);
+  let metadata = stepGrounding;
+  if (!stepGrounding.length) metadata = run.grounding ? [run.grounding] : [];
   return uniqueStrings(
     metadata.flatMap(m => (Array.isArray(m?.webSearchQueries) ? m.webSearchQueries : []))
   );
@@ -320,7 +321,7 @@ function streamFields(stream, status) {
  * @returns {Array<{tool: Object|null, stream: Object|null}>}
  */
 function callsInOrder(run) {
-  const streams = (run.argOrder || []).map(id => run.argStreams[id]).filter(Boolean);
+  const streams = (run.argOrder || []).map(id => run.argStreams[id]).filter(stream => stream);
   const tools = run.tools || [];
   const placed = new Set();
   const calls = [];
@@ -342,6 +343,12 @@ function callsInOrder(run) {
   });
   placeStreamsUpTo(Infinity);
   return calls;
+}
+
+/** Where a search or read looked: the organisation's documents or the web; a plain call says nothing. */
+function scopeOf(kind, tool) {
+  if (kind === 'tool') return null;
+  return tool?.activityScope === 'documents' ? 'documents' : 'web';
 }
 
 /**
@@ -377,7 +384,7 @@ function callRow(run, { tool, stream }, finished) {
       // The integration, MCP server or agent it ran against ("Munich AD").
       integration: tool?.integration || stream?.integration || null,
       status,
-      scope: kind === 'tool' ? null : tool?.activityScope === 'documents' ? 'documents' : 'web',
+      scope: scopeOf(kind, tool),
       query,
       url,
       documentId,
@@ -462,7 +469,7 @@ export function buildToolActivity(run) {
   const finished = ['completed', 'aborted', 'error', 'budget_exhausted'].includes(run.status);
   const toolRows = callsInOrder(run)
     .map(call => callRow(run, call, finished))
-    .filter(Boolean);
+    .filter(row => row);
   const items = mergeSkillRows(toolRows, skillRows(run)).map(row => row.item);
   const native = nativeSearchRow(run, finished);
   if (native) items.push(native);

@@ -34,7 +34,13 @@ import {
   sameArgs
 } from '../loop/seams/approvalSeam.js';
 import { startedDisplayOf } from '../../utils/toolDisplay.js';
-import { PROGRESS_PHASES, createToolArgTracker, createWaitingLine } from './toolArgProgress.js';
+import {
+  PROGRESS_PHASES,
+  chunkHasReasoning,
+  chunkShowsOutput,
+  createToolArgTracker,
+  createWaitingLine
+} from './toolArgProgress.js';
 
 /**
  * A clarification nobody answers expires after a day, so abandoned chats do
@@ -376,18 +382,15 @@ export function chatToolSeam({
     onChunk(ctx, chunk) {
       if (!progressLive(ctx)) return;
       guarded('chunk', () => {
-        const showsText = (chunk.content || []).some(Boolean);
-        if (showsText || (Array.isArray(chunk.images) && chunk.images.length > 0)) {
-          waiting.visible();
-        }
-        if (Array.isArray(chunk.thinking) && chunk.thinking.length > 0) waiting.thinking();
-        if (!Array.isArray(chunk.toolCallProgress) || chunk.toolCallProgress.length === 0) return;
-        const frames = argTracker.observe(chunk.toolCallProgress, name => ctx.resolveTool?.(name));
-        if (frames.length > 0) {
-          // A row on screen: the waiting line stands down.
-          waiting.visible();
-          emitFrames(ctx, frames);
-        }
+        if (chunkShowsOutput(chunk)) waiting.visible();
+        if (chunkHasReasoning(chunk)) waiting.thinking();
+        const early = chunk.toolCallProgress;
+        if (!Array.isArray(early) || early.length === 0) return;
+        const frames = argTracker.observe(early, name => ctx.resolveTool?.(name));
+        if (frames.length === 0) return;
+        // A row on screen: the waiting line stands down.
+        waiting.visible();
+        emitFrames(ctx, frames);
       });
     },
     streamEnd(ctx, { outcome, result }) {

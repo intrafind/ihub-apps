@@ -143,9 +143,12 @@ export function idleLabel(t, kind) {
  * inconsistent ways, and a row names what is happening without trailing dots.
  */
 export function stripEllipsis(text) {
-  return String(text ?? '')
-    .replace(/\s*(…|\.{3})\s*$/, '')
-    .trim();
+  // A check of the end, not a regular expression: a pattern for "whitespace,
+  // dots, whitespace" backtracks badly on a long run of whitespace.
+  const plain = String(text ?? '').trimEnd();
+  if (plain.endsWith('…')) return plain.slice(0, -1).trim();
+  if (plain.endsWith('...')) return plain.slice(0, -3).trim();
+  return plain.trim();
 }
 
 /** Sources read, by scope — a document shows up on its search hit and on the read that fetched it. */
@@ -257,7 +260,7 @@ function readParts(t, items) {
 
 /** What the calls that made something made, and how they ended: "Created web artifact · Stopped". */
 function madeParts(t, items) {
-  const made = items.filter(hasOutputKind);
+  const made = items.filter(item => hasOutputKind(item));
   const parts = [];
   for (const kind of new Set(made.map(item => item.outputKind))) {
     if (made.some(item => item.outputKind === kind && item.status === 'completed')) {
@@ -287,7 +290,7 @@ export function finishedHeadline(t, items, searches) {
   if (others.length) parts.push(t('toolActivity.toolCalls', { count: others.length }));
   parts.push(...madeParts(t, items));
   // The systems the turn asked, so the summary says where the answer came from.
-  const integrations = [...new Set(items.map(item => item.integration).filter(Boolean))];
+  const integrations = [...new Set(items.map(item => item.integration).filter(name => name))];
   if (integrations.length) parts.push(integrations.join(', '));
   return parts.join(' · ');
 }
@@ -299,27 +302,30 @@ export function finishedHeadline(t, items, searches) {
  * @returns {{name: string, failed: boolean}}
  */
 export function summaryIconOf(items) {
-  const made = items.filter(hasOutputKind);
-  if (made.some(item => item.status === 'error'))
+  const made = items.filter(item => hasOutputKind(item));
+  if (made.some(item => item.status === 'error')) {
     return { name: 'exclamation-circle', failed: true };
+  }
   if (items.length && made.length === items.length) {
     return { name: outputGlyphOf(made[made.length - 1], 'wrench'), failed: false };
   }
-  // Skill and plain tool rows do not say where the turn looked, so they do not
-  // decide the icon between the web and the organisation's documents.
-  const isPlain = item => item.kind === 'tool' || item.kind === 'skill';
-  const onlyDocuments = items.every(item => isPlain(item) || item.scope === 'documents');
-  const name = items.every(item => item.kind === 'skill')
-    ? 'sparkles'
-    : items.every(isPlain)
-      ? 'wrench'
-      : onlyDocuments
-        ? 'document-text'
-        : 'globe-alt';
-  return { name, failed: false };
+  return { name: lookedAtIcon(items), failed: false };
 }
 
-const lastWhere = (list, test) => [...list].reverse().find(test) || null;
+/**
+ * The icon of a turn that made nothing: where it looked. Skill and plain tool
+ * rows do not say where the turn looked, so they do not decide the icon
+ * between the web and the organisation's documents.
+ */
+function lookedAtIcon(items) {
+  if (items.every(item => item.kind === 'skill')) return 'sparkles';
+  const isPlain = item => item.kind === 'tool' || item.kind === 'skill';
+  if (items.every(item => isPlain(item))) return 'wrench';
+  const onlyDocuments = items.every(item => isPlain(item) || item.scope === 'documents');
+  return onlyDocuments ? 'document-text' : 'globe-alt';
+}
+
+const lastWhere = (list, matches) => [...list].reverse().find(item => matches(item)) || null;
 
 /**
  * Which line the headline is, first match wins (UX brief 3.3):
@@ -341,7 +347,7 @@ const lastWhere = (list, test) => [...list].reverse().find(test) || null;
  */
 export function headlineModeOf(activity, loading) {
   const items = activity?.items || [];
-  const busyCount = items.filter(isActiveItem).length;
+  const busyCount = items.filter(item => isActiveItem(item)).length;
   const awaiting = lastWhere(items, item => item.status === 'awaiting');
   if (awaiting) return { mode: 'awaiting', owner: awaiting, more: 0, busy: false, active: true };
   if (!loading) return { mode: 'summary', owner: null, more: 0, busy: false, active: false };

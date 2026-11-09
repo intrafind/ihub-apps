@@ -92,7 +92,7 @@ function RunAnnouncer({ messages }) {
 
   useEffect(() => {
     const { timers } = runRef.current;
-    return () => Object.values(timers).forEach(clearTimeout);
+    return () => Object.values(timers).forEach(timer => clearTimeout(timer));
   }, []);
 
   return (

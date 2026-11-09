@@ -67,6 +67,81 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `fetch.loading` / `fetch.parsing` / `fetch.extracting` | `read_url`   | `{ url, status, type? }`                                |
 | `ifinder_search` / `ifinder_content` / `ifinder_download` | iFinder tools        | `{ query? \| documentId, searchProfile, … }`             |
 | `agent.*`                      | agent runtime (workflow / agent streams)    | the former internal event payload (task queue, plan, artifacts, inbox, memory, skills, hallucinated tools …) |
+| `args`                         | chat turn, while a tool call's arguments stream | `{ name, title?, integration?, activityKind?, outputKind?, argBytes, elapsedMs, occurrence? }` (first frame), then `{ argBytes, elapsedMs }`; frame also carries `step`, `callId`, `toolId` |
+| `args.ended`                   | chat turn, when that model call ends        | `{ outcome, argBytes, elapsedMs }`; frame also carries `step`, `callId`, `toolId` |
+| `model.waiting`                | chat turn, while the model shows nothing    | `{ elapsedMs, reasoning? }`; frame also carries `step` |
+
+### Tool calls and silence while the model writes (`args`, `args.ended`, `model.waiting`)
+
+A tool call such as `create_web_artifact` carries a whole file in its arguments,
+and a model needs a minute or more to write it. The loop runs no tool before the
+call is finished, so `tool/started` comes late. These three phases fill the gap.
+They are **live only**: the stored-activity allow-list (`RECORDED_PROGRESS_PHASES`
+in `server/services/chat/runActivity.js`) keeps them out of stored chats and the
+run ledger, and `tool/started` / `tool/completed` are unchanged. They are sent
+on the chat stream only (the chat's `chatToolSeam`); workflow and agent runs do
+not send them. Logic and every timing: `server/services/chat/toolArgProgress.js`.
+
+`args` announces a call while its arguments are still streaming:
+
+- **Which calls.** The call name must resolve to a tool the loop offered that the
+  server runs and the chat shows: never an unknown or hallucinated name,
+  `activate_skill` and the other loop tools, `ask_user`, a passthrough (workflow)
+  tool or a caller-executed tool. A system-skill tool (the document and artifact
+  creators, `isSystemSkillTool`) is announced as soon as its name and call id are
+  known; any other tool only once its arguments are still streaming 1.5 s after
+  its name was seen, so a fast search never flickers.
+- **Call id.** `callId` is the id `tool/started` and `tool/completed` will carry.
+  Nothing is sent before the provider has sent the id.
+- **First frame** (the announcement): `name` (the name the model called),
+  `title` / `integration` / `activityKind` as on `tool/started` (from
+  `utils/toolDisplay.js`), `outputKind` for the built-in creators (`webArtifact`,
+  `document`, `presentation`, `workbook`, `pdf`, `file`, `archive`; decided on the
+  server, `undefined` for every other tool), `argBytes`, `elapsedMs`, and
+  `occurrence` (only when 2 or more: how many calls of this tool the turn has
+  announced). **Later frames carry `argBytes` and `elapsedMs` only**: merge them
+  into what the first frame said, do not replace it.
+- **`argBytes`**: UTF-8 bytes of the raw argument JSON received so far, escapes
+  counted as sent (a little more than the finished file). Absolute, never
+  decreases. **`elapsedMs`**: since the call's first fragment.
+- **No argument text** is in any of these frames.
+- **Throttle.** At most one `args` frame per call per second, at least one every
+  2 s while fragments flow; at most 130 frames and 40 KB per call over 120 s.
+
+`args.ended` closes every announced call exactly once, from `streamEnd` (see
+[Agent loop](agent-loop.md)), before `step/completed` and before any
+`tool/started`. `data.outcome`:
+
+| Outcome     | Meaning                                                                                         | What follows                                                        |
+| ----------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `ready`     | The finished call exists and its arguments parse (or the loop repaired them)                    | `tool/started` for the same `callId`, or, for a gated call, `interaction/raised` (no `tool/started`) |
+| `invalid`   | The arguments could not be read as JSON at all                                                  | The loop still runs the call with `{}`: `tool/started`, `tool/completed` with an error |
+| `truncated` | The model hit its output limit inside the arguments (`finishReason: length`)                    | As `invalid` where the loop could read the call; nothing where the provider never finished it |
+| `dropped`   | The finished list has no such call (or no name), so the loop will not run it                    | Nothing                                                             |
+| `aborted`   | Stop, the run's deadline or a provider error ended the model call                               | `stream/error` or `run/ended`                                       |
+
+A `tool/started` for the call always wins over an earlier `args.ended`. A `ready`
+call that never gets a `tool/started` (the approval gate took it over, the run
+paused or ended first, an earlier call of the batch ended the turn) simply has
+no further frame: the client closes a row that is still preparing when the run
+ends.
+
+`model.waiting` is the line for a model that shows nothing: after 3 s without
+visible output (answer text, an image, an announced tool row), then once a
+second until something is shown or the model call ends. `elapsedMs` is the time
+since the last visible output (the client derives its clock from it, not from
+when the frame arrived). `reasoning: true` means the model streamed reasoning
+(shown or not) since then, so the chat can say "Thinking" instead of "Waiting
+for the model". Reasoning does not restart the clock. The line works for every
+provider, also one that sends nothing until the finished call. It stands down
+while an announced row is open and there is no end frame: the client drops the
+line when answer text, an image, `args` or `tool/started` arrives.
+
+Early signal per provider: OpenAI-compatible (Chat Completions), vLLM,
+Anthropic, OpenAI Responses and Bedrock expose the call while it streams
+(`chunk.toolCallProgress`, see `server/adapters/toolCalling/toolCallProgress.js`);
+Gemini and Mistral send calls whole and get the waiting line only, as does a
+vLLM tool-call parser that buffers upstream.
 
 ### `sources/added`
 
@@ -104,7 +179,9 @@ are mapped onto the same field), which the activity panel shows.
 stream/connected            once per connection
 run/started                 { kind: 'chat', model, refs: { chatId, appId, messageId } }
 tool/progress               phase skill.activation (only when a skill was pre-activated)
+tool/progress               phase model.waiting (live only, while the model shows nothing)
 step/delta …                text / thinking / image deltas of step 1
+tool/progress               phase args / args.ended (live only, while a tool call's arguments stream)
 tool/started                the model called a tool
 tool/completed              its (previewed) result
 step/completed              step 1 summary, then step 2 deltas …

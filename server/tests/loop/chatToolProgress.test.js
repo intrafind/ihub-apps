@@ -74,7 +74,6 @@ function captureFrames(t, chatId) {
 
 const ofType = (frames, type) => frames.filter(f => f.type === type);
 const phases = (frames, phase) => ofType(frames, TOOL_PROGRESS).filter(f => f.data.phase === phase);
-const indexOfFrame = (frames, predicate) => frames.findIndex(predicate);
 const typesOf = frames =>
   frames.map(f => (f.type === TOOL_PROGRESS ? `progress:${f.data.phase}` : f.type));
 
