@@ -115,8 +115,12 @@ Done since the first release:
   `RowMeta` and `RowLine` with the DOM unchanged (checked against the old render for rows, grid,
   openable and plain, wide and compact). The other seven findings in the product code are fixed:
   nested ternaries, the two `role="status"` paragraphs that are `<output>` now, and the print
-  `!important` that a more specific selector replaces. The findings left are in
-  `mockups/attachments.html`, a static prototype.
+  `!important` that a more specific selector replaces. The 65 findings in the static prototype
+  `mockups/attachments.html` are fixed too, except one (see below): nested ternaries and template
+  literals, repeated `push` calls, the `!important` declarations (specificity instead), the
+  complexity of `rowCard` and `block`, and more. The prototype renders the same: 3,466 states
+  (four widths, both themes, all placements and file sets, keyboard tours, print, forced colors,
+  reduced motion) match the original screenshot for screenshot.
 
 - **User pictures survive a reload.** `prepareTurnFiles` stores each picture of a turn
   (`storeTurnImage`: raster types only, sniffed from the bytes, deduplicated by content and name,
@@ -139,6 +143,7 @@ Still open:
    server to answer the turn with the stored descriptors.
 3. **Edit-and-resend** of a turn that is only files: an empty or unchanged edit is a deliberate
    no-op and the Resend button covers it, so this is not treated as a defect.
-4. **Sonar findings in the mockup** (`mockups/attachments.html`, 55 of them, a prototype that is
-   not shipped).
+4. **One Sonar finding in the mockup**: `role="group"` on `#frame` wants a `<fieldset>`, which
+   repaints the four anti-aliased corners of the dashed frame (a couple of dozen pixels per
+   screenshot). The prototype is not shipped, so it is left as it is.
 5. PR #1933 is closed as superseded and #1786 is closed by the first release.
