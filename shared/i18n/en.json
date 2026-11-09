@@ -7533,10 +7533,10 @@
     "waitingForModel": "Waiting for the model…",
     "awaitingApproval": "Waiting for approval",
     "stalled": "No new output for a while. The model may be busy — you can wait or stop.",
-    "stoppedUnfinished": "Stopped — the unfinished file was not saved.",
+    "stoppedUnfinished": "Stopped — the unfinished call was not run.",
     "notRun": "Not run",
-    "cutOff": "Incomplete — the model reached its output limit before the file was finished.",
-    "invalidArguments": "Incomplete — the file data from the model could not be read.",
+    "cutOff": "Incomplete — the model reached its output limit before the call was finished.",
+    "invalidArguments": "Incomplete — the call data from the model could not be read.",
     "dropped": "Not created — the model's request could not be used.",
     "alsoActive_one": "+{{count}} more",
     "alsoActive_other": "+{{count}} more"

@@ -7507,10 +7507,10 @@
     "waitingForModel": "Wartet auf das Modell…",
     "awaitingApproval": "Wartet auf Freigabe",
     "stalled": "Seit einiger Zeit keine neue Ausgabe. Das Modell ist möglicherweise ausgelastet – warten oder stoppen ist möglich.",
-    "stoppedUnfinished": "Abgebrochen – die unfertige Datei wurde nicht gespeichert.",
+    "stoppedUnfinished": "Abgebrochen – der unfertige Aufruf wurde nicht ausgeführt.",
     "notRun": "Nicht ausgeführt",
-    "cutOff": "Unvollständig – das Modell hat sein Ausgabelimit erreicht, bevor die Datei fertig war.",
-    "invalidArguments": "Unvollständig – die Dateidaten des Modells konnten nicht gelesen werden.",
+    "cutOff": "Unvollständig – das Modell hat sein Ausgabelimit erreicht, bevor der Aufruf fertig war.",
+    "invalidArguments": "Unvollständig – die Aufrufdaten des Modells konnten nicht gelesen werden.",
     "dropped": "Nicht erstellt – die Anfrage des Modells war nicht verwendbar.",
     "alsoActive_one": "+{{count}} weiterer",
     "alsoActive_other": "+{{count}} weitere"

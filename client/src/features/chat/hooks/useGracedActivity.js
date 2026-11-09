@@ -27,13 +27,20 @@ export function useGracedActivity(activity) {
   // Wake up when the next row's grace ends: its frame brought no re-render of its own.
   useEffect(() => {
     const clock = performance.now();
-    const waits = (activity?.items || [])
-      .map(item => paintsIn(item, clock))
-      .filter(wait => wait !== null);
+    const items = activity?.items || [];
+    // A grace that ended before this effect ran (a long render, a throttled
+    // background tab): the stored clock is behind, so catch it up at once. No
+    // timer would be set for a grace that is over, and the row would stay hidden
+    // while the screen-reader announcer already speaks for it.
+    if (items.some(item => !isPainted(item, now) && isPainted(item, clock))) {
+      setNow(clock);
+      return undefined;
+    }
+    const waits = items.map(item => paintsIn(item, clock)).filter(wait => wait !== null);
     if (waits.length === 0) return undefined;
     const timer = setTimeout(() => setNow(performance.now()), Math.min(...waits) + 1);
     return () => clearTimeout(timer);
-  }, [activity]);
+  }, [activity, now]);
 
   return useMemo(() => {
     if (!activity) return null;

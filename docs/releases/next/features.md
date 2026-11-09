@@ -1313,8 +1313,8 @@ what is happening.
 - **A call that does not finish says so:** a call that is stopped, cut off by the model's output
   limit, refused or waiting for approval shows its own state, for example "Stopped", "Incomplete" or
   "Waiting for approval", instead of a spinning row.
-- **Screen readers** hear the start and the end once; the changing numbers are not read out. With
-  reduced motion the spinner is replaced by a still icon.
+- **Screen readers** are told the start and the end, each at most once; the changing numbers are
+  not read out. With reduced motion the spinner is replaced by a still icon.
 - **Which models show the row:** OpenAI-compatible servers and vLLM whose tool-call parser streams
   the call, Anthropic, OpenAI Responses and Amazon Bedrock. Google and Mistral send a tool call
   whole, and some vLLM parsers hold it back until it is complete; those models get the waiting line

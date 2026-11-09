@@ -196,7 +196,7 @@ function uniqueStrings(values) {
 function nativeSearchQueries(run) {
   const stepGrounding = Object.values(run.steps || {})
     .map(step => step.groundingMetadata)
-    .filter(grounding => grounding);
+    .filter(Boolean);
   let metadata = stepGrounding;
   if (!stepGrounding.length) metadata = run.grounding ? [run.grounding] : [];
   return uniqueStrings(
@@ -321,7 +321,7 @@ function streamFields(stream, status) {
  * @returns {Array<{tool: Object|null, stream: Object|null}>}
  */
 function callsInOrder(run) {
-  const streams = (run.argOrder || []).map(id => run.argStreams[id]).filter(stream => stream);
+  const streams = (run.argOrder || []).map(id => run.argStreams[id]).filter(Boolean);
   const tools = run.tools || [];
   const placed = new Set();
   const calls = [];
@@ -469,7 +469,7 @@ export function buildToolActivity(run) {
   const finished = ['completed', 'aborted', 'error', 'budget_exhausted'].includes(run.status);
   const toolRows = callsInOrder(run)
     .map(call => callRow(run, call, finished))
-    .filter(row => row);
+    .filter(Boolean);
   const items = mergeSkillRows(toolRows, skillRows(run)).map(row => row.item);
   const native = nativeSearchRow(run, finished);
   if (native) items.push(native);

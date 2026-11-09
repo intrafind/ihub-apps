@@ -614,22 +614,25 @@ export class AgentLoop {
           }
           throw err;
         } finally {
-          try {
-            await runHooks(
-              seams,
-              'streamEnd',
-              ctx,
-              streamOutcome === 'completed'
-                ? { outcome: streamOutcome, result }
-                : { outcome: streamOutcome }
-            );
-          } catch (hookErr) {
-            // A display hook must never replace the failure it is reporting.
-            this.logger.warn('streamEnd seam failed', {
-              component: COMPONENT,
-              runId,
-              error: hookErr?.message
-            });
+          const endInfo =
+            streamOutcome === 'completed'
+              ? { outcome: streamOutcome, result }
+              : { outcome: streamOutcome };
+          // One seam at a time: a display hook must never replace the failure it
+          // is reporting, nor stop the seams after it from learning that the call
+          // ended (`chatToolSeam` stops its waiting timer here).
+          for (const seam of seams) {
+            if (typeof seam?.streamEnd !== 'function') continue;
+            try {
+              await seam.streamEnd(ctx, endInfo);
+            } catch (hookErr) {
+              this.logger.warn('streamEnd seam failed', {
+                component: COMPONENT,
+                runId,
+                seam: seam?.name,
+                error: hookErr?.message
+              });
+            }
           }
         }
 

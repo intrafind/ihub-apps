@@ -292,6 +292,26 @@ test('a throwing streamEnd is logged and never replaces the outcome', async () =
   assert.doesNotMatch(String(failed.error?.message), /display bug/);
 });
 
+test('a throwing streamEnd does not stop the seams after it from learning the call ended', async () => {
+  const seen = [];
+  const { loop, logger } = makeLoop([textTurn('fine')], {
+    seams: [
+      {
+        name: 'first',
+        streamEnd: () => {
+          throw new Error('display bug');
+        }
+      },
+      { name: 'second', streamEnd: (_ctx, info) => seen.push(info.outcome) }
+    ]
+  });
+  const result = await run(loop, { tools: [] });
+  assert.equal(result.status, 'completed');
+  assert.deepEqual(seen, ['completed'], 'the later seam still got its streamEnd');
+  const warning = logger.warnings.find(w => /streamEnd seam failed/.test(w.message));
+  assert.equal(warning?.data?.seam, 'first', 'the failing seam is named in the log');
+});
+
 test('seams without a streamEnd hook are unaffected', async () => {
   const { loop } = makeLoop([textTurn('plain')], { seams: [{ name: 'other', stepEnd: () => {} }] });
   const result = await run(loop, { tools: [] });

@@ -41,11 +41,11 @@ const OUTPUT_GLYPHS = {
 export const FAILURE_REASONS = {
   truncated: [
     'toolActivity.cutOff',
-    'Incomplete — the model reached its output limit before the file was finished.'
+    'Incomplete — the model reached its output limit before the call was finished.'
   ],
   invalid: [
     'toolActivity.invalidArguments',
-    'Incomplete — the file data from the model could not be read.'
+    'Incomplete — the call data from the model could not be read.'
   ],
   dropped: ['toolActivity.dropped', 'Not created — the model’s request could not be used.']
 };
@@ -128,7 +128,7 @@ export function occurrenceLabel(t, count) {
 export function stoppedUnstartedLabel(t, item) {
   return item?.argsComplete
     ? t('toolActivity.notRun', 'Not run')
-    : t('toolActivity.stoppedUnfinished', 'Stopped — the unfinished file was not saved.');
+    : t('toolActivity.stoppedUnfinished', 'Stopped — the unfinished call was not run.');
 }
 
 /** The idle line: "Thinking…" while the model reasons, else "Waiting for the model…". */
@@ -290,7 +290,7 @@ export function finishedHeadline(t, items, searches) {
   if (others.length) parts.push(t('toolActivity.toolCalls', { count: others.length }));
   parts.push(...madeParts(t, items));
   // The systems the turn asked, so the summary says where the answer came from.
-  const integrations = [...new Set(items.map(item => item.integration).filter(name => name))];
+  const integrations = [...new Set(items.map(item => item.integration).filter(Boolean))];
   if (integrations.length) parts.push(integrations.join(', '));
   return parts.join(' · ');
 }

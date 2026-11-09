@@ -1430,8 +1430,8 @@ describe('ToolActivity — a call that is being written', () => {
   });
 
   test.each([
-    ['truncated', 'Incomplete — the model reached its output limit before the file was finished.'],
-    ['invalid', 'Incomplete — the file data from the model could not be read.'],
+    ['truncated', 'Incomplete — the model reached its output limit before the call was finished.'],
+    ['invalid', 'Incomplete — the call data from the model could not be read.'],
     ['dropped', 'Not created — the model’s request could not be used.']
   ])('a call that ended %s says why, in red, with the last size', (outcome, sentence) => {
     const frames = [
@@ -1457,7 +1457,7 @@ describe('ToolActivity — a call that is being written', () => {
     expect(screen.getByRole('button')).toHaveTextContent(/^Stopped$/);
     fireEvent.click(screen.getByRole('button'));
     const row = screen.getByRole('listitem');
-    const sentence = within(row).getByText('Stopped — the unfinished file was not saved.');
+    const sentence = within(row).getByText('Stopped — the unfinished call was not run.');
     expect(sentence.className).toMatch(/text-gray-600/);
     expect(sentence.className).not.toMatch(/red/);
     expect(within(row).queryByText(/^Stopped$/)).not.toBeInTheDocument();

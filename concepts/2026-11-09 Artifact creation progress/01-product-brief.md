@@ -9,8 +9,8 @@ call progress while the model streams tool arguments (spinner-only for 1+ min on
 | Document | 01 Product brief (what to build, in what order) |
 | Author role | Product management |
 | Date | 2026-11-09 |
-| Status | Draft for product-owner review. No code has been written or changed. |
-| Next documents | 02 Technical design (architect), 03 Test plan (QA / author of the tests). Add them next to this file as `02-technical-design.md`, `03-test-plan.md`. |
+| Status | Written before the build; implemented in PR [#3535](https://github.com/intrafind/ihub-apps/pull/3535). Where the build differs, [04-decisions-and-contract.md](04-decisions-and-contract.md) wins. The stop-phase telemetry (R0) is deferred to a separate PR. |
+| Next documents | [02 UX brief](02-ux-brief.md), [03 UI spec](03-ui-spec.md) and [04 decisions and contract](04-decisions-and-contract.md), which supersedes this brief where they differ (release order, repeat label, file name). No separate technical design or test plan was written; sections 3 to 5 of the contract stand in for them. |
 
 How to read this: sections 1 to 3 are the decisions and the reasoning. Sections 4 to 9 are the
 requirements. Section 10 onward is for whoever builds it (risks, order of work, checklist). If you

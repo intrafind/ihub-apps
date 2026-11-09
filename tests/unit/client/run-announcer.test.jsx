@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: IntraFind Software AG
+// SPDX-License-Identifier: LicenseRef-iHub-Apps
+
 /**
  * What a screen reader is told while a turn writes a file or waits (#3534): the
  * pure script (`deriveAnnouncements`), its queue, the live region that speaks it
@@ -215,8 +218,8 @@ describe('deriveAnnouncements', () => {
   });
 
   test.each([
-    ['truncated', 'Incomplete — the model reached its output limit before the file was finished.'],
-    ['invalid', 'Incomplete — the file data from the model could not be read.']
+    ['truncated', 'Incomplete — the model reached its output limit before the call was finished.'],
+    ['invalid', 'Incomplete — the call data from the model could not be read.']
   ])('says why a call that ended %s failed, as the most important thing', (outcome, reason) => {
     const frames = [args(2, 'x1', T0), argsEnded(3, 'x1', T0 + 900, outcome)];
     const result = derive(createAnnouncerState(), [assistant(frames)], T0 + 1000);
@@ -240,7 +243,7 @@ describe('deriveAnnouncements', () => {
       [assistant([args(2, 'x1', T0), aborted(4)], { loading: true })],
       T0 + 2000
     );
-    expect(texts(stopped)).toContain('Stopped — the unfinished file was not saved.');
+    expect(texts(stopped)).toContain('Stopped — the unfinished call was not run.');
     const notRun = derive(
       createAnnouncerState(),
       [assistant([args(2, 'x1', T0), argsEnded(3, 'x1', T0 + 900, 'ready'), aborted(4)])],
