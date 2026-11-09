@@ -20,10 +20,11 @@ only have five minutes, read the Decisions box and section 5.
 
 1. **The problem is trust, not speed.** Nothing was hung; the UI gave no sign of life for about two
    minutes and the user pressed Stop. We fix that first.
-2. **Smallest slice that fixes it:** a provider-independent "the model is still working" line with a
-   running clock, so the screen is never a bare spinner. It needs no adapter change, so it works for
-   every model. On top of it goes the richer "Creating web artifact... 12 KB, 0:41" row for providers
-   that tell us early.
+2. **Smallest slice that fixes it:** a provider-independent "Waiting for the model... 0:42" line with
+   a running clock, so the screen is never a bare spinner. It needs no adapter change, so it works for
+   every model. The clock proves that a request is pending, not that the model is healthy (a hung
+   provider looks identical), so the wording claims no more than that. On top of it goes the richer
+   "Creating web artifact... 12 KB, 0:41" row for providers that tell us early.
 3. **Live artifact preview (HTML/SVG appearing in the Artifacts panel while it is generated) is a
    non-goal for release 1.** It is a gated fast follow, starting with the safest part (streaming the
    code into the Code tab, no execution). Reasons in section 3.
@@ -81,7 +82,9 @@ chat `chat-83b0fdd3-f4f5-49cf-9171-f2e36f583b4c` (see section 10, spike S0).
 ### Success metric
 
 - Primary: the share of user Stop presses that happen while the model is silent (no visible output)
-  or streaming tool arguments, as a fraction of turns that used a deliverable tool. Target: halve it
+  or streaming tool arguments, as a fraction of turns in which a deliverable tool was offered (not of
+  turns that recorded a deliverable call: a turn stopped during the first call's arguments records
+  none). Target: halve it
   within 30 days of rollout on instances that run local models. Details in section 11.
 - Secondary: the first visible tool signal appears within 1.2 seconds (95th percentile, server-side)
   of the provider first sending the tool name, on providers that send it early.
@@ -192,11 +195,11 @@ Release names: R0 is a small preparatory change, R1 is the feature, R2 is the ga
 | P1 | Announce a tool call as soon as its name is known in the stream (issue item 1) | Must | R1 | The core of the issue. |
 | P2 | Throttled progress while arguments stream: size and elapsed time, at most about 1 per second (issue item 2) | Must | R1 | Without growth the row looks frozen too. |
 | P3 | No orphan rows: every announced call ends in a defined state (ran, stopped, refused, handed to approval) | Must | R1 | A permanent spinner is worse than today. Added by PM. |
-| P4 | Provider-independent liveness: "the model is still working" with a running clock after 3 s without visible output | Must | R1 (slice A, first) | The only thing that works for Gemini, Mistral and a vLLM parser that buffers. Added by PM. |
+| P4 | Provider-independent waiting line: "Waiting for the model... 0:12" with a running clock after 3 s without visible output. It states that a request is pending; it never claims the model is working. | Must | R1 (slice A, first) | The only thing that works for Gemini, Mistral and a vLLM parser that buffers. Added by PM. |
 | P5 | Measurement: record the phase in which a turn was aborted, and ship it before the feature to get a baseline | Must | R0 | Without it we cannot show the metric moved. Added by PM. |
 | P6 | Label a repeated call of the same deliverable tool in one turn: "again (2)" (issue item 3). The separate second row itself is Must and comes free from the distinct call id. | Should | R1 | Cheap, explains the second wait. |
 | P7 | "Thinking..." instead of a bare spinner when reasoning streams but is not shown (issue item 4) | Should | R1 | Cheap once the liveness line exists. Lowest evidence: the issue's own evidence points at tool arguments, not reasoning. |
-| P8 | Show the file name being created ("Creating roi-calculator.html...") | Should | R1 if the spike shows a small partial-JSON peek is enough, otherwise R2 | Strong trust cue. Depends on the model writing `filename` before `content`, which the tool schema order encourages but cannot guarantee. |
+| P8 | Show the file name being created ("Creating roi-calculator.html...") | Won't (R1); Could (R2) | R2, and only after a security review | It is the one place a piece of the argument text would leave the server before the tool runs, which AC-1 forbids and release 1 deliberately does not do. It also depends on the model writing `filename` before `content`, which the tool schema order encourages but cannot guarantee. |
 | P9 | Diagnostics: log and span attributes for argument stream duration and size | Should | R1 | Lets ops explain "why was that slow" without a debugger. |
 | P10 | Early signal for Bedrock (same pattern as Anthropic) | Should | R1, or the first follow-up if it makes slice B too large | Same work, separate code. |
 | P11 | "This is taking long" hint after about 90 s, with a way to stop | Could | R2 | Nice, risks nagging; decide after we see real timings. |
@@ -208,8 +211,8 @@ Release names: R0 is a small preparatory change, R1 is the feature, R2 is the ga
 | P17 | Workflow and agent run pages | Won't | Later | Same signals could feed them; release 1 is the chat surface only. |
 | P18 | Admin setting to switch the feature off | Won't | | Fewer knobs; additive and cheap. Revisit if a customer finds it noisy. |
 
-Release 1 therefore contains P1, P2, P3, P4, P6, P7, P9, P10 and, conditionally, P8, on top of the R0
-baseline P5.
+Release 1 therefore contains P1, P2, P3, P4, P6, P7, P9, P10 on top of the R0
+baseline P5; P8 waits for release 2.
 
 ## 6. Which tools get the treatment
 
@@ -271,9 +274,9 @@ Each story traces to the success metric in section 2.
 
 - **US-1 Know what is happening.** As a chat user waiting for a generated document, I want to see
   that the model is creating it (and what kind of thing), so that I do not stop a run that is working.
-- **US-2 Know it is still alive on any model.** As a chat user on a model whose provider gives no
-  early signal, I want a visible "still working" indication with a running clock, so that a silent
-  minute does not look like a freeze.
+- **US-2 See that a request is pending on any model.** As a chat user on a model whose provider gives
+  no early signal, I want a visible "waiting for the model" indication with a running clock, so that a
+  silent minute does not look like a freeze.
 - **US-3 Understand a second wait.** As a chat user, I want a second generation of the same kind to
   appear as its own entry marked as a repeat, so that a second long wait is explained.
 - **US-4 Know the model is thinking.** As a chat user whose model reasons without showing it, I want
@@ -303,10 +306,12 @@ hard-code in several places.
 - Given a call whose arguments stream for 60 seconds
 - When progress is projected
 - Then the server emits at most one progress frame per second per call and at least one every 2
-  seconds while fragments flow; each frame carries absolute values (characters received so far,
-  elapsed milliseconds), never deltas; `argChars` never decreases
-- And the row shows the size in KB (locale formatted) and the elapsed time (m:ss), and both change
-  while the call streams
+  seconds while fragments flow; each frame carries absolute values (`argBytes`: UTF-8 bytes of the raw
+  argument JSON text received so far, JSON escapes such as `\n` and `\"` counted as sent, so it is the
+  size of the stream and slightly above the size of the finished file; `elapsedMs`), never deltas;
+  `argBytes` never decreases
+- And the row shows the size as a rounded, locale-formatted KB figure (the unit matches the counted
+  bytes) and the elapsed time (m:ss), and both change while the call streams
 - And a final frame is sent when the arguments complete, so the last number shown is the real total.
 
 **AC-3 Hand-over to the running tool (US-1)**
@@ -329,14 +334,23 @@ hard-code in several places.
   the arguments arrive malformed
 - Then within 1 second of that event the row leaves the preparing state: it is replaced by the
   approval card, or shows as stopped/failed, or disappears if the call was dropped
-- And after `run/ended` no row anywhere is in the preparing state.
+- And this holds on the paths that never reach the loop's `stepEnd` hook: a provider error or Stop
+  during the arguments rethrows out of the model-call loop in `AgentLoop` and returns through its
+  `catch` as `aborted` or `error` without calling `stepEnd`, so the server closes announced calls
+  there as well as at step end
+- And after `run/ended` no row anywhere is in the preparing state, also when the stream ended without
+  a closing frame (the client treats a preparing row of a finished run as stopped, the same rule
+  `shared/run/toolActivity.js` applies to a running tool row).
 
 **AC-6 Liveness fallback (US-2, P4)**
 - Given any provider, and a model call that has produced no visible output (answer text, reasoning,
   image) for 3 seconds
 - When the silence continues
-- Then the chat shows a localised line such as "The model is still working... 0:12" with a clock that
+- Then the chat shows a localised line such as "Waiting for the model... 0:12" with a clock that
   is correct to within 2 seconds, also after the browser reconnected to the stream
+- And the wording describes a pending request only: elapsed time cannot tell a healthy buffered call
+  from a hung provider, so no string says the model "is working" unless an observable health signal
+  (for example bytes still arriving on the stream) backs it
 - And the line disappears as soon as visible output or a tool row appears
 - And for a provider with no early signal (Gemini, Mistral, a buffering vLLM parser) this is the only
   new element, the final frames are identical to today's, and no error is raised.
@@ -395,15 +409,33 @@ hard-code in several places.
 
 **AC-16 Measurement (P5)**
 - Given telemetry enabled
-- When a user presses Stop while a call is streaming tool arguments
-- Then `ihub.stream.outcome` is recorded with `stream.outcome=aborted` and `stream.phase=tool_args`,
-  and the ledger `run/end` cause carries the same phase.
+- When a user presses Stop while a model call is in flight
+- Then `ihub.stream.outcome` is recorded with `stream.outcome=aborted` and the phase the loop actually
+  observed, and the ledger `run/end` cause carries the same phase
+- And `stream.phase=tool_args` is recorded only where the loop saw a tool-call signal (a converter that
+  already streams tool-call deltas, or any converter after slice B); on a provider that buffers the
+  call upstream (today the OpenAI-compatible, vLLM, Anthropic and Bedrock converters, and Gemini and
+  Mistral) a Stop during silent argument generation is recorded as `waiting` ("no visible output and
+  no tool-call signal"), never as `tool_args`, so R0 does not depend on slice B
+- And the baseline of section 11 counts `waiting` and `tool_args` together, so the two phases never
+  split the cohort.
 
-**AC-17 Replay of the reported incident (end-to-end)**
-- Given a mock model stream that sends `create_web_artifact` arguments for 63 seconds, then a second
-  call for 66 seconds
+**AC-17 Replay of the reported incident, stream that exposes the tool call (end-to-end)**
+- Given a mock model stream that sends the `create_web_artifact` name and its argument fragments
+  incrementally for 63 seconds, then a second call for 66 seconds
 - Then the user sees the first row within about 1 second with growing progress, then a second row
   labelled as a repeat, and the screen is never a bare spinner for more than 3 seconds.
+
+**AC-17b Replay with a buffering stream (fallback)**
+- Given a mock model stream that sends nothing for 63 seconds and then the whole `create_web_artifact`
+  call at once (the behaviour of a buffering vLLM tool-call parser), followed by a second such call
+  after 66 seconds
+- Then within 3 seconds of the silence starting the user sees the waiting line of AC-6 with a running
+  clock, never a bare spinner; no "Creating web artifact..." row and no progress appear before a call
+  arrives, because nothing in the stream says what is coming; when each call arrives the normal running
+  row follows, each its own row as today; the final frames equal today's
+- And the product owner is told plainly that this is the best an adapter-level change can do for such
+  a parser (risk R1).
 
 ### 8.3 Behavioural contract, recommended (architect confirms in document 02)
 
@@ -416,7 +448,7 @@ consumers treat it as "the tool is running".
 
 | Frame | Phase | Carries |
 |---|---|---|
-| Preparing | `args` | `step`, `callId`, `toolId`, and in `data`: `name`, display fields from `toolDisplayOf` (`title`, `integration`, `activityKind`), `argChars`, `elapsedMs`, `occurrence` (only for announced calls that qualify) |
+| Preparing | `args` | `step`, `callId`, `toolId`, and in `data`: `name`, display fields from `toolDisplayOf` (`title`, `integration`, `activityKind`), `argBytes`, `elapsedMs`, `occurrence` (only for announced calls that qualify) |
 | End of arguments | `args.ended` | `callId`, `data.outcome`: `ready` (a `tool/started`, an approval or a refusal follows) or `dropped` |
 | Liveness | `model.waiting` | `step`, `data.elapsedMs` since the last visible output |
 
@@ -467,9 +499,9 @@ Two facts decide how much of release 1 works for the issue's own scenario:
 
 | ID | Risk | Likelihood / impact | Mitigation |
 |---|---|---|---|
-| R1 | The vLLM tool-call parser buffers until the call is complete, so there is no early signal for the very model in the issue. | Medium / high | S0 first. P4 covers it regardless; the acceptance for the issue's replay (AC-17) is then met through P4 and the product owner is told plainly that "Creating web artifact..." is not possible on that parser. |
+| R1 | The vLLM tool-call parser buffers until the call is complete, so there is no early signal for the very model in the issue. | Medium / high | S0 first. P4 covers it regardless; for such a parser the replay is accepted through AC-17b (waiting line only), not AC-17, and the product owner is told plainly that "Creating web artifact..." is not possible on that parser. |
 | R2 | The call id is not on the first fragment on some OpenAI-compatible servers; the converters currently drop a call without an id. | Medium / medium | Key by index until the id is known; test with a fixture that has the id late. |
-| R3 | A row announced for a call that never runs (stop, refusal, approval, malformed arguments) stays forever. | High if unhandled / high | P3 and AC-5 are Must. The server closes every announced call at the end of the model step. |
+| R3 | A row announced for a call that never runs (stop, refusal, approval, malformed arguments) stays forever. | High if unhandled / high | P3 and AC-5 are Must. The server closes every announced call at the end of the model step and in a new hook on the loop's error and abort exit (today's seam list has no hook there, and `AgentLoop` returns from its `catch` without `stepEnd`); the client treats a preparing row of a finished run as stopped. |
 | R4 | The reducer appends every progress frame to `run.progress`; one frame per second for two minutes is noise and re-renders. | High / low | Dedicated reducer case that updates one entry per call. |
 | R5 | Parallel tool calls: several calls arrive at once with indexes 0, 1, 2. | Medium / low | Cap shown rows at 2 (section 9); test two parallel `create_*` calls. |
 | R6 | Anthropic argument fragments arrive in bursts, so sizes look jumpy. | High / low | Elapsed clock keeps ticking from the server tick, not from fragments. |
@@ -485,13 +517,13 @@ work (section 12).
 | Slice | Content | Items | Rough size |
 |---|---|---|---|
 | S0 | The spike above | | 0.5 day |
-| R0 | Record `stream.phase` on `ihub.stream.outcome` (values: `waiting`, `reasoning`, `answer`, `tool_args`, `tool_run`) and on the ledger abort cause. Add the label to the allow-list. Ships first, so a baseline accumulates. | P5 | Small |
+| R0 | Record `stream.phase` on `ihub.stream.outcome` (values: `waiting`, `reasoning`, `answer`, `tool_args`, `tool_run`) and on the ledger abort cause. `tool_args` only where the loop sees a tool-call signal; a buffering provider reports `waiting` (AC-16). Also record whether a deliverable tool was offered in the turn (known to the loop from the offered tool set), so the baseline denominator exists before the feature ships. Add the labels to the allow-list. Ships first, so a baseline accumulates. | P5 | Small |
 | A | Liveness line. Server: time since last visible output, emit `model.waiting`. Client: reducer, one line component with the stopwatch, en and de strings, accessibility. | P4, P7 | Small to medium |
-| B | Early signal. Converters (OpenAI, vLLM, Anthropic, Bedrock) additionally expose a progress signal and leave the finished `tool_calls` untouched; Responses derived from its deltas. `chatToolSeam.onChunk`: the rule of section 6, throttle, `args` and `args.ended` frames, step-end cleanup. Reducer and `toolActivity` row with the preparing state. | P1, P2, P3, P10, P9 | Medium |
-| C | Polish: `occurrence` label, file name if cheap, docs and release note. | P6, P8 | Small |
+| B | Early signal. Converters (OpenAI, vLLM, Anthropic, Bedrock) additionally expose a progress signal and leave the finished `tool_calls` untouched; Responses derived from its deltas. `chatToolSeam.onChunk`: the rule of section 6, throttle, `args` and `args.ended` frames, cleanup at step end and in a new hook on the loop's error and abort exit (AC-5). Reducer and `toolActivity` row with the preparing state. | P1, P2, P3, P10, P9 | Medium |
+| C | Polish: `occurrence` label, docs and release note. | P6 | Small |
 
 A suggested minimal way to carry the signal (non-binding): add one optional field on the generic chunk
-(for example `toolCallProgress: [{ index, id, name, argChars }]`) set by the converters, passed through
+(for example `toolCallProgress: [{ index, id, name, argBytes }]`) set by the converters, passed through
 `normalizeChunk` (unknown fields already pass through) and ignored by `ResultAccumulator`. This keeps the
 `tool_calls` contract untouched and avoids a refactor that would need Google and Mistral re-tested.
 
@@ -511,12 +543,16 @@ What to add (release R0 and R1):
 |---|---|---|
 | `stream.phase` label on `ihub.stream.outcome` | metric, add `stream.phase` to `ALLOWED_METRIC_LABELS` | Five values only: `waiting`, `reasoning`, `answer`, `tool_args`, `tool_run`. Low cardinality, so it is safe as a label. |
 | Phase on the abort cause | ledger `run/end` | Works with telemetry off. This is the data source for the offline baseline on instances without OpenTelemetry. |
-| `ihub.tool.args_chars`, `ihub.tool.args_stream_ms` | attributes on the model-call span | High cardinality (tool id, size), so span only. |
-| One log line per slow call | server log next to the existing `Chat tool call` line in `chatSeams.js` | Tool id, argument characters, stream milliseconds. |
+| `ihub.tool.args_bytes`, `ihub.tool.args_stream_ms` | attributes on the model-call span | High cardinality (tool id, size), so span only. |
+| One log line per slow call | server log next to the existing `Chat tool call` line in `chatSeams.js` | Tool id, argument bytes, stream milliseconds. |
 
 How we judge success:
 1. After R0 has run for about two weeks: baseline = (`aborted` with `user_stop` and phase `waiting` or
-   `tool_args`) divided by (turns that used a deliverable tool), per instance with local models.
+   `tool_args`) divided by (turns in which a deliverable tool was offered), per instance with local
+   models. The denominator is "offered", not "used": a turn stopped during the first call's arguments
+   records no `tool/call` (the loop records the call only after the model step has returned), so a
+   "used" denominator would drop exactly the turns the metric is about. Before the denominator is
+   relied on, a test shows that a Stop during the first call's arguments lands in the cohort.
 2. After R1: same ratio, 30 days. Target: halved. If the baseline is too small to read (fewer than
    about 20 events a month on an instance), judge by the replay test AC-17 and by support-ticket
    count instead; do not pretend to a statistic.
@@ -593,7 +629,7 @@ Live preview of partial HTML or SVG; streaming argument text to the client; work
 scheduled-task run pages; an admin setting; tokens as the unit of progress (they are an estimate that
 differs per model, KB and seconds are exact and mean something to every user); changing the tool schemas
 (except keeping `filename` and `title` before `content` in `create_web_artifact`, which is already the
-case and should be protected by a test comment because P8 depends on it); Gemini and Mistral early
+case and is worth protecting with a test comment because a later file-name display (P8) would depend on it); Gemini and Mistral early
 signals; changing how the model is prompted to retry (P15 is a separate brief).
 
 ## 14. Open questions only the product owner can answer
