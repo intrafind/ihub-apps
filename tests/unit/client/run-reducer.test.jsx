@@ -408,7 +408,11 @@ describe('runReducer — a tool call still being written', () => {
   it('shows a running row at once, replaced in place by the call', () => {
     let run = getRun(fold([started, preparing(2, 'c1')]), 'run-p');
     expect(run.tools).toHaveLength(1);
-    expect(run.tools[0]).toMatchObject({ status: 'running', preparing: true, title: 'Create artifact' });
+    expect(run.tools[0]).toMatchObject({
+      status: 'running',
+      preparing: true,
+      title: 'Create artifact'
+    });
     expect(run.progress).toHaveLength(0);
 
     run = getRun(fold([started, preparing(2, 'c1'), toolStarted(3, 'c1')]), 'run-p');
