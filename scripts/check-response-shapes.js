@@ -41,6 +41,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const SNAPSHOT_PATH = path.join(root, 'tests', 'contract', 'response-shapes.json');
 
+// Key order must be the same on every machine, so it never depends on the locale
+// (`localeCompare` does): plain code-unit order.
+const byCodeUnit = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
 const MAX_DEPTH = 3;
 const MAX_ELEMENTS = 25;
 
@@ -76,35 +80,37 @@ export function shapeOf(value, depth = 0) {
     if (depth >= MAX_DEPTH) return 'object';
     return Object.fromEntries(
       Object.keys(value)
-        .sort()
+        .sort(byCodeUnit)
         .map(key => [key, shapeOf(value[key], depth + 1)])
     );
   }
   return typeof value;
 }
 
-/** One shape for several: an object with the union of keys (`?` marks a key some lack), types joined by `|`. */
+/** Objects: the union of keys, a key some lack marked with `?`. */
+function mergeObjectShapes(objects) {
+  const keys = [...new Set(objects.flatMap(o => Object.keys(o)))].sort(byCodeUnit);
+  return Object.fromEntries(
+    keys.map(key => {
+      const present = objects.filter(o => key in o);
+      const merged = mergeShapes(present.map(o => o[key]));
+      return [present.length === objects.length ? key : `${key}?`, merged];
+    })
+  );
+}
+
+/** One shape for several: objects by key, lists by element, anything else as its types joined by `|`. */
 export function mergeShapes(shapes) {
   if (shapes.length === 1) return shapes[0];
-  const objects = shapes.filter(s => s && typeof s === 'object' && !Array.isArray(s));
-  if (objects.length === shapes.length) {
-    const keys = [...new Set(objects.flatMap(o => Object.keys(o)))].sort();
-    return Object.fromEntries(
-      keys.map(key => {
-        const present = objects.filter(o => key in o);
-        const merged = mergeShapes(present.map(o => o[key]));
-        return [present.length === objects.length ? key : `${key}?`, merged];
-      })
-    );
-  }
-  const arrays = shapes.filter(Array.isArray);
-  if (arrays.length === shapes.length) {
-    const inner = arrays.flat();
+  const isObject = s => s && typeof s === 'object' && !Array.isArray(s);
+  if (shapes.every(isObject)) return mergeObjectShapes(shapes);
+  if (shapes.every(Array.isArray)) {
+    const inner = shapes.flat();
     return inner.length ? [mergeShapes(inner)] : [];
   }
-  const names = [
-    ...new Set(shapes.map(s => (typeof s === 'string' ? s : JSON.stringify(s))))
-  ].sort();
+  const names = [...new Set(shapes.map(s => (typeof s === 'string' ? s : JSON.stringify(s))))].sort(
+    byCodeUnit
+  );
   return names.length === 1 ? shapes[0] : names.join('|');
 }
 
@@ -228,22 +234,23 @@ async function request(base, cookie, routePath) {
  */
 async function resolvePath(base, cookie, routePath, getPaths) {
   const template = routePath.split('/');
-  const filled = [...template];
-  for (let i = 0; i < template.length; i++) {
-    if (!template[i].startsWith(':')) continue;
-    const parentTemplate = template.slice(0, i).join('/');
+  const fill = async (i, filled) => {
+    const next = template.findIndex((segment, at) => at >= i && segment.startsWith(':'));
+    if (next < 0) return { path: filled.join('/') };
+    const parentTemplate = template.slice(0, next).join('/');
     if (!parentTemplate || !getPaths.has(parentTemplate)) {
       return { skipped: 'its parent path is not a readable list' };
     }
-    // Sequential on purpose: each id comes from the list the previous one opened.
-    const listing = await request(base, cookie, filled.slice(0, i).join('/'));
+    const listing = await request(base, cookie, filled.slice(0, next).join('/'));
     const id = listing.body ? firstId(listing.body) : null;
     if (id === null || id === undefined) {
       return { skipped: 'its parent list has no entry in the seed' };
     }
-    filled[i] = encodeURIComponent(String(id));
-  }
-  return { path: filled.join('/') };
+    const filledNext = [...filled];
+    filledNext[next] = encodeURIComponent(String(id));
+    return fill(next + 1, filledNext);
+  };
+  return fill(0, [...template]);
 }
 
 /**
@@ -407,7 +414,7 @@ export async function collectShapes({ base, cookie, routes }) {
   };
   // One request at a time: the seed's state and the rate limit stay simple.
   await [...new Set(getRoutes)]
-    .sort()
+    .sort(byCodeUnit)
     .reduce((chain, routePath) => chain.then(() => visit(routePath)), Promise.resolve());
   return out;
 }
@@ -415,7 +422,7 @@ export async function collectShapes({ base, cookie, routes }) {
 /** Differences between two snapshots, one line each. */
 export function diffSnapshots(expected, actual) {
   const lines = [];
-  for (const key of Object.keys({ ...expected, ...actual }).sort()) {
+  for (const key of Object.keys({ ...expected, ...actual }).sort(byCodeUnit)) {
     const a = JSON.stringify(expected[key]);
     const b = JSON.stringify(actual[key]);
     if (a === b) continue;
@@ -438,7 +445,7 @@ async function signIn(base) {
 }
 
 async function main() {
-  const argv = process.argv.slice(2);
+  const flags = new Set(process.argv.slice(2));
 
   // The server reads CONTENTS_DIR when its config module is first loaded, so the
   // directory is chosen before anything of the server is imported.
@@ -454,7 +461,7 @@ async function main() {
   await prepareE2eContents({ root, contentsDir, llmPort: await freePort() });
 
   const { child, base } = await startServer(contentsDir);
-  if (argv.includes('--serve')) {
+  if (flags.has('--serve')) {
     const login = await signIn(base);
     await seedData(base, login);
     console.log(`seeded server: ${base}  (admin / password123); Ctrl-C to stop`);
@@ -489,12 +496,12 @@ async function main() {
     for (const [key] of emptyLists) console.log(`  ${key}`);
   }
 
-  if (argv.includes('--list')) {
+  if (flags.has('--list')) {
     console.log(JSON.stringify(snapshot, null, 2));
     return 0;
   }
   const text = `${JSON.stringify(snapshot, null, 2)}\n`;
-  if (argv.includes('--update')) {
+  if (flags.has('--update')) {
     fs.mkdirSync(path.dirname(SNAPSHOT_PATH), { recursive: true });
     fs.writeFileSync(SNAPSHOT_PATH, text);
     console.log(`wrote ${path.relative(root, SNAPSHOT_PATH)}`);
