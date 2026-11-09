@@ -690,6 +690,7 @@
     "noComponentToRender": "Keine Komponente zum Rendern",
     "pageNotFound": "Seite nicht gefunden",
     "signIn": "Anmelden",
+    "imageUploadDisabled": "Bild-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell oder laden Sie stattdessen eine Textdatei hoch.",
     "audioUploadDisabled": "Audio-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
     "videoUploadDisabled": "Video-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
     "audioDecodeError": "Audio konnte nicht aus dem Video dekodiert werden. Das Videoformat oder der Codec wird möglicherweise von Ihrem Browser nicht unterstützt.",

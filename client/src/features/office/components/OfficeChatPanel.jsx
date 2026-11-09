@@ -12,6 +12,7 @@ import ChatInput from '../../chat/components/ChatInput';
 import ChatStartForm from '../../chat/components/ChatStartForm';
 import ChatHeader from './chat/ChatHeader';
 import OfficeContextStrip from './chat/OfficeContextStrip';
+import OfficeFilesView from './chat/OfficeFilesView';
 import ItemSelectorDialog from './apps-dialog';
 import VariablesDialog, {
   buildInitialVariablesMap,
@@ -1107,26 +1108,32 @@ function OfficeChatPanel({
             {/* Messages */}
             {!showStartForm && (
               <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <ChatMessageList
-                  messages={adapter.messages}
-                  outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
-                  onDelete={adapter.deleteMessage}
-                  onEdit={adapter.editMessage}
-                  onResend={handleResend}
-                  editable={true}
-                  compact={true}
-                  onInsert={handleInsert}
-                  insertAction={embeddedHost?.insertAction}
-                  insertActions={mailActions.actions}
-                  defaultInsertActionId={defaultMailActionId}
-                  onInsertAction={runAnswerAction}
-                  appId={selectedApp?.id}
+                <OfficeFilesView
                   chatId={chatIdRef.current}
-                  app={selectedApp}
-                  showAvatars={false}
-                  // A stored chat keeps its generated images; don't warn that
-                  // they are lost on leaving.
-                />
+                  messages={adapter.messages}
+                  zipName={appName || undefined}
+                >
+                  <ChatMessageList
+                    messages={adapter.messages}
+                    outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
+                    onDelete={adapter.deleteMessage}
+                    onEdit={adapter.editMessage}
+                    onResend={handleResend}
+                    editable={true}
+                    compact={true}
+                    onInsert={handleInsert}
+                    insertAction={embeddedHost?.insertAction}
+                    insertActions={mailActions.actions}
+                    defaultInsertActionId={defaultMailActionId}
+                    onInsertAction={runAnswerAction}
+                    appId={selectedApp?.id}
+                    chatId={chatIdRef.current}
+                    app={selectedApp}
+                    showAvatars={false}
+                    // A stored chat keeps its generated images; don't warn that
+                    // they are lost on leaving.
+                  />
+                </OfficeFilesView>
               </div>
             )}
 

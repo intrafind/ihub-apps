@@ -35,15 +35,26 @@ optionally the original. Scopes:
   inside its text: a message's content is exactly the text that was typed. A card shows the name,
   the type and, while the original is kept, the size. For a message sent in the current session it
   also says what the assistant got from the file (the same line as the composer chip) and an image
-  has a thumbnail. After a reload the same cards show name, type and size: the server stores
-  neither the images nor the audio of a message, and a stored document opens in the Files drawer
-  with a click or Enter. Audio is a card without a player. More than four cards fold into **+N more
+  has a thumbnail. After a reload the same cards show name, type and size, and the same line for
+  a document the server stored (the characters or page images it read, shortened, text only): the
+  server keeps those numbers on the file's descriptor. A message stored before that shows no line
+  rather than a guess. A picture is kept by the server too (see [Pictures](#pictures)), so after
+  a reload an image shows its thumbnail again, and its card opens the picture in the Files drawer,
+  as a document's card does; a picture sent in the current session is shown from memory and opens
+  from the next reload on. A stored document opens in the Files drawer with a click or Enter.
+  Audio is not stored: it is a card without a player. More than four cards fold into **+N more
   files** (more than three on a narrow screen). In a shared chat a card follows the share: a file
   the owner did not share is marked as such and does not open.
+- **In the Outlook task pane and the browser extension.** The cards open their file in the same
+  Files drawer, which on the narrow pane is a full-pane sheet over the chat with its own close
+  button. While a mail is being written, **Attach to email** is offered there too.
 - **Which files a model takes.** Images are offered only when the selected model has vision, audio
   only when it takes audio (or is a transcription model); documents are offered to every model
   but a transcription one. An image attached before the model was switched to one without vision
-  stops the message with a note, as audio does.
+  stops the message with a note, as audio does. When the app allows an image, sound or video and the
+  selected model cannot take it, the uploader says so ("… is not supported by the selected model.
+  Please choose a different model"); when the app itself does not offer the type, it answers with the
+  list of formats it does accept.
 - **Files drawer.** The chat header's button opens the **Files** drawer with two tabs, **Uploaded**
   (what the user and the add-ins put into the chat, including e-mails, meetings and pages) and
   **Generated** (see [Artifacts](artifacts.md#the-artifacts-panel)). Each uploaded file shows its type,
@@ -51,6 +62,10 @@ optionally the original. Scopes:
   the assistant reads, and the actions **Download original**, **Download text** and **Delete file**. A
   file card above a message opens the file in the drawer. In the Outlook task pane, while a mail is
   being written, **Attach to email** attaches the file to it.
+- **Export.** The JSON and JSONL export of a chat carry a message's text and, for a message with
+  files, a short list per file (id, kind, name, type and size; no size once only the text is kept).
+  They never carry the contents of a file, the images or the audio, which a message sent in the
+  current session still holds in memory. Markdown, HTML and text exports are unchanged.
 - **Task editor.** A scheduled task's form has an **Attached files** section to upload and remove
   files. Files from a connected system with `refreshOnRun` are set through the API; if a refresh
   fails, the run uses the last stored version and says so (see
@@ -61,6 +76,41 @@ optionally the original. Scopes:
 - **Large tool results.** A binary file a tool returns is moved out of the model's context into the
   chat's files before it is logged, so a large result never reaches the transcript as base64.
 
+## Pictures
+
+A picture the user attaches to a message (a photo, a screenshot) is sent to the model inline. So
+that its thumbnail survives a reload, the server also keeps it, as it was sent to the model (the
+resized copy), in the chat's files with the origin `image`.
+
+- **Policy.** A picture follows the policy of an original: it is stored only in the
+  `original_and_text` mode (an app's `uploads.storageMode` counts), and not when uploads are off.
+  In `server_text_only` and `client_text_only` nothing of a picture is kept, and the card stays a
+  named tile after a reload. Only PNG, JPEG, GIF, WebP and BMP are kept, recognised by their
+  bytes, never SVG; anything else is still sent to the model and just not kept.
+- **Quotas.** Its bytes count against the per-file, per-chat, per-user and server limits like any
+  file. It takes **no file slot** (`maxChatFiles`): a chat of screenshots still has room for
+  documents. A picture a quota refuses never stops the message; it is only not kept. It never
+  makes room by evicting: when the user or the server is full, a picture is simply not stored, and
+  the oldest originals of documents are evicted only to make room for a document.
+- **Retention.** It lives as long as an original (`originalRetentionDays`, default 14, and it is
+  among the first to go when `evictOldestOriginalsOnQuota` needs room). When its original goes, the
+  whole file goes with it, since nothing else is stored; the card then shows its tile. A chat share
+  that includes the file keeps it while the share is active.
+- **Privacy.** Only the owner of the chat reads it. It appears in **Files → Uploaded** with
+  preview, **Download original** and **Delete file** (deleting it also removes its thumbnail from
+  the cards), and is removed with the chat. In a [chat share](chat-sharing.md) a viewer sees its
+  thumbnail and can open it only when the owner shared the originals (`uploadedFilesAccess:
+  original`) and left the picture ticked; with text-only access a picture has nothing to share and
+  is not listed.
+- **The model.** A picture is not a document: the model does not list it with `chat_files_list`,
+  and later turns do not repeat it as a file. Sending the same picture again (a resend, a
+  regenerated answer) does not store it twice.
+- **Regenerating after a reload.** The browser no longer holds the picture's data after a reload,
+  so a turn regenerated then goes to the model **without the picture** (this was already so before
+  pictures were stored; the card used to vanish). The card keeps its thumbnail but no longer says
+  "sent to the model" for that turn (`sentToModel: false` on its descriptor). Sending the stored
+  picture again would need the server to check that the selected model takes images; it does not.
+
 ## Platform settings (`platform.uploads`)
 
 Edited in **Admin → Chat history → Uploaded files**.
@@ -69,7 +119,7 @@ Edited in **Admin → Chat history → Uploaded files**.
 | ----------------------------- | -------------- | ---------------------------------------------------------------------------------------- |
 | `enabled`                     | `true`         | Store uploaded files on the server                                                       |
 | `storageMode`                 | `original_and_text` | `original_and_text`, `server_text_only` or `client_text_only` (app override: `app.uploads.storageMode`) |
-| `originalRetentionDays`       | `14`           | Days an original is kept; `0` keeps it as long as the chat. The text stays with the chat |
+| `originalRetentionDays`       | `14`           | Days an original is kept; `0` keeps it as long as the chat. The text stays with the chat (a picture goes whole) |
 | `evictOldestOriginalsOnQuota` | `true`         | When a user or the server is full, drop the oldest chat originals before refusing        |
 | `quotas.maxFileBytes`         | 25 MB          | One file                                                                                 |
 | `quotas.maxChatBytes` / `maxChatFiles` | 100 MB / 25 | One chat or one task                                                                  |

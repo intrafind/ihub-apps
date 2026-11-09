@@ -308,7 +308,8 @@ export default function SharedChatPage() {
             openFile: fileId => {
               setFilesDrawerFileId(fileId);
               setShowArtifacts(true);
-            }
+            },
+            fetchBlob: uploadedSource.fetchBlob
           }
         : null,
     [uploadedSource]

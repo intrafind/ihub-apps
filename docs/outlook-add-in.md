@@ -238,6 +238,7 @@ With file storage on (`platform.uploads.enabled`, the default; see [Chat and Sch
 - Attachments keep their original: a `.docx`, `.pptx`, `.xlsx` or PDF attachment is stored as it is, so the model can use it as a template or fill it in.
 - The files follow the chat's retention, can be deleted from the drawer, and are included in a [chat share](chat-sharing.md) only if the owner chooses to share them.
 - **Attach to email** in the drawer's file actions attaches a stored file to the mail the user is writing (compose mode only), like **Add to email** for iFinder documents.
+- A card above a message (a file the user attached, an email attachment, a picture) opens its file in the **Files** drawer, which on the narrow task pane is a full-pane sheet over the chat with a close button. A picture shows its thumbnail on the card again after the chat is reopened.
 
 The task pane sends what the user typed, the open item and its attachments separately; the server
 renders every piece of material as a `<content>` block — the same shape the web app uses for

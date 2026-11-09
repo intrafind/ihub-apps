@@ -13,6 +13,10 @@ import { isAbortError, raceAbort } from '../../../utils/abortable';
  * leaves the file picker unfiltered — for callers that decide acceptance by
  * content in `onProcessFile`, e.g. "any text file" uploads.
  *
+ * `refuseFile(file)` may return an error code for a file the caller will not take for a reason
+ * the format list cannot express (a type the selected model cannot read). It runs before the
+ * format check, so that reason is the one the user sees, and the file is not processed.
+ *
  * `onProcessFile(file, { signal, onProgress })` may use its second argument: it
  * stops when `signal` aborts and reports `onProgress({ stage, percent, detail })`
  * (`percent` null when unknown, `detail` optional: what is being worked on,
@@ -38,6 +42,7 @@ const Uploader = ({
   data = null,
   onSelect,
   onProcessFile,
+  refuseFile,
   allowMultiple = false,
   acceptAnyFile = false,
   onProcessingChange,
@@ -143,6 +148,12 @@ const Uploader = ({
 
       if (file.size > maxSizeMB * 1024 * 1024) {
         setError('file-too-large');
+        return;
+      }
+
+      const refusal = refuseFile?.(file);
+      if (refusal) {
+        setError(refusal);
         return;
       }
 

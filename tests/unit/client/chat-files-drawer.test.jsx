@@ -397,6 +397,38 @@ describe('the Files drawer', () => {
     expect(saveBlobAs.mock.calls[0][1]).toBe('plan.docx.txt');
   });
 
+  it('lists a picture the user attached, previews it and downloads it, with no text to download', async () => {
+    const picture = {
+      id: 'file_img',
+      name: 'whiteboard.png',
+      mimeType: 'image/png',
+      origin: 'image',
+      bytes: 5000,
+      hasOriginal: true,
+      createdAt: '2026-11-01T11:00:00Z'
+    };
+    const uploaded = makeUploaded({
+      list: jest.fn(async () => ({ items: [picture, ...FILES] })),
+      fetchBlob: jest.fn(async () => new Blob(['png'], { type: 'image/png' }))
+    });
+    render(
+      <ArtifactsPanel
+        isOpen
+        onClose={() => {}}
+        source={makeSource()}
+        uploadedSource={uploaded}
+        initialTab="uploaded"
+        initialFileId="file_img"
+      />
+    );
+    fireEvent.click(await screen.findByTestId('uploaded-download-original'));
+    await waitFor(() => expect(saveBlobAs).toHaveBeenCalled());
+    expect(saveBlobAs.mock.calls[0][1]).toBe('whiteboard.png');
+    // A picture has no extracted text, and the drawer does not offer one
+    expect(screen.queryByTestId('uploaded-download-text')).not.toBeInTheDocument();
+    expect(uploaded.fetchText).not.toHaveBeenCalled();
+  });
+
   it('deletes a file after a confirmation and refreshes the list', async () => {
     const uploaded = makeUploaded();
     const onChanged = jest.fn();

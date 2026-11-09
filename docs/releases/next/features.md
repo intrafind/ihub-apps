@@ -1108,13 +1108,26 @@ or the text was shortened.
   opens in the **Files** panel with a click or Enter, an image shows a thumbnail, and audio is a
   card of its own. Each card repeats what the assistant got from the file, and once only the text
   of a file is kept it says so instead of showing a size. The thumbnail and the "what the assistant
-  got" line are shown for a message sent in the current session; a reopened chat shows the name,
-  type and size. More than four files fold into **+N more files** (more than three on a phone or
+  got" line are shown the same way after a reload; for a document the server stored it keeps what
+  it read. A picture is kept by the server now, so its thumbnail is back after a reload, and its
+  card opens it in the **Files** panel, where it can be previewed, downloaded and deleted. It
+  follows the rules of an original: only in the `original_and_text` mode, kept for
+  `originalRetentionDays`, counted against the storage quotas but not against the number of files
+  of a chat, never read by the assistant as a document, and shared in a chat share only with the
+  originals. More than four files fold into **+N more files** (more than three on a phone or
   in the Outlook task pane). In a shared chat a file the owner did not share is marked as such.
+- **Outlook task pane and browser extension:** the cards of a message now open their file in the
+  Files panel, a full-pane sheet on the narrow pane, with **Attach to email** while a mail is being
+  written. They were plain cards there.
 - **Copy and link:** copying a message, or its link, gives the text you typed. It no longer
   carries the markup of a file badge.
 - **Images and a model without vision:** an image attached before switching to a model that cannot
-  see images now stops the message with a note instead of sending it; audio already did.
+  see images now stops the message with a note instead of sending it; audio already did. Dropping
+  an image or a sound file on a model that cannot take it now says so and suggests another model,
+  instead of the list of accepted formats.
+- **Export:** the JSON and JSONL export of a chat no longer contain the contents of the attached
+  files (their text and base64 data) for a message sent in the current session; each file is
+  listed with its name, type and size (see the breaking changes).
   
 ## LLM Timeouts Configurable for All Providers and Per Provider
 

@@ -27,6 +27,8 @@ const { saveBlobAs } = require('../../../client/src/utils/externalNavigation');
 const {
   messageContentToMarkdown,
   exportChatToFormat,
+  generateJSON,
+  generateJSONL,
   getExportErrorMessage,
   EXPORT_DOWNLOAD_FAILED
 } = require('../../../client/src/features/chat/utils/chatExport');
@@ -249,6 +251,105 @@ describe('exportChatToFormat', () => {
     expect(parsed.model).toBe('gpt-test');
     expect(parsed).not.toHaveProperty('temperature');
     expect(parsed.messages.map(m => m.role)).toEqual(['user', 'assistant']);
+  });
+
+  describe('a message that went with files', () => {
+    const withFiles = [
+      {
+        role: 'user',
+        content: 'Please compare these',
+        imageData: { type: 'image', base64: 'data:image/png;base64,SECRETPIXELS' },
+        fileData: {
+          type: 'document',
+          fileName: 'Contract.pdf',
+          content: 'CONFIDENTIAL CONTRACT TEXT'
+        },
+        audioData: { type: 'audio', base64: 'data:audio/wav;base64,SECRETSOUND' },
+        attachments: [
+          {
+            key: '0:file_1',
+            id: 'file_1',
+            kind: 'document',
+            name: 'Contract.pdf',
+            mimeType: 'application/pdf',
+            bytes: 2400000,
+            originalKept: true,
+            read: { kind: 'document', characters: 26 },
+            previewSrc: null,
+            source: 'live'
+          },
+          {
+            key: '1:a.png',
+            id: null,
+            kind: 'image',
+            name: 'a.png',
+            mimeType: 'image/png',
+            bytes: 5,
+            originalKept: null,
+            read: { kind: 'image' },
+            previewSrc: 'data:image/png;base64,SECRETPIXELS',
+            source: 'live'
+          }
+        ]
+      },
+      { role: 'assistant', content: 'Compared.' }
+    ];
+    const named = [
+      {
+        id: 'file_1',
+        kind: 'document',
+        name: 'Contract.pdf',
+        mimeType: 'application/pdf',
+        bytes: 2400000
+      },
+      { kind: 'image', name: 'a.png', mimeType: 'image/png', bytes: 5 }
+    ];
+
+    it('names the files in a JSON export and leaves out what was in them', async () => {
+      await exportChatToFormat(withFiles, settings, 'json', { appName: 'Chat' });
+
+      const text = await readBlob(downloads[0].blob);
+      for (const secret of [
+        'SECRETPIXELS',
+        'SECRETSOUND',
+        'CONFIDENTIAL CONTRACT TEXT',
+        'base64'
+      ]) {
+        expect(text).not.toContain(secret);
+      }
+      const [user, assistant] = JSON.parse(text).messages;
+      expect(user.content).toBe('Please compare these');
+      expect(user.attachments).toEqual(named);
+      expect(user).not.toHaveProperty('imageData');
+      expect(user).not.toHaveProperty('fileData');
+      expect(user).not.toHaveProperty('audioData');
+      expect(assistant).toEqual({ role: 'assistant', content: 'Compared.' });
+    });
+
+    it('does the same in a JSONL export', async () => {
+      await exportChatToFormat(withFiles, settings, 'jsonl', { appName: 'Chat' });
+
+      const text = await readBlob(downloads[0].blob);
+      for (const secret of [
+        'SECRETPIXELS',
+        'SECRETSOUND',
+        'CONFIDENTIAL CONTRACT TEXT',
+        'base64'
+      ]) {
+        expect(text).not.toContain(secret);
+      }
+      const lines = text.split('\n').map(line => JSON.parse(line));
+      expect(lines[1].attachments).toEqual(named);
+    });
+
+    it('is what the dialog copies too: one generator for the file and the clipboard', () => {
+      for (const generate of [generateJSON, generateJSONL]) {
+        const text = generate(withFiles, settings);
+        expect(text).not.toContain('SECRETPIXELS');
+        expect(text).not.toContain('CONFIDENTIAL CONTRACT TEXT');
+        expect(text).toContain('Contract.pdf');
+      }
+    });
   });
 
   it('exports JSONL as one meta line followed by one line per message', async () => {

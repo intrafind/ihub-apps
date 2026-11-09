@@ -1012,9 +1012,10 @@ function AppChat({
         setFilesDrawerFileId(fileId);
         setFilesDrawerArtifactId(null);
         setShowArtifacts(true);
-      }
+      },
+      fetchBlob: uploadedSource.fetchBlob
     }),
-    []
+    [uploadedSource]
   );
   const artifactSource = useMemo(
     () => ({

@@ -19,6 +19,7 @@ import { FilesystemStorageProvider } from '../storage/index.js';
 import { ChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
 import { describeStored, prepareTurnFiles } from '../services/chatFiles/ChatFileService.js';
 import { messageAttachments } from '../routes/chat/sessionRoutes.js';
+import { normalizeAttachments } from '../services/chat/chatMaterializer.js';
 
 const BYTES = Buffer.from('Quarterly numbers: 1, 2, 3\n');
 const documentOf = ({ name = 'numbers.txt', bytes = null } = {}) => ({
@@ -119,6 +120,13 @@ describe('the descriptors a turn leaves on its message', () => {
     assert.equal(attachments[0].bytes, BYTES.length);
   });
 
+  it('records what the server read from a stored file, so a reload can still say it', async () => {
+    const { attachments } = await turn({ fileData: documentOf({ bytes: BYTES }) });
+    assert.equal(attachments[0].textBytes, BYTES.length);
+    assert.equal(attachments[0].pageImageCount, undefined);
+    assert.equal(attachments[0].truncated, undefined);
+  });
+
   it('gives a file kept as text only the size of its text', async () => {
     const { attachments } = await turn({ fileData: documentOf() });
     assert.equal(attachments[0].hasOriginal, undefined);
@@ -142,5 +150,47 @@ describe('describeStored', () => {
 
   it('falls back to the stored size when the original size is not known', () => {
     assert.equal(describeStored({ ...stored, hasOriginal: true }).bytes, 300);
+  });
+});
+
+describe('what the server read, on the descriptor', () => {
+  const stored = { id: 'file_a', mimeType: 'application/pdf', name: 'a.pdf', bytes: 300 };
+
+  it('keeps the size of the text, the page images of a scan and a shortened text', () => {
+    assert.deepEqual(
+      describeStored({ ...stored, textBytes: 120, pageImageCount: 3, truncated: true }),
+      {
+        id: 'file_a',
+        type: 'application/pdf',
+        name: 'a.pdf',
+        bytes: 300,
+        textBytes: 120,
+        pageImageCount: 3,
+        truncated: true
+      }
+    );
+  });
+
+  it('leaves out what is not known or not so: no page images, not shortened, no text size', () => {
+    const described = describeStored({ ...stored, pageImageCount: 0, truncated: false });
+    assert.equal('textBytes' in described, false);
+    assert.equal('pageImageCount' in described, false);
+    assert.equal('truncated' in described, false);
+  });
+
+  it('survives the store: the materializer keeps the numbers it is given', () => {
+    const [kept] = normalizeAttachments([
+      describeStored({ ...stored, textBytes: 120, pageImageCount: 3, truncated: true })
+    ]);
+    assert.equal(kept.textBytes, 120);
+    assert.equal(kept.pageImageCount, 3);
+    assert.equal(kept.truncated, true);
+  });
+
+  it('does not invent them for a descriptor that never had them (an older message)', () => {
+    const [kept] = normalizeAttachments([{ id: 'f', type: 'application/pdf', name: 'a.pdf' }]);
+    assert.equal('textBytes' in kept, false);
+    assert.equal('pageImageCount' in kept, false);
+    assert.equal('truncated' in kept, false);
   });
 });
