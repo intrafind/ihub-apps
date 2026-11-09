@@ -432,7 +432,7 @@ export default function registerAdminAuthRoutes(app) {
 
     // Return user without password hash
     const { passwordHash: _passwordHash, ...userResponse } = newUser;
-    res.json({ user: userResponse });
+    res.json(userResponse);
   });
 
   /**
@@ -582,7 +582,7 @@ export default function registerAdminAuthRoutes(app) {
     // Return user without password hash
 
     const { passwordHash, ...userResponse } = user;
-    res.json({ user: userResponse });
+    res.json(userResponse);
   });
 
   /**

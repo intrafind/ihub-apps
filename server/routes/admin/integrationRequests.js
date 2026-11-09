@@ -188,9 +188,7 @@ export default function registerAdminIntegrationRequestRoutes(app) {
         resourceId: request.definition,
         summary: `Approved the request of ${request.requester.id} for "${request.definition}"`
       });
-      res.json({
-        request: adminRequestView(request, languageOf(req), installedIntegrationService.list())
-      });
+      res.json(adminRequestView(request, languageOf(req), installedIntegrationService.list()));
     }
   );
 

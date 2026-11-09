@@ -304,7 +304,7 @@ export default function registerRunRoutes(app) {
         user: req.user,
         channel: ['chat', 'run_page', 'queue', 'api'].includes(channel) ? channel : 'api'
       });
-      res.json({ interaction: answered });
+      res.json(answered);
     }
   );
 

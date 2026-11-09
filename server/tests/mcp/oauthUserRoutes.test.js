@@ -620,7 +620,7 @@ describe('GET /api/integrations and POST /api/integrations/:id/_disconnect (MCP)
       reason: 'not_connected'
     });
     const one = await request(app).get('/api/integrations/okta').set('x-test-user', 'bob');
-    expect(one.body.integration).toMatchObject({ id: 'okta' });
+    expect(one.body).toMatchObject({ id: 'okta' });
     const anonymous = await request(app).get('/api/integrations');
     expect(anonymous.status).toBe(401);
   });

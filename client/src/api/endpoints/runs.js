@@ -22,7 +22,7 @@ import { handleApiResponse } from '../utils/requestHandler';
  * @param {Object} answer - `{ value?, data?, decision?, reason?, skipped? }`
  * @param {Object} [options]
  * @param {'chat'|'run_page'|'queue'|'api'} [options.channel='run_page'] - where the answer was given
- * @returns {Promise<{ success: boolean, interaction: Object }>} the response body
+ * @returns {Promise<Object>} the answered interaction
  */
 export const answerInteraction = async (runId, interactionId, answer, options = {}) => {
   const { channel = 'run_page' } = options;

@@ -481,7 +481,7 @@ router.get('/:id', async (req, res, next) => {
           throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
         }
         res.setHeader('Cache-Control', 'no-store');
-        return res.json({ integration });
+        return res.json(integration);
       } catch (error) {
         return next(error);
       }

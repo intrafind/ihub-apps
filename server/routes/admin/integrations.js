@@ -467,14 +467,14 @@ export default function registerAdminIntegrationsRoutes(app) {
       await integrationRegistry.ensureLoaded();
       const entry = integrationRegistry.get(id);
       if (!entry) throw new ServiceError('NOT_FOUND', 'Integration definition not found');
-      res.json({
-        definition: definitionDetailView(
+      res.json(
+        definitionDetailView(
           entry,
           languageOf(req),
           installedIntegrationService.list(),
           await definitionUpdates()
         )
-      });
+      );
     }
   );
 
@@ -798,7 +798,7 @@ export default function registerAdminIntegrationsRoutes(app) {
         platform: configCache.getPlatform() || {}
       });
       if (!detail) throw new ServiceError('NOT_FOUND', 'Action not found');
-      res.json({ detail });
+      res.json(detail);
     }
   );
 

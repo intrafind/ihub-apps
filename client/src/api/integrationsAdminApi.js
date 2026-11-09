@@ -19,7 +19,7 @@ export const fetchIntegrationCatalog = async () => (await makeAdminApiCall(`${BA
 
 /** One definition with its install fields, auth modes and actions. */
 export const fetchIntegrationDefinition = async definitionId =>
-  (await makeAdminApiCall(definitionPath(definitionId))).data.definition;
+  (await makeAdminApiCall(definitionPath(definitionId))).data;
 
 /** Test an unsaved instance of a definition. */
 export const testIntegrationDraft = async (definitionId, draft) =>
@@ -98,7 +98,7 @@ const actionPath = (id, action) => `${instancePath(id)}/actions/${encodeURICompo
  * and the connections a test can run with.
  */
 export const fetchIntegrationAction = async (id, action) =>
-  (await makeAdminApiCall(actionPath(id, action))).data.detail;
+  (await makeAdminApiCall(actionPath(id, action))).data;
 
 /**
  * Change the admin override of one action: `{ description?, guidance?,
