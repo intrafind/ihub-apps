@@ -9,7 +9,8 @@ import {
   updateProjectItem,
   updateProjectItemText
 } from '../../../api';
-import { projectErrorDetails, projectErrorMessage } from '../utils/projectErrors';
+import { projectErrorMessage } from '../utils/projectErrors';
+import { removeItemsInTurn, withoutItems } from '../utils/removeItems';
 
 /**
  * Replace one item of a project in place, keeping the others.
@@ -156,29 +157,15 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
   const removeMany = useCallback(
     async items => {
       setError(null);
-      const removed = new Set();
-      const failed = [];
-      try {
-        for (const item of items) {
-          setBusyItemId(item.id);
-          try {
-            await deleteProjectItem(projectId, item.id);
-            removed.add(item.id);
-          } catch (err) {
-            if (projectErrorDetails(err).code === 'ITEM_NOT_FOUND') removed.add(item.id);
-            else failed.push(projectErrorMessage(err, t));
-          }
+      const { removed, failed } = await removeItemsInTurn(
+        items,
+        item => deleteProjectItem(projectId, item.id),
+        {
+          messageOf: err => projectErrorMessage(err, t),
+          onItem: item => setBusyItemId(item?.id ?? null)
         }
-      } finally {
-        setBusyItemId(null);
-      }
-      if (removed.size > 0) {
-        setProject(prev =>
-          prev
-            ? { ...prev, items: (prev.items || []).filter(entry => !removed.has(entry.id)) }
-            : prev
-        );
-      }
+      );
+      setProject(prev => withoutItems(prev, removed));
       if (failed.length > 0) {
         setError(
           t(

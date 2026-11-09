@@ -32,6 +32,7 @@ const IFINDER_ALLOWED_KINDS = [IFINDER_DOCUMENT_KIND];
 import AddProjectItemDialog from './AddProjectItemDialog';
 import EditItemDialog from './EditItemDialog';
 import EstimateTokensButton from './EstimateTokensButton';
+import ItemSelectionBar, { SelectionDeleteButton } from './ItemSelectionBar';
 import ProjectEstimatePanel from './ProjectEstimatePanel';
 import ProjectItemsTable from './ProjectItemsTable';
 import { useProjectItemDocumentActions } from './ProjectItemDocumentActions';
@@ -69,6 +70,40 @@ function userItemApi(errorMessage) {
     },
     fetchLinkSource: projectId => fetchProject(projectId),
     errorMessage
+  };
+}
+
+/**
+ * The wording of deleting the ticked documents. A smart collection from iFinder
+ * only removes them from the collection: the documents stay in iFinder.
+ *
+ * @param {Function} t
+ * @param {boolean} isIFinder
+ * @param {number} count - The documents the confirmation is for.
+ * @returns {{action: string, title: string, message: string, confirm: string}}
+ */
+function bulkRemoveTexts(t, isIFinder, count) {
+  if (isIFinder) {
+    return {
+      action: t('projects.items.removeSelected', 'Remove'),
+      title: t('projects.items.removeSelectedTitle', 'Remove selected documents'),
+      message: t(
+        'projects.items.removeSelectedFromCollectionConfirm',
+        'Remove {{count}} documents from the collection? The documents stay in iFinder.',
+        { count }
+      ),
+      confirm: t('projects.items.removeSelectedAction', 'Remove documents')
+    };
+  }
+  return {
+    action: t('projects.items.deleteSelected', 'Delete'),
+    title: t('projects.items.deleteSelectedTitle', 'Delete selected documents'),
+    message: t(
+      'projects.items.deleteSelectedConfirm',
+      'Delete {{count}} documents from the project? This cannot be undone.',
+      { count }
+    ),
+    confirm: t('projects.items.deleteSelectedAction', 'Delete documents')
   };
 }
 
@@ -110,8 +145,8 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
-  // The ticked items a removal waits to be confirmed for, and whether it runs.
-  const [bulkRemove, setBulkRemove] = useState(null);
+  // The ticked items a removal waits to be confirmed for (none: no dialog), and whether it runs.
+  const [bulkRemove, setBulkRemove] = useState([]);
   const [bulkRemoving, setBulkRemoving] = useState(false);
   const actions = useProjectItemActions({ projectId: project.id, setProject, reload });
   const documentActions = useProjectItemDocumentActions(project.id);
@@ -136,14 +171,14 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   } = useProjectEstimate(estimateCall, messageOf);
 
   // The selection as it is now: an item removed since it was ticked (here, by
-  // someone else, or found gone by the poll) is not selected any more.
-  const selectedItems = editable
-    ? (project.items || []).filter(item => selectedIds.has(item.id))
-    : [];
+  // someone else, or found gone by the poll) is not selected any more. The table
+  // offers ticking only to those who may change the items.
+  const selectedItems = (project.items || []).filter(item => selectedIds.has(item.id));
+  const bulkTexts = bulkRemoveTexts(t, isIFinder, bulkRemove.length);
 
   const handleBulkRemove = async () => {
-    const items = bulkRemove || [];
-    setBulkRemove(null);
+    const items = bulkRemove;
+    setBulkRemove([]);
     if (items.length === 0) return;
     clearEstimate();
     setBulkRemoving(true);
@@ -227,43 +262,18 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         </div>
       )}
 
-      {selectedItems.length > 0 && (
-        <div
-          data-testid="project-item-selection-bar"
-          className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 dark:border-indigo-800 dark:bg-indigo-900/30"
+      {editable && selectedItems.length > 0 && (
+        <ItemSelectionBar
+          label={t('projects.items.selectedCount', '{{count}} documents selected', {
+            count: selectedItems.length
+          })}
+          busy={bulkRemoving}
+          onClear={() => setSelectedIds(new Set())}
         >
-          <span className="text-sm font-medium text-indigo-800 dark:text-indigo-200">
-            {t('projects.items.selectedCount', '{{count}} documents selected', {
-              count: selectedItems.length
-            })}
-          </span>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setBulkRemove(selectedItems)}
-              disabled={bulkRemoving}
-              aria-busy={bulkRemoving || undefined}
-              className="inline-flex items-center gap-1 rounded-lg bg-red-600 px-3 py-1 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-            >
-              <Icon
-                name={bulkRemoving ? 'arrow-path' : 'trash'}
-                size="sm"
-                className={bulkRemoving ? 'animate-spin' : undefined}
-              />
-              {isIFinder
-                ? t('projects.items.removeSelected', 'Remove')
-                : t('projects.items.deleteSelected', 'Delete')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSelectedIds(new Set())}
-              disabled={bulkRemoving}
-              className="rounded-lg border border-gray-300 bg-white px-3 py-1 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              {t('common.clearSelection', 'Clear')}
-            </button>
-          </div>
-        </div>
+          <SelectionDeleteButton busy={bulkRemoving} onClick={() => setBulkRemove(selectedItems)}>
+            {bulkTexts.action}
+          </SelectionDeleteButton>
+        </ItemSelectionBar>
       )}
 
       {/* A long list scrolls inside its card instead of pushing the page down. */}
@@ -301,8 +311,8 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           onRename={isIFinder ? undefined : setRenaming}
           onEdit={isIFinder ? undefined : setEditing}
           onRemove={setRemoving}
-          selectedIds={editable ? new Set(selectedItems.map(item => item.id)) : undefined}
-          onSelectionChange={editable ? setSelectedIds : undefined}
+          selectedIds={new Set(selectedItems.map(item => item.id))}
+          onSelectionChange={setSelectedIds}
         />
       </div>
 
@@ -385,33 +395,13 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
         onDeny={() => setRemoving(null)}
       />
       <ConfirmDialog
-        isOpen={Boolean(bulkRemove)}
-        title={
-          isIFinder
-            ? t('projects.items.removeSelectedTitle', 'Remove selected documents')
-            : t('projects.items.deleteSelectedTitle', 'Delete selected documents')
-        }
-        message={
-          isIFinder
-            ? t(
-                'projects.items.removeSelectedFromCollectionConfirm',
-                'Remove {{count}} documents from the collection? The documents stay in iFinder.',
-                { count: bulkRemove?.length ?? 0 }
-              )
-            : t(
-                'projects.items.deleteSelectedConfirm',
-                'Delete {{count}} documents from the project? This cannot be undone.',
-                { count: bulkRemove?.length ?? 0 }
-              )
-        }
-        confirmLabel={
-          isIFinder
-            ? t('projects.items.removeSelectedAction', 'Remove documents')
-            : t('projects.items.deleteSelectedAction', 'Delete documents')
-        }
+        isOpen={bulkRemove.length > 0}
+        title={bulkTexts.title}
+        message={bulkTexts.message}
+        confirmLabel={bulkTexts.confirm}
         danger
         onConfirm={handleBulkRemove}
-        onDeny={() => setBulkRemove(null)}
+        onDeny={() => setBulkRemove([])}
       />
     </section>
   );
