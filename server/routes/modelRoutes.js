@@ -8,14 +8,9 @@ import {
   enhanceUserWithPermissions
 } from '../utils/authorization.js';
 import { authRequired } from '../middleware/authRequired.js';
-import {
-  sendFailedOperationError,
-  sendNotFound,
-  sendInternalError,
-  sendErrorResponse
-} from '../utils/responseHelpers.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { validateIdForPath } from '../utils/pathSecurity.js';
+import { ServiceError } from '../utils/ServiceError.js';
+import { assertValidId } from '../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getTranscriptionProvider } from '../transcription/index.js';
 
@@ -109,115 +104,107 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
    *         description: Internal server error
    */
   app.get(buildServerPath('/api/models'), authRequired, async (req, res) => {
-    try {
-      const platformConfig = configCache.getPlatform() || {};
-      const authConfig = platformConfig.auth || {};
+    const platformConfig = configCache.getPlatform() || {};
+    const authConfig = platformConfig.auth || {};
 
-      // Force permission enhancement if not already done
-      if (req.user && !req.user.permissions) {
-        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-      }
-
-      // Create anonymous user if none exists and anonymous access is allowed
-      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-      }
-
-      // Use centralized method to get filtered models with user-specific ETag
-      const { data: models, etag: userSpecificEtag } = await configCache.getModelsForUser(
-        req.user,
-        platformConfig
-      );
-
-      if (!models) {
-        return sendFailedOperationError(res, 'load models configuration');
-      }
-
-      // Filter by model type. Default to chat models so transcription models
-      // never leak into the chat model selector, magic prompt, compare mode,
-      // workflows, or the default-model fallback (G9). `?type=transcription`
-      // returns the permitted transcription models,
-      // `?type=tts` the permitted text-to-speech models (read aloud).
-      // Unknown types are a 400, not a silent fallback to chat — otherwise a
-      // future model type would silently return the wrong list. A
-      // comma-separated list asks for several: the chat's model selector asks
-      // for `chat,transcription`, since a transcription model can be selected
-      // there to transcribe an audio or video file.
-      const requestedTypes = [
-        ...new Set(
-          String(req.query.type ?? 'chat')
-            .split(',')
-            .map(type => type.trim())
-        )
-      ].sort((a, b) => a.localeCompare(b));
-      const unknownType = requestedTypes.find(type => !MODEL_TYPES.has(type));
-      if (unknownType !== undefined) {
-        return sendErrorResponse(res, 400, `Unknown model type: ${unknownType}`);
-      }
-      const requestedType = requestedTypes.join(',');
-      const typedModels = models.filter(m => requestedTypes.includes(m.modelType || 'chat'));
-
-      // Strip server-side secrets (encrypted apiKey for all; url for
-      // transcription and TTS models) so they never reach the browser (G2).
-      const sanitizedModels = typedModels.map(sanitizeModelForPublic);
-
-      // Discriminate the ETag by type so the chat and transcription lists don't
-      // collide in the shared conditional-request cache.
-      const typedEtag = userSpecificEtag ? `${userSpecificEtag}-${requestedType}` : null;
-
-      // Handle conditional requests with ETag
-      if (typedEtag) {
-        res.setHeader('ETag', typedEtag);
-        const clientETag = req.headers['if-none-match'];
-        if (clientETag && clientETag === typedEtag) {
-          return res.status(304).end();
-        }
-      }
-
-      res.json(sanitizedModels);
-    } catch (error) {
-      sendInternalError(res, error, 'fetching models');
+    // Force permission enhancement if not already done
+    if (req.user && !req.user.permissions) {
+      req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
     }
+
+    // Create anonymous user if none exists and anonymous access is allowed
+    if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+      req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+    }
+
+    // Use centralized method to get filtered models with user-specific ETag
+    const { data: models, etag: userSpecificEtag } = await configCache.getModelsForUser(
+      req.user,
+      platformConfig
+    );
+
+    if (!models) {
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to load models configuration');
+    }
+
+    // Filter by model type. Default to chat models so transcription models
+    // never leak into the chat model selector, magic prompt, compare mode,
+    // workflows, or the default-model fallback (G9). `?type=transcription`
+    // returns the permitted transcription models,
+    // `?type=tts` the permitted text-to-speech models (read aloud).
+    // Unknown types are a 400, not a silent fallback to chat — otherwise a
+    // future model type would silently return the wrong list. A
+    // comma-separated list asks for several: the chat's model selector asks
+    // for `chat,transcription`, since a transcription model can be selected
+    // there to transcribe an audio or video file.
+    const requestedTypes = [
+      ...new Set(
+        String(req.query.type ?? 'chat')
+          .split(',')
+          .map(type => type.trim())
+      )
+    ].sort((a, b) => a.localeCompare(b));
+    const unknownType = requestedTypes.find(type => !MODEL_TYPES.has(type));
+    if (unknownType !== undefined) {
+      throw new ServiceError('BAD_REQUEST', `Unknown model type: ${unknownType}`);
+    }
+    const requestedType = requestedTypes.join(',');
+    const typedModels = models.filter(m => requestedTypes.includes(m.modelType || 'chat'));
+
+    // Strip server-side secrets (encrypted apiKey for all; url for
+    // transcription and TTS models) so they never reach the browser (G2).
+    const sanitizedModels = typedModels.map(sanitizeModelForPublic);
+
+    // Discriminate the ETag by type so the chat and transcription lists don't
+    // collide in the shared conditional-request cache.
+    const typedEtag = userSpecificEtag ? `${userSpecificEtag}-${requestedType}` : null;
+
+    // Handle conditional requests with ETag
+    if (typedEtag) {
+      res.setHeader('ETag', typedEtag);
+      const clientETag = req.headers['if-none-match'];
+      if (clientETag && clientETag === typedEtag) {
+        return res.status(304).end();
+      }
+    }
+
+    res.json(sanitizedModels);
   });
 
   // No modelAccessRequired here: it answers 403, while this route gives one
   // answer (404) for a model that does not exist and one the caller may not use.
   app.get(buildServerPath('/api/models/:modelId'), authRequired, async (req, res) => {
-    try {
-      const { modelId } = req.params;
+    const { modelId } = req.params;
 
-      // Validate modelId to prevent injection
-      if (!validateIdForPath(modelId, 'model', res)) return;
+    // Validate modelId to prevent injection
+    assertValidId(modelId, 'model');
 
-      const platform = configCache.getPlatform() || {};
-      const defaultLang = platform?.defaultLanguage || 'en';
-      const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
+    const platform = configCache.getPlatform() || {};
+    const defaultLang = platform?.defaultLanguage || 'en';
+    const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
 
-      // Try to get models from cache first
-      const { data: models } = configCache.getModels();
+    // Try to get models from cache first
+    const { data: models } = configCache.getModels();
 
-      if (!models) {
-        return sendFailedOperationError(res, 'load models configuration');
-      }
-      const model = findByIdCaseInsensitive(models, modelId);
-      // Transcription and TTS models are not exposed through this public
-      // chat-model route (G9); their internal url / apiKey must never reach
-      // the browser. Treat them as not-found here.
-      if (!model || (model.modelType || 'chat') !== 'chat') {
-        const errorMessage = await getLocalizedError('modelNotFound', {}, language);
-        return sendNotFound(res, errorMessage);
-      }
-
-      // Fails closed: without a principal carrying permissions nothing is granted.
-      if (!canUserAccessResource(req.user, 'models', model.id)) {
-        const errorMessage = await getLocalizedError('modelNotFound', {}, language);
-        return sendNotFound(res, errorMessage);
-      }
-
-      // Strip server-side secrets (encrypted apiKey) before returning.
-      res.json(sanitizeModelForPublic(model));
-    } catch (error) {
-      sendInternalError(res, error, 'fetching model details');
+    if (!models) {
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to load models configuration');
     }
+    const model = findByIdCaseInsensitive(models, modelId);
+    // Transcription and TTS models are not exposed through this public
+    // chat-model route (G9); their internal url / apiKey must never reach
+    // the browser. Treat them as not-found here.
+    if (!model || (model.modelType || 'chat') !== 'chat') {
+      const errorMessage = await getLocalizedError('modelNotFound', {}, language);
+      throw new ServiceError('NOT_FOUND', `${errorMessage} not found`);
+    }
+
+    // Fails closed: without a principal carrying permissions nothing is granted.
+    if (!canUserAccessResource(req.user, 'models', model.id)) {
+      const errorMessage = await getLocalizedError('modelNotFound', {}, language);
+      throw new ServiceError('NOT_FOUND', `${errorMessage} not found`);
+    }
+
+    // Strip server-side secrets (encrypted apiKey) before returning.
+    res.json(sanitizeModelForPublic(model));
   });
 }

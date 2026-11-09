@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { hasIdCaseInsensitive } from './resourceLookup.js';
+import { ServiceError } from './ServiceError.js';
 
 /**
  * Which groups may use a piece of content — an app, a prompt, a skill, a tool
@@ -28,18 +29,19 @@ import { hasIdCaseInsensitive } from './resourceLookup.js';
  */
 export const CONTENT_ACCESS_TYPES = Object.freeze(['apps', 'prompts', 'skills', 'workflows']);
 
+const STATUS_CODES = { 403: 'FORBIDDEN', 404: 'NOT_FOUND' };
+
 /**
  * A refused change, carrying the HTTP status the route should answer with.
  */
-export class ContentAccessError extends Error {
+export class ContentAccessError extends ServiceError {
   /**
    * @param {number} status - HTTP status (400 invalid request, 403 not yours, 404 unknown group)
    * @param {string} message - What was refused, for the admin who asked
    */
   constructor(status, message) {
-    super(message);
+    super(STATUS_CODES[status] || 'BAD_REQUEST', message, { status });
     this.name = 'ContentAccessError';
-    this.status = status;
   }
 }
 

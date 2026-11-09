@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import express from 'express';
 import request from 'supertest';
 import configCache from '../configCache.js';
+import errorHandler from '../middleware/errorHandler.js';
 import registerModelRoutes from '../routes/modelRoutes.js';
 import { getLocalizedError } from '../serverHelpers.js';
 
@@ -57,6 +58,7 @@ function buildApp() {
     next();
   });
   registerModelRoutes(app, { getLocalizedError });
+  app.use(errorHandler);
   return app;
 }
 

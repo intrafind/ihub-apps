@@ -6,9 +6,9 @@ import { authRequired } from '../middleware/authRequired.js';
 import configCache from '../configCache.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { ServiceError } from '../utils/ServiceError.js';
 import { buildContentDisposition } from '../utils/safeContentDisposition.js';
 import logger from '../utils/logger.js';
-import { sendErrorResponse } from '../utils/responseHelpers.js';
 import {
   buildChatExportSpec,
   buildMarkdownExportSpec,
@@ -20,7 +20,7 @@ import {
   templateBundleFor
 } from '../services/documents/templates/applyTemplate.js';
 import { templateChoices } from '../services/documents/templates/DocumentTemplateService.js';
-import { DocumentGenerationError } from '../services/documents/renderService.js';
+import { toDocumentServiceError } from '../services/documents/documentHttpErrors.js';
 
 /**
  * Server-side exports. `POST /api/exports/pdf` renders a chat, or any
@@ -84,25 +84,20 @@ export default function registerExportRoutes(app) {
   // descriptions only: the templates' files stay on the server.
   // With `appId`, also the template that app pins (its exports always use it).
   app.get(buildServerPath('/api/document-templates'), authRequired, async (req, res) => {
-    try {
-      const language = typeof req.query.lang === 'string' ? req.query.lang.slice(0, 10) : 'en';
-      const templates = await templateChoices(language);
-      const pinned = appOf(req.query.appId)?.documentTemplate;
-      res.setHeader('Cache-Control', 'no-store');
-      res.json({
-        templates,
-        pinned: templates.some(template => template.id === pinned) ? pinned : null
-      });
-    } catch (error) {
-      logger.error('Listing document templates failed', { component: 'Exports', error });
-      sendErrorResponse(res, 500, 'The document templates could not be loaded.');
-    }
+    const language = typeof req.query.lang === 'string' ? req.query.lang.slice(0, 10) : 'en';
+    const templates = await templateChoices(language);
+    const pinned = appOf(req.query.appId)?.documentTemplate;
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      templates,
+      pinned: templates.some(template => template.id === pinned) ? pinned : null
+    });
   });
 
   app.post(buildServerPath('/api/exports/pdf'), authRequired, exportLimiter, async (req, res) => {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
     if (body.kind === 'chat' && !chatExportAllowed(body.appId)) {
-      return sendErrorResponse(res, 403, 'Export is not enabled');
+      throw new ServiceError('FORBIDDEN', 'Export is not enabled');
     }
     const pdfDefaults = configCache.getPlatform()?.pdfExport || {};
     try {
@@ -140,7 +135,7 @@ export default function registerExportRoutes(app) {
           language: body.language
         });
       } else {
-        return sendErrorResponse(res, 400, 'kind must be "chat" or "markdown"');
+        throw new ServiceError('BAD_REQUEST', 'kind must be "chat" or "markdown"');
       }
 
       const templated = applyTemplateToPdfSpec(spec, bundle);
@@ -156,13 +151,10 @@ export default function registerExportRoutes(app) {
       res.setHeader('X-Page-Count', String(pages));
       return res.send(buffer);
     } catch (error) {
-      if (error?.status) return sendErrorResponse(res, error.status, error.message);
-      if (error instanceof DocumentGenerationError) {
-        const status = error.code === 'busy' ? 503 : error.code === 'timeout' ? 504 : 422;
-        return sendErrorResponse(res, status, error.message);
-      }
+      const mapped = toDocumentServiceError(error);
+      if (mapped instanceof ServiceError) throw mapped;
       logger.error('PDF export failed', { component: 'Exports', error });
-      return sendErrorResponse(res, 500, 'The PDF could not be created.');
+      throw new ServiceError('INTERNAL_ERROR', 'The PDF could not be created.');
     }
   });
 }

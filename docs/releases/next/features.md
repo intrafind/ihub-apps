@@ -818,6 +818,13 @@ used to be an HTML or plain text page.
   `FORBIDDEN` for a protected page or a model the caller may not use, `BAD_REQUEST` for an invalid id or a
   missing input and, for a failing model call, the LLM code with its canonical status. An unexpected failure
   answers 500 with a fixed text; the cause is in the server log.
+- The PDF export (`/api/exports*`), apps and models listing (`/api/apps*`, `/api/models*`), document template
+  administration (`/api/admin/document-templates*`), content access (`/api/admin/content-access*`) and chat
+  history administration endpoints answer in this shape: `NOT_FOUND` for an unknown app, model, template or group,
+  `BAD_REQUEST` for an invalid id, type or upload, `CONFLICT` for a template that already exists,
+  `PAYLOAD_TOO_LARGE` for a template file over the limit, `SERVICE_UNAVAILABLE` / `TIMEOUT` when the document
+  renderer is busy or too slow (before: a plain `error` text), and `INTERNAL_ERROR` with a fixed text for an
+  unexpected failure; the cause is in the server log.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

@@ -6,20 +6,14 @@ import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { isAdmin } from '../../utils/authorization.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
+import { ServiceError } from '../../utils/ServiceError.js';
+import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import logger from '../../utils/logger.js';
-import {
-  sendInternalError,
-  sendNotFound,
-  sendBadRequest,
-  sendErrorResponse
-} from '../../utils/responseHelpers.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import {
   CONTENT_ACCESS_TYPES,
-  ContentAccessError,
   applyContentAccessChanges,
   canonicalContentAccessType,
   describeContentAccess,
@@ -63,28 +57,24 @@ function findContent(type, id) {
 }
 
 /**
- * Validate `:type` and `:id` and resolve the content. Answers the request
- * itself when something is wrong and returns null.
+ * Validate `:type` and `:id` and resolve the content; throws a ServiceError
+ * when something is wrong.
  */
-function resolveTarget(req, res) {
+function resolveTarget(req) {
   const { id } = req.params;
   // The allowlist's own constant, never the URL's string, names the permission
   // list from here on — see canonicalContentAccessType.
   const type = canonicalContentAccessType(req.params.type);
   if (type === undefined) {
-    sendBadRequest(
-      res,
+    throw new ServiceError(
+      'BAD_REQUEST',
       `Unknown content type '${req.params.type}'. Expected one of: ${CONTENT_ACCESS_TYPES.join(', ')}`
     );
-    return null;
   }
-  if (!validateIdForPath(id, type.slice(0, -1), res)) {
-    return null;
-  }
+  assertValidId(id, type.slice(0, -1));
   const content = findContent(type, id);
   if (!content) {
-    sendNotFound(res, `${type.slice(0, -1)} '${id}'`);
-    return null;
+    throw new ServiceError('NOT_FOUND', `${type.slice(0, -1)} '${id}' not found`);
   }
   return { type, contentId: content.id };
 }
@@ -228,20 +218,15 @@ export default function registerAdminContentAccessRoutes(app) {
     buildServerPath('/api/admin/content-access/:type/:id'),
     contentAdminAuth,
     async (req, res) => {
-      try {
-        const target = resolveTarget(req, res);
-        if (!target) return;
+      const target = resolveTarget(req);
 
-        const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
-        if (!groupsData?.groups) {
-          return sendNotFound(res, 'Groups file');
-        }
-
-        const { view } = buildView(req, groupsData, target.type, target.contentId);
-        res.json(view);
-      } catch (error) {
-        return sendInternalError(res, error, 'get content access');
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData?.groups) {
+        throw new ServiceError('NOT_FOUND', 'Groups file not found');
       }
+
+      const { view } = buildView(req, groupsData, target.type, target.contentId);
+      res.json(view);
     }
   );
 
@@ -321,91 +306,78 @@ export default function registerAdminContentAccessRoutes(app) {
     buildServerPath('/api/admin/content-access/:type/:id'),
     contentAdminAuth,
     async (req, res) => {
-      try {
-        const target = resolveTarget(req, res);
-        if (!target) return;
+      const target = resolveTarget(req);
 
-        const { grant = [], revoke = [] } = req.body || {};
-        if (!Array.isArray(grant) || !Array.isArray(revoke)) {
-          return sendBadRequest(res, "'grant' and 'revoke' must be arrays of group ids");
-        }
-        const invalid = [...grant, ...revoke].find(groupId => !isValidId(groupId));
-        if (invalid !== undefined) {
-          return sendBadRequest(
-            res,
-            'Invalid group ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.'
-          );
-        }
-
-        const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
-        if (!groupsData?.groups) {
-          return sendNotFound(res, 'Groups file');
-        }
-
-        const { manageableIds } = buildView(req, groupsData, target.type, target.contentId);
-
-        let changes;
-        try {
-          changes = applyContentAccessChanges({
-            groups: groupsData.groups,
-            type: target.type,
-            contentId: target.contentId,
-            grant,
-            revoke,
-            manageableIds
-          });
-        } catch (error) {
-          if (error instanceof ContentAccessError) {
-            return sendErrorResponse(res, error.status, error.message);
-          }
-          throw error;
-        }
-
-        if (changes.length > 0) {
-          groupsData.metadata = {
-            ...groupsData.metadata,
-            lastModified: new Date().toISOString()
-          };
-          await configStore.writeJson(GROUPS_FILE, groupsData);
-          await configCache.refreshCacheEntry(GROUPS_FILE);
-
-          const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
-          const noun = target.type.slice(0, -1);
-          for (const change of changes) {
-            await saveSnapshot({
-              resource: 'group',
-              id: change.groupId,
-              before: change.before,
-              after: change.after,
-              admin
-            });
-            await logAudit({
-              req,
-              action: 'update',
-              resource: 'group',
-              resourceId: change.groupId,
-              summary:
-                change.action === 'grant'
-                  ? `Granted ${noun} ${target.contentId} to group ${change.groupId}`
-                  : `Revoked ${noun} ${target.contentId} from group ${change.groupId}`
-            });
-          }
-
-          logger.info('Updated content access', {
-            component: 'AdminContentAccess',
-            type: target.type,
-            contentId: target.contentId,
-            changed: changes.map(change => `${change.action}:${change.groupId}`)
-          });
-        }
-
-        // Re-read the view from the (possibly updated) data so the response
-        // reflects exactly what was written.
-        const { view } = buildView(req, groupsData, target.type, target.contentId);
-        res.json({ ...view, changed: changes.map(change => change.groupId) });
-      } catch (error) {
-        return sendInternalError(res, error, 'update content access');
+      const { grant = [], revoke = [] } = req.body || {};
+      if (!Array.isArray(grant) || !Array.isArray(revoke)) {
+        throw new ServiceError('BAD_REQUEST', "'grant' and 'revoke' must be arrays of group ids");
       }
+      const invalid = [...grant, ...revoke].find(groupId => !isValidId(groupId));
+      if (invalid !== undefined) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid group ID. Only alphanumeric characters, dots, underscores, and hyphens are allowed.'
+        );
+      }
+
+      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
+      if (!groupsData?.groups) {
+        throw new ServiceError('NOT_FOUND', 'Groups file not found');
+      }
+
+      const { manageableIds } = buildView(req, groupsData, target.type, target.contentId);
+
+      const changes = applyContentAccessChanges({
+        groups: groupsData.groups,
+        type: target.type,
+        contentId: target.contentId,
+        grant,
+        revoke,
+        manageableIds
+      });
+
+      if (changes.length > 0) {
+        groupsData.metadata = {
+          ...groupsData.metadata,
+          lastModified: new Date().toISOString()
+        };
+        await configStore.writeJson(GROUPS_FILE, groupsData);
+        await configCache.refreshCacheEntry(GROUPS_FILE);
+
+        const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
+        const noun = target.type.slice(0, -1);
+        for (const change of changes) {
+          await saveSnapshot({
+            resource: 'group',
+            id: change.groupId,
+            before: change.before,
+            after: change.after,
+            admin
+          });
+          await logAudit({
+            req,
+            action: 'update',
+            resource: 'group',
+            resourceId: change.groupId,
+            summary:
+              change.action === 'grant'
+                ? `Granted ${noun} ${target.contentId} to group ${change.groupId}`
+                : `Revoked ${noun} ${target.contentId} from group ${change.groupId}`
+          });
+        }
+
+        logger.info('Updated content access', {
+          component: 'AdminContentAccess',
+          type: target.type,
+          contentId: target.contentId,
+          changed: changes.map(change => `${change.action}:${change.groupId}`)
+        });
+      }
+
+      // Re-read the view from the (possibly updated) data so the response
+      // reflects exactly what was written.
+      const { view } = buildView(req, groupsData, target.type, target.contentId);
+      res.json({ ...view, changed: changes.map(change => change.groupId) });
     }
   );
 }
