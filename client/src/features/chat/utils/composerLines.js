@@ -20,12 +20,8 @@ export const DEFAULT_MAX_LINES = { multiline: 12, singleline: 5 };
  * @returns {{ minLines: number, maxLines: number }}
  */
 export function composerLineLimits({ multiline, rows, compact = false, maxRows = null }) {
-  const maxLines =
-    typeof maxRows === 'number' && maxRows > 0
-      ? maxRows
-      : multiline
-        ? DEFAULT_MAX_LINES.multiline
-        : DEFAULT_MAX_LINES.singleline;
+  const defaultMaxLines = multiline ? DEFAULT_MAX_LINES.multiline : DEFAULT_MAX_LINES.singleline;
+  const maxLines = typeof maxRows === 'number' && maxRows > 0 ? maxRows : defaultMaxLines;
   const configuredLines = multiline ? Math.max(1, Number(rows) || 2) : 1;
   return { minLines: Math.min(compact ? 1 : configuredLines, maxLines), maxLines };
 }
