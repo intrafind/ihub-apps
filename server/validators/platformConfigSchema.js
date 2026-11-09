@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { usageLimitBucketSchema } from './common.js';
+import { MAX_FILES_CEILING } from '../services/projects/projectConstants.js';
 import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import {
   VOICE_LISTENING_STYLES,
@@ -716,7 +717,7 @@ export const platformConfigSchema = z
     // chats. `tierPolicy` `both` or `ifinder` also lists the user's iFinder
     // smart collections as read-only projects (needs the iFinder installation);
     // creating projects in the iFinder tier is not part of this version.
-    // `limits.maxFiles` may not exceed 50; `maxProjectsPerUser`
+    // `limits.maxFiles` may not exceed MAX_FILES_CEILING; `maxProjectsPerUser`
     // of zero or less means no cap; `retentionDays` of zero or less keeps user
     // projects until deleted. `kinds` switches item kinds off by id.
     projects: z
@@ -726,9 +727,9 @@ export const platformConfigSchema = z
         defaultAppId: z.string().max(100).optional(),
         limits: z
           .object({
-            maxFiles: z.number().int().min(1).max(50).prefault(25),
+            maxFiles: z.number().int().min(1).max(MAX_FILES_CEILING).prefault(100),
             maxFileBytes: z.number().int().positive().prefault(20971520),
-            maxProjectBytes: z.number().int().positive().prefault(209715200),
+            maxProjectBytes: z.number().int().positive().prefault(524288000),
             maxProjectsPerUser: z.number().int().prefault(20)
           })
           .passthrough()

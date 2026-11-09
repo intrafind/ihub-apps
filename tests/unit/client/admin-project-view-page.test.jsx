@@ -50,6 +50,10 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   default: () => null
 }));
 jest.mock('../../../client/src/features/admin/components/ChangeHistoryDrawer', () => () => null);
+jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
+  __esModule: true,
+  default: () => ({ isEnabled: () => true })
+}));
 
 const mockT = (key, defaultOrOptions, maybeOptions) => {
   const options = typeof defaultOrOptions === 'object' ? defaultOrOptions : maybeOptions || {};

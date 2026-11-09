@@ -65,8 +65,8 @@ export const IFINDER_ITEM_KIND = 'ifinder-document';
 /** Documents a collection holds at most: iFinder's cap, counted here before sending. */
 export const MAX_DOCUMENTS = MAX_COLLECTION_DOCUMENTS;
 
-/** Documents one add call takes. */
-export const MAX_ADD_PER_CALL = 50;
+/** Documents one add call takes: a whole collection, the project item ceiling. */
+export const MAX_ADD_PER_CALL = MAX_DOCUMENTS;
 
 // --- shared pieces ----------------------------------------------------------------
 

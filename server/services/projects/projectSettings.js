@@ -45,9 +45,9 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   tierPolicy: 'ihub',
   defaultAppId: '',
   limits: Object.freeze({
-    maxFiles: 25,
+    maxFiles: 100,
     maxFileBytes: 20 * 1024 * 1024,
-    maxProjectBytes: 200 * 1024 * 1024,
+    maxProjectBytes: 500 * 1024 * 1024,
     maxProjectsPerUser: 20
   }),
   sharing: Object.freeze({

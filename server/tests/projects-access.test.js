@@ -202,8 +202,16 @@ describe('settings', () => {
   it('clamps the files limit to the hard ceiling and applies defaults', () => {
     const s = projectSettings({ projects: { limits: { maxFiles: 500, maxProjectsPerUser: -3 } } });
     assert.equal(s.limits.maxFiles, MAX_FILES_CEILING);
+    assert.equal(MAX_FILES_CEILING, 200, 'the document cap of a smart collection');
+    assert.equal(
+      projectSettings({ projects: { limits: { maxFiles: 150 } } }).limits.maxFiles,
+      150,
+      'a limit above the old ceiling of 50 is kept'
+    );
     assert.equal(s.limits.maxProjectsPerUser, 0);
     assert.equal(s.limits.maxFileBytes, 20 * 1024 * 1024);
+    assert.equal(projectSettings({}).limits.maxFiles, 100, 'the default item count');
+    assert.equal(projectSettings({}).limits.maxProjectBytes, 500 * 1024 * 1024);
     assert.equal(s.sharing.allowEveryone, false);
     assert.equal(s.tierPolicy, 'ihub');
     assert.equal(projectSettings({ projects: { tierPolicy: 'both' } }).tierPolicy, 'both');

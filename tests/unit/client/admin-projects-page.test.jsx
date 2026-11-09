@@ -99,9 +99,18 @@ beforeEach(() => {
   mockApi.deleteAdminProject.mockResolvedValue(undefined);
   mockApi.fetchProjectSettings.mockResolvedValue({
     sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: false },
-    tierPolicy: 'ihub'
+    tierPolicy: 'ihub',
+    limits: {
+      maxFiles: 25,
+      maxFileBytes: 20 * MB,
+      maxProjectBytes: 200 * MB,
+      maxProjectsPerUser: 20
+    },
+    maxFilesCeiling: 200
   });
 });
+
+const MB = 1024 * 1024;
 
 describe('AdminProjectsPage', () => {
   test('lists the projects with item kinds, category, tags and the statistics', async () => {
@@ -227,6 +236,7 @@ describe('AdminProjectsPage – sharing of user projects', () => {
         tierPolicy: 'ihub'
       })
     );
+    expect(mockApi.saveProjectSettings.mock.calls[0][0]).not.toHaveProperty('limits');
     expect(await screen.findByText('Saved')).toBeInTheDocument();
   });
 
@@ -242,6 +252,48 @@ describe('AdminProjectsPage – sharing of user projects', () => {
         expect.objectContaining({ tierPolicy: 'both' })
       )
     );
+  });
+
+  test('edits the limits, the sizes in MB, and sends only when they changed', async () => {
+    mockApi.saveProjectSettings.mockImplementation(async settings => ({
+      ...settings,
+      maxFilesCeiling: 200
+    }));
+    renderPage();
+    const items = await screen.findByLabelText('Items per project');
+    expect(items).toHaveValue(25);
+    expect(screen.getByLabelText('Size of one file (MB)')).toHaveValue(20);
+    expect(screen.getByLabelText('Size of one project (MB)')).toHaveValue(200);
+    expect(screen.getByText('Every kind of item counts. At most 200.')).toBeInTheDocument();
+
+    fireEvent.change(items, { target: { value: '150' } });
+    fireEvent.change(screen.getByLabelText('Size of one project (MB)'), {
+      target: { value: '1024' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.saveProjectSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          limits: {
+            maxFiles: 150,
+            maxFileBytes: 20 * MB,
+            maxProjectBytes: 1024 * MB,
+            maxProjectsPerUser: 20
+          }
+        })
+      )
+    );
+  });
+
+  test('keeps Save off while a limit is out of range', async () => {
+    renderPage();
+    const items = await screen.findByLabelText('Items per project');
+    fireEvent.change(items, { target: { value: '201' } });
+    expect(items).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('Enter a number in the allowed range.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    fireEvent.change(items, { target: { value: '200' } });
+    expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 
   test('is not shown to a content admin', async () => {

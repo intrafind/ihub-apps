@@ -153,8 +153,12 @@ function AdminProvidersPage() {
         makeAdminApiCall('/admin/models').catch(() => ({ data: [] }))
       ]);
 
-      const providersArray = Array.isArray(providersResponse.data) ? providersResponse.data : [];
-      const modelsArray = Array.isArray(modelsResponse.data) ? modelsResponse.data : [];
+      const providersArray = Array.isArray(providersResponse.data?.items)
+        ? providersResponse.data.items
+        : [];
+      const modelsArray = Array.isArray(modelsResponse.data?.items)
+        ? modelsResponse.data.items
+        : [];
       setProviders(providersArray);
       setModels(modelsArray);
 

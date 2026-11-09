@@ -105,7 +105,7 @@ function AdminVoiceInputPage() {
     makeAdminApiCall('/admin/models', { method: 'GET' })
       .then(response => {
         if (!active) return;
-        const models = Array.isArray(response.data) ? response.data : [];
+        const models = Array.isArray(response.data?.items) ? response.data.items : [];
         setTranscriptionModels(
           models.filter(m => m.modelType === 'transcription' && m.enabled !== false)
         );

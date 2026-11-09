@@ -1296,6 +1296,20 @@ A web page added to a project without a name now shows the page's title instead 
 you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
 page that cannot be read when it is added keeps its URL as the name.
 
+## Projects: Up to 200 Items, and the Limits Are Set in the Admin UI
+
+A project can now hold up to 200 items, the same number of documents an iFinder smart collection
+holds, and by default holds 100 items and 500 MB (was 25 items and 200 MB). Admins set the project
+limits under **Admin → Projects → Project settings** instead of
+editing `platform.json`, and a change applies at once, without a restart.
+
+- Four limits: items per project (100 by default, at most 200), size of one file (20 MB) and of
+  one project (500 MB), and projects per user (0 for no limit).
+- An upgrade raises the item and project size limits only where they still hold the old defaults; a
+  value an admin chose stays.
+- Lowering a limit removes nothing; it only refuses what would go past it.
+- Adding several iFinder documents to a smart collection project at once takes up to 200 per call.
+
 ## Chat: A Tool Call Shows Up While the Model Is Still Writing It
 
 The activity list now shows a tool call ("Create interactive web artifact", "Search the web") as
