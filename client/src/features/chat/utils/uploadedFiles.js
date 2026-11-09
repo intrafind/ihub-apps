@@ -10,6 +10,9 @@
  * @module features/chat/utils/uploadedFiles
  */
 
+import { attachmentIdsOf } from '../messageAttachments/attachmentViews';
+import { fileLookOf } from './artifactFiles';
+
 const BADGES = {
   'application/pdf': 'PDF',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
@@ -169,7 +172,7 @@ export function extractedTextFileName(file) {
  * the ids a message names.
  *
  * @param {Object[]} files - Descriptors.
- * @param {Object[]} messages - Chat messages with `attachments` / `fileData`.
+ * @param {Object[]} messages - Chat messages with `attachments`.
  * @returns {Map<string, number>} File id → number of the question that carried it (1-based).
  */
 export function questionOfFiles(files, messages) {
@@ -179,13 +182,38 @@ export function questionOfFiles(files, messages) {
   for (const message of messages || []) {
     if (message?.role !== 'user' || message.isGreeting) continue;
     question += 1;
-    const ids = [
-      ...(Array.isArray(message.attachments) ? message.attachments : []),
-      ...[message.fileData].flat().filter(Boolean)
-    ].map(item => item?.id || item?.fileId);
-    for (const id of ids) {
-      if (id && wanted.has(id) && !out.has(id)) out.set(id, question);
+    for (const id of attachmentIdsOf(message)) {
+      if (wanted.has(id) && !out.has(id)) out.set(id, question);
     }
   }
   return out;
+}
+
+/**
+ * Icon and tile colours of an uploaded file: e-mails, meetings and pages have their own, the rest
+ * the look of its file type.
+ *
+ * @param {{ mimeType?: string, name?: string, origin?: string }} file
+ * @returns {{ icon: string, className: string }}
+ */
+export function uploadedFileLook(file) {
+  switch (uploadedViewKind(file)) {
+    case 'email':
+      return {
+        icon: 'envelope',
+        className: 'bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300'
+      };
+    case 'meeting':
+      return {
+        icon: 'calendar',
+        className: 'bg-violet-50 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300'
+      };
+    case 'page':
+      return {
+        icon: 'globe',
+        className: 'bg-teal-50 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300'
+      };
+    default:
+      return fileLookOf({ mimeType: file.mimeType });
+  }
 }

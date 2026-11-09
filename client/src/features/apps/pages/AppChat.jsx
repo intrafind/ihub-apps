@@ -29,6 +29,12 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import { debugLog } from '../../../utils/debugLog';
+import {
+  imagesNeedVision,
+  payloadFieldsOf,
+  toApiFileField
+} from '../../chat/messageAttachments/attachmentPayload';
+import { attachmentIdsOf } from '../../chat/messageAttachments/attachmentViews';
 import Icon from '../../../shared/components/Icon';
 import ShareDialog from '../../chat/components/ShareDialog';
 import ArtifactShareDialog from '../../chat/components/ArtifactShareDialog';
@@ -219,12 +225,6 @@ const isTranscriptionTurn = (messages, messageId) =>
 /** A message can go out with text, attachments, or — where the app allows it — neither. */
 const hasSomethingToSend = (content, files, app) =>
   Boolean(content) || files.length > 0 || app?.allowEmptyContent === true;
-
-/** Attachments as the uploader holds them: none, one object, or a list. */
-const asSelection = files => {
-  if (files.length === 0) return null;
-  return files.length === 1 ? files[0] : files;
-};
 
 /** A message's images, audio and documents (each one or a list) as one list. */
 const attachmentsOf = ({ imageData, audioData, fileData }) =>
@@ -973,13 +973,7 @@ function AppChat({
   // by id. Together with the generated files they make the Files drawer.
   const uploadedFilesAvailable =
     Boolean(chatId) &&
-    messages.some(
-      message =>
-        message.role === 'user' &&
-        [...(message.attachments || []), ...[message.fileData].flat().filter(Boolean)].some(
-          file => file?.id || file?.fileId
-        )
-    );
+    messages.some(message => message.role === 'user' && attachmentIdsOf(message).length > 0);
   const filesDrawerAvailable = artifactsAvailable || uploadedFilesAvailable;
   const uploadedSource = useMemo(
     () => ({
@@ -1860,7 +1854,7 @@ function AppChat({
     restoreVariables(resendData.variables);
 
     // The message's images, audio and documents become the selection again.
-    fileUploadHandler.setSelectedFile(asSelection(filesToRestore));
+    fileUploadHandler.setSelectedFile(toApiFileField(filesToRestore));
 
     // Held from here on: resending the first exchange of a form-started chat
     // empties the transcript, and the composer has to stay to send it.
@@ -2221,7 +2215,7 @@ function AppChat({
     async (files, others = []) => {
       if (busyWithAudio()) return;
       setInput('');
-      fileUploadHandler.setSelectedFile(asSelection(others));
+      fileUploadHandler.setSelectedFile(toApiFileField(others));
       fileUploadHandler.hideUploader();
 
       const abortController = new AbortController();
@@ -2503,75 +2497,23 @@ function AppChat({
       }
     }
 
-    let finalInput = typed.trim();
-    let messageContent = finalInput;
-    let messageData = {};
-
-    if (selectedFile) {
-      // Handle multiple files
-      if (Array.isArray(selectedFile)) {
-        const images = selectedFile.filter(f => f.type === 'image');
-        const audioFiles = selectedFile.filter(f => f.type === 'audio');
-        const documents = selectedFile.filter(f => f.type === 'document');
-
-        let contentParts = [finalInput];
-
-        // Add image previews
-        if (images.length > 0) {
-          const imgPreviews = images
-            .map(
-              img =>
-                `<img src="${img.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`
-            )
-            .join('\n');
-          contentParts.push(imgPreviews);
-        }
-
-        // Add audio file indicators
-        if (audioFiles.length > 0) {
-          const audioIndicators = audioFiles
-            .map(
-              audio =>
-                `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${audio.fileName}</span>\n      </div>`
-            )
-            .join('');
-          contentParts.push(audioIndicators);
-        }
-
-        // Add file indicators
-        if (documents.length > 0) {
-          const fileIndicators = documents
-            .map(
-              doc =>
-                `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${doc.fileName}</span>\n      </div>`
-            )
-            .join('');
-          contentParts.push(fileIndicators);
-        }
-
-        messageContent = contentParts.filter(Boolean).join('\n\n');
-        messageData = {
-          imageData: images.length > 0 ? images : undefined,
-          audioData: audioFiles.length > 0 ? audioFiles : undefined,
-          fileData: documents.length > 0 ? documents : undefined
-        };
-      } else {
-        // Handle single file (legacy behavior)
-        if (selectedFile.type === 'image') {
-          const imgPreview = `<img src="${selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
-          messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
-          messageData = { imageData: selectedFile };
-        } else if (selectedFile.type === 'audio') {
-          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
-          messageContent = finalInput ? `${finalInput} ${audioIndicator}` : audioIndicator;
-          messageData = { audioData: selectedFile };
-        } else {
-          const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${selectedFile.fileName}</span>\n      </div>`;
-          messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
-          messageData = { fileData: selectedFile };
-        }
-      }
+    // Images go to a model that can see them. The uploader only offers them to such a model, so
+    // this is the case where the model was switched after the image was attached.
+    if (!compareModeActive && imagesNeedVision(selectedFile, currentModelObject)) {
+      addSystemMessage(
+        t(
+          'error.modelTakesNoImage',
+          'The selected model cannot process images. Select a model with vision, or remove the image attachment.'
+        ),
+        true
+      );
+      return;
     }
+
+    // The message is the text that was typed, and nothing else: its files go out as the
+    // payload below and are shown from `message.attachments` (derived from that payload), never
+    // as markup pasted into the text.
+    const messageContent = typed.trimEnd();
 
     const params = {
       modelId: selectedModel,
@@ -2644,8 +2586,7 @@ function AppChat({
           rawContent: typed,
           variables:
             carriesVariables && app?.variables?.length > 0 ? { ...validatedVariables } : undefined,
-          ...(isVoiceTurn && !typedInVoiceMode ? { inputMode: 'voice' } : {}),
-          ...messageData
+          ...(isVoiceTurn && !typedInVoiceMode ? { inputMode: 'voice' } : {})
         }
       },
       apiMessage: {
@@ -2654,48 +2595,8 @@ function AppChat({
         // after it go as typed.
         promptTemplate: startFormActive ? null : app?.prompt || null,
         variables: carriesVariables ? { ...validatedVariables } : undefined,
-        imageData: (() => {
-          // Handle image data: convert to object/array/null based on count
-          const imageFiles = Array.isArray(selectedFile)
-            ? selectedFile.filter(f => f.type === 'image')
-            : selectedFile?.type === 'image'
-              ? [selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return imageFiles.length === 1
-            ? imageFiles[0]
-            : imageFiles.length > 1
-              ? imageFiles
-              : null;
-        })(),
-        audioData: (() => {
-          // Handle audio data: convert to object/array/null based on count
-          const audioFiles = Array.isArray(selectedFile)
-            ? selectedFile.filter(f => f.type === 'audio')
-            : selectedFile?.type === 'audio'
-              ? [selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return audioFiles.length === 1
-            ? audioFiles[0]
-            : audioFiles.length > 1
-              ? audioFiles
-              : null;
-        })(),
-        fileData: (() => {
-          // Handle file data: convert to object/array/null based on count
-          const documentFiles = Array.isArray(selectedFile)
-            ? selectedFile.filter(f => f.type === 'document')
-            : selectedFile?.type === 'document'
-              ? [selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return documentFiles.length === 1
-            ? documentFiles[0]
-            : documentFiles.length > 1
-              ? documentFiles
-              : null;
-        })()
+        // What goes to the server: none, one object or a list per kind
+        ...payloadFieldsOf(selectedFile)
       },
       params,
       sendChatHistory,

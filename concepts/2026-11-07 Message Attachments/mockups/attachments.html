@@ -1,0 +1,719 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sent attachments mockup</title>
+<style>
+/* =====================================================================
+   Sent-message attachments: visual mockup (self-contained, no requests).
+   Tokens mirror the real Tailwind v4 classes of the app; the Tailwind
+   equivalent is written next to each token. Hex = Tailwind 4 palette,
+   indigo = the v3 ramp pinned in client/tailwind.css.
+   ===================================================================== */
+*{box-sizing:border-box}
+:root{
+  color-scheme:light;
+  /* chrome of this page (not part of the component) */
+  --outer:#f3f4f6; --panel:#fff; --panel-border:#d1d5db; --fg:#101828; --muted:#4a5565;
+  /* chat surfaces */
+  --page:#fff;                      /* bg-white (Layout.jsx) */
+  --bubble:#eef0f4; --bubble-fg:#0f172a; /* ChatMessage.css user bubble */
+  /* card: bg-white border-gray-300 */
+  --card:#fff; --card-hover:#f9fafb; --card-press:#f3f4f6;
+  --card-border:#d1d5db; --card-border-hover:#a5b4fc; /* border-gray-300, hover:border-indigo-300 */
+  --name:#101828; --meta:#4a5565; --chev:#6a7282;    /* text-gray-900, text-gray-600, text-gray-500 */
+  --ring:#6366f1; --ring-offset:var(--page);          /* ring-indigo-500, ring-offset = surface behind */
+  --skel:#e5e7eb; --spin:#4f46e5; --link:#4338ca;     /* gray-200, indigo-600, indigo-700 */
+  --thumb-border:rgb(0 0 0/.12);
+  --warn-bg:#fffbeb; --warn-border:#ffd230; --warn-text:#973c00; --warn-icon:#bb4d00;   /* amber-50/300/800/700 */
+  --err-bg:#fef2f2; --err-border:#ffa2a2; --err-text:#c10007;                           /* red-50/300/700 */
+  --mut-bg:#f9fafb; --mut-border:#6a7282; --mut-name:#364153; --mut-tile-bg:#f3f4f6; --mut-tile-fg:#4a5565;
+  --shadow:0 1px 2px rgb(0 0 0/.05);
+}
+[data-theme=dark]{
+  color-scheme:dark;
+  --outer:#030712; --panel:#1e2939; --panel-border:#4a5565; --fg:#f3f4f6; --muted:#d1d5db;
+  --page:#101828;
+  --bubble:#2b303b; --bubble-fg:#e5e7eb;
+  --card:#1e2939; --card-hover:#2a3546; --card-press:#364153;      /* bg-gray-800, hover:bg-gray-700/50, active:bg-gray-700 */
+  --card-border:#4a5565; --card-border-hover:#4f46e5;              /* border-gray-600, hover:border-indigo-600 */
+  --name:#f3f4f6; --meta:#d1d5db; --chev:#99a1af;                  /* gray-100, gray-300, gray-400 */
+  --ring:#818cf8;                                                  /* dark:ring-indigo-400 (indigo-500 fails on the bubble: 2.96) */
+  --skel:#364153; --spin:#818cf8; --link:#a5b4fc;
+  --thumb-border:rgb(255 255 255/.18);
+  --warn-bg:rgb(123 51 6/.2); --warn-border:#bb4d00; --warn-text:#fee685; --warn-icon:#ffd230;  /* amber-900/20, 700, 200, 300 */
+  --err-bg:rgb(130 24 26/.2); --err-border:#c10007; --err-text:#ffa2a2;                          /* red-900/20, 700, 300 */
+  --mut-bg:rgb(30 41 57/.6); --mut-border:#99a1af; --mut-name:#e5e7eb; --mut-tile-bg:rgb(54 65 83/.5); --mut-tile-fg:#d1d5db;
+  --shadow:none;
+}
+/* Variant B: the card sits on the bubble, so surfaces are relative to it */
+.in-bubble{
+  --card:#fff; --card-hover:#f9fafb; --card-press:#f3f4f6; --card-border:#e5e7eb; --ring-offset:var(--bubble);
+}
+[data-theme=dark] .in-bubble{
+  --card:rgb(255 255 255/.07); --card-hover:rgb(255 255 255/.12); --card-press:rgb(255 255 255/.16);
+  --card-border:rgb(255 255 255/.1); --card-border-hover:#818cf8;
+}
+/* kind tiles = LOOKS / lookOf() class strings, e.g. bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400 */
+[data-kind]{--tile-bg:#f3f4f6;--tile-fg:#4a5565}
+[data-kind=pdf]{--tile-bg:#fef2f2;--tile-fg:#c10007}
+[data-kind=docx]{--tile-bg:#eff6ff;--tile-fg:#1447e6}
+[data-kind=pptx]{--tile-bg:#fff7ed;--tile-fg:#ca3500}
+[data-kind=xlsx]{--tile-bg:#f0fdf4;--tile-fg:#008236}
+[data-kind=image]{--tile-bg:#ecfdf5;--tile-fg:#007a55}
+[data-kind=email]{--tile-bg:#f0f9ff;--tile-fg:#0069a8}
+[data-kind=meeting]{--tile-bg:#f5f3ff;--tile-fg:#7008e7}
+[data-kind=page]{--tile-bg:#f0fdfa;--tile-fg:#00786f}
+[data-kind=audio]{--tile-bg:#faf5ff;--tile-fg:#8200db}
+[data-kind=archive]{--tile-bg:#fffbeb;--tile-fg:#bb4d00}
+[data-kind=code]{--tile-bg:#f1f5f9;--tile-fg:#314158}
+[data-theme=dark] [data-kind]{--tile-bg:rgb(54 65 83/.5);--tile-fg:#d1d5db}
+[data-theme=dark] [data-kind=pdf]{--tile-bg:rgb(130 24 26/.3);--tile-fg:#ff6467}
+[data-theme=dark] [data-kind=docx]{--tile-bg:rgb(28 57 142/.3);--tile-fg:#8ec5ff}
+[data-theme=dark] [data-kind=pptx]{--tile-bg:rgb(126 42 12/.3);--tile-fg:#ffb86a}
+[data-theme=dark] [data-kind=xlsx]{--tile-bg:rgb(13 84 43/.3);--tile-fg:#7bf1a8}
+[data-theme=dark] [data-kind=image]{--tile-bg:rgb(0 79 59/.3);--tile-fg:#5ee9b5}
+[data-theme=dark] [data-kind=email]{--tile-bg:rgb(2 74 112/.3);--tile-fg:#74d4ff}
+[data-theme=dark] [data-kind=meeting]{--tile-bg:rgb(77 23 154/.3);--tile-fg:#c4b4ff}
+[data-theme=dark] [data-kind=page]{--tile-bg:rgb(11 79 74/.3);--tile-fg:#46ecd5}
+[data-theme=dark] [data-kind=audio]{--tile-bg:rgb(89 22 139/.3);--tile-fg:#dab2ff}
+[data-theme=dark] [data-kind=archive]{--tile-bg:rgb(123 51 6/.3);--tile-fg:#ffd230}
+[data-theme=dark] [data-kind=code]{--tile-bg:rgb(49 65 88/.5);--tile-fg:#e2e8f0}
+
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--outer);color:var(--fg);
+  font:16px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.ic{width:20px;height:20px;flex:none;display:block}
+.ic.sm{width:16px;height:16px}.ic.xs{width:12px;height:12px}
+
+/* ---------- page chrome (not the component) ---------- */
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{font-size:20px;line-height:28px;margin:0 0 4px}
+h2{font-size:16px;line-height:24px;margin:32px 0 8px}
+.lead{margin:0 0 16px;color:var(--muted);font-size:14px;line-height:20px;max-width:70ch}
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;background:var(--panel);border:1px solid var(--panel-border);border-radius:12px;padding:12px 16px}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+legend{font-size:12px;line-height:16px;font-weight:600;color:var(--muted);padding:0;margin-bottom:4px}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg label{display:block;position:relative}
+.seg input{position:absolute;opacity:0;width:1px;height:1px}
+.seg span{display:inline-flex;align-items:center;min-height:36px;padding:4px 12px;border:1px solid var(--panel-border);border-radius:8px;font-size:14px;cursor:pointer;color:var(--fg);background:transparent}
+.seg input:checked + span{background:#4f46e5;border-color:#4f46e5;color:#fff}
+.seg label:has(input:focus-visible) span{outline:2px solid var(--ring);outline-offset:2px}
+select{min-height:36px;font:inherit;font-size:14px;border:1px solid var(--panel-border);border-radius:8px;background:var(--panel);color:var(--fg);padding:4px 8px;width:22rem;max-width:100%}
+.controls>div{max-width:100%;min-width:0}
+select:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.stagebar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;margin:16px 0 8px;font-size:12px;line-height:16px;color:var(--muted)}
+.stage{display:flex;justify-content:center}
+.frame{width:min(var(--w,900px),100%);background:var(--page);color:var(--fg);border:1px dashed var(--panel-border);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:16px}
+.opened{display:block;margin-top:8px;min-height:20px;font-size:12px;line-height:16px;color:var(--muted)}
+
+/* ---------- chat context: copied from ChatMessage.css / ChatMessageList.jsx ---------- */
+.msgrow{container-type:inline-size;width:100%;max-width:768px;margin:0 auto;display:flex}   /* w-full max-w-3xl + @container */
+.msgrow.user{justify-content:flex-end}
+.umsg{max-width:85%;min-width:0}                                                     /* max-w-[85%] */
+.chat-widget-message{display:flex;flex-direction:column;align-items:flex-end;width:100%}
+.bubble{max-width:95%;display:inline-block;box-sizing:content-box;word-break:break-word;padding:10px 16px;border-radius:20px;
+  background:var(--bubble);color:var(--bubble-fg);white-space:pre-wrap}
+.bubble.att-only{padding:12px}
+.actions{margin-top:4px;padding:0 4px;display:flex;gap:12px;font-size:12px;line-height:16px;color:var(--meta)}
+.actions button{all:unset;cursor:pointer;color:var(--meta);min-height:24px;display:inline-flex;align-items:center;border-radius:4px}
+.actions button:focus-visible{box-shadow:0 0 0 2px var(--page),0 0 0 4px var(--ring)}
+.answer{max-width:100%;color:var(--fg)}
+.answer p{margin:0 0 8px}.answer ul{margin:0 0 8px;padding-left:20px}
+.shared-banner{font-size:12px;line-height:16px;color:var(--meta);border:1px solid var(--card-border);border-radius:8px;padding:8px 12px}
+
+/* =====================================================================
+   THE COMPONENT: <MessageAttachments>
+   ===================================================================== */
+.att-block{display:flex;flex-direction:column;gap:8px;max-width:100%;min-width:0;align-items:flex-end}
+.att-block[data-slot=above]{margin-bottom:8px}                    /* mb-2 */
+.att-block[data-slot=under]{margin-top:6px}                       /* mt-1.5 */
+.att-block.in-bubble{align-items:flex-start;margin:2px -4px 8px}  /* -mx-1 mt-0.5 mb-2: inset 12px = 20px bubble radius - 8px card radius */
+.bubble.att-only .att-block.in-bubble{margin:0}
+.att-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;max-width:100%}
+.in-bubble .att-list{flex-direction:column;flex-wrap:nowrap;align-items:flex-start;width:20rem;max-width:100%}
+.att-list>li{display:flex;max-width:100%;min-width:0}
+.att-list.is-grid{display:grid;grid-template-columns:repeat(3,96px);justify-content:end}
+.in-bubble .att-list.is-grid,.spec .att-list.is-grid{justify-content:start;flex-direction:initial;width:auto}
+
+/* row card: w-80 max-w-full min-h-14 gap-3 rounded-lg border px-3 py-2 */
+.att-card{position:relative;display:flex;align-items:center;gap:12px;width:20rem;max-width:100%;min-height:56px;padding:8px 12px;
+  border:1px solid var(--card-border);border-radius:8px;background:var(--card);color:var(--name);text-align:left;font:inherit;cursor:pointer;
+  transition:background-color .15s,border-color .15s;margin:0;-webkit-appearance:none;appearance:none}
+.att-card:hover,.att-card.is-hover{background:var(--card-hover);border-color:var(--card-border-hover);box-shadow:var(--shadow)}
+.att-card:active,.att-card.is-active{background:var(--card-press)}
+.att-card:focus-visible,.att-card.is-focus{outline:2px solid transparent;outline-offset:2px;box-shadow:0 0 0 2px var(--ring-offset),0 0 0 4px var(--ring)}  /* focus:outline-hidden ring-2 ring-offset-2 */
+.att-tile{flex:none;width:36px;height:36px;border-radius:6px;display:grid;place-items:center;background:var(--tile-bg);color:var(--tile-fg)}
+.att-tile.has-img{width:40px;height:40px;overflow:hidden;border:1px solid var(--thumb-border)}
+.att-tile img{display:block;width:100%;height:100%;object-fit:cover}
+.att-body{flex:1;min-width:0;display:flex;flex-direction:column}
+.att-name{font-size:14px;line-height:20px;font-weight:500;color:var(--name);overflow-wrap:anywhere;
+  display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;overflow:hidden}
+.nm-c{display:none}
+.att-meta{font-size:12px;line-height:16px;color:var(--meta);overflow-wrap:anywhere}
+.att-type{font-weight:600;letter-spacing:.02em}
+.att-facts{display:flex;align-items:flex-start;gap:4px;margin-top:2px;font-size:12px;line-height:16px;color:var(--meta);overflow-wrap:anywhere}
+.att-facts .ic{margin-top:2px}
+.att-facts span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;min-width:0}
+.att-chev{flex:none;color:var(--chev)}
+/* states without an action */
+.att-card.is-static{cursor:default}
+.att-card.is-static:hover{background:var(--card);border-color:var(--card-border);box-shadow:none}
+.att-card[aria-disabled=true]{cursor:default}
+.att-card[aria-disabled=true]:hover,.att-card[aria-disabled=true]:active{background:var(--card);border-color:var(--card-border);box-shadow:none}
+.att-card[aria-disabled=true] .att-chev{display:none}
+/* tones */
+.att-card.is-warn{background:var(--warn-bg);border-color:var(--warn-border)}
+.att-card.is-warn .att-facts{color:var(--warn-text)}.att-card.is-warn .att-facts .ic{color:var(--warn-icon)}
+.att-card.is-warn:hover{background:var(--warn-bg)}
+.att-card.is-warn.is-static:hover{border-color:var(--warn-border)}
+.att-card.is-error{background:var(--err-bg);border-color:var(--err-border)}
+.att-card.is-error .att-facts{color:var(--err-text)}.att-card.is-error .att-facts .ic{color:var(--err-text)}
+.att-card.is-error:hover{background:var(--err-bg)}
+.att-card.is-muted{background:var(--mut-bg);border:1px dashed var(--mut-border)}
+.att-card.is-muted .att-name{color:var(--mut-name)}
+.att-card.is-muted .att-tile{background:var(--mut-tile-bg);color:var(--mut-tile-fg)}
+.att-card.is-muted:hover{background:var(--mut-bg);border-color:var(--mut-border)}
+.att-spin{animation:att-spin 1s linear infinite;color:var(--spin)}
+@keyframes att-spin{to{transform:rotate(360deg)}}
+
+/* audio card: container + an open button + the native player (no nested interactive elements) */
+.att-card.att-audio{flex-direction:column;align-items:stretch;gap:0;padding:0;cursor:default}
+.att-card.att-audio:hover{background:var(--card);border-color:var(--card-border);box-shadow:none}
+.att-row{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:7px 7px 0 0;cursor:pointer;min-height:56px}
+.att-row:hover{background:var(--card-hover)}
+.att-row:active{background:var(--card-press)}
+.att-row:focus-visible{box-shadow:inset 0 0 0 2px var(--ring)}
+.att-card.att-audio audio{display:block;width:calc(100% - 24px);height:40px;margin:0 12px 10px}
+[data-theme=dark] audio{color-scheme:dark}
+.att-card.att-audio.no-open .att-row{cursor:default}
+.att-card.att-audio.no-open .att-row:hover{background:transparent}
+
+/* image thumbnail: 96 px square, one image 240x180 */
+.att-thumb{all:unset;box-sizing:border-box;position:relative;display:block;width:96px;height:96px;max-width:100%;border:1px solid var(--thumb-border);border-radius:8px;overflow:hidden;background:var(--skel);cursor:pointer}
+.att-thumb.wide{width:12rem;height:auto;aspect-ratio:4/3}
+.att-thumb img{position:absolute;inset:0;display:block;width:100%;height:100%;object-fit:cover}
+.att-thumb::after{content:"";position:absolute;inset:0;background:rgb(0 0 0/0);transition:background-color .15s}
+.att-thumb:hover::after,.att-thumb.is-hover::after{background:rgb(0 0 0/.1)}
+.att-thumb:hover,.att-thumb.is-hover{border-color:var(--card-border-hover)}
+.att-thumb:active::after,.att-thumb.is-active::after{background:rgb(0 0 0/.15)}
+.att-thumb:focus-visible,.att-thumb.is-focus{outline:2px solid transparent;outline-offset:2px;box-shadow:0 0 0 2px var(--ring-offset),0 0 0 4px var(--ring)}
+.att-thumb.is-loading{cursor:default;display:grid;place-items:center}
+.att-thumb.is-loading::after{display:none}
+
+/* summary chip */
+.att-chip{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:8px;max-width:100%;min-height:36px;padding:4px 12px 4px 6px;border:1px solid var(--card-border);
+  border-radius:16px;background:var(--card);color:var(--name);font-size:14px;line-height:20px;font-weight:500;cursor:pointer;transition:background-color .15s,border-color .15s}
+@media (pointer:coarse){.att-chip{min-height:44px}}
+.att-chip:hover,.att-chip.is-hover{background:var(--card-hover);border-color:var(--card-border-hover);box-shadow:var(--shadow)}
+.att-chip:active,.att-chip.is-active{background:var(--card-press)}
+.att-chip:focus-visible,.att-chip.is-focus{outline:2px solid transparent;outline-offset:2px;box-shadow:0 0 0 2px var(--ring-offset),0 0 0 4px var(--ring)}
+.att-stack{display:flex;flex:none}
+.att-mini{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;background:var(--tile-bg);color:var(--tile-fg);box-shadow:0 0 0 2px var(--card)}
+.att-mini+.att-mini{margin-left:-6px}
+.att-clip{display:none;color:var(--chev);margin-left:6px}
+.att-chip-text{min-width:0;overflow-wrap:anywhere;text-align:left}
+.att-chip-warn{display:inline-flex;align-items:center;gap:4px;font-weight:500;color:var(--warn-text)}
+.att-chip-warn .ic{color:var(--warn-icon)}
+.att-chip.has-warn{background:var(--warn-bg);border-color:var(--warn-border)}
+.att-chip.has-warn:hover{background:var(--warn-bg)}
+.att-chip .att-mini{box-shadow:0 0 0 2px var(--card)}
+.att-chip.has-warn .att-mini{box-shadow:0 0 0 2px var(--warn-bg)}
+
+/* disclosure "show N more" */
+.att-more{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:0 8px;border-radius:6px;font-size:14px;line-height:20px;font-weight:500;color:var(--link);cursor:pointer}
+.att-more:hover{text-decoration:underline;text-underline-offset:2px}
+.att-more:focus-visible{box-shadow:0 0 0 2px var(--ring-offset),0 0 0 4px var(--ring)}
+.att-more[aria-expanded=true] .ic{transform:rotate(180deg)}
+
+/* compact: the message column is 320 px or narrower (Outlook pane, 320 px reflow) */
+@container (max-width:20rem){
+  .att-card{padding:8px;gap:8px}
+  .att-tile,.att-tile.has-img{width:32px;height:32px}
+  .att-chev{display:none}
+  .nm-n{display:none}.nm-c{display:inline}
+  .att-row{padding:8px;gap:8px}
+  .att-card.att-audio audio{width:calc(100% - 16px);margin:0 8px 8px}
+  .att-stack{display:none}.att-clip{display:block}
+  .att-chip{padding-left:4px}
+}
+
+@container (max-width:22.5rem){.att-list.is-grid{grid-template-columns:repeat(2,96px)}}
+@container (max-width:20rem){.att-list.is-grid{grid-template-columns:repeat(2,80px)}.att-thumb:not(.wide){width:80px;height:80px}}
+
+/* accessibility media features, same as client/src/App.css */
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+@media (prefers-contrast:more){
+  .att-card,.att-chip{border-color:var(--chev)}
+  :focus-visible{outline:3px solid currentColor!important;outline-offset:2px!important}
+}
+@media (forced-colors:active){
+  .att-card,.att-chip,.att-thumb{border:1px solid ButtonText;forced-color-adjust:auto}
+  .att-card.is-muted{border-style:dashed}
+  .att-row{border:0}
+  .att-card .ic,.att-chip .ic{color:ButtonText}
+  .att-card:hover,.att-chip:hover,.att-thumb:hover{border-color:Highlight}
+  :focus-visible{outline:3px solid Highlight!important;outline-offset:2px!important}
+}
+@media print{.att-card,.att-chip,.att-thumb{display:flex!important}.att-chev{display:none}}
+
+/* ---------- states gallery ---------- */
+.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,22rem),1fr));gap:16px}
+.gallery figure{margin:0;min-width:0}
+.gallery figcaption{font-size:12px;line-height:16px;color:var(--muted);margin-bottom:4px}
+.gallery figcaption b{color:var(--fg)}
+.spec{container-type:inline-size;background:var(--page);border:1px solid var(--panel-border);border-radius:8px;padding:12px;min-width:0;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
+.spec.on-bubble{background:var(--bubble)}
+.spec.narrow{width:min(100%,264px)}                 /* 248 px message column + 16 */
+.spec .att-block{align-items:flex-start}
+.spec .att-list{justify-content:flex-start}
+.demo-btn{font:inherit;font-size:12px;min-height:28px;padding:2px 10px;border:1px solid var(--panel-border);border-radius:6px;background:var(--panel);color:var(--fg);cursor:pointer}
+.demo-btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,13rem),1fr));gap:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Attachments on a sent message: visual mockup</h1>
+  <p class="lead">One component, four placements. Choose placement, theme, pane width and file set. Press <kbd>Tab</kbd> to see the real keyboard focus ring; the gallery below shows every state. Inline SVG stand-ins in Heroicons-outline style; production uses the app's <code>&lt;Icon name&gt;</code>.</p>
+
+  <form class="controls" aria-label="Preview options" onsubmit="return false">
+    <fieldset><legend>Placement</legend><div class="seg" id="seg-v"></div></fieldset>
+    <fieldset><legend>Theme</legend><div class="seg" id="seg-t"></div></fieldset>
+    <fieldset><legend>Chat pane width</legend><div class="seg" id="seg-w"></div></fieldset>
+    <fieldset><legend>Audio</legend><div class="seg"><label><input type="checkbox" id="player"><span>Inline player</span></label></div></fieldset>
+    <div><label for="scenario" style="display:block;font-size:12px;line-height:16px;font-weight:600;color:var(--muted);margin-bottom:4px">Files</label><select id="scenario"></select></div>
+  </form>
+
+  <div class="stagebar"><span id="stage-label"></span><span>Frame = chat pane incl. 16 px padding; user messages are max 85 % of the column</span></div>
+  <div class="stage"><div class="frame" id="frame" role="group" aria-label="Chat excerpt preview"></div></div>
+  <output class="opened" id="opened" aria-live="polite"></output>
+
+  <h2>States gallery</h2>
+  <p class="lead">Forced states (hover, focus, pressed) use the same CSS as the real pseudo-classes. Every card is a real element: tab through them.</p>
+  <div class="gallery" id="gallery"></div>
+  <div class="sr-only" role="status" id="live-region"></div>
+</div>
+
+<script>
+/* ===================================================================
+   COPY: every user-visible string of the component lives here, so the UX
+   engineer can swap it (and i18n can take it over). Placeholders only.
+   =================================================================== */
+const COPY = {
+  groupLabel: 'Attachments',
+  filesLabel: n => `Files (${n})`,
+  imagesLabel: n => `Images (${n})`,
+  listLabel: n => `Attached files (${n})`,
+  opens: 'Opens in the Files panel',
+  pages: n => `${n} ${n === 1 ? 'page' : 'pages'}`,
+  slides: n => `${n} slides`,
+  sheets: n => `${n} sheets`,
+  textRead: n => `Text read: ${n.toLocaleString('en')} characters`,
+  scan: n => `Scan: ${n} page images`,
+  shortened: 'Shortened',
+  originalRemoved: 'Original removed, only the text is kept',
+  noText: 'No text could be read from this file',
+  imageSent: (w, h) => `Image sent as ${w}×${h}`,
+  audioSent: 'Audio sent to the model',
+  unavailable: 'This file is no longer available',
+  noAccess: 'Not shared with you',
+  loading: 'Loading…',
+  loadingSr: name => `Loading ${name}`,
+  readySr: name => `${name} is ready`,
+  failedSr: name => `${name} could not be loaded`,
+  loadFailed: 'Preview could not be loaded',
+  chipFiles: n => `${n} files`,
+  chipProblem: n => `${n} unavailable`,
+  more: n => `Show ${n} more`,
+  fewer: 'Show fewer',
+  playLabel: name => `Play ${name}`,
+  copy: 'Copy', edit: 'Edit',
+  opened: name => `Mock: would open “${name}” in the Files panel.`,
+  openedAll: 'Mock: would open the Files panel at the first attached file.'
+};
+
+/* ---------- icons: Heroicons-outline style stand-ins (24px, stroke 1.5) ---------- */
+const ICONS = {
+  'document-text':'<path d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/>',
+  'table-cells':'<rect x="3" y="4.5" width="18" height="15" rx="1.5"/><path d="M3 9.5h18M3 14.5h18M9 4.5v15"/>',
+  'presentation':'<path d="M3.75 3v11.25A2.25 2.25 0 0 0 6 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0 1 18 16.5h-2.25m-7.5 0h7.5m-7.5 0-1 3m8.5-3 1 3m0 0 .5 1.5m-.5-1.5h-9.5m0 0-.5 1.5M9 11.25v1.5M12 9v3.75m3-6v6"/>',
+  'photo':'<path d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"/>',
+  'musical-note':'<path d="m9 9 10.5-3m0 6.553v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 1 1-.99-3.467l2.31-.66a2.25 2.25 0 0 0 1.632-2.163Zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 0 1-1.632 2.163l-1.32.377a1.803 1.803 0 0 1-.99-3.467l2.31-.66A2.25 2.25 0 0 0 9 15.553Z"/>',
+  'envelope':'<path d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75"/>',
+  'calendar':'<path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5"/>',
+  'globe':'<path d="M12 21a9.004 9.004 0 0 0 8.716-6.747M12 21a9.004 9.004 0 0 1-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 0 1 7.843 4.582M12 3a8.997 8.997 0 0 0-7.843 4.582m15.686 0A11.953 11.953 0 0 1 12 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0 1 21 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0 1 12 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 0 1 3 12c0-1.605.42-3.113 1.157-4.418"/>',
+  'archive':'<path d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z"/>',
+  'code':'<path d="M17.25 6.75 22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3-4.5 16.5"/>',
+  'paper-clip':'<path d="m18.375 12.739-7.693 7.693a4.5 4.5 0 0 1-6.364-6.364l10.94-10.94A3 3 0 1 1 19.5 7.372L8.552 18.32m.009-.01-.01.01m5.699-9.941-7.81 7.81a1.5 1.5 0 0 0 2.112 2.13"/>',
+  'chevron-right':'<path d="m8.25 4.5 7.5 7.5-7.5 7.5"/>',
+  'chevron-down':'<path d="m19.5 8.25-7.5 7.5-7.5-7.5"/>',
+  'exclamation-triangle':'<path d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/>',
+  'exclamation-circle':'<path d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"/>',
+  'information-circle':'<path d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z"/>',
+  'lock-closed':'<path d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z"/>'
+};
+const icon = (name, cls = '') => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${ICONS[name]}</svg>`;
+const spinner = cls => `<svg class="ic att-spin ${cls || ''}" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M12 3a9 9 0 0 1 9 9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>`;
+
+/* kind -> icon + type label (production: fileLookOf / lookOf + uploadedFileBadge) */
+const KIND = {
+  pdf:{icon:'document-text',label:'PDF'}, docx:{icon:'document-text',label:'DOCX'}, pptx:{icon:'presentation',label:'PPTX'},
+  xlsx:{icon:'table-cells',label:'XLSX'}, csv:{icon:'table-cells',label:'CSV'}, txt:{icon:'document-text',label:'TXT'},
+  image:{icon:'photo',label:'JPG'}, audio:{icon:'musical-note',label:'M4A'}, email:{icon:'envelope',label:'EML'},
+  meeting:{icon:'calendar',label:'ICS'}, page:{icon:'globe',label:'Web page'}, archive:{icon:'archive',label:'ZIP'},
+  code:{icon:'code',label:'PY'}, file:{icon:'paper-clip',label:'FILE'}
+};
+const TILE_KIND = {csv:'xlsx',txt:'code',file:'file'};            // which data-kind palette a kind uses
+
+/* ---------- inline pictures and audio (no network) ---------- */
+const svgUri = s => 'data:image/svg+xml;utf8,' + encodeURIComponent(s);
+const PIC = {
+  site: svgUri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8fb8de"/><stop offset="1" stop-color="#f0dfba"/></linearGradient></defs><rect width="400" height="300" fill="url(#g)"/><path d="M0 190 90 130 170 175 260 115 400 195V300H0Z" fill="#6f8f63"/><rect x="120" y="150" width="170" height="90" fill="#9aa3ad"/><path d="M110 152 205 108 300 152Z" fill="#6b7280"/><rect x="150" y="180" width="30" height="60" fill="#475569"/><rect x="210" y="175" width="60" height="30" fill="#cbd5e1"/><rect x="0" y="240" width="400" height="60" fill="#8a7a63"/></svg>'),
+  board: svgUri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#f7f7f4"/><path d="M40 70h200M40 110h280M40 150h160" stroke="#334155" stroke-width="6" stroke-linecap="round"/><path d="M60 220c40-50 70 40 110-10s60 30 110-20" stroke="#2563eb" stroke-width="6" fill="none" stroke-linecap="round"/><circle cx="320" cy="80" r="26" fill="none" stroke="#dc2626" stroke-width="6"/></svg>'),
+  night: svgUri('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><rect width="400" height="300" fill="#0b1020"/><g fill="#1c2540"><rect x="20" y="120" width="70" height="180"/><rect x="100" y="70" width="90" height="230"/><rect x="200" y="140" width="60" height="160"/><rect x="270" y="90" width="110" height="210"/></g><g fill="#fbbf24"><rect x="115" y="95" width="12" height="12"/><rect x="145" y="125" width="12" height="12"/><rect x="290" y="115" width="12" height="12"/><rect x="330" y="150" width="12" height="12"/><rect x="40" y="150" width="12" height="12"/></g></svg>')
+};
+let wavUrl = '';
+function makeWav(seconds, rate) {
+  try {
+    const n = seconds * rate, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+    const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+    v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true);
+    v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+    return URL.createObjectURL(new Blob([buf], { type: 'audio/wav' }));
+  } catch (e) { return ''; }
+}
+
+/* ---------- scenarios: descriptors as the view-model mapping would produce them ---------- */
+const MB = 1024 * 1024, KB = 1024;
+const SCENARIOS = {
+  one: { label: '1 PDF', text: 'Can you summarise the attached report in five bullet points?',
+    reply: ['Here are the five main points of the Q3 report:', ['Revenue grew 8 % against the plan.', 'Two sites missed the cost target.', 'Hiring is on hold until Q1.', 'The new contract adds 1.2 m EUR.', 'The risk register lists three open items.']],
+    files: [{ id:'f1', name:'Quartalsbericht_Q3_2026.pdf', kind:'pdf', bytes:2.3*MB, pages:12, facts:{ textRead:12400 } }] },
+  mixed: { label: '3 mixed (image, audio, DOCX)', text: 'Here is the site photo, the voice memo from the visit and the draft contract. What has to be fixed before Friday?',
+    reply: ['I went through all three. Before Friday:', ['The photo shows the loading bay still blocked (item 4 of the contract).', 'In the memo the customer asks for an earlier handover date.', 'Section 7 of the draft needs a data protection annex.']],
+    files: [
+      { id:'f1', name:'Baustellenfoto_Halle-3.jpg', kind:'image', typeLabel:'JPG', bytes:1.4*MB, thumb:PIC.site, facts:{ imageSent:[1568,1176] } },
+      { id:'f2', name:'Kundentermin_Sprachmemo.m4a', kind:'audio', typeLabel:'M4A', bytes:1.2*MB, duration:'0:42', playable:true, facts:{ audio:true } },
+      { id:'f3', name:'Rahmenvertrag_Datenschutzfolgenabschätzung_Entwurf_v3_final.docx', kind:'docx', bytes:84*KB, pages:9, facts:{ textRead:31200, shortened:true } }
+    ] },
+  seven: { label: '7 files', text: 'Please compare these seven files and list every contradiction between them.',
+    reply: ['I found four contradictions across the seven files:', ['The report gives 12 sites, the cost table lists 11.', 'The kick-off deck moves go-live to May; the meeting invite says April.', 'The e-mail quotes a different price than the offer.', 'The scanned contract is the 2024 version.']],
+    files: [
+      { id:'f1', name:'Quartalsbericht_Q3_2026.pdf', kind:'pdf', bytes:2.3*MB, pages:12, origin:'iFinder', facts:{ textRead:12400 } },
+      { id:'f2', name:'Kostenübersicht_Standorte.xlsx', kind:'xlsx', bytes:186*KB, sheets:4, facts:{ textRead:8120 } },
+      { id:'f3', name:'Kickoff-Präsentation_Atlas.pptx', kind:'pptx', bytes:5.1*MB, slides:18, origin:'SharePoint', facts:{ textRead:6900 } },
+      { id:'f4', name:'AW: Angebot Lieferverzug Halle 3', kind:'email', typeLabel:'EML', bytes:38*KB, facts:{ textRead:2150 } },
+      { id:'f5', name:'Jour fixe Projekt Atlas', kind:'meeting', typeLabel:'ICS', bytes:6*KB, facts:{ textRead:640 } },
+      { id:'f6', name:'Release-Plan (Intranet-Wiki)', kind:'page', typeLabel:'Web page', bytes:94*KB, facts:{ textRead:9300, shortened:true } },
+      { id:'f7', name:'Gescannter-Vertrag_Mustermann.pdf', kind:'pdf', bytes:6.8*MB, pages:3, facts:{ scan:3 } }
+    ] },
+  photos: { label: '4 photos (image grid)', text: 'Which of these four photos shows the damage best?',
+    reply: ['The second photo shows the crack most clearly; the others are blurred or too dark.'],
+    files: [
+      { id:'p1', name:'Baustellenfoto_Halle-3.jpg', kind:'image', typeLabel:'JPG', bytes:1.4*MB, thumb:PIC.site, facts:{ imageSent:[1568,1176] } },
+      { id:'p2', name:'Whiteboard_Workshop.png', kind:'image', typeLabel:'PNG', bytes:0.8*MB, thumb:PIC.board, facts:{ imageSent:[1280,960] } },
+      { id:'p3', name:'Nachtaufnahme_Lager.jpg', kind:'image', typeLabel:'JPG', bytes:2.2*MB, thumb:PIC.night, facts:{ imageSent:[1568,1176] } },
+      { id:'p4', name:'Baustellenfoto_Halle-3_Detail.jpg', kind:'image', typeLabel:'JPG', bytes:1.1*MB, thumb:PIC.site, facts:{ imageSent:[1568,1176] } }
+    ] },
+  only: { label: 'Attachments only (no text)', text: '',
+    reply: ['I read both files. The contract and the cost sheet agree on the total of 48,200 EUR.'],
+    files: [
+      { id:'f1', name:'Vertrag_Mustermann_unterschrieben.pdf', kind:'pdf', bytes:1.1*MB, pages:6, facts:{ textRead:14800 } },
+      { id:'f2', name:'Kalkulation_2026.xlsx', kind:'xlsx', bytes:92*KB, sheets:2, facts:{ textRead:3900 } }
+    ] },
+  shared: { label: 'Shared chat, viewer without access', viewer: true, text: 'Summarise the contract and flag unusual clauses.',
+    reply: ['The contract is a standard services agreement. Unusual: a 36-month minimum term and a unilateral price clause.'],
+    files: [
+      { id:'f1', name:'Dienstleistungsvertrag_Entwurf.pdf', kind:'pdf', bytes:1.1*MB, status:'noAccess' },
+      { id:'f2', name:'Preisliste_2026.xlsx', kind:'xlsx', bytes:92*KB, status:'noAccess' },
+      { id:'f3', name:'Anlage_Datenschutz.docx', kind:'docx', bytes:60*KB, status:'noAccess' }
+    ] },
+  discarded: { label: 'Original discarded (text kept)', text: 'What does clause 14 say?',
+    reply: ['Clause 14 limits liability to the annual fee, except for intent and gross negligence.'],
+    files: [{ id:'f1', name:'Rahmenvertrag_2023.pdf', kind:'pdf', bytes:1.9*MB, pages:22, facts:{ textRead:41200, originalRemoved:true } }] },
+  unavailable: { label: 'File unavailable / failed', text: 'Use the three files from last week.',
+    reply: ['I can only see the first file. The other two could not be loaded, so I did not use them.'],
+    files: [
+      { id:'f1', name:'Projektstatus_KW44.docx', kind:'docx', bytes:120*KB, pages:5, facts:{ textRead:7400 } },
+      { id:'f2', name:'Angebot_2024_Lieferant_Nord.pdf', kind:'pdf', bytes:3.2*MB, status:'unavailable' },
+      { id:'f3', name:'Foto_Zaehlerstand.png', kind:'image', typeLabel:'PNG', bytes:0.9*MB, status:'error' }
+    ] }
+};
+
+/* ---------- view-model helpers ---------- */
+const softName = n => { const i = n.lastIndexOf('.'), hasExt = i > 0 && n.length - i <= 6, stem = hasExt ? n.slice(0, i) : n;
+  return esc(stem).replace(/([_\-.\/])/g, '$1<wbr>') + (hasExt ? esc(n.slice(i)) : ''); };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const fmtBytes = b => b < KB ? `${b} B` : b < MB ? `${Math.round(b / KB)} KB` : `${(b / MB).toFixed(1)} MB`;
+let uid = 0;
+const typeLabel = f => f.typeLabel || KIND[f.kind].label;
+const tileKind = f => TILE_KIND[f.kind] || f.kind;
+function factTexts(f) {
+  const k = f.facts || {}, out = [];
+  if (k.textRead) out.push(COPY.textRead(k.textRead));
+  if (k.scan) out.push(COPY.scan(k.scan));
+  if (k.imageSent) out.push(COPY.imageSent(...k.imageSent));
+  if (k.audio) out.push(COPY.audioSent);
+  if (k.shortened) out.push(COPY.shortened);
+  if (k.originalRemoved) out.push(COPY.originalRemoved);
+  if (k.noText) out.push(COPY.noText);
+  return out;
+}
+const isNotice = f => !!(f.facts && (f.facts.shortened || f.facts.originalRemoved || f.facts.scan));
+function metaParts(f) {
+  const p = [];
+  if (f.bytes && f.status !== 'noAccess') p.push(esc(fmtBytes(f.bytes)));
+  if (f.pages) p.push(esc(COPY.pages(f.pages)));
+  if (f.slides) p.push(esc(COPY.slides(f.slides)));
+  if (f.sheets) p.push(esc(COPY.sheets(f.sheets)));
+  if (f.duration) p.push(esc(f.duration));
+  if (f.origin) p.push(esc(f.origin));
+  return p;
+}
+const SEP = '<span aria-hidden="true"> · </span><span class="sr-only">, </span>';
+const metaHtml = f => `<span class="att-type">${esc(typeLabel(f))}</span>${metaParts(f).map(x => SEP + x).join('')}`;
+const stateCls = f => (f.force ? ' is-' + f.force : '');
+/* long names: middle-shortened for the eye (the extension stays visible); the full name stays in the accessible name and title */
+const wbrify = t => esc(t).replace(/([_\-.\/])/g, '$1<wbr>');
+const mid = (n, h, t) => `${wbrify(n.slice(0, h))}…${softName(n.slice(-t))}`;
+/* normal: over 40 characters -> 22 + ... + 14. Compact (message column <= 320 px): over 34 -> 14 + ... + 14. */
+function nameHtml(n) {
+  const norm = n.length > 40 ? mid(n, 22, 14) : null, comp = n.length > 34 ? mid(n, 14, 14) : null;
+  if (!norm && !comp) return `<span class="att-name" title="${esc(n)}">${softName(n)}</span>`;
+  return `<span class="att-name" title="${esc(n)}" aria-hidden="true"><span class="nm-n">${norm || softName(n)}</span><span class="nm-c">${comp || softName(n)}</span></span><span class="sr-only">${esc(n)}</span>`;
+}
+
+/* ---------- card builders ---------- */
+function rowCard(f, ctx) {
+  const id = `att-${++uid}`;
+  const st = f.status || 'ready';
+  const texts = factTexts(f);
+  let tone = '', factIcon = '', factText = texts.join(' · '), tileIcon = KIND[f.kind].icon, tkind = tileKind(f);
+  let interactive = true, busy = false;
+  if (st === 'loading') { interactive = false; busy = true; factText = COPY.loading; }
+  else if (st === 'error') { tone = ' is-error'; factIcon = 'exclamation-circle'; factText = COPY.loadFailed; }
+  else if (st === 'unavailable') { tone = ' is-warn'; factIcon = 'exclamation-triangle'; factText = COPY.unavailable; interactive = false; }
+  else if (st === 'noAccess') { tone = ' is-muted'; factIcon = 'lock-closed'; factText = COPY.noAccess; tileIcon = 'lock-closed'; interactive = false; tkind = 'file'; }
+  else if (f.facts && f.facts.noText) { tone = ' is-warn'; factIcon = 'exclamation-triangle'; }
+  else if (isNotice(f)) factIcon = 'information-circle';
+  const hasImg = !!(f.thumb && f.kind === 'image' && st === 'ready');
+  const tile = busy ? spinner() : hasImg ? `<img src="${f.thumb}" alt="">` : icon(tileIcon);
+  const factsId = `${id}-d`;
+  const facts = factText ? `<span class="att-facts"${interactive ? ` id="${factsId}" aria-hidden="true"` : ''}>${factIcon ? icon(factIcon, 'xs') : ''}<span>${esc(factText)}</span></span>` : '';
+  const body = `<span class="att-tile${hasImg ? ' has-img' : ''}" aria-hidden="true">${tile}</span>
+    <span class="att-body">${nameHtml(f.name)}<span class="sr-only">, </span><span class="att-meta">${metaHtml(f)}</span>${facts}</span>`;
+  const cls = `att-card${tone}${stateCls(f)}`;
+  const busyAttr = busy ? ' aria-busy="true"' : '';
+  if (interactive) {
+    const dis = f.force === 'disabled';
+    return `<li><button type="button" class="${cls}" data-kind="${tkind}" data-open="${esc(f.id)}" data-name="${esc(f.name)}" aria-describedby="${factText ? factsId + ' ' : ''}${ctx.actionId}"${dis ? ' aria-disabled="true"' : ''}>${body}${icon('chevron-right', 'sm att-chev')}</button></li>`;
+  }
+  const status = busy ? `<span class="sr-only" role="status">${esc(COPY.loadingSr(f.name))}</span>` : '';
+  return `<li${busyAttr}><div class="${cls} is-static" data-kind="${tkind}">${body}${status}</div></li>`;
+}
+function audioCard(f, ctx) {
+  const id = `att-${++uid}`;
+  const texts = factTexts(f);
+  const factsId = `${id}-d`;
+  const body = `<span class="att-tile" aria-hidden="true">${icon('musical-note')}</span>
+    <span class="att-body">${nameHtml(f.name)}<span class="sr-only">, </span><span class="att-meta">${metaHtml(f)}</span>
+    ${texts.length ? `<span class="att-facts" id="${factsId}" aria-hidden="true"><span>${esc(texts.join(' · '))}</span></span>` : ''}</span>${icon('chevron-right', 'sm att-chev')}`;
+  return `<li><div class="att-card att-audio${stateCls(f)}" data-kind="audio">
+    <button type="button" class="att-row" data-open="${esc(f.id)}" data-name="${esc(f.name)}" aria-describedby="${factsId} ${ctx.actionId}">${body}</button>
+    <audio controls preload="metadata" aria-label="${esc(COPY.playLabel(f.name))}" src="${wavUrl}"></audio></div></li>`;
+}
+/* thumbnail tile: used for 3 or more images (a grid); one or two images are row cards with a 40 px thumbnail */
+function thumbCard(f, ctx, wide) {
+  const id = `att-${++uid}`;
+  const label = `${f.name}, ${typeLabel(f)}, ${fmtBytes(f.bytes)}`;
+  if (f.status === 'loading') {
+    return `<li aria-busy="true"><div class="att-thumb is-loading${wide ? ' wide' : ''}" data-kind="image">${spinner()}<span class="sr-only" role="status">${esc(COPY.loadingSr(f.name))}</span></div></li>`;
+  }
+  const t = factTexts(f).join(' · ');
+  return `<li><button type="button" class="att-thumb${wide ? ' wide' : ''}${stateCls(f)}" data-open="${esc(f.id)}" data-name="${esc(f.name)}" title="${esc(f.name)}" aria-describedby="${t ? id + '-d ' : ''}${ctx.actionId}">
+    <img src="${f.thumb}" alt="" width="96" height="96"><span class="sr-only">${esc(label)}</span></button>${t ? `<span hidden id="${id}-d">${esc(t)}</span>` : ''}</li>`;
+}
+const canThumb = f => f.kind === 'image' && f.thumb && (!f.status || f.status === 'loading');
+function cardFor(f, ctx, o = {}) {
+  if ((o.grid || o.wide) && canThumb(f)) return thumbCard(f, ctx, o.wide);
+  if (f.kind === 'audio' && f.playable && state.p && !f.status) return audioCard(f, ctx);
+  return rowCard(f, ctx);
+}
+
+/* the block. Rows (documents, e-mails, meetings, pages, audio, then 1-2 images) and, for 3+ images, a grid.
+   Fold rule (UX concept section 6): visible = n <= cap ? n : cap - 1. Rows: cap 4 wide, 3 narrow. Image grid: cap 6 wide, 4 narrow. */
+const isNarrow = () => state.w - 32 < 360;
+const visibleOf = (n, cap) => (n <= cap ? n : cap - 1);
+function block(files, opts = {}) {
+  const ctx = { actionId: `att-act-${++uid}` };
+  const imgs = files.filter(f => f.kind === 'image'), others = files.filter(f => f.kind !== 'image');
+  const grid = imgs.length >= 3;
+  const rows = grid ? others : [...others, ...imgs];
+  const rowVis = opts.fold ? visibleOf(rows.length, isNarrow() ? 3 : 4) : rows.length;
+  const gridVis = opts.fold ? visibleOf(imgs.length, isNarrow() ? 4 : 6) : imgs.length;
+  const mk = (arr, vis, o) => arr.map((f, i) => { const h = cardFor(f, ctx, o); return i >= vis ? h.replace('<li', '<li hidden data-fold') : h; }).join('');
+  const both = grid && rows.length;
+  const lists = [];
+  if (rows.length) lists.push(`<ul class="att-list" role="list" aria-label="${esc(both ? COPY.filesLabel(rows.length) : COPY.listLabel(files.length))}">${mk(rows, rowVis, {})}</ul>`);
+  if (grid) lists.push(`<ul class="att-list is-grid" role="list" aria-label="${esc(both ? COPY.imagesLabel(imgs.length) : COPY.listLabel(files.length))}">${mk(imgs, gridVis, { grid: true })}</ul>`);
+  const hiddenCount = (rows.length - rowVis) + (grid ? imgs.length - gridVis : 0);
+  const more = hiddenCount ? `<button type="button" class="att-more" aria-expanded="false" data-more="${hiddenCount}">${icon('chevron-down', 'sm')}<span>${esc(COPY.more(hiddenCount))}</span></button>` : '';
+  const wrapAttr = both ? ' role="group" aria-label="' + esc(COPY.groupLabel) + '"' : '';
+  return `<div class="att-block${opts.inBubble ? ' in-bubble' : ''}" data-slot="${opts.slot || ''}"${wrapAttr}>${lists.join('')}${more}<span hidden id="${ctx.actionId}">${esc(COPY.opens)}</span></div>`;
+}
+function chip(files, opts = {}) {
+  const total = files.reduce((s, f) => s + (f.bytes || 0), 0);
+  const bad = files.filter(f => ['unavailable', 'error', 'noAccess'].includes(f.status)).length;
+  const id = `att-act-${++uid}`;
+  const one = files.length === 1;
+  const minis = files.slice(0, 3).map(f => `<span class="att-mini" data-kind="${tileKind(f)}">${icon(KIND[f.kind].icon, 'sm')}</span>`).join('');
+  const label = one ? `<span title="${esc(files[0].name)}">${softName(files[0].name)}</span>` : esc(COPY.chipFiles(files.length));
+  const size = total ? SEP + esc(fmtBytes(total)) : '';
+  const warn = bad ? `${SEP}<span class="att-chip-warn">${icon('exclamation-triangle', 'xs')}${esc(COPY.chipProblem(bad))}</span>` : '';
+  return `<div class="att-block" data-slot="${opts.slot || ''}"><button type="button" class="att-chip${bad ? ' has-warn' : ''}${opts.force ? ' is-' + opts.force : ''}" data-open-all aria-describedby="${id}">
+    <span class="att-stack" aria-hidden="true">${minis}</span>${icon('paper-clip', 'sm att-clip')}
+    <span class="att-chip-text">${label}${size}${warn}</span>${icon('chevron-right', 'xs')}</button><span hidden id="${id}">${esc(COPY.opens)}</span></div>`;
+}
+
+/* ---------- chat excerpt ---------- */
+const VARIANTS = [['A', 'A · Outside above'], ['B', 'B · Inside strip'], ['C', 'C · Summary chip'], ['adaptive', 'A, summary above 3']];
+const THEMES = [['light', 'Light'], ['dark', 'Dark']];
+const WIDTHS = [[900, '900 desktop'], [640, '640 tablet'], [360, '360 phone'], [280, '280 Outlook pane']];
+const state = { v: 'A', t: 'light', w: 900, s: 'mixed', p: 0 };
+
+function userMessage(sc, variant) {
+  const files = sc.files, hasText = !!sc.text;
+  const many = files.length > 3;
+  const mode = variant === 'adaptive' ? (many ? 'chipAbove' : 'A') : variant;
+  const textHtml = hasText ? esc(sc.text) : '';
+  let above = '', inside = '', under = '';
+  if (mode === 'A') above = block(files, { slot: 'above', fold: true });
+  if (mode === 'B') inside = block(files, { slot: 'inside', inBubble: true, fold: true });
+  if (mode === 'C') under = chip(files, { slot: 'under' });
+  if (mode === 'chipAbove') above = chip(files, { slot: 'above' });
+  const showBubble = hasText || mode === 'B';
+  const bubble = showBubble ? `<div class="bubble${hasText ? '' : ' att-only'}">${inside}${hasText ? `<span>${textHtml}</span>` : ''}</div>` : '';
+  return `<div class="msgrow user"><div class="umsg"><div class="chat-widget-message user">${above}${bubble}${under}
+    <div class="actions"><button type="button">${COPY.copy}</button><button type="button">${COPY.edit}</button></div></div></div></div>`;
+}
+function answer(sc) {
+  const [lead, bullets] = sc.reply.length === 2 ? sc.reply : [sc.reply[0], null];
+  return `<div class="msgrow"><div class="answer"><p>${esc(lead)}</p>${bullets ? `<ul>${bullets.map(b => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}</div></div>`;
+}
+function renderFrame() {
+  const sc = SCENARIOS[state.s];
+  document.documentElement.dataset.theme = state.t;
+  const frame = document.getElementById('frame');
+  frame.style.setProperty('--w', state.w + 'px');
+  frame.innerHTML = (sc.viewer ? `<div class="shared-banner">Shared chat, read-only. You are viewing as a guest.</div>` : '') + userMessage(sc, state.v) + answer(sc);
+  const vname = VARIANTS.find(x => x[0] === state.v)[1];
+  document.getElementById('stage-label').textContent = `Pane ${state.w} px · ${vname} · ${state.t} · ${sc.label}`;
+}
+
+/* ---------- gallery ---------- */
+function spec(inner, cls = '') { return `<div class="spec ${cls}">${inner}</div>`; }
+function one(f, ctx) { const c = { actionId: `att-act-${++uid}` }; return `<div class="att-block"><ul class="att-list" role="list" aria-label="${esc(COPY.listLabel(1))}">${cardFor(f, c, { wide: f.wide })}</ul><span hidden id="${c.actionId}">${esc(COPY.opens)}</span></div>`; }
+const PDF = { id:'g', name:'Quartalsbericht_Q3_2026.pdf', kind:'pdf', bytes:2.3*MB, pages:12, facts:{ textRead:12400 } };
+function fig(title, note, html, cls) { return `<figure><figcaption><b>${title}</b> ${note || ''}</figcaption>${spec(html, cls)}</figure>`; }
+function buildGallery() {
+  const g = [];
+  g.push(fig('Default', 'bg-white border-gray-300', one(PDF)));
+  g.push(fig('Hover', 'hover:bg-gray-50 hover:border-indigo-300', one({ ...PDF, force: 'hover' })));
+  g.push(fig('Focus-visible', 'ring-2 ring-offset-2, indigo-500 / dark indigo-400', one({ ...PDF, force: 'focus' })));
+  g.push(fig('Pressed', 'active:bg-gray-100', one({ ...PDF, force: 'active' })));
+  g.push(fig('Loading', 'aria-busy, spinner + text', one({ ...PDF, status: 'loading' }) + '<button type="button" class="demo-btn" id="replay">Replay loading → ready</button><output id="replay-out" class="opened" style="margin:0"></output>'));
+  g.push(fig('Error (retryable)', 'red tone + icon + text', one({ ...PDF, status: 'error' })));
+  g.push(fig('Unavailable / expired', 'amber tone + icon + text, not a button', one({ ...PDF, status: 'unavailable' })));
+  g.push(fig('No access (shared chat)', 'dashed border + lock + text', one({ ...PDF, status: 'noAccess' })));
+  g.push(fig('Disabled', 'aria-disabled: same text colours, no chevron, no hover', one({ ...PDF, force: 'disabled' })));
+  g.push(fig('Text read', '', one(PDF)));
+  g.push(fig('Scan without text', 'notice icon', one({ ...PDF, id:'g2', name:'Gescannter-Vertrag.pdf', pages:3, bytes:6.8*MB, facts:{ scan:3 } })));
+  g.push(fig('Shortened', 'notice icon', one({ ...PDF, id:'g3', facts:{ textRead:98000, shortened:true } })));
+  g.push(fig('Original removed', 'notice icon, still openable', one({ ...PDF, id:'g4', facts:{ textRead:12400, originalRemoved:true } })));
+  g.push(fig('Nothing readable', 'amber tone, still openable', one({ ...PDF, id:'g5', name:'Scan_unleserlich.pdf', facts:{ noText:true } })));
+  g.push(fig('Cloud origin', 'origin as text in the meta line', one({ ...PDF, id:'g6', origin:'iFinder' })));
+  g.push(fig('Long German name, 320 px', 'over 40 characters: 22 + ... + 14, extension kept, 2 lines', one({ id:'g7', name:'Rahmenvertrag_Datenschutzfolgenabschätzung_Entwurf_v3_final_Anmerkungen_Rechtsabteilung.docx', kind:'docx', bytes:84*KB, pages:9, facts:{ textRead:31200, shortened:true } })));
+  g.push(fig('Same, 248 px column (compact)', 'p-2 gap-2, 32 px tile, no chevron; over 34 characters: 14 + ... + 14', one({ id:'g8', name:'Rahmenvertrag_Datenschutzfolgenabschätzung_Entwurf_v3_final_Anmerkungen_Rechtsabteilung.docx', kind:'docx', bytes:84*KB, pages:9, facts:{ textRead:31200, shortened:true } }), 'narrow'));
+  const imgs = [{ id:'i1', name:'Baustellenfoto_Halle-3.jpg', kind:'image', typeLabel:'JPG', bytes:1.4*MB, thumb:PIC.site, facts:{ imageSent:[1568,1176] } },
+    { id:'i2', name:'Whiteboard_Workshop.png', kind:'image', typeLabel:'PNG', bytes:0.8*MB, thumb:PIC.board }, { id:'i3', name:'Nachtaufnahme.jpg', kind:'image', typeLabel:'JPG', bytes:2.2*MB, thumb:PIC.night }];
+  g.push(fig('Image, 1 or 2 per message', 'row card, 40 px thumbnail, same facts line', one(imgs[0])));
+  g.push(fig('Image row, loading', 'spinner in the thumbnail slot, text says Loading', one({ ...imgs[0], status:'loading' })));
+  g.push(fig('Images, 3 or more', '96 px grid, 3 columns (2 narrow); light and dark pictures keep a visible edge', `<div class="att-block"><ul class="att-list is-grid" role="list" aria-label="Images (3)">${imgs.map(f => thumbCard(f, { actionId: 'att-act-g' })).join('')}</ul></div>`));
+  g.push(fig('Grid states', 'hover, focus, loading', `<div class="att-block"><ul class="att-list is-grid" role="list" aria-label="Grid states">${thumbCard({ ...imgs[0], force:'hover' }, { actionId:'att-act-g' })}${thumbCard({ ...imgs[1], force:'focus' }, { actionId:'att-act-g' })}${thumbCard({ ...imgs[0], status:'loading' }, { actionId:'att-act-g' })}</ul></div>`));
+  g.push(fig('Single large thumbnail', 'alternative, not the default: 192 x 144 (w-48, aspect 4:3)', one({ ...imgs[0], wide:true })));
+  g.push(fig('Audio with player', 'optional: native controls, no nested button', one({ id:'a1', name:'Kundentermin_Sprachmemo.m4a', kind:'audio', typeLabel:'M4A', bytes:1.2*MB, duration:'0:42', playable:true, facts:{ audio:true } })));
+  g.push(fig('Audio without player', 'default: plain file card', one({ id:'a2', name:'Kundentermin_Sprachmemo.m4a', kind:'audio', typeLabel:'M4A', bytes:1.2*MB, duration:'0:42', facts:{ audio:true } })));
+  const sf = SCENARIOS.seven.files;
+  g.push(fig('Summary chip', 'min-h-9, 44 px on coarse pointers', chip(sf)));
+  g.push(fig('Chip: hover / focus', '', chip(sf, { force:'hover' }) + chip(sf, { force:'focus' })));
+  g.push(fig('Chip: with a problem', 'amber tone + icon + text', chip([...sf.slice(0, 2), { ...sf[2], status:'unavailable' }])));
+  g.push(fig('Chip: one file', 'shows the name', chip([sf[0]])));
+  g.push(fig('Chip, 248 px column (compact)', 'one clip icon instead of the tile stack', chip(sf), 'narrow'));
+  g.push(fig('Inside the bubble (B), light surface', 'bg-white border-gray-200 on the bubble', `<div class="bubble att-only">${one(PDF).replace('class="att-block"', 'class="att-block in-bubble"')}</div>`, 'on-bubble'));
+  const kinds = Object.keys(KIND).map(k => `<li>${rowCard({ id:'k-' + k, name:`Beispiel.${k === 'page' ? 'url' : k === 'email' ? 'eml' : k === 'meeting' ? 'ics' : k}`, kind:k, bytes:64*KB }, { actionId:'att-act-g' }).replace(/^<li>|<\/li>$/g, '')}</li>`).join('');
+  document.getElementById('gallery').innerHTML = g.join('') + `<span hidden id="att-act-g">${esc(COPY.opens)}</span><figure style="grid-column:1/-1"><figcaption><b>Kinds</b> tile colour per type, never the only carrier: the type label is text</figcaption><div class="spec"><ul class="att-list kinds" role="list" aria-label="All kinds" style="width:100%;display:grid">${kinds}</ul></div></figure>`;
+}
+
+/* ---------- wiring ---------- */
+function seg(id, name, items, cur) {
+  document.getElementById(id).innerHTML = items.map(([val, lab]) => `<label><input type="radio" name="${name}" value="${val}"${String(val) === String(cur) ? ' checked' : ''}><span>${esc(lab)}</span></label>`).join('');
+}
+function syncHash() { try { history.replaceState(null, '', `#v=${state.v}&t=${state.t}&w=${state.w}&s=${state.s}&p=${state.p}`); } catch (e) {} }
+function readHash() {
+  const p = new URLSearchParams(location.hash.slice(1));
+  if (p.get('v') && VARIANTS.some(x => x[0] === p.get('v'))) state.v = p.get('v');
+  if (p.get('t') === 'dark' || p.get('t') === 'light') state.t = p.get('t');
+  if (WIDTHS.some(x => String(x[0]) === p.get('w'))) state.w = +p.get('w');
+  if (SCENARIOS[p.get('s')]) state.s = p.get('s');
+  state.p = p.get('p') === '1' ? 1 : 0;
+}
+function init() {
+  readHash();
+  wavUrl = makeWav(42, 4000);
+  seg('seg-v', 'v', VARIANTS, state.v); seg('seg-t', 't', THEMES, state.t); seg('seg-w', 'w', WIDTHS, state.w);
+  const sel = document.getElementById('scenario');
+  sel.innerHTML = Object.entries(SCENARIOS).map(([k, s]) => `<option value="${k}"${k === state.s ? ' selected' : ''}>${esc(s.label)}</option>`).join('');
+  document.querySelector('.controls').addEventListener('change', e => {
+    const t = e.target;
+    if (t.name === 'v') state.v = t.value; if (t.name === 't') state.t = t.value; if (t.name === 'w') state.w = +t.value;
+    if (t.id === 'scenario') state.s = t.value;
+    if (t.id === 'player') state.p = t.checked ? 1 : 0;
+    syncHash(); renderFrame();
+  });
+  document.addEventListener('click', e => {
+    const open = e.target.closest('[data-open]'), all = e.target.closest('[data-open-all]'), more = e.target.closest('[data-more]');
+    const out = document.getElementById('opened');
+    if (more) {
+      const exp = more.getAttribute('aria-expanded') === 'true';
+      more.setAttribute('aria-expanded', String(!exp));
+      more.querySelector('span').textContent = exp ? COPY.more(+more.dataset.more) : COPY.fewer;
+      more.closest('.att-block').querySelectorAll('[data-fold]').forEach(li => { li.hidden = exp; });
+    } else if (open) { if (open.getAttribute('aria-disabled') !== 'true') out.textContent = COPY.opened(open.dataset.name); }
+    else if (all) out.textContent = COPY.openedAll;
+    const rb = e.target.closest('#replay');
+    if (rb) {
+      const fig = rb.closest('.spec'), live = document.getElementById('live-region'), o = document.getElementById('replay-out');
+      const name = PDF.name;
+      fig.querySelector('.att-block').outerHTML = one({ ...PDF, status: 'loading' });
+      live.textContent = COPY.loadingSr(name); o.textContent = 'Live region: ' + live.textContent;
+      setTimeout(() => {
+        fig.querySelector('.att-block').outerHTML = one(PDF);
+        live.textContent = COPY.readySr(name); o.textContent = 'Live region: ' + live.textContent;
+        setTimeout(() => { live.textContent = ''; }, 1500);
+      }, 1400);
+    }
+  });
+  document.getElementById('player').checked = !!state.p;
+  renderFrame(); buildGallery();
+}
+init();
+</script>
+</body>
+</html>
