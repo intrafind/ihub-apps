@@ -87,10 +87,17 @@ searches again. Nothing is stored per chat.
   at least 500. Estimated with the shared tokenizer on `{ name, description, parameters }`.
 - **Pinned integrations over budget stay**; everything else is then searched. Tool search is skipped
   when the list plus the search tool would cost as much as the tools left out.
-- **Not done:** Anthropic's native `defer_loading` and OpenRouter's `openrouter:tool_search`. The
-  generic path has to work everywhere anyway. For Anthropic the native path is the better one: it
-  keeps the prompt cache (see above), at the price of sending every tool definition in `tools` on
-  every request, which saves context-window tokens but not request size.
+- **Not done: the cache-safe native paths.** Anthropic (Messages API) and OpenAI (Responses API,
+  `gpt-5.4` and later) both document a **client-run** tool search that keeps the prompt cache:
+  Anthropic expands a `tool_reference` returned in our own tool's `tool_result`, and the found
+  tool's definition goes into `tools` with `defer_loading: true`, which keeps it out of the cache
+  key (only the tools we reference need a definition, so the request does not grow); OpenAI's
+  `tool_search` with `execution: "client"` takes our `tool_search_output` and injects the tools at
+  the end of the context. Neither works on Chat Completions, Bedrock Converse (Anthropic's
+  server-side search is InvokeModel-only; the client-run variant is untested there), Google,
+  Mistral or vLLM, so the generic path stays the fallback. The loop would not change; each is an
+  adapter feature (new block or item types in the history, and for Anthropic the cache breakpoint
+  must sit on a non-deferred tool, since a deferred tool cannot carry `cache_control`).
 
 ## Cleaned up on the way
 
