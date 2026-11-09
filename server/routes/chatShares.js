@@ -580,6 +580,8 @@ export default function registerChatShareRoutes(app) {
       allowed.size > 0
         ? (await getChatRepository().fileStore().list(scope))
             .filter(item => allowed.has(item.id))
+            // A picture has no text to share: with text-only access there is nothing to list
+            .filter(item => item.origin !== 'image' || access === 'original')
             .map(({ meta: _meta, source: _source, ...visible }) => ({
               ...visible,
               hasOriginal: visible.hasOriginal && access === 'original'

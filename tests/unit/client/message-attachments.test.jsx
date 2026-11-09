@@ -488,6 +488,25 @@ describe('MessageAttachments: the picture of a stored image', () => {
     expect(card.querySelector('img')).toHaveAttribute('alt', '');
   });
 
+  test('a picture a regenerated turn did not send again does not say it was sent', async () => {
+    const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
+    render(
+      <MessageAttachments
+        attachments={viewsOf([
+          picture('file_img', 'sent.png'),
+          picture('file_img2', 'again.png', { sentToModel: false })
+        ])}
+        fetchFileBlob={fetchFileBlob}
+      />
+    );
+    const cards = screen.getAllByTestId('message-attachment');
+    expect(cards[0]).toHaveTextContent('Image sent to the model');
+    expect(cards[1]).toHaveTextContent('again.png');
+    expect(cards[1]).not.toHaveTextContent('sent to the model');
+    // Its thumbnail still comes from the store: the picture is there, it just was not sent
+    await waitFor(() => expect(fetchFileBlob).toHaveBeenCalledWith('file_img2'));
+  });
+
   test('a picture still in memory is not fetched', () => {
     const fetchFileBlob = jest.fn(() => Promise.resolve(blob));
     const [view] = viewsOf([picture('file_img', 'a.png')]);

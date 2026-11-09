@@ -118,6 +118,8 @@ function fromLive(entry, index) {
  * @returns {Object|null}
  */
 function readOfStored(descriptor, kind) {
+  // A picture the server did not send to the model again (a regenerated turn) must not say so
+  if (kind === 'image' && descriptor.sentToModel === false) return null;
   if (kind === 'image' || kind === 'audio') return { kind };
   if (!Number.isFinite(descriptor.textBytes)) return null;
   const pageImages = Math.max(0, Number(descriptor.pageImageCount) || 0);

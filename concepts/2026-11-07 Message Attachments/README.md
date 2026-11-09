@@ -141,9 +141,13 @@ Still open:
    the picture's rules.
 2. A picture **sent in this session** opens only after a reload; showing its id live needs the
    server to answer the turn with the stored descriptors.
-3. **Edit-and-resend** of a turn that is only files: an empty or unchanged edit is a deliberate
+3. **Regenerating a turn after a reload** sends no picture to the model: the browser has none, and
+   the vision check exists only in the client. The server holds the bytes, so it could send the
+   stored picture again once it knows that the selected model takes images. Until then the card
+   keeps the thumbnail and does not say "sent to the model".
+4. **Edit-and-resend** of a turn that is only files: an empty or unchanged edit is a deliberate
    no-op and the Resend button covers it, so this is not treated as a defect.
-4. **One Sonar finding in the mockup**: `role="group"` on `#frame` wants a `<fieldset>`, which
+5. **One Sonar finding in the mockup**: `role="group"` on `#frame` wants a `<fieldset>`, which
    repaints the four anti-aliased corners of the dashed frame (a couple of dozen pixels per
    screenshot). The prototype is not shipped, so it is left as it is.
-5. PR #1933 is closed as superseded and #1786 is closed by the first release.
+6. PR #1933 is closed as superseded and #1786 is closed by the first release.

@@ -458,6 +458,25 @@ async function findAttachmentDuplicate(repo, scope, { name, text, originalBuffer
   );
 }
 
+/**
+ * The descriptor of a stored file a request only named by id. A picture named that way is not sent
+ * to the model again (a regenerated turn after a reload has no picture data to send), so its
+ * descriptor says so and the card does not claim otherwise.
+ *
+ * @param {Object} stored
+ * @returns {Object}
+ */
+function describeNamed(stored) {
+  const described = describeStored(stored);
+  return stored.origin === 'image' ? { ...described, sentToModel: false } : described;
+}
+
+/** The picture of this descriptor went to the model with the turn after all. */
+function markSentToModel(descriptors, id) {
+  const named = descriptors.find(descriptor => descriptor.id === id);
+  if (named) delete named.sentToModel;
+}
+
 /** A value as a list: a list as it is, one value as a list of one, nothing as an empty list. */
 function listOf(value) {
   if (Array.isArray(value)) return value;
@@ -613,7 +632,7 @@ export async function prepareTurnFiles({
       seenIds.add(fileId);
       // A picture of an earlier turn keeps its card but is not a document for the model
       if (stored.origin !== 'image') resolvedPromptFiles.push(toPromptFileData(stored));
-      descriptors.push(describeStored(stored));
+      descriptors.push(describeNamed(stored));
     }
   }
 
@@ -629,7 +648,7 @@ export async function prepareTurnFiles({
         // A stored picture keeps its card but is not a document for the model
         if (stored.origin === 'image') namedPicture = true;
         else resolvedPromptFiles.push(toPromptFileData(stored));
-        descriptors.push(describeStored(stored));
+        descriptors.push(describeNamed(stored));
         continue;
       }
     }
@@ -751,7 +770,11 @@ export async function prepareTurnFiles({
   // them.
   for (const image of listOf(message?.imageData)) {
     const stored = await storeTurnImage({ repo: activeRepo, scope, ownerId, image, appConfig });
-    if (stored && seenIds.has(stored.id)) continue;
+    if (stored && seenIds.has(stored.id)) {
+      // Named by id and sent again with the turn: this time the model has it
+      markSentToModel(descriptors, stored.id);
+      continue;
+    }
     if (stored) seenIds.add(stored.id);
     const reported = mediaDescriptor(image);
     // The size the user knows is that of the file they attached; the stored picture is the

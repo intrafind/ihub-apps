@@ -89,7 +89,9 @@ resized copy), in the chat's files with the origin `image`.
   bytes, never SVG; anything else is still sent to the model and just not kept.
 - **Quotas.** Its bytes count against the per-file, per-chat, per-user and server limits like any
   file. It takes **no file slot** (`maxChatFiles`): a chat of screenshots still has room for
-  documents. A picture a quota refuses never stops the message; it is only not kept.
+  documents. A picture a quota refuses never stops the message; it is only not kept. It never
+  makes room by evicting: when the user or the server is full, a picture is simply not stored, and
+  the oldest originals of documents are evicted only to make room for a document.
 - **Retention.** It lives as long as an original (`originalRetentionDays`, default 14, and it is
   among the first to go when `evictOldestOriginalsOnQuota` needs room). When its original goes, the
   whole file goes with it, since nothing else is stored; the card then shows its tile. A chat share
@@ -98,10 +100,16 @@ resized copy), in the chat's files with the origin `image`.
   preview, **Download original** and **Delete file** (deleting it also removes its thumbnail from
   the cards), and is removed with the chat. In a [chat share](chat-sharing.md) a viewer sees its
   thumbnail and can open it only when the owner shared the originals (`uploadedFilesAccess:
-  original`) and left the picture ticked; with text-only access a picture has nothing to share.
+  original`) and left the picture ticked; with text-only access a picture has nothing to share and
+  is not listed.
 - **The model.** A picture is not a document: the model does not list it with `chat_files_list`,
   and later turns do not repeat it as a file. Sending the same picture again (a resend, a
   regenerated answer) does not store it twice.
+- **Regenerating after a reload.** The browser no longer holds the picture's data after a reload,
+  so a turn regenerated then goes to the model **without the picture** (this was already so before
+  pictures were stored; the card used to vanish). The card keeps its thumbnail but no longer says
+  "sent to the model" for that turn (`sentToModel: false` on its descriptor). Sending the stored
+  picture again would need the server to check that the selected model takes images; it does not.
 
 ## Platform settings (`platform.uploads`)
 

@@ -334,6 +334,24 @@ describe('toAttachmentViews: what the server read, kept on a stored message', ()
     expect(noOriginal.originalKept).toBeNull();
   });
 
+  test('a picture the server did not send to the model again says nothing of the kind', () => {
+    const picture = extra => ({
+      id: 'file_img',
+      type: 'image/png',
+      name: 'a.png',
+      bytes: 5,
+      hasOriginal: true,
+      ...extra
+    });
+    expect(viewOf(picture({ sentToModel: false })).read).toBeNull();
+    expect(viewOf(picture({})).read).toEqual({ kind: 'image' });
+    // The mark is about a picture: audio never had one
+    const [audio] = toAttachmentViews({
+      stored: [{ type: 'audio/mpeg', name: 'a.mp3', sentToModel: false }]
+    });
+    expect(audio.read).toEqual({ kind: 'audio' });
+  });
+
   test('an image and an audio file were sent to the model', () => {
     const [image, audio] = toAttachmentViews({
       stored: [

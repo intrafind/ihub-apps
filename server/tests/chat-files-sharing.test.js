@@ -211,11 +211,23 @@ describe('uploaded files on a share', () => {
       return { created, flag: open.body.messages[0].attachments[0].shared };
     };
 
-    // Text only: a picture has no text, so there is nothing to open
-    assert.equal((await flagFor('extracted_text')).flag, false);
+    // Text only: a picture has no text, so there is nothing to open, and nothing to list
+    const textOnly = await flagFor('extracted_text');
+    assert.equal(textOnly.flag, false);
+    const textOnlyList = await drive(listFilesHandlers, {
+      params: { shareId: textOnly.created.id }
+    });
+    assert.deepEqual(textOnlyList.body.items, []);
 
     const original = await flagFor('original');
     assert.equal(original.flag, true);
+    const originalList = await drive(listFilesHandlers, {
+      params: { shareId: original.created.id }
+    });
+    assert.deepEqual(
+      originalList.body.items.map(item => item.name),
+      ['whiteboard.png']
+    );
     const served = await drive(fileHandlers, {
       params: { shareId: original.created.id, fileId: picture.id }
     });

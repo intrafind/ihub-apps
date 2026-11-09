@@ -278,6 +278,41 @@ describe('a picture of a turn', () => {
     assert.equal(named.promptMessage.fileData, undefined);
   });
 
+  it('says it was not sent to the model again when a regenerated turn only names it', async () => {
+    const first = await turn({ imageData: imageOf(PNG) });
+    assert.equal(first.attachments[0].sentToModel, undefined);
+    const regenerated = await turn(
+      { content: 'again' },
+      { inheritedAttachments: first.attachments }
+    );
+    assert.equal(regenerated.attachments[0].sentToModel, false);
+  });
+
+  it('says so too when the request names the picture by id', async () => {
+    const first = await turn({ imageData: imageOf(PNG) });
+    const named = await turn({ content: 'again', fileIds: [first.attachments[0].id] });
+    assert.equal(named.attachments[0].sentToModel, false);
+  });
+
+  it('says nothing of the kind when the picture goes with the turn again', async () => {
+    const first = await turn({ imageData: imageOf(PNG) });
+    const again = await turn(
+      { content: 'again', imageData: imageOf(PNG) },
+      { inheritedAttachments: first.attachments }
+    );
+    assert.equal(again.attachments.length, 1);
+    assert.equal(again.attachments[0].sentToModel, undefined);
+  });
+
+  it('survives the store: the materializer keeps the mark and invents none', () => {
+    const [marked, plain] = normalizeAttachments([
+      { id: 'file_a', type: 'image/png', name: 'a.png', sentToModel: false },
+      { id: 'file_b', type: 'image/png', name: 'b.png' }
+    ]);
+    assert.equal(marked.sentToModel, false);
+    assert.equal('sentToModel' in plain, false);
+  });
+
   it('is not repeated as a document in the history of later turns', async () => {
     const first = await turn({ imageData: imageOf(PNG) });
     const history = await hydrateHistoryForPrompt(
@@ -395,6 +430,90 @@ describe('only a picture is stored as a picture', () => {
     });
     assert.equal(attachments[0].origin, undefined);
     assert.equal((await repo.getDescriptor(scope, attachments[0].id)).origin, 'upload');
+  });
+});
+
+describe('a picture never makes room by evicting', () => {
+  let tmpDir;
+  let provider;
+  let repo;
+  const other = { type: 'chat', id: 'chat-other' };
+  const mine = { type: 'chat', id: 'chat-mine' };
+  const oldDoc = { type: 'chat', id: 'chat-other' };
+  const policy = () => ({ quotas: { maxUserBytes: 400 }, evictOldestOriginalsOnQuota: true });
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-turn-img-evict-'));
+    provider = new FilesystemStorageProvider({ baseDir: tmpDir });
+    await provider.initialize();
+    repo = new ChatFileRepository({ documents: provider.documents, blobs: provider.blobs, policy });
+  });
+
+  afterEach(async () => {
+    await provider?.shutdown?.();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  const fillWithOneDocument = () =>
+    repo.put(oldDoc, {
+      ownerId: 'jonas',
+      name: 'template.docx',
+      mimeType: 'application/octet-stream',
+      text: 'template',
+      originalBuffer: Buffer.alloc(380, 1)
+    });
+
+  it('is refused when the user is full, and the original of a document in another chat stays', async () => {
+    const doc = await fillWithOneDocument();
+    await assert.rejects(
+      repo.put(mine, {
+        ownerId: 'jonas',
+        name: 'a.png',
+        mimeType: 'image/png',
+        originalBuffer: PNG,
+        origin: 'image'
+      }),
+      error => error.code === 'QUOTA_USER_BYTES'
+    );
+    assert.equal((await repo.getDescriptor(other, doc.id)).hasOriginal, true);
+  });
+
+  it('while a document in the same position still makes room by evicting the oldest original', async () => {
+    const doc = await fillWithOneDocument();
+    await repo.put(mine, {
+      ownerId: 'jonas',
+      name: 'notes.txt',
+      mimeType: 'text/plain',
+      text: 'x',
+      originalBuffer: Buffer.alloc(100, 2)
+    });
+    assert.equal((await repo.getDescriptor(other, doc.id)).hasOriginal, false);
+  });
+
+  it('is refused when the server is full, too', async () => {
+    const serverFull = new ChatFileRepository({
+      documents: provider.documents,
+      blobs: provider.blobs,
+      policy: () => ({ quotas: { maxServerBytes: 400 }, evictOldestOriginalsOnQuota: true })
+    });
+    const doc = await serverFull.put(oldDoc, {
+      ownerId: 'someone',
+      name: 'template.docx',
+      mimeType: 'application/octet-stream',
+      text: 'template',
+      originalBuffer: Buffer.alloc(380, 1)
+    });
+    await assert.rejects(
+      serverFull.put(mine, {
+        ownerId: 'jonas',
+        name: 'a.png',
+        mimeType: 'image/png',
+        originalBuffer: PNG,
+        origin: 'image'
+      }),
+      error => error.code === 'QUOTA_SERVER_BYTES'
+    );
+    assert.equal((await serverFull.getDescriptor(other, doc.id)).hasOriginal, true);
   });
 });
 

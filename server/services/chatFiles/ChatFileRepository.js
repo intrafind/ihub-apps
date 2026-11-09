@@ -618,8 +618,8 @@ export class ChatFileRepository {
   }) {
     assertFileSize(settings.quotas, singleFileSize);
     await this._enforceScopeQuota({ scope, totalBytes, quotas: settings.quotas, replaces, origin });
-    await this._enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces });
-    await this._enforceServerQuota({ scope, totalBytes, settings, replaces });
+    await this._enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces, origin });
+    await this._enforceServerQuota({ scope, totalBytes, settings, replaces, origin });
   }
 
   /**
@@ -644,19 +644,22 @@ export class ChatFileRepository {
   }
 
   /**
-   * Tier 2: the quota of a user, with eviction of the oldest chat originals.
+   * Tier 2: the quota of a user, with eviction of the oldest chat originals. A picture never
+   * makes room by evicting: it is a thumbnail, and a user near their quota must not lose a
+   * document's original to keep one.
    *
    * @private
    */
-  async _enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces }) {
-    const { quotas, evictOldestOriginalsOnQuota } = settings;
+  async _enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces, origin }) {
+    const { quotas } = settings;
+    const mayEvict = settings.evictOldestOriginalsOnQuota && origin !== 'image';
     const limited = Boolean(ownerId) && quotas.maxUserBytes > 0;
     if (!limited) return;
     const ownerDocs = await this._listOwnerDocs(ownerId);
     let used =
       ownerDocs.reduce((sum, doc) => sum + (Number(doc.data?.bytes) || 0), 0) -
       (replaces?.bytes || 0);
-    if (used + totalBytes > quotas.maxUserBytes && evictOldestOriginalsOnQuota) {
+    if (used + totalBytes > quotas.maxUserBytes && mayEvict) {
       used -= await this._evictOldestOriginals(ownerDocs, used + totalBytes - quotas.maxUserBytes, {
         excludeScope: scope,
         reason: 'quota_evicted'
@@ -676,12 +679,13 @@ export class ChatFileRepository {
    * Tier 3: the quota of the whole server, with eviction of the oldest chat originals. The total
    * is read from a short-lived cache, not from every document of the namespace on every upload; a
    * full read is made only when the upload could come close to the limit, where the answer has to
-   * be exact.
+   * be exact. As in the user tier, a picture never makes room by evicting.
    *
    * @private
    */
-  async _enforceServerQuota({ scope, totalBytes, settings, replaces }) {
-    const { quotas, evictOldestOriginalsOnQuota } = settings;
+  async _enforceServerQuota({ scope, totalBytes, settings, replaces, origin }) {
+    const { quotas } = settings;
+    const mayEvict = settings.evictOldestOriginalsOnQuota && origin !== 'image';
     const limited = quotas.maxServerBytes > 0;
     if (!limited) return;
     const limit = quotas.maxServerBytes;
@@ -690,7 +694,7 @@ export class ChatFileRepository {
       used = await this._serverUsedBytes({ exact: true });
     }
     used -= replaces?.bytes || 0;
-    if (used + totalBytes > limit && evictOldestOriginalsOnQuota) {
+    if (used + totalBytes > limit && mayEvict) {
       used -= await this._evictOldestOriginals(
         await this._listAllDocs(),
         used + totalBytes - limit,
