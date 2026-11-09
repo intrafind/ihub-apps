@@ -686,27 +686,33 @@ function ChatInput({
     onFileSelect(null);
   }, [onFileSelect]);
 
+  // A `/` that opens the prompt picker: in an empty input, or at the start of
+  // a word. Returns whether it did.
+  const openSlashPicker = e => {
+    if (!slashCommandEnabled || showPromptSearch || e.key !== '/') return false;
+    const el = actualInputRef.current;
+    if (value === '') {
+      e.preventDefault();
+      slashPickRef.current = { anchor: null };
+      setShowPromptSearch(true);
+      return true;
+    }
+    if (!opensSlashPickerMidText(value, el?.selectionStart, el?.selectionEnd)) return false;
+    // Typed by hand rather than by the browser: the picker takes focus while
+    // the key is still being handled, and the `/` would land in its search
+    // field instead. Closing the picker keeps the slash.
+    e.preventDefault();
+    const anchor = el.selectionStart;
+    slashPickRef.current = { anchor };
+    onChange({ target: { value: typeSlashAt(value, anchor) } });
+    setShowPromptSearch(true);
+    return true;
+  };
+
   // Handle key events for the textarea
   const handleKeyDown = e => {
-    if (slashCommandEnabled && !showPromptSearch && e.key === '/') {
-      const el = actualInputRef.current;
-      if (value === '') {
-        e.preventDefault();
-        slashPickRef.current = { anchor: null };
-        setShowPromptSearch(true);
-        return;
-      }
-      if (opensSlashPickerMidText(value, el?.selectionStart, el?.selectionEnd)) {
-        // Typed by hand rather than by the browser: the picker takes focus
-        // while the key is still being handled, and the `/` would land in its
-        // search field instead. Closing the picker keeps the slash.
-        e.preventDefault();
-        const anchor = el.selectionStart;
-        slashPickRef.current = { anchor };
-        onChange({ target: { value: typeSlashAt(value, anchor) } });
-        setShowPromptSearch(true);
-        return;
-      }
+    if (openSlashPicker(e)) {
+      return;
     }
 
     if (showPromptSearch) {
