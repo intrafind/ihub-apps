@@ -293,6 +293,15 @@ export async function downloadWebFile(
       `The file could not be downloaded from ${url} (HTTP ${response.status})`
     );
   }
+  if (PAGE_TYPES.has(mimeOf(response.headers.get('content-type')))) {
+    // A file link that now answers with a page (a sign-in redirect, a soft
+    // 404): not the file. Refused, so a refresh keeps the text it had.
+    dropBody(response.body);
+    throw new ProjectError(
+      'SOURCE_FORBIDDEN',
+      'The website answered with a web page instead of the file (a sign-in or an error page)'
+    );
+  }
   const size = declaredLength(response);
   if (size !== null && size > maxBytes) {
     dropBody(response.body);

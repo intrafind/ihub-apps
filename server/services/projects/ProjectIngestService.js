@@ -297,7 +297,7 @@ export class ProjectIngestService {
     const patch = (update, options = {}) =>
       this.service.patchItem(projectId, itemId, update, {
         ...options,
-        ...(input.scheduled ? { touchActivity: false } : {})
+        ...(input.scheduled ? { touchActivity: false, touchUpdated: false } : {})
       });
     let lost = false;
     const owns = item => {
@@ -341,13 +341,18 @@ export class ProjectIngestService {
         // Nothing changed at the source: it said so to a conditional request
         // (304), it names the version the text was taken from (ETag), or it
         // was last modified before that.
+        // An ETag on both sides decides alone: a server evaluates
+        // If-None-Match first, and a changed ETag with an unchanged
+        // Last-Modified (an edit within the second, a kept mtime) is a change.
+        const bothTagged = Boolean(input.previousEtag) && Boolean(fetched.etag);
         const sameVersion =
           refresh &&
           (fetched.notModified === true ||
-            (Boolean(input.previousEtag) && fetched.etag === input.previousEtag) ||
-            (Boolean(previousVersion) &&
-              Boolean(job.lastModified) &&
-              Date.parse(job.lastModified) <= Date.parse(previousVersion)));
+            (bothTagged
+              ? fetched.etag === input.previousEtag
+              : Boolean(previousVersion) &&
+                Boolean(job.lastModified) &&
+                Date.parse(job.lastModified) <= Date.parse(previousVersion)));
         if (sameVersion) {
           // Keep the text, clear `stale`, note the check.
           const checkedAt = new Date().toISOString();

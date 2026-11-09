@@ -58,6 +58,9 @@ describe('refresh TTL helpers', () => {
     expect(refreshSummary({ refresh: { scheduled: false, ttl: 86400 } }, t, 'en')).toBe(
       'Read live, kept for 1 days'
     );
+    expect(refreshSummary({ refresh: { scheduled: false, ttl: REFRESH_NEVER } }, t, 'en')).toBe(
+      'Read live, kept until refreshed by hand'
+    );
     expect(refreshSummary({ refresh: { scheduled: true, ttl: REFRESH_NEVER } }, t, 'en')).toBe(
       'Refreshed only by hand'
     );

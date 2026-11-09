@@ -8961,7 +8961,8 @@
       "change": "Change the refresh of files and web pages",
       "projectValue": "Files and web pages: {{ttl}}",
       "projectDefault": "Files and web pages: {{ttl}} (default)",
-      "projectDefaultUnknown": "Default of this installation"
+      "projectDefaultUnknown": "Default of this installation",
+      "cachedManual": "Read live, kept until refreshed by hand"
     }
   },
   "integrationScopes": {

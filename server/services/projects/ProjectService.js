@@ -1058,7 +1058,12 @@ export class ProjectService {
    *   caller expected any more).
    * @returns {Promise<Object|null>} The item as stored, or null when gone.
    */
-  async patchItem(projectId, itemId, update, { check, touchActivity = true } = {}) {
+  async patchItem(
+    projectId,
+    itemId,
+    update,
+    { check, touchActivity = true, touchUpdated = true } = {}
+  ) {
     const stored = await this.repository.mutate(
       projectId,
       project => {
@@ -1071,7 +1076,7 @@ export class ProjectService {
         item.updatedAt = nowIso();
         return project;
       },
-      { touchActivity }
+      { touchActivity, touchUpdated }
     );
     return stored?.items?.find(entry => entry.id === itemId) || null;
   }

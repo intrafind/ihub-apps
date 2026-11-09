@@ -8935,7 +8935,8 @@
       "change": "Aktualisierung von Dateien und Webseiten ändern",
       "projectValue": "Dateien und Webseiten: {{ttl}}",
       "projectDefault": "Dateien und Webseiten: {{ttl}} (Standard)",
-      "projectDefaultUnknown": "Standard dieser Installation"
+      "projectDefaultUnknown": "Standard dieser Installation",
+      "cachedManual": "Live gelesen, bis zur Aktualisierung von Hand zwischengespeichert"
     }
   },
   "integrationScopes": {

@@ -126,6 +126,9 @@ export function refreshSummary(item, t, language) {
   const refresh = item?.refresh;
   if (!refresh) return null;
   if (!refresh.scheduled) {
+    if (refresh.ttl === REFRESH_NEVER) {
+      return t('projects.refresh.cachedManual', 'Read live, kept until refreshed by hand');
+    }
     return t('projects.refresh.cachedFor', 'Read live, kept for {{ttl}}', {
       ttl: refreshTtlLabel(refresh.ttl, t)
     });

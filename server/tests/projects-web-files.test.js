@@ -493,6 +493,44 @@ describe('web files in a project', () => {
     }
   });
 
+  it('trusts a changed ETag over an unchanged Last-Modified, and keeps the text when a page answers', async () => {
+    const stamp = 'Tue, 03 Nov 2026 10:00:00 GMT';
+    serve(
+      '/kept-mtime.txt',
+      'Deployed version one.',
+      { 'content-type': 'text/plain', 'last-modified': stamp },
+      { etag: '"a"' }
+    );
+    const project = await newProject('Etag');
+    const { item } = await addUrl(project, `${base}/kept-mtime.txt`);
+    const first = await settled(project.id, item.id);
+    // Same mtime (kept by the deploy), new ETag: a change.
+    serve(
+      '/kept-mtime.txt',
+      'Deployed version two.',
+      { 'content-type': 'text/plain', 'last-modified': stamp },
+      { etag: '"b"' }
+    );
+    const { item: changed } = await service.refreshItem(project.id, item.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.notEqual(changed.text.blobKey, first.text.blobKey);
+    assert.match((await getItemText({ id: project.id }, changed, { user: ADA })).text, /two/);
+
+    // The file now redirects to a sign-in page: refused, the text stays.
+    serve('/kept-mtime.txt', '<html><body>Sign in</body></html>', {
+      'content-type': 'text/html'
+    });
+    await assert.rejects(
+      service.refreshItem(project.id, item.id, { user: ADA, wait: true }),
+      error => error.code === 'SOURCE_FORBIDDEN'
+    );
+    const stale = await itemOf(project.id, item.id);
+    assert.equal(stale.status, 'stale');
+    assert.equal(stale.text.blobKey, changed.text.blobKey);
+  });
+
   it('refreshes after the TTL: an unchanged ETag keeps the text, a changed file replaces it', async () => {
     serve('/policy.txt', 'Policy version one.', { 'content-type': 'text/plain' }, { etag: '"v1"' });
     const project = await newProject('Refresh');
@@ -520,6 +558,11 @@ describe('web files in a project', () => {
       (await getProjectRepository().get(project.id)).lastActivityAt,
       projectNow.lastActivityAt,
       'a scheduled refresh is not activity: retention still sees the project as it was'
+    );
+    assert.equal(
+      (await getProjectRepository().get(project.id)).updatedAt,
+      projectNow.updatedAt,
+      'nor an edit of the project'
     );
     assert.equal(seen.at(-1).headers['if-none-match'], '"v1"', 'asked conditionally');
 
@@ -611,6 +654,31 @@ describe('web files in a project', () => {
       entry => entry.data?.metadata?.url === `${base}/live`
     );
     assert.equal(cached.ttl, 3600 * 1000, 'kept for the project TTL');
+    // Another reader with a shorter lifetime judges the same entry by its own.
+    const { forgetCachedPage } = await import('../services/pageCache.js');
+    const config = { url: `${base}/live`, cacheTtlSeconds: 1 };
+    cached.timestamp -= 2000;
+    // The page reader's own 10-minute cache sits below; real TTLs (15 min and
+    // up) outlast it, the 1 s of this test does not.
+    forgetCachedPage(`${base}/live`);
+    serve(
+      '/live',
+      '<html><head><title>Live</title></head><body><main>Live short</main></body></html>',
+      {
+        'content-type': 'text/html'
+      }
+    );
+    assert.match((await handler.getCachedContent(config)).content, /Live short/);
+    serve(
+      '/live',
+      '<html><head><title>Live</title></head><body><main>Live one</main></body></html>',
+      {
+        'content-type': 'text/html'
+      }
+    );
+    handler.forget(`${base}/live`);
+    forgetCachedPage(`${base}/live`);
+    assert.match((await read()).text, /Live one/);
 
     serve(
       '/live',
