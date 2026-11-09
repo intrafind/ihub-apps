@@ -514,7 +514,10 @@ const appIntegrationBindingSchema = integrationScopeSettingsSchema
     // Whether a new chat starts with the integration switched on (absent =
     // true). `false`: it is only available, offered in the chat's "+" menu and
     // off until the user switches it on, like `websearch.enabledByDefault`.
-    enabledByDefault: z.boolean().optional()
+    enabledByDefault: z.boolean().optional(),
+    // `true`: the integration's tools are always sent to the model in full,
+    // never left to tool search (`toolSearch`, the `toolSearch` feature).
+    alwaysLoaded: z.boolean().optional()
   })
   .strict();
 
@@ -601,6 +604,20 @@ const baseAppConfigSchema = z.object({
     })
     .optional(),
   workflows: z.array(z.string()).optional(),
+  // Tool search (the `toolSearch` platform feature): an app with more
+  // integration tools than fit its budget sends the biggest integrations as a
+  // list and a search (`search_tools`, which loads what it finds) instead of in full.
+  toolSearch: z
+    .object({
+      // `auto` (absent): leave integrations out when the tools exceed the
+      // budget; `off`: always send every tool in full.
+      mode: z.enum(['auto', 'off']).optional(),
+      // Tokens the tool definitions of one request may take (default 6000, at
+      // most a tenth of the model's context window).
+      maxToolTokens: z.number().int().min(500).max(100000).optional()
+    })
+    .strict()
+    .optional(),
   // Other app ids this app may invoke as synthetic `app__<id>` tools
   // (requires the `appAsTool` platform feature; see appToolsGateway).
   apps: z.array(z.string()).optional(),

@@ -150,8 +150,10 @@ function Card({ title, description, children, testId }) {
  * @param {Object} props
  * @param {Object} props.app - the app being edited
  * @param {(app: Object) => void} props.onChange - receives the whole changed app
+ * @param {boolean} [props.toolSearchEnabled] - the platform's tool search feature is on:
+ *   the rows offer "Always loaded"
  */
-function IntegrationsConfigSection({ app, onChange }) {
+function IntegrationsConfigSection({ app, onChange, toolSearchEnabled = false }) {
   const { t } = useTranslation();
   const [installed, setInstalled] = useState([]);
   // Every installation (also those whose definition is missing), for the migration warnings.
@@ -425,6 +427,7 @@ function IntegrationsConfigSection({ app, onChange }) {
       binding={bindings[item.id]}
       detail={details[item.id]}
       onBindingChange={binding => setBinding(item.id, binding)}
+      toolSearchEnabled={toolSearchEnabled}
       notice={
         migrationWarnings.has(item.id) ? (
           <AppMigrationWarnings warnings={migrationWarnings.get(item.id)} />
@@ -524,6 +527,7 @@ function IntegrationsConfigSection({ app, onChange }) {
           renderRow={renderRow}
           onBindingsChange={setBindings}
           notice={typeNotice(PEOPLE_DIRECTORY_TYPE_KEY)}
+          toolSearchEnabled={toolSearchEnabled}
         />
       )}
 

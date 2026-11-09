@@ -1189,6 +1189,40 @@ installed. A description you set replaces the one in `SKILL.md` wherever the ski
 marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
 `contents/config/skills.json`, a new file that a fresh install and an upgrade create.
 
+## Tool Search: Apps With Many Integrations Stop Sending Every Tool on Every Request
+
+An app with many integrations used to hand the model every tool definition of every integration on
+every request, even for a turn that used no tool. That made requests larger and slower, blurred tool
+choice on smaller and local models, and changed the request start whenever the tool set changed.
+With **Tool Search** switched on, an app whose integration tools exceed a token budget sends only
+what fits. The biggest integrations are left out and listed in the system prompt, and the model
+finds a tool with `search_tools`: the tools it finds are added to the request, and the model calls
+them like any other tool.
+
+- **Off by default.** Switch it on under **Admin → Features → Tool Search** (preview). An app, a
+  chat or an integration that does not exceed the budget sends exactly the request it sent before.
+- **Whole integrations, biggest first.** The list names each left-out integration with its tools.
+  If the list itself grows too long it shortens to tool names, then to integrations with their
+  tool counts. It depends only on the tools, never on the message, so it stays the same from turn
+  to turn.
+- **Found tools are ordinary tools.** Approval, connection checks, scopes, progress, chat history,
+  MCP App views and usage logs show the tool by its own name. A write that needs approval still asks
+  first, and a tool the model has not found cannot be called. One search loads at most five tools,
+  and one run at most 15.
+- **A turn that searches changes the request.** The found tools join the tools list, so a provider's
+  prompt cache no longer applies to the steps after the search. A turn that does not search sends
+  the same request as before. A tool found in one turn is not carried into the next: the model
+  searches again when it needs it.
+- **Per app:** **Admin → Apps → (an app) → Tools → Tool search** switches it off for the app or
+  sets the token budget for its tool definitions (default 6000, never more than a tenth of the
+  model's context window, so a small local model gets a smaller budget).
+- **Per integration:** tick **Always loaded** on an integration's binding to always send its tools
+  in full. Web search engines, the question to the user (`ask_user`), skills, project knowledge,
+  workflows and apps used as tools are never left out.
+- **Only for models that call tools.** Agents and workflows keep sending the tools they list.
+
+No migration is needed: the new settings are optional and absent means automatic.
+
 ## Projects: Delete Several Documents at Once
 
 Tick documents in a project and choose **Delete** to delete them all after one confirmation.

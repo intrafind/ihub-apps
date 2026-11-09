@@ -92,7 +92,8 @@ export function toolDisplayOf(toolDef) {
   }
 
   const source = classifyToolKnowledgeSource(toolDef.id, toolDef);
-  const activityKind = activityKindOf(toolDef.id, source);
+  // The loop's own tools (skills, tool search) are plain calls, whatever their id says.
+  const activityKind = toolDef.isInternalTool ? 'tool' : activityKindOf(toolDef.id, source);
 
   return {
     ...(title ? { title } : {}),

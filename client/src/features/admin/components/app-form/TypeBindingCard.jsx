@@ -37,6 +37,7 @@ import IntegrationBindingOptions from './IntegrationBindingOptions';
  * @param {Object} [props.newBinding] - the binding the type key starts with
  * @param {string} [props.requiredHelp] - help text of the type binding's Required switch
  * @param {React.ReactNode} [props.notice] - shown on top, e.g. a migration warning
+ * @param {boolean} [props.toolSearchEnabled] - the platform's tool search feature is on
  */
 function TypeBindingCard({
   testId,
@@ -53,7 +54,8 @@ function TypeBindingCard({
   onBindingsChange,
   newBinding = {},
   requiredHelp,
-  notice = null
+  notice = null,
+  toolSearchEnabled = false
 }) {
   const { t } = useTranslation();
   const has = key => Object.hasOwn(bindings, key);
@@ -135,6 +137,7 @@ function TypeBindingCard({
                       binding={bindings[typeKey]}
                       onBindingChange={binding => onBindingsChange({ [typeKey]: binding })}
                       requiredHelp={requiredHelp}
+                      toolSearchEnabled={toolSearchEnabled}
                     />
                   </div>
                 )}

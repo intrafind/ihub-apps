@@ -219,7 +219,11 @@ function AppFormEditor({
           <>
             {/* Integrations: web search, iAssistant, people directories and every
                 other installed integration, each in one place (#3061) */}
-            <IntegrationsConfigSection app={app} onChange={onChange} />
+            <IntegrationsConfigSection
+              app={app}
+              onChange={onChange}
+              toolSearchEnabled={featureFlags.isEnabled('toolSearch', false)}
+            />
 
             {/* Tool use and approval (the tools themselves come from the integrations above) */}
             <ToolsConfigSection
@@ -227,6 +231,12 @@ function AppFormEditor({
               onToolChoiceChange={toolChoice => handleInputChange('toolChoice', toolChoice)}
               toolApproval={app.toolApproval}
               onToolApprovalChange={toolApproval => handleInputChange('toolApproval', toolApproval)}
+              {...(featureFlags.isEnabled('toolSearch', false)
+                ? {
+                    toolSearch: app.toolSearch,
+                    onToolSearchChange: toolSearch => handleInputChange('toolSearch', toolSearch)
+                  }
+                : {})}
             />
 
             {/* Workflows Configuration */}
