@@ -28,6 +28,7 @@ import {
 import { evictItemKeys, readText, storeText } from './ItemTextStore.js';
 import { getItemKind, isItemKindEnabled } from './kinds/registry.js';
 import { ProjectError } from './projectErrors.js';
+import { applyItemInfo, cleanItemInfo } from './itemInfo.js';
 import { PROJECT_ITEM_KIND } from './projectItemLinks.js';
 // Registering the built-in kinds is a side effect of loading them.
 import './kinds/linkKinds.js';
@@ -119,6 +120,9 @@ function applyItemRef(item, { kind, ref, prepared }, { keepName, language }) {
     ...item.provenance,
     source: after.url || after.site ? { site: after.site, url: after.url } : null
   };
+  // What the item is about follows the reference: the new page's, or none
+  // until its first read.
+  applyItemInfo(item, prepared?.info);
   item.status = 'ready';
   item.error = null;
   return true;
@@ -554,6 +558,7 @@ export class ProjectService {
       createdAt: now,
       updatedAt: now
     };
+    if (prepared?.info) applyItemInfo(item, prepared.info);
     if (!isText) {
       item.cache = { ttlSeconds: 7200 };
     } else {
@@ -971,6 +976,36 @@ export class ProjectService {
       { touchActivity: true }
     );
     return stored?.items?.find(entry => entry.id === itemId) || null;
+  }
+
+  /**
+   * Record what a link item is about when it was first read (#3539): an item
+   * added before titles were captured, or whose page could not be read when
+   * it was added. Only an item that has neither yet is changed, so a later
+   * read never overwrites what is there; the project's change stamps stay as
+   * they are, since nobody changed the project.
+   *
+   * @param {string} projectId
+   * @param {string} itemId
+   * @param {{title?: string, description?: string}} info
+   * @returns {Promise<boolean>} Whether the item was changed.
+   */
+  async recordItemInfo(projectId, itemId, info) {
+    const clean = cleanItemInfo(info);
+    if (!clean.title && !clean.description) return false;
+    let changed = false;
+    await this.repository.mutate(
+      projectId,
+      project => {
+        const item = (project.items || []).find(entry => entry.id === itemId);
+        if (!item || item.storage !== 'link' || item.title || item.description) return null;
+        applyItemInfo(item, clean);
+        changed = true;
+        return project;
+      },
+      { touchActivity: false, touchUpdated: false }
+    );
+    return changed;
   }
 
   // --- moving items ---------------------------------------------------------
@@ -1488,7 +1523,9 @@ function buildItem(kind, ref, input, { user, origin, run = null, prepared = null
     snapshotAt: null,
     createdAt: now,
     updatedAt: now,
-    ...(link ? { cache: input.cache || { ttlSeconds: 7200 } } : {})
+    ...(link ? { cache: input.cache || { ttlSeconds: 7200 } } : {}),
+    ...(prepared?.info?.title ? { title: prepared.info.title } : {}),
+    ...(prepared?.info?.description ? { description: prepared.info.description } : {})
   };
 }
 

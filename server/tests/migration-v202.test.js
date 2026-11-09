@@ -47,7 +47,20 @@ const DEFINITION_FILE = path.join(
   'integration-definitions/com.intrafind__ihub/integration.json'
 );
 const sha256 = text => createHash('sha256').update(text).digest('hex');
-const shipped = id => JSON.parse(readFileSync(path.join(DEFAULTS_DIR, `tools/${id}.json`), 'utf8'));
+// The files as V199 found them shipped. `knowledge.json` has changed since
+// (#3539: its descriptions name the document list of a searched project); a
+// copy seeded before then still matches the frozen hash, so the migration is
+// tested against that copy, kept as a fixture.
+const SHIPPED_AT_V199 = {
+  knowledge: path.join(
+    path.dirname(fileURLToPath(import.meta.url)),
+    'fixtures/migration-v199/knowledge.v199.json'
+  )
+};
+const shipped = id =>
+  JSON.parse(
+    readFileSync(SHIPPED_AT_V199[id] || path.join(DEFAULTS_DIR, `tools/${id}.json`), 'utf8')
+  );
 
 function makeCtx(files) {
   const logs = [];

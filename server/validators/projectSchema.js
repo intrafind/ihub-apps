@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { isHttpUrl, zSafeId } from './common.js';
 import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
+import { MAX_ITEM_DESCRIPTION_CHARS, MAX_ITEM_TITLE_CHARS } from '../services/projects/itemInfo.js';
 import {
   LINK_MODES,
   MAX_FILES_CEILING,
@@ -168,6 +169,9 @@ export const projectItemSchema = z
     id: itemIdSchema,
     kind: zSafeId.min(1).max(50),
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH),
+    /** The document's own title and a short description, captured at ingest or first read. */
+    title: z.string().max(MAX_ITEM_TITLE_CHARS).nullable().optional(),
+    description: z.string().max(MAX_ITEM_DESCRIPTION_CHARS).nullable().optional(),
     ref: z.record(z.string(), z.unknown()).prefault({}),
     storage: z.enum(ITEM_STORAGE),
     pinned: z.boolean().prefault(false),

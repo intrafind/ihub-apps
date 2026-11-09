@@ -53,6 +53,8 @@ export function docOf(project, item) {
     projectId: project.id,
     kind: item.kind,
     name: item.name,
+    title: typeof item.title === 'string' && item.title ? item.title : null,
+    description: typeof item.description === 'string' && item.description ? item.description : null,
     status: item.status,
     pinned: item.pinned === true,
     chars: Number.isFinite(item.text?.chars) ? item.text.chars : null,

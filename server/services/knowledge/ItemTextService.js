@@ -86,6 +86,50 @@ export function setTextReader(reader) {
   textReader = typeof reader === 'function' ? reader : null;
 }
 
+let infoRecorder = null;
+
+/** Items whose first read already offered what they are about, in this process. */
+const infoOffered = new Set();
+
+/**
+ * Register the recorder of what a link item is about, learned on its first
+ * read: `(project, item, {title, description}) → Promise`. The project
+ * service registers it at startup (#3539); it runs in the background and its
+ * failure never fails the read.
+ *
+ * @param {((project: Object, item: Object, info: Object) => Promise<unknown>)|null} recorder
+ */
+export function setItemInfoRecorder(recorder) {
+  infoRecorder = typeof recorder === 'function' ? recorder : null;
+  infoOffered.clear();
+}
+
+/**
+ * Hand what a web page said about itself to the recorder, once per item and
+ * process, when the item has no title or description yet.
+ */
+function offerItemInfo(project, item, metadata) {
+  if (!infoRecorder || item.kind !== 'url' || item.title || item.description) return;
+  const title = metadata?.title;
+  const description = metadata?.description;
+  if (!title && !description) return;
+  const key = `${project.id}/${item.id}`;
+  if (infoOffered.has(key)) return;
+  // Bounded: forgetting only means a later read offers again, which records nothing twice.
+  if (infoOffered.size >= 10000) infoOffered.clear();
+  infoOffered.add(key);
+  Promise.resolve()
+    .then(() => infoRecorder(project, item, { title, description }))
+    .catch(error => {
+      logger.debug('Could not record what a link item is about', {
+        component: COMPONENT,
+        projectId: project.id,
+        itemId: item.id,
+        error: error?.message
+      });
+    });
+}
+
 /** The handler type and config a link item's fetch runs with. */
 function handlerCallOf(item, ctx) {
   const ref = item.ref || {};
@@ -243,6 +287,7 @@ export async function getItemText(project, item, ctx = {}) {
     const result = await handler.getCachedContent(call.config);
     const text =
       typeof result?.content === 'string' ? result.content : String(result?.content || '');
+    offerItemInfo(project, item, result?.metadata);
     return { text, cached: false, ...completenessOf(result?.metadata) };
   } catch (error) {
     const message = String(error?.message || 'fetch failed');

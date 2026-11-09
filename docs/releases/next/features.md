@@ -1293,3 +1293,17 @@ about half the pane — so a long prompt can be read and edited without scrollin
 A web page added to a project without a name now shows the page's title instead of its URL. A name
 you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
 page that cannot be read when it is added keeps its URL as the name.
+
+## Projects: The Model Knows Which Documents a Searched Project Holds
+
+When a project is too large to load in full and is searched instead, the model now sees a list of
+its documents, not just a count. It can pick the page or file that answers the question and read it
+directly, instead of searching blindly first.
+
+- Each listed document shows its name, size and, for web pages, its URL, plus the document's own
+  title and a short description when iHub knows them.
+- The title and description are captured automatically: from an uploaded file's metadata or first
+  heading and paragraph, and from a web page's title and description when it is added (or, for
+  pages added earlier, the first time it is read).
+- The list stops at 50 documents per project; the model is told how many more there are and how to
+  list them all.
