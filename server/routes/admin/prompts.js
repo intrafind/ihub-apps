@@ -85,7 +85,7 @@ function adminName(req) {
  */
 async function listSharedUserPrompts(req) {
   const repo = getUserPromptRepository();
-  if (!repo.isAvailable()) return { prompts: [], truncated: false, available: false };
+  if (!repo.isAvailable()) return { items: [], truncated: false, available: false };
   const { prompts, truncated } = await repo.scan({
     filter: prompt =>
       (prompt.shares || []).some(share => share.type === 'group' || share.type === 'everyone')
@@ -102,7 +102,7 @@ async function listSharedUserPrompts(req) {
     );
   });
   items.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
-  return { prompts: items, truncated, available: true };
+  return { items, truncated, available: true };
 }
 
 /** A string, or a localized object, as a localized object in `language`. */
@@ -469,7 +469,7 @@ export default function registerAdminPromptsRoutes(app) {
         return res.status(304).end();
       }
     }
-    res.json(prompts);
+    res.json({ items: prompts });
   });
 
   /**

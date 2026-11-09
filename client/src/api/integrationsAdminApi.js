@@ -303,8 +303,8 @@ export const showHiddenIntegration = async definition => {
  * when it belongs to one. Replaces the removed `GET /api/admin/tools`.
  */
 export const fetchAdminToolCatalog = async () => {
-  const data = (await makeAdminApiCall(`${BASE}/tools`)).data;
-  return Array.isArray(data) ? data : [];
+  const items = (await makeAdminApiCall(`${BASE}/tools`)).data?.items;
+  return Array.isArray(items) ? items : [];
 };
 
 // --- Integration builder (Admin → Integrations → Add manually) -------------

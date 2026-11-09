@@ -666,7 +666,7 @@ describe('export', () => {
 describe('tool catalog', () => {
   it('lists every tool the admin pickers offer, with its installation', async () => {
     const res = await admin(request(app).get('/api/admin/integrations/tools')).expect(200);
-    expect(res.body).toEqual([
+    expect(res.body.items).toEqual([
       { id: 'write_memory', name: 'Write memory', description: 'Agent memory' },
       {
         id: 'legacyLookup',

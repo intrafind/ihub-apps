@@ -24,7 +24,7 @@ function assertValidInboxId(id) {
 export default function registerAdminAgentInboxesRoutes(app) {
   app.get(buildServerPath('/api/admin/agents/inboxes'), adminAuth, async (req, res) => {
     const inboxes = await inboxStore.listInboxes();
-    res.json(inboxes);
+    res.json({ items: inboxes });
   });
 
   app.get(buildServerPath('/api/admin/agents/inboxes/:inboxId'), adminAuth, async (req, res) => {

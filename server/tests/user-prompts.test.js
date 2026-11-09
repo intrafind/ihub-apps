@@ -898,10 +898,10 @@ describe('the admin view', () => {
     await share(ADA, narrow.id, [{ type: 'user', id: GRACE.id, permission: 'use' }]);
     const res = await drive(route.adminList, { user: ROOT, query: { scope: 'user' } });
     assert.equal(res.statusCode, 200, JSON.stringify(res.body));
-    const listed = ids(res.body.prompts);
+    const listed = ids(res.body.items);
     assert.ok(listed.includes(broad.id));
     assert.ok(!listed.includes(narrow.id));
-    const entry = res.body.prompts.find(item => item.id === broad.id);
+    const entry = res.body.items.find(item => item.id === broad.id);
     assert.equal(entry.owner.id, ADA.id);
     assert.equal(entry.permissions.canDelete, true);
   });

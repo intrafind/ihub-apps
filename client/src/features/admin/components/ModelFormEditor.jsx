@@ -346,7 +346,7 @@ function ModelFormEditor({
       try {
         const response = await makeAdminApiCall('/admin/providers');
         if (cancelled) return;
-        const list = Array.isArray(response?.data) ? response.data : [];
+        const list = Array.isArray(response?.data?.items) ? response.data.items : [];
         setCustomProviders(list.filter(isCustomLlmProvider));
       } catch {
         if (!cancelled) setCustomProviders([]);
