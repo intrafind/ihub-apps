@@ -80,8 +80,8 @@ function Location() {
 
 function renderPage() {
   mockMakeAdminApiCall.mockImplementation(async path => {
-    if (path === '/admin/providers') return { data: providers };
-    if (path === '/admin/models') return { data: models };
+    if (path === '/admin/providers') return { data: { items: providers } };
+    if (path === '/admin/models') return { data: { items: models } };
     if (path === '/admin/llm-timeouts') {
       return {
         data: {
