@@ -31,8 +31,8 @@ A rate limit sets the `Retry-After` header and `details.retryAfterMs`. The media
 
 OAuth endpoints (`/api/oauth/*`, `/.well-known/*`) and bearer-token errors keep the RFC 6749 / 6750
 shape, `{ "error", "error_description" }`. The OpenAI-compatible endpoints keep the OpenAI error
-object. The voice routes keep their kebab-case protocol codes (`invalid-voice`, `not-permitted`),
-which are shared with the voice WebSocket and are not in the registry.
+object. The codes of the voice WebSocket (`unknown-model`, `not-permitted`, …) are protocol codes and are
+not in the registry; the read-aloud routes (`/api/voice/*`) use registry codes like every other route.
 
 ## For developers
 

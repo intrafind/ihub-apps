@@ -703,7 +703,7 @@ describe('failures', () => {
     queue.update('| a | b |\n|---|---|\n| 1 | 2 |\n\nThen words. ', { final: true });
     await flush();
     expect(requests[0].body.text).toContain('| a | b |');
-    requests[0].fail(422, 'Nothing to read aloud', 'no-speakable-text');
+    requests[0].fail(422, 'Nothing to read aloud', 'NO_SPEAKABLE_TEXT');
     await flush();
     requests[1].complete(0.5, { language: 'en' });
     await flush();

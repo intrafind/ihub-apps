@@ -86,7 +86,7 @@ export function resolveTtsModel({ modelId, user, platform } = {}) {
       return {
         ok: false,
         status: 503,
-        code: 'not-configured',
+        code: 'TTS_NOT_CONFIGURED',
         error: 'Read aloud is not configured'
       };
     }
@@ -99,7 +99,7 @@ export function resolveTtsModel({ modelId, user, platform } = {}) {
     return {
       ok: false,
       status: 404,
-      code: 'unknown-model',
+      code: 'MODEL_NOT_FOUND',
       error: `Unknown text-to-speech model: ${id}`
     };
   }
@@ -107,7 +107,7 @@ export function resolveTtsModel({ modelId, user, platform } = {}) {
     return {
       ok: false,
       status: 503,
-      code: 'model-disabled',
+      code: 'MODEL_DISABLED',
       error: `Text-to-speech model "${id}" is disabled`
     };
   }
@@ -118,7 +118,7 @@ export function resolveTtsModel({ modelId, user, platform } = {}) {
     return {
       ok: false,
       status: 403,
-      code: 'not-permitted',
+      code: 'MODEL_ACCESS_DENIED',
       error: `Not permitted to use text-to-speech model: ${id}`
     };
   }
@@ -128,7 +128,7 @@ export function resolveTtsModel({ modelId, user, platform } = {}) {
     return {
       ok: false,
       status: 501,
-      code: 'unsupported-provider',
+      code: 'NOT_IMPLEMENTED',
       error: `Unsupported text-to-speech provider: ${model.provider}`
     };
   }

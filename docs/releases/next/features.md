@@ -904,9 +904,15 @@ used to be an HTML or plain text page.
   `details.remediation` and its `messageKey` in `details.messageKey`.
 - Reading the sections above: where one says `error`, the member is now `detail`, and a list that
   is described as `details.issues` is now the `errors` list.
-- The voice routes of the chat (`/api/voice/*`) keep their own kebab-case codes (`invalid-voice`,
-  `not-permitted`, …): they are shared with the voice WebSocket and the voice dock of the web app, not
-  part of the code registry.
+- The read-aloud routes (`/api/voice/speech`, `/api/voice/azure/token`) answer with registry codes instead of the
+  former kebab-case strings: `INVALID_TEXT`, `TEXT_TOO_LONG`, `INVALID_MODEL`, `INVALID_LANGUAGE`, `INVALID_VOICE`,
+  `NO_SPEAKABLE_TEXT`, `NO_AUDIO`, `TTS_NOT_CONFIGURED`, `MODEL_NOT_FOUND`, `MODEL_DISABLED`, `MODEL_ACCESS_DENIED`,
+  `RATE_LIMITED` (too many syntheses at once) and `UPSTREAM_ERROR`. This is a clean break: a client that compared the
+  old strings has to compare the new ones. The web app is updated. The codes of the voice WebSocket
+  (`unknown-model`, `not-permitted`, …) are a different protocol and stay as they are. The discovery and JWKS
+  endpoints under `/.well-known/` answer their failures in the OAuth shape (`error`, `error_description`) like the
+  other protocol endpoints, and an expired token on an API route is answered `TOKEN_EXPIRED`
+  (401) through the same error middleware as the other routes.
 
 See [Error Responses](../../error-responses.md).
 

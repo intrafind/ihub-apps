@@ -81,12 +81,14 @@ jest.unstable_mockModule('../tts/mistralTtsProvider.js', () => ({
 }));
 
 const { default: registerVoiceRoutes } = await import('../routes/voiceRoutes.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const app = express();
 // As a deployment behind a proxy: the client address comes from X-Forwarded-For.
 app.set('trust proxy', true);
 app.use(express.json({ limit: '2mb' }));
 registerVoiceRoutes(app);
+app.use(errorHandler);
 
 const GERMAN = 'Die Sprachausgabe liest Antworten vor. Das ist praktisch, wenn man unterwegs ist.';
 // Too short for detection to decide on its own.
@@ -181,7 +183,7 @@ describe('languageFixed', () => {
         .post('/api/voice/speech')
         .send({ text: SHORT, language: 'de', languageFixed });
       expect(res.status).toBe(400);
-      expect(res.body.code).toBe('invalid-language');
+      expect(res.body.code).toBe('INVALID_LANGUAGE');
     }
     expect(state.calls).toHaveLength(0);
   });
@@ -192,7 +194,7 @@ describe('languageFixed', () => {
         .post('/api/voice/speech')
         .send({ text: SHORT, languageFixed: true, ...body });
       expect(res.status).toBe(400);
-      expect(res.body.code).toBe('invalid-language');
+      expect(res.body.code).toBe('INVALID_LANGUAGE');
     }
     expect(state.calls).toHaveLength(0);
   });
@@ -207,7 +209,7 @@ describe('languageFixed', () => {
       .post('/api/voice/speech')
       .send({ text: ' ', languageFixed: true, language: 'de' });
     expect(noText.status).toBe(400);
-    expect(noText.body.code).toBe('invalid-text');
+    expect(noText.body.code).toBe('INVALID_TEXT');
 
     state.permissions = new Set(['some-chat-model']);
     const denied = await request(app)
@@ -261,7 +263,7 @@ describe('voice', () => {
       .post('/api/voice/speech')
       .send({ text: GERMAN, voice: 'someone_elses_voice' });
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('invalid-voice');
+    expect(res.body.code).toBe('INVALID_VOICE');
     expect(state.calls).toHaveLength(0);
   });
 
@@ -270,7 +272,7 @@ describe('voice', () => {
       .post('/api/voice/speech')
       .send({ text: GERMAN, voice: 'other_voice' });
     expect(res.status).toBe(400);
-    expect(res.body.code).toBe('invalid-voice');
+    expect(res.body.code).toBe('INVALID_VOICE');
 
     const own = await speak({ text: GERMAN, modelId: 'other-tts', voice: 'other_voice' });
     expect(own.status).toBe(200);
@@ -281,7 +283,7 @@ describe('voice', () => {
     for (const voice of [5, true, null, {}, ['de_marie_neutral'], 'x'.repeat(201)]) {
       const res = await request(app).post('/api/voice/speech').send({ text: GERMAN, voice });
       expect(res.status).toBe(400);
-      expect(res.body.code).toBe('invalid-voice');
+      expect(res.body.code).toBe('INVALID_VOICE');
     }
     expect(state.calls).toHaveLength(0);
   });
@@ -332,7 +334,7 @@ describe('voice', () => {
         .post('/api/voice/speech')
         .send({ text: GERMAN, voice: 'hr_voice_id' });
       expect(res.status).toBe(400);
-      expect(res.body.code).toBe('invalid-voice');
+      expect(res.body.code).toBe('INVALID_VOICE');
     });
 
     test('is not allowed when the app is not one the caller may use', async () => {
@@ -342,7 +344,7 @@ describe('voice', () => {
         .post('/api/voice/speech')
         .send({ text: GERMAN, voice: 'hr_voice_id' });
       expect(res.status).toBe(400);
-      expect(res.body.code).toBe('invalid-voice');
+      expect(res.body.code).toBe('INVALID_VOICE');
     });
 
     test('is not allowed when voice mode is off for the app or for the instance', async () => {
@@ -390,7 +392,7 @@ describe('syntheses at once', () => {
 
     const refused = await request(app).post('/api/voice/speech').send({ text: GERMAN });
     expect(refused.status).toBe(429);
-    expect(refused.body.code).toBe('too-many-requests');
+    expect(refused.body.code).toBe('RATE_LIMITED');
 
     release();
     const done = await Promise.all(running);

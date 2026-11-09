@@ -17,7 +17,7 @@ import {
 import { detectSpeechLanguage, normalizeLanguage } from '../tts/language.js';
 import { resolveVoiceModeSettings } from '../../shared/voiceMode.js';
 
-import { sendErrorResponse } from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
 /** Longest message body `/api/voice/speech` accepts, before markup is stripped. */
 const MAX_INPUT_CHARACTERS = 200_000;
 
@@ -153,43 +153,37 @@ export default function registerVoiceRoutes(app) {
       voice: requestedVoice
     } = req.body || {};
     if (typeof text !== 'string' || !text.trim()) {
-      return sendErrorResponse(res, 400, 'text is required', { code: 'invalid-text' });
+      throw new ServiceError('INVALID_TEXT', 'text is required');
     }
     if (text.length > MAX_INPUT_CHARACTERS) {
-      return sendErrorResponse(res, 413, 'text is too long', { code: 'text-too-long' });
+      throw new ServiceError('TEXT_TOO_LONG', 'text is too long');
     }
     if (modelId !== undefined && typeof modelId !== 'string') {
-      return sendErrorResponse(res, 400, 'modelId must be a string', { code: 'invalid-model' });
+      throw new ServiceError('INVALID_MODEL', 'modelId must be a string');
     }
     if (languageFixed !== undefined && typeof languageFixed !== 'boolean') {
-      return sendErrorResponse(res, 400, 'languageFixed must be a boolean', {
-        code: 'invalid-language'
-      });
+      throw new ServiceError('INVALID_LANGUAGE', 'languageFixed must be a boolean');
     }
     if (languageFixed === true && typeof languageHint !== 'string') {
-      return sendErrorResponse(res, 400, 'language is required when languageFixed is true', {
-        code: 'invalid-language'
-      });
+      throw new ServiceError('INVALID_LANGUAGE', 'language is required when languageFixed is true');
     }
     if (
       requestedVoice !== undefined &&
       (typeof requestedVoice !== 'string' || requestedVoice.length > MAX_VOICE_ID_LENGTH)
     ) {
-      return sendErrorResponse(res, 400, 'voice must be a string', { code: 'invalid-voice' });
+      throw new ServiceError('INVALID_VOICE', 'voice must be a string');
     }
 
     const resolved = resolveTtsModel({ modelId, user: req.user, platform });
     if (!resolved.ok) {
-      return sendErrorResponse(res, resolved.status, resolved.error, { code: resolved.code });
+      throw new ServiceError(resolved.code, resolved.error, { status: resolved.status });
     }
     const { model, provider } = resolved;
 
     const speechKey = speechSlotKey(req);
     const running = speechInFlight.get(speechKey) || 0;
     if (running >= MAX_CONCURRENT_SPEECH_PER_USER) {
-      return sendErrorResponse(res, 429, 'Too many speech requests at once', {
-        code: 'too-many-requests'
-      });
+      throw new ServiceError('RATE_LIMITED', 'Too many speech requests at once');
     }
     speechInFlight.set(speechKey, running + 1);
     let slotReleased = false;
@@ -207,13 +201,13 @@ export default function registerVoiceRoutes(app) {
     // the one the language chooses.
     const voice = typeof requestedVoice === 'string' ? requestedVoice.trim() : '';
     if (voice && !(await configuredVoices(model, platform, req.user)).has(voice)) {
-      return sendErrorResponse(res, 400, 'Unknown voice for this model', { code: 'invalid-voice' });
+      throw new ServiceError('INVALID_VOICE', 'Unknown voice for this model');
     }
 
     const maxCharacters = platform.speech?.tts?.maxCharacters || DEFAULT_MAX_CHARACTERS;
     const { chunks, characters, truncated } = prepareSpeech(text, { maxCharacters });
     if (!chunks.length) {
-      return sendErrorResponse(res, 422, 'Nothing to read aloud', { code: 'no-speakable-text' });
+      throw new ServiceError('NO_SPEAKABLE_TEXT', 'Nothing to read aloud');
     }
 
     // One voice for the whole message: its language decides it once. A caller
@@ -257,28 +251,6 @@ export default function registerVoiceRoutes(app) {
           return writeWithBackpressure(res, pcm);
         }
       });
-      const summary = {
-        component: 'VoiceRoutes',
-        modelId: model.id,
-        userId: req.user?.id,
-        characters,
-        chunks: chunks.length,
-        language,
-        voice: cfg.voice,
-        durationMs: Date.now() - startedAt
-      };
-      if (controller.signal.aborted) {
-        logger.info('Read aloud stopped by the client', summary);
-        return undefined;
-      }
-      if (!started) {
-        // The provider finished without a single sample: a failure, reported
-        // like any other before the first byte rather than as empty audio.
-        logger.error('Read aloud returned no audio', summary);
-        return sendErrorResponse(res, 502, 'No audio was returned', { code: 'no-audio' });
-      }
-      res.end();
-      logger.info('Read aloud finished', summary);
     } catch (error) {
       if (controller.signal.aborted) {
         logger.info('Read aloud stopped by the client', {
@@ -300,36 +272,62 @@ export default function registerVoiceRoutes(app) {
         // Upstream messages are built to be safe to show (no hosts, no keys);
         // anything else is a bug whose details belong in the log only.
         const message = error.name === 'TtsUpstreamError' ? error.message : 'Text-to-speech failed';
-        return sendErrorResponse(res, 502, message, { code: 'upstream-error' });
+        throw new ServiceError('UPSTREAM_ERROR', message, { cause: error });
       }
       res.destroy(error);
+      return undefined;
     }
+    const summary = {
+      component: 'VoiceRoutes',
+      modelId: model.id,
+      userId: req.user?.id,
+      characters,
+      chunks: chunks.length,
+      language,
+      voice: cfg.voice,
+      durationMs: Date.now() - startedAt
+    };
+    if (controller.signal.aborted) {
+      logger.info('Read aloud stopped by the client', summary);
+      return undefined;
+    }
+    if (!started) {
+      // The provider finished without a single sample: a failure, reported
+      // like any other before the first byte rather than as empty audio.
+      logger.error('Read aloud returned no audio', summary);
+      throw new ServiceError('NO_AUDIO', 'No audio was returned');
+    }
+    res.end();
+    logger.info('Read aloud finished', summary);
     return undefined;
   });
 
   app.get(buildServerPath('/api/voice/azure/token'), authRequired, async (req, res) => {
+    const azure = (configCache.getPlatform() || {}).speech?.azure || {};
+    if (!azure.enabled) {
+      throw new ServiceError('SERVICE_UNAVAILABLE', 'Azure Speech is not enabled');
+    }
+    if (!azure.subscriptionKey) {
+      return res.json({ token: null, region: azure.region || '' });
+    }
+    let result;
     try {
-      const azure = (configCache.getPlatform() || {}).speech?.azure || {};
-      if (!azure.enabled) {
-        return sendErrorResponse(res, 503, 'Azure Speech is not enabled');
-      }
-      if (!azure.subscriptionKey) {
-        return res.json({ token: null, region: azure.region || '' });
-      }
-      const result = await getAzureSpeechToken({
+      result = await getAzureSpeechToken({
         subscriptionKey: azure.subscriptionKey, // decrypted by configCache on load
         region: azure.region
       });
-      if (!result.ok) {
-        return sendErrorResponse(res, 502, result.error);
-      }
-      return res.json({ token: result.token, region: result.region });
     } catch (error) {
       logger.error('Failed to issue Azure Speech token', {
         component: 'VoiceRoutes',
         error: error.message
       });
-      return sendErrorResponse(res, 500, 'Failed to issue Azure Speech token');
+      throw new ServiceError('INTERNAL_ERROR', 'Failed to issue Azure Speech token', {
+        cause: error
+      });
     }
+    if (!result.ok) {
+      throw new ServiceError('UPSTREAM_ERROR', result.error);
+    }
+    return res.json({ token: result.token, region: result.region });
   });
 }

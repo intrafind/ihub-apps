@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * HTTP mapping for `LLMError`s thrown by `LLMClient`.
+ * HTTP status mapping for `LLMError`s thrown by `LLMClient`.
  *
- * Express routes that make single-shot model calls (admin utilities, magic
- * prompt, model diagnostics, …) use this module to turn the canonical
- * `LLMError` taxonomy (contracts/errors.js) into a status code and a stable
- * JSON error body, instead of collapsing every failure into
- * "Internal server error".
+ * The global error middleware answers an `LLMError` itself (a problem with the
+ * model call's own code); this module keeps the status mapping the admin model
+ * diagnostics use (`llmErrorToHttpStatus`, `isMissingApiKeyError`).
  *
  * Mapping (see `llmErrorToHttpStatus`):
  *
@@ -25,19 +23,9 @@
  * | ABORTED                   | 499  | Client closed request (nginx convention)                     |
  * | PROVIDER_ERROR / other    | 502 for an upstream 5xx, else the upstream 4xx or `defaultStatus` |
  *
- * Anything that is not an `LLMError` is a programming error and answered with
- * the generic 500 from `responseHelpers.sendInternalError`.
- *
  * @module services/loop/llmHttpErrors
  */
 import { isLLMError, LLM_ERROR_CODES } from './contracts/errors.js';
-import { sendInternalError } from '../../utils/responseHelpers.js';
-import logger from '../../utils/logger.js';
-
-const COMPONENT = 'llmHttpErrors';
-
-/** Upper bound for the raw provider body echoed in `details`. */
-const MAX_DETAILS_LENGTH = 2000;
 
 /**
  * Whether an `AUTH_FAILED` error means "no API key is configured on this
@@ -98,70 +86,4 @@ export function llmErrorToHttpStatus(err, { defaultStatus = 502 } = {}) {
       return defaultStatus;
     }
   }
-}
-
-/**
- * Build the JSON body for an `LLMError` response. `undefined` fields are
- * dropped by `res.json`, so `provider` / `details` only appear when known.
- *
- * @param {import('./contracts/errors.js').LLMError} err
- * @returns {{ error: string, code: string, provider?: string, details?: string }}
- */
-export function llmErrorToResponseBody(err) {
-  return {
-    error: err.message,
-    code: err.code,
-    provider: err.provider ?? undefined,
-    details: typeof err.details === 'string' ? err.details.slice(0, MAX_DETAILS_LENGTH) : undefined
-  };
-}
-
-/**
- * Answer an Express request with the mapped status and body for an LLM
- * failure. Sets `Retry-After` (seconds) for rate limits when the provider
- * supplied one. Non-`LLMError` input is delegated to `sendInternalError`.
- *
- * @param {import('express').Response} res
- * @param {*} err - Error thrown by `LLMClient` (or anything else)
- * @param {Object} [opts]
- * @param {number} [opts.defaultStatus=502] - See `llmErrorToHttpStatus`
- * @param {string} [opts.context='LLM request'] - Route context for the server log
- * @returns {import('express').Response}
- *
- * @example
- *   try {
- *     const result = await llmClient.complete({ … });
- *   } catch (error) {
- *     if (isLLMError(error)) return sendLLMError(res, error, { context: 'translate text' });
- *     return sendInternalError(res, error, 'translate text');
- *   }
- */
-export function sendLLMError(res, err, { defaultStatus = 502, context = 'LLM request' } = {}) {
-  if (!isLLMError(err)) {
-    return sendInternalError(res, err, context);
-  }
-
-  const status = llmErrorToHttpStatus(err, { defaultStatus });
-
-  if (
-    err.code === LLM_ERROR_CODES.RATE_LIMITED &&
-    typeof err.retryAfterMs === 'number' &&
-    err.retryAfterMs > 0 &&
-    typeof res.setHeader === 'function'
-  ) {
-    res.setHeader('Retry-After', String(Math.ceil(err.retryAfterMs / 1000)));
-  }
-
-  logger.warn(`LLM request failed in ${context}`, {
-    component: COMPONENT,
-    context,
-    code: err.code,
-    providerCode: err.providerCode,
-    upstreamStatus: err.status,
-    httpStatus: status,
-    provider: err.provider,
-    modelId: err.modelId
-  });
-
-  return res.status(status).json(llmErrorToResponseBody(err));
 }

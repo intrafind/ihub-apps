@@ -340,9 +340,9 @@ describe('TTS provider registry and model resolution', () => {
     expect(resolveTtsModel({ user: wildcard, platform: off })).toMatchObject({
       ok: false,
       status: 503,
-      code: 'not-configured'
+      code: 'TTS_NOT_CONFIGURED'
     });
-    expect(resolveTtsModel({ user: wildcard, platform: {} }).code).toBe('not-configured');
+    expect(resolveTtsModel({ user: wildcard, platform: {} }).code).toBe('TTS_NOT_CONFIGURED');
   });
 
   test('an explicit model id is any enabled TTS model the user may use', () => {
@@ -355,20 +355,20 @@ describe('TTS provider registry and model resolution', () => {
     expect(resolveTtsModel({ user: denied, platform: platformOn })).toMatchObject({
       ok: false,
       status: 403,
-      code: 'not-permitted'
+      code: 'MODEL_ACCESS_DENIED'
     });
   });
 
   test('fails closed when permissions were not computed', () => {
-    expect(resolveTtsModel({ user: {}, platform: platformOn }).code).toBe('not-permitted');
+    expect(resolveTtsModel({ user: {}, platform: platformOn }).code).toBe('MODEL_ACCESS_DENIED');
   });
 
   test('rejects a chat model, an unknown model and a disabled model', () => {
     expect(resolveTtsModel({ modelId: 'mistral-small', user: wildcard }).code).toBe(
-      'unknown-model'
+      'MODEL_NOT_FOUND'
     );
-    expect(resolveTtsModel({ modelId: 'nope', user: wildcard }).code).toBe('unknown-model');
-    expect(resolveTtsModel({ modelId: 'tts-off', user: wildcard }).code).toBe('model-disabled');
+    expect(resolveTtsModel({ modelId: 'nope', user: wildcard }).code).toBe('MODEL_NOT_FOUND');
+    expect(resolveTtsModel({ modelId: 'tts-off', user: wildcard }).code).toBe('MODEL_DISABLED');
   });
 });
 
