@@ -409,12 +409,13 @@ function AppChat({
     featureFlags.isEnabled('compareMode', false) &&
     app?.features?.compareMode?.enabled !== false;
   const [compareModeActive, setCompareModeActive] = useState(false);
-  // Whether the start form has been sent to the compare panels. Entering or
-  // leaving compare mode starts the panels afresh, and with them the form.
-  const [compareFormSent, setCompareFormSent] = useState(false);
+  // Whether anything — the start form or a message — has been sent to the
+  // compare panels. Entering or leaving compare mode starts the panels afresh,
+  // and with them the form and the composer's size.
+  const [compareSent, setCompareSent] = useState(false);
   const changeCompareMode = useCallback(active => {
     setCompareModeActive(active);
-    setCompareFormSent(false);
+    setCompareSent(false);
   }, []);
   // Imperative handle exposed by CompareModeView for sendMessage / clearAll / cancelAll.
   const compareViewRef = useRef(null);
@@ -916,7 +917,7 @@ function AppChat({
   const showStartForm =
     startFormActive &&
     (compareModeActive
-      ? !compareFormSent
+      ? !compareSent
       : sentInChatId !== chatId && !messages.some(m => m.role === 'user'));
   const showVariablesPanel = app?.variables?.length > 0 && !startFormActive;
   // Collapsed, expanded and pinned state of that panel beside the chat.
@@ -1040,6 +1041,14 @@ function AppChat({
   // messages — on screen for a render, and pinning it would send the user
   // straight back into it.
   const chatStarted = messages.some(message => message.role === 'user' && !message.isGreeting);
+  // The composer is compact (one line that grows as the user types) once the
+  // conversation has started; the app's `inputMode.rows` are for the empty
+  // chat only (#3520). A stored chat on its way in counts as started, so the
+  // composer does not show the empty chat's rows until its transcript lands;
+  // a chat this tab minted is new, and hydrates in a frame.
+  const composerCompact = compareModeActive
+    ? compareSent
+    : chatStarted || (hydrating && !mintedChatIdsRef.current.has(chatId));
   // After the commit, not during render: a render React throws away must not
   // decide what a later New chat deletes.
   useEffect(() => {
@@ -1988,7 +1997,7 @@ function AppChat({
       if (compareModeActive) {
         // Clear every compare panel (regenerates their chatIds internally)
         compareViewRef.current?.clearAll();
-        setCompareFormSent(false);
+        setCompareSent(false);
       } else {
         // Clear regular chat
         clearMessages();
@@ -2613,7 +2622,7 @@ function AppChat({
     // If compare mode is active, broadcast to every panel; otherwise send through the regular chat
     if (compareModeActive) {
       compareViewRef.current?.sendMessage(messageStructure);
-      if (startFormMessage !== null) setCompareFormSent(true);
+      setCompareSent(true);
     } else {
       sendChatMessage(messageStructure);
       setSentInChatId(chatId);
@@ -2918,6 +2927,7 @@ function AppChat({
         onModelChange={setSelectedModel}
         currentLanguage={currentLanguage}
         showModelSelector={!compareModeActive && modelSelectionAllowed}
+        compact={composerCompact}
         // AI disclaimer shares the tight line below the input with the
         // ephemeral toggle; shown after the first submitted message.
         disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}

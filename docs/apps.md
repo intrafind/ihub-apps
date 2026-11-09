@@ -870,7 +870,7 @@ Available types:
 - `singleline` – single line text field
 - `multiline` – expandable text area (default)
 
-The optional `rows` property sets the initial number of textarea rows (defaults to 5). If the `microphone` block is provided, it configures voice input for that app.
+The optional `rows` property sets how many rows the multi-line input shows in a new chat, before the first message (defaults to 5). Once the conversation has started, the input is a single line that grows as the user types, up to 12 lines or 40% of the window, and then scrolls; a new chat shows the configured rows again. Single-line inputs always start at one line. In the Outlook add-in the input never grows beyond 3 lines, whatever `rows` says. If the `microphone` block is provided, it configures voice input for that app.
 
 #### Message Placeholders
 

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatMessage from './ChatMessage';
 import Icon from '../../../shared/components/Icon';
@@ -78,22 +78,22 @@ function ChatMessageList({
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
+  const shouldAutoScrollRef = useRef(shouldAutoScroll);
+  shouldAutoScrollRef.current = shouldAutoScroll;
   const isUserScrollingRef = useRef(false);
   const prevMessageCountRef = useRef(0);
 
-  const assistantIcon = uiConfig?.icons?.assistantMessage || 'apps-svg-logo';
-  const userIcon = uiConfig?.icons?.userMessage || 'user';
-  const errorIcon = uiConfig?.icons?.errorMessage || 'exclamation-circle';
+  // The scroll container renders only once there is a message, so it is
+  // wired up in a callback ref rather than a mount effect, which would find no
+  // container in a chat that starts empty.
+  const observeContainer = useCallback(node => {
+    chatContainerRef.current = node;
+    if (!node) return undefined;
 
-  // Detect manual scrolling by the user
-  useEffect(() => {
-    const container = chatContainerRef.current;
-    if (!container) return;
-
+    // Detect manual scrolling by the user
     const handleScroll = () => {
       // Check if user is near the bottom (within 50px)
-      const isNearBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight < 50;
+      const isNearBottom = node.scrollHeight - node.scrollTop - node.clientHeight < 50;
 
       // If user scrolls away from bottom, disable auto-scroll
       // If user scrolls back to bottom, re-enable auto-scroll
@@ -106,10 +106,30 @@ function ChatMessageList({
 
       setShouldAutoScroll(isNearBottom);
     };
+    node.addEventListener('scroll', handleScroll, { passive: true });
 
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
+    // The list gets shorter when the composer below it grows — a one-line
+    // composer does from the second line the user types (#3520). Scrolled to
+    // the bottom, the user stays there, so the end of the answer they are
+    // replying to stays in view.
+    const observer =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => {
+            if (shouldAutoScrollRef.current) node.scrollTop = node.scrollHeight;
+          });
+    observer?.observe(node);
+
+    return () => {
+      node.removeEventListener('scroll', handleScroll);
+      observer?.disconnect();
+      chatContainerRef.current = null;
+    };
   }, []);
+
+  const assistantIcon = uiConfig?.icons?.assistantMessage || 'apps-svg-logo';
+  const userIcon = uiConfig?.icons?.userMessage || 'user';
+  const errorIcon = uiConfig?.icons?.errorMessage || 'exclamation-circle';
 
   // Always scroll to show user's new message, regardless of shouldAutoScroll
   // This ensures the user can see their input was sent
@@ -179,7 +199,7 @@ function ChatMessageList({
 
   return (
     <div
-      ref={chatContainerRef}
+      ref={observeContainer}
       className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg"
       role="log"
       aria-live="polite"

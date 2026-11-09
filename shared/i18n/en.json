@@ -462,6 +462,8 @@
     "messageList": "Chat messages",
     "inputLabel": "Type your message",
     "clearInput": "Clear input",
+    "sendShortcutHint": "{{submit}} to send",
+    "sendEnterHint": "Enter to send",
     "ephemeral": {
       "label": "Incognito mode",
       "enable": "Turn on incognito — the chat is not saved to your history",
@@ -2915,6 +2917,8 @@
         "feedbackNote": "When disabled, the star rating is hidden under this app’s responses and the feedback API rejects submissions for it. The platform-level feedback feature must also be enabled for the rating to appear; all of it is also manageable under Admin → Feedback.",
         "platformDefaultService": "Platform default ({{service}})",
         "browserService": "Browser (Web Speech API)",
+        "initialRows": "Rows in a new chat",
+        "initialRowsHint": "How tall the input is before the first message. Once the chat has started, the input is one line that grows as the user types.",
         "platformDefaultServiceHint": "Follows the default set under Admin → Voice Input, including later changes.",
         "dictationModelHint": "The microphone streams through the iHub server to this transcription model. Users need access to the model through their groups.",
         "dictationModelUnavailable": "This model is disabled, no longer exists or does not stream, so voice input fails in this app.",

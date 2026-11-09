@@ -165,6 +165,8 @@
     "contextUsage": "~{{used}} / {{total}} Kontext-Tokens",
     "inputLabel": "Nachricht eingeben",
     "clearInput": "Eingabe löschen",
+    "sendShortcutHint": "{{submit}} zum Senden",
+    "sendEnterHint": "Enter zum Senden",
     "ephemeral": {
       "label": "Inkognito-Modus",
       "enable": "Inkognito aktivieren – der Chat wird nicht im Verlauf gespeichert",
@@ -3266,6 +3268,8 @@
         "feedbackNote": "Wenn deaktiviert, ist die Sternebewertung unter den Antworten dieser App ausgeblendet und die Feedback-API lehnt Einsendungen dafür ab. Die plattformweite Feedback-Funktion muss zusätzlich aktiviert sein; alles davon lässt sich auch unter Admin → Feedback verwalten.",
         "platformDefaultService": "Plattform-Standard ({{service}})",
         "browserService": "Browser (Web Speech API)",
+        "initialRows": "Zeilen in einem neuen Chat",
+        "initialRowsHint": "So hoch ist das Eingabefeld vor der ersten Nachricht. Sobald der Chat begonnen hat, ist es einzeilig und wächst beim Tippen mit.",
         "platformDefaultServiceHint": "Folgt dem unter Admin → Spracheingabe festgelegten Standard, auch bei späteren Änderungen.",
         "dictationModelHint": "Das Mikrofon wird über den iHub-Server an dieses Transkriptionsmodell gestreamt. Benutzer brauchen über ihre Gruppen Zugriff auf das Modell.",
         "dictationModelUnavailable": "Dieses Modell ist deaktiviert, existiert nicht mehr oder streamt nicht. Die Spracheingabe schlägt in dieser App daher fehl.",
