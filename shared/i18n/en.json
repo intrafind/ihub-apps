@@ -462,6 +462,8 @@
     "messageList": "Chat messages",
     "inputLabel": "Type your message",
     "clearInput": "Clear input",
+    "expandInput": "Expand input",
+    "collapseInput": "Collapse input",
     "sendShortcutHint": "{{submit}} to send",
     "sendEnterHint": "Enter to send",
     "ephemeral": {

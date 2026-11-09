@@ -1285,6 +1285,9 @@ function OfficeChatPanel({
                   // the app asks for. Issue #1467.
                   maxRows={3}
                   compact={composerCompact}
+                  // ...and the expand button opens about half the pane for a
+                  // long prompt. Issue #3524.
+                  expandable
                 />
               </div>
             )}

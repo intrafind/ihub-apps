@@ -65,3 +65,20 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* The expanded composer (#3524, the Outlook task pane's expand button): a
+   fixed editing area of about half the pane, so a long prompt can be read and
+   edited, and the transcript above stays partly in view. The lines come from
+   `composerLineLimits`; the half-pane limit wins in any pane of normal height.
+   The header and the send row are outside the text area, so they stay. */
+.chat-input-textarea--expanded {
+  min-height: min(calc(var(--composer-min-lines, 20) * 1.5em + 1rem), 50vh);
+  max-height: min(calc(var(--composer-max-lines, 20) * 1.5em + 1rem), 50vh);
+}
+
+@supports (height: 1dvh) {
+  .chat-input-textarea--expanded {
+    min-height: min(calc(var(--composer-min-lines, 20) * 1.5em + 1rem), 50dvh);
+    max-height: min(calc(var(--composer-max-lines, 20) * 1.5em + 1rem), 50dvh);
+  }
+}
