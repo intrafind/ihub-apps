@@ -54,10 +54,14 @@ export const CHAT_FILE_SCOPES = Object.freeze(['chat', 'task', 'user']);
 /**
  * Where a stored file came from. `upload` and `attachment` (a file attached to
  * an e-mail) are the classic two; the rest are first-class sources whose files
- * show in the Files drawer like any other.
+ * show in the Files drawer like any other. `image` is a picture the user attached to a
+ * message: only the picture itself is stored, so its thumbnail survives a reload. It is never
+ * read by the model as a document, takes no file slot of a chat (it counts against the bytes
+ * only) and is removed whole when its original expires, since nothing else is left of it.
  */
 export const CHAT_FILE_ORIGINS = Object.freeze([
   'upload',
+  'image',
   'attachment',
   'email',
   'meeting',
@@ -439,7 +443,8 @@ export class ChatFileRepository {
       singleFileSize,
       totalBytes,
       settings,
-      replaces
+      replaces,
+      origin
     });
 
     const cleanName =
@@ -531,7 +536,15 @@ export class ChatFileRepository {
    *
    * @private
    */
-  async _enforceQuotas({ scope, ownerId, singleFileSize, totalBytes, settings, replaces = null }) {
+  async _enforceQuotas({
+    scope,
+    ownerId,
+    singleFileSize,
+    totalBytes,
+    settings,
+    replaces = null,
+    origin = 'upload'
+  }) {
     const { quotas, evictOldestOriginalsOnQuota } = settings;
 
     if (quotas.maxFileBytes > 0 && singleFileSize > quotas.maxFileBytes) {
@@ -552,13 +565,16 @@ export class ChatFileRepository {
       const existing = (await this.list(scope)).filter(
         item => !replaces || chatFileKey(scope, item.id) !== replaces.key
       );
-      if (maxScopeFiles > 0 && existing.length >= maxScopeFiles) {
+      // A picture the user attached takes no slot: a chat of screenshots must not leave no room
+      // for a document. Its bytes count below like any file's.
+      const slotsUsed = existing.filter(item => item.origin !== 'image').length;
+      if (origin !== 'image' && maxScopeFiles > 0 && slotsUsed >= maxScopeFiles) {
         throw new ChatFileQuotaError(
           isApiScope ? 'QUOTA_API_FILES' : 'QUOTA_CHAT_FILES',
           isApiScope
             ? `You already have the maximum of ${maxScopeFiles} files in the Inference API`
             : `This ${scope.type} already has the maximum of ${maxScopeFiles} uploaded files`,
-          { limit: maxScopeFiles, used: existing.length },
+          { limit: maxScopeFiles, used: slotsUsed },
           413
         );
       }
@@ -900,6 +916,19 @@ export class ChatFileRepository {
     const doc = await this.documents.get(CHAT_FILES_NAMESPACE, key);
     const data = doc?.data;
     if (!data || (data.scope && !sameScope(data.scope, target))) return null;
+
+    // Nothing but the picture is stored for an image: without it the file is an empty shell
+    if (data.origin === 'image') {
+      await this._deleteKey(key, target);
+      return toFileDescriptor(fileId, {
+        ...data,
+        hasOriginal: false,
+        originalBytes: 0,
+        bytes: 0,
+        originalDeletedAt: now,
+        originalDeleteReason: reason
+      });
+    }
 
     await this.blobs.delete(CHAT_FILE_BLOBS_NAMESPACE, originalBlobKey(key)).catch(error => {
       this.logger.warn('Failed to delete original binary blob during discardOriginal', {

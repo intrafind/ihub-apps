@@ -40,6 +40,7 @@ import { projectSettings } from '../projects/projectSettings.js';
 import { renderPagePreview } from '../documents/pdf/PdfService.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { normalizeChatFilePolicy } from './chatFilePolicy.js';
+import { decodeRasterDataUrl } from './rasterImage.js';
 import {
   CHAT_FILE_ORIGINS,
   ChatFileQuotaError,
@@ -422,7 +423,9 @@ export function describeStored(stored) {
     // What the server read from the file, so the transcript can still say what the
     // assistant got after a reload: the size of the text, the page images of a scan, and
     // whether the text was shortened. `textBytes` is only kept when it is known.
-    ...(Number.isFinite(stored.textBytes) ? { textBytes: stored.textBytes } : {}),
+    ...(Number.isFinite(stored.textBytes) && stored.origin !== 'image'
+      ? { textBytes: stored.textBytes }
+      : {}),
     ...(stored.pageImageCount > 0 ? { pageImageCount: stored.pageImageCount } : {}),
     ...(stored.truncated === true ? { truncated: true } : {})
   };
@@ -453,6 +456,73 @@ async function findAttachmentDuplicate(repo, scope, { name, text, originalBuffer
       return Boolean(byteHash) && !item.hasOriginal && item.sha256 === textHash;
     }) || null
   );
+}
+
+/** A value as a list: a list as it is, one value as a list of one, nothing as an empty list. */
+function listOf(value) {
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
+}
+
+/**
+ * What a transcript says about a picture or sound that was not stored: its type, name and size
+ * as the client reported them. `null` when `media` is not an object.
+ */
+function mediaDescriptor(media) {
+  if (!media || typeof media !== 'object') return null;
+  const name = media.name || media.fileName;
+  const bytes = Number(media.bytes ?? media.size ?? media.fileSize);
+  return {
+    type: String(media.fileType || media.mimeType || media.type || 'file'),
+    ...(name ? { name: String(name) } : {}),
+    ...(Number.isFinite(bytes) ? { bytes } : {})
+  };
+}
+
+/**
+ * Keep a picture of the turn (as it is sent to the model) so that its thumbnail survives a
+ * reload. Best effort and never an error: a picture the policy does not keep (uploads off, text
+ * only), that is not a raster image, or that a quota refuses is still sent to the model, and its
+ * card simply stays a tile after a reload.
+ *
+ * The same picture sent again (a resend, a regenerated answer) is found by its content and name
+ * and not stored twice.
+ *
+ * @param {Object} params
+ * @param {Object} params.repo - The chat file repository
+ * @param {{type: string, id: string}} params.scope
+ * @param {string|null} params.ownerId
+ * @param {Object} params.image - `{ base64, fileName, … }` as the message carries it
+ * @param {Object|null} params.appConfig
+ * @returns {Promise<Object|null>} The stored descriptor, or `null` when the picture was not kept.
+ */
+async function storeTurnImage({ repo, scope, ownerId, image, appConfig }) {
+  if (!image || typeof image !== 'object' || !repo?.isAvailable()) return null;
+  const decoded = decodeRasterDataUrl(image.base64);
+  if (!decoded) return null;
+  const name = String(image.fileName || image.name || 'image').trim() || 'image';
+  try {
+    const hash = sha256Of(decoded.bytes);
+    const duplicate = (await repo.list(scope)).find(
+      item => item.origin === 'image' && item.sha256 === hash && item.name === name
+    );
+    if (duplicate) return duplicate;
+    return await repo.put(scope, {
+      ownerId,
+      name,
+      mimeType: decoded.mimeType,
+      originalBuffer: decoded.bytes,
+      origin: 'image',
+      appConfig
+    });
+  } catch (error) {
+    logger.info('A picture of the turn was not kept; it is still sent to the model', {
+      component: COMPONENT,
+      chatId: scope.id,
+      reason: error.code || error.message
+    });
+    return null;
+  }
 }
 
 /**
@@ -519,7 +589,8 @@ export async function prepareTurnFiles({
       const stored = await activeRepo.getText(scope, fileId);
       if (!stored) continue;
       seenIds.add(fileId);
-      resolvedPromptFiles.push(toPromptFileData(stored));
+      // A picture of an earlier turn keeps its card but is not a document for the model
+      if (stored.origin !== 'image') resolvedPromptFiles.push(toPromptFileData(stored));
       descriptors.push(describeStored(stored));
     }
   }
@@ -645,18 +716,26 @@ export async function prepareTurnFiles({
     });
   }
 
-  // Also include image/audio attachment descriptors from `message.imageData` / `message.audioData`
-  for (const media of [message?.imageData, message?.audioData].flatMap(v =>
-    Array.isArray(v) ? v : v ? [v] : []
-  )) {
-    if (!media || typeof media !== 'object') continue;
-    const name = media.name || media.fileName;
-    const bytes = Number(media.bytes ?? media.size ?? media.fileSize);
-    descriptors.push({
-      type: String(media.fileType || media.mimeType || media.type || 'file'),
-      ...(name ? { name: String(name) } : {}),
-      ...(Number.isFinite(bytes) ? { bytes } : {})
-    });
+  // The pictures and sounds of the turn are described next to its documents. A picture is also
+  // stored, so its thumbnail survives a reload.
+  for (const image of listOf(message?.imageData)) {
+    const stored = await storeTurnImage({ repo: activeRepo, scope, ownerId, image, appConfig });
+    if (stored && seenIds.has(stored.id)) continue;
+    if (stored) seenIds.add(stored.id);
+    const reported = mediaDescriptor(image);
+    // The size the user knows is that of the file they attached; the stored picture is the
+    // smaller one that went to the model. The card says the same before and after a reload.
+    const descriptor = stored
+      ? {
+          ...describeStored(stored),
+          ...(reported?.bytes !== undefined ? { bytes: reported.bytes } : {})
+        }
+      : reported;
+    if (descriptor) descriptors.push(descriptor);
+  }
+  for (const audio of listOf(message?.audioData)) {
+    const descriptor = mediaDescriptor(audio);
+    if (descriptor) descriptors.push(descriptor);
   }
 
   const promptMessage =
@@ -710,7 +789,8 @@ export async function hydrateHistoryForPrompt(
           stored = await activeRepo.getText(scope, fileId);
           if (stored) break;
         }
-        if (stored) {
+        // A picture is not a document: it has no text for the prompt
+        if (stored && stored.origin !== 'image') {
           hydratedFiles.push(toPromptFileData(stored));
         }
       }

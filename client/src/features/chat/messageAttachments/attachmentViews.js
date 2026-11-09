@@ -41,8 +41,11 @@ import { describeAttachment } from '../../upload/utils/attachmentDescription';
 /** Image data URLs a thumbnail may use. Never SVG, never a remote URL. */
 const SAFE_PREVIEW = /^data:image\/(?:png|jpe?g|gif|webp|bmp);base64,[A-Za-z0-9+/=]+$/;
 
-/** @param {unknown} value */
-const asList = value => (Array.isArray(value) ? value : value ? [value] : []);
+/** A list as it is, one value as a list of one, nothing as an empty list. @param {unknown} value */
+function asList(value) {
+  if (Array.isArray(value)) return value;
+  return value ? [value] : [];
+}
 
 /** @param {unknown} value */
 const finiteOrNull = value => {

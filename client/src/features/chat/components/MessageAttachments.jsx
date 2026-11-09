@@ -5,6 +5,7 @@ import { memo, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { contentLineFromInfo } from '../../upload/utils/attachmentDescription';
+import { useStoredThumbnail } from '../messageAttachments/useStoredThumbnail';
 import { PDF_LOOK, formatBytes } from '../utils/artifactFiles';
 import { uploadedFileBadge, uploadedFileLook } from '../utils/uploadedFiles';
 
@@ -114,6 +115,13 @@ function stateLineOf(view, t) {
   return null;
 }
 
+/**
+ * Whether a card has to fetch its picture: a stored picture the viewer may read, with none in
+ * memory. A picture of a shared chat that the owner did not share is not fetched.
+ */
+const needsStoredThumbnail = view =>
+  view.kind === 'image' && !view.previewSrc && Boolean(view.id) && view.shared !== false;
+
 /** The size under a card's name. Once only the text is kept, `bytes` is the text's size, not the file's. */
 const sizeOf = view => (view.bytes && view.originalKept !== false ? formatBytes(view.bytes) : '');
 
@@ -137,24 +145,22 @@ function rowTileSize(showThumb, compact) {
 }
 
 /** What a tile shows: the image as it was sent, or the icon of the file's type. */
-function TileContent({ view, look, showThumb }) {
+function TileContent({ thumbSrc, look, showThumb }) {
   if (showThumb) {
-    return (
-      <img src={view.previewSrc} alt="" className="size-full object-cover" draggable={false} />
-    );
+    return <img src={thumbSrc} alt="" className="size-full object-cover" draggable={false} />;
   }
   return <Icon name={look.icon} size="md" aria-hidden="true" />;
 }
 
 /** A grid tile: the picture, its name below; the details are for the screen reader only. */
-function GridBody({ view, look, showThumb, name, size, line }) {
+function GridBody({ view, thumbSrc, look, showThumb, name, size, line }) {
   return (
     <>
       <span
         className={`${STYLES.tile} aspect-square w-full border border-black/10 dark:border-white/20 ${look.className}`}
         aria-hidden="true"
       >
-        <TileContent view={view} look={look} showThumb={showThumb} />
+        <TileContent thumbSrc={thumbSrc} look={look} showThumb={showThumb} />
       </span>
       <span className="mt-1 block w-full min-w-0 truncate text-xs font-medium" title={name}>
         {name}
@@ -204,7 +210,7 @@ function RowLine({ line, lineId }) {
 }
 
 /** A row: tile, name, type and size, the state line, and a chevron when it opens. */
-function RowBody({ view, look, showThumb, name, size, line, lineId, compact, openable }) {
+function RowBody({ view, thumbSrc, look, showThumb, name, size, line, lineId, compact, openable }) {
   const noAccess = line?.tone === 'noAccess';
   return (
     <>
@@ -212,7 +218,7 @@ function RowBody({ view, look, showThumb, name, size, line, lineId, compact, ope
         className={`${STYLES.tile} ${rowTileSize(showThumb, compact)} ${look.className}`}
         aria-hidden="true"
       >
-        <TileContent view={view} look={look} showThumb={showThumb} />
+        <TileContent thumbSrc={thumbSrc} look={look} showThumb={showThumb} />
       </span>
       <span className="min-w-0 flex-1">
         <span
@@ -240,6 +246,7 @@ function RowBody({ view, look, showThumb, name, size, line, lineId, compact, ope
 function AttachmentCard({
   view,
   onOpenFile,
+  fetchFileBlob = null,
   hintId,
   compact,
   grid = false,
@@ -247,12 +254,21 @@ function AttachmentCard({
 }) {
   const { t } = useTranslation();
   const lineId = useId();
+  const cardRef = useRef(null);
   const openable = isOpenable(view, onOpenFile);
   const line = stateLineOf(view, t);
+  // A picture sent in this session is in memory; one read back from the store is fetched
+  const stored = useStoredThumbnail({
+    ref: cardRef,
+    fileId: needsStoredThumbnail(view) ? view.id : null,
+    fetchBlob: fetchFileBlob
+  });
+  const thumbSrc = view.previewSrc || stored.src;
   const parts = {
     view,
+    thumbSrc,
     look: lookOfView(view),
-    showThumb: Boolean(view.kind === 'image' && view.previewSrc),
+    showThumb: Boolean(view.kind === 'image' && thumbSrc),
     name: view.name || t('chatSharing.viewer.attachmentUnnamed', 'file'),
     size: sizeOf(view),
     line
@@ -263,6 +279,7 @@ function AttachmentCard({
     .filter(Boolean)
     .join(' ');
   const shared = {
+    ref: cardRef,
     className: `${surfaceOf(line?.tone)} ${spacingOf(grid, compact)}`,
     'aria-describedby': describedBy || undefined,
     'data-testid': 'message-attachment',
@@ -317,9 +334,16 @@ function useNarrow(compact) {
  * @param {Object} props
  * @param {import('../messageAttachments/attachmentViews').AttachmentView[]} props.attachments
  * @param {(fileId: string) => void} [props.onOpenFile] - without it the cards are plain
+ * @param {(fileId: string) => Promise<Blob>} [props.fetchFileBlob] - reads a stored picture, for
+ *   the thumbnail of a card that has none in memory
  * @param {boolean} [props.compact] - the surface is narrow whatever its measured width
  */
-function MessageAttachments({ attachments, onOpenFile = null, compact = false }) {
+function MessageAttachments({
+  attachments,
+  onOpenFile = null,
+  fetchFileBlob = null,
+  compact = false
+}) {
   const { t } = useTranslation();
   const containerRef = useRef(null);
   const toggleRef = useRef(null);
@@ -396,6 +420,7 @@ function MessageAttachments({ attachments, onOpenFile = null, compact = false })
             <AttachmentCard
               view={view}
               onOpenFile={onOpenFile}
+              fetchFileBlob={fetchFileBlob}
               hintId={hintId}
               compact={narrow}
               firstRevealed={index === firstRevealedRow}
@@ -415,6 +440,7 @@ function MessageAttachments({ attachments, onOpenFile = null, compact = false })
                   <AttachmentCard
                     view={view}
                     onOpenFile={onOpenFile}
+                    fetchFileBlob={fetchFileBlob}
                     hintId={hintId}
                     compact={narrow}
                     grid

@@ -61,6 +61,8 @@ export async function list(params) {
     const listed = [];
     for (const scope of files.scopes) {
       for (const file of await files.store.list(scope)) {
+        // A picture the user attached is kept for its thumbnail, not as a document to read
+        if (file.origin === 'image') continue;
         if (
           query &&
           !String(file.name || '')

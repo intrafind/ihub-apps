@@ -881,6 +881,7 @@ function ChatMessage({
         <MessageAttachments
           attachments={message.attachments}
           onOpenFile={chatFiles?.openFile}
+          fetchFileBlob={chatFiles?.fetchBlob}
           compact={compact}
         />
       )}
