@@ -163,9 +163,16 @@ async function drive(handlers, { params = {}, query = {}, body = {}, user, metho
   const chain = [...guards, ...handlers];
   for (const handler of chain) {
     let advanced = false;
-    await handler(req, res, () => {
-      advanced = true;
-    });
+    try {
+      await handler(req, res, () => {
+        advanced = true;
+      });
+    } catch (error) {
+      // A guard refuses by throwing a ServiceError, which the error middleware would answer.
+      if (!Number.isInteger(error?.status)) throw error;
+      res.statusCode = error.status;
+      res.body = { code: error.code, detail: error.message };
+    }
     if (!advanced) break;
   }
   return res;

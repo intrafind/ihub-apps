@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { recordRateLimitHit } from '../telemetry/metrics.js';
 import { ClusterRateLimitStore } from '../utils/clusterRateLimitStore.js';
 
-import { sendErrorResponse } from '../utils/responseHelpers.js';
+import { ServiceError } from '../utils/ServiceError.js';
 /**
  * Rate limiting middleware configuration for API protection
  * Creates configurable rate limiters based on platform configuration
@@ -107,7 +107,7 @@ function createRateLimiter(
     // Telemetry hook fires once per IP per window when the limit is exceeded.
     // We label by the limiter's `type` (e.g. 'API', 'Admin API') because the
     // express request path would explode label cardinality.
-    handler: (req, res, _next, options) => {
+    handler: (req, res, next, options) => {
       try {
         recordRateLimitHit('http', String(type).toLowerCase());
       } catch {
@@ -119,9 +119,11 @@ function createRateLimiter(
         typeof options.message === 'string'
           ? options.message
           : (options.message?.error ?? options.message?.message);
-      sendErrorResponse(res, options.statusCode, text || 'Too many requests', {
-        code: 'RATE_LIMITED'
-      });
+      next(
+        new ServiceError('RATE_LIMITED', text || 'Too many requests', {
+          status: options.statusCode
+        })
+      );
     }
   });
 }

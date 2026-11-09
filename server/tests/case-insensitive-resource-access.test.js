@@ -20,6 +20,7 @@ import {
   intersectWithClientAllowList
 } from '../utils/authorization.js';
 import { appAccessRequired, modelAccessRequired } from '../middleware/authRequired.js';
+import errorHandler from '../middleware/errorHandler.js';
 
 describe('filterResourcesByPermissions (case-insensitive)', () => {
   it('matches a resource whose id differs only in case from the permission list', () => {
@@ -103,7 +104,12 @@ describe('appAccessRequired / modelAccessRequired (case-insensitive gate)', () =
       { modelId: 'claude-sonnet' }
     );
     const next = jest.fn();
-    modelAccessRequired(req, res, next);
+    try {
+      modelAccessRequired(req, res, next);
+    } catch (error) {
+      // A refusal is a thrown ServiceError, answered by the error middleware.
+      errorHandler(error, req, res, () => {});
+    }
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(403);
     expect(res.headers['Content-Type']).toBe('application/problem+json');
