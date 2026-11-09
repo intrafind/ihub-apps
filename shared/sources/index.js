@@ -10,6 +10,7 @@
  *   normalizeSource(input) → Source              (source.js)
  *   mergeSources(set, frame) → SourceSet          (sourceSet.js)
  *   resolveCitations(markdown, set) → { cited, considered, … }   (citations.js)
+ *   findTrailingSourceList(markdown, citations) → { start } | null  (trailingSourceList.js)
  *   sourcesFromGrounding(meta) → SourceFrame      (grounding.js)
  *
  * See `docs/answer-sources.md`.
@@ -20,4 +21,5 @@ export * from './url.js';
 export * from './source.js';
 export * from './sourceSet.js';
 export * from './citations.js';
+export * from './trailingSourceList.js';
 export * from './grounding.js';

@@ -11,7 +11,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { PROMPT_UPDATES as V233_UPDATES } from '../migrations/V233__web_chat_inline_citations.js';
 import {
   up,
   precondition,
@@ -50,12 +50,10 @@ test('precondition requires the web-chat app', async () => {
   assert.equal(await precondition(fakeCtx(webChat({}))), true);
 });
 
-test('the new prompts match the shipped defaults', async () => {
-  const shipped = JSON.parse(
-    await readFile(new URL('../defaults/apps/web-chat.json', import.meta.url), 'utf8')
-  );
-  assert.equal(shipped.system.en, PROMPT_UPDATES.en.to);
-  assert.equal(shipped.system.de, PROMPT_UPDATES.de.to);
+test('the new prompts are what V233 rewords further', () => {
+  // The shipped default moved on in V233 (#3522); V124's result is its starting point.
+  assert.equal(V233_UPDATES.en.from, PROMPT_UPDATES.en.to);
+  assert.equal(V233_UPDATES.de.from, PROMPT_UPDATES.de.to);
   assert.notEqual(PROMPT_UPDATES.en.from, PROMPT_UPDATES.en.to);
   assert.notEqual(PROMPT_UPDATES.de.from, PROMPT_UPDATES.de.to);
 });
