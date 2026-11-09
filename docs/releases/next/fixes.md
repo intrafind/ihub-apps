@@ -456,3 +456,10 @@ On phones, the backdrop behind the **Sources** panel was darker than intended, a
 found two identical **Sources** dialogs. The chat keeps a phone and a desktop layout of each answer
 on the page, and both opened their own panel on top of each other. The panel now opens once, from
 whichever layout is shown.
+
+## Projects: iFinder Documents With Several Titles Can Be Added
+
+Picking an iFinder document in a project's **Add item** dialog and clicking **Add** did nothing
+for a document whose index entry carries more than one title; the browser console showed
+`TypeError: (t.name || "").trim is not a function`. The dialog now shows and names the item after
+the document's first title, and the document is added.

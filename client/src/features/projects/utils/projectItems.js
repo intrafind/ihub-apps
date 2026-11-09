@@ -254,6 +254,30 @@ export function isHttpUrl(value) {
 }
 
 /**
+ * A field of a search hit or a draft as one string: the first non-empty value
+ * of a list (iFinder keeps a field with several values, a document with two
+ * titles, as a list), a number as its digits, anything else as `''`.
+ *
+ * @param {*} value
+ * @returns {string}
+ *
+ * @example
+ * textOf(['', 'Lease agreement', 'Lease']) // => 'Lease agreement'
+ */
+export function textOf(value) {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const text = textOf(entry);
+      if (text.trim()) return text;
+    }
+    return '';
+  }
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  return '';
+}
+
+/**
  * The JSON body `POST …/projects/:id/items` gets from a dialog tab (every
  * tab but the file upload, which sends multipart, and the cloud tabs, which
  * send {@link buildCloudItemRequest}).
@@ -270,7 +294,7 @@ export function isHttpUrl(value) {
  * // => { body: { kind: 'url', ref: { url: 'https://example.com' }, pinned: false }, error: null }
  */
 export function buildItemRequest(tabId, draft = {}) {
-  const name = (draft.name || '').trim();
+  const name = textOf(draft.name).trim();
   const common = { ...(name ? { name } : {}), pinned: draft.pinned === true };
   const fail = error => ({ body: null, error });
   switch (tabId) {
@@ -401,7 +425,7 @@ export function buildItemChanges(item, draft) {
   delete kept.language;
   const ref = { ...kept, ...picked };
   const changes = {};
-  const name = (draft.name || '').trim();
+  const name = textOf(draft.name).trim();
   if (name && name !== item.name) changes.name = name;
   // The values of a reference are scalars: equal keys with equal values.
   const stored = item.ref || {};

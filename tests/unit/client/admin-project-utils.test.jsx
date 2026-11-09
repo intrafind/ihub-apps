@@ -24,6 +24,7 @@ import {
   buildItemRequest,
   hasActiveItems,
   summarizeItemKinds,
+  textOf,
   validateUpload
 } from '../../../client/src/features/projects/utils/projectItems';
 
@@ -163,6 +164,32 @@ describe('items', () => {
     expect(buildItemRequest('ifinder-query', { query: 'manual' }).body.ref).toEqual({
       query: 'manual'
     });
+  });
+
+  test('names an item after a title iFinder returned with several values', () => {
+    // #3532: the name of a picked iFinder document was a list and `.trim()` threw.
+    expect(
+      buildItemRequest('ifinder-document', { documentId: 'doc-1', name: ['', ' Lease ', 'Alt'] })
+        .body
+    ).toEqual({
+      kind: 'ifinder-document',
+      ref: { documentId: 'doc-1' },
+      name: 'Lease',
+      pinned: false
+    });
+    expect(
+      buildItemRequest('ifinder-document', { documentId: 'doc-1', name: { a: 1 } }).body
+    ).toEqual({ kind: 'ifinder-document', ref: { documentId: 'doc-1' }, pinned: false });
+  });
+
+  test('textOf turns a hit field into one string', () => {
+    expect(textOf('Lease')).toBe('Lease');
+    expect(textOf(['', null, 'Lease', 'Alt'])).toBe('Lease');
+    expect(textOf([])).toBe('');
+    expect(textOf(42)).toBe('42');
+    expect(textOf(null)).toBe('');
+    expect(textOf(undefined)).toBe('');
+    expect(textOf({ title: 'x' })).toBe('');
   });
 
   test('reports what is missing instead of building a body', () => {
