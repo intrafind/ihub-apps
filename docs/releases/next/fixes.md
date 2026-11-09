@@ -427,3 +427,11 @@ with the base path (`/ihub/uploads/assets/logo.png`, the address the browser sho
 not load behind a reverse proxy that forwards the prefix. Such URLs are now used as they are, as
 are `data:image/…` logos, which were not shown on any installation. `/uploads/assets/logo.png`
 keeps working as before.
+
+## Projects: HTML Files Keep Only the Page's Content, Not Its Menus
+
+An HTML file added to a project — uploaded, or picked from OneDrive / SharePoint or Google Drive —
+was read as the whole page: skip links, menus, page trees, breadcrumbs and footers (on a saved
+Confluence page, about half of the text) ended up in the project and in every answer drawn from it.
+HTML files are now read like a web page added by URL: only the main content is kept, with its
+headings, lists, tables and links.

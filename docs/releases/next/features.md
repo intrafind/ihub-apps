@@ -1174,3 +1174,9 @@ shown for it. A skill that is off is offered to no app, user, agent or MCP clien
 installed. A description you set replaces the one in `SKILL.md` wherever the skill is listed, and a
 marketplace update does not overwrite it. System skills cannot be changed. The settings are kept in
 `contents/config/skills.json`, a new file that a fresh install and an upgrade create.
+
+## Projects: A Web Page Is Named After Its Title
+
+A web page added to a project without a name now shows the page's title instead of its URL. A name
+you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
+page that cannot be read when it is added keeps its URL as the name.
