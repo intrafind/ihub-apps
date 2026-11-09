@@ -878,6 +878,12 @@ used to be an HTML or plain text page.
   shape. The iFinder routes keep the status the token store reported and show its message only for a client error.
 - A request whose declared body is larger than the configured limit is refused with `PAYLOAD_TOO_LARGE` (413) in this
   shape instead of the plain text `Payload Too Large`.
+- The sign-in routes (`/api/auth/local/login`, `/api/auth/ldap/login`, `/api/auth/ntlm/login`) and `/api/auth/user`
+  answer in this shape: `BAD_REQUEST` for missing credentials, a turned-off method, an unknown LDAP provider or an
+  invalid return URL, `AUTH_REQUIRED` (401) for refused credentials or an unfinished NTLM handshake, and
+  `RATE_LIMITED` (429, with `Retry-After`) for a locked account. They still fail closed: any other failure inside a
+  sign-in handler answers 401, never a 500, and the cause stays in the server log. The wording of the messages is
+  unchanged.
 - The routes that still answer errors with their own body are converted to this shape one by one in
   the following releases; each conversion is listed here.
 - The remaining routes now answer in this shape too: the authentication middleware (`AUTH_REQUIRED`,

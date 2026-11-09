@@ -68,6 +68,7 @@ const { default: express } = await import('express');
 const { default: request } = await import('supertest');
 const { loginUser } = await import('../middleware/localAuth.js');
 const { default: registerAuthRoutes } = await import('../routes/auth.js');
+const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const {
   LoginLockedError,
   clearFailedLogins,
@@ -356,6 +357,7 @@ describe('POST /api/auth/local/login while an account is locked', () => {
     const app = express();
     app.use(express.json());
     registerAuthRoutes(app);
+    app.use(errorHandler);
     const attempt = password =>
       request(app).post('/api/auth/local/login').send({ username: 'testuser', password });
 
