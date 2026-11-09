@@ -598,6 +598,14 @@ export class ConfigStore {
    * @throws {Error} When the write fails; callers map that onto a response
    */
   async writeJson(relPath, data) {
+    // Every save of the platform configuration passes here, and several routes
+    // build it from the runtime cache, which holds secrets decrypted.
+    if (path.posix.normalize(String(relPath)) === 'config/platform.json') {
+      // Loaded on demand: it pulls in TokenStorageService, which resolves the
+      // contents directory when first imported — too early for most callers.
+      const { encryptPlatformSecrets } = await import('../../utils/configSecrets.js');
+      data = await encryptPlatformSecrets(data);
+    }
     const location = parseRawRelPath(relPath);
     const documents = location ? documentsFor(location.ns) : null;
     if (documents) {
