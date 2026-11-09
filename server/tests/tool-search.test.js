@@ -286,6 +286,19 @@ describe('searchDeferredTools', () => {
     assert.match(searchDeferredTools(deferred, undefined), /Give a few keywords/);
   });
 
+  it('stays fast for a description that is mostly white space (a remote server writes it)', () => {
+    const hostile = action('evil', 'run', {
+      description: `Runs it.${' '.repeat(200_000)}end`
+    });
+    const started = Date.now();
+    const answer = searchDeferredTools([hostile], 'evil');
+    const index = buildToolIndex([hostile]).text;
+    // A quadratic white space pattern takes tens of seconds here; this takes milliseconds.
+    assert.ok(Date.now() - started < 1000, 'search and list stay linear in the description');
+    assert.match(answer, /Runs it\. end/);
+    assert.match(index, /Runs it\./);
+  });
+
   it('brings the guidance of the integrations it finds', () => {
     const guided = action('jira', 'add_comment', {
       extra: { instructions: 'Always quote the issue key.' }

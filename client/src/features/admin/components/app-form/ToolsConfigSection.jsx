@@ -86,7 +86,7 @@ const TOOL_SEARCH_INPUT_CLASS =
 function ToolSearchSettings({ toolSearch, onChange }) {
   const { t } = useTranslation();
   const setField = patch => {
-    const next = { ...(toolSearch || {}), ...patch };
+    const next = { ...toolSearch, ...patch };
     for (const key of Object.keys(patch)) {
       if (patch[key] === undefined || patch[key] === '') delete next[key];
     }

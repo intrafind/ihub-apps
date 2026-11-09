@@ -208,6 +208,13 @@ function labelOf(tool) {
   );
 }
 
+/** `text` without the white space and punctuation at its end. */
+function trimTrailingPunctuation(text) {
+  let end = text.length;
+  while (end > 0 && /[\s.,;:!?-]/.test(text[end - 1])) end -= 1;
+  return text.slice(0, end);
+}
+
 /** `text` cut to about `max` characters at a word boundary, on one line. */
 function shorten(text, max = SHORT_DESCRIPTION_CHARS) {
   const value = String(text || '')
@@ -216,7 +223,7 @@ function shorten(text, max = SHORT_DESCRIPTION_CHARS) {
   if (value.length <= max) return value;
   const cut = value.slice(0, max);
   const space = cut.lastIndexOf(' ');
-  return `${(space > max / 2 ? cut.slice(0, space) : cut).replace(/[\s.,;:!?-]+$/, '')}…`;
+  return `${trimTrailingPunctuation(space > max / 2 ? cut.slice(0, space) : cut)}…`;
 }
 
 const INDEX_INTRO =
@@ -256,7 +263,7 @@ export function buildToolIndex(deferred, { maxTokens = MAX_INDEX_TOKENS } = {}) 
   if (groups.length === 0) return { text: '', level: 'descriptions' };
 
   const render = (note, body) =>
-    `${INDEX_INTRO}${note ? ` ${note}` : ''}\n<available_tools>\n${groups
+    `${INDEX_INTRO}${note ? ' ' + note : ''}\n<available_tools>\n${groups
       .map(
         group =>
           `  <integration name="${escapeXml(group.label)}" id="${escapeXml(group.id)}"${body(group)}`
@@ -358,8 +365,10 @@ export function toolSearchToolDefinitions(language = 'en') {
 function describeFound(tool) {
   const integration = tool._integration || {};
   const title = integration.actionTitle ? `${labelOf(tool)}: ${integration.actionTitle}` : null;
-  const lines = [`- ${tool.id}${title ? ` (${title})` : ''}`];
-  if (tool.description) lines.push(`  ${String(tool.description).replace(/\s*\n\s*/g, ' ')}`);
+  const lines = [title ? `- ${tool.id} (${title})` : `- ${tool.id}`];
+  // One line. `\s+` runs in linear time; `\s*\n\s*` is quadratic on a long run of
+  // white space, and a remote MCP server writes these descriptions.
+  if (tool.description) lines.push(`  ${String(tool.description).replace(/\s+/g, ' ').trim()}`);
   lines.push(
     `  Parameters (JSON Schema): ${JSON.stringify(tool.parameters || { type: 'object' })}`
   );
@@ -413,7 +422,7 @@ function argumentProblem(toolDef, args) {
   if (verdict.valid) return null;
   const problems = (verdict.errors || [])
     .slice(0, 8)
-    .map(error => `${error.path && error.path !== '/' ? `${error.path} ` : ''}${error.message}`)
+    .map(error => (error.path && error.path !== '/' ? error.path + ' ' : '') + error.message)
     .join('; ');
   const quoted = JSON.stringify(toolDef.parameters || {});
   return (
