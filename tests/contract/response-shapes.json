@@ -2533,40 +2533,12 @@
     "shape": {
       "loadAllBudgetTokens": "number",
       "projects": {
-        "faq": {
+        "<id>": {
           "bytes": "number",
           "items": "number",
           "links": "number",
           "pending": "number",
-          "tokens": "number"
-        },
-        "faq-page-source": {
-          "bytes": "number",
-          "items": "number",
-          "links": "number",
-          "pending": "number",
-          "tokens": "null"
-        },
-        "ihub-documentation": {
-          "bytes": "number",
-          "items": "number",
-          "links": "number",
-          "pending": "number",
-          "tokens": "number"
-        },
-        "intrafind-website": {
-          "bytes": "number",
-          "items": "number",
-          "links": "number",
-          "pending": "number",
-          "tokens": "null"
-        },
-        "meeting-knowledge-base": {
-          "bytes": "number",
-          "items": "number",
-          "links": "number",
-          "pending": "number",
-          "tokens": "number"
+          "tokens": "null|number"
         }
       },
       "toolResultBudgetTokens": "number"
@@ -2709,7 +2681,7 @@
         "enabled": "boolean",
         "http": "string",
         "https": "string",
-        "noProxy": ["string"],
+        "noProxy": [],
         "urlPatterns": []
       },
       "provenance": {
