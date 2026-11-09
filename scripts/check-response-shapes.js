@@ -459,26 +459,35 @@ const UNSETTLED_ITEM_STATES = new Set(['pending', 'extracting']);
  */
 export async function waitForProjectImports(base, cookie, { timeoutMs = 120_000 } = {}) {
   const deadline = Date.now() + timeoutMs;
-  let unsettled = [];
-  while (Date.now() < deadline) {
-    unsettled = [];
-    let cursor = null;
-    do {
-      const query = new URLSearchParams({ limit: '100' });
-      if (cursor) query.set('cursor', cursor);
-      const answer = await request(base, cookie, `/api/admin/projects?${query}`);
-      if (answer.type !== 'json' || answer.status !== 200) return;
-      for (const project of answer.body.items ?? []) {
-        for (const item of project.items ?? []) {
-          if (UNSETTLED_ITEM_STATES.has(item.status)) unsettled.push(`${project.id}/${item.id}`);
-        }
-      }
-      cursor = answer.body.nextCursor ?? null;
-    } while (cursor);
+  const poll = async () => {
+    const unsettled = await unsettledProjectItems(base, cookie);
     if (unsettled.length === 0) return;
+    if (Date.now() >= deadline) {
+      console.warn(
+        `project items still importing after ${timeoutMs / 1000}s: ${unsettled.join(', ')}`
+      );
+      return;
+    }
     await new Promise(resolve => setTimeout(resolve, 500));
-  }
-  console.warn(`project items still importing after ${timeoutMs / 1000}s: ${unsettled.join(', ')}`);
+    await poll();
+  };
+  await poll();
+}
+
+/** `projectId/itemId` of every admin project item the server is still working on. */
+async function unsettledProjectItems(base, cookie, cursor = null) {
+  const query = new URLSearchParams({ limit: '100' });
+  if (cursor) query.set('cursor', cursor);
+  const answer = await request(base, cookie, `/api/admin/projects?${query}`);
+  // An answer that is not the list (an error) is nothing to wait for.
+  if (answer.type !== 'json' || answer.status !== 200) return [];
+  const unsettled = (answer.body.items ?? []).flatMap(project =>
+    (project.items ?? [])
+      .filter(item => UNSETTLED_ITEM_STATES.has(item.status))
+      .map(item => `${project.id}/${item.id}`)
+  );
+  const next = answer.body.nextCursor;
+  return next ? [...unsettled, ...(await unsettledProjectItems(base, cookie, next))] : unsettled;
 }
 
 async function main() {
