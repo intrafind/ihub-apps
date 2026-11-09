@@ -299,6 +299,43 @@ describe('focus when the sources panel closes (#3521)', () => {
   });
 });
 
+describe('one panel per answer, however often it is on the page', () => {
+  // AppChat renders the chat twice (phone and desktop layout, one hidden);
+  // each copy's panel would go to document.body, where hiding does not reach.
+  function Twice({ first = true }) {
+    const { view } = citationsFor();
+    return (
+      <>
+        {first && <AnswerSources messageKey="msg-1" sources={sources} citations={view} />}
+        <AnswerSources messageKey="msg-1" sources={sources} citations={view} />
+      </>
+    );
+  }
+
+  test('opening it from either copy shows one panel', () => {
+    render(<Twice />);
+    const [, second] = screen.getAllByRole('button', { name: /sources.resultsCount/ });
+    fireEvent.click(second);
+    expect(screen.getAllByRole('dialog', { name: 'Sources' })).toHaveLength(1);
+    // Both copies say the panel is open.
+    for (const entry of screen.getAllByRole('button', { name: /sources.resultsCount/ })) {
+      expect(entry).toHaveAttribute('aria-expanded', 'true');
+    }
+  });
+
+  test('when the copy that shows it goes away, the other one keeps it open', () => {
+    const { rerender } = render(<Twice />);
+    fireEvent.click(screen.getAllByRole('button', { name: /sources.resultsCount/ })[0]);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+
+    rerender(<Twice first={false} />);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    // The entry that opened it is gone: focus goes to the one that is left.
+    act(() => closeSources());
+    expect(screen.getByRole('button', { name: /sources.resultsCount/ })).toHaveFocus();
+  });
+});
+
 describe('AnswerSources', () => {
   const renderSources = (props = {}) => {
     const { view } = citationsFor();

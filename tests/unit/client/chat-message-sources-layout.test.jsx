@@ -177,6 +177,21 @@ test('closing the panel returns focus to what opened it', () => {
   expect(entryOf()).toHaveFocus();
 });
 
+test('an answer rendered twice (phone and desktop layout) opens one panel', () => {
+  render(
+    <>
+      <div className="md:hidden">
+        <ChatMessage message={message} appId="chat" chatId="chat-1" modelId="m" />
+      </div>
+      <div className="hidden md:block">
+        <ChatMessage message={message} appId="chat" chatId="chat-1" modelId="m" />
+      </div>
+    </>
+  );
+  fireEvent.click(screen.getAllByRole('button', { name: 'sources.resultsCount' })[1]);
+  expect(screen.getAllByRole('dialog', { name: 'Sources' })).toHaveLength(1);
+});
+
 test('an answer that found nothing has no divider and no entry, only its badge', () => {
   const { container } = renderMessage({ ...webSearch, sources: { queries: ['x'], items: [] } });
   expect(entryOf()).not.toBeInTheDocument();

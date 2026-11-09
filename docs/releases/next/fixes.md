@@ -449,3 +449,10 @@ is. If you wrote your own, avoid asking for "sources with URLs" or a list of sou
 lists them.
 
 See [Web Tools → Sources and Citations](../../web-tools.md#sources-and-citations).
+
+## Chat: The Sources Panel Opens Once
+
+On phones, the backdrop behind the **Sources** panel was darker than intended, and screen readers
+found two identical **Sources** dialogs. The chat keeps a phone and a desktop layout of each answer
+on the page, and both opened their own panel on top of each other. The panel now opens once, from
+whichever layout is shown.

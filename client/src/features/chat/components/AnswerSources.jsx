@@ -29,6 +29,7 @@ import {
   openSources,
   releaseCitation,
   sourcesOpener,
+  useSourcesPanelHost,
   useSourcesState
 } from '../sources/sourcesStore';
 import {
@@ -80,6 +81,9 @@ const CITED_LIST_LIMIT = 5;
  * open the panel from the text, and a panel open when the answer completes
  * stays open.
  *
+ * When the same answer is rendered more than once (AppChat's phone and
+ * desktop layouts), only one copy renders the panel (`useSourcesPanelHost`).
+ *
  * @param {Object} props
  * @param {string} props.messageKey - The answer's id
  * @param {{items: Object[], queries: string[]}} props.sources - The answer's source set
@@ -100,6 +104,7 @@ function AnswerSources({
   const triggerRef = useRef(null);
   const { open, highlight } = useSourcesState();
   const isOpen = open?.messageKey === messageKey;
+  const isPanelHost = useSourcesPanelHost(messageKey);
 
   const cited = citations?.cited || [];
   const considered = citations?.considered || [];
@@ -115,6 +120,7 @@ function AnswerSources({
         <button
           ref={triggerRef}
           type="button"
+          data-sources-entry-of={messageKey}
           onClick={() =>
             isOpen ? closeSources() : openSources(messageKey, null, { opener: triggerRef.current })
           }
@@ -146,7 +152,7 @@ function AnswerSources({
           />
         </button>
       )}
-      {isOpen && (
+      {isOpen && isPanelHost && (
         <SourcesPanel
           messageKey={messageKey}
           sources={sources}
@@ -154,7 +160,6 @@ function AnswerSources({
           considered={considered}
           focus={open.focus}
           highlight={highlighted}
-          entryRef={triggerRef}
           onOpenInApp={onOpenInApp}
         />
       )}
@@ -355,27 +360,26 @@ const attributeValue = value => String(value).replace(/["\\]/g, '\\$&');
  * Where focus goes when the sources panel closes: back to what opened it (an
  * inline badge, a number in the cited list, the entry). An inline badge the
  * answer's markup replaced since (it is rebuilt while the answer streams) is
- * found again by its number; else the entry, if it is shown. Nothing when none
- * of them is on the page — focus is not moved somewhere unrelated.
+ * found again by its number; else the answer's entry, if it is shown. Nothing
+ * when none of them is on the page — focus is not moved somewhere unrelated.
  *
  * Candidates are tried in turn until one takes focus: a page can render the
  * same answer twice (AppChat keeps a phone and a desktop layout, one of them
  * `display: none`), and an element in the hidden copy does not take it.
  *
  * @param {string} messageKey
- * @param {{current: HTMLElement|null}} entryRef
  */
-function returnFocus(messageKey, entryRef) {
+function returnFocus(messageKey) {
   const opener = sourcesOpener();
+  const key = attributeValue(messageKey);
   const badges =
     opener?.n != null
-      ? [
-          ...document.querySelectorAll(
-            `[data-citations-of="${attributeValue(messageKey)}"] [data-source-citation="${opener.n}"]`
-          )
-        ]
+      ? document.querySelectorAll(
+          `[data-citations-of="${key}"] [data-source-citation="${opener.n}"]`
+        )
       : [];
-  for (const element of [opener?.element, ...badges, entryRef.current]) {
+  const entries = document.querySelectorAll(`[data-sources-entry-of="${key}"]`);
+  for (const element of [opener?.element, ...badges, ...entries]) {
     if (!element?.isConnected) continue;
     element.focus({ preventScroll: true });
     if (document.activeElement === element) return;
@@ -391,16 +395,7 @@ function returnFocus(messageKey, entryRef) {
  * modal and keeps keyboard focus inside until it is closed — except while one
  * of its dialogs (preview, details, app picker) is open on top of it.
  */
-function SourcesPanel({
-  messageKey,
-  sources,
-  cited,
-  considered,
-  focus,
-  highlight,
-  entryRef,
-  onOpenInApp
-}) {
+function SourcesPanel({ messageKey, sources, cited, considered, focus, highlight, onOpenInApp }) {
   const { t, i18n } = useTranslation();
   const titleId = useId();
   const panelRef = useRef(null);
@@ -450,9 +445,9 @@ function SourcesPanel({
     document.addEventListener('keydown', onKey);
     return () => {
       document.removeEventListener('keydown', onKey);
-      returnFocus(messageKey, entryRef);
+      returnFocus(messageKey);
     };
-  }, [messageKey, entryRef]);
+  }, [messageKey]);
 
   // Scroll to the card a clicked badge points at.
   useEffect(() => {
