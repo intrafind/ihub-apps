@@ -370,13 +370,11 @@ Both adapters:
 
 When audio upload is enabled, the upload button in the chat interface allows users to select audio files. The file picker automatically filters to show only supported audio formats.
 
-### Audio File Indicator
+### Audio File Card
 
-Uploaded audio files are displayed with a music note icon (🎵) and the filename:
-
-```
-🎵 recording.mp3
-```
+Audio you send is shown as a card above your message with the file name, its type and size and the
+line "Audio sent to the model". The message itself holds only the text you typed. There is no
+inline player: the server does not keep the audio of a chat message.
 
 ### Multiple Files
 

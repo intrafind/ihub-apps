@@ -93,62 +93,26 @@ When multiple files including audio are selected:
 
 **Location:** Chat History → User and Assistant Messages
 
-### Audio Playback in Messages
+Audio you send is shown as a card above your message, not inside its text. There is no audio player
+in the message: the server does not keep the audio of a chat message, so a player would work only
+until the page is reloaded. The card says what was sent and keeps its look after a reload.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ User                                        11:23 AM │
-├─────────────────────────────────────────────────────┤
-│ Transcribe this audio please                        │
-│                                                      │
-│ ┌─────────────────────────────────────────────────┐ │
-│ │ 🎵  recording.mp3                              │ │
-│ │     audio/mpeg • 2.45 MB                       │ │
-│ │                                                 │ │
-│ │ ▶️ ━━━━━━━━━━━━━━━━━━━━ 🔊 ⋮               │ │
-│ │ 0:00 / 3:24                                    │ │
-│ └─────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
+                                  ┌───────────────────────────────────────┐
+                                  │ [♪]  recording.mp3                    │
+                                  │      WAV · 5 KB                       │
+                                  │      Audio sent to the model          │
+                                  └───────────────────────────────────────┘
+                                       ┌─────────────────────────────────┐
+                                       │ Transcribe this audio please    │
+                                       └─────────────────────────────────┘
 ```
 
-**Player Features:**
-- Purple-themed container (light purple background in light mode)
-- Musical note icon + filename + file type + size
-- HTML5 native audio controls:
-  - ▶️ Play/Pause button
-  - Progress bar with seek capability
-  - Volume control
-  - Time display (current / total)
-  - Download option (browser dependent)
-
-**Visual Styling:**
-- Background: `bg-purple-50` (light mode) / `bg-purple-900/20` (dark mode)
-- Border: `border-purple-200` (light mode) / `border-purple-800` (dark mode)
-- Icon color: Purple (`text-purple-600` / `text-purple-400`)
-- Rounded corners for modern look
-- Responsive width (100% of message container)
-
-### Multiple Audio Files in One Message
-
-```
-┌─────────────────────────────────────────────────────┐
-│ User                                        11:25 AM │
-├─────────────────────────────────────────────────────┤
-│ Compare these two recordings                        │
-│                                                      │
-│ ┌─────────────────────────────────────────────────┐ │
-│ │ 🎵  sample1.mp3                                │ │
-│ │     audio/mpeg • 1.8 MB                        │ │
-│ │ ▶️ ━━━━━━━━━━━━━━━━━━━━ 🔊 ⋮               │ │
-│ └─────────────────────────────────────────────────┘ │
-│                                                      │
-│ ┌─────────────────────────────────────────────────┐ │
-│ │ 🎵  sample2.wav                                │ │
-│ │     audio/wav • 3.2 MB                         │ │
-│ │ ▶️ ━━━━━━━━━━━━━━━━━━━━ 🔊 ⋮               │ │
-│ └─────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
-```
+- The card is a plain card, not a button: there is nothing stored to open.
+- After a reload it shows the name, type and size; the line "Audio sent to the model" is shown for a
+  message sent in the current session.
+- Several audio files are several cards. From the fifth file of a message (the fourth on a phone or
+  in the Outlook task pane) the rest fold into **+N more files**.
 
 ## 4. Error States
 

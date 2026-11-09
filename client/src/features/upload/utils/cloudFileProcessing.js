@@ -151,11 +151,4 @@ export function isCloudFileSupported(mimeType, fileName) {
   return IMAGE_TYPES.has(type) || AUDIO_TYPES.has(type) || SUPPORTED_TEXT_FORMATS.includes(type);
 }
 
-/**
- * Format file size to human-readable string
- */
-export function formatFileSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+export { formatFileSize } from './attachmentDescription';

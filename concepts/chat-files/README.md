@@ -123,7 +123,7 @@ Configured under `platform.uploads.quotas`:
      - In Mode 3 (`client_text_only`): Extract in browser, then `POST /api/chats/:chatId/files` with `{ name, mimeType, text }`.
    - Also supports inline `fileData` on `POST /api/apps/:appId/chat/:chatId` for backwards compatibility, automatically persisting the extracted text in `ChatFileRepository` so Turn 2+ and Replay always work.
 2. **Clean Message Bubble + Unified "Files" Drawer:**
-   - **In the Message Bubble:** Show compact, clickable file chips (icon + filename + size/pages) — never dump raw file info into the message text. Clicking a chip opens that file directly in the **Files Drawer**.
+   - **Above the Message Bubble:** Show compact, clickable file cards (icon + filename + type/size, and what the assistant got from the file) as a block of their own, outside the bubble — never dump raw file info into the message text. Clicking a card opens that file directly in the **Files Drawer**. *(Amended 2026-11-07: this said "in the bubble"; the placement was decided in [Message Attachments](../2026-11-07%20Message%20Attachments/README.md).)*
    - **Unified Files Drawer (extending `ArtifactsPanel.jsx`):**
      - Two tabs in the side drawer: **Uploaded (`N`)** and **Generated (`M`)**.
      - Clicking an **Uploaded** file opens `ArtifactPreview.jsx` (PDF iframe, image preview, CSV table, `.ipynb`, code, email/meeting/page viewer, or extracted Markdown text view for `.docx`/`.pptx`/`.xlsx`, plus a **Download Original** button that is `410 ORIGINAL_DISCARDED` aware).
