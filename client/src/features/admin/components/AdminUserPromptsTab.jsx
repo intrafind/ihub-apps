@@ -81,7 +81,7 @@ function PromoteDialog({ prompt, onClose, onPromoted }) {
         `/admin/prompts/${encodeURIComponent(prompt.id)}/promote`,
         { method: 'POST', body: { id: id.trim() || undefined, enabled } }
       );
-      onPromoted(response.data?.prompt);
+      onPromoted(response.data);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
       setSaving(false);
@@ -443,7 +443,7 @@ function AdminUserPromptsTab() {
       setLoading(true);
       setError(null);
       const response = await makeAdminApiCall('/admin/prompts?scope=user');
-      setPrompts(Array.isArray(response.data?.prompts) ? response.data.prompts : []);
+      setPrompts(Array.isArray(response.datas) ? response.data.prompts : []);
       setTruncated(response.data?.truncated === true);
       setAvailable(response.data?.available !== false);
     } catch (err) {

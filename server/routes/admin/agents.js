@@ -206,7 +206,7 @@ export default function registerAdminAgentsRoutes(app) {
       profileId: profile.id,
       actor: req.user?.id
     });
-    sendCreated(res, `/api/admin/agents/profiles/${segment(profile.id)}`, { profile });
+    sendCreated(res, `/api/admin/agents/profiles/${segment(profile.id)}`, profile);
   });
 
   // ── Update ────────────────────────────────────────────────────────────────
@@ -229,7 +229,7 @@ export default function registerAdminAgentsRoutes(app) {
       profileId,
       actor: req.user?.id
     });
-    res.json({ profile });
+    res.json(profile);
   });
 
   // ── Toggle enabled ────────────────────────────────────────────────────────

@@ -118,7 +118,7 @@ export default function registerAdminOAuthCimdRoutes(app) {
       if (!client) {
         throw new ServiceError('NOT_FOUND', 'Client not found');
       }
-      res.json({ client });
+      res.json(client);
     }
   );
 

@@ -175,7 +175,7 @@ export default function registerAdminIntegrationExampleAppsRoutes(app) {
         resourceId: appId,
         summary: `Created app ${appId} from the example app of integration "${resolved.instance.id}"`
       });
-      sendCreated(res, `/api/admin/apps/${segment(appId)}`, { app: newApp });
+      sendCreated(res, `/api/admin/apps/${segment(appId)}`, newApp);
     }
   );
 }

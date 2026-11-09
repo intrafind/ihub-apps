@@ -162,7 +162,7 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
     handle('created', async (req, res) => {
       const body = bodyOf(req);
       const template = await saveTemplate(String(body.id || ''), body, { create: true });
-      sendCreated(res, `/api/admin/document-templates/${segment(template.id)}`, { template });
+      sendCreated(res, `/api/admin/document-templates/${segment(template.id)}`, template);
     })
   );
 

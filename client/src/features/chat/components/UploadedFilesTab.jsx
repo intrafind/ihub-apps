@@ -97,7 +97,7 @@ function UploadedPreview({ file, source, getBlob }) {
     source
       .fetchText(file.id)
       .then(result => {
-        if (active) setText({ status: 'ready', text: result?.file?.text || '' });
+        if (active) setText({ status: 'ready', text: result?.text || '' });
       })
       .catch(() => {
         if (active) setText({ status: 'error' });
@@ -243,7 +243,7 @@ export default function UploadedFilesTab({
     run('text', async () => {
       try {
         const result = await source.fetchText(file.id);
-        const blob = new Blob([result?.file?.text || ''], { type: 'text/plain;charset=utf-8' });
+        const blob = new Blob([result?.text || ''], { type: 'text/plain;charset=utf-8' });
         if (!saveBlobAs(blob, extractedTextFileName(file))) throw new Error('save');
       } catch {
         setNotice({

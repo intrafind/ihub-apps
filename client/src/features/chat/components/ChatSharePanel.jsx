@@ -415,7 +415,7 @@ export default function ChatSharePanel({ chatId, artifact = null }) {
                 }
               : {})
           });
-      setCreated(result.share);
+      setCreated(result);
       setAcknowledged(false);
       await loadShares();
     } catch (error) {

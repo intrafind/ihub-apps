@@ -617,7 +617,7 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: appId,
       summary: `Updated app ${appId}`
     });
-    res.json({ app: updatedApp });
+    res.json(updatedApp);
   });
 
   /**
@@ -736,7 +736,7 @@ export default function registerAdminAppsRoutes(app) {
       resourceId: newApp.id,
       summary: `Created app ${newApp.id}`
     });
-    sendCreated(res, `/api/admin/apps/${segment(newApp.id)}`, { app: newApp });
+    sendCreated(res, `/api/admin/apps/${segment(newApp.id)}`, newApp);
   });
 
   /**

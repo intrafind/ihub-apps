@@ -512,9 +512,11 @@ export default function registerChatRoutes(app) {
       store: fileStore,
       user: req.user
     });
-    return sendCreated(res, `/api/chats/${segment(chatId)}/files/${segment(descriptor.id)}`, {
-      file: descriptor
-    });
+    return sendCreated(
+      res,
+      `/api/chats/${segment(chatId)}/files/${segment(descriptor.id)}`,
+      descriptor
+    );
   });
 
   app.get(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {
@@ -547,7 +549,7 @@ export default function registerChatRoutes(app) {
         // nosemgrep: javascript.express.security.audit.xss.direct-response-write.direct-response-write
         return res.send(textFile.text);
       }
-      return res.json({ file: textFile });
+      return res.json(textFile);
     }
 
     const original = await fileStore.getOriginal(scope, fileId);
@@ -595,7 +597,7 @@ export default function registerChatRoutes(app) {
           reason: 'user_deleted'
         });
         if (!updated) throw notFound('File');
-        return res.json({ file: updated });
+        return res.json(updated);
       }
 
       const deleted = await fileStore.delete(scope, fileId);
@@ -675,7 +677,7 @@ export default function registerChatRoutes(app) {
       chat = await repository.renameChat(chatId, title.slice(0, TITLE_INPUT_WINDOW));
       if (!chat) throw notFound('Chat');
     }
-    res.json({ chat: publicChatView(chat) });
+    res.json(publicChatView(chat));
   });
 
   app.delete(buildServerPath('/api/chats/:chatId'), authRequired, async (req, res) => {

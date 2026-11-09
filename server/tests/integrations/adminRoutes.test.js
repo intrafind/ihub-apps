@@ -250,7 +250,7 @@ describe('installed instances', () => {
     const created = await admin(
       request(app).post('/api/admin/integrations/installed').send(payload)
     ).expect(201);
-    expect(created.body.instance).toMatchObject({
+    expect(created.body).toMatchObject({
       id: 'ckan-demo',
       definitionVersion: '1.2.3',
       enabled: true,
@@ -288,12 +288,12 @@ describe('installed instances', () => {
         .send({ ...payload, values: { baseUrl: 'https://other.example' } })
     ).expect(200);
     expect(state.integrations.installed[0].values.baseUrl).toBe('https://other.example');
-    expect(state.integrations.installed[0].installedAt).toBe(created.body.instance.installedAt);
+    expect(state.integrations.installed[0].installedAt).toBe(created.body.installedAt);
 
     const disabled = await admin(
       request(app).post('/api/admin/integrations/installed/ckan-demo/_disable')
     ).expect(200);
-    expect(disabled.body.instance.enabled).toBe(false);
+    expect(disabled.body.enabled).toBe(false);
 
     const test = await admin(
       request(app).post('/api/admin/integrations/installed/ckan-demo/_test')
@@ -431,7 +431,7 @@ describe('installed instances', () => {
           secrets: { apiToken: 's3cret' }
         })
     ).expect(201);
-    expect(res.body.instance.auth).toEqual({
+    expect(res.body.auth).toEqual({
       mode: 'service-account',
       credentialRef: 'integration-private-apiToken'
     });

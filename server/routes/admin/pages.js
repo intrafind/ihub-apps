@@ -129,7 +129,7 @@ export default function registerAdminPagesRoutes(app) {
     // content is missing.
     await configStore.writeJson(UI_FILE, uiConfig);
     await configCache.refreshCacheEntry('config/ui.json');
-    sendCreated(res, `/api/admin/pages/${segment(id)}`, { page: { id, title } });
+    sendCreated(res, `/api/admin/pages/${segment(id)}`, { id, title });
   });
 
   app.put(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {
@@ -176,7 +176,7 @@ export default function registerAdminPagesRoutes(app) {
     }
     await configStore.writeJson(UI_FILE, uiConfig);
     await configCache.refreshCacheEntry('config/ui.json');
-    res.json({ page: { id, title } });
+    res.json({ id, title });
   });
 
   app.delete(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {

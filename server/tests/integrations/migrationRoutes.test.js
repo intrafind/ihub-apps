@@ -508,8 +508,8 @@ describe('an ordinary save', () => {
       status: 'needsReview',
       migrationLog: []
     }).expect(200);
-    expect(res.body.instance.definitionVersion).toBe('1.2.1');
-    expect(res.body.instance.status).toBeUndefined();
+    expect(res.body.definitionVersion).toBe('1.2.1');
+    expect(res.body.status).toBeUndefined();
   });
 });
 

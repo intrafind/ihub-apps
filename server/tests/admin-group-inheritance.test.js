@@ -117,7 +117,7 @@ describe('POST /api/admin/groups with inherits', () => {
     const response = await create(['editors', 'editors', 'anonymous']);
 
     expect(response.status).toBe(200);
-    expect(response.body.group.inherits).toEqual(['editors', 'anonymous']);
+    expect(response.body.inherits).toEqual(['editors', 'anonymous']);
     expect((await readGroups()).qa.inherits).toEqual(['editors', 'anonymous']);
   });
 

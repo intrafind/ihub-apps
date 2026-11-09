@@ -461,7 +461,7 @@ async function handleCreateShare(req, res, { artifactId = null } = {}) {
         : `with ${mode === 'users' ? `${share.recipients.length} user(s)` : 'signed-in users'}`
     }`
   });
-  sendCreated(res, `/api/shares/${segment(share.id)}`, { share: ownerView(share) });
+  sendCreated(res, `/api/shares/${segment(share.id)}`, ownerView(share));
 }
 
 /**
@@ -718,7 +718,7 @@ export default function registerChatShareRoutes(app) {
       resourceId: shareId,
       summary: `Revoked share of chat ${share.chatId} (${share.mode})`
     });
-    res.json({ share: ownerView(revoked) });
+    res.json(ownerView(revoked));
   });
 
   app.get(

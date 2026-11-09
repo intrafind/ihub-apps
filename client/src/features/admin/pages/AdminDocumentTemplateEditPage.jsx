@@ -203,7 +203,7 @@ export default function AdminDocumentTemplateEditPage() {
     try {
       if (isNew) {
         const response = await createDocumentTemplate(cleanTemplate(draft));
-        navigate(`/admin/document-templates/${encodeURIComponent(response.template.id)}`, {
+        navigate(`/admin/document-templates/${encodeURIComponent(response.id)}`, {
           replace: true
         });
         return true;

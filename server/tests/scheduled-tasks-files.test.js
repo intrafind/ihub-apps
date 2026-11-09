@@ -112,9 +112,9 @@ describe('task file routes', () => {
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
     assert.equal(
       created.headers.Location,
-      `/api/scheduled-tasks/${task.id}/files/${created.body.file.id}`
+      `/api/scheduled-tasks/${task.id}/files/${created.body.id}`
     );
-    assert.equal(created.body.file.name, 'brief.md');
+    assert.equal(created.body.name, 'brief.md');
 
     const listed = await call('get', '/:taskId/files', { params: { taskId: task.id }, user });
     assert.deepEqual(
@@ -123,19 +123,19 @@ describe('task file routes', () => {
     );
 
     const text = await call('get', '/:taskId/files/:fileId', {
-      params: { taskId: task.id, fileId: created.body.file.id },
+      params: { taskId: task.id, fileId: created.body.id },
       query: { format: 'text' },
       user
     });
-    assert.match(text.body.file.text, /roadmap/);
+    assert.match(text.body.text, /roadmap/);
 
     const removed = await call('delete', '/:taskId/files/:fileId', {
-      params: { taskId: task.id, fileId: created.body.file.id },
+      params: { taskId: task.id, fileId: created.body.id },
       user
     });
     assert.equal(removed.statusCode, 204);
     const again = await call('delete', '/:taskId/files/:fileId', {
-      params: { taskId: task.id, fileId: created.body.file.id },
+      params: { taskId: task.id, fileId: created.body.id },
       user
     });
     assert.equal(again.statusCode, 404);
@@ -153,7 +153,7 @@ describe('task file routes', () => {
       ['delete', '/:taskId/files/:fileId', {}]
     ]) {
       const res = await call(method, suffix, {
-        params: { taskId: task.id, fileId: created.body.file.id },
+        params: { taskId: task.id, fileId: created.body.id },
         user: grace(),
         ...extra
       });
@@ -190,11 +190,11 @@ describe('task file routes', () => {
       data: buffer.toString('base64')
     });
     assert.equal(created.statusCode, 201, JSON.stringify(created.body));
-    assert.equal(created.body.file.hasOriginal, true);
-    assert.equal(created.body.file.canUseAsTemplate, true);
+    assert.equal(created.body.hasOriginal, true);
+    assert.equal(created.body.canUseAsTemplate, true);
 
     const download = await call('get', '/:taskId/files/:fileId', {
-      params: { taskId: task.id, fileId: created.body.file.id },
+      params: { taskId: task.id, fileId: created.body.id },
       query: { download: '1' },
       user
     });
@@ -258,7 +258,7 @@ describe('task files in runs and across the task lifecycle', () => {
       now: farFuture
     });
     assert.equal(swept.discarded, 0);
-    const kept = await store.getOriginal({ type: 'task', id: task.id }, created.body.file.id);
+    const kept = await store.getOriginal({ type: 'task', id: task.id }, created.body.id);
     assert.equal(kept.discarded, false);
     await cleanup(user);
   });

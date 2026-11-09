@@ -69,7 +69,9 @@ beforeEach(() => {
   mockApi.fetchChatShares.mockResolvedValue({ items: [] });
   mockApi.fetchChatFiles.mockResolvedValue({ items: [{ id: 'f1', name: 'upload.pdf' }] });
   mockApi.createArtifactShare.mockImplementation(async (_chat, _artifact, body) => ({
-    share: { id: 'shr_new', mode: body.mode, embeddable: body.embeddable === true }
+    id: 'shr_new',
+    mode: body.mode,
+    embeddable: body.embeddable === true
   }));
 });
 

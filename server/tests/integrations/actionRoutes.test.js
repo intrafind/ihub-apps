@@ -372,13 +372,13 @@ describe('action detail', () => {
         .put(`${base}/instructions`)
         .send({ instructions: { en: 'Use the notes.' } })
     ).expect(200);
-    expect(set.body.instance.instructions).toEqual({ en: 'Use the notes.' });
+    expect(set.body.instructions).toEqual({ en: 'Use the notes.' });
     const page = await admin(request(app).get(base)).expect(200);
     expect(page.body.instructions).toMatchObject({ text: 'Use the notes.', source: 'admin' });
     const removed = await admin(
       request(app).put(`${base}/instructions`).send({ instructions: null })
     ).expect(200);
-    expect(removed.body.instance.instructions).toBeUndefined();
+    expect(removed.body.instructions).toBeUndefined();
     await admin(
       request(app)
         .put(`${base}/instructions`)
