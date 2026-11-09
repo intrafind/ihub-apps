@@ -312,11 +312,12 @@ async function storedModels() {
  */
 async function updateStoredModel(modelId, change) {
   const file = await modelPath(modelId);
-  const stored = await configStore.readJson(file);
-  if (stored === null) return null;
-  const updated = change({ ...stored });
-  await configStore.writeJson(file, updated);
-  return updated;
+  // updateJson holds the file's lock (or the provider's compare-and-set) from the read to the
+  // write, so a save of the same model in between is not written over. `change` may run again.
+  const { data } = await configStore.updateJson(file, stored =>
+    stored === null ? undefined : change({ ...stored })
+  );
+  return data;
 }
 
 /** Take the default flag off every stored model except `exceptId`. */
@@ -672,10 +673,13 @@ export default function registerAdminModelsRoutes(app) {
 
     if (!isChatModel(updatedModel)) updatedModel.default = false;
     if (updatedModel.default === true) await clearOtherDefaults(modelId);
-    // The version being replaced, as it is stored: the history's "before"
-    const oldModel = await configStore.readJson(await modelPath(modelId));
-
-    await configStore.writeJson(await modelPath(modelId), updatedModel);
+    // The version being replaced, as it is stored: the history's "before". Replaced under the
+    // same lock a toggle takes, so the two cannot interleave.
+    let oldModel = null;
+    await configStore.updateJson(await modelPath(modelId), current => {
+      oldModel = current;
+      return updatedModel;
+    });
     await configCache.refreshModelsCache();
     if (oldModel) {
       await saveSnapshot({

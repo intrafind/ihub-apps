@@ -63,6 +63,12 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
     writeJson: async (rel, data) => {
       store[rel] = clone(data);
     },
+    // Read, change, write; `undefined` from `mutate` leaves the file as it is.
+    updateJson: async (rel, mutate) => {
+      const next = await mutate(rel in store ? clone(store[rel]) : null);
+      if (next !== undefined) store[rel] = clone(next);
+      return { data: rel in store ? clone(store[rel]) : null, written: next !== undefined };
+    },
     remove: async rel => {
       const existed = rel in store;
       delete store[rel];
@@ -172,10 +178,17 @@ describe('routes that move the default model read the stored files, not a laggin
   });
 
   test('disabling several models does not write the old copy of the model that inherits the default', async () => {
-    seedWithLaggingCache(chat('small', { default: true }), chat('large', { contextWindow: 65536 }));
-    const res = await request(app).post('/api/admin/models/small/_toggle').send({ enabled: false });
+    seedWithLaggingCache(
+      chat('small', { default: true }),
+      chat('extra'),
+      chat('large', { contextWindow: 65536 })
+    );
+    const res = await request(app)
+      .post('/api/admin/models/small,extra/_toggle')
+      .send({ enabled: false });
     expect(res.status).toBe(200);
     expect(stored('small').enabled).toBe(false);
+    expect(stored('extra').enabled).toBe(false);
     expect(stored('large').default).toBe(true);
     expect(stored('large').contextWindow).toBe(65536);
   });
