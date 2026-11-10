@@ -43,6 +43,8 @@ export function settleActivity(activity, { interrupted = false, decided = false 
   if (decided) items = items.filter(item => item.status !== 'awaiting');
   if (!interrupted) return { ...activity, items };
   // The silence, the page being read and the answer being written are over.
-  const { idle: _idle, answering: _answering, ...rest } = activity;
-  return { ...rest, items: items.map(settleItem), reading: null };
+  const settled = { ...activity, items: items.map(settleItem), reading: null };
+  delete settled.idle;
+  delete settled.answering;
+  return settled;
 }
