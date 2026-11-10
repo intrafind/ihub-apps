@@ -2,17 +2,21 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import SourceHandler from './SourceHandler.js';
-import configCache from '../configCache.js';
-import { httpFetch } from '../utils/httpConfig.js';
 import logger from '../utils/logger.js';
 import { publish, subscribe } from '../clusterBus.js';
-import { htmlToText } from 'html-to-text';
+
+/** Characters of a page one read returns unless the item sets `maxContentLength`. */
+const DEFAULT_MAX_CONTENT_LENGTH = 50000;
 
 /**
  * URL Source Handler
  *
- * Loads content from web URLs. Uses the existing webContentExtractor tool
- * to fetch and clean web content for use as source material.
+ * Loads content from web URLs through the page reader
+ * (`tools/webContentExtractor.js`), the one way iHub reads a web page: the
+ * same fetch (SSRF guard on every hop, proxy, certificate whitelist), the same
+ * extraction and the same page cache as `read_url` and the search tools'
+ * `extractContent`. This handler adds only the source-handler cache and its
+ * metadata.
  */
 class URLHandler extends SourceHandler {
   constructor(config = {}) {
@@ -23,11 +27,11 @@ class URLHandler extends SourceHandler {
 
   /**
    * Load content from URL
-   * @param {Object} sourceConfig - { url: string, options?: Object }
+   * @param {Object} sourceConfig - { url: string, chatId?: string, options?: { maxContentLength?: number } }
    * @returns {Promise<Object>} - { content: string, metadata: Object }
    */
   async loadContent(sourceConfig) {
-    const { url, options = {} } = sourceConfig;
+    const { url, chatId, options = {} } = sourceConfig;
 
     if (!url) {
       throw new Error('URLHandler requires a url in sourceConfig');
@@ -38,43 +42,25 @@ class URLHandler extends SourceHandler {
     }
 
     try {
-      // Import the webContentExtractor tool dynamically
-      const webContentExtractor = await this.getWebContentExtractor();
-
-      // Apply global SSL configuration if not explicitly overridden
-      const platformConfig = configCache.getPlatform() || {};
-      const shouldIgnoreSSL =
-        options.ignoreSSL !== undefined
-          ? options.ignoreSSL
-          : platformConfig.ssl?.ignoreInvalidCertificates || false;
-
-      // Extract content using the existing tool
-      const result = await webContentExtractor.extract({
+      const result = await this.readPage({
         url,
-        maxContentLength: options.maxContentLength || 50000,
-        includeMetadata: true,
-        cleanContent: options.cleanContent !== false,
-        followRedirects: options.followRedirects !== false,
-        ignoreSSL: shouldIgnoreSSL
+        maxLength: options.maxContentLength || DEFAULT_MAX_CONTENT_LENGTH,
+        chatId
       });
 
-      // The page reader returns its metadata at the top level, the fallback
-      // extractor under `metadata`.
-      const meta = { ...result.metadata, ...result };
-      const finalUrl = meta.finalUrl || url;
+      const finalUrl = result.finalUrl || url;
       return {
         content: result.content,
         metadata: {
           type: 'url',
           url,
           link: finalUrl, // Use final URL as link for references
-          title: meta.title || '',
-          description: meta.description || '',
+          title: result.title || '',
+          description: result.description || '',
           contentLength: result.content.length,
           extractedAt: new Date().toISOString(),
-          statusCode: meta.statusCode,
           finalUrl,
-          contentType: meta.contentType,
+          contentType: result.contentType,
           // Only the first `maxContentLength` characters (or the reader's
           // own cap) came back: a consumer must not take this as the page.
           truncated: result.truncated === true || result.incomplete === true,
@@ -87,119 +73,14 @@ class URLHandler extends SourceHandler {
   }
 
   /**
-   * Get webContentExtractor tool instance
-   * @returns {Promise<Object>} - Web content extractor tool
+   * Read a page with the page reader. A method of its own so a test can
+   * stand in for the network.
+   * @param {Object} params - The page reader's parameters (`url`, `maxLength`, `chatId`)
+   * @returns {Promise<Object>} - The page reader's result
    */
-  async getWebContentExtractor() {
-    try {
-      // Try to load the existing web content extraction functionality
-      const webContentExtractor = (await import('../tools/webContentExtractor.js')).default;
-      return {
-        extract: async params => {
-          return await webContentExtractor({
-            url: params.url,
-            maxLength: params.maxContentLength || 50000,
-            ignoreSSL: params.ignoreSSL || false,
-            chatId: params.chatId || 'unknown'
-          });
-        }
-      };
-    } catch (error) {
-      logger.warn('Could not load webContentExtractor tool, using fallback:', error.message);
-      // Fallback implementation if tool not available
-      return this.createFallbackExtractor();
-    }
-  }
-
-  /**
-   * Create fallback extractor using basic fetch
-   * @returns {Object} - Basic extractor implementation
-   */
-  createFallbackExtractor() {
-    logger.info('Using fallback web content extractor (limited functionality)');
-
-    return {
-      extract: async ({
-        url,
-        maxContentLength = 50000,
-        followRedirects = true,
-        cleanContent = true
-      }) => {
-        try {
-          logger.info(`Fallback extractor: Fetching ${url}`);
-
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-          const response = await httpFetch(url, {
-            method: 'GET',
-            headers: {
-              'User-Agent': 'ihub-Apps/1.0 (+https://github.com/intrafind/ihub-apps)',
-              Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'en-US,en;q=0.5',
-              'Accept-Encoding': 'gzip, deflate'
-            },
-            signal: controller.signal,
-            redirect: followRedirects ? 'follow' : 'manual'
-          });
-
-          clearTimeout(timeoutId);
-
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-          }
-
-          let content = await response.text();
-          logger.info(`Fallback extractor: Retrieved ${content.length} characters`);
-
-          // Basic HTML content cleaning if requested
-          if (cleanContent) {
-            // Use a robust HTML-to-text converter instead of manual regex-based sanitization
-            content = htmlToText(content, {
-              wordwrap: false,
-              selectors: [
-                { selector: 'script', format: 'skip' },
-                { selector: 'style', format: 'skip' },
-                { selector: 'nav', format: 'skip' },
-                { selector: 'footer', format: 'skip' },
-                { selector: 'header', format: 'skip' },
-                { selector: 'aside', format: 'skip' }
-              ]
-            })
-              .replace(/\s+/g, ' ')
-              .trim();
-          }
-
-          // Truncate content if too long
-          const truncated = content.length > maxContentLength;
-          if (truncated) {
-            content = content.substring(0, maxContentLength);
-            logger.info(`Fallback extractor: Content truncated to ${maxContentLength} characters`);
-          }
-
-          return {
-            content: content,
-            truncated,
-            metadata: {
-              statusCode: response.status,
-              contentType: response.headers.get('content-type') || 'unknown',
-              finalUrl: response.url,
-              link: response.url, // Use final URL as link for references
-              title: '',
-              description: '',
-              extractedAt: new Date().toISOString(),
-              extractorType: 'fallback'
-            }
-          };
-        } catch (error) {
-          if (error.name === 'AbortError') {
-            throw new Error('Request timeout after 30 seconds');
-          }
-          logger.error('Fallback extractor error:', error.message);
-          throw error;
-        }
-      }
-    };
+  async readPage(params) {
+    const { default: readWebPage } = await import('../tools/webContentExtractor.js');
+    return readWebPage(params);
   }
 
   /**
@@ -258,9 +139,7 @@ class URLHandler extends SourceHandler {
       return JSON.stringify({
         url: normalizedUrl,
         options: {
-          maxContentLength: options.maxContentLength,
-          cleanContent: options.cleanContent,
-          followRedirects: options.followRedirects
+          maxContentLength: options.maxContentLength
         }
       });
     } catch {

@@ -855,6 +855,21 @@ The web content extractor uses the following approach:
 
 `tools/lib/pageContent.js` holds the extraction rules as pure functions; `tools/webContentExtractor.js` does the fetching and caching.
 
+### One Way to Read a Web Page
+
+Every read of a web page goes through the page reader (`tools/webContentExtractor.js`), whoever asks:
+
+| Caller | Entry |
+| --- | --- |
+| The model's `read_url` | `extractForTool` |
+| A search result's `extractContent` excerpt | `webContentExtractor` (via `tools/lib/searchWithExtraction.js`) |
+| A project's web page item (`url` kind, the `url` source handler) | `webContentExtractor` (via `sources/URLHandler.js`) |
+| A project's site crawl and its linked-file download | `fetchWebPage` (the same guarded fetch; the response is read as a file, not as a page) |
+
+So they share one fetch (SSRF guard on every redirect hop, DNS pinning, proxy, `ssl.domainWhitelist`), one extraction (Readability and Turndown, `tools/lib/pageContent.js`), one page cache and one bot-protection memory. An HTML file in a project is turned into Markdown by the same `extractHtmlPage`, so a saved page and a live one read alike. The only other HTML-to-text converter is the one for e-mail bodies (`.eml`, `.msg`), which are fragments, not pages.
+
+A change to how a page is fetched or extracted belongs in these two files, not in a caller. The `url` source handler has no fetch or conversion of its own: it passes the item's length limit (`maxContentLength`) and the chat to the page reader.
+
 ### SSRF Protection
 
 The web content extractor includes protection against Server-Side Request Forgery (SSRF):

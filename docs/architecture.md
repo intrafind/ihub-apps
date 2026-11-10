@@ -458,9 +458,9 @@ graph TB
 
 #### URLHandler
 - **Purpose**: Fetch content from web URLs
-- **Features**: Web content extraction, fallback mechanisms
-- **Integration**: Uses read_url tool for intelligent content parsing
-- **Error Handling**: Graceful degradation when external tools unavailable
+- **Features**: Web content extraction, source-handler cache with a per-item TTL
+- **Integration**: Reads through the page reader (`tools/webContentExtractor.js`), the same fetch, extraction and page cache as `read_url`; see [One Way to Read a Web Page](web-tools.md#one-way-to-read-a-web-page)
+- **Error Handling**: A failed read is reported on the item; there is no second fetch path
 
 #### IFinderHandler
 - **Purpose**: Integration with iFinder document management system
