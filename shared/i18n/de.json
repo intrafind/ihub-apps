@@ -1,10 +1,14 @@
 {
+  "product": {
+    "name": "iHub Apps",
+    "tagline": "von IntraFind"
+  },
   "accessibility": {
     "skipToContent": "Zum Hauptinhalt springen"
   },
   "footer": {
     "navigation": "Fußzeilen-Navigation",
-    "copyright": "© {{year}} iHub Apps"
+    "copyright": "© {{year}} $t(product.name)"
   },
   "attachedFiles": {
     "removeAll": "Alle entfernen",
@@ -53,7 +57,7 @@
     "downloadFailed": "Der Download ist fehlgeschlagen. Bitte versuchen Sie es erneut."
   },
   "app": {
-    "title": "iHub Apps",
+    "title": "$t(product.name)",
     "loading": "Wird geladen...",
     "error": "Ein Fehler ist aufgetreten",
     "retry": "Wiederholen"
@@ -316,7 +320,7 @@
   },
   "pages": {
     "home": {
-      "title": "iHub Apps",
+      "title": "$t(product.name)",
       "description": "Interagiere mit verschiedenen KI-Modellen über eine einfache Schnittstelle",
       "featured": "Ausgewählte Anwendungen",
       "viewAll": "Alle Anwendungen anzeigen"
@@ -389,7 +393,7 @@
       "title": "Externe Anwendung",
       "externalSite": "Externe Webseite",
       "continueButton": "Weiter zu {{appName}}",
-      "warning": "Sie verlassen iHub Apps",
+      "warning": "Sie verlassen $t(product.name)",
       "openingInNewTab": "Wird in neuem Tab geöffnet...",
       "redirecting": "Weiterleitung...",
       "invalidUrl": "Für diese App ist keine gültige Webadresse hinterlegt. Nur http- und https-Links können geöffnet werden."
@@ -2364,7 +2368,7 @@
       "versionLoading": "Versionsinformationen werden geladen...",
       "versionError": "Fehler beim Laden der Versionsinformationen",
       "updateCheckTitle": "Update verfügbar",
-      "updateAvailable": "Eine neue Version von iHub Apps ist verfügbar!",
+      "updateAvailable": "Eine neue Version von $t(product.name) ist verfügbar!",
       "currentVersion": "Aktuelle Version",
       "latestVersion": "Neueste Version",
       "viewRelease": "Release auf GitHub ansehen",
@@ -4799,7 +4803,7 @@
     },
     "changelog": {
       "title": "Neuigkeiten",
-      "subtitle": "Versionshinweise zu jeder iHub Apps-Version, neueste zuerst.",
+      "subtitle": "Versionshinweise zu jeder $t(product.name)-Version, neueste zuerst.",
       "loading": "Änderungsprotokoll wird geladen …",
       "loadingRelease": "Versionshinweise werden geladen …",
       "loadError": "Änderungsprotokoll konnte nicht geladen werden",
@@ -5195,7 +5199,7 @@
       "delete": "Löschen",
       "edit": "Bearbeiten",
       "searchPlaceholder": "Skills durchsuchen...",
-      "subtitle": "Skills für Ihre iHub Apps installieren, konfigurieren und verwalten",
+      "subtitle": "Skills für Ihre $t(product.name) installieren, konfigurieren und verwalten",
       "table": {
         "name": "Name"
       },
@@ -6419,15 +6423,15 @@
     },
     "manifest": {
       "name": {
-        "short": "iHub Apps",
-        "full": "iHub Apps - Enterprise KI-Assistent"
+        "short": "$t(product.name)",
+        "full": "$t(product.name) - Enterprise KI-Assistent"
       },
       "description": {
         "short": "Zugriff auf KI-basierte Anwendungen direkt in Microsoft Teams",
-        "full": "iHub Apps bietet eine umfassende Suite von KI-basierten Anwendungen für Unternehmensbenutzer. Greifen Sie auf Chat-Assistenten, Dokumentanalysatoren und spezialisierte KI-Tools direkt in Microsoft Teams zu."
+        "full": "$t(product.name) bietet eine umfassende Suite von KI-basierten Anwendungen für Unternehmensbenutzer. Greifen Sie auf Chat-Assistenten, Dokumentanalysatoren und spezialisierte KI-Tools direkt in Microsoft Teams zu."
       },
       "staticTabs": {
-        "name": "iHub Apps"
+        "name": "$t(product.name)"
       }
     }
   },
@@ -6446,7 +6450,7 @@
       },
       "apiKeys": {
         "title": "Persönlicher API-Schlüssel",
-        "description": "Erzeugen Sie einen Schlüssel, mit dem externe Werkzeuge iHub Apps in Ihrem Namen aufrufen - mit genau Ihren Berechtigungen.",
+        "description": "Erzeugen Sie einen Schlüssel, mit dem externe Werkzeuge $t(product.name) in Ihrem Namen aufrufen - mit genau Ihren Berechtigungen.",
         "available": "Verfügbar",
         "endpointsTitle": "Endpunkte",
         "endpoints": {
@@ -6491,12 +6495,12 @@
       "sections": {
         "access": {
           "title": "Zugriff auf iHub",
-          "description": "Werkzeuge und Anwendungen, die iHub Apps in Ihrem Namen nutzen."
+          "description": "Werkzeuge und Anwendungen, die $t(product.name) in Ihrem Namen nutzen."
         }
       },
       "connections": {
         "title": "Verbundene Apps",
-        "description": "Anwendungen, denen Sie Zugriff auf iHub Apps in Ihrem Namen erlaubt haben.",
+        "description": "Anwendungen, denen Sie Zugriff auf $t(product.name) in Ihrem Namen erlaubt haben.",
         "empty": "Sie haben noch keine Anwendungen verbunden.",
         "disconnect": "Trennen",
         "disconnectTitle": "Anwendung trennen",
@@ -7133,7 +7137,7 @@
   },
   "setup": {
     "step1": {
-      "title": "Willkommen bei iHub Apps",
+      "title": "Willkommen bei $t(product.name)",
       "description": "Ihre zentrale Plattform für KI-gestützte Anwendungen. Verbinden Sie Ihren ersten KI-Anbieter, um loszulegen — das dauert nur eine Minute.",
       "getStarted": "Loslegen",
       "skipLater": "Überspringen, später konfigurieren"
@@ -7680,7 +7684,7 @@
       "readOnly": "Nur lesen",
       "sharedBy": "Geteilt von {{name}}",
       "sharedAnonymously": "Mit Ihnen geteilt",
-      "openApp": "iHub Apps öffnen",
+      "openApp": "$t(product.name) öffnen",
       "publicBanner": "Diese Unterhaltung ist öffentlich zugänglich. Jeder mit dem Link kann sie lesen.",
       "signInTitle": "Melden Sie sich an, um diesen geteilten Chat zu öffnen",
       "signInHint": "Dieser Link wurde nur mit angemeldeten Nutzern geteilt. Nach der Anmeldung kommen Sie hierher zurück.",

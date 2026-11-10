@@ -8,6 +8,7 @@ import LanguageSelector from './LanguageSelector';
 import DarkModeToggle from './DarkModeToggle';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
+import { resolveTranslationRefs } from '../../utils/translationRefs';
 import DisclaimerPopup from './DisclaimerPopup';
 import SmartSearch from './SmartSearch';
 import ScheduledTaskNotifier from '../../features/tasks/components/ScheduledTaskNotifier';
@@ -47,6 +48,10 @@ function Layout() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { headerColor, uiConfig, resetHeaderColor } = useUIConfig();
+  // The tagline may refer to a translation key (`$t(product.tagline)`), so it is resolved here.
+  const tagline = uiConfig?.header?.tagline
+    ? resolveTranslationRefs(getLocalizedContent(uiConfig.header.tagline, currentLanguage), t)
+    : null;
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
@@ -334,13 +339,13 @@ function Layout() {
                             <span className="font-semibold">
                               {uiConfig?.header?.title
                                 ? getLocalizedContent(uiConfig.header.title, currentLanguage)
-                                : 'iHub Apps'}
+                                : t('product.name', 'iHub Apps')}
                             </span>
                           )}
                         </span>
-                        {uiConfig?.header?.tagline && (
+                        {tagline && (
                           <span className="text-[0.5625rem] text-white/60 font-normal">
-                            {getLocalizedContent(uiConfig.header.tagline, currentLanguage)}
+                            {tagline}
                           </span>
                         )}
                       </div>

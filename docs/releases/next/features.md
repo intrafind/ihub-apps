@@ -1476,3 +1476,18 @@ what is happening.
 For integrators: SSE v2 gains three `tool/progress` phases, `args`, `args.ended` and
 `model.waiting`. They are additive, `tool/started` is unchanged and nothing is added to saved chats.
 See [SSE v2](../../sse-v2.md) and [Accessibility](../../accessibility.md).
+
+## Translations: One Key for the Product Name
+
+The product name has a single translation key, `product.name`, and every translation that
+mentions "iHub Apps" now refers to it. Overriding that one key under **Admin → Customization →
+Localization** renames the product in the footer, page titles, share links, the Teams manifest text
+and every other place the name appears.
+
+- The header tagline ("by IntraFind" / "von IntraFind") is now the translation key
+  `product.tagline`, so it can be overridden the same way. Installations that still have the
+  shipped tagline in `ui.json` are switched over automatically; a tagline you wrote, or removed, is
+  left alone.
+- Use `$t(product.name)` in your own overrides instead of typing the name.
+
+See [Localization](../../localization.md).

@@ -22,8 +22,8 @@
       }
     },
     "tagline": {
-      "en": "by IntraFind",
-      "de": "von IntraFind"
+      "en": "$t(product.tagline)",
+      "de": "$t(product.tagline)"
     },
     "links": [
       {

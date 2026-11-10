@@ -46,7 +46,7 @@ function DocumentTitle() {
     }
 
     // Get platform name from config
-    let platformName = 'iHub Apps'; // Default fallback
+    let platformName = t('product.name', 'iHub Apps'); // Default fallback
     if (uiConfig?.title) {
       const localizedTitle = getLocalizedContent(uiConfig.title, currentLanguage);
       if (localizedTitle) {

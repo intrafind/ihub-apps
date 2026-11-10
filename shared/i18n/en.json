@@ -1,10 +1,14 @@
 {
+  "product": {
+    "name": "iHub Apps",
+    "tagline": "by IntraFind"
+  },
   "accessibility": {
     "skipToContent": "Skip to main content"
   },
   "footer": {
     "navigation": "Footer navigation",
-    "copyright": "© {{year}} iHub Apps"
+    "copyright": "© {{year}} $t(product.name)"
   },
   "attachedFiles": {
     "removeAll": "Remove All",
@@ -53,7 +57,7 @@
     "downloadFailed": "The download failed. Please try again."
   },
   "app": {
-    "title": "iHub Apps",
+    "title": "$t(product.name)",
     "loading": "Loading...",
     "error": "An error occurred",
     "retry": "Retry"
@@ -257,7 +261,7 @@
   },
   "pages": {
     "home": {
-      "title": "iHub Apps",
+      "title": "$t(product.name)",
       "description": "Interact with various AI models through a simple interface",
       "featured": "Featured Apps",
       "viewAll": "View All Apps"
@@ -330,7 +334,7 @@
       "title": "External Application",
       "externalSite": "External Site",
       "continueButton": "Continue to {{appName}}",
-      "warning": "You are about to leave iHub Apps",
+      "warning": "You are about to leave $t(product.name)",
       "openingInNewTab": "Opening in new tab...",
       "redirecting": "Redirecting...",
       "invalidUrl": "This app has no valid web address configured. Only http and https links can be opened."
@@ -2007,7 +2011,7 @@
       "versionLoading": "Loading version information...",
       "versionError": "Failed to load version information",
       "updateCheckTitle": "Update Available",
-      "updateAvailable": "A new version of iHub Apps is available!",
+      "updateAvailable": "A new version of $t(product.name) is available!",
       "currentVersion": "Current Version",
       "latestVersion": "Latest Version",
       "viewRelease": "View Release on GitHub",
@@ -4442,7 +4446,7 @@
     },
     "changelog": {
       "title": "What's New",
-      "subtitle": "Release notes for every iHub Apps release, newest first.",
+      "subtitle": "Release notes for every $t(product.name) release, newest first.",
       "loading": "Loading changelog...",
       "loadingRelease": "Loading release notes...",
       "loadError": "Failed to load changelog",
@@ -4838,7 +4842,7 @@
       "delete": "Delete",
       "edit": "Edit",
       "searchPlaceholder": "Search skills...",
-      "subtitle": "Install, configure, and manage skills for your iHub Apps",
+      "subtitle": "Install, configure, and manage skills for your $t(product.name)",
       "table": {
         "name": "Name"
       },
@@ -5445,7 +5449,7 @@
         "manifest-invalid": "The update manifest is not valid: {{error}}",
         "legacy-archive": "The archive has no update manifest (built before manifests were introduced); its contents cannot be checked file by file.",
         "manifest-mismatch": "The archive's files do not match its manifest ({{changed}} changed, {{missing}} missing, {{unlisted}} unlisted: {{sample}}).",
-        "wrong-product": "The archive is not an iHub Apps release ({{product}}).",
+        "wrong-product": "The archive is not an $t(product.name) release ({{product}}).",
         "incomplete": "The archive does not contain the application files (server/, public/, version.txt).",
         "version-conflict": "The manifest says {{manifest}}, version.txt says {{versionTxt}}.",
         "signature-invalid": "The manifest signature does not match: the archive was modified after signing.",
@@ -5926,7 +5930,7 @@
     },
     "docs": {
       "title": "Documentation",
-      "subtitle": "The iHub Apps documentation for the version you are running.",
+      "subtitle": "The $t(product.name) documentation for the version you are running.",
       "searchLabel": "Search the documentation",
       "searchPlaceholder": "Search the documentation...",
       "searching": "Searching...",
@@ -6445,15 +6449,15 @@
     },
     "manifest": {
       "name": {
-        "short": "iHub Apps",
-        "full": "iHub Apps - Enterprise AI Assistant"
+        "short": "$t(product.name)",
+        "full": "$t(product.name) - Enterprise AI Assistant"
       },
       "description": {
         "short": "Access AI-powered applications directly in Microsoft Teams",
-        "full": "iHub Apps provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
+        "full": "$t(product.name) provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
       },
       "staticTabs": {
-        "name": "iHub Apps"
+        "name": "$t(product.name)"
       }
     }
   },
@@ -6472,7 +6476,7 @@
       },
       "apiKeys": {
         "title": "Personal API Key",
-        "description": "Generate a key that lets external tools call iHub Apps as you, with exactly your permissions.",
+        "description": "Generate a key that lets external tools call $t(product.name) as you, with exactly your permissions.",
         "available": "Available",
         "endpointsTitle": "Endpoints",
         "endpoints": {
@@ -6517,12 +6521,12 @@
       "sections": {
         "access": {
           "title": "Access to iHub",
-          "description": "Tools and applications that use iHub Apps as you."
+          "description": "Tools and applications that use $t(product.name) as you."
         }
       },
       "connections": {
         "title": "Connected apps",
-        "description": "Applications you have allowed to access iHub Apps as you.",
+        "description": "Applications you have allowed to access $t(product.name) as you.",
         "empty": "You have not connected any applications yet.",
         "disconnect": "Disconnect",
         "disconnectTitle": "Disconnect application",
@@ -7159,7 +7163,7 @@
   },
   "setup": {
     "step1": {
-      "title": "Welcome to iHub Apps",
+      "title": "Welcome to $t(product.name)",
       "description": "Your all-in-one platform for AI-powered applications. To get started, connect your first AI provider — it only takes a minute.",
       "getStarted": "Get Started",
       "skipLater": "Skip, I'll configure later"
@@ -7706,7 +7710,7 @@
       "readOnly": "Read-only",
       "sharedBy": "Shared by {{name}}",
       "sharedAnonymously": "Shared with you",
-      "openApp": "Open iHub Apps",
+      "openApp": "Open $t(product.name)",
       "publicBanner": "This conversation is publicly accessible. Anyone with the link can read it.",
       "signInTitle": "Sign in to open this shared chat",
       "signInHint": "This link was shared with signed-in users only. Sign in and you will be brought back here.",

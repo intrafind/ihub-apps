@@ -116,7 +116,9 @@ function ExportDialog({
   });
 
   const getAppName = () => {
-    return uiConfig?.title ? getLocalizedContent(uiConfig.title, currentLanguage) : 'iHub Apps';
+    return uiConfig?.title
+      ? getLocalizedContent(uiConfig.title, currentLanguage)
+      : t('product.name', 'iHub Apps');
   };
 
   // Helper functions to generate content for copying

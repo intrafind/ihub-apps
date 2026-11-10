@@ -25,6 +25,29 @@ Customers can override any of the built-in strings by creating files in `content
 
 Save this as `contents/locales/de.json`. During startup the server merges these overrides with the built-in locales.
 
+## The Product Name and Tagline
+
+The product name has one translation key, `product.name` ("iHub Apps"). Every other text that
+mentions it, such as the footer copyright, the welcome title or the share-link button, refers to it
+as `$t(product.name)`, which i18next fills in from the same file. Override that one key and the
+name changes everywhere:
+
+```json
+{
+  "product": {
+    "name": "Acme Assistant"
+  }
+}
+```
+
+Use the same reference in your own overrides (`"Welcome to $t(product.name)"`) instead of
+spelling the name out. A key can refer to any other key the same way.
+
+The header tagline ("by IntraFind") is `product.tagline`. The shipped `header.tagline` in
+`contents/config/ui.json` points at it as `$t(product.tagline)`; text you type into that field
+instead, or an empty value, takes its place. `$t(key)` also works in other header and footer text
+that the client resolves, but only the tagline is resolved today.
+
 ## Merge Behaviour
 
 1. The server loads the built-in file from `shared/i18n/{lang}.json`.
