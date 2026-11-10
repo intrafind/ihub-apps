@@ -1,5 +1,12 @@
 # Fixes — Unreleased
 
+## Rating a Chat Answer Works Again
+
+Sending a star rating or comment under an answer failed with "Some of the entered data is not valid"
+and nothing was saved. The chat sends no iAssistant conversation or message id for an ordinary
+answer, and the server refused the empty value. `POST /api/feedback` now accepts the optional fields
+as empty, so feedback is recorded for every app and model.
+
 ## Share Is Always Offered When You Open a File From the Chat
 
 Opening a generated picture or a file from the answer that has just produced it showed the viewer

@@ -21,12 +21,14 @@ export const startSessionSchema = {
   })
 };
 
+// Optional fields are nullish: the client sends `null` (not an absent key) for
+// `conversationId` / `ifinderMessageId` on every non-iAssistant message.
 export const feedbackSchema = {
   body: z.object({
     messageId: z.string().min(1),
     appId: z.string().min(1),
     chatId: z.string().min(1),
-    messageContent: z.string().optional(),
+    messageContent: z.string().nullish(),
     rating: z
       .number()
       .min(0.5, 'Rating must be at least 0.5')
@@ -34,12 +36,12 @@ export const feedbackSchema = {
       .refine(val => val % 0.5 === 0, {
         message: 'Rating must be in 0.5 increments (0.5, 1.0, 1.5, ..., 5.0)'
       }),
-    feedback: z.string().optional(),
-    modelId: z.string().optional(),
-    conversationId: z.string().optional(),
-    ifinderMessageId: z.string().optional(),
+    feedback: z.string().nullish(),
+    modelId: z.string().nullish(),
+    conversationId: z.string().nullish(),
+    ifinderMessageId: z.string().nullish(),
     /** Run the rated message belongs to — records a `human/event` on its ledger. */
-    runId: z.string().optional()
+    runId: z.string().nullish()
   })
 };
 
