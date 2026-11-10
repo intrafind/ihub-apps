@@ -137,7 +137,7 @@ test.describe('Artifact viewer in a shared chat', () => {
     await expect(card).toBeFocused();
   });
 
-  test('full screen fills the window; ?artifact= reopens on reload, and Back steps out', async ({
+  test('full screen fills the area under the header; ?artifact= reopens on reload, and Back steps out', async ({
     page
   }) => {
     await mockShares(page);
@@ -145,7 +145,14 @@ test.describe('Artifact viewer in a shared chat', () => {
     await page.getByTestId('generated-file-open').click();
     await page.getByRole('button', { name: 'Full screen' }).click();
     await expect(page).toHaveURL(/view=full/);
-    await expectFillsViewport(page, page.getByTestId('artifact-viewer').locator('iframe'));
+    // Full screen fills the content area under the page header; the chat column hides.
+    await expect(page.getByTestId('workspace-chat-column')).toBeHidden();
+    const viewport = page.viewportSize();
+    const paneBox = await page.getByTestId('workspace-pane').boundingBox();
+    expect(paneBox.width).toBeGreaterThanOrEqual(viewport.width - 2);
+    expect(paneBox.y + paneBox.height).toBeGreaterThanOrEqual(viewport.height - 2);
+    const frameBox = await page.getByTestId('artifact-viewer').locator('iframe').boundingBox();
+    expect(frameBox.width).toBeGreaterThanOrEqual(paneBox.width - 4);
 
     await page.reload();
     await expect(page.getByTestId('workspace-pane')).toHaveAttribute('data-state', 'full');

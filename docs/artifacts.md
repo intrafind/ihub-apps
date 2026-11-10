@@ -237,7 +237,7 @@ travels on a request the client makes itself.
 
 A chat shows its files, generated and uploaded, and the sources its answers cite in one
 **workspace pane** on the right of the chat. The pane is part of the chat page's layout, so
-the chat reflows next to it and stays usable: you can keep asking while a document is open.
+the chat reflows next to it and stays usable; the app's header keeps the full width above both: you can keep asking while a document is open.
 (Design: `concepts/2026-11-10 Workspace Pane for Artifacts, Files and Sources.md`.)
 
 ### States and layout
@@ -246,7 +246,7 @@ the chat reflows next to it and stays usable: you can keep asking while a docume
 | --- | --- | --- |
 | Closed | ✕, Esc with focus in the pane, Back | Chat at full width |
 | Docked | A file card, a source's **Preview**, the header's **Files** button, Ctrl/Cmd+. | Next to the chat, which reflows |
-| Full screen | ⤢ or Ctrl/Cmd+Shift+E | The pane fills the content area, text in a reading column, a composer dock at the bottom |
+| Full screen | ⤢ or Ctrl/Cmd+Shift+E | The pane fills the content area under the app header, text in a reading column, a composer dock at the bottom |
 
 - **Width.** The docked pane opens at half the row, clamped to 420–960 px. Drag the divider
   (or focus it and use the arrow keys, Shift for bigger steps, Home/End for the limits) to

@@ -3120,114 +3120,116 @@ function AppChat({
             : null
         }
       >
-        <WorkspaceLayout className="h-full max-h-full overflow-hidden">
-          <div className="flex flex-col flex-1 h-full max-h-full min-h-0 overflow-hidden px-4 md:px-6 pt-2 sm:pt-4 pb-2">
-            {/* Shared App Header */}
-            <SharedAppHeader
-              app={app}
-              appId={appId}
-              chatId={chatId}
-              mode="chat"
-              messages={messages}
-              variables={variables}
-              onClearChat={clearChat}
-              currentLanguage={currentLanguage}
-              models={models}
-              styles={styles}
-              selectedModel={selectedModel}
-              selectedStyle={selectedStyle}
-              selectedOutputFormat={selectedOutputFormat}
-              sendChatHistory={sendChatHistory}
-              thinkingEnabled={thinkingEnabled}
-              thinkingLevel={thinkingLevel}
-              thinkingThoughts={thinkingThoughts}
-              enabledTools={effectiveEnabledTools}
-              imageAspectRatio={imageAspectRatio}
-              imageQuality={imageQuality}
-              onModelChange={setSelectedModel}
-              onStyleChange={setSelectedStyle}
-              onOutputFormatChange={setSelectedOutputFormat}
-              onSendChatHistoryChange={setSendChatHistory}
-              onThinkingEnabledChange={setThinkingEnabled}
-              onThinkingLevelChange={setThinkingLevel}
-              onThinkingThoughtsChange={setThinkingThoughts}
-              onEnabledToolsChange={setEnabledTools}
-              onImageAspectRatioChange={setImageAspectRatio}
-              onImageQualityChange={setImageQuality}
-              showConfig={showConfig}
-              onToggleConfig={toggleConfig}
-              onToggleParameters={toggleParameters}
-              showParameters={window.innerWidth >= 768 ? !variablesPanel.collapsed : showParameters}
-              hideParametersButton={!showVariablesPanel}
-              onShare={() => setShowShare(true)}
-              showShareButton={shareEnabled || chatShareReady}
-              onOpenArtifacts={() => workspaceRef.current?.openFiles()}
-              showArtifactsButton={filesDrawerAvailable}
-              conversationTitle={conversationTitle}
-              showCompareModeToggle={compareModeFeatureEnabled && chatModels.length >= 2}
-              compareModeActive={compareModeActive}
-              onCompareModeChange={changeCompareMode}
-              compareModeDisabled={processing || compareIsProcessing}
-              showBackButton={!embedded}
-              showEditAppButton={!embedded}
-              onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
-            />
+        <div className="flex flex-col flex-1 h-full max-h-full min-h-0 overflow-hidden px-4 md:px-6 pt-2 sm:pt-4 pb-2">
+          {/* Shared App Header */}
+          <SharedAppHeader
+            app={app}
+            appId={appId}
+            chatId={chatId}
+            mode="chat"
+            messages={messages}
+            variables={variables}
+            onClearChat={clearChat}
+            currentLanguage={currentLanguage}
+            models={models}
+            styles={styles}
+            selectedModel={selectedModel}
+            selectedStyle={selectedStyle}
+            selectedOutputFormat={selectedOutputFormat}
+            sendChatHistory={sendChatHistory}
+            thinkingEnabled={thinkingEnabled}
+            thinkingLevel={thinkingLevel}
+            thinkingThoughts={thinkingThoughts}
+            enabledTools={effectiveEnabledTools}
+            imageAspectRatio={imageAspectRatio}
+            imageQuality={imageQuality}
+            onModelChange={setSelectedModel}
+            onStyleChange={setSelectedStyle}
+            onOutputFormatChange={setSelectedOutputFormat}
+            onSendChatHistoryChange={setSendChatHistory}
+            onThinkingEnabledChange={setThinkingEnabled}
+            onThinkingLevelChange={setThinkingLevel}
+            onThinkingThoughtsChange={setThinkingThoughts}
+            onEnabledToolsChange={setEnabledTools}
+            onImageAspectRatioChange={setImageAspectRatio}
+            onImageQualityChange={setImageQuality}
+            showConfig={showConfig}
+            onToggleConfig={toggleConfig}
+            onToggleParameters={toggleParameters}
+            showParameters={window.innerWidth >= 768 ? !variablesPanel.collapsed : showParameters}
+            hideParametersButton={!showVariablesPanel}
+            onShare={() => setShowShare(true)}
+            showShareButton={shareEnabled || chatShareReady}
+            onOpenArtifacts={() => workspaceRef.current?.openFiles()}
+            showArtifactsButton={filesDrawerAvailable}
+            conversationTitle={conversationTitle}
+            showCompareModeToggle={compareModeFeatureEnabled && chatModels.length >= 2}
+            compareModeActive={compareModeActive}
+            onCompareModeChange={changeCompareMode}
+            compareModeDisabled={processing || compareIsProcessing}
+            showBackButton={!embedded}
+            showEditAppButton={!embedded}
+            onOpenCanvas={embedded ? () => openInNewTab(`/apps/${appId}/canvas`) : undefined}
+          />
 
-            {chatOrigin?.createdVia === 'scheduled-task' && (
-              <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />
-            )}
+          {chatOrigin?.createdVia === 'scheduled-task' && (
+            <ScheduledRunBanner origin={chatOrigin} onRunChanged={reloadScheduledRunChat} />
+          )}
 
-            {showVariablesPanel && showParameters && (
-              <div
-                role="presentation"
-                className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
-                onClick={e => {
-                  // Close modal when clicking backdrop
-                  if (e.target === e.currentTarget) {
-                    handleParametersCancel();
-                  }
-                }}
-              >
-                <div className="w-full bg-white dark:bg-gray-800 rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-                  <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 shrink-0">
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">
-                      {t('pages.appChat.inputParameters')}
-                    </h3>
-                    <button
-                      onClick={handleParametersCancel}
-                      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
-                    >
-                      <Icon name="close" size="lg" className="text-current" />
-                    </button>
-                  </div>
-                  <div className="p-4 overflow-y-auto flex-1">
-                    <InputVariables
-                      variables={tempVariables}
-                      setVariables={handleTempVariableChange}
-                      localizedVariables={localizedVariables}
-                    />
-                  </div>
-                  <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
-                    <button
-                      onClick={handleParametersCancel}
-                      className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
-                    >
-                      {t('common.cancel', 'Cancel')}
-                    </button>
-                    <button
-                      onClick={handleParametersOk}
-                      className="flex-1 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
-                    >
-                      {t('common.ok', 'OK')}
-                    </button>
-                  </div>
+          {showVariablesPanel && showParameters && (
+            <div
+              role="presentation"
+              className="md:hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+              onClick={e => {
+                // Close modal when clicking backdrop
+                if (e.target === e.currentTarget) {
+                  handleParametersCancel();
+                }
+              }}
+            >
+              <div className="w-full bg-white dark:bg-gray-800 rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+                <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 shrink-0">
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                    {t('pages.appChat.inputParameters')}
+                  </h3>
+                  <button
+                    onClick={handleParametersCancel}
+                    className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
+                  >
+                    <Icon name="close" size="lg" className="text-current" />
+                  </button>
+                </div>
+                <div className="p-4 overflow-y-auto flex-1">
+                  <InputVariables
+                    variables={tempVariables}
+                    setVariables={handleTempVariableChange}
+                    localizedVariables={localizedVariables}
+                  />
+                </div>
+                <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 shrink-0">
+                  <button
+                    onClick={handleParametersCancel}
+                    className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
+                  >
+                    {t('common.cancel', 'Cancel')}
+                  </button>
+                  <button
+                    onClick={handleParametersOk}
+                    className="flex-1 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 font-medium"
+                  >
+                    {t('common.ok', 'OK')}
+                  </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Embedded, the chat sits in a panel far narrower than the viewport its
+          {/* Embedded, the chat sits in a panel far narrower than the viewport its
           breakpoints measure, so the input variables stack above it instead of
           taking a side column. */}
+          {/* The workspace pane shares the area under the app header with the chat:
+            the header keeps the full width, the pane is part of the app. */}
+          <WorkspaceLayout className="gap-2 [&>section]:rounded-lg [&>section]:border [&>section]:border-gray-200 dark:[&>section]:border-gray-700">
             <div
               className={`flex flex-col flex-1 gap-4 overflow-hidden mx-auto w-full ${embedded ? '' : 'md:flex-row'}`}
             >
@@ -3477,105 +3479,105 @@ function AppChat({
                 />
               )}
             </div>
-            {promptDraft && (
-              <Suspense fallback={null}>
-                <PromptEditorModal
-                  initial={promptDraft}
-                  onClose={() => setPromptDraft(null)}
-                  onSaved={() => {
-                    setPromptDraft(null);
-                    setPromptSavedNotice(true);
-                    setTimeout(() => setPromptSavedNotice(false), 3000);
-                  }}
-                />
-              </Suspense>
-            )}
-            {promptSavedNotice && (
-              <div
-                role="status"
-                className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
-              >
-                {t('prompts.notices.savedToLibrary', 'Saved to your prompts')}
-              </div>
-            )}
-            {skillDraft && (
-              <Suspense fallback={null}>
-                <SkillEditorModal
-                  initial={skillDraft}
-                  onClose={() => setSkillDraft(null)}
-                  onSaved={saved => {
-                    setSkillDraft(null);
-                    setSavedSkillName(saved?.name || skillDraft.name);
-                  }}
-                />
-              </Suspense>
-            )}
-            {savedSkillName && (
-              <div
-                role="status"
-                className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
-              >
-                {t('skills.notices.savedFromChat', {
-                  defaultValue: 'Saved to your skills. Type /{{name}} in a chat to use it.',
-                  name: savedSkillName
-                })}
-              </div>
-            )}
-            {/* Mounted while the app has a guide and opened by state, like the other
+          </WorkspaceLayout>
+          {promptDraft && (
+            <Suspense fallback={null}>
+              <PromptEditorModal
+                initial={promptDraft}
+                onClose={() => setPromptDraft(null)}
+                onSaved={() => {
+                  setPromptDraft(null);
+                  setPromptSavedNotice(true);
+                  setTimeout(() => setPromptSavedNotice(false), 3000);
+                }}
+              />
+            </Suspense>
+          )}
+          {promptSavedNotice && (
+            <div
+              role="status"
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
+            >
+              {t('prompts.notices.savedToLibrary', 'Saved to your prompts')}
+            </div>
+          )}
+          {skillDraft && (
+            <Suspense fallback={null}>
+              <SkillEditorModal
+                initial={skillDraft}
+                onClose={() => setSkillDraft(null)}
+                onSaved={saved => {
+                  setSkillDraft(null);
+                  setSavedSkillName(saved?.name || skillDraft.name);
+                }}
+              />
+            </Suspense>
+          )}
+          {savedSkillName && (
+            <div
+              role="status"
+              className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 rounded-md bg-gray-900 text-white text-sm px-4 py-2 shadow-lg"
+            >
+              {t('skills.notices.savedFromChat', {
+                defaultValue: 'Saved to your skills. Type /{{name}} in a chat to use it.',
+                name: savedSkillName
+              })}
+            </div>
+          )}
+          {/* Mounted while the app has a guide and opened by state, like the other
           dialogs, so its focus trap sees the open transition. */}
-            {usageGuide.available && (
-              <Suspense fallback={null}>
-                <UsageGuideDialog
-                  isOpen={usageGuideViewerOpen}
-                  question={usageGuide.question}
-                  content={usageGuide.content}
-                  onClose={() => setUsageGuideViewerOpen(false)}
-                />
-              </Suspense>
-            )}
-            {sharingArtifact && (
-              <ArtifactShareDialog
-                isOpen
-                onClose={() => setSharingArtifact(null)}
-                chatId={chatId}
-                artifact={{ id: sharingArtifact.id, name: sharingArtifact.name }}
+          {usageGuide.available && (
+            <Suspense fallback={null}>
+              <UsageGuideDialog
+                isOpen={usageGuideViewerOpen}
+                question={usageGuide.question}
+                content={usageGuide.content}
+                onClose={() => setUsageGuideViewerOpen(false)}
               />
-            )}
-            {showShare && (
-              <ShareDialog
-                isOpen={showShare}
-                onClose={() => setShowShare(false)}
-                appName={app?.name}
-                chatShare={chatShareOffered ? { chatId, ready: chatShareReady } : null}
-                appLink={
-                  shareEnabled
-                    ? {
-                        appId,
-                        // A link to the app points at the app, never at one stored
-                        // chat: the recipient does not own it and could only ever
-                        // get a 404 from it.
-                        path: embedded
-                          ? appPagePath
-                          : routeChatId
-                            ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
-                            : window.location.pathname,
-                        params: {
-                          model: selectedModel,
-                          style: selectedStyle,
-                          outfmt: selectedOutputFormat,
-                          history: sendChatHistory,
-                          prefill: prefillMessage,
-                          ...Object.fromEntries(
-                            Object.entries(variables).map(([k, v]) => [`var_${k}`, v])
-                          )
-                        }
+            </Suspense>
+          )}
+          {sharingArtifact && (
+            <ArtifactShareDialog
+              isOpen
+              onClose={() => setSharingArtifact(null)}
+              chatId={chatId}
+              artifact={{ id: sharingArtifact.id, name: sharingArtifact.name }}
+            />
+          )}
+          {showShare && (
+            <ShareDialog
+              isOpen={showShare}
+              onClose={() => setShowShare(false)}
+              appName={app?.name}
+              chatShare={chatShareOffered ? { chatId, ready: chatShareReady } : null}
+              appLink={
+                shareEnabled
+                  ? {
+                      appId,
+                      // A link to the app points at the app, never at one stored
+                      // chat: the recipient does not own it and could only ever
+                      // get a 404 from it.
+                      path: embedded
+                        ? appPagePath
+                        : routeChatId
+                          ? window.location.pathname.replace(/\/c\/[^/]+$/, '')
+                          : window.location.pathname,
+                      params: {
+                        model: selectedModel,
+                        style: selectedStyle,
+                        outfmt: selectedOutputFormat,
+                        history: sendChatHistory,
+                        prefill: prefillMessage,
+                        ...Object.fromEntries(
+                          Object.entries(variables).map(([k, v]) => [`var_${k}`, v])
+                        )
                       }
-                    : null
-                }
-              />
-            )}
-          </div>
-        </WorkspaceLayout>
+                    }
+                  : null
+              }
+            />
+          )}
+        </div>
       </ArtifactViewerHost>
     </ChatFilesContext.Provider>
   );

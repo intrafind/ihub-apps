@@ -431,66 +431,67 @@ export default function SharedChatPage() {
         `/share/${encodeURIComponent(shareId)}?artifact=${encodeURIComponent(artifact.id)}`
       }
     >
-      <WorkspaceLayout className="h-dvh overflow-hidden" chatClassName="overflow-y-auto">
-        <div className="min-h-full bg-white dark:bg-gray-900 flex flex-col">
-          {share.mode === 'public' && (
-            <div
-              role="note"
-              className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border-b border-amber-200 dark:border-amber-800"
+      <div className="h-dvh overflow-hidden bg-white dark:bg-gray-900 flex flex-col">
+        {share.mode === 'public' && (
+          <div
+            role="note"
+            className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 border-b border-amber-200 dark:border-amber-800"
+          >
+            <Icon name="globe-alt" size="sm" />
+            <span>
+              {t(
+                'chatSharing.viewer.publicBanner',
+                'This conversation is publicly accessible. Anyone with the link can read it.'
+              )}
+            </span>
+          </div>
+        )}
+
+        <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
+            <span
+              className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white"
+              style={{ backgroundColor: color }}
             >
-              <Icon name="globe-alt" size="sm" />
-              <span>
-                {t(
-                  'chatSharing.viewer.publicBanner',
-                  'This conversation is publicly accessible. Anyone with the link can read it.'
-                )}
-              </span>
-            </div>
-          )}
-
-          <header className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center gap-4">
-              <span
-                className="w-11 h-11 rounded-xl flex items-center justify-center flex-none text-white"
-                style={{ backgroundColor: color }}
-              >
-                <Icon name={icon} size="md" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
-                    {title}
-                  </h1>
-                  <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
-                    <Icon name="eye" size="xs" />
-                    {t('chatSharing.viewer.readOnly', 'Read-only')}
-                  </span>
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                  {[
-                    appName,
-                    share.sharedBy
-                      ? t('chatSharing.viewer.sharedBy', {
-                          name: share.sharedBy,
-                          defaultValue: 'Shared by {{name}}'
-                        })
-                      : t('chatSharing.viewer.sharedAnonymously', 'Shared with you'),
-                    formatDate(share.createdAt, i18n.language)
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </p>
+              <Icon name={icon} size="md" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
+                  {title}
+                </h1>
+                <span className="inline-flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-wide rounded-full px-2 py-0.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                  <Icon name="eye" size="xs" />
+                  {t('chatSharing.viewer.readOnly', 'Read-only')}
+                </span>
               </div>
-              <Link
-                to="/"
-                className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap"
-              >
-                {t('chatSharing.viewer.openApp', 'Open iHub Apps')}
-                <Icon name="arrow-right" size="sm" />
-              </Link>
+              <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
+                {[
+                  appName,
+                  share.sharedBy
+                    ? t('chatSharing.viewer.sharedBy', {
+                        name: share.sharedBy,
+                        defaultValue: 'Shared by {{name}}'
+                      })
+                    : t('chatSharing.viewer.sharedAnonymously', 'Shared with you'),
+                  formatDate(share.createdAt, i18n.language)
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </p>
             </div>
-          </header>
+            <Link
+              to="/"
+              className="hidden sm:inline-flex items-center gap-1 text-sm font-medium text-indigo-600 dark:text-indigo-400 hover:underline whitespace-nowrap"
+            >
+              {t('chatSharing.viewer.openApp', 'Open iHub Apps')}
+              <Icon name="arrow-right" size="sm" />
+            </Link>
+          </div>
+        </header>
 
+        {/* The workspace pane shares the area under the header with the chat. */}
+        <WorkspaceLayout chatClassName="overflow-y-auto">
           <main className="flex-1 flex flex-col max-w-4xl w-full mx-auto px-2 sm:px-6 py-4">
             <ChatFilesContext.Provider value={filesContext}>
               <ArtifactFetchContext.Provider value={fetchArtifact}>
@@ -557,8 +558,8 @@ export default function SharedChatPage() {
               </p>
             )}
           </main>
-        </div>
-      </WorkspaceLayout>
+        </WorkspaceLayout>
+      </div>
     </ArtifactViewerHost>
   );
 }
