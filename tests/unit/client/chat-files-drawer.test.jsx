@@ -433,7 +433,16 @@ describe('an uploaded file in the pane', () => {
     });
     mount({ uploaded, entry: '/c?file=file_pdf' });
     fireEvent.click(await screen.findByTestId('uploaded-download-original'));
-    expect(await screen.findByText(/only its text is kept/)).toBeInTheDocument();
+    // The notice is an alert and the live region repeats it one frame later, so a
+    // text query would match once or twice depending on timing: look at the alerts.
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('alert')
+          .map(node => node.textContent)
+          .join(' ')
+      ).toMatch(/only its text is kept/)
+    );
   });
 
   it('deletes a file after a confirmation and goes back to the list', async () => {
@@ -463,7 +472,11 @@ describe('an uploaded file in the pane', () => {
     mount({ mailAttach, entry: '/c?file=file_pdf' });
     fireEvent.click(await screen.findByRole('button', { name: 'Attach to email' }));
     await waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('Attached contract.pdf to your email.')).toBeInTheDocument();
+    // The message shows in the header and, one animation frame later, in the pane's
+    // live region (`announce`): wait for it, whichever of the two copies is there.
+    expect(
+      (await screen.findAllByText('Attached contract.pdf to your email.')).length
+    ).toBeGreaterThan(0);
   });
 
   it('offers no "Attach to email" for a file without its original', async () => {
