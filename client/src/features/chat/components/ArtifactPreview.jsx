@@ -280,7 +280,8 @@ export default function ArtifactPreview({
     );
   }
 
-  if (type === 'markdown') {
+  // Markdown has a Code view too (the source), when the parent asks for it.
+  if (type === 'markdown' && viewMode !== 'code') {
     return (
       <Root {...rootProps}>
         {truncatedNote}
