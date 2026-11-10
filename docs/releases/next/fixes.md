@@ -1,5 +1,12 @@
 # Fixes — Unreleased
 
+## Share Is Always Offered When You Open a File From the Chat
+
+Opening a generated picture or a file from the answer that has just produced it showed the viewer
+without **Share**; it only appeared after opening the same file from **Files**. The viewer now offers
+Share wherever sharing is allowed. A file that is still being saved to the chat is shared through its
+stored copy; if that copy is not there yet, the viewer says so and Share works a moment later.
+
 ## The Azure Speech Key Stays Encrypted When Other Settings Are Saved
 
 The Azure Speech subscription key is kept encrypted in `platform.json`, but the server holds it

@@ -9128,6 +9128,7 @@
     "zipTooMany": "Too many files for one ZIP archive. Select fewer files.",
     "zipTooLarge": "The files are too large for one ZIP archive. Select fewer files.",
     "zipFailed": "The ZIP archive could not be created. Please try again.",
+    "shareNotStored": "This file is still being saved to the chat. Try again in a moment.",
     "previewLoading": "Loading preview…",
     "previewFailed": "The preview could not be loaded.",
     "previewTruncated": "Showing the first {{size}}. Download the file to see all of it.",
