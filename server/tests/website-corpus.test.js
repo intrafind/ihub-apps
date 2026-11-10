@@ -283,6 +283,38 @@ describe('findNearDuplicates', () => {
 });
 
 describe('renderReport', () => {
+  it('escapes a backslash before a pipe, so a cell cannot end early', async () => {
+    const pages = [
+      { url: 'https://a.test/de/x/1', title: 'a\\|b', text: words(200) },
+      { url: 'https://a.test/de/x/2', text: words(300) }
+    ];
+    const analysis = await analyseCorpus(pages, { countTokens: t => t.length, prefix: '/de/' });
+    // Sections come from URL paths, which cannot hold a backslash; force one to test the escaping itself.
+    analysis.sections[0].section = 'a\\|b';
+    const markdown = renderReport({
+      name: 'N',
+      analysis,
+      nearDuplicates: { total: 0, pairs: [] },
+      tokenizer: { method: 'heuristic', note: 'n' },
+      meta: {
+        crawlDate: '2026-11-10',
+        siteUrl: 'https://a.test',
+        prefix: '',
+        dropSelector: '',
+        coverage: {
+          inSitemap: 2,
+          crawled: 2,
+          failed: 0,
+          blockedByRobots: 0,
+          notHtml: 0,
+          notCrawled: 0
+        }
+      }
+    });
+    // The backslash is doubled and the pipe is escaped: `a\\\\\\|b` in the Markdown source.
+    assert.ok(markdown.includes('| a\\\\\\|b |'));
+  });
+
   it('lays the numbers out and escapes what would break the Markdown', async () => {
     const pages = [
       { url: 'https://a.test/de/a|b/x(1)', text: words(200) },
@@ -555,7 +587,10 @@ describe('WebsiteCorpusService', () => {
       'redirected to another site'
     ]);
     // The page robots.txt forbids is never fetched.
-    assert.ok(!site.calls.includes('https://a.test/de/privat/geheim'));
+    assert.equal(
+      site.calls.filter(called => called === 'https://a.test/de/privat/geheim').length,
+      0
+    );
   });
 
   it('stops starting pages at the deadline and resumes where it stopped', async () => {

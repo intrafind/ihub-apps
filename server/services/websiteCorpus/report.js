@@ -21,7 +21,8 @@ const CHART_SECTIONS = 10;
 const LARGEST_PAGES = 20;
 
 const n = value => Number(value).toLocaleString('en-US');
-const md = text => String(text).replace(/\|/g, '\\|');
+// Backslashes first: otherwise a backslash in the text would swallow the one added before a pipe.
+const md = text => String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
 
 function share(part, whole) {
   const value = percent(part, whole);
