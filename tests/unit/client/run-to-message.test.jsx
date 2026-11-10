@@ -492,3 +492,35 @@ describe('projectRunToMessage — a skill activated more than once', () => {
     ]);
   });
 });
+
+describe('projectRunToMessage — context window counted by the server', () => {
+  const usage = inputTokens => ({
+    contextWindow: 100000,
+    inputTokens,
+    maxOutputTokens: 4000,
+    source: 'provider'
+  });
+
+  test('the latest context/usage frame rides on the message while the run streams', () => {
+    const run = runFrom([
+      started,
+      env(2, 'context/usage', { ...usage(1200), source: 'estimate' }),
+      env(3, 'context/usage', usage(48000))
+    ]);
+    expect(projectRunToMessage(run).extras.context).toEqual(usage(48000));
+  });
+
+  test('run/ended keeps the state the run ended with', () => {
+    const run = runFrom([
+      started,
+      env(2, 'context/usage', usage(48000)),
+      env(3, 'run/ended', { status: 'completed', context: usage(52000) })
+    ]);
+    expect(projectRunToMessage(run).extras.context).toEqual(usage(52000));
+  });
+
+  test('a run that reported none leaves the message without one', () => {
+    const run = runFrom([started, env(2, 'run/ended', { status: 'completed' })]);
+    expect(projectRunToMessage(run).extras.context).toBeUndefined();
+  });
+});

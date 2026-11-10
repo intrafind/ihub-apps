@@ -235,6 +235,24 @@ function normalizeUsage(usage) {
 }
 
 /**
+ * The context-window state a turn ended with (see `loop/contextTracker.js`),
+ * or null: what the chat reopens with, tool results included.
+ */
+function normalizeContext(context) {
+  if (!context || typeof context !== 'object') return null;
+  const contextWindow = Math.round(Number(context.contextWindow));
+  const inputTokens = Math.round(Number(context.inputTokens));
+  if (!(contextWindow > 0) || !(inputTokens >= 0)) return null;
+  const maxOutputTokens = Math.round(Number(context.maxOutputTokens));
+  return {
+    contextWindow,
+    inputTokens,
+    maxOutputTokens: maxOutputTokens > 0 ? maxOutputTokens : 0,
+    source: context.source === 'provider' ? 'provider' : 'estimate'
+  };
+}
+
+/**
  * The error to record on a stored assistant message, or null when the turn
  * ended cleanly. An abort is recorded too: "the user stopped it" is part of
  * what happened, and without it a truncated answer reads as a complete one.
@@ -579,6 +597,7 @@ export async function settleAssistantTurn({
   const content = typeof summary?.content === 'string' ? summary.content : '';
   const error = messageError(summary);
   const usage = normalizeUsage(summary?.usage);
+  const storedContext = normalizeContext(summary?.context);
   // Taken unconditionally, so the recording ends with the turn whatever is
   // stored. A caller that rebuilt the activity itself (a run whose process
   // died, see `chatRecovery.js`) hands it over on the summary.
@@ -682,6 +701,7 @@ export async function settleAssistantTurn({
             runId,
             finishReason: summary?.finishReason ?? null,
             ...(usage ? { usage } : {}),
+            ...(storedContext ? { context: storedContext } : {}),
             ...(error ? { error } : {}),
             ...(artifacts.length > 0 ? { artifacts } : {}),
             ...(mcpApps.length > 0 ? { mcpApps } : {}),

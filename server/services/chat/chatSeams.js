@@ -127,13 +127,26 @@ function toolCallRecords(toolCalls) {
  * metrics for every model call, and the `step/completed` frame. Usage
  * analytics are recorded by `LLMClient` for every call, not here.
  */
-export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defaultTelemetry }) {
+export function chatTurnSeam({
+  chatId,
+  buildLogData,
+  streaming,
+  telemetry = defaultTelemetry,
+  contextTracker = null
+}) {
+  // The context window as the server counts it, sent with every model call
+  // and after each reply: tool results (pages a research read) fill it, and
+  // only the server holds them.
+  const reportContext = (ctx, state) => {
+    if (state) emit(ctx, SSE_V2_EVENTS.CONTEXT_USAGE, { ...state, step: ctx.iteration });
+  };
   return {
     name: 'chat-turn',
     async preStep(ctx) {
       if (ctx.iteration === 1) {
         for (const source of detectContextSources(ctx.messages)) ctx.addKnowledgeSource(source);
       }
+      if (contextTracker) reportContext(ctx, contextTracker.estimate(ctx.messages));
       await telemetry.recordChatCallStart({
         baseLog: buildLogData(streaming),
         chatId,
@@ -147,6 +160,9 @@ export function chatTurnSeam({ chatId, buildLogData, streaming, telemetry = defa
         model: ctx.model,
         outcome: 'completed'
       });
+      if (contextTracker) {
+        reportContext(ctx, contextTracker.recordStep(step.result?.usage, ctx.messages.length));
+      }
       emit(ctx, SSE_V2_EVENTS.STEP_COMPLETED, {
         step: ctx.iteration,
         content: step.result?.content || '',

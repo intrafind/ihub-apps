@@ -508,6 +508,15 @@ cause: iHub's reason, for example "You are not allowed to use this integration."
 groups are not granted the iFinder integration (documents in iAssistant answers need it too), or
 Outlook's own error.
 
+## Chat: The Context Counter Includes What the Model Read
+
+After a research turn the context counter under the message box did not move: it counted only
+the messages the browser held, not the web pages and documents the model had read to answer, so
+a chat could run into the model's limit while the counter showed plenty of room. The server now
+counts the context window — from the token count the model provider reports for each call, plus
+an estimate for what was added since — and the counter follows it while the answer is being
+written. The figure is stored with the answer, so a reopened chat shows it too.
+
 ## Chat: An Empty Answer Says So and Offers Retry
 
 An answer could stay completely blank, so the chat looked stuck after the question. This happens

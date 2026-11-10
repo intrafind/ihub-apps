@@ -50,10 +50,26 @@ export const runStartedData = z.object({
   refs: z.record(z.any()).prefault({})
 });
 
+/**
+ * How full the model's context window is, counted by the server: the prompt
+ * the provider reported for the last model call plus what the transcript grew
+ * by since (the reply, tool results such as pages a research read).
+ */
+export const contextUsageData = z.object({
+  contextWindow: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  maxOutputTokens: z.number().int().nonnegative().prefault(0),
+  /** `provider`: anchored on the provider's count; `estimate`: counted by the server. */
+  source: z.enum(['provider', 'estimate']).prefault('estimate'),
+  step: z.number().int().nonnegative().optional()
+});
+
 export const runEndedData = z.object({
   status: z.enum(RUN_STATUSES),
   finishReason: z.string().nullable().prefault(null),
   usage: usageSchema.optional(),
+  /** The context window's state when the run ended. */
+  context: contextUsageData.optional(),
   /** Surface hints preserved from the legacy `done` event. */
   toolName: z.string().optional(),
   knowledgeSources: z.array(z.string()).optional(),
@@ -271,6 +287,7 @@ export const sseV2EventSchema = z.discriminatedUnion('type', [
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.TOOL_COMPLETED), data: toolCompletedData }),
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.SOURCES_ADDED), data: sourcesAddedData }),
   z.object({ ...base, type: z.literal(SSE_V2_EVENTS.KNOWLEDGE_SCOPE), data: knowledgeScopeData }),
+  z.object({ ...base, type: z.literal(SSE_V2_EVENTS.CONTEXT_USAGE), data: contextUsageData }),
   z.object({
     ...base,
     type: z.literal(SSE_V2_EVENTS.INTERACTION_RAISED),
@@ -299,6 +316,7 @@ export const sseV2EventDataSchemas = Object.freeze({
   [SSE_V2_EVENTS.TOOL_COMPLETED]: toolCompletedData,
   [SSE_V2_EVENTS.SOURCES_ADDED]: sourcesAddedData,
   [SSE_V2_EVENTS.KNOWLEDGE_SCOPE]: knowledgeScopeData,
+  [SSE_V2_EVENTS.CONTEXT_USAGE]: contextUsageData,
   [SSE_V2_EVENTS.INTERACTION_RAISED]: interactionRaisedData,
   [SSE_V2_EVENTS.INTERACTION_ANSWERED]: interactionAnsweredData,
   [SSE_V2_EVENTS.PROGRESS_NODE]: progressNodeData,
