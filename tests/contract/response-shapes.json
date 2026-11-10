@@ -2367,6 +2367,7 @@
           "id": "string",
           "instructions": "string",
           "items": "array",
+          "knowledgeMode": "null",
           "lastActivityAt": "string",
           "members": [],
           "name": "object",
@@ -2418,6 +2419,7 @@
           "updatedAt": "string"
         }
       ],
+      "knowledgeMode": "null",
       "lastActivityAt": "string",
       "members": [],
       "name": {
@@ -2503,6 +2505,7 @@
     "status": 200,
     "shape": {
       "defaultAppId": "string",
+      "knowledgeModes": ["string"],
       "limits": {
         "maxFileBytes": "number",
         "maxFiles": "number",
@@ -4704,6 +4707,7 @@
       "projects": {
         "defaultAppId": "string",
         "enabled": "boolean",
+        "knowledgeModes": ["string"],
         "limits": {
           "maxFileBytes": "number",
           "maxFiles": "number",
@@ -5547,6 +5551,7 @@
           "enabled?": "boolean",
           "id": "string",
           "instructions": "string",
+          "knowledgeMode": "null",
           "lastActivityAt": "string",
           "memberCount?": "number",
           "members?": [],
@@ -5602,6 +5607,7 @@
           "updatedAt": "string"
         }
       ],
+      "knowledgeMode": "null",
       "lastActivityAt": "string",
       "memberCount": "number",
       "name": {
@@ -5749,6 +5755,7 @@
           "storage": "string"
         }
       ],
+      "knowledgeModes": ["string"],
       "limits": {
         "maxFileBytes": "number",
         "maxFiles": "number",
