@@ -363,7 +363,7 @@ function AdminProjectsPage() {
       label: t('admin.projects.actions.edit', 'Edit project'),
       icon: 'pencil',
       priority: 'primary',
-      onClick: project => navigate(`/admin/projects/${encodeURIComponent(project.id)}/edit`)
+      onClick: project => navigate(`/admin/projects/${encodeURIComponent(project.id)}`)
     },
     {
       id: 'toggle',

@@ -334,9 +334,8 @@ const KNOWN_VIOLATIONS = {
 const CLEAN_PAGES = [
   '/projects',
   '/admin/projects',
-  // A shipped project, so a fresh contents/ has it: the view and the edit page.
+  // A shipped project, so a fresh contents/ has it.
   '/admin/projects/ihub-documentation',
-  '/admin/projects/ihub-documentation/edit',
   '/apps',
   '/tasks',
   '/workflows',

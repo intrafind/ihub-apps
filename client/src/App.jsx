@@ -94,9 +94,6 @@ const AdminProjectsPage = lazyWithRetry(() => import('./features/admin/pages/Adm
 const AdminProjectEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminProjectEditPage')
 );
-const AdminProjectViewPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminProjectViewPage')
-);
 const AdminPagesPage = lazyWithRetry(() => import('./features/admin/pages/AdminPagesPage'));
 const AdminPageEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminPageEditPage'));
 const AdminAuthPage = lazyWithRetry(() => import('./features/admin/pages/AdminAuthPage'));
@@ -608,12 +605,6 @@ function App() {
             {showAdminPage('projects') && (
               <Route
                 path="projects/:id"
-                element={<LazyAdminRoute component={AdminProjectViewPage} />}
-              />
-            )}
-            {showAdminPage('projects') && (
-              <Route
-                path="projects/:id/edit"
                 element={<LazyAdminRoute component={AdminProjectEditPage} />}
               />
             )}

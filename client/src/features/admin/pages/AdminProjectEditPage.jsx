@@ -30,6 +30,7 @@ import RenameItemDialog from '../../projects/components/RenameItemDialog';
 import RefreshTtlDialog from '../../projects/components/RefreshTtlDialog';
 import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
 import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
+import ProjectUsedByCard from '../components/ProjectUsedByCard';
 import {
   AdminProjectCheckResults,
   AdminProjectHeaderActions,
@@ -78,12 +79,14 @@ const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
 const adminErrorMessage = err => getAdminApiErrorMessage(err);
 
 /**
- * Admin → Projects → new / edit (#1036). A new project starts with the full
- * settings form (id, localized name and description, availability,
- * instructions, category, tags). Once it exists, the page works on its
- * items: add (one tab per kind), pin, preview the text, retry, refresh,
- * remove, and a test of every item; the settings sit beside them as rows
- * that each open a dialog and save at once, as on a user's project page.
+ * Admin → Projects → new / one project (#1036). A new project starts with the
+ * full settings form (id, localized name and description, availability,
+ * instructions, category, tags). Once it exists, this is the one page of the
+ * project, with no separate read-only view: its items (add, one tab per kind,
+ * the "For the AI" mode of each, preview the text, retry, refresh, remove, a
+ * test of every item) and what links it (**Used by**); the settings sit
+ * beside them as rows that each open a dialog and save at once, as on a
+ * user's project page.
  * While an item is being extracted the page re-reads the project every two
  * seconds. **Try in chat** opens a scratch chat beside the page that has this
  * project and nothing else in scope (#3309).
@@ -210,7 +213,7 @@ function AdminProjectEditPageContent({ id }) {
       const created = await createAdminProject(payload);
       markSaved();
       // Items can be added once the project exists.
-      navigate(`/admin/projects/${encodeURIComponent(created?.id || payload.id)}/edit`, {
+      navigate(`/admin/projects/${encodeURIComponent(created?.id || payload.id)}`, {
         replace: true,
         state: { openAdd: true }
       });
@@ -497,11 +500,16 @@ function AdminProjectEditPageContent({ id }) {
           ]}
         />
 
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center">
-            <Icon name="folder" className="h-6 w-6 mr-2" />
-            {title}
-          </h1>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center">
+              <Icon name="folder" className="h-6 w-6 mr-2" />
+              <span className="break-words">{title}</span>
+            </h1>
+            {!isNew && (
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 font-mono">{id}</p>
+            )}
+          </div>
           {!isNew && (
             <AdminProjectHeaderActions
               checks={checks}
@@ -558,6 +566,7 @@ function AdminProjectEditPageContent({ id }) {
               <>
                 <AdminProjectCheckResults checks={checks} />
                 {itemsSection}
+                <ProjectUsedByCard projectId={id} />
               </>
             }
             side={

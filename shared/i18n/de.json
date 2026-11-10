@@ -5679,8 +5679,7 @@
         "instructionsHint": "Die Anweisungen werden dem System-Prompt jeder App, jedes Workflow-Schritts und jedes Agenten hinzugefügt, die dieses Projekt verknüpfen.",
         "usedBy": "Verwendet von",
         "notLinked": "Keine App, kein Workflow und kein Agent verknüpft dieses Projekt.",
-        "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden.",
-        "editItems": "Elemente bearbeiten"
+        "usedByFailed": "Die Apps, Workflows und Agenten, die dieses Projekt verknüpfen, konnten nicht geladen werden."
       },
       "sharing": {
         "title": "Teilen von Benutzerprojekten",
