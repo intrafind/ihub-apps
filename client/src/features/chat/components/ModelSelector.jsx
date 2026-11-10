@@ -24,7 +24,11 @@ function ModelSelector({
   onModelChange,
   currentLanguage,
   disabled = false,
-  dropdownDirection = 'up' // 'up' or 'down' - controls where the dropdown opens
+  dropdownDirection = 'up', // 'up' or 'down' - controls where the dropdown opens
+  // In the one-line composer the button is as tall as the toolbar's other
+  // buttons on a phone too (36px, 40px from `sm`), so the toolbar row is as
+  // tall as the text row above it.
+  compact = false
 }) {
   const { t } = useTranslation();
   const { bucketsForModel } = useMyUsage();
@@ -124,7 +128,7 @@ function ModelSelector({
           }
         }}
         disabled={disabled}
-        className={`flex max-w-full items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+        className={`flex max-w-full items-center gap-2 px-3 ${compact ? 'py-2 sm:py-2.5' : 'py-2.5'} rounded-lg text-sm font-medium transition-colors ${
           disabled
             ? 'bg-gray-100 text-gray-600 cursor-not-allowed dark:bg-gray-700 dark:text-gray-300'
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'

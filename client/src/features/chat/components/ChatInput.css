@@ -8,16 +8,21 @@
  *
  * ChatInput sets the height from the content; the limits live here, in lines,
  * from the `--composer-min-lines` and `--composer-max-lines` the component sets
- * inline. A line is 1.5em (the line height below), plus 0.5rem of padding above
- * and below. The cap is also held to 40% of the viewport, so the composer never
- * covers the transcript on a phone with its keyboard open or at 200% zoom.
+ * inline. A line is 1.5em (the line height below), plus `--composer-padding-y`
+ * above and below (0.5rem; more in the one-line composer, see below). The cap is
+ * also held to 40% of the viewport, so the composer never covers the transcript
+ * on a phone with its keyboard open or at 200% zoom.
  */
 .chat-input-textarea {
+  --composer-padding-y: 0.5rem;
   line-height: 1.5;
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  min-height: calc(var(--composer-min-lines, 1) * 1.5em + 1rem);
-  max-height: min(calc(var(--composer-max-lines, 12) * 1.5em + 1rem), 40vh);
+  padding-top: var(--composer-padding-y);
+  padding-bottom: var(--composer-padding-y);
+  min-height: calc(var(--composer-min-lines, 1) * 1.5em + 2 * var(--composer-padding-y));
+  max-height: min(
+    calc(var(--composer-max-lines, 12) * 1.5em + 2 * var(--composer-padding-y)),
+    40vh
+  );
   /* Thin, on a transparent track, and visible without hovering: the page's 8px
      scrollbar on its grey track is too heavy inside the rounded box. */
   scrollbar-width: thin;
@@ -26,7 +31,10 @@
 
 @supports (height: 1dvh) {
   .chat-input-textarea {
-    max-height: min(calc(var(--composer-max-lines, 12) * 1.5em + 1rem), 40dvh);
+    max-height: min(
+      calc(var(--composer-max-lines, 12) * 1.5em + 2 * var(--composer-padding-y)),
+      40dvh
+    );
   }
 }
 
@@ -64,6 +72,23 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The one-line composer's text row is as tall as the toolbar row under it: the
+   toolbar's buttons (2.25rem, 2.5rem from `sm`) plus its padding (0.375rem,
+   0.5rem from `sm`) above and below. With the 0.5rem of a multi-line box, the
+   line was 16px shorter than the toolbar on a desktop.
+   `block`: an inline text area sits on the text baseline, which left a 6px gap
+   under it. The expanded box keeps the multi-line padding. */
+.chat-input-textarea--compact:not(.chat-input-textarea--expanded) {
+  display: block;
+  --composer-padding-y: 0.75rem;
+}
+
+@media (min-width: 40rem) {
+  .chat-input-textarea--compact:not(.chat-input-textarea--expanded) {
+    --composer-padding-y: 1rem;
+  }
 }
 
 /* The expanded composer (#3524, the Outlook task pane's expand button): a
