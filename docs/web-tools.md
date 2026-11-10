@@ -751,6 +751,7 @@ None of these take any parameters — they're automatically enabled when `websea
 - `url` (string, required): The URL of the page to open
 - `maxLength` (integer, optional): Most characters returned per call (default: 10000, clamped to 500-50,000)
 - `offset` (integer, optional): Character offset to start reading at — the previous result's `nextOffset`, to read on in a long page (default: 0)
+- `focus` (string, optional): The question being researched, in a few words (trimmed, cut at 500 characters). On the first read of a page longer than `maxLength`, the result holds the sections that answer it instead of the first window — see [Focused reading](#focused-reading-focus). Ignored when `offset` is set and for pages that fit in `maxLength`
 
 **Availability**: A platform tool of the web search feature, not an engine's action: the shipped definition `server/defaults/tools/read_url.json` is read in place (initial setup does not copy it into `contents/tools/`). It is offered automatically next to the engine's search tool whenever an app has web search on, and next to Anthropic and OpenAI native search — with or without an engine (see [How Provider Resolution Works](#how-provider-resolution-works)). A workflow node can also list it in `tools` directly; it is only offered once. To stop offering it, put a tool file `contents/tools/read_url.json` with `"enabled": false` (it takes the place of the shipped definition, as for the other platform tools); migration V204 writes one where the `websearch` installation had the page reader switched off. In chats, `websearch.maxPageReads` caps how often one answer may call it (see [Page Read Limit](#page-read-limit)).
 
@@ -777,6 +778,24 @@ None of these take any parameters — they're automatically enabled when `websea
 - **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)
 
 In the chat's tool activity, a page read shows the page's title, its site, the words read and a *truncated* hint.
+
+#### Focused reading (`focus`)
+
+A page is read from its start, so on a long page the section that answers the question is often past the first 10,000 characters. With `focus`, `read_url` returns the part of the page that matches the question instead:
+
+1. The extracted Markdown is split at its headings (levels 1–4). A page without headings is split into parts of at most 6,000 characters.
+2. The sections are ranked with BM25, the keyword ranking the knowledge tools already use (`server/sources/documentRetrieval.js`). There is no model call, no embedding and no extra request: the page comes through the same guarded fetch and page cache as without `focus`.
+3. The best sections are returned **verbatim**, best match first, each as `<section id path offset>` with its heading path and the character offset where it starts in the page. After them comes an outline of the whole page, with the offset of every section (`@1234`). The whole `content`, outline included, stays within `maxLength`.
+
+The result also carries `focus` (the question as used) and `excerpted: true`; `truncated` is `true` and a `note` says the content is a selection. To read around a section, call `read_url` again with its `offset` (without `focus`); to look for something else, call it again with another `focus`.
+
+- **Unchanged without `focus`**, with an empty `focus`, for a page that fits in `maxLength`, and whenever `offset` is set: the result is exactly what it was.
+- **No section matches:** the result is the first window of the page followed by the outline (`excerpted: false`), never an empty answer.
+- **Sources:** the sections the model was given appear as the passages of the page's source in the sources panel (private, like every page the reader opens). They have no numbered markers: a citation points to the page.
+- **Counts as one page read** for `maxPageReads`. PDFs, the 400,000 character cap, caching and bot-protection results behave as before.
+- An administrator-edited `contents/tools/read_url.json` replaces the shipped definition and does not show `focus` to the model until it is brought up to date.
+
+Search results with `extractContent` still return the first `contentMaxLength` characters of each page; they do not take a `focus`.
 
 ## Complete Example
 

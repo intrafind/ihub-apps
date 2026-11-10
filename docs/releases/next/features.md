@@ -1359,3 +1359,28 @@ live links.
 - Uploads never wait behind scheduled refreshes.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
+
+## Long Pages and Documents Are Read for the Question, Not From the Top
+
+When the section that answers a question is far into a long web page or project document, the
+model now gets that section, not just the first part of the text. The text is returned
+word for word, ranked with the keyword search iHub already uses; no extra model call is made.
+
+- **Web pages:** `read_url` takes a `focus` (the question). On a page longer than the read length,
+  the result holds the best-matching sections with their headings and positions, plus an outline of
+  the whole page; the model can read on from any position in it. Without `focus`, nothing changes.
+- **Projects too large to load:** a project linked in `auto` mode now puts its pinned documents
+  and the sections of the other documents that best match the user's latest message into the
+  prompt, each marked with its document and section, instead of pinned documents alone.
+- **The 75 % limit of the context window:** the document that does not fit keeps its best
+  sections for the question and an outline, not its first characters.
+- **`knowledge_read` with `focus`:** a long document returns its best sections and an outline
+  instead of the outline alone.
+- The sections the model was given appear as passages of the page or document in the sources panel.
+- A chat turn that has excerpts changes the system prompt with the question, so a model
+  provider's prompt cache misses on those turns, and such a turn can use up to half of
+  the projects budget on excerpts. Lower `projects.loadAllMaxTokens` in the platform settings to
+  spend less.
+- A `contents/tools/read_url.json` edited by an admin replaces the shipped tool definition and does
+  not show `focus` to the model until it is updated.
+- Search results with page excerpts (`extractContent`) are unchanged.

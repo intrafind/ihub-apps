@@ -434,11 +434,14 @@ the app's links, projects attached to the chat, the workflow's links.
 - `context`: every usable document goes into the prompt.
 - `tools`: only pinned documents go into the prompt; the model searches the rest.
 - `auto`: the whole project goes into the prompt when it fits what is left of the budget;
-  otherwise only its pinned documents, and the model searches the rest.
+  otherwise its pinned documents plus the sections of the other documents that best match the
+  question (see [Reading with the question in mind](#reading-with-the-question-in-mind)), and the
+  model searches the rest.
 - **Pinned** documents always go into the prompt, in every mode, ahead of the other documents of
   their project, even when they exceed the budget.
 - Nothing injected may exceed **75 % of the model's context window**, whatever the mode. Documents
-  beyond that limit are cut from the prompt and stay reachable through `knowledge_read`. The limit
+  beyond that limit are cut from the prompt and stay reachable through `knowledge_read`; the cut
+  keeps the sections that answer the question when there is one. The limit
   is spent project by project, in the order of the links: a pinned document of a later project is
   cut when the projects before it have used the limit up. Link the project whose pinned documents
   must always be present first.
@@ -448,6 +451,37 @@ readable. Documents that are waiting, failed or unreadable for this user are lis
 so the model can say so.
 
 The budget depends on the model's `contextWindow` (see [Models](models.md)).
+
+### Reading with the question in mind
+
+A document that is cut to its first characters loses the part that answers the question. When a
+chat turn has a question, iHub reads long documents for it instead — with the BM25 keyword ranking
+that `knowledge_search` uses, the text kept **verbatim**, and no model call.
+
+- **The question** is the user's latest message. When it is short (under 40 characters or six
+  words, like "and in German?"), the user message before it is added. Assistant text is never part
+  of it, and nothing rewrites it. It is cut at 500 characters. A workflow node, an empty message
+  and a request without text have no question; they behave as before.
+- **`auto` project that does not fit:** the prompt holds the pinned documents (in full) plus the
+  best sections of the other documents, up to what is left of the budget, at most half of the
+  budget for the excerpts of all projects together. Each document with excerpts is marked
+  `excerpt="true"`, each section carries its document id and `<section id path>`, and a note tells
+  the model to read the rest with `knowledge_read`. The document stays in the project's document
+  list, so the model knows there is more of it. The ranking uses the project's cached search index,
+  the same one `knowledge_search` uses.
+- **The 75 % limit:** the document that does not fit keeps its best sections for the question and
+  an outline of the rest instead of its first characters, when at least 1,500 tokens are left for
+  it and a section matches; otherwise its start, as before. A document that was already reduced
+  to excerpts and does not fit is dropped whole.
+- **`knowledge_read` with `focus`:** a long document returns its best sections and an outline of
+  the rest, not the outline alone (`retrieval.mode` is `focus`). An explicit `section` wins over
+  `focus`, and a document that fits in one result is returned in full. The sections appear as
+  passages of the document's source in the sources panel; a citation points to the document.
+
+Excerpts depend on the question, so the system prompt of a project that does not fit changes from
+turn to turn. A model provider's prompt cache then misses on those turns, and the first call of a
+turn can carry up to half of the budget in excerpts. Lower `projects.loadAllMaxTokens` to spend
+less per turn. There is no setting to switch excerpts off.
 
 ### The knowledge tools
 
@@ -460,7 +494,7 @@ integration and cannot be switched off. The definition ships with iHub
 | Tool               | What it does                                                                                               |
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `knowledge_search` | Searches the projects (all, or one with `project`) for passages that answer a query; ranked, numbered hits. |
-| `knowledge_read`   | Reads one document in full, or one section of it, by an id from a search, `knowledge_list` or a project's document list. A long document comes back as an outline first. |
+| `knowledge_read`   | Reads one document in full, or one section of it, by an id from a search, `knowledge_list` or a project's document list. A long document comes back as an outline first, or, with `focus` (the question), as its best sections and an outline of the rest. |
 | `knowledge_list`   | Lists the documents of the projects with id, name, title and description (when known), kind, size, status and provenance. |
 
 Each tool's description names the projects in scope and whether each one is loaded in full, so
