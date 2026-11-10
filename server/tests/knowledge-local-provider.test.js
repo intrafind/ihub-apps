@@ -406,12 +406,9 @@ describe('scope and planner', () => {
     assert.ok(block.includes('pinned="true"'));
     assert.ok(renderProjectInstructions(fits).includes('Answer as a lawyer'));
 
-    // The pinned policy is 44 tokens counted by the tokenizer and 56 by the
-    // four-characters rule; the budget is below both so the test holds whichever
-    // counts (it was 50, which only the rough rule exceeded).
     const tight = await planKnowledgeScope(scope, {
       model: { contextWindow: 200 },
-      settings: { loadAllMaxTokens: 20 },
+      settings: { loadAllMaxTokens: 50 },
       ctx
     });
     assert.equal(tight.projects[0].mode, 'searched');
