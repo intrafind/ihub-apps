@@ -12,10 +12,10 @@
  * The request hands the ids over on the app object, the way skills travel
  * (`_activeSkills`): `_projectId` (container), `_attachedProjectIds`
  * (picker), `_workflowProjects` (executor), beside the configured
- * `projects`, and `_knowledgeMode`, the mode the user chose for this chat.
+ * `projects`.
  *
  * Each entry carries the knowledge mode it is used in, decided here once
- * (`resolveKnowledgeMode`: chat → link → project default → `auto`), so the
+ * (`resolveKnowledgeMode`: link → project default → `auto`), so the
  * planner and the tools never decide it again.
  *
  * @module services/knowledge/ProjectScope
@@ -41,7 +41,7 @@ import { projectDescription, projectName } from '../projects/projectView.js';
  * @typedef {Object} ScopeEntry
  * @property {Object} project - The stored project.
  * @property {'auto'|'context'|'relevant'|'tools'|'pinned'} mode - The knowledge mode.
- * @property {'chat'|'link'|'project'|'default'} [modeSource] - Which level decided it.
+ * @property {'link'|'project'|'default'} [modeSource] - Which level decided it.
  * @property {boolean} write
  * @property {'container'|'app'|'attached'|'workflow'} origin
  * @property {boolean} instructions - Whether its instructions apply to the prompt.
@@ -78,13 +78,6 @@ export async function resolveProjectScope({
   if (!isProjectsConfigured(features)) return [];
   const wanted = [];
   const seen = new Set();
-  // The mode chosen for this chat reaches the projects the chat brought itself
-  // (its container and the attached ones), also when an app links the same one.
-  const chatMode = typeof appConfig._knowledgeMode === 'string' ? appConfig._knowledgeMode : null;
-  const chatProjectIds = new Set([
-    ...(typeof appConfig._projectId === 'string' ? [appConfig._projectId] : []),
-    ...(Array.isArray(appConfig._attachedProjectIds) ? appConfig._attachedProjectIds : [])
-  ]);
   const add = (id, mode, write, origin, instructions) => {
     if (!id || seen.has(id)) return;
     seen.add(id);
@@ -93,8 +86,7 @@ export async function resolveProjectScope({
       mode,
       write,
       origin,
-      instructions,
-      chat: origin !== 'workflow' && chatProjectIds.has(id) ? chatMode : null
+      instructions
     });
   };
   // An app the admin switched projects off for (`features.projects: false`)
@@ -174,11 +166,10 @@ export async function resolveProjectScope({
     if (!permissions.canUse) continue;
     // "Not for AI" items stay in the project for people; the model never sees them.
     const project = forAi ? withoutExcludedItems(loadedProject) : loadedProject;
-    // The platform's list is what users may choose, for their chats and their own
-    // projects. An administrator's choice, on a link or on an admin project, is
-    // not narrowed by it.
+    // The platform's list is what users may choose for their own projects. An
+    // administrator's choice, on a link or on an admin project, is not narrowed
+    // by it, and a user's chat cannot change the mode of any project.
     const { mode, source } = resolveKnowledgeMode({
-      chat: entry.chat,
       link: entry.mode,
       project: loadedProject.knowledgeMode,
       allowed: allowedModes,

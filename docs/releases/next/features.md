@@ -1374,40 +1374,41 @@ live links.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
 
-## Projects: Choose How a Project Reaches the Model, per Project, Chat and Link
+## Projects: Choose How a Project Reaches the Model, per Project and Link
 
 How a project reaches the model used to be fixed: chats and attached projects always used
 `auto`, and only administrators could set a mode, only on app and workflow links. Now there are five
-**knowledge modes**, and owners, editors and chat users can choose:
+**knowledge modes**, and owners and editors can choose:
 
 - **Automatic** (the default): everything when it fits, otherwise the pinned documents plus the best
   sections for the question.
-- **Full context:** everything, up to 75 % of the model's context window. For a contract, a policy or
+- **Read everything** (`context`): everything, up to 75 % of the model's context window. For a contract, a policy or
   a specification that must be read whole.
-- **Relevant sections:** the pinned documents plus the best sections for the question from all
+- **Best passages** (`relevant`): the pinned documents plus the best sections for the question from all
   documents, word for word. For large projects and models that call tools poorly; it works for iFinder
   smart collections, too, and saves a tool round trip.
-- **Search:** the pinned documents only; the model searches the rest.
-- **Pinned only:** the pinned documents only, and the model cannot reach the others, because no
+- **Look things up** (`tools`): the pinned documents only; the model searches the rest.
+- **Pinned documents only** (`pinned`): the pinned documents only, and the model cannot reach the others, because no
   knowledge tool is offered for the project.
 
-Where to set it, the first that is set wins: the **mode switch beside the project chip in the chat
-input** (this chat only, stored with it), the mode on the **link** of an app or workflow, then the
+The mode belongs to the project, not to the chat: a chat never changes it. Where it is set, the first
+that is set wins: the mode on the **link** of an app or workflow (set by an administrator), then the
 **project's own default** (**Knowledge mode** on the project page; for admin projects in the project
-editor). A link without a mode now uses the project's default; links that say `auto` keep
-saying it. In **Admin → Projects → Project settings**, "Knowledge modes users may choose" lets you
-switch a mode off, for example full context to save cost; links and admin projects an administrator
-set keep their mode.
+editor). You choose the mode of your own projects; the mode an administrator set, or the owner of a
+project shared with you, applies as set. A link without a mode now uses the project's default; links
+that say `auto` keep saying it. In **Admin → Projects → Project settings**, "Knowledge modes users may
+choose" lets you switch a mode off, for example full context to save cost; links and admin projects
+an administrator set keep their mode.
 
 - **Not for AI:** an item can be marked "Not for AI" in the project's "For the AI" column, next to
   Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
   model, listed or searched.
-- **Models without tools** cannot call `knowledge_search`. For them Search reads as Relevant sections,
+- **Models without tools** cannot call `knowledge_search`. For them Look things up reads as Best passages,
   so unpinned documents are not silently out of reach.
 - **The answer badge** names the mode a project was used in and says when it was replaced.
 
 **API:** `knowledgeMode` on projects (`POST` and `PATCH` `/api/projects`, the admin project
-documents), on `PATCH /api/chats/:chatId` and on a chat turn, `excludedFromAi` on items,
+documents), `excludedFromAi` on items,
 `knowledgeModes` in the project settings and the platform config. All additive.
 
 See [Projects → Knowledge modes](../../projects.md#knowledge-modes).

@@ -3,7 +3,6 @@
 
 import { z } from 'zod';
 import { mcpAppContextSchema } from '../services/mcp/mcpAppContext.js';
-import { KNOWLEDGE_MODES } from '../../shared/knowledgeModes.js';
 export { zSafeId } from './common.js';
 
 export {
@@ -124,15 +123,6 @@ export const chatPostSchema = {
      */
     projectId: z.string().max(200).nullable().optional(),
     projects: z.array(z.string().max(200)).max(20).optional(),
-    /**
-     * How the chat reaches the knowledge of its projects (#3538): one of the
-     * knowledge modes, or null / '' to go back to the projects' own. Stored with
-     * the chat; absent leaves the stored one.
-     */
-    knowledgeMode: z
-      .union([z.enum(KNOWLEDGE_MODES), z.literal('')])
-      .nullable()
-      .optional(),
     /**
      * Admin → Projects → Test (#3309): run the turn with this admin project as
      * the only one in scope, as a temporary chat. Content admins only; checked

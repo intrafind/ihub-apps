@@ -462,11 +462,6 @@ export const toggleSchema = z
   })
   .strict();
 
-/** What `PATCH /api/chats/:id` accepts to set the knowledge mode of a chat; null clears it. */
-export const chatKnowledgeModeSchema = z
-  .object({ knowledgeMode: knowledgeModeSchema.nullable() })
-  .strict();
-
 /** What `PATCH /api/chats/:id` accepts to set the projects attached to a chat. */
 export const attachedProjectsSchema = z
   .object({ attachedProjectIds: z.array(zSafeId.min(1).max(100)).max(MAX_ATTACHED_PROJECTS) })

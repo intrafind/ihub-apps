@@ -432,26 +432,25 @@ A **knowledge mode** says how one project reaches the model. There are five:
 | Mode (value)           | In the prompt                                                                                                                                      | Knowledge tools | For                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------- |
 | **Automatic** (`auto`) | Everything if it fits the budget; otherwise the pinned documents plus the best sections for the question                                           | yes             | most projects (the default)                                                                  |
-| **Full context** (`context`) | Everything, up to the hard limit of 75 % of the context window; what is cut stays reachable with `knowledge_read`                            | yes             | small sets that must be read whole: a contract, a policy, a specification                    |
-| **Relevant sections** (`relevant`) | The pinned documents plus the best sections for the question across all documents, up to the budget, word for word. Works for iFinder smart collections, which cannot be loaded in full | yes | large projects; models that call tools poorly; saves a tool round trip |
-| **Search** (`tools`)   | The pinned documents only; the rest through `knowledge_search`                                                                                     | yes             | large libraries; agents and workflows that search on purpose                                 |
-| **Pinned only** (`pinned`) | The pinned documents only                                                                                                                      | **no**: the other documents are not reachable | one curated subset of a large project for a given chat or app |
+| **Read everything** (`context`) | Everything, up to the hard limit of 75 % of the context window; what is cut stays reachable with `knowledge_read`                            | yes             | small sets that must be read whole: a contract, a policy, a specification                    |
+| **Best passages** (`relevant`) | The pinned documents plus the best sections for the question across all documents, up to the budget, word for word. Works for iFinder smart collections, which cannot be loaded in full | yes | large projects; models that call tools poorly; saves a tool round trip |
+| **Look things up** (`tools`) | The pinned documents only; the rest through `knowledge_search`                                                                                     | yes             | large libraries; agents and workflows that search on purpose                                 |
+| **Pinned documents only** (`pinned`) | The pinned documents only                                                                                                                      | **no**: the other documents are not reachable | one curated subset of a large project for a given app |
 
-The mode is chosen at four levels; the first that is set wins:
+The mode is chosen at three levels; the first that is set wins. A chat never changes it: the mode
+of a project is the decision of whoever owns the project or links it, and it is binding for everyone
+else who uses it. You choose the mode of your own projects; the mode an administrator set on a link
+or on an admin project, or the owner of a project shared with you, applies as set.
 
-1. **The chat.** The project chip in the chat input (and the project chat header) has a mode
-   switch for this chat. It applies to the chat's own project and the projects attached to it, is
-   stored with the chat and sent with its first message (`knowledgeMode`), or changed afterwards
-   with `PATCH /api/chats/:chatId` (`{ "knowledgeMode": "pinned" }`, `null` clears it).
-2. **The link** of an app, workflow or agent, set by an administrator. A link without a `mode`
+1. **The link** of an app, workflow or agent, set by an administrator. A link without a `mode`
    passes to the next level.
-3. **The project's default** (`knowledgeMode`): the owner and editors set it on the project page
+2. **The project's default** (`knowledgeMode`): the owner and editors set it on the project page
    (**Knowledge mode**), administrators in **Admin → Projects → edit → Name and description**.
-4. **Automatic.**
+3. **Automatic.**
 
 `platform.projects.knowledgeModes` lists the modes users may choose (**Admin → Projects → Project
 settings**, "Knowledge modes users may choose"); all five by default, and `auto` is always offered.
-A chat, or a user's own project, that uses a mode switched off falls back to the next level. What an
+A user's own project that uses a mode switched off falls back to the next level. What an
 administrator set is not narrowed by the list: the links of apps and workflows keep their mode, and
 so does the default mode of an admin project (the admin project editor offers every mode).
 
@@ -467,7 +466,7 @@ normal and "Not for AI" are one setting: choosing one clears the other. Workflow
 on the documents themselves and still see it.
 
 The server decides the mode; the answer badge (`knowledge/scope`) reports the mode each project was
-used in (`knowledgeMode`), the level that chose it (`modeSource`: `chat`, `link`, `project` or
+used in (`knowledgeMode`), the level that chose it (`modeSource`: `link`, `project` or
 `default`), and, when it was replaced, the mode it replaced (`modeFallback`). A `pinned` project is
 reported with `mode: "pinned"`.
 
@@ -1183,7 +1182,7 @@ would go past it.
 | `sharing.allowCatalog`      | `false`             | Owners and editors may publish projects to the catalog. Off hides published projects again.              |
 | `retentionDays`             | `0`                 | Days without activity after which a user project is deleted; 0 keeps them.                               |
 | `loadAllMaxTokens`          | `50000`             | Upper bound of the load-all budget (also capped at 40 % of the model's context window).                  |
-| `knowledgeModes`            | all five            | The [knowledge modes](#knowledge-modes) users may choose for a project or a chat: a list of `auto`, `context`, `relevant`, `tools`, `pinned`; `auto` is always offered. **Admin → Projects → Project settings**. |
+| `knowledgeModes`            | all five            | The [knowledge modes](#knowledge-modes) users may choose for a project: a list of `auto`, `context`, `relevant`, `tools`, `pinned`; `auto` is always offered. **Admin → Projects → Project settings**. |
 | `refreshTtl`                | `86400` (1 day)     | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
 | `kinds`                     | `{}`                | Item kinds to switch off, `{ "<kind>": false }`.                                                         |
 | `scan.provider`             | `none`              | `none` (no scan) or `command` (run a scanner on every upload and picked file before extraction).         |

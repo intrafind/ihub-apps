@@ -3,7 +3,7 @@
 
 /**
  * The knowledge modes of a project (#3538): `auto`, `context`, `relevant`,
- * `tools` and `pinned`, chosen per chat, per link or per project; what each
+ * `tools` and `pinned`, chosen per link or per project; what each
  * injects, whether the knowledge tools are offered, the platform's allow-list,
  * the fallback for a model that cannot call tools, and the items marked "Not for AI".
  */
@@ -165,7 +165,7 @@ after(async () => {
   await fs.rm(scratch, { recursive: true, force: true });
 });
 
-/** The scope of a chat in `big`, with the mode the chat picked, or a link's. */
+/** The scope of a chat in `big`, with the mode of the project, or a link's. */
 async function scopeOf(appConfig) {
   return resolveProjectScope({ appConfig: { id: 'chat', ...appConfig }, user: ADA });
 }
@@ -202,14 +202,9 @@ describe('the knowledge modes', () => {
       mode: 'auto',
       source: 'default'
     });
-    // A chat's pick is the user's, whatever the project is.
-    assert.equal(
-      resolveKnowledgeMode({ chat: 'context', allowed, allowedForProject: false }).mode,
-      'auto'
-    );
   });
 
-  it('resolves chat → link → project default → auto', () => {
+  it('resolves link → project default → auto', () => {
     assert.deepEqual(resolveKnowledgeMode({}), { mode: 'auto', source: 'default' });
     assert.deepEqual(resolveKnowledgeMode({ project: 'context' }), {
       mode: 'context',
@@ -219,13 +214,14 @@ describe('the knowledge modes', () => {
       mode: 'tools',
       source: 'link'
     });
+    // A chat has no say: a `chat` level is not read.
     assert.deepEqual(resolveKnowledgeMode({ chat: 'pinned', link: 'tools', project: 'context' }), {
-      mode: 'pinned',
-      source: 'chat'
+      mode: 'tools',
+      source: 'link'
     });
-    // A mode the platform no longer offers is passed over for chats and projects, not for a link.
+    // A mode the platform no longer offers is passed over for a user's project, not for a link.
     const allowed = ['auto', 'tools'];
-    assert.deepEqual(resolveKnowledgeMode({ chat: 'context', project: 'pinned', allowed }), {
+    assert.deepEqual(resolveKnowledgeMode({ project: 'pinned', allowed }), {
       mode: 'auto',
       source: 'default'
     });
@@ -295,15 +291,16 @@ describe('which mode a project is used in', () => {
     });
   });
 
-  it('lets the chat override the project, for its container and its attachments', async () => {
+  it("does not let a chat change a project's mode, for its container or its attachments", async () => {
     await withDefault('context', async () => {
+      // A mode a request still carries is not read.
       const [container] = await scopeOf({ _projectId: big.id, _knowledgeMode: 'pinned' });
-      assert.deepEqual([container.mode, container.modeSource], ['pinned', 'chat']);
+      assert.deepEqual([container.mode, container.modeSource], ['context', 'project']);
       const [attached] = await scopeOf({
         _attachedProjectIds: [big.id],
         _knowledgeMode: 'relevant'
       });
-      assert.deepEqual([attached.mode, attached.modeSource], ['relevant', 'chat']);
+      assert.deepEqual([attached.mode, attached.modeSource], ['context', 'project']);
     });
   });
 
@@ -318,15 +315,7 @@ describe('which mode a project is used in', () => {
     });
   });
 
-  it("does not apply the chat's mode to a project only an app links", async () => {
-    const [entry] = await scopeOf({
-      projects: [{ id: big.id, mode: 'tools' }],
-      _knowledgeMode: 'pinned'
-    });
-    assert.deepEqual([entry.mode, entry.modeSource], ['tools', 'link']);
-  });
-
-  it('passes over a mode the platform switched off, for chats and projects', async () => {
+  it('passes over a mode the platform switched off, for projects', async () => {
     const platform = configCache.getPlatform();
     configCache.setCacheEntry('config/platform.json', {
       ...platform,
@@ -334,8 +323,8 @@ describe('which mode a project is used in', () => {
     });
     try {
       await withDefault('context', async () => {
-        const [chat] = await scopeOf({ _projectId: big.id, _knowledgeMode: 'pinned' });
-        assert.deepEqual([chat.mode, chat.modeSource], ['auto', 'default']);
+        const [project] = await scopeOf({ _projectId: big.id });
+        assert.deepEqual([project.mode, project.modeSource], ['auto', 'default']);
         // An administrator's link keeps its mode.
         const [link] = await scopeOf({ projects: [{ id: big.id, mode: 'context' }] });
         assert.deepEqual([link.mode, link.modeSource], ['context', 'link']);
@@ -488,7 +477,7 @@ describe('what each mode injects', () => {
   });
 
   it('tells the badge the mode the server used and the level that chose it', async () => {
-    const scope = await scopeOf({ _projectId: big.id, _knowledgeMode: 'relevant' });
+    const scope = await scopeOf({ projects: [{ id: big.id, mode: 'relevant' }] });
     const plan = await planKnowledgeScope(scope, {
       model: TOOLS_MODEL,
       settings: { loadAllMaxTokens: 50000 },
@@ -497,7 +486,7 @@ describe('what each mode injects', () => {
     });
     const [entry] = scopeSummary(plan).projects;
     assert.equal(entry.knowledgeMode, 'relevant');
-    assert.equal(entry.modeSource, 'chat');
+    assert.equal(entry.modeSource, 'link');
     assert.equal(entry.mode, 'searched');
     assert.equal(entry.excerpted, true);
   });

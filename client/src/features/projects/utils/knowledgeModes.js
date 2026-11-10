@@ -11,10 +11,10 @@
 
 const LABELS = {
   auto: 'Automatic',
-  context: 'Full context',
-  relevant: 'Relevant sections',
-  tools: 'Search',
-  pinned: 'Pinned only'
+  context: 'Read everything',
+  relevant: 'Best passages',
+  tools: 'Look things up',
+  pinned: 'Pinned documents only'
 };
 
 const DESCRIPTIONS = {

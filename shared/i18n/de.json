@@ -8679,27 +8679,25 @@
       "hint": "Wie Chats und Apps dieses Projekt nutzen, sofern sie keinen anderen Modus wählen.",
       "automaticDefault": "Automatisch (Standard)",
       "defaultSuffix": "(Standard)",
-      "projectDefault": "Projektstandard",
-      "chatLabel": "Wissensmodus dieses Chats",
       "modes": {
         "auto": {
           "label": "Automatisch",
           "description": "Alles, wenn es passt, sonst die angehefteten Dokumente und die besten Abschnitte zur Frage. Den Rest kann das Modell durchsuchen."
         },
         "context": {
-          "label": "Voller Kontext",
+          "label": "Alles lesen",
           "description": "Alles, bis zur Grenze des Modells. Für kleine Bestände, die vollständig gelesen werden müssen: ein Vertrag, eine Richtlinie, eine Spezifikation."
         },
         "relevant": {
-          "label": "Relevante Abschnitte",
+          "label": "Beste Textstellen",
           "description": "Die angehefteten Dokumente und die besten Abschnitte zur Frage aus allen Dokumenten. Spart einen Werkzeugaufruf; für große Projekte und Modelle, die Werkzeuge schlecht aufrufen."
         },
         "tools": {
-          "label": "Suche",
+          "label": "Bei Bedarf nachschlagen",
           "description": "Nur die angehefteten Dokumente; den Rest durchsucht das Modell. Für große Bibliotheken und Agenten, die gezielt suchen."
         },
         "pinned": {
-          "label": "Nur Angeheftetes",
+          "label": "Nur angeheftete Dokumente",
           "description": "Nur die angehefteten Dokumente; die übrigen kann das Modell nicht erreichen. Eine kuratierte Auswahl aus einem großen Projekt."
         }
       }

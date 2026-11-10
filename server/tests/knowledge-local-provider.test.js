@@ -1710,15 +1710,12 @@ describe('chat request schema', () => {
     assert.equal(chatPostSchema.body.parse({ messages: [], projectId: null }).projectId, null);
   });
 
-  it('keeps the knowledge mode of a chat turn and refuses an unknown one (#3538)', () => {
-    for (const mode of ['auto', 'context', 'relevant', 'tools', 'pinned', '', null]) {
-      assert.equal(
-        chatPostSchema.body.parse({ messages: [], knowledgeMode: mode }).knowledgeMode,
-        mode
-      );
-    }
-    assert.equal(chatPostSchema.body.parse({ messages: [] }).knowledgeMode, undefined);
-    assert.throws(() => chatPostSchema.body.parse({ messages: [], knowledgeMode: 'everything' }));
+  it('does not take a knowledge mode from a chat turn (#3538)', () => {
+    // The mode of a project is decided by its owner or the link, never by a chat.
+    assert.equal(
+      chatPostSchema.body.parse({ messages: [], knowledgeMode: 'pinned' }).knowledgeMode,
+      undefined
+    );
   });
 });
 

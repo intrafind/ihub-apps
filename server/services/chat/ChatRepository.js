@@ -1466,29 +1466,6 @@ export class ChatRepository {
   }
 
   /**
-   * Set the knowledge mode of a chat (#3538), under its lock: how the chat
-   * reaches the knowledge of its projects. `null` clears it, and the projects'
-   * own defaults apply again. The caller has checked that the mode exists.
-   *
-   * @param {string} chatId - Chat id.
-   * @param {string|null} mode - A knowledge mode, or null.
-   * @returns {Promise<Object|null>} The chat as it stands, or null when it does not
-   *   exist or cannot be stored.
-   */
-  setKnowledgeMode(chatId, mode) {
-    if (!this._usable(chatId, 'setKnowledgeMode')) return null;
-    return this._withChatLock(chatId, async () => {
-      const { chat: existing, etag } = await this._loadChat(chatId);
-      if (!existing) return null;
-      const next = typeof mode === 'string' && mode ? mode : null;
-      if ((existing.knowledgeMode ?? null) === next) return existing;
-      const updated = applyChatPatch(existing, { knowledgeMode: next });
-      if (next === null) delete updated.knowledgeMode;
-      return this._writeChat(updated, etag);
-    });
-  }
-
-  /**
    * Move a chat between projects only while it is still where the caller saw
    * it: `projectId` becomes `nextProjectId` when it equals `expectedProjectId`
    * (null for "in no project"). The compare runs inside the chat's lock, so a

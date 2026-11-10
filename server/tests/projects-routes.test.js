@@ -1814,7 +1814,7 @@ describe('chats in a project', () => {
     }
   });
 
-  it('stores the knowledge mode of a chat, clears it and refuses an unknown one (#3538)', async () => {
+  it('does not let a chat set a knowledge mode (#3538)', async () => {
     const chats = getChatRepository();
     const chat = await chats.ensureChat({
       chatId: 'chat-knowledge-mode',
@@ -1823,36 +1823,14 @@ describe('chats in a project', () => {
       title: 'Mode'
     });
     assert.ok(chat);
-    for (const mode of ['pinned', 'relevant']) {
-      const set = await drive(route.chatPatch, {
-        user: ADA,
-        params: { chatId: chat.id },
-        body: { knowledgeMode: mode }
-      });
-      assert.equal(set.statusCode, 200, JSON.stringify(set.body));
-      assert.equal(set.body.knowledgeMode, mode);
-      assert.equal((await chats.getChat(chat.id)).knowledgeMode, mode);
-    }
-    const cleared = await drive(route.chatPatch, {
-      user: ADA,
-      params: { chatId: chat.id },
-      body: { knowledgeMode: null }
-    });
-    assert.equal(cleared.statusCode, 200, JSON.stringify(cleared.body));
-    assert.equal((await chats.getChat(chat.id)).knowledgeMode, undefined);
+    // The mode of a project is its owner's or the link's decision, binding for the chat.
     const refused = await drive(route.chatPatch, {
       user: ADA,
       params: { chatId: chat.id },
-      body: { knowledgeMode: 'everything' }
-    });
-    assert.equal(refused.statusCode, 400);
-    // Someone else's chat is not theirs to set.
-    const stranger = await drive(route.chatPatch, {
-      user: GRACE,
-      params: { chatId: chat.id },
       body: { knowledgeMode: 'pinned' }
     });
-    assert.equal(stranger.statusCode, 404);
+    assert.equal(refused.statusCode, 400, JSON.stringify(refused.body));
+    assert.equal((await chats.getChat(chat.id)).knowledgeMode, undefined);
   });
 
   it('attaches projects to a stored chat, takes them away and refuses ones it may not use', async () => {
