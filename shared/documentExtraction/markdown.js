@@ -9,7 +9,7 @@
  * `a_b` of the document), tables as GFM tables with merged cells expanded, images reduced to
  * their alt text (never base64), footnotes as `[^n]`, no link noise from internal anchors.
  *
- * Several rules are copied from `server/tools/lib/pageContent.js` (the web page reader);
+ * Several rules are copied from `server/services/pageReader/pageContent.js` (the web page reader);
  * consolidating the two converters is a release 2 cleanup.
  *
  * @module shared/documentExtraction/markdown

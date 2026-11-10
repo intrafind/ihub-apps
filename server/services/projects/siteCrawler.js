@@ -16,13 +16,13 @@
  * @module services/projects/siteCrawler
  */
 import { JSDOM } from 'jsdom';
-import { fetchWebPage } from '../../tools/webContentExtractor.js';
+import { fetchWebPage } from '../pageReader/pageReader.js';
 import {
   BOT_PROTECTION_CODE,
   blockedResponseError,
   classifyBlockedResponse
-} from '../../tools/lib/botProtection.js';
-import { dropRawTextElements } from '../../tools/lib/pageContent.js';
+} from '../pageReader/botProtection.js';
+import { dropRawTextElements } from '../pageReader/pageContent.js';
 import { HTML_MIME, acceptedTypeOf } from './extractText.js';
 import { DOCUMENT_EXTENSIONS } from './webFileDownload.js';
 

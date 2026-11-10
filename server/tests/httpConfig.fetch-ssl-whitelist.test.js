@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The whitelist decision behind `enhanceFetchOptions`, which `read_url` (tools/webContentExtractor.js) calls
+ * The whitelist decision behind `enhanceFetchOptions`, which `read_url` (services/pageReader/pageReader.js) calls
  * for every hop: certificate verification is skipped only for a host on
  * `ssl.domainWhitelist` while `ssl.ignoreInvalidCertificates` is on.
  */

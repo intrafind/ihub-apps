@@ -46,18 +46,16 @@ const CLOUDFLARE_BODY =
 
 describe('read_url refused pages', () => {
   let read_url;
-  let extractForTool;
+  let readUrl;
   let clearBlockedHosts;
   let searchWithExtraction;
   let webSearchService;
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    ({
-      default: read_url,
-      extractForTool,
-      clearBlockedHosts
-    } = await import('../tools/webContentExtractor.js'));
+    ({ readWebPage: read_url, clearBlockedHosts } =
+      await import('../services/pageReader/pageReader.js'));
+    ({ readUrl } = await import('../tools/readUrl.js'));
     clearBlockedHosts();
   });
 
@@ -140,7 +138,7 @@ describe('read_url refused pages', () => {
     throttledFetchMock.mockResolvedValue(
       blockedResponse(403, { server: 'AkamaiNetStorage' }, AKAMAI_BODY)
     );
-    const result = await extractForTool({ url: 'https://8.8.8.8/shoes' });
+    const result = await readUrl({ url: 'https://8.8.8.8/shoes' });
     expect(result.error).toMatchObject({
       code: 'BOT_PROTECTION',
       retryable: false,
@@ -160,7 +158,7 @@ describe('read_url refused pages', () => {
 
   test('other failures still throw for the model entry point', async () => {
     throttledFetchMock.mockResolvedValue(blockedResponse(403, { server: 'nginx' }, 'Forbidden'));
-    await expect(extractForTool({ url: 'https://8.8.8.8/' })).rejects.toMatchObject({
+    await expect(readUrl({ url: 'https://8.8.8.8/' })).rejects.toMatchObject({
       code: 'ACCESS_DENIED'
     });
   });
@@ -169,17 +167,17 @@ describe('read_url refused pages', () => {
     throttledFetchMock.mockResolvedValue(
       blockedResponse(403, { server: 'AkamaiNetStorage' }, AKAMAI_BODY)
     );
-    const first = await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-1' });
+    const first = await readUrl({ url: 'https://8.8.8.8/a', chatId: 'chat-1' });
     expect(first.error.code).toBe('BOT_PROTECTION');
     expect(throttledFetchMock).toHaveBeenCalledTimes(1);
 
-    const second = await extractForTool({ url: 'https://8.8.8.8/other', chatId: 'chat-1' });
+    const second = await readUrl({ url: 'https://8.8.8.8/other', chatId: 'chat-1' });
     expect(second.error).toMatchObject({ code: 'BOT_PROTECTION', retryable: false });
     expect(second.url).toBe('https://8.8.8.8/other');
     expect(throttledFetchMock).toHaveBeenCalledTimes(1);
 
     // Another chat is not affected.
-    await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-2' });
+    await readUrl({ url: 'https://8.8.8.8/a', chatId: 'chat-2' });
     expect(throttledFetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -194,10 +192,10 @@ describe('read_url refused pages', () => {
           }
         : blockedResponse(403, { server: 'AkamaiNetStorage' }, AKAMAI_BODY)
     );
-    const first = await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-r' });
+    const first = await readUrl({ url: 'https://8.8.8.8/a', chatId: 'chat-r' });
     expect(first.error).toMatchObject({ code: 'BOT_PROTECTION', host: '1.1.1.1' });
     const calls = throttledFetchMock.mock.calls.length;
-    const second = await extractForTool({ url: 'https://8.8.8.8/b', chatId: 'chat-r' });
+    const second = await readUrl({ url: 'https://8.8.8.8/b', chatId: 'chat-r' });
     expect(second.error.code).toBe('BOT_PROTECTION');
     expect(throttledFetchMock).toHaveBeenCalledTimes(calls);
   });
@@ -206,9 +204,9 @@ describe('read_url refused pages', () => {
     throttledFetchMock.mockResolvedValue(
       blockedResponse(429, { server: 'cloudflare', 'cf-mitigated': 'challenge' }, '')
     );
-    const first = await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-429' });
+    const first = await readUrl({ url: 'https://8.8.8.8/a', chatId: 'chat-429' });
     expect(first.error).toMatchObject({ code: 'BOT_PROTECTION', retryable: false, status: 429 });
-    await extractForTool({ url: 'https://8.8.8.8/a', chatId: 'chat-429' });
+    await readUrl({ url: 'https://8.8.8.8/a', chatId: 'chat-429' });
     expect(throttledFetchMock).toHaveBeenCalledTimes(2);
   });
 
@@ -241,7 +239,7 @@ describe('read_url refused pages', () => {
       expect(throttledFetchMock).toHaveBeenCalledTimes(1);
 
       // ... so neither a later read_url nor another search asks that host again.
-      const read = await extractForTool({ url: 'https://8.8.8.8/other', chatId: 'chat-s' });
+      const read = await readUrl({ url: 'https://8.8.8.8/other', chatId: 'chat-s' });
       expect(read.error.code).toBe('BOT_PROTECTION');
       const second = await search();
       expect(second.extractedContent[0].extractionErrorCode).toBe('BOT_PROTECTION');

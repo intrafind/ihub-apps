@@ -50,12 +50,12 @@ const freshUrl = () => `http://93.184.216.34/lease-${++counter}`;
 
 describe('the url source handler', () => {
   let URLHandler;
-  let extractForTool;
+  let readUrl;
 
   beforeEach(async () => {
     jest.resetAllMocks();
     ({ default: URLHandler } = await import('../sources/URLHandler.js'));
-    ({ extractForTool } = await import('../tools/webContentExtractor.js'));
+    ({ readUrl } = await import('../tools/readUrl.js'));
   });
 
   test('reads the page as the page reader does, and shares its cache with read_url', async () => {
@@ -76,7 +76,7 @@ describe('the url source handler', () => {
 
     // The model's `read_url` of the same page is served from the cache the
     // item filled: one fetch, one extraction.
-    const read = await extractForTool({ url });
+    const read = await readUrl({ url });
     expect(read.content).toBe(loaded.content);
     expect(throttledFetchMock).toHaveBeenCalledTimes(1);
   });

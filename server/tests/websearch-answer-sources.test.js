@@ -39,7 +39,7 @@ import { SSE_V2_EVENTS } from '../../shared/runEvents.js';
 import { resolveCitations } from '../../shared/sources/index.js';
 import { boundStoredSources } from '../services/chat/chatSources.js';
 import braveSearch from '../tools/braveSearch.js';
-import { acceptLanguageFor } from '../tools/lib/pageContent.js';
+import { acceptLanguageFor } from '../services/pageReader/pageContent.js';
 import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
 import { makePageCacheKey, setCachedPage } from '../services/pageCache.js';
 import webSearchService, { SearchProvider } from '../services/WebSearchService.js';

@@ -11,7 +11,7 @@ import TurndownService from 'turndown';
  * at a time.
  *
  * Everything here is pure — HTML or PDF bytes in, text out — so the extraction
- * rules are testable without a network. `webContentExtractor.js` owns the
+ * rules are testable without a network. `pageReader.js` owns the
  * fetching, the SSRF guard and the cache.
  *
  * ## Why Markdown
@@ -29,7 +29,7 @@ import TurndownService from 'turndown';
  * older selector rules stay as the fallback: strip navigation, ads and chrome,
  * then take `main` / `article` / the first known content container, or `body`.
  *
- * @module tools/lib/pageContent
+ * @module services/pageReader/pageContent
  */
 
 /**

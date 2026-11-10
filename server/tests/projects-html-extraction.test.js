@@ -11,7 +11,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { extractText } from '../services/projects/extractText.js';
-import { MAX_DOCUMENT_CHARS } from '../tools/lib/pageContent.js';
+import { MAX_DOCUMENT_CHARS } from '../services/pageReader/pageContent.js';
 
 const page = body =>
   Buffer.from(

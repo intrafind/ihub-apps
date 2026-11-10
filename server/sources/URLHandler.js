@@ -12,7 +12,7 @@ const DEFAULT_MAX_CONTENT_LENGTH = 50000;
  * URL Source Handler
  *
  * Loads content from web URLs through the page reader
- * (`tools/webContentExtractor.js`), the one way iHub reads a web page: the
+ * (`services/pageReader/pageReader.js`), the one way iHub reads a web page: the
  * same fetch (SSRF guard on every hop, proxy, certificate whitelist), the same
  * extraction and the same page cache as `read_url` and the search tools'
  * `extractContent`. This handler adds only the source-handler cache and its
@@ -79,7 +79,7 @@ class URLHandler extends SourceHandler {
    * @returns {Promise<Object>} - The page reader's result
    */
   async readPage(params) {
-    const { default: readWebPage } = await import('../tools/webContentExtractor.js');
+    const { readWebPage } = await import('../services/pageReader/pageReader.js');
     return readWebPage(params);
   }
 

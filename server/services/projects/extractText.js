@@ -40,7 +40,7 @@ import {
 import { extractXlsxText } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
 import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
-import { extractHtmlPage } from '../../tools/lib/pageContent.js';
+import { extractHtmlPage } from '../pageReader/pageContent.js';
 import { cleanItemInfo, infoFromText } from './itemInfo.js';
 
 /** The most characters one item keeps (about 10 MB of text). */
@@ -482,7 +482,7 @@ function htmlText(html) {
 
 /**
  * An HTML file's main content as Markdown, by the page reader's extraction
- * (`tools/lib/pageContent.js`, the one way iHub turns HTML into text): menus,
+ * (`services/pageReader/pageContent.js`, the one way iHub turns HTML into text): menus,
  * page trees, breadcrumbs and footers are left out, so they do not repeat in
  * every chunk of the item. Not cut at the reader's own character cap; the
  * item's limit (`normalizeText`) applies.

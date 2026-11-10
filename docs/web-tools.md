@@ -128,7 +128,7 @@ in `websearch` as above.
 
 Whenever an engine's search tool is offered — including when a provider turns
 native search down and the loop falls back to it — the page reader
-[`read_url`](#web-content-extractor-read_url) is offered next to it. The search
+[`read_url`](#page-reader-read_url) is offered next to it. The search
 tool's automatic extraction only copies a short excerpt of the top results
 (`contentMaxLength` each); the page reader lets the model open one specific
 result, or a URL the user pasted, and read it in full.
@@ -564,7 +564,7 @@ on and off, and restricted to groups, on their engine under **Admin →
 Integrations → Web search**. Their throttling is unchanged (Brave: one request
 at a time, 1100 ms apart). The page reader `read_url` is a platform tool of the
 web search feature, read from `server/defaults/tools/read_url.json` (see
-[Web Content Extractor](#web-content-extractor-read_url)).
+[Page Reader](#page-reader-read_url)).
 
 ### Brave Search (`braveSearch`)
 
@@ -751,7 +751,7 @@ Google Search grounding, OpenAI Web Search, and Anthropic Web Search are **not**
 
 None of these take any parameters — they're automatically enabled when `websearch.useNativeSearch` is on and the app's model supports them (Anthropic additionally receives the app's search cap as `max_uses`). Search queries, results and citations are surfaced as grounding metadata, which powers the "Grounding" answer-source badge and the [sources panel and inline citations](#sources-and-citations). For OpenAI this includes streamed answers: the `url_citation` annotations and `web_search_call` items of the stream are read into the grounding metadata (before, only a non-streamed response's annotations were parsed, and nothing read them).
 
-### Web Content Extractor (`read_url`)
+### Page Reader (`read_url`)
 
 **Purpose**: Open a web page or PDF by URL and return its main content as Markdown, without headers, footers, navigation, ads and other non-content elements.
 
@@ -844,7 +844,7 @@ Here is a complete app configuration with web search enabled:
 
 ### Content Extraction Algorithm
 
-The web content extractor uses the following approach:
+The page reader uses the following approach:
 
 1. **Fetch the page** with the user's `Accept-Language`, a browser user agent and a timeout, re-validating every redirect hop against the SSRF guard (or serve it from the page cache)
 2. **Parse HTML** using JSDOM, with the page's URL as the base for relative links
@@ -853,26 +853,26 @@ The web content extractor uses the following approach:
 5. **Extract metadata** (title, description, author, site name, published date)
 6. **Cache the whole document** and return the window starting at `offset`, ending at a paragraph break where possible, with `truncated` / `totalLength` / `nextOffset`
 
-`tools/lib/pageContent.js` holds the extraction rules as pure functions; `tools/webContentExtractor.js` does the fetching and caching.
+`services/pageReader/pageContent.js` holds the extraction rules as pure functions; `services/pageReader/pageReader.js` does the fetching and caching. The page reader is a platform service, not a tool: `read_url` (`tools/readUrl.js`) is only the model's door to it.
 
 ### One Way to Read a Web Page
 
-Every read of a web page goes through the page reader (`tools/webContentExtractor.js`), whoever asks:
+Every read of a web page goes through the page reader (`services/pageReader/pageReader.js`), whoever asks:
 
 | Caller | Entry |
 | --- | --- |
-| The model's `read_url` | `extractForTool` |
-| A search result's `extractContent` excerpt | `webContentExtractor` (via `tools/lib/searchWithExtraction.js`) |
-| A project's web page item (`url` kind, the `url` source handler) | `webContentExtractor` (via `sources/URLHandler.js`) |
+| The model's `read_url` tool | `readUrl` (`tools/readUrl.js`): checks what the model passed, then calls `readWebPage` |
+| A search result's `extractContent` excerpt | `readWebPage` (via `tools/lib/searchWithExtraction.js`) |
+| A project's web page item (`url` kind, the `url` source handler) | `readWebPage` (via `sources/URLHandler.js`) |
 | A project's site crawl and its linked-file download | `fetchWebPage` (the same guarded fetch; the response is read as a file, not as a page) |
 
-So they share one fetch (SSRF guard on every redirect hop, DNS pinning, proxy, `ssl.domainWhitelist`), one extraction (Readability and Turndown, `tools/lib/pageContent.js`), one page cache and one bot-protection memory. An HTML file in a project is turned into Markdown by the same `extractHtmlPage`, so a saved page and a live one read alike. The only other HTML-to-text converter is the one for e-mail bodies (`.eml`, `.msg`), which are fragments, not pages.
+So they share one fetch (SSRF guard on every redirect hop, DNS pinning, proxy, `ssl.domainWhitelist`), one extraction (Readability and Turndown, `services/pageReader/pageContent.js`), one page cache and one bot-protection memory. An HTML file in a project is turned into Markdown by the same `extractHtmlPage`, so a saved page and a live one read alike. The only other HTML-to-text converter is the one for e-mail bodies (`.eml`, `.msg`), which are fragments, not pages.
 
 A change to how a page is fetched or extracted belongs in these two files, not in a caller. The `url` source handler has no fetch or conversion of its own: it passes the item's length limit (`maxContentLength`) and the chat to the page reader.
 
 ### SSRF Protection
 
-The web content extractor includes protection against Server-Side Request Forgery (SSRF):
+The page reader includes protection against Server-Side Request Forgery (SSRF):
 
 - Blocks requests to private and internal IP addresses
 - Blocks access to cloud metadata services (169.254.x.x, etc.)
