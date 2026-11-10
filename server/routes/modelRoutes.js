@@ -9,7 +9,7 @@ import {
 } from '../utils/authorization.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
-import { responseEtag } from '../utils/etag.js';
+import { etagWithSuffix, responseEtag } from '../utils/etag.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
@@ -157,9 +157,11 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     const sanitizedModels = typedModels.map(sanitizeModelForPublic);
 
     // Discriminate the ETag by type so the chat and transcription lists don't
-    // collide in the shared conditional-request cache.
+    // collide in the shared conditional-request cache. The type goes inside the
+    // quotes, so the ETag stays one well-formed entity tag, and without a comma,
+    // which separates the tags of an If-None-Match list.
     const typedEtag = userSpecificEtag
-      ? responseEtag(`${userSpecificEtag}-${requestedType}`)
+      ? responseEtag(etagWithSuffix(userSpecificEtag, requestedTypes.join('+')))
       : null;
 
     // Handle conditional requests with ETag

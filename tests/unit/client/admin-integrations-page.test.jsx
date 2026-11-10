@@ -300,10 +300,8 @@ describe('Installed tab', () => {
 });
 
 describe('Clients section', () => {
-  const clientsSection = () =>
-    screen
-      .getAllByTestId('integration-group')
-      .find(g => g.getAttribute('data-group') === 'clients');
+  // By its accessible name, so a section that loses its heading fails too.
+  const clientsSection = () => screen.queryByRole('region', { name: /^Clients\b/ });
 
   test('heads the Installed tab: each client links to its page with its status', async () => {
     renderPage();
@@ -357,7 +355,7 @@ describe('Clients section', () => {
     expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'x.500' } });
-    expect(clientsSection()).toBeUndefined();
+    expect(clientsSection()).toBeNull();
     expect(screen.getAllByTestId('installation-tile')).toHaveLength(1);
 
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'no such thing' } });
