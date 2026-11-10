@@ -41,6 +41,7 @@ import {
   sourceScopesOf
 } from '../sources/sourcesView';
 import ItemProvenance from '../../projects/components/ItemProvenance';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 
 // Loaded on demand: the preview pulls in pdf.js, which is a deliberately
 // on-demand bundle chunk. Importing it statically here would put pdf.js in
@@ -382,8 +383,28 @@ function AnswerSourceRow({ source, messageKey, active }) {
   );
 }
 
-/** The message shown when an action did not happen, by action and reason. */
-function describeFailure(t, action, reason) {
+/**
+ * Why a download or an attachment failed, as the one who refused said it: the
+ * server's problem ("You are not allowed to use this integration.") or Outlook's
+ * error ("AttachmentError (9000): …"). Null when neither named a reason.
+ */
+function failureReason(t, result) {
+  const data = result?.error?.response?.data;
+  if (data && typeof data === 'object' && !(data instanceof Blob) && (data.code || data.detail)) {
+    return apiErrorMessage(result.error, t) || null;
+  }
+  return typeof result?.message === 'string' && result.message ? result.message : null;
+}
+
+/** The message shown when an action did not happen, by action and reason, with the cause when known. */
+function describeFailure(t, action, result) {
+  const message = failureMessage(t, action, result.reason);
+  const reason = result.reason === 'failed' ? failureReason(t, result) : null;
+  return reason ? `${message} ${reason}` : message;
+}
+
+/** The generic message for an action that did not happen, by action and reason. */
+function failureMessage(t, action, reason) {
   if (action === 'download') {
     return reason === 'unavailable'
       ? t('sources.downloadUnavailable', 'This document cannot be downloaded from here.')
@@ -559,7 +580,7 @@ function SourcesPanel({
       else if (action === 'attach') result = await attachSourceToMail(source);
       else result = { ok: false, reason: 'unsupported' };
 
-      if (!result.ok) setError(describeFailure(t, action, result.reason));
+      if (!result.ok) setError(describeFailure(t, action, result));
       else if (action === 'copyLink') setNotice(t('sources.linkCopied', 'Link copied.'));
       else if (action === 'attach') {
         setNotice(

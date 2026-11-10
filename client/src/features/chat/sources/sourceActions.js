@@ -38,7 +38,9 @@ import {
  *
  * @typedef {{ ok: true }
  *   | { ok: false, reason: 'unavailable'|'blocked'|'failed'|'notComposing'|'tooLarge',
- *       error?: Error }} SourceActionResult
+ *       error?: Error, message?: string }} SourceActionResult
+ *   `error` is the failed request, its problem body readable (`withReadableProblem`);
+ *   `message` is what Outlook said when it refused an attachment.
  *
  * @module features/chat/sources/sourceActions
  */
@@ -230,6 +232,41 @@ function downloadBlob({ response, asText }) {
   });
 }
 
+/** A Blob's text (`Blob.text()` is missing from some embedded browsers). */
+function blobToText(blob) {
+  if (typeof blob.text === 'function') return blob.text();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error || new Error('Could not read the response'));
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.readAsText(blob);
+  });
+}
+
+/**
+ * A failed content request with the server's answer readable. A request for a
+ * Blob gets its error body as a Blob too, so the problem the server sent
+ * (`application/problem+json`: `code`, `detail`) would be lost and every
+ * failure would read the same; it is parsed into `error.response.data`, where
+ * `apiErrorMessage` reads it.
+ *
+ * @param {unknown} error
+ * @returns {Promise<unknown>} the same error
+ */
+export async function withReadableProblem(error) {
+  const response = error?.response;
+  const data = response?.data;
+  if (typeof Blob === 'undefined' || !(data instanceof Blob) || !/json/i.test(data.type || '')) {
+    return error;
+  }
+  try {
+    response.data = JSON.parse(await blobToText(data));
+  } catch {
+    // Not JSON after all: the status still tells something.
+  }
+  return error;
+}
+
 /**
  * Download the source's file through its provider and save it.
  *
@@ -246,7 +283,7 @@ export async function downloadSource(source) {
       ? { ok: true }
       : { ok: false, reason: 'failed' };
   } catch (error) {
-    return { ok: false, reason: 'failed', error };
+    return { ok: false, reason: 'failed', error: await withReadableProblem(error) };
   }
 }
 
@@ -305,6 +342,6 @@ export async function attachSourceToMail(source) {
     });
     return result.ok ? { ok: true, filename } : result;
   } catch (error) {
-    return { ok: false, reason: 'failed', error };
+    return { ok: false, reason: 'failed', error: await withReadableProblem(error) };
   }
 }
