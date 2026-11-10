@@ -279,6 +279,98 @@ describe('restylePptx', () => {
     assert.match(second, /type="sldNum"/);
   });
 
+  it('makes the result a presentation also when the template is a .potx', async () => {
+    const zip = await JSZip.loadAsync(await companyTemplate());
+    const types = await zip.file('[Content_Types].xml').async('string');
+    assert.match(types, /presentationml\.presentation\.main\+xml/);
+    zip.file(
+      '[Content_Types].xml',
+      types.replace('presentationml.presentation.main+xml', 'presentationml.template.main+xml')
+    );
+    const potx = await zip.generateAsync({ type: 'nodebuffer' });
+
+    const { buffer } = await restylePptx(await sourceDeck(), potx);
+    const result = await JSZip.loadAsync(buffer);
+    const resultTypes = await text(result, '[Content_Types].xml');
+    assert.match(resultTypes, /presentationml\.presentation\.main\+xml/);
+    assert.doesNotMatch(resultTypes, /presentationml\.template\.main\+xml/);
+  });
+
+  it('shrinks text with a shape that shrinks: inherited sizes too', async () => {
+    // A 16:9 deck onto a 4:3 template: the content has to shrink.
+    const small = await buildBaseTemplate({ primaryColor: '#AB0D19', aspectRatio: '4:3' });
+    const { buffer } = await restylePptx(await sourceDeck('16:9'), small);
+    const zip = await JSZip.loadAsync(buffer);
+
+    // Text next to a chart: the text body shrinks by the same factor, whatever size it has.
+    const chartSlide = await text(zip, 'ppt/slides/slide4.xml');
+    const fit = /<a:normAutofit fontScale="(\d+)"/.exec(chartSlide);
+    assert.ok(fit, 'the text body has "shrink text on overflow" at a scale');
+    assert.ok(Number(fit[1]) < 100000 && Number(fit[1]) > 40000);
+
+    // A table: its cells have no such setting; every run gets an explicit, scaled size.
+    const tableSlide = parseXml(await text(zip, 'ppt/slides/slide6.xml'));
+    const table = tableSlide.getElementsByTagName('a:tbl')[0];
+    const sizes = [...table.getElementsByTagName('a:r')].map(run =>
+      Number(run.getElementsByTagName('a:rPr')[0]?.getAttribute('sz'))
+    );
+    assert.ok(sizes.length > 0);
+    assert.ok(
+      sizes.every(size => size > 0 && size < 1800),
+      `scaled below the default: ${sizes}`
+    );
+  });
+
+  it('leaves comments behind and says when a shape cannot be moved', async () => {
+    const zip = await JSZip.loadAsync(await sourceDeck());
+    // A comment on slide 2 …
+    zip.file(
+      'ppt/comments/comment1.xml',
+      '<p:cmLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"/>'
+    );
+    const rels = await text(zip, 'ppt/slides/_rels/slide2.xml.rels');
+    zip.file(
+      'ppt/slides/_rels/slide2.xml.rels',
+      rels.replace(
+        '</Relationships>',
+        '<Relationship Id="rIdC" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../comments/comment1.xml"/></Relationships>'
+      )
+    );
+    const types = await text(zip, '[Content_Types].xml');
+    zip.file(
+      '[Content_Types].xml',
+      types.replace(
+        '</Types>',
+        '<Override PartName="/ppt/comments/comment1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.comments+xml"/></Types>'
+      )
+    );
+    // … and a shape wrapped in mc:AlternateContent (equations, ink, 3-D models), which has no position to read.
+    const slide = await text(zip, 'ppt/slides/slide2.xml');
+    zip.file(
+      'ppt/slides/slide2.xml',
+      slide.replace(
+        '</p:spTree>',
+        '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Fallback/></mc:AlternateContent></p:spTree>'
+      )
+    );
+
+    const { buffer, warnings } = await restylePptx(
+      await zip.generateAsync({ type: 'nodebuffer' }),
+      await companyTemplate()
+    );
+    const result = await JSZip.loadAsync(buffer);
+    assert.equal(
+      Object.keys(result.files).some(name => name.startsWith('ppt/comments/')),
+      false,
+      'no comment part without its authors'
+    );
+    await assertWellFormed(await openPackage(buffer));
+    assert.ok(
+      warnings.some(w => /^Slide 2: a shape of a kind that cannot be moved/.test(w)),
+      warnings.join('; ')
+    );
+  });
+
   it('refuses what is no presentation', async () => {
     await assert.rejects(restylePptx(Buffer.from('nope'), await companyTemplate()));
     await assert.rejects(restylePptx(await sourceDeck(), Buffer.from('nope')));

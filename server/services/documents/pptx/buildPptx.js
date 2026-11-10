@@ -74,7 +74,7 @@ const SLIDE_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml
 const NOTES_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml';
 const CHART_TYPE = 'application/vnd.openxmlformats-officedocument.drawingml.chart+xml';
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const PRESENTATION_TYPE =
+export const PRESENTATION_TYPE =
   'application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml';
 const PRESENTATION = 'ppt/presentation.xml';
 

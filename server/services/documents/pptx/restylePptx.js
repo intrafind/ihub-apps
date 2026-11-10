@@ -25,6 +25,7 @@ import {
 import {
   contentArea,
   ensureNotesMaster,
+  PRESENTATION_TYPE,
   insertPresentationChild,
   removeTemplateSlides,
   uniquePath
@@ -90,7 +91,18 @@ const COLOR_ROLES = [
 ];
 const MIN_FONT = 800;
 const MAX_FONT = 7200;
+/** The size table text has when nothing sets one (PowerPoint's 18 pt). */
+const DEFAULT_TABLE_FONT = 1800;
 const SMALL_SCALE = 0.5;
+
+/**
+ * Whether a relationship is left behind: structure the template provides, and
+ * comments (their authors are kept by the presentation, which is not copied;
+ * PowerPoint would offer to repair the file).
+ */
+function isLeftBehind(rel) {
+  return STRUCTURAL_RELS.has(rel.type) || rel.type.endsWith('/comments');
+}
 
 export class RestyleError extends Error {
   constructor(message) {
@@ -305,17 +317,47 @@ function createTransform(element) {
   return xfrm;
 }
 
-function scaleFonts(element, scale) {
-  for (const name of ['rPr', 'defRPr', 'endParaRPr']) {
-    for (const node of descendants(element, name)) {
-      const size = attrNumber(node, 'sz');
-      if (!Number.isFinite(size)) continue;
-      node.setAttribute(
-        'sz',
-        String(Math.min(MAX_FONT, Math.max(MIN_FONT, Math.round(size * scale))))
-      );
-    }
+/** Replace a text body's autofit setting with "shrink text on overflow" at a scale. */
+function setFontScale(bodyPr, scale) {
+  for (const name of ['noAutofit', 'normAutofit', 'spAutoFit']) {
+    const old = firstChild(bodyPr, name);
+    if (old) bodyPr.removeChild(old);
   }
+  const fit = bodyPr.ownerDocument.createElementNS(NS.a, 'a:normAutofit');
+  fit.setAttribute('fontScale', String(Math.round(scale * 100000)));
+  // The autofit choice comes after the text warp and before the 3-D settings.
+  const warp = firstChild(bodyPr, 'prstTxWarp');
+  bodyPr.insertBefore(fit, warp ? warp.nextSibling : bodyPr.firstChild);
+}
+
+const clampFont = size => Math.min(MAX_FONT, Math.max(MIN_FONT, Math.round(size)));
+
+/** Table cells have no autofit: each run gets an explicit size, the inherited one scaled. */
+function shrinkTableText(element, scale) {
+  for (const run of descendants(element, 'r')) {
+    let props = firstChild(run, 'rPr');
+    if (!props) {
+      props = run.ownerDocument.createElementNS(NS.a, 'a:rPr');
+      run.insertBefore(props, run.firstChild);
+    }
+    const size = attrNumber(props, 'sz');
+    props.setAttribute(
+      'sz',
+      String(clampFont((Number.isFinite(size) ? size : DEFAULT_TABLE_FONT) * scale))
+    );
+  }
+}
+
+/**
+ * Text shrinks with its shape: shapes get "shrink text on overflow" at the
+ * same scale, so sizes the text sets itself and sizes it inherits shrink alike.
+ */
+function shrinkText(element, scale) {
+  if (element.localName === 'graphicFrame') {
+    shrinkTableText(element, scale);
+    return;
+  }
+  for (const bodyPr of descendants(element, 'bodyPr')) setFontScale(bodyPr, scale);
 }
 
 function scaleTable(element, scale) {
@@ -372,7 +414,7 @@ function placeScaled(shapes, ctx) {
       bindPlaceholder(shape, targets.shift());
     else if (shape.ph) dropPlaceholder(shape);
     // Text only shrinks with its shape: a larger box does not need larger text.
-    if (scale < 1) scaleFonts(shape.element, scale);
+    if (scale < 1) shrinkText(shape.element, scale);
     if (shape.element.localName === 'graphicFrame') scaleTable(shape.element, scale);
   }
   return scale;
@@ -380,6 +422,11 @@ function placeScaled(shapes, ctx) {
 
 function placeContent(shapes, ctx) {
   if (!shapes.length) return;
+  if (shapes.some(s => !s.rect && !s.ph)) {
+    ctx.warnings.push(
+      `Slide ${ctx.number}: a shape of a kind that cannot be moved (an equation, ink or a 3-D model) stays where it was; check the slide.`
+    );
+  }
   const bodies = shapes.filter(isTextPlaceholder);
   const targets = targetContentPlaceholders(ctx.layout).filter(p => !ctx.used.has(p));
   if (bodies.length === shapes.length && bodies.length <= targets.length) {
@@ -529,7 +576,7 @@ async function copyRelationships(ctx, sourcePath, destination, rels) {
       out.push(rel);
       continue;
     }
-    if (STRUCTURAL_RELS.has(rel.type)) continue;
+    if (isLeftBehind(rel)) continue;
     const copied = await copyPart(ctx, resolveTarget(sourcePath, rel.target));
     if (copied) out.push({ ...rel, target: relativeTarget(destination, copied) });
   }
@@ -576,7 +623,7 @@ async function mapSlideRelationship(ctx, entry, newPath, rel) {
     const other = ctx.slideMap.get(target);
     return other ? { ...rel, target: relativeTarget(newPath, other) } : null;
   }
-  if (STRUCTURAL_RELS.has(rel.type)) return null;
+  if (isLeftBehind(rel)) return null;
   const copied = await copyPart(ctx, target);
   return copied ? { ...rel, target: relativeTarget(newPath, copied) } : null;
 }
@@ -668,6 +715,8 @@ export async function restylePptx(sourceBuffer, templateBuffer, options = {}) {
   const target = await loadPresentationTemplate(templateBuffer);
   await removeTemplateSlides(target);
   const types = await ContentTypes.read(target.zip);
+  // A .potx template names its main part a template; the result is a presentation.
+  types.setOverride(PRESENTATION, PRESENTATION_TYPE);
   const entries = await slideEntries(source);
   if (!entries.length) throw new RestyleError('The presentation has no slides.');
 

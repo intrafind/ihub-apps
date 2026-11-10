@@ -72,10 +72,10 @@ A user can upload a `.pptx` made elsewhere and ask for it in the company design.
 - **Titles, subtitles, footers and slide numbers** take the template's placeholders, so their positions, fonts and colours are the template's. The template's footer text and slide numbers are added where the slide has none (not on the title slide).
 - **Text alone on a slide** takes the template's content placeholder.
 - **Everything else** (pictures, charts, tables, text boxes, groups, and text next to them) keeps its arrangement: the shapes are scaled together, by one factor, into the template's content area. Decks of another size (4:3 to 16:9) are fitted the same way. Text shrinks with a shape that shrinks.
-- **Kept:** pictures, charts with their data, tables, speaker notes, links, transitions. **Dropped:** slide backgrounds and the old master, layouts and theme.
+- **Kept:** pictures, charts with their data, tables, speaker notes, links, transitions. **Dropped:** slide backgrounds, review comments and the old master, layouts and theme.
 - **Colours** the deck took from its old theme (accent colours, text and background colours) follow the template's theme, also inside charts. A colour or font a shape sets itself stays as it is.
 
-It is a move onto a new master, not a redesign: slides with several pictures or tight arrangements can need a look afterwards, and the tool reports a slide whose content had to shrink below half its size. To rewrite a deck instead (new titles, fewer words), use `create_pptx`: the deck is rebuilt from its text, and its pictures are not carried over.
+It is a move onto a new master, not a redesign: slides with several pictures or tight arrangements can need a look afterwards. The tool reports a slide whose content had to shrink below half its size, and a slide with a shape that cannot be moved (an equation, ink or a 3-D model: it stays where it was). To rewrite a deck instead (new titles, fewer words), use `create_pptx`: the deck is rebuilt from its text, and its pictures are not carried over.
 
 ## Excel
 
