@@ -75,7 +75,7 @@ Replace all three overlays with **one right-hand Workspace pane**. It is part of
 - **Never remount the viewer** between docked and full screen. Only the container changes. Scroll position, Preview/Code mode, the selected version and the composer draft are all kept.
 - **URL:** keep `?artifact=<id>`. Add `&view=full` for full screen and `?source=<id>` for sources.
   - Opening the pane pushes **one** history entry. Switching items uses `replace`.
-  - Back steps out one level at a time: full screen → docked → closed.
+  - Back steps out one level at a time: full screen → docked → closed. On sheet-only surfaces (below), which have no docked state, Back closes the sheet straight to the chat.
   - `ArtifactViewerHost.jsx` already implements most of this.
 - **Sizes:**
   - Default pane width: **50%**, clamped to **420–960px**.
@@ -87,7 +87,7 @@ Replace all three overlays with **one right-hand Workspace pane**. It is part of
   - The collapse is announced politely: "Sidebar collapsed to make room".
 - **Below 1024px, in the Outlook task pane, the browser-extension side panel, mobile and embed mode:** there is **no split, ever**. The pane opens as a full-screen sheet, which is a real `role="dialog"` with a focus trap, as it is today. Its header has a "Back to chat" button. At 400% zoom (WCAG 1.4.10 Reflow) it falls into the same sheet mode.
 - **Standalone `/artifact` page:** the full-screen state without a chat.
-- **Auto-open on a new artifact:** only when the pane is closed and the viewport is at least 1024px. Focus is never taken from the composer. The open is announced in a live region: "Angebot.md opened in workspace". An app/admin setting can turn it off.
+- **Auto-open on a new artifact:** only when the pane is closed, the viewport is at least 1024px, and the surface supports the docked state. It never auto-opens on sheet-only surfaces (Outlook, extension, mobile, embed), whatever their width, because the sheet would cover the composer. Focus is never taken from the composer. The open is announced in a live region: "Angebot.md opened in workspace". An app/admin setting can turn it off.
 
 ---
 
@@ -209,7 +209,7 @@ Files                                        [✕]
 
 ## 9. Accessibility (BITV 2.0 / WCAG 2.2 AA)
 
-- Docked and full screen are **not modal**: no focus trap, no `aria-modal`, no scrim.
+- Docked and full screen on wide viewports are **not modal**: no focus trap, no `aria-modal`, no scrim. The only modal state is the sheet on narrow surfaces (§4): a `role="dialog"` with a focus trap, where F6 stays inside the sheet.
 - **Landmark:** for this release the pane is a `<section role="region" aria-labelledby>` inside `<main>`, labelled "Workspace: {title}". A skip link, "Skip to workspace", is added while the pane is open. Moving the pane out to be a sibling of `<main>` touches `Layout.jsx`, `AdminLayout`, embed mode and the skip link, so it is a separate a11y refactor.
 - **Focus:**
   - When the pane opens from a click, focus moves to the pane heading (`tabIndex=-1`).
