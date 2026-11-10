@@ -119,6 +119,12 @@ export function isPrivateIPv6Bytes(b) {
   if (zeroRange(0, 15) && b[15] === 1) return true; // ::1 loopback
   if (b[0] === 0xff) return true; // ff00::/8 multicast
   if (b[0] === 0xfe && (b[1] & 0xc0) === 0x80) return true; // fe80::/10 link-local
+  if (b[0] === 0xfe && (b[1] & 0xc0) === 0xc0) return true; // fec0::/10 site-local, deprecated
+  if (b[0] === 0x20 && b[1] === 0x01 && b[2] === 0 && b[3] === 0) return true; // Teredo tunnels
+  if (b[0] === 0x00 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && b[4] === 0 && b[5] === 1)
+    return true; // 64:ff9b:1::/48 local-use NAT64
+  // 6to4 carries an IPv4 address in bytes 2-5.
+  if (b[0] === 0x20 && b[1] === 0x02) return isAlwaysBlockedIPv4Bytes(b.slice(2, 6));
   if ((b[0] & 0xfe) === 0xfc) return true; // fc00::/7 unique-local (fc/fd)
 
   // IPv4-mapped ::ffff:0:0/96 -> classify embedded IPv4
@@ -167,6 +173,91 @@ export function isPrivateIP(ip) {
 }
 
 /**
+ * The addresses that stay unreachable even where internal addresses are
+ * allowed (see {@link assertPublicTarget}'s `allowPrivate`): the machine itself
+ * (loopback, "this" network), link-local addresses, multicast and reserved
+ * ranges, and the cloud metadata services, which hand out credentials to
+ * whoever asks from inside the network: `169.254.169.254` (AWS, Azure, GCP,
+ * link-local), AWS's IPv6 endpoint `fd00:ec2::254` and Alibaba's
+ * `100.100.100.200`, the last two being inside ranges that are otherwise
+ * ordinary private networks.
+ *
+ * What remains private-but-allowed is what a company network is made of:
+ * 10/8, 172.16/12, 192.168/16, 100.64/10 shared space and IPv6 fc00::/7.
+ *
+ * @param {number[]} bytes - Four octets
+ * @returns {boolean}
+ */
+function isAlwaysBlockedIPv4Bytes([a, b, c, d]) {
+  if (a === 0 || a === 127) return true; // "this" network, loopback
+  if (a === 169 && b === 254) return true; // link-local, incl. the metadata service
+  if (a >= 224) return true; // multicast and reserved
+  if (a === 100 && b === 100 && c === 100 && d === 200) return true; // Alibaba metadata
+  if (a === 168 && b === 63 && c === 129 && d === 16) return true; // Azure WireServer
+  if (a === 192 && b === 0 && c === 0) return true; // IETF protocol assignments (192.0.0.192 is a metadata address)
+  return false;
+}
+
+function isAlwaysBlockedIPv6Bytes(b) {
+  const zeroRange = (start, end) => b.slice(start, end).every(x => x === 0);
+  if (zeroRange(0, 16)) return true; // ::
+  if (zeroRange(0, 15) && b[15] === 1) return true; // ::1
+  if (b[0] === 0xff) return true; // multicast
+  if (b[0] === 0xfe && (b[1] & 0xc0) === 0x80) return true; // fe80::/10 link-local
+  if (b[0] === 0xfe && (b[1] & 0xc0) === 0xc0) return true; // fec0::/10 site-local, deprecated
+  if (b[0] === 0x20 && b[1] === 0x01 && b[2] === 0 && b[3] === 0) return true; // Teredo tunnels
+  if (b[0] === 0x00 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && b[4] === 0 && b[5] === 1)
+    return true; // 64:ff9b:1::/48 local-use NAT64
+  // 6to4 carries an IPv4 address in bytes 2-5.
+  if (b[0] === 0x20 && b[1] === 0x02) return isAlwaysBlockedIPv4Bytes(b.slice(2, 6));
+  // AWS metadata over IPv6: fd00:ec2::254
+  if (b[0] === 0xfd && b[1] === 0x00 && b[2] === 0x0e && b[3] === 0xc2) {
+    if (zeroRange(4, 14) && b[14] === 0x02 && b[15] === 0x54) return true;
+  }
+  // An IPv4 address in an IPv6 wrapper is classified as that IPv4 address.
+  if (zeroRange(0, 10) && b[10] === 0xff && b[11] === 0xff)
+    return isAlwaysBlockedIPv4Bytes(b.slice(12));
+  if (zeroRange(0, 12)) return isAlwaysBlockedIPv4Bytes(b.slice(12));
+  // IPv4-translated ::ffff:0:a.b.c.d
+  if (zeroRange(0, 8) && b[8] === 0xff && b[9] === 0xff && b[10] === 0 && b[11] === 0)
+    return isAlwaysBlockedIPv4Bytes(b.slice(12));
+  if (b[0] === 0x00 && b[1] === 0x64 && b[2] === 0xff && b[3] === 0x9b && zeroRange(4, 12)) {
+    return isAlwaysBlockedIPv4Bytes(b.slice(12));
+  }
+  return false;
+}
+
+/**
+ * Whether an address stays blocked even where internal addresses are allowed.
+ * Unknown or unparseable input is blocked.
+ *
+ * @param {string} ip
+ * @returns {boolean}
+ */
+export function isAlwaysBlockedIP(ip) {
+  if (!ip) return true;
+  const family = net.isIP(ip);
+  if (family === 4) return isAlwaysBlockedIPv4Bytes(ip.split('.').map(Number));
+  if (family === 6) {
+    const bytes = ipv6ToBytes(ip);
+    return bytes ? isAlwaysBlockedIPv6Bytes(bytes) : true;
+  }
+  return true; // not an address at all
+}
+
+/**
+ * Whether an address may not be fetched: any private address, or, with
+ * `allowPrivate`, only the always-blocked ones.
+ *
+ * @param {string} ip
+ * @param {{allowPrivate?: boolean}} [options]
+ * @returns {boolean}
+ */
+export function isBlockedIP(ip, { allowPrivate = false } = {}) {
+  return allowPrivate ? isAlwaysBlockedIP(ip) : isPrivateIP(ip) || isAlwaysBlockedIP(ip);
+}
+
+/**
  * Whether one `dns.resolve*` outcome is the DNS server's definite answer that
  * the name (or record type) does not exist, as opposed to a failure to get an
  * answer (timeout, SERVFAIL, refused connection).
@@ -197,10 +288,16 @@ export const UNRESOLVED_HOST = 'UNRESOLVED_HOST';
  * pin the connection to them (see {@link createPinnedLookup}) and avoid a
  * DNS-rebinding window between this check and the actual fetch.
  *
+ * With `allowPrivate`, company-internal addresses (10/8, 172.16/12, 192.168/16,
+ * shared space, IPv6 unique-local) pass too, and only {@link isAlwaysBlockedIP}
+ * ones are refused: loopback, link-local, reserved ranges and the cloud
+ * metadata services. The resolved addresses are still pinned.
+ *
  * @param {URL} parsedUrl - The parsed request URL
+ * @param {{allowPrivate?: boolean}} [options]
  * @returns {Promise<{ok: boolean, reason?: string, code?: string, addresses?: string[]}>}
  */
-export async function assertPublicTarget(parsedUrl) {
+export async function assertPublicTarget(parsedUrl, { allowPrivate = false } = {}) {
   // Strip IPv6 brackets that URL parsing leaves on the hostname.
   let host = parsedUrl.hostname;
   if (host.startsWith('[') && host.endsWith(']')) {
@@ -224,8 +321,8 @@ export async function assertPublicTarget(parsedUrl) {
   // If the hostname is already an IP literal, check it directly. No DNS is
   // performed for literals, so there is nothing to pin/rebind.
   if (net.isIP(host)) {
-    return isPrivateIP(host)
-      ? { ok: false, reason: `IP ${host} is private` }
+    return isBlockedIP(host, { allowPrivate })
+      ? { ok: false, reason: `IP ${host} is ${allowPrivate ? 'not reachable' : 'private'}` }
       : { ok: true, addresses: [host] };
   }
 
@@ -273,8 +370,11 @@ export async function assertPublicTarget(parsedUrl) {
   }
 
   for (const addr of addrs) {
-    if (isPrivateIP(addr)) {
-      return { ok: false, reason: `host resolves to private IP ${addr}` };
+    if (isBlockedIP(addr, { allowPrivate })) {
+      return {
+        ok: false,
+        reason: `host resolves to ${allowPrivate ? 'the unreachable' : 'private'} IP ${addr}`
+      };
     }
   }
   return { ok: true, addresses: addrs };
@@ -296,10 +396,11 @@ export async function assertPublicTarget(parsedUrl) {
  * configured the proxy performs egress DNS itself and is treated as the trust
  * boundary, so the lookup is not applied there.
  *
- * @param {string[]} addresses - Validated public IP addresses
+ * @param {string[]} addresses - Validated IP addresses
+ * @param {{allowPrivate?: boolean}} [options] - The same option the addresses were validated with
  * @returns {Function} A `(hostname, options, callback)` lookup function
  */
-export function createPinnedLookup(addresses) {
+export function createPinnedLookup(addresses, { allowPrivate = false } = {}) {
   const allowed = [...new Set(addresses || [])];
   return function pinnedLookup(hostname, options, callback) {
     if (typeof options === 'function') {
@@ -316,7 +417,7 @@ export function createPinnedLookup(addresses) {
       const fam = net.isIP(addr);
       if (fam === 0) continue;
       if (wantFamily && wantFamily !== fam) continue;
-      if (isPrivateIP(addr)) continue; // defense-in-depth re-check
+      if (isBlockedIP(addr, { allowPrivate })) continue; // defense-in-depth re-check
       entries.push({ address: addr, family: fam });
     }
 

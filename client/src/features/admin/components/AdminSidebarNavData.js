@@ -42,7 +42,7 @@ import {
  * @param {function} params.showAdminPage - (key: string) => boolean
  * @param {object} params.featureFlags - FeatureFlags instance
  * @param {object} [params.badges] - Counts shown next to items, by item key
- *   (`integrations`: open integration requests)
+ *   (`integrations`: open integration requests and requests for internal websites)
  */
 export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {} }) {
   const ff = featureFlags ? featureFlags.isEnabled.bind(featureFlags) : () => true;
@@ -199,7 +199,7 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           badge: badges.integrations || 0,
           badgeLabel: t(
             'admin.integrations.requests.sidebarBadge',
-            '{{count}} open integration requests',
+            '{{count}} open requests (integrations and websites)',
             { count: badges.integrations || 0 }
           )
         },

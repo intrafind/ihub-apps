@@ -22,7 +22,11 @@ import {
   selectContent
 } from '../sources/documentRetrieval.js';
 import logger from '../utils/logger.js';
-import { enhanceFetchOptions, isSsrfTrustedHost } from '../utils/httpConfig.js';
+import {
+  describeProxyRouting,
+  enhanceFetchOptions,
+  isSsrfTrustedHost
+} from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
 import {
   ACCESS_DENIED_CODE,
@@ -57,23 +61,43 @@ function createError(message, code) {
  * revalidated independently so a public initial hostname that redirects to a
  * private/internal address after the first check is still blocked.
  *
+ * A caller may pass a `policy` of its own: `allowPrivate(hostname)` says
+ * whether this host may be a company-internal address (10/8, 172.16/12,
+ * 192.168/16, ...). Unlike the whitelist bypass the address is still resolved
+ * and pinned, and loopback, link-local and cloud metadata addresses stay
+ * blocked. It is asked per hop, so a redirect cannot carry the permission of
+ * one host over to another.
+ *
  * @param {URL} parsedUrl - The URL for this hop
- * @returns {Promise<string[]|null>} Validated public addresses to pin the
- *   connection to, or null when the whitelist bypass applies (no DNS
- *   resolution/pinning is performed in that case)
+ * @param {{allowPrivate?: (hostname: string, port: string) => boolean}} [policy]
+ * @returns {Promise<{addresses: string[], allowPrivate: boolean}|null>} Validated
+ *   addresses to pin the connection to, or null when the whitelist bypass applies
+ *   (no DNS resolution/pinning is performed in that case)
  */
-async function assertHopIsSafe(parsedUrl) {
+async function assertHopIsSafe(parsedUrl, policy = null) {
   if (isSsrfTrustedHost(parsedUrl.hostname)) {
     return null;
   }
-  const result = await assertPublicTarget(parsedUrl);
+  const allowPrivate = Boolean(
+    policy?.allowPrivate?.(parsedUrl.hostname.replace(/^\[|\]$/g, ''), parsedUrl.port)
+  );
+  if (allowPrivate && describeProxyRouting(parsedUrl.href).decision === 'proxied') {
+    // Through a proxy the proxy resolves the name, so the address checked here is not the
+    // one connected to, and a company-internal address cannot be told from loopback.
+    throw createError(
+      'Access to a company-internal host through a proxy is not allowed: add the host to ' +
+        'proxy.noProxy so it is fetched directly',
+      'SSRF_BLOCKED'
+    );
+  }
+  const result = await assertPublicTarget(parsedUrl, { allowPrivate });
   if (!result.ok) {
     throw createError(
       `Access to private/internal IP addresses is not allowed (${result.reason})`,
       'SSRF_BLOCKED'
     );
   }
-  return result.addresses;
+  return { addresses: result.addresses, allowPrivate };
 }
 
 /** Browser user agent: many sites answer a default Node user agent with a block page. */
@@ -90,7 +114,15 @@ export const DEFAULT_READER_USER_AGENT =
  */
 async function fetchPage(
   validUrl,
-  { shouldIgnoreSSL, acceptLanguage, signal, throttleId = 'read_url', headers = null }
+  {
+    shouldIgnoreSSL,
+    acceptLanguage,
+    signal,
+    throttleId = 'read_url',
+    headers = null,
+    policy = null,
+    stayOn = null
+  }
 ) {
   let hopUrl = validUrl;
   let response;
@@ -100,8 +132,10 @@ async function fetchPage(
     }
     if (signal?.aborted) throw createError('The request was cancelled', 'ABORTED');
 
-    const addresses = await assertHopIsSafe(hopUrl);
-    const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
+    const safe = await assertHopIsSafe(hopUrl, policy);
+    const pinnedLookup = safe
+      ? createPinnedLookup(safe.addresses, { allowPrivate: safe.allowPrivate })
+      : null;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -157,6 +191,10 @@ async function fetchPage(
       if (!['http:', 'https:'].includes(nextUrl.protocol)) {
         throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
       }
+      if (stayOn && !stayOn(nextUrl)) {
+        // Refused before any request goes to it; the caller drops this redirect response.
+        return { response, finalUrl: nextUrl, redirectRefused: true };
+      }
       hopUrl = nextUrl;
       continue;
     }
@@ -183,9 +221,18 @@ async function fetchPage(
  *   chat's page reads behind it
  * @param {Object<string, string>} [options.headers] - Extra request headers
  *   (`Accept`, `If-None-Match`, `If-Modified-Since`), sent on every hop
- * @returns {Promise<{response: Object, finalUrl: URL}>}
+ * @param {{allowPrivate?: (hostname: string, port: string) => boolean}} [options.policy] - Lets
+ *   this call reach company-internal addresses of the hosts it names; the
+ *   default is the public-addresses-only rule. Not applied through a proxy
+ * @param {(url: URL) => boolean} [options.stayOn] - Asked before a redirect is
+ *   followed; when it says no, nothing is sent to the target and the result is the
+ *   redirect response with `redirectRefused: true` and `finalUrl` the refused target
+ * @returns {Promise<{response: Object, finalUrl: URL, redirectRefused?: boolean}>}
  */
-export async function fetchWebPage(url, { language, signal, throttleId, headers } = {}) {
+export async function fetchWebPage(
+  url,
+  { language, signal, throttleId, headers, policy, stayOn } = {}
+) {
   const validUrl = new URL(url);
   if (!['http:', 'https:'].includes(validUrl.protocol)) {
     throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
@@ -196,7 +243,9 @@ export async function fetchWebPage(url, { language, signal, throttleId, headers 
     acceptLanguage: acceptLanguageFor(resolveSearchLanguage(language)),
     signal,
     throttleId,
-    headers: sanitizeHeaders(headers)
+    headers: sanitizeHeaders(headers),
+    policy: policy && typeof policy.allowPrivate === 'function' ? policy : null,
+    stayOn: typeof stayOn === 'function' ? stayOn : null
   });
 }
 
