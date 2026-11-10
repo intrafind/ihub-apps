@@ -166,5 +166,27 @@
       "sideEffect": "read",
       "dataFlow": "external"
     }
+  },
+  "com.intrafind/website-corpus": {
+    "discover_site": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "outline_pages": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "crawl_pages": {
+      "sideEffect": "read",
+      "dataFlow": "external"
+    },
+    "read_page_text": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    },
+    "corpus_report": {
+      "sideEffect": "read",
+      "dataFlow": "internal"
+    }
   }
 }

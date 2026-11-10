@@ -293,6 +293,14 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * marker per definition, keyed `ihid_<hash>`.
    */
   integrationRequestsHidden: 'integration-requests-hidden',
+  /**
+   * What the website corpus sizer crawled for a user, keyed by corpus id and
+   * owned by the user: the document holds the settings and the progress, the
+   * blobs of the same namespace the URL list (`<id>__urls`) and the extracted
+   * pages, one blob per crawl batch (`<id>__pages__<n>`). Short-lived: a corpus
+   * is a working copy for one sizing and is removed after its retention time.
+   */
+  websiteCorpora: 'website-corpora',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

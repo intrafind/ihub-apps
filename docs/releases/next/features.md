@@ -1496,3 +1496,26 @@ and every other place the name appears.
 - Use `$t(product.name)` in your own overrides instead of typing the name.
 
 See [Localization](../../localization.md).
+
+## Website Corpus: Measure How Many Tokens a Website Holds
+
+The new **Website Corpus** integration tells you how much text a website really has, in tokens,
+and whether all of it fits into one context window. That decides whether "put the whole site into
+the prompt" is a realistic alternative to retrieval.
+
+- Five tools: find a site's pages from its sitemap, outline a few pages to spot boilerplate, crawl
+  the pages in resumable batches, show the kept text of a page, and report the size.
+- The report gives tokens per section, how many 128k, 256k and 1M windows the corpus fills (all
+  pages, after removing repeated lines, and without blog and news sections), the largest pages,
+  duplicates, how much of the sitemap was crawled, and the method.
+- Only pages of the site itself are fetched, with the SSRF guard and the proxy settings, within
+  the site's `robots.txt`, a few requests per second. A crawl belongs to the user who started it and
+  is removed after 14 days.
+- Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
+  `website-corpus-sizer` skill from the marketplace guides users through it.
+- Tokens are counted with the shared token estimator. The server does not ship `gpt-tokenizer`, so
+  without it the estimator counts one token per four characters; the report says which method it
+  used.
+
+See [Website Corpus](../../website-corpus.md).
+
