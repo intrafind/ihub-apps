@@ -155,4 +155,85 @@ describe('website corpus fetch', () => {
     expect(await fetchRobotsText('http://93.184.216.34')).toBeNull();
     expect(await fetchRobotsText('http://127.0.0.1')).toBeNull();
   });
+
+  describe('company-internal hosts (policy.allowPrivate)', () => {
+    const only = host => ({ allowPrivate: hostname => hostname === host });
+
+    test('refuses a private host by default and fetches it when the policy names it', async () => {
+      await expect(
+        fetchSitePage('http://10.1.2.3/', { siteHost: '10.1.2.3' })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('private/internal IP addresses')
+      });
+      expect(throttledFetchMock).not.toHaveBeenCalled();
+
+      throttledFetchMock.mockResolvedValueOnce(response({ body: '<main>intern</main>' }));
+      const page = await fetchSitePage('http://10.1.2.3/', {
+        siteHost: '10.1.2.3',
+        policy: only('10.1.2.3')
+      });
+      expect(page.html).toContain('intern');
+    });
+
+    test('keeps loopback, link-local and the metadata services blocked even for a host the policy allows', async () => {
+      const everything = { allowPrivate: () => true };
+      for (const host of ['127.0.0.1', '169.254.169.254', '100.100.100.200']) {
+        await expect(
+          fetchSitePage(`http://${host}/`, { siteHost: host, policy: everything })
+        ).rejects.toMatchObject({
+          message: expect.stringContaining('private/internal IP addresses')
+        });
+      }
+      expect(throttledFetchMock).not.toHaveBeenCalled();
+    });
+
+    test('asks the policy for every hop: a redirect to another internal host is refused', async () => {
+      throttledFetchMock.mockResolvedValueOnce(
+        response({ status: 302, location: 'http://10.9.9.9/x' })
+      );
+      await expect(
+        fetchSitePage('http://10.1.2.3/', { siteHost: '10.1.2.3', policy: only('10.1.2.3') })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('private/internal IP addresses')
+      });
+      expect(throttledFetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    test('a redirect from an allowed host to the metadata service is refused, even for a policy that allows all', async () => {
+      throttledFetchMock.mockResolvedValueOnce(
+        response({ status: 302, location: 'http://169.254.169.254/latest/meta-data/' })
+      );
+      await expect(
+        fetchSitePage('http://10.1.2.3/', {
+          siteHost: '10.1.2.3',
+          policy: { allowPrivate: () => true }
+        })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('private/internal IP addresses')
+      });
+    });
+
+    test('a policy that is not a function of the host is ignored', async () => {
+      await expect(
+        fetchSitePage('http://10.1.2.3/', { siteHost: '10.1.2.3', policy: { allowPrivate: true } })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('private/internal IP addresses')
+      });
+    });
+
+    test('the host check answers the way the fetch will', async () => {
+      const { checkHostReachable } = await import('../services/websiteCorpus/fetch.js');
+      expect(await checkHostReachable(new URL('http://10.1.2.3/'))).toMatchObject({ ok: false });
+      expect(await checkHostReachable(new URL('http://10.1.2.3/'), only('10.1.2.3'))).toEqual({
+        ok: true
+      });
+      expect(await checkHostReachable(new URL('http://10.1.2.4/'), only('10.1.2.3'))).toMatchObject(
+        { ok: false }
+      );
+      expect(
+        await checkHostReachable(new URL('http://169.254.169.254/'), { allowPrivate: () => true })
+      ).toMatchObject({ ok: false });
+      expect(await checkHostReachable(new URL('http://93.184.216.34/'))).toEqual({ ok: true });
+    });
+  });
 });

@@ -67,16 +67,30 @@ describe('Website Corpus integration', () => {
     assert.ok(ids.every(id => /^[a-z][a-z0-9_]*$/.test(id)));
   });
 
-  it('declares only reading actions, and says where each one sends data', () => {
-    for (const action of definition.actions) {
-      assert.equal(action.sideEffect, 'read');
-    }
-    const dataFlow = Object.fromEntries(definition.actions.map(a => [a.name, a.dataFlow]));
-    // Only the steps that fetch from the website leave the server.
-    assert.equal(dataFlow.discover_site, 'external');
-    assert.equal(dataFlow.crawl_pages, 'external');
-    assert.equal(dataFlow.read_page_text, 'internal');
-    assert.equal(dataFlow.corpus_report, 'internal');
+  it('declares what each action does to the website and where its data goes', () => {
+    const policy = Object.fromEntries(
+      definition.actions.map(action => [action.name, [action.sideEffect, action.dataFlow]])
+    );
+    // Nothing writes to a website; only the steps that fetch from it leave the server.
+    assert.deepEqual(policy, {
+      discover_site: ['read', 'external'],
+      outline_pages: ['read', 'external'],
+      crawl_pages: ['read', 'external'],
+      read_page_text: ['read', 'internal'],
+      corpus_report: ['read', 'internal'],
+      // Creates a request for an admin in iHub's own store: a write, so users confirm it.
+      request_domain: ['write', 'internal']
+    });
+  });
+
+  it('keeps company-internal addresses off unless the admin switches them on', () => {
+    const field = definition.install.find(item => item.key === 'allowPrivateAddresses');
+    assert.equal(field.type, 'boolean');
+    assert.equal(field.default, false);
+    assert.match(
+      field.description.en,
+      /Loopback, link-local and cloud metadata addresses stay blocked/
+    );
   });
 
   it('offers a maxPages setting within the service cap', () => {

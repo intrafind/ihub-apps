@@ -301,7 +301,7 @@ describe('Admin sidebar', () => {
     );
     const badges = await screen.findAllByTestId('nav-badge-integrations');
     expect(badges[0]).toHaveTextContent('2');
-    expect(badges[0]).toHaveTextContent('2 open integration requests');
+    expect(badges[0]).toHaveTextContent('2 open requests (integrations and websites)');
 
     announceIntegrationRequestCount(0);
     await waitFor(() => expect(screen.queryByTestId('nav-badge-integrations')).toBeNull());

@@ -31,6 +31,12 @@ import {
   RETENTION_DAYS
 } from '../services/websiteCorpus/CorpusStore.js';
 import {
+  DomainStore,
+  MAX_OPEN_REQUESTS_PER_USER,
+  domainIdFor,
+  normalizeHost
+} from '../services/websiteCorpus/DomainStore.js';
+import {
   WebsiteCorpusService,
   tokenizerNote
 } from '../services/websiteCorpus/WebsiteCorpusService.js';
@@ -518,19 +524,72 @@ function fakeSite({
   };
 }
 
-function makeService(site, { method = 'heuristic', now } = {}) {
+function makeService(site, { method = 'heuristic', now, hostCheck } = {}) {
   const facets = memoryFacets();
   const store = new CorpusStore(facets);
+  const domains = new DomainStore(facets);
   const service = new WebsiteCorpusService({
     store,
+    domains,
     countTokens: text => Math.ceil(text.length / 4),
     tokenizerInfo: () => ({ method }),
     fetchPage: site.fetchPage,
     fetchRobots: site.fetchRobots,
     fetchSitemap: site.fetchSitemap,
+    // The network decision is tested in the SSRF guard tests; here every host is public.
+    hostCheck: hostCheck || (async () => ({ ok: true })),
     ...(now ? { now } : {})
   });
-  return { service, store, facets };
+  return { service, store, domains, facets };
+}
+
+/**
+ * A host check as the SSRF guard decides it: `*.corp` hosts are company-internal
+ * addresses (reachable only when the policy allows it), `loopback.corp` is never
+ * reachable, `nx.corp` does not resolve, anything else is public.
+ */
+async function guardedCheck(url, policy) {
+  if (url.hostname === 'nx.corp') {
+    return { ok: false, reason: 'host did not resolve to any IP', code: 'UNRESOLVED_HOST' };
+  }
+  if (url.hostname === 'loopback.corp')
+    return { ok: false, reason: 'IP 127.0.0.1 is not reachable' };
+  if (url.hostname.endsWith('.corp')) {
+    return policy?.allowPrivate?.(url.hostname)
+      ? { ok: true }
+      : { ok: false, reason: 'host resolves to private IP 10.0.0.5' };
+  }
+  return { ok: true };
+}
+
+/** A fake internal site, whose requests record the policy they were made with. */
+function internalSite(host = 'intranet.corp') {
+  const policies = [];
+  const origin = `https://${host}`;
+  return {
+    policies,
+    fetchRobots: async (_origin, { policy } = {}) => {
+      policies.push(policy);
+      return `Sitemap: ${origin}/s.xml`;
+    },
+    fetchSitemap: async (url, { policy } = {}) => {
+      policies.push(policy);
+      return url === `${origin}/s.xml`
+        ? `<urlset>${[0, 1, 2].map(i => `<url><loc>${origin}/de/p${i}</loc></url>`).join('')}</urlset>`
+        : null;
+    },
+    fetchPage: async (url, { policy } = {}) => {
+      policies.push(policy);
+      return {
+        status: 200,
+        finalUrl: url,
+        contentType: 'text/html',
+        html: page('Intern', `<p>${words(40)}</p>`),
+        truncated: false,
+        offSite: false
+      };
+    }
+  };
 }
 
 describe('WebsiteCorpusService', () => {
@@ -796,5 +855,243 @@ describe('tokenizerInfo', () => {
     // Without the tokenizer library the estimate is exactly one token per four characters.
     if (method === 'heuristic') assert.equal(estimateTokens(sample), Math.ceil(sample.length / 4));
     else assert.notEqual(estimateTokens(sample), Math.ceil(sample.length / 4));
+  });
+});
+
+describe('internal websites', () => {
+  const ADMIN = { id: 'admin1', name: 'Admin' };
+
+  it('refuses an internal host with what the user can do, before fetching anything', async () => {
+    const site = internalSite();
+    const { service, facets } = makeService(site, { hostCheck: guardedCheck });
+    await assert.rejects(
+      service.discoverSite({ siteUrl: 'https://intranet.corp' }, { user: USER }),
+      error => {
+        assert.equal(error.code, 'HOST_NOT_ALLOWED');
+        assert.match(error.message, /company-internal address/);
+        assert.match(error.message, /website_corpus_request_domain/);
+        return true;
+      }
+    );
+    assert.deepEqual(site.policies, [], 'no robots.txt, sitemap or page was fetched');
+    assert.equal((await facets.documents.list('website-corpora', {})).items.length, 0);
+  });
+
+  it('does not offer a request for what no approval can allow, nor for a name that does not resolve', async () => {
+    const { service } = makeService(internalSite(), { hostCheck: guardedCheck });
+    await assert.rejects(
+      service.discoverSite({ siteUrl: 'https://loopback.corp' }, { user: USER }),
+      error => {
+        assert.equal(error.code, 'HOST_NEVER_ALLOWED');
+        assert.ok(!/website_corpus_request_domain/.test(error.message));
+        return true;
+      }
+    );
+    await assert.rejects(service.discoverSite({ siteUrl: 'https://nx.corp' }, { user: USER }), {
+      code: 'HOST_NOT_RESOLVED'
+    });
+    await assert.rejects(service.requestDomain({ host: 'loopback.corp' }, { user: USER }), {
+      code: 'HOST_NEVER_ALLOWED'
+    });
+  });
+
+  it('takes a request, joins a second user to it, and tells an asker twice nothing new', async () => {
+    const { service, domains } = makeService(internalSite(), { hostCheck: guardedCheck });
+    const first = await service.requestDomain(
+      { host: 'https://Intranet.corp/some/page', reason: 'Size the wiki' },
+      { user: USER }
+    );
+    assert.equal(first.status, 'requested');
+    assert.equal(first.host, 'intranet.corp');
+    assert.match(first.message, /An admin has to approve it/);
+    const again = await service.requestDomain({ host: 'intranet.corp' }, { user: USER });
+    assert.match(again.message, /requested already/);
+    await service.requestDomain({ host: 'intranet.corp', reason: 'Same site' }, { user: OTHER });
+    const entry = await domains.find('intranet.corp');
+    assert.deepEqual(
+      entry.requesters.map(r => r.userId),
+      ['u1', 'u2']
+    );
+    assert.equal(entry.requesters[0].reason, 'Size the wiki');
+    // Once asked for, the refusal says so instead of offering to ask again.
+    await assert.rejects(
+      service.discoverSite({ siteUrl: 'https://intranet.corp' }, { user: USER }),
+      error => /already waiting for an admin/.test(error.message)
+    );
+  });
+
+  it('crawls the host once an admin approved it, and only that host', async () => {
+    const site = internalSite();
+    const { service, domains } = makeService(site, { hostCheck: guardedCheck });
+    await service.requestDomain({ host: 'intranet.corp' }, { user: USER });
+    await domains.decide(domainIdFor('intranet.corp'), {
+      decision: 'approved',
+      admin: ADMIN,
+      note: 'ok'
+    });
+    const found = await service.discoverSite(
+      { siteUrl: 'https://intranet.corp', name: 'Wiki' },
+      { user: USER }
+    );
+    assert.equal(found.pages, 3);
+    // The fetches carried a policy that allows exactly this host.
+    const policy = site.policies.at(-1);
+    assert.equal(policy.allowPrivate('intranet.corp'), true);
+    assert.equal(policy.allowPrivate('other.corp'), false);
+    const crawled = await service.crawlPages(
+      { corpusId: found.corpusId, dropSelector: '' },
+      { user: USER }
+    );
+    assert.equal(crawled.done, true);
+    assert.equal(crawled.crawled, 3);
+    // Another internal host stays refused, and asking for an approved host says it is not needed.
+    await assert.rejects(service.discoverSite({ siteUrl: 'https://other.corp' }, { user: USER }), {
+      code: 'HOST_NOT_ALLOWED'
+    });
+    const asked = await service.requestDomain({ host: 'intranet.corp' }, { user: OTHER });
+    assert.equal(asked.status, 'not_needed');
+  });
+
+  it('allows every internal host when the installation says so, and says no request is needed', async () => {
+    const site = internalSite('wiki.corp');
+    const { service } = makeService(site, { hostCheck: guardedCheck });
+    const found = await service.discoverSite(
+      { siteUrl: 'https://wiki.corp' },
+      { user: USER, allowPrivateAddresses: true }
+    );
+    assert.equal(found.pages, 3);
+    assert.equal(site.policies.at(-1).allowPrivate('anything.corp'), true);
+    const asked = await service.requestDomain(
+      { host: 'wiki.corp' },
+      { user: USER, allowPrivateAddresses: true }
+    );
+    assert.equal(asked.status, 'not_needed');
+    // Loopback stays out of reach: the setting does not change the guard's own rule.
+    await assert.rejects(
+      service.discoverSite(
+        { siteUrl: 'https://loopback.corp' },
+        { user: USER, allowPrivateAddresses: true }
+      ),
+      { code: 'HOST_NEVER_ALLOWED' }
+    );
+  });
+
+  it('asks nothing of a user who is not signed in, and refuses bad hosts and patterns', async () => {
+    const { service } = makeService(internalSite(), { hostCheck: guardedCheck });
+    await assert.rejects(
+      service.requestDomain({ host: 'intranet.corp' }, { user: { id: 'anonymous' } }),
+      { code: 'SIGN_IN_REQUIRED' }
+    );
+    for (const host of ['', '   ', '*.corp', 'bad host name', 'https://']) {
+      await assert.rejects(service.requestDomain({ host }, { user: USER }), {
+        code: 'INVALID_HOST'
+      });
+    }
+  });
+
+  it('limits the open requests of one user', async () => {
+    const { service } = makeService(internalSite(), { hostCheck: guardedCheck });
+    for (let i = 0; i < MAX_OPEN_REQUESTS_PER_USER; i++) {
+      await service.requestDomain({ host: `h${i}.corp` }, { user: USER });
+    }
+    await assert.rejects(service.requestDomain({ host: 'one-more.corp' }, { user: USER }), {
+      code: 'TOO_MANY_REQUESTS'
+    });
+    // Joining a request somebody else made costs nothing.
+    const joined = await service.requestDomain({ host: 'h0.corp' }, { user: OTHER });
+    assert.equal(joined.status, 'requested');
+  });
+});
+
+describe('DomainStore', () => {
+  const ADMIN = { id: 'admin1', name: 'Admin' };
+  const make = () => {
+    const facets = memoryFacets();
+    return { store: new DomainStore(facets), facets };
+  };
+
+  it('reduces input to a host, and accepts a wildcard only from an admin', () => {
+    assert.equal(normalizeHost('https://Wiki.Corp:8443/a?b=1'), 'wiki.corp');
+    assert.equal(normalizeHost('wiki.corp'), 'wiki.corp');
+    assert.equal(normalizeHost('10.1.2.3'), '10.1.2.3');
+    assert.equal(normalizeHost('*.Corp.Example', { allowWildcard: true }), '*.corp.example');
+    assert.throws(() => normalizeHost('*.corp.example'), { code: 'INVALID_HOST' });
+    assert.throws(() => normalizeHost('*.com', { allowWildcard: true }), { code: 'INVALID_HOST' });
+    assert.throws(() => normalizeHost(''), { code: 'INVALID_HOST' });
+    assert.throws(() => normalizeHost('a'.repeat(600)), { code: 'INVALID_HOST' });
+  });
+
+  it('keeps one document per host and decides for everyone who asked', async () => {
+    const { store } = make();
+    const { entry, created } = await store.request({
+      host: 'wiki.corp',
+      user: USER,
+      reason: 'why'
+    });
+    assert.equal(created, true);
+    assert.equal(entry.id, domainIdFor('wiki.corp'));
+    assert.equal((await store.request({ host: 'WIKI.corp', user: OTHER })).created, false);
+    const decided = await store.decide(entry.id, {
+      decision: 'declined',
+      admin: ADMIN,
+      note: 'not now'
+    });
+    assert.equal(decided.status, 'declined');
+    assert.equal(decided.requesters.length, 2);
+    // A declined host is not reopened by asking again, but an admin can reverse it.
+    assert.equal((await store.request({ host: 'wiki.corp', user: USER })).entry.status, 'declined');
+    assert.equal(
+      (await store.decide(entry.id, { decision: 'approved', admin: ADMIN })).status,
+      'approved'
+    );
+    await assert.rejects(
+      store.decide('wd_00000000000000000000000000000000', { decision: 'approved', admin: ADMIN }),
+      { code: 'NOT_FOUND' }
+    );
+    await assert.rejects(store.decide('../x', { decision: 'approved', admin: ADMIN }), {
+      code: 'NOT_FOUND'
+    });
+  });
+
+  it('lists open requests first, and counts them', async () => {
+    const { store } = make();
+    await store.addApproved({ host: 'a.corp', admin: ADMIN });
+    await store.request({ host: 'b.corp', user: USER });
+    const declined = (await store.request({ host: 'c.corp', user: USER })).entry;
+    await store.decide(declined.id, { decision: 'declined', admin: ADMIN });
+    const { items } = await store.list();
+    assert.deepEqual(
+      items.map(entry => [entry.host, entry.status]),
+      [
+        ['b.corp', 'requested'],
+        ['a.corp', 'approved'],
+        ['c.corp', 'declined']
+      ]
+    );
+    assert.equal(await store.openCount(), 1);
+  });
+
+  it('covers an approved host and a wildcard, and forgets a withdrawn approval', async () => {
+    const { store } = make();
+    await store.addApproved({ host: 'wiki.corp', admin: ADMIN, note: 'direct' });
+    const wildcard = await store.addApproved({ host: '*.dept.corp', admin: ADMIN });
+    await store.request({ host: 'pending.corp', user: USER });
+    let hosts = await store.approvedHosts(1000);
+    assert.deepEqual([...hosts].sort(), ['*.dept.corp', 'wiki.corp']);
+    assert.equal(DomainStore.covers(hosts, 'wiki.corp'), true);
+    assert.equal(DomainStore.covers(hosts, 'a.dept.corp'), true);
+    assert.equal(DomainStore.covers(hosts, 'dept.corp'), false);
+    assert.equal(DomainStore.covers(hosts, 'pending.corp'), false);
+    assert.equal(await store.remove(wildcard.id), true);
+    hosts = await store.approvedHosts(1000);
+    assert.deepEqual(hosts, ['wiki.corp'], 'a change is seen at once on this worker');
+  });
+
+  it('answers without storage as if nothing were approved, and refuses to keep a request', async () => {
+    const store = new DomainStore({});
+    assert.deepEqual(await store.approvedHosts(), []);
+    await assert.rejects(store.request({ host: 'wiki.corp', user: USER }), {
+      code: 'STORAGE_UNAVAILABLE'
+    });
   });
 });

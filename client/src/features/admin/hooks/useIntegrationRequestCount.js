@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { fetchIntegrationRequests } from '../../../api/integrationsAdminApi';
+import { fetchWebsiteCorpusDomains } from '../../../api/websiteCorpusAdminApi';
 
 /**
  * Window event the Requests tab sends after it (re)loaded the queue, with
@@ -15,32 +16,51 @@ export function announceIntegrationRequestCount(openCount) {
   window.dispatchEvent(new CustomEvent(INTEGRATION_REQUESTS_EVENT, { detail: { openCount } }));
 }
 
+/** Window event the Website Corpus panel sends after it (re)loaded its requests, with `detail.openCount`. */
+export const WEBSITE_CORPUS_DOMAINS_EVENT = 'admin:website-corpus-domains-changed';
+
+/** Tell the sidebar how many requests for internal websites are open now. */
+export function announceWebsiteCorpusDomainCount(openCount) {
+  window.dispatchEvent(new CustomEvent(WEBSITE_CORPUS_DOMAINS_EVENT, { detail: { openCount } }));
+}
+
 /**
- * The number of open integration requests, for the admin sidebar's badge
- * (#2926). Read once when the admin layout mounts and kept current by
- * {@link INTEGRATION_REQUESTS_EVENT}. Zero when the queue cannot be read.
+ * The number of open requests an admin has to decide, for the admin sidebar's
+ * badge (#2926): integration requests plus requests for internal websites of
+ * the Website Corpus. Read once when the admin layout mounts and kept current
+ * by {@link INTEGRATION_REQUESTS_EVENT} and {@link WEBSITE_CORPUS_DOMAINS_EVENT}.
+ * Zero when a queue cannot be read.
  *
- * @param {boolean} enabled - Only full admins can read the queue
+ * @param {boolean} enabled - Only full admins can read the queues
  * @returns {number}
  */
 export default function useIntegrationRequestCount(enabled) {
-  const [count, setCount] = useState(0);
+  const [integrations, setIntegrations] = useState(0);
+  const [websites, setWebsites] = useState(0);
 
   useEffect(() => {
     if (!enabled) return undefined;
     let cancelled = false;
     fetchIntegrationRequests()
       .then(data => {
-        if (!cancelled) setCount(Number(data?.openCount) || 0);
+        if (!cancelled) setIntegrations(Number(data?.openCount) || 0);
       })
       .catch(() => {});
-    const onChange = event => setCount(Number(event.detail?.openCount) || 0);
-    window.addEventListener(INTEGRATION_REQUESTS_EVENT, onChange);
+    fetchWebsiteCorpusDomains()
+      .then(data => {
+        if (!cancelled) setWebsites(Number(data?.openCount) || 0);
+      })
+      .catch(() => {});
+    const onIntegrations = event => setIntegrations(Number(event.detail?.openCount) || 0);
+    const onWebsites = event => setWebsites(Number(event.detail?.openCount) || 0);
+    window.addEventListener(INTEGRATION_REQUESTS_EVENT, onIntegrations);
+    window.addEventListener(WEBSITE_CORPUS_DOMAINS_EVENT, onWebsites);
     return () => {
       cancelled = true;
-      window.removeEventListener(INTEGRATION_REQUESTS_EVENT, onChange);
+      window.removeEventListener(INTEGRATION_REQUESTS_EVENT, onIntegrations);
+      window.removeEventListener(WEBSITE_CORPUS_DOMAINS_EVENT, onWebsites);
     };
   }, [enabled]);
 
-  return enabled ? count : 0;
+  return enabled ? integrations + websites : 0;
 }

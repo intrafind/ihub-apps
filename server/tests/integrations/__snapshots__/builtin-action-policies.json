@@ -187,6 +187,10 @@
     "corpus_report": {
       "sideEffect": "read",
       "dataFlow": "internal"
+    },
+    "request_domain": {
+      "sideEffect": "write",
+      "dataFlow": "internal"
     }
   }
 }

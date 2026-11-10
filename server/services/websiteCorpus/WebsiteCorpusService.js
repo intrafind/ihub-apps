@@ -23,7 +23,15 @@
  */
 import { parseRobotsTxt, robotsAllows } from '../projects/siteCrawler.js';
 import { extractPage, outlinePage, validateSelector } from './extract.js';
-import { CORPUS_CONCURRENCY, fetchRobotsText, fetchSitemapText, fetchSitePage } from './fetch.js';
+import {
+  CORPUS_CONCURRENCY,
+  checkHostReachable,
+  fetchRobotsText,
+  fetchSitemapText,
+  fetchSitePage
+} from './fetch.js';
+import { UNRESOLVED_HOST } from '../../utils/ssrfGuard.js';
+import { DomainError, DomainStore, normalizeHost } from './DomainStore.js';
 import { renderReport } from './report.js';
 import { collectSiteUrls } from './sitemap.js';
 import { DEFAULT_NEWS_SECTIONS, analyseCorpus, findNearDuplicates } from './stats.js';
@@ -111,6 +119,8 @@ export class WebsiteCorpusService {
    * @param {typeof fetchSitePage} [deps.fetchPage]
    * @param {typeof fetchRobotsText} [deps.fetchRobots]
    * @param {typeof fetchSitemapText} [deps.fetchSitemap]
+   * @param {import('./DomainStore.js').DomainStore} [deps.domains] - Approved and requested internal hosts
+   * @param {typeof checkHostReachable} [deps.hostCheck]
    * @param {() => number} [deps.now]
    */
   constructor({
@@ -120,6 +130,8 @@ export class WebsiteCorpusService {
     fetchPage = fetchSitePage,
     fetchRobots = fetchRobotsText,
     fetchSitemap = fetchSitemapText,
+    domains = new DomainStore(),
+    hostCheck = checkHostReachable,
     now = Date.now
   }) {
     Object.assign(this, {
@@ -129,8 +141,108 @@ export class WebsiteCorpusService {
       fetchPage,
       fetchRobots,
       fetchSitemap,
+      domains,
+      hostCheck,
       now
     });
+  }
+
+  /**
+   * Which hosts may be company-internal addresses for this call: all of them
+   * when the installation allows internal addresses, otherwise the hosts an
+   * admin approved. Loopback, link-local and cloud metadata addresses are
+   * never reachable either way.
+   *
+   * @param {{allowPrivateAddresses?: boolean}} context
+   * @returns {Promise<{allowPrivate: (hostname: string) => boolean}>}
+   */
+  async policyFor({ allowPrivateAddresses = false } = {}) {
+    const approved = await this.domains.approvedHosts(this.now()).catch(() => []);
+    return {
+      allowPrivate: hostname =>
+        allowPrivateAddresses === true || DomainStore.covers(approved, hostname)
+    };
+  }
+
+  /**
+   * The refusal for a host the server may not fetch, with what the user can do
+   * about it: ask for it to be allowed, when an approval would help.
+   */
+  async refusalFor(site, verdict) {
+    const host = site.hostname;
+    if (verdict.code === UNRESOLVED_HOST) {
+      return new WebsiteCorpusError(
+        'HOST_NOT_RESOLVED',
+        `The host name ${host} does not resolve from this server. Check the spelling; an internal name needs the server's DNS to know it.`
+      );
+    }
+    const everAllowed = await this.hostCheck(site, { allowPrivate: () => true });
+    if (!everAllowed.ok) {
+      return new WebsiteCorpusError(
+        'HOST_NEVER_ALLOWED',
+        `${host} is not reachable from this server (${verdict.reason}). Loopback, link-local and cloud metadata addresses are never allowed, and no approval changes that.`
+      );
+    }
+    const known = await this.domains.find(host).catch(() => null);
+    const state =
+      known?.status === 'requested'
+        ? 'A request for it is already waiting for an admin to decide.'
+        : known?.status === 'declined'
+          ? `An admin declined a request for it${known.note ? `: ${known.note}` : '.'}`
+          : 'The user can ask for it to be allowed: call website_corpus_request_domain with the host and a short reason. An admin then approves it, and the discovery can be run again.';
+    return new WebsiteCorpusError(
+      'HOST_NOT_ALLOWED',
+      `${host} is a company-internal address, which this server may not fetch (${verdict.reason}). ${state}`
+    );
+  }
+
+  /**
+   * A user's request that the Website Corpus may reach an internal host. An
+   * admin decides; nothing is allowed by asking.
+   *
+   * @param {Object} args
+   * @param {string} args.host - A host name, or a URL on it
+   * @param {string} [args.reason] - Why the site should be sized
+   * @param {Object} context
+   * @returns {Promise<Object>}
+   */
+  async requestDomain({ host, reason }, context) {
+    const { user } = context;
+    requireUser(user);
+    let name;
+    try {
+      name = normalizeHost(host);
+    } catch (error) {
+      if (error instanceof DomainError) throw new WebsiteCorpusError(error.code, error.message);
+      throw error;
+    }
+    const site = new URL(`https://${name.includes(':') ? `[${name}]` : name}`);
+    const verdict = await this.hostCheck(site, await this.policyFor(context));
+    if (verdict.ok) {
+      return {
+        status: 'not_needed',
+        host: name,
+        message: `${name} can be fetched already, so no request is needed. Start with the discovery step.`
+      };
+    }
+    const refusal = await this.refusalFor(site, verdict);
+    if (refusal.code !== 'HOST_NOT_ALLOWED') throw refusal;
+
+    const { entry, created } = await this.domains.request({ host: name, user, reason });
+    const message = {
+      requested: created
+        ? `The request for ${name} was sent. An admin has to approve it before it can be crawled; the user can start again once they have.`
+        : `${name} was requested already and is waiting for an admin.`,
+      approved: `${name} is approved. It may take up to half a minute to take effect; then run the discovery again.`,
+      declined: `An admin declined a request for ${name}${entry.note ? `: ${entry.note}` : '.'}`
+    }[entry.status];
+    return {
+      status: entry.status,
+      host: name,
+      requestedAt: entry.createdAt,
+      ...(entry.note ? { note: entry.note } : {}),
+      message
+    };
   }
 
   /**
@@ -148,22 +260,25 @@ export class WebsiteCorpusService {
    */
   async discoverSite(
     { siteUrl, name, prefix, sitemapUrls = [] },
-    { user, maxPages = DEFAULT_MAX_PAGES }
+    { user, maxPages = DEFAULT_MAX_PAGES, allowPrivateAddresses = false }
   ) {
     const ownerId = requireUser(user);
     const site = parseSiteUrl(siteUrl);
     const scope = normalizePrefix(prefix);
     const limit = clampInt(maxPages, DEFAULT_MAX_PAGES, 1, MAX_PAGES_CAP);
+    const policy = await this.policyFor({ allowPrivateAddresses });
+    const verdict = await this.hostCheck(site, policy);
+    if (!verdict.ok) throw await this.refusalFor(site, verdict);
     await this.store.prune(ownerId, this.now());
 
-    const robotsText = await this.fetchRobots(site.origin);
+    const robotsText = await this.fetchRobots(site.origin, { policy });
     const rules = parseRobotsTxt(robotsText);
     const found = await collectSiteUrls({
       siteUrl: site.href,
       prefix: scope,
       sitemapUrls,
       robotsText,
-      fetchText: url => this.fetchSitemap(url),
+      fetchText: url => this.fetchSitemap(url, { policy }),
       maxUrls: limit + 1
     });
 
@@ -237,8 +352,9 @@ export class WebsiteCorpusService {
    * @param {Object} context
    * @returns {Promise<Object>}
    */
-  async outlinePages({ corpusId, count = 3, urlContains = [] }, { user }) {
+  async outlinePages({ corpusId, count = 3, urlContains = [] }, { user, allowPrivateAddresses }) {
     const corpus = await this.store.get(corpusId, requireUser(user));
+    const policy = await this.policyFor({ allowPrivateAddresses });
     let urls = await this.store.urls(corpus.id);
     if (urlContains.length) urls = urls.filter(url => urlContains.some(part => url.includes(part)));
     const wanted = clampInt(count, 3, 1, 3);
@@ -251,7 +367,7 @@ export class WebsiteCorpusService {
         continue;
       }
       try {
-        const page = await this.fetchPage(url, { siteHost: corpus.host });
+        const page = await this.fetchPage(url, { siteHost: corpus.host, policy });
         const outline = page.html ? outlinePage(page.html) : null;
         pages.push(
           outline
@@ -287,8 +403,12 @@ export class WebsiteCorpusService {
    * @param {Object} context
    * @returns {Promise<Object>}
    */
-  async crawlPages({ corpusId, dropSelector, batchSize, restart = false }, { user }) {
+  async crawlPages(
+    { corpusId, dropSelector, batchSize, restart = false },
+    { user, allowPrivateAddresses }
+  ) {
     const ownerId = requireUser(user);
+    const policy = await this.policyFor({ allowPrivateAddresses });
     return this.store.withCorpus(corpusId, async () => {
       let corpus = await this.store.get(corpusId, ownerId);
       let selector = corpus.dropSelector;
@@ -334,7 +454,7 @@ export class WebsiteCorpusService {
         while (started < slice.length && this.now() < deadline) {
           const url = slice[started];
           started += 1;
-          const result = await this.crawlOne(url, corpus, selector);
+          const result = await this.crawlOne(url, corpus, selector, policy);
           if (result.page) kept.push(result.page);
           if (result.counter) counters[result.counter] += 1;
           if (result.failure) failures.push(result.failure);
@@ -387,10 +507,10 @@ export class WebsiteCorpusService {
   }
 
   /** Fetch and extract one page; never throws. */
-  async crawlOne(url, corpus, selector) {
+  async crawlOne(url, corpus, selector, policy) {
     if (!robotsAllows(url, corpus.rules)) return { counter: 'blockedByRobots' };
     try {
-      const page = await this.fetchPage(url, { siteHost: corpus.host });
+      const page = await this.fetchPage(url, { siteHost: corpus.host, policy });
       if (page.offSite) {
         return { counter: 'failed', failure: { url, reason: 'redirected to another site' } };
       }

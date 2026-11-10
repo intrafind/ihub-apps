@@ -3276,6 +3276,35 @@
       "marketplaceInstallFailed": "{{name}} could not be installed from {{registry}}: {{error}}",
       "marketplaceOff": "The catalog also lists the integrations of the marketplace (hosted MCP servers such as GitHub, Linear or Stripe) when the Marketplace feature is on under Admin → Features."
     },
+    "websiteCorpusDomains": {
+      "title": "Internal websites for the Website Corpus",
+      "description": "The server refuses company-internal addresses. Users whose crawl was refused can ask for the host here. An approval lets the Website Corpus reach that host only; other tools keep the public-addresses-only rule. Loopback, link-local and cloud metadata addresses can never be allowed.",
+      "loadFailed": "The internal websites could not be loaded.",
+      "openTitle": "Open requests ({{count}})",
+      "none": "No open requests.",
+      "requestedBy": "Requested by {{names}} on {{date}}",
+      "noteLabel": "Note for the requesters (optional)",
+      "approved": "{{host}} is approved.",
+      "declined": "{{host}} is declined.",
+      "approveNamed": "Approve {{host}}",
+      "declineNamed": "Decline {{host}}",
+      "decidedTitle": "Approved and declined ({{count}})",
+      "noneDecided": "No hosts yet.",
+      "status": {
+        "approved": "Approved",
+        "declined": "Declined"
+      },
+      "decidedBy": "{{name}} on {{date}}",
+      "withdrawNamed": "Withdraw {{host}}",
+      "removeNamed": "Remove {{host}}",
+      "removed": "{{host}} is removed.",
+      "addTitle": "Allow a host without a request",
+      "hostLabel": "Host",
+      "hostHelp": "A host name or address, or a wildcard such as *.corp.example for every host below a domain.",
+      "addNoteLabel": "Note (optional)",
+      "add": "Allow host",
+      "added": "{{host}} is allowed now."
+    },
     "integrations": {
       "backToIntegrations": "Back to Integrations",
       "cards": {
@@ -4166,7 +4195,7 @@
       },
       "requests": {
         "tab": "Requests",
-        "sidebarBadge": "{{count}} open integration requests",
+        "sidebarBadge": "{{count}} open requests (integrations and websites)",
         "loadFailed": "The requests could not be loaded.",
         "openTitle": "Open requests ({{count}})",
         "description": "Users asked for these catalog integrations. Approve opens the install wizard; a request closes by itself once the integration is installed and the requester’s groups may use it.",

@@ -16,6 +16,8 @@
  */
 import zlib from 'node:zlib';
 import { fetchWebPage } from '../../tools/webContentExtractor.js';
+import { isSsrfTrustedHost } from '../../utils/httpConfig.js';
+import { assertPublicTarget } from '../../utils/ssrfGuard.js';
 import { decodeHtml, readBoundedBytes } from '../projects/siteCrawler.js';
 import { registerThrottleHints } from '../../requestThrottler.js';
 import { onSite } from './urls.js';
@@ -54,13 +56,15 @@ function dropBody(body) {
  * @param {string} url
  * @param {Object} options
  * @param {string} options.siteHost - The corpus' host; a redirect to another site is refused
+ * @param {{allowPrivate?: (hostname: string) => boolean}} [options.policy] - Which hosts may be company-internal addresses
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{status: number, finalUrl: string, contentType: string, html: string|null, truncated: boolean, offSite: boolean}>}
  */
-export async function fetchSitePage(url, { siteHost, signal } = {}) {
+export async function fetchSitePage(url, { siteHost, signal, policy } = {}) {
   const { response, finalUrl } = await fetchWebPage(url, {
     signal,
-    throttleId: CORPUS_THROTTLE_ID
+    throttleId: CORPUS_THROTTLE_ID,
+    policy
   });
   const contentType = response.headers.get('content-type') || '';
   const base = { status: response.status, finalUrl: finalUrl.href, contentType };
@@ -82,9 +86,13 @@ export async function fetchSitePage(url, { siteHost, signal } = {}) {
 }
 
 /** A text file of the site (robots.txt, a sitemap), unzipped if it is gzip; `null` when it cannot be read. */
-async function fetchSiteText(url, { maxBytes, signal }) {
+async function fetchSiteText(url, { maxBytes, signal, policy }) {
   try {
-    const { response } = await fetchWebPage(url, { signal, throttleId: CORPUS_THROTTLE_ID });
+    const { response } = await fetchWebPage(url, {
+      signal,
+      throttleId: CORPUS_THROTTLE_ID,
+      policy
+    });
     if (!response.ok) {
       dropBody(response.body);
       return null;
@@ -100,9 +108,29 @@ async function fetchSiteText(url, { maxBytes, signal }) {
 }
 
 /** The site's robots.txt, or `null` when it has none. */
-export const fetchRobotsText = (origin, { signal } = {}) =>
-  fetchSiteText(`${origin}/robots.txt`, { maxBytes: MAX_ROBOTS_BYTES, signal });
+export const fetchRobotsText = (origin, { signal, policy } = {}) =>
+  fetchSiteText(`${origin}/robots.txt`, { maxBytes: MAX_ROBOTS_BYTES, signal, policy });
 
 /** One sitemap file, or `null`. */
-export const fetchSitemapText = (url, { signal } = {}) =>
-  fetchSiteText(url, { maxBytes: MAX_SITEMAP_BYTES, signal });
+export const fetchSitemapText = (url, { signal, policy } = {}) =>
+  fetchSiteText(url, { maxBytes: MAX_SITEMAP_BYTES, signal, policy });
+
+/**
+ * Whether the server may fetch from a site's host, decided the way the guarded
+ * fetch will decide it: a host the admin trusts platform-wide is fine, any
+ * other host must resolve to public addresses unless the policy lets it be
+ * company-internal (then only loopback, link-local and cloud metadata
+ * addresses are refused). Asked before a crawl starts, because the sitemap and
+ * robots.txt reads swallow errors and a refusal would otherwise look like "no
+ * pages found".
+ *
+ * @param {URL} url - Any URL on the host
+ * @param {{allowPrivate?: (hostname: string) => boolean}} [policy]
+ * @returns {Promise<{ok: boolean, reason?: string, code?: string}>}
+ */
+export async function checkHostReachable(url, policy = null) {
+  if (isSsrfTrustedHost(url.hostname)) return { ok: true };
+  const allowPrivate = Boolean(policy?.allowPrivate?.(url.hostname));
+  const { ok, reason, code } = await assertPublicTarget(url, { allowPrivate });
+  return ok ? { ok: true } : { ok: false, reason, code };
+}

@@ -301,6 +301,14 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * is a working copy for one sizing and is removed after its retention time.
    */
   websiteCorpora: 'website-corpora',
+  /**
+   * The websites the Website Corpus may reach on the company network, one
+   * document per host: a user's request for it, an admin's approval or
+   * refusal, or a host an admin added directly. Keyed by a hash of the host,
+   * so one host is one document however many users ask for it, and owned by
+   * the first requester (or the admin who added it).
+   */
+  websiteCorpusDomains: 'website-corpus-domains',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });

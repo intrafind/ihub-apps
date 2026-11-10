@@ -13,8 +13,9 @@ the user through the steps; the tools also work without it.
 ## Setting it up
 
 1. **Install it.** **Admin → Integrations → Catalog → Website Corpus → Set up integration.** It is a
-   singleton: one installation, `website-corpus`. Its only setting is **Most pages per corpus**
-   (default 3,000, at most 10,000).
+   singleton: one installation, `website-corpus`. Its settings are **Most pages per corpus**
+   (default 3,000, at most 10,000) and **Allow company-internal websites** (off by default, see
+   [Internal websites](#internal-websites)).
 2. **Grant it.** Add `website-corpus` to `permissions.integrations` of the groups that may use it
    (see [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration)).
    Using it needs a signed-in user; anonymous users are refused.
@@ -32,8 +33,10 @@ which tokenizer counts (see [How tokens are counted](#how-tokens-are-counted)).
 
 ## The tools
 
-All five only read (`sideEffect: read`). The two that fetch from the website send requests out of
-the server (`dataFlow: external`); the other three work on what was already stored (`internal`).
+Five tools only read (`sideEffect: read`): the two that fetch from the website send requests out of
+the server (`dataFlow: external`), the other three work on what was already stored (`internal`). The
+sixth, `website_corpus_request_domain`, creates a request for an admin (`sideEffect: write`,
+`dataFlow: internal`), so users confirm it before it is sent.
 
 | Tool                       | Action          | What it does                                                                                                                          |
 | -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -42,6 +45,7 @@ the server (`dataFlow: external`); the other three work on what was already stor
 | `website_corpus_crawl`     | `crawl_pages`   | Fetches the next batch of pages (30 by default, at most 60) and keeps their main text; call it until it reports `done`                |
 | `website_corpus_page_text` | `read_page_text`| The kept text of one page, for a spot-check against the live page                                                                     |
 | `website_corpus_report`    | `corpus_report` | Computes the numbers and returns the report as Markdown                                                                               |
+| `website_corpus_request_domain` | `request_domain` | Asks an admin to allow a company-internal host that the discovery was refused for; see [Internal websites](#internal-websites)    |
 
 **What is kept.** The text of `<main>` (`<body>` if there is none). Scripts, styles, forms, buttons,
 iframes, `<nav>` and the selectors the user names (`dropSelector`, for example
@@ -72,8 +76,9 @@ of text, and about 130 ms for 400 KB, which is the longest page a corpus keeps.
 
 - Every request goes through the page reader's guarded fetch: private and internal addresses are
   refused on every redirect hop, DNS is pinned, the proxy is applied, and certificate checks are
-  skipped only for hosts on `ssl.domainWhitelist`. An internal site can be sized when it is listed in
-  `ssrf.allowedHosts` or `ssl.domainWhitelist`.
+  skipped only for hosts on `ssl.domainWhitelist`. A host listed platform-wide in
+  `ssrf.allowedHosts` or `ssl.domainWhitelist` can be sized too; for the rest see
+  [Internal websites](#internal-websites).
 - Only pages on the site's own host are fetched. A sitemap or a redirect that points elsewhere is
   not followed into the corpus.
 - The site's `robots.txt` is honored (`User-agent: *` rules). Pages it forbids are counted as
@@ -88,6 +93,43 @@ of text, and about 130 ms for 400 KB, which is the longest page a corpus keeps.
 
 Only crawl sites the user may crawl. The tools do not check that for them.
 
+## Internal websites
+
+The guard refuses private and internal addresses, so an intranet site cannot be sized until it is
+allowed. There are two ways, and neither touches the platform-wide `ssrf.allowedHosts`, so `read_url`,
+the workflows and every other tool keep the public-addresses-only rule:
+
+**Ask and approve (the default).** When a discovery is refused, the answer says the host is a
+company-internal address and offers `website_corpus_request_domain`. The user sends a request with
+a short reason; an admin decides under **Admin → Integrations → Requests → Internal websites for the
+Website Corpus** (the admin sidebar counts open requests next to Integrations):
+
+- **Approve** lets the Website Corpus reach that host, for every user, within about 30 seconds on
+  every worker. **Decline** keeps it refused and shows the note to the user who asks again. An
+  approval can be withdrawn and a decline reversed at any time.
+- One host is one request, however many users ask. A user can have 10 open requests.
+- An admin can also **allow a host without a request**, with a wildcard such as `*.corp.example`
+  (a wildcard matches the hosts below a domain, not the domain itself).
+- Every decision is written to the audit log (`websiteCorpusDomain`).
+
+**Allow all internal websites (a setting).** **Allow company-internal websites** on the installation
+lets every crawl of every user of this integration reach the company network, with no request. Turn it
+on only where all those users may see what the server can read inside the network: the crawl keeps
+the text of every page it fetches, and the user can read it back.
+
+**What is never allowed.** Whatever is approved or switched on, the server does not fetch loopback
+(`127.0.0.0/8`, `::1`, `localhost`), link-local addresses (`169.254.0.0/16`, `fe80::/10`), reserved
+ranges, or the cloud metadata services (`169.254.169.254` on AWS, Azure and GCP, `fd00:ec2::254`,
+Alibaba's `100.100.100.200`). What an approval or the setting allows is the company network:
+`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` and IPv6 `fc00::/7`. The address is
+still resolved and pinned for the connection, and every redirect hop is checked again, so an
+approved host cannot send the crawler on to another internal one. Only the site's own host is
+fetched in any case.
+
+**API.** `GET /api/admin/website-corpus/domains` lists the requests (`{ items, nextCursor,
+openCount }`, open ones first), `POST` on the same path allows a host (`201`), `POST …/{id}/_approve`
+and `…/_decline` decide (`{ note? }`), `DELETE …/{id}` removes an entry. All need an admin.
+
 ## What is stored
 
 A corpus belongs to the user who started it and nobody else can read it. It is kept in the
@@ -95,6 +137,9 @@ A corpus belongs to the user who started it and nobody else can read it. It is k
 the URL list, and the extracted pages, one blob per crawl batch. It is removed after 14 days, and a
 user keeps at most five; starting a sixth removes the oldest. The storage provider needs the
 document and blob stores (the filesystem provider has both).
+
+The requests and approvals for internal websites are kept in the `website-corpus-domains`
+namespace, one document per host, until an admin removes them.
 
 ## Limits and settings
 
@@ -105,6 +150,7 @@ document and blob stores (the filesystem provider has both).
 | Corpora per user                   | 5                                                |
 | Retention                          | 14 days                                          |
 | Near-duplicate pairs listed        | 25 (the report gives the total)                  |
+| Requests for websites                | 10 open per user, 20 requesters shown per host; at most 500 approved hosts are honoured |
 
 ## Code
 

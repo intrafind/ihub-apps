@@ -24,6 +24,7 @@ import {
   matchesInboundQuery
 } from '../components/integrations/inboundChannels';
 import IntegrationRequestsPanel from '../components/integrations/IntegrationRequestsPanel';
+import WebsiteCorpusDomainsPanel from '../components/integrations/WebsiteCorpusDomainsPanel';
 import { announceIntegrationRequestCount } from '../hooks/useIntegrationRequestCount';
 import {
   MigrationConfirmDialog,
@@ -761,6 +762,9 @@ function AdminIntegrationsPage() {
                 <LoadingSpinner size="lg" />
               </div>
             )
+          )}
+          {installed.some(item => item.definition === 'com.intrafind/website-corpus') && (
+            <WebsiteCorpusDomainsPanel />
           )}
         </div>
       )}

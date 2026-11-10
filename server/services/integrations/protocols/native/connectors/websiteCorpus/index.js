@@ -16,6 +16,7 @@
  * | `crawl_pages`   | `website_corpus_crawl`    | Fetches the next batch of pages (call until done) |
  * | `read_page_text`| `website_corpus_page_text`| The kept text of one page, for a spot-check |
  * | `corpus_report` | `website_corpus_report`   | The numbers and the report |
+ * | `request_domain`| `website_corpus_request_domain` | Asks an admin to allow an internal host the crawl was refused for |
  *
  * Tokens are counted with the shared estimator (`shared/tokenEstimator.js`);
  * the report says whether that was the o200k_base tokenizer or the
@@ -23,11 +24,29 @@
  */
 import { estimateTokens, tokenizerInfo } from '../../../../../../../shared/tokenEstimator.js';
 import { getCorpusStore, CorpusError } from '../../../../../websiteCorpus/CorpusStore.js';
+import { DomainError, getDomainStore } from '../../../../../websiteCorpus/DomainStore.js';
 import {
   DEFAULT_MAX_PAGES,
   WebsiteCorpusError,
   WebsiteCorpusService
 } from '../../../../../websiteCorpus/WebsiteCorpusService.js';
+
+const PARAMETER_REQUEST_DOMAIN = {
+  type: 'object',
+  properties: {
+    host: {
+      type: 'string',
+      description:
+        'The host name of the internal website the discovery refused, for example intranet.example.corp (a full address is reduced to its host).'
+    },
+    reason: {
+      type: 'string',
+      maxLength: 500,
+      description: 'Why the site should be sized, in a sentence or two, for the admin who decides.'
+    }
+  },
+  required: ['host']
+};
 
 const corpusId = {
   type: 'string',
@@ -35,6 +54,7 @@ const corpusId = {
 };
 
 const PARAMETERS = {
+  request_domain: PARAMETER_REQUEST_DOMAIN,
   discover_site: {
     type: 'object',
     properties: {
@@ -141,6 +161,7 @@ const PARAMETERS = {
 function service() {
   return new WebsiteCorpusService({
     store: getCorpusStore(),
+    domains: getDomainStore(),
     countTokens: estimateTokens,
     tokenizerInfo
   });
@@ -158,6 +179,7 @@ async function guarded(call) {
     if (
       error instanceof WebsiteCorpusError ||
       error instanceof CorpusError ||
+      error instanceof DomainError ||
       error?.code === 'INVALID_SELECTOR'
     ) {
       return { error: true, code: error.code, message: error.message };
@@ -169,11 +191,20 @@ async function guarded(call) {
 /** `maxPages` of the installation, within the service's cap. */
 const maxPagesOf = ctx => Number(ctx.values?.maxPages) || DEFAULT_MAX_PAGES;
 
+/** Whether the installation lets crawls reach company-internal addresses. */
+const allowPrivateOf = ctx => ctx.values?.allowPrivateAddresses === true;
+
 function action(name, call) {
   return {
     parameters: PARAMETERS[name],
     run: (args, ctx) =>
-      guarded(() => call(service(), args || {}, { user: ctx.user, maxPages: maxPagesOf(ctx) }))
+      guarded(() =>
+        call(service(), args || {}, {
+          user: ctx.user,
+          maxPages: maxPagesOf(ctx),
+          allowPrivateAddresses: allowPrivateOf(ctx)
+        })
+      )
   };
 }
 
@@ -211,11 +242,14 @@ const connector = {
     read_page_text: action('read_page_text', (svc, args, context) =>
       svc.readPageText(args, context)
     ),
-    corpus_report: action('corpus_report', (svc, args, context) => svc.corpusReport(args, context))
+    corpus_report: action('corpus_report', (svc, args, context) => svc.corpusReport(args, context)),
+    request_domain: action('request_domain', (svc, args, context) =>
+      svc.requestDomain(args, context)
+    )
   },
   test,
   status() {
-    return { connected: true, toolCount: 5 };
+    return { connected: true, toolCount: 6 };
   },
   invalidate() {},
   onChanged() {}

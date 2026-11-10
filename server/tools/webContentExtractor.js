@@ -57,23 +57,32 @@ function createError(message, code) {
  * revalidated independently so a public initial hostname that redirects to a
  * private/internal address after the first check is still blocked.
  *
+ * A caller may pass a `policy` of its own: `allowPrivate(hostname)` says
+ * whether this host may be a company-internal address (10/8, 172.16/12,
+ * 192.168/16, ...). Unlike the whitelist bypass the address is still resolved
+ * and pinned, and loopback, link-local and cloud metadata addresses stay
+ * blocked. It is asked per hop, so a redirect cannot carry the permission of
+ * one host over to another.
+ *
  * @param {URL} parsedUrl - The URL for this hop
- * @returns {Promise<string[]|null>} Validated public addresses to pin the
- *   connection to, or null when the whitelist bypass applies (no DNS
- *   resolution/pinning is performed in that case)
+ * @param {{allowPrivate?: (hostname: string) => boolean}} [policy]
+ * @returns {Promise<{addresses: string[], allowPrivate: boolean}|null>} Validated
+ *   addresses to pin the connection to, or null when the whitelist bypass applies
+ *   (no DNS resolution/pinning is performed in that case)
  */
-async function assertHopIsSafe(parsedUrl) {
+async function assertHopIsSafe(parsedUrl, policy = null) {
   if (isSsrfTrustedHost(parsedUrl.hostname)) {
     return null;
   }
-  const result = await assertPublicTarget(parsedUrl);
+  const allowPrivate = Boolean(policy?.allowPrivate?.(parsedUrl.hostname));
+  const result = await assertPublicTarget(parsedUrl, { allowPrivate });
   if (!result.ok) {
     throw createError(
       `Access to private/internal IP addresses is not allowed (${result.reason})`,
       'SSRF_BLOCKED'
     );
   }
-  return result.addresses;
+  return { addresses: result.addresses, allowPrivate };
 }
 
 /** Browser user agent: many sites answer a default Node user agent with a block page. */
@@ -90,7 +99,14 @@ export const DEFAULT_READER_USER_AGENT =
  */
 async function fetchPage(
   validUrl,
-  { shouldIgnoreSSL, acceptLanguage, signal, throttleId = 'read_url', headers = null }
+  {
+    shouldIgnoreSSL,
+    acceptLanguage,
+    signal,
+    throttleId = 'read_url',
+    headers = null,
+    policy = null
+  }
 ) {
   let hopUrl = validUrl;
   let response;
@@ -100,8 +116,10 @@ async function fetchPage(
     }
     if (signal?.aborted) throw createError('The request was cancelled', 'ABORTED');
 
-    const addresses = await assertHopIsSafe(hopUrl);
-    const pinnedLookup = addresses ? createPinnedLookup(addresses) : null;
+    const safe = await assertHopIsSafe(hopUrl, policy);
+    const pinnedLookup = safe
+      ? createPinnedLookup(safe.addresses, { allowPrivate: safe.allowPrivate })
+      : null;
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -183,9 +201,12 @@ async function fetchPage(
  *   chat's page reads behind it
  * @param {Object<string, string>} [options.headers] - Extra request headers
  *   (`Accept`, `If-None-Match`, `If-Modified-Since`), sent on every hop
+ * @param {{allowPrivate?: (hostname: string) => boolean}} [options.policy] - Lets
+ *   this call reach company-internal addresses of the hosts it names; the
+ *   default is the public-addresses-only rule
  * @returns {Promise<{response: Object, finalUrl: URL}>}
  */
-export async function fetchWebPage(url, { language, signal, throttleId, headers } = {}) {
+export async function fetchWebPage(url, { language, signal, throttleId, headers, policy } = {}) {
   const validUrl = new URL(url);
   if (!['http:', 'https:'].includes(validUrl.protocol)) {
     throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
@@ -196,7 +217,8 @@ export async function fetchWebPage(url, { language, signal, throttleId, headers 
     acceptLanguage: acceptLanguageFor(resolveSearchLanguage(language)),
     signal,
     throttleId,
-    headers: sanitizeHeaders(headers)
+    headers: sanitizeHeaders(headers),
+    policy: policy && typeof policy.allowPrivate === 'function' ? policy : null
   });
 }
 

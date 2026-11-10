@@ -57,6 +57,19 @@
       "default": 3000,
       "min": 100,
       "max": 10000
+    },
+    {
+      "key": "allowPrivateAddresses",
+      "type": "boolean",
+      "title": {
+        "en": "Allow company-internal websites",
+        "de": "Interne Websites im Firmennetz erlauben"
+      },
+      "description": {
+        "en": "Off (default): the server refuses private and internal addresses, as everywhere else in iHub, and a user whose crawl was refused can ask an admin to allow that host (Admin → Integrations → Requests). On: every user of this integration can have the server read internal websites of the company network (10.x.x.x, 172.16-31.x.x, 192.168.x.x, shared address space, IPv6 unique-local). Loopback, link-local and cloud metadata addresses stay blocked either way. Turn it on only where every user of the integration may see what the server can reach inside the network.",
+        "de": "Aus (Standard): der Server lehnt private und interne Adressen ab, wie überall in iHub, und wer abgelehnt wurde, kann einen Admin bitten, den Host freizugeben (Admin → Integrationen → Anfragen). An: jede Person, die diese Integration nutzt, kann den Server interne Websites des Firmennetzes lesen lassen (10.x.x.x, 172.16-31.x.x, 192.168.x.x, Shared Address Space, IPv6 Unique-Local). Loopback, Link-Local und Cloud-Metadaten-Adressen bleiben in beiden Fällen gesperrt. Nur einschalten, wenn alle Nutzer der Integration sehen dürfen, was der Server im Netz erreicht."
+      },
+      "default": false
     }
   ],
   "capabilities": ["tools"],
@@ -150,10 +163,28 @@
         "en": "Show the report unchanged, then add the verdict. Every figure comes from the report; never add up or recalculate anything.",
         "de": "Zeige den Bericht unverändert und ergänze dann das Fazit. Jede Zahl stammt aus dem Bericht; rechne nichts zusammen oder nach."
       }
+    },
+    {
+      "name": "request_domain",
+      "toolId": "website_corpus_request_domain",
+      "title": {
+        "en": "Ask for an internal website",
+        "de": "Interne Website anfragen"
+      },
+      "description": {
+        "en": "Ask an admin to allow an internal website that the crawl was refused for. Nothing is allowed by asking; an admin decides.",
+        "de": "Einen Admin bitten, eine interne Website freizugeben, für die der Crawl abgelehnt wurde. Fragen allein erlaubt nichts; ein Admin entscheidet."
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "guidance": {
+        "en": "Use it only after the discovery answered HOST_NOT_ALLOWED, and only when the user wants the request sent: say which host it is and give a short reason. Then tell the user that an admin has to approve it and that they can start again afterwards.",
+        "de": "Nutze es nur, nachdem die Suche HOST_NOT_ALLOWED gemeldet hat und die Person die Anfrage senden möchte: nenne den Host und gib eine kurze Begründung an. Sage dann, dass ein Admin zustimmen muss und die Person danach neu beginnen kann."
+      }
     }
   ],
   "instructions": {
-    "en": "Use these tools to measure how much text a website has. Work in order: discover the site, outline a few pages, crawl until done, spot-check, then report. Show the user what each step found before the next one. Only crawl a site the user may crawl.",
-    "de": "Mit diesen Werkzeugen wird gemessen, wie viel Text eine Website hat. Gehe der Reihe nach vor: Website finden, einige Seiten ansehen, crawlen bis fertig, Stichprobe, dann berichten. Zeige der Person, was jeder Schritt ergeben hat, bevor du den nächsten ausführst. Crawle nur Websites, die die Person crawlen darf."
+    "en": "Use these tools to measure how much text a website has. Work in order: discover the site, outline a few pages, crawl until done, spot-check, then report. Show the user what each step found before the next one. Only crawl a site the user may crawl. If the discovery says the host is a company-internal address (HOST_NOT_ALLOWED), offer to ask an admin to allow it instead of trying again.",
+    "de": "Mit diesen Werkzeugen wird gemessen, wie viel Text eine Website hat. Gehe der Reihe nach vor: Website finden, einige Seiten ansehen, crawlen bis fertig, Stichprobe, dann berichten. Zeige der Person, was jeder Schritt ergeben hat, bevor du den nächsten ausführst. Crawle nur Websites, die die Person crawlen darf. Meldet die Suche, dass der Host eine interne Adresse im Firmennetz ist (HOST_NOT_ALLOWED), biete an, einen Admin um Freigabe zu bitten, statt es erneut zu versuchen."
   }
 }
