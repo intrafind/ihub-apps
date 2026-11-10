@@ -806,8 +806,9 @@ describe('crawler: documents on other hosts', () => {
   };
 
   it("lists them only when asked, never crawls them, and never lists other hosts' pages", async () => {
+    const hostOf = url => new URL(url).hostname;
     const plain = await crawlSite({ url: 'https://www.example.com/docs/', maxDepth: 1 }, deps);
-    assert.ok(!plain.pages.some(entry => entry.url.includes('cdn.example.net')));
+    assert.ok(!plain.pages.some(entry => hostOf(entry.url) === 'cdn.example.net'));
     fetched.length = 0;
     const wide = await crawlSite(
       { url: 'https://www.example.com/docs/', maxDepth: 1, otherHostDocuments: true },
@@ -815,14 +816,14 @@ describe('crawler: documents on other hosts', () => {
     );
     const listed = wide.pages.map(entry => [entry.url, entry.type]);
     assert.deepEqual(
-      listed.filter(([url]) => url.includes('cdn.example.net')),
+      listed.filter(([url]) => hostOf(url) === 'cdn.example.net'),
       [
         ['https://cdn.example.net/files/handbook.pdf', 'document'],
         ['https://cdn.example.net/files/deck.pptx', 'document']
       ],
       "documents only, and the start site's robots.txt is not applied to another host"
     );
-    assert.ok(!listed.some(([url]) => url.includes('other.example.org')));
+    assert.ok(!listed.some(([url]) => hostOf(url) === 'other.example.org'));
     assert.ok(
       !fetched.some(url => !url.startsWith('https://www.example.com/')),
       'nothing else is fetched'
