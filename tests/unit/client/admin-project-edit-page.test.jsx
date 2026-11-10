@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Admin → Projects → new / edit (#1036): the create form validates the id
+ * Admin → Projects → new / one project (#1036): the create form validates the id
  * before anything is sent, the items table shows each status, the page
  * polls while an item is extracted, the "Add item" dialog uploads a file as
  * multipart (through `uploadAdminProjectItem`) and sends text as JSON, and
@@ -26,6 +26,9 @@ const mockApi = {
   addAdminProjectItem: jest.fn(),
   uploadAdminProjectItem: jest.fn(),
   fetchAdminProjectItemText: jest.fn(),
+  updateAdminProjectItemText: jest.fn(),
+  fetchAdminProjectDependencies: jest.fn(),
+  estimateAdminProject: jest.fn(),
   fetchProjectPickerPages: jest.fn(),
   searchProjectPickerIFinder: jest.fn(),
   checkProjectPickerUrl: jest.fn()
@@ -50,6 +53,9 @@ jest.mock('../../../client/src/api/adminApi', () => {
     addAdminProjectItem: forward('addAdminProjectItem'),
     uploadAdminProjectItem: forward('uploadAdminProjectItem'),
     fetchAdminProjectItemText: forward('fetchAdminProjectItemText'),
+    updateAdminProjectItemText: forward('updateAdminProjectItemText'),
+    fetchAdminProjectDependencies: forward('fetchAdminProjectDependencies'),
+    estimateAdminProject: forward('estimateAdminProject'),
     fetchProjectPickerPages: forward('fetchProjectPickerPages'),
     searchProjectPickerIFinder: forward('searchProjectPickerIFinder'),
     checkProjectPickerUrl: forward('checkProjectPickerUrl'),
@@ -65,6 +71,10 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
   default: () => null
 }));
 jest.mock('../../../client/src/features/admin/components/ChangeHistoryDrawer', () => () => null);
+jest.mock('../../../client/src/shared/hooks/useFeatureFlags', () => ({
+  __esModule: true,
+  default: () => ({ isEnabled: () => true })
+}));
 // The chat is the app editor's; here it only shows what the page hands it.
 jest.mock('../../../client/src/features/admin/components/ProjectTestPanel', () => ({
   __esModule: true,
@@ -153,7 +163,7 @@ function renderAt(path) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        {['/admin/projects/new', '/admin/projects/:id/edit'].map(routePath => (
+        {['/admin/projects/new', '/admin/projects/:id'].map(routePath => (
           <Route
             key={routePath}
             path={routePath}
@@ -174,6 +184,7 @@ beforeEach(() => {
   Object.values(mockApi).forEach(fn => fn.mockReset());
   mockApi.fetchAdminProjectKinds.mockResolvedValue(KINDS);
   mockApi.fetchAdminProjectConfig.mockResolvedValue(CONFIG);
+  mockApi.fetchAdminProjectDependencies.mockResolvedValue([]);
 });
 
 describe('AdminProjectEditPage – create', () => {
@@ -225,7 +236,7 @@ describe('AdminProjectEditPage – create', () => {
       knowledgeMode: 'auto'
     });
     await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook/edit')
+      expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook')
     );
   });
 
@@ -246,7 +257,7 @@ describe('AdminProjectEditPage – create', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Create and add items' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook/edit');
+    expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook');
   });
 
   test('shows the server message when the id is taken', async () => {
@@ -280,9 +291,9 @@ describe('AdminProjectEditPage – routes', () => {
       );
     }
     render(
-      <MemoryRouter initialEntries={['/admin/projects/handbook/edit']}>
+      <MemoryRouter initialEntries={['/admin/projects/handbook']}>
         <Routes>
-          {['/admin/projects/new', '/admin/projects/:id/edit'].map(routePath => (
+          {['/admin/projects/new', '/admin/projects/:id'].map(routePath => (
             <Route key={routePath} path={routePath} element={<AdminProjectEditPage />} />
           ))}
         </Routes>
@@ -321,7 +332,7 @@ describe('AdminProjectEditPage – items', () => {
         }
       ])
     );
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     expect(await screen.findByText('policies.pdf')).toBeInTheDocument();
     expect(screen.getByTestId('project-side-panel')).toHaveTextContent('Answer briefly.');
@@ -356,7 +367,7 @@ describe('AdminProjectEditPage – items', () => {
       name: 'https://intra/new',
       ref: { url: 'https://intra/new' }
     });
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     await screen.findByText('policies.pdf');
     // An upload has no address to change: it is renamed instead.
@@ -399,7 +410,7 @@ describe('AdminProjectEditPage – items', () => {
     };
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([link]));
     mockApi.updateAdminProjectItem.mockRejectedValue(new Error('Invalid reference for url'));
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit' }));
     fireEvent.change(await screen.findByLabelText('URL'), {
@@ -414,7 +425,7 @@ describe('AdminProjectEditPage – items', () => {
     mockApi.fetchAdminProject
       .mockResolvedValueOnce(makeProject([{ ...READY, status: 'pending', text: null }]))
       .mockResolvedValue(makeProject([READY]));
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     expect(await screen.findByText('Waiting')).toBeInTheDocument();
     expect(await screen.findByText('Ready', {}, { timeout: 4000 })).toBeInTheDocument();
@@ -431,7 +442,7 @@ describe('AdminProjectEditPage – items', () => {
       .mockResolvedValueOnce(makeProject([READY, pending]))
       // The poll finds the first item gone (moved or removed by someone else).
       .mockResolvedValue(makeProject([{ ...pending, status: 'ready' }]));
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     fireEvent.click(await screen.findByLabelText('Select policies.pdf'));
     const bar = screen.getByTestId('item-selection-bar');
@@ -455,7 +466,7 @@ describe('AdminProjectEditPage – items', () => {
       .mockResolvedValueOnce(makeProject([READY, second, third]))
       .mockResolvedValue(makeProject([third]));
     mockApi.deleteAdminProjectItem.mockResolvedValue(undefined);
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     fireEvent.click(await screen.findByLabelText('Select policies.pdf'));
     fireEvent.click(screen.getByLabelText('Select draft.pdf'));
@@ -497,7 +508,7 @@ describe('AdminProjectEditPage – items', () => {
           response: { status: 404, data: { code: 'ITEM_NOT_FOUND' } }
         });
     });
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     fireEvent.click(await screen.findByLabelText('Select all items'));
     fireEvent.click(
@@ -520,7 +531,7 @@ describe('AdminProjectEditPage – items', () => {
   test('uploads a file through the multipart helper from the dialog', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.uploadAdminProjectItem.mockResolvedValue({ id: 'i9', status: 'pending' });
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add item' }));
     const dialog = await screen.findByRole('dialog');
@@ -553,7 +564,7 @@ describe('AdminProjectEditPage – items', () => {
   test('sends pasted text as a JSON upload item and keeps cloud kinds disabled', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.addAdminProjectItem.mockResolvedValue({ id: 'i9', status: 'pending' });
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add item' }));
     const dialog = await screen.findByRole('dialog');
@@ -588,7 +599,7 @@ describe('AdminProjectEditPage – settings', () => {
       ...makeProject([]),
       instructions: 'Cite the handbook.'
     });
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     const panel = await screen.findByTestId('project-side-panel');
     expect(panel).toHaveTextContent('Answer briefly.');
@@ -617,7 +628,7 @@ describe('AdminProjectEditPage – settings', () => {
 
   test('a name is required', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     const panel = await screen.findByTestId('project-side-panel');
     fireEvent.click(within(panel).getByRole('button', { name: 'Edit name and description' }));
@@ -639,7 +650,7 @@ describe('AdminProjectEditPage – availability', () => {
   test('one choice replaces Enabled and Published; "everyone" says what it opens before saving', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([]));
     mockApi.updateAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     const dialog = await openAvailability();
     const apps = within(dialog).getByRole('radio', { name: /Linked apps only/ });
@@ -672,7 +683,7 @@ describe('AdminProjectEditPage – availability', () => {
   test('"off" disables and unpublishes without a warning', async () => {
     mockApi.fetchAdminProject.mockResolvedValue({ ...makeProject([]), published: true });
     mockApi.updateAdminProject.mockResolvedValue(makeProject([]));
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
 
     const dialog = await openAvailability();
     expect(within(dialog).getByRole('radio', { name: /Everyone signed in/ })).toBeChecked();
@@ -712,7 +723,7 @@ describe('AdminProjectEditPage – create availability', () => {
 describe('AdminProjectEditPage – try in chat', () => {
   async function openPage() {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject([READY]));
-    renderAt('/admin/projects/handbook/edit');
+    renderAt('/admin/projects/handbook');
     return screen.findByRole('button', { name: 'Try in chat' });
   }
 
@@ -751,5 +762,136 @@ describe('AdminProjectEditPage – try in chat', () => {
     renderAt('/admin/projects/new');
     await screen.findByRole('button', { name: 'Create and add items' });
     expect(screen.queryByRole('button', { name: 'Try in chat' })).toBeNull();
+  });
+});
+
+describe('AdminProjectEditPage – the one project page', () => {
+  const ITEMS = [
+    {
+      id: 'itm_home',
+      kind: 'url',
+      name: 'https://www.intrafind.com',
+      ref: { url: 'https://www.intrafind.com' },
+      storage: 'link',
+      status: 'ready',
+      pinned: false
+    },
+    {
+      id: 'itm_docs',
+      kind: 'upload',
+      name: 'handbook.md',
+      storage: 'text',
+      status: 'ready',
+      pinned: false,
+      provenance: { origin: 'uploaded' },
+      text: { tokens: 1200 }
+    }
+  ];
+
+  test('has no separate edit mode: add, remove and the AI mode are there at once', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject(ITEMS));
+    renderAt('/admin/projects/handbook');
+    await screen.findByRole('heading', { level: 1, name: /Employee handbook/ });
+
+    expect(screen.queryByRole('link', { name: 'Edit items' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Remove item' })).toHaveLength(2);
+    // Each document's mode ("Normal", "Pinned", "Not for AI") is a live control.
+    expect(screen.getByLabelText('Use of https://www.intrafind.com by the AI')).toBeEnabled();
+  });
+
+  test('changes the AI mode of one document in place', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject(ITEMS));
+    mockApi.updateAdminProjectItem.mockResolvedValue({ ...ITEMS[0], excludedFromAi: true });
+    renderAt('/admin/projects/handbook');
+    const select = await screen.findByLabelText('Use of https://www.intrafind.com by the AI');
+
+    fireEvent.change(select, { target: { value: 'excluded' } });
+
+    await waitFor(() =>
+      expect(mockApi.updateAdminProjectItem).toHaveBeenCalledWith(
+        'handbook',
+        'itm_home',
+        expect.objectContaining({ excludedFromAi: true })
+      )
+    );
+  });
+
+  test('lists what links the project', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject(ITEMS));
+    mockApi.fetchAdminProjectDependencies.mockResolvedValue([
+      { type: 'app', id: 'handbook-bot', name: 'Handbook Bot' }
+    ]);
+    renderAt('/admin/projects/handbook');
+
+    expect(await screen.findByRole('link', { name: 'Handbook Bot' })).toHaveAttribute(
+      'href',
+      '/admin/apps/handbook-bot'
+    );
+  });
+
+  test('says so when the links could not be loaded', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject(ITEMS));
+    mockApi.fetchAdminProjectDependencies.mockRejectedValue(new Error('boom'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    renderAt('/admin/projects/handbook');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The apps, workflows and agents that link this project could not be loaded.'
+    );
+    console.error.mockRestore();
+  });
+
+  test('estimates the tokens per project and per item', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject(ITEMS));
+    mockApi.estimateAdminProject.mockResolvedValue({
+      projectId: 'handbook',
+      tokens: 31200,
+      budgetTokens: 50000,
+      share: 0.624,
+      minContextWindow: 78000,
+      unmeasured: 0,
+      recommendation: 'prompt',
+      reason: 'tight',
+      items: [
+        { id: 'itm_home', ok: true, tokens: 30000, recommendation: 'search', reason: 'large' },
+        { id: 'itm_docs', ok: true, tokens: 1200, recommendation: 'prompt', reason: 'small' }
+      ]
+    });
+    renderAt('/admin/projects/handbook');
+    await screen.findByRole('heading', { level: 1 });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Estimate tokens' }));
+
+    expect(await screen.findByTestId('project-estimate')).toHaveTextContent(
+      '~31.2K tokens in total'
+    );
+    expect(screen.getByTestId('item-estimate-itm_home')).toHaveTextContent('Search');
+    expect(screen.getByTestId('item-estimate-itm_docs')).toHaveTextContent('Prompt');
+  });
+
+  test('lets an admin edit the text of an uploaded document from its preview', async () => {
+    mockApi.fetchAdminProject.mockResolvedValue(makeProject(ITEMS));
+    mockApi.fetchAdminProjectItemText.mockResolvedValue({
+      text: 'Old text',
+      chars: 8,
+      truncated: false
+    });
+    mockApi.updateAdminProjectItemText.mockResolvedValue({ ...ITEMS[1], text: { tokens: 3 } });
+    renderAt('/admin/projects/handbook');
+    await screen.findByRole('heading', { level: 1 });
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Preview text' })[1]);
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit text' }));
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'New text' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(mockApi.updateAdminProjectItemText).toHaveBeenCalledWith(
+        'handbook',
+        'itm_docs',
+        'New text'
+      )
+    );
   });
 });

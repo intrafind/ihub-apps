@@ -368,27 +368,27 @@ affected.
 
 ### Checking a project
 
-![An admin project's view page: items, the apps and workflows that use it, and the settings rows with Availability](assets/screenshots/admin-project-view.png)
+![An admin project's page: items, the apps and workflows that use it, and the settings rows with Availability](assets/screenshots/admin-project-view.png)
 
 - **Test** (`POST /api/admin/projects/:id/_test`) reads every item the way a chat would, with your
   own credentials for iFinder items, and reports per item whether it was readable, its size and
   how long it took.
-- **Try in chat** (on the editor, `/admin/projects/:id/edit`) opens a scratch chat beside it that
+- **Try in chat** (on the project's page, `/admin/projects/:id`) opens a scratch chat beside it that
   has this project and nothing else in scope, to see whether the project works and, when an
   answer is wrong, whether the cause is the project or the app and the model. See
   [Try in chat](#try-in-chat).
-- **Estimate tokens** (`POST /api/admin/projects/:id/estimate`, on the project's view and edit
-  pages) loads every item, link items included, and counts its tokens. It recommends for each
+- **Estimate tokens** (`POST /api/admin/projects/:id/estimate`, on the project's page) loads every item, link items included, and counts its tokens. It recommends for each
   document whether it is small enough to pin into the prompt (up to 20 % of the load-all budget)
   or better searched, and for the project whether it belongs in the prompt (it fits the budget;
   *tight* above half of it) or is searched (it exceeds the budget, or a source delivered only part
   of its text). It also names the context window a model needs to load the project in full. The
   numbers are an estimate; the real decision of a request is made against the model in use.
   User projects have the same button on their page (`POST /api/projects/:projectId/estimate`).
-- The name of a project on **Admin → Projects** opens its view: the items (read-only), **Used by**
-  with the apps, workflows and agents that link it, and the settings rows. **Edit items** (or
-  **Edit project** in the list) opens the editor (`/admin/projects/:id/edit`), where items are
-  added, pinned, moved and removed.
+- The name of a project on **Admin → Projects** (or **Edit project** in the list) opens its page
+  (`/admin/projects/:id`). There is no separate read-only view and edit mode: on the same page you
+  add, preview, refresh, move and remove items, and set each document's **For the AI** mode
+  (*Normal*, *Pinned* or *Not for AI*). **Used by** lists the apps, workflows and agents that link
+  the project, and the settings are rows beside the items, each changed in a dialog.
 - `GET /api/admin/projects/_tokens` reports each admin project's size in tokens, items and bytes,
   together with the load-all budget (`loadAllBudgetTokens`) and the tool result budget. The app
   editor uses it to explain whether a linked project will be loaded in full.

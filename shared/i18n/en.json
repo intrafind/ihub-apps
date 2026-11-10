@@ -5322,8 +5322,7 @@
         "instructionsHint": "The instructions are added to the system prompt of every app, workflow step or agent that links this project.",
         "usedBy": "Used by",
         "notLinked": "No app, workflow or agent links this project.",
-        "usedByFailed": "The apps, workflows and agents that link this project could not be loaded.",
-        "editItems": "Edit items"
+        "usedByFailed": "The apps, workflows and agents that link this project could not be loaded."
       },
       "sharing": {
         "title": "Sharing of user projects",
