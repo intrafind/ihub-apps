@@ -149,7 +149,6 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     if (unknownType !== undefined) {
       throw new ServiceError('BAD_REQUEST', `Unknown model type: ${unknownType}`);
     }
-    const requestedType = requestedTypes.join(',');
     const typedModels = models.filter(m => requestedTypes.includes(m.modelType || 'chat'));
 
     // Strip server-side secrets (encrypted apiKey for all; url for
