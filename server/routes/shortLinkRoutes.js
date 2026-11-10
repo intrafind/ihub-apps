@@ -21,9 +21,12 @@ import { buildServerPath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
-/** Hosts an absolute short link target may name (`platform.shortLinks.allowedHosts`). */
+/**
+ * Hosts an absolute short link target may name: the SSRF allowlist
+ * (`platform.ssrf.allowedHosts`, Admin → Security → SSRF Allowlist).
+ */
 function allowedHosts() {
-  return configCache.getPlatform()?.shortLinks?.allowedHosts || [];
+  return configCache.getPlatform()?.ssrf?.allowedHosts || [];
 }
 
 /**

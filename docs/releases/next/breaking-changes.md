@@ -841,3 +841,23 @@ page, and migration V235 removes `getUserInfo`, `getGroups`, `domainControllerUs
 
 **Before upgrading:** If you set `NTLM_LDAP_USER` / `NTLM_LDAP_PASSWORD` or the domain controller
 credentials expecting NTLM users to receive groups, configure an LDAP Group Lookup Provider instead.
+
+## Short Links Use the SSRF Allowlist
+
+Short links had their own list of external hosts, `shortLinks.allowedHosts`, that no admin page
+could edit. It is gone: a short link may lead to a path on this server or to a website whose host
+is on the SSRF allowlist (**Admin → Security → SSRF Allowlist**, `ssrf.allowedHosts`). Changes there
+apply to new and existing links at once.
+
+- Migration V238 adds the entries of `shortLinks.allowedHosts` and the hosts of all stored,
+  unexpired short links to `ssrf.allowedHosts`, logs each host it adds, and removes
+  `shortLinks.allowedHosts`. `/regex/` entries and IPv6 addresses cannot be expressed there; they
+  are logged as skipped.
+- Saving a link to a host that is not on the list says so and names where to allow it
+  (`SHORT_LINK_HOST_NOT_ALLOWED`).
+- The public redirect `/s/<code>` is rate limited (300 requests per minute per address).
+
+**Before upgrading:** after the upgrade, review the SSRF allowlist. An entry there also lets
+outbound calls (web tools, MCP servers, OpenAPI tools) reach that host when it resolves to an
+internal address, and short links created before 5.5.32 could name any host.
+

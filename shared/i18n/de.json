@@ -2395,7 +2395,7 @@
       },
       "ssrf": {
         "title": "SSRF-Allowlist",
-        "description": "Erlaubt ausgehende HTTP-Aufrufe (OpenAPI-Tools, MCP-Server, Web-Tools) zu absichtlich internen Diensten, auch wenn deren Hostname zu einer privaten IP auflöst.",
+        "description": "Erlaubt ausgehende HTTP-Aufrufe (OpenAPI-Tools, MCP-Server, Web-Tools) zu absichtlich internen Diensten, auch wenn deren Hostname zu einer privaten IP auflöst. Auch Kurzlinks dürfen nur auf Websites verweisen, deren Host auf dieser Liste steht.",
         "addHost": "Host hinzufügen",
         "removeHost": "Entfernen",
         "hostPlaceholder": "*.intrafind.io, api.internal.company.com",
@@ -5963,29 +5963,12 @@
     "translateField": "Übersetzen",
     "shortlinks": {
       "saveError": "Der Kurzlink konnte nicht gespeichert werden.",
-      "allowedHosts": {
-        "title": "Erlaubte externe Hosts",
-        "description": "Kurzlinks können immer auf Seiten dieser Installation verweisen. Ein Link auf eine andere Website funktioniert nur, wenn ihr Host in dieser Liste steht. Die SSRF-Allowlist gilt nicht für Kurzlinks.",
-        "warning": "Ein Kurzlink dieser Installation kann Besucher zu jedem Host in dieser Liste weiterleiten, und jeder, der Kurzlinks anlegen darf, kann das nutzen. Fügen Sie nur Hosts hinzu, denen Sie vertrauen.",
-        "blockedTitle": "Links, die nicht funktionieren",
-        "blockedDescription": "Bestehende Kurzlinks verweisen auf diese Hosts, die nicht in der Liste stehen. Sie antworten mit „Nicht gefunden“, bis Sie den Host erlauben und speichern.",
-        "linkCount_one": "{{count}} Link",
-        "linkCount_other": "{{count}} Links",
-        "allowHost": "Erlauben",
-        "allowHostLabel": "{{host}} erlauben",
-        "inputLabel": "Zu erlaubender Host",
-        "placeholder": "www.example.com, *.example.com",
-        "addHost": "Host hinzufügen",
-        "patternHelp": "Ein exakter Host (www.example.com), jede Subdomain (*.example.com oder .example.com, nicht example.com selbst) oder ein /regulärer Ausdruck/, der auf den ganzen Host passen muss. Eine eingefügte URL wird auf ihren Host gekürzt.",
-        "removeHost": "Entfernen",
-        "removeHostLabel": "{{host}} entfernen",
-        "noHosts": "Keine externen Hosts erlaubt. Kurzlinks verweisen nur auf Seiten dieser Installation.",
-        "save": "Erlaubte Hosts speichern",
-        "saving": "Wird gespeichert…",
-        "saved": "Erlaubte Hosts gespeichert.",
-        "loadError": "Die erlaubten Hosts konnten nicht geladen werden.",
-        "saveError": "Die erlaubten Hosts konnten nicht gespeichert werden."
-      }
+      "app": "App",
+      "appSearch": "Apps durchsuchen...",
+      "noApp": "Keine App ausgewählt",
+      "urlHint": "Ein Pfad auf diesem Server (/apps/chat) funktioniert immer. Ein Link zu einer anderen Website funktioniert nur, wenn ihr Host auf der SSRF-Allowlist steht.",
+      "ssrfNotice": "Kurzlinks zu anderen Websites funktionieren nur für Hosts auf der SSRF-Allowlist; Links zu anderen Hosts antworten mit „Nicht gefunden“.",
+      "ssrfLink": "Admin → Sicherheit → SSRF-Allowlist"
     },
     "toolApproval": {
       "mode": {
@@ -9222,7 +9205,7 @@
     "FILES_NOT_SHARED": "Der Besitzer hat die angehängten Dateien nicht freigegeben.",
     "ORIGINAL_NOT_SHARED": "Der Besitzer hat den Text dieser Datei freigegeben, nicht das Original.",
     "ORIGINAL_DISCARDED": "Die Originaldatei ist nicht mehr verfügbar.",
-    "SHORT_LINK_HOST_NOT_ALLOWED": "Kurzlinks dürfen nicht auf diese Website verweisen. Ein Administrator kann ihren Host unter Admin → Kurzlinks → Erlaubte externe Hosts freigeben.",
+    "SHORT_LINK_HOST_NOT_ALLOWED": "Kurzlinks dürfen nicht auf diese Website verweisen. Ein Administrator kann ihren Host auf der SSRF-Allowlist unter Admin → Sicherheit → SSRF-Allowlist freigeben.",
     "SCHEDULED_TASKS_UNAVAILABLE": "Geplante Aufgaben sind auf dieser Installation nicht verfügbar.",
     "INTERACTIVE_USER_REQUIRED": "Geplante Aufgaben erfordern eine angemeldete Person, kein Token und keinen Agenten.",
     "PERMISSION_DENIED": "Sie dürfen geplante Aufgaben nicht verwenden.",

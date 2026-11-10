@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -12,7 +12,6 @@ import { useClipboard } from '../../../shared/hooks/useClipboard';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable, SearchInput, parseSortParam, formatSortParam } from '../components/data-table';
 import AdminLoadError from '../components/AdminLoadError';
-import ShortLinkHostsConfig from '../components/ShortLinkHostsConfig';
 
 function CodeCell({ link }) {
   return (
@@ -212,9 +211,18 @@ function AdminShortLinks() {
             </div>
           </div>
 
-          <div className="mt-6">
-            <ShortLinkHostsConfig />
-          </div>
+          <p className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+            {t(
+              'admin.shortlinks.ssrfNotice',
+              'Short links to other websites work only for hosts on the SSRF allowlist; links to any other host answer "Not found".'
+            )}{' '}
+            <Link
+              to="/admin/security#settings-section-ssrf"
+              className="text-indigo-600 dark:text-indigo-400 underline"
+            >
+              {t('admin.shortlinks.ssrfLink', 'Admin → Security → SSRF Allowlist')}
+            </Link>
+          </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
             <SearchInput

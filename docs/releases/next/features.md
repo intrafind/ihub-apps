@@ -1362,19 +1362,8 @@ live links.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
 
-## Short Links: Allow External Hosts in the Admin UI
+## Short Links: Pick the App From a Search Box
 
-A short link may lead to a page of this installation or to an external website whose host is on
-the allowed list. Admins could only edit that list in `platform.json` and had to restart, so links
-to external sites answered "Not found" and new ones were refused. **Admin → Short Links** now has an
-**Allowed external hosts** section.
-
-- Changes take effect at once, for new and existing links.
-- **Links that do not work** lists the hosts existing links lead to that the list blocks, with how
-  many links each, and an **Allow** button.
-- Enter a host (`www.example.com`), any subdomain (`*.example.com`) or a `/regular expression/`. A
-  pasted URL is reduced to its host. `www.example.com` and `example.com` are different hosts.
-- Saving a link to a host that is not allowed now names the host and says where to allow it. The
-  SSRF allowlist does not apply to short links.
-
-See [Platform Configuration](../../platform.md#shortlinks).
+The short link editor offers the app as a search box, as other admin pages do: type part of an
+app's name and pick it, instead of typing its ID. The **Redirect URL** field says that a link to
+another website needs its host on the SSRF allowlist, with a link to it.

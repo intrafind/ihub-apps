@@ -75,8 +75,8 @@ export class ShortLinkTargetError extends ServiceError {
     if (refusal?.reason === 'host') {
       super(
         'SHORT_LINK_HOST_NOT_ALLOWED',
-        `Short links may not lead to ${refusal.host}. An administrator can allow this host under ` +
-          'Admin → Short Links → Allowed external hosts (shortLinks.allowedHosts).',
+        `Short links may not lead to ${refusal.host}. An administrator can allow this host on the ` +
+          'SSRF allowlist under Admin → Security → SSRF Allowlist (ssrf.allowedHosts).',
         { details: { host: refusal.host } }
       );
     } else {
@@ -252,33 +252,4 @@ export function canManageLink(link, user, isAdmin) {
 export async function searchLinks({ appId, ownerId } = {}) {
   const links = await readLinks();
   return links.filter(l => (!appId || l.appId === appId) && (!ownerId || l.ownerId === ownerId));
-}
-
-/**
- * The hosts that stored, unexpired links lead to but `allowedHosts` refuses:
- * those links answer "Not found" until an administrator allows the host.
- * Most links first.
- *
- * @param {unknown} allowedHosts - `platform.shortLinks.allowedHosts`
- * @returns {Promise<Array<{ host: string, links: number }>>}
- */
-export async function findBlockedHosts(allowedHosts) {
-  const counts = new Map();
-  for (const link of await readLinks()) {
-    if (isLinkExpired(link)) continue;
-    const refusal = shortLinkTargetRefusal(link.url, allowedHosts);
-    if (refusal?.reason === 'host') {
-      counts.set(refusal.host, (counts.get(refusal.host) || 0) + 1);
-    }
-  }
-  return [...counts]
-    .map(([host, links]) => ({ host, links }))
-    .sort((a, b) => b.links - a.links || compareCodeUnits(a.host, b.host));
-}
-
-/** Plain code-unit order, independent of the server's locale. */
-function compareCodeUnits(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
 }
