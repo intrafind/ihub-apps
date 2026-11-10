@@ -73,6 +73,21 @@ function matchesEverything(query) {
 export function zeroHitHint({ query, filter } = {}, { fixed = false } = {}) {
   const filters = Array.isArray(filter) ? filter.filter(Boolean) : [];
   const steps = [];
+  // `field:Jira Work Item` binds only `Jira` to the field; the rest becomes loose terms.
+  const unquoted = filters.filter(f => {
+    const m = f.trim().match(/^[\w.]+:([^"[{(\s]\S*\s+\S.*)$/);
+    return m && !/:|\b(AND|OR|NOT)\b/.test(m[1]);
+  });
+  if (unquoted.length > 0) {
+    steps.push(
+      `Quote filter values that contain spaces — unquoted, only the first word is bound to the field: ${unquoted
+        .map(f => {
+          const i = f.indexOf(':');
+          return `\`${f.slice(0, i + 1)}"${f.slice(i + 1).trim()}"\``;
+        })
+        .join(', ')}.`
+    );
+  }
   if (matchesEverything(query)) {
     steps.push(
       'The query matches every document, so a filter excluded them all: check each filter value against iFinder_getFacetValues and the field name against iFinder_getFields, or drop filters one at a time.'

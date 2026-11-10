@@ -649,6 +649,25 @@ describe('iFinder search with no hits', () => {
     assert.doesNotMatch(hint, /same words plus more/);
   });
 
+  it('names an unquoted filter value with spaces and shows it quoted', () => {
+    const hint = zeroHitHint({
+      query: '*',
+      filter: ['application.keyword:Jira Work Item', 'creators.keyword:"DOE, John"']
+    });
+    assert.match(hint, /Quote filter values that contain spaces/);
+    assert.match(hint, /`application\.keyword:"Jira Work Item"`/);
+    assert.doesNotMatch(hint, /DOE/);
+    const quoted = zeroHitHint({ query: '*', filter: ['application.keyword:"Jira Work Item"'] });
+    assert.doesNotMatch(quoted, /Quote filter values/);
+    const range = zeroHitHint({ query: '*', filter: ['modificationDate:[2026-01-01 TO *]'] });
+    assert.doesNotMatch(range, /Quote filter values/);
+    const bool = zeroHitHint({
+      query: '*',
+      filter: ['application.keyword:PDF OR sourceType.keyword:Jira']
+    });
+    assert.doesNotMatch(bool, /Quote filter values/);
+  });
+
   it('suggests dropping the filters once when a topic query had filters', () => {
     const hint = zeroHitHint({ query: 'Urlaub', filter: ['application.keyword:PDF'] });
     assert.match(hint, /run it once without them/);
