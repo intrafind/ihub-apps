@@ -108,6 +108,23 @@ describe('GET /api/models?type=', () => {
     assert.equal(fresh.status, 304);
   });
 
+  test('a text-to-speech list ETag from before the { items } body is not answered 304', async () => {
+    // Read aloud and voice mode show their buttons only when the TTS model is
+    // in this list. A 304 to the old ETag handed the client the cached bare
+    // array, `fetchTtsModels` read no `items` from it, and the voice mode
+    // button was gone even with voice mode switched on.
+    const app = buildApp();
+    const stale = await request(app)
+      .get('/api/models?type=tts')
+      .set('If-None-Match', 'models-etag-tts');
+    assert.equal(stale.status, 200);
+    assert.deepEqual(ids(stale), ['voxtral-tts']);
+    const fresh = await request(app)
+      .get('/api/models?type=tts')
+      .set('If-None-Match', stale.headers.etag);
+    assert.equal(fresh.status, 304);
+  });
+
   test('an unknown type in the list is a 400', async () => {
     const res = await request(buildApp()).get('/api/models?type=chat,video');
     assert.equal(res.status, 400);
