@@ -15,6 +15,12 @@ import {
   withPreviewCsp
 } from '../utils/artifactFiles';
 
+// A preview that fills the full-screen pane scrolls behind the composer dock; the workspace sets
+// `--workspace-dock-clearance` (0 without a dock) so the last lines can still be scrolled clear.
+const DOCK_CLEARANCE_1REM = 'calc(1rem + var(--workspace-dock-clearance, 0px))';
+const DOCK_CLEARANCE_025REM = 'calc(0.25rem + var(--workspace-dock-clearance, 0px))';
+const DOCK_CLEARANCE_2REM = 'calc(2rem + var(--workspace-dock-clearance, 0px))';
+
 /**
  * Read what a preview shows of a blob: an object URL for a picture or PDF, the
  * text (cut at {@link MAX_PREVIEW_BYTES}) for everything readable.
@@ -288,6 +294,7 @@ export default function ArtifactPreview({
         <div className={fill ? 'flex-1 min-h-0 overflow-auto' : undefined}>
           <article
             className={`prose prose-sm dark:prose-invert max-w-none ${fill ? 'mx-auto max-w-3xl px-6 py-8' : ''}`}
+            style={fill ? { paddingBottom: DOCK_CLEARANCE_2REM } : undefined}
             // Sanitized by renderMarkdown (DOMPurify).
             dangerouslySetInnerHTML={{ __html: renderMarkdown(state.text) }}
           />
@@ -362,11 +369,16 @@ export default function ArtifactPreview({
     }
     if (type === 'csv') {
       const { header, rows, totalRows } = parseCsvPreview(state.text);
+      // The row-count notice is the last line: it carries the clearance when it is shown.
+      const hasMoreRows = totalRows > rows.length;
       return (
         <Root {...rootProps}>
           {truncatedNote}
           {modeToggle}
-          <div className={`overflow-auto ${maxTall} ${fill ? '' : frame}`}>
+          <div
+            className={`overflow-auto ${maxTall} ${fill ? '' : frame}`}
+            style={fill && !hasMoreRows ? { paddingBottom: DOCK_CLEARANCE_1REM } : undefined}
+          >
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-xs">
               {header.length > 0 && (
                 <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
@@ -402,9 +414,10 @@ export default function ArtifactPreview({
               </tbody>
             </table>
           </div>
-          {totalRows > rows.length && (
+          {hasMoreRows && (
             <p
               className={`text-xs text-gray-500 dark:text-gray-400 ${fill ? 'px-4 py-1' : 'mt-1.5'}`}
+              style={fill ? { paddingBottom: DOCK_CLEARANCE_025REM } : undefined}
             >
               {t('chatArtifacts.csvRowsShown', 'Showing {{shown}} of {{total}} rows.', {
                 shown: rows.length,
@@ -421,7 +434,10 @@ export default function ArtifactPreview({
         <Root {...rootProps}>
           {truncatedNote}
           {modeToggle}
-          <div className={`space-y-3 overflow-auto ${maxTall} ${fill ? 'p-4' : 'pr-1'}`}>
+          <div
+            className={`space-y-3 overflow-auto ${maxTall} ${fill ? 'p-4' : 'pr-1'}`}
+            style={fill ? { paddingBottom: DOCK_CLEARANCE_1REM } : undefined}
+          >
             {notebook.cells.map(cell => {
               if (cell.type === 'markdown') {
                 return (
@@ -474,6 +490,7 @@ export default function ArtifactPreview({
         className={`bg-gray-900 text-gray-100 overflow-auto text-xs leading-relaxed focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
           fill ? 'flex-1 min-h-0 p-4' : `rounded-md p-4 ${maxTall}`
         }`}
+        style={fill ? { paddingBottom: DOCK_CLEARANCE_1REM } : undefined}
       >
         <code
           className={language ? `hljs language-${language}` : undefined}

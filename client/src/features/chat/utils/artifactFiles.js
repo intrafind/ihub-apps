@@ -315,7 +315,9 @@ export function isLiveArtifact(artifact) {
 /**
  * The artifacts a conversation produced that the viewer can open, in order:
  * generated files and pictures of each answer. A live picture has no id yet;
- * it gets a stable `live:` key so the viewer can step to it.
+ * it gets a stable `live:` key so the viewer can step to it. An entry keeps
+ * the answer's `runId` (and a picture its position, `imageIndex`) so that the
+ * stored copy of a live item can be found once the answer is stored.
  *
  * @param {Object[]} messages
  * @returns {Object[]} Descriptors (as the cards carry them; `data` kept inline).
@@ -325,11 +327,13 @@ export function collectOpenableArtifacts(messages) {
   const seen = new Set();
   (messages || []).forEach((message, messageIndex) => {
     if (message?.role !== 'assistant') return;
+    const files = Array.isArray(message.generatedFiles) ? message.generatedFiles : [];
+    const images = Array.isArray(message.images) ? message.images : [];
     const items = [
-      ...(Array.isArray(message.generatedFiles) ? message.generatedFiles : []),
-      ...(Array.isArray(message.images) ? message.images : [])
+      ...files.map(item => ({ item, imageIndex: null })),
+      ...images.map((item, imageIndex) => ({ item, imageIndex }))
     ];
-    items.forEach((item, index) => {
+    items.forEach(({ item, imageIndex }, index) => {
       if (!isOpenable(item)) return;
       const id = item.id || `live:${messageIndex}:${index}`;
       if (seen.has(id)) return;
@@ -337,9 +341,38 @@ export function collectOpenableArtifacts(messages) {
       out.push({
         ...item,
         id,
-        kind: item.kind || (item.mimeType?.startsWith('image/') ? 'image' : undefined)
+        kind: item.kind || (item.mimeType?.startsWith('image/') ? 'image' : undefined),
+        ...(message.runId ? { runId: message.runId } : {}),
+        ...(imageIndex !== null ? { imageIndex } : {})
       });
     });
   });
   return out;
+}
+
+/**
+ * The stored copy of an artifact, which is what can be shared.
+ *
+ * A stored artifact is its own copy. A live one (bytes only in this tab, or a
+ * held file whose stored copy has another id) is looked up in what the chat
+ * has stored for its answer: a picture by its position among the answer's
+ * pictures, a file by name and type.
+ *
+ * @param {Object|null} artifact - A descriptor as the viewer shows it.
+ * @param {Object[]} storedItems - The chat's stored artifacts (`runId`, `kind`, `name`, …).
+ * @returns {Object|null} `null` while the answer is not stored (or listed) yet.
+ */
+export function storedCounterpart(artifact, storedItems) {
+  if (!artifact) return null;
+  if (!isLiveArtifact(artifact)) return artifact;
+  const ofRun = artifact.runId
+    ? (Array.isArray(storedItems) ? storedItems : []).filter(item => item.runId === artifact.runId)
+    : [];
+  if (artifact.kind === 'image' || artifact.mimeType?.startsWith('image/')) {
+    const images = ofRun.filter(item => item.kind === 'image');
+    return images[artifact.imageIndex] || (images.length === 1 ? images[0] : null);
+  }
+  return (
+    ofRun.find(item => item.name === artifact.name && item.mimeType === artifact.mimeType) || null
+  );
 }

@@ -67,11 +67,14 @@ export default function ComposerDock({
       data-testid="composer-dock"
       data-expanded={expanded ? 'true' : 'false'}
       data-f6-region="dock"
-      className="absolute bottom-4 left-1/2 z-20 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2 rounded-2xl border border-gray-200 bg-white/90 shadow-xl backdrop-blur dark:border-gray-700 dark:bg-gray-800/90"
+      className="absolute bottom-4 left-1/2 z-20 w-[calc(100%-2rem)] max-w-2xl -translate-x-1/2"
     >
+      {/* The dock itself has no background: the document scrolls visibly behind it.
+          The parts that have to stay legible (the answer snippet, the composer, the
+          collapsed bar) carry their own backing. */}
       {expanded ? (
-        <div className="flex flex-col gap-2 p-2">
-          <div className="flex items-start gap-2 px-1">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-2 rounded-xl border border-gray-200 bg-white/90 p-2 shadow-md backdrop-blur dark:border-gray-700 dark:bg-gray-800/90">
             <div className="min-w-0 flex-1 text-xs text-gray-700 dark:text-gray-200">
               {latest?.text ? (
                 <p className="line-clamp-2" data-testid="composer-dock-latest">
@@ -116,7 +119,7 @@ export default function ComposerDock({
         <button
           type="button"
           onClick={() => onExpandedChange(true)}
-          className="flex h-12 w-full items-center gap-2 rounded-2xl px-4 text-left text-sm text-gray-600 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-gray-300 dark:hover:bg-gray-700/60"
+          className="flex h-12 w-full items-center gap-2 rounded-2xl border border-gray-200 bg-white/90 px-4 text-left text-sm text-gray-600 shadow-xl backdrop-blur hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800/90 dark:text-gray-300 dark:hover:bg-gray-700/60"
           data-testid="composer-dock-expand"
         >
           <Icon name="sparkles" size="sm" className="text-indigo-600 dark:text-indigo-300" />

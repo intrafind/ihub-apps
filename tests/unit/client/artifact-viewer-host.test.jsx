@@ -80,7 +80,7 @@ const liveFile = {
   mimeType: 'text/html',
   data: btoa('<p>live</p>')
 };
-const messages = [{ role: 'assistant', generatedFiles: [stored, second, liveFile] }];
+const messages = [{ role: 'assistant', runId: 'r1', generatedFiles: [stored, second, liveFile] }];
 
 function Opener({ file }) {
   const viewer = useArtifactViewer();
@@ -109,14 +109,20 @@ const blobOf = text => {
   return blob;
 };
 
-function mount(entry = '/chat', { onShare = null } = {}) {
+function mount(entry = '/chat', { onShare = null, files = null } = {}) {
   return render(
     <MemoryRouter initialEntries={[entry]}>
       <Routes>
         <Route
           path="*"
           element={
-            <ArtifactViewerHost messages={messages} chatId="chat-1" inline onShare={onShare}>
+            <ArtifactViewerHost
+              messages={messages}
+              chatId="chat-1"
+              inline
+              onShare={onShare}
+              files={files}
+            >
               <WorkspaceLayout>
                 <Where />
                 <Opener file={stored} />
@@ -179,6 +185,7 @@ describe('ArtifactViewerHost: docked pane', () => {
     expect(where()).toBe('/chat');
     await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
     expect(mockFetchChatArtifact).not.toHaveBeenCalled();
+    // Where the page allows sharing: never offered at all otherwise.
     expect(screen.queryByTestId('artifact-viewer-share')).not.toBeInTheDocument();
   });
 
@@ -354,6 +361,34 @@ describe('ArtifactViewerHost: docked pane', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Share' }));
     expect(onShare).toHaveBeenCalledWith(expect.objectContaining({ id: 'f1' }));
+  });
+
+  it('offers Share for a live-turn file too, and shares its stored copy', async () => {
+    const onShare = jest.fn();
+    const copy = { id: 's9', runId: 'r1', name: 'live.html', mimeType: 'text/html' };
+    mount('/chat', {
+      onShare,
+      files: { artifacts: { list: () => Promise.resolve({ items: [copy] }) } }
+    });
+    fireEvent.click(screen.getByText('open live.html'));
+    // Wait until the chat's stored list has arrived.
+    await waitFor(() => expect(document.querySelector('iframe')).not.toBeNull());
+    await act(async () => {});
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Share' }));
+    expect(onShare).toHaveBeenCalledWith(copy);
+  });
+
+  it('keeps Share for a live-turn file whose stored copy is not there yet, and says so', async () => {
+    const onShare = jest.fn();
+    mount('/chat', { onShare });
+    fireEvent.click(screen.getByText('open live.html'));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Share' }));
+    expect(onShare).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(screen.getByText(/still being saved to the chat/)).toBeInTheDocument()
+    );
   });
 });
 

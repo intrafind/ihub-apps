@@ -91,6 +91,8 @@ export default function ArtifactViewer({
 
   const name = artifactDisplayName(artifact);
   const type = previewTypeOf(artifact);
+  // Fitted to the pane, nothing to scroll: kept clear of the composer dock rather than behind it.
+  const fitsPane = type === 'image' || type === 'svg';
   const hasCodeView = HAS_CODE_VIEW.includes(type);
   const isText = isTextArtifact(artifact);
   const canExport = EXPORTABLE.includes(type) || type === 'html';
@@ -421,7 +423,10 @@ export default function ArtifactViewer({
         onQuote={chrome?.onQuote}
         source={{ kind: 'artifact', id: artifact.id, name }}
         allowEdit
-        bottomPadding={chrome?.bottomPadding || 0}
+        // A scrolling artifact fills the pane and scrolls behind the (transparent) composer
+        // dock. A picture has nothing to scroll, so it keeps clear of the dock instead.
+        bottomPadding={fitsPane ? chrome?.bottomPadding || 0 : 0}
+        dockClearance={fitsPane ? 0 : chrome?.bottomPadding || 0}
         className="flex min-h-0 flex-1 flex-col bg-white dark:bg-gray-900"
         innerClassName={
           readingColumn ? 'mx-auto flex min-h-0 w-full max-w-[52rem] flex-1 flex-col' : ''
