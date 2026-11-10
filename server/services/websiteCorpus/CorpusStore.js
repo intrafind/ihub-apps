@@ -204,6 +204,39 @@ export class CorpusStore {
     for (const doc of doomed) await this.remove(doc.key);
     return doomed.length;
   }
+
+  /**
+   * Remove every corpus past its retention time, whoever owns it. `prune` only
+   * runs when the owner starts another discovery, so the corpora of someone who
+   * stopped using the tool would stay; the daily sweep
+   * (`corpusRetention.js`) calls this.
+   *
+   * @param {number} [now=Date.now()]
+   * @returns {Promise<{scanned: number, deleted: number}>}
+   */
+  async sweepExpired(now = Date.now()) {
+    this._require();
+    const expiry = now - RETENTION_DAYS * 86_400_000;
+    const expired = [];
+    let scanned = 0;
+    let cursor = null;
+    do {
+      const page = await this.documents.list(CORPUS_NAMESPACE, {
+        limit: 200,
+        includeData: true,
+        ...(cursor ? { cursor } : {})
+      });
+      for (const doc of page.items || []) {
+        scanned += 1;
+        const createdAt = Date.parse(doc.data?.createdAt);
+        if (Number.isFinite(createdAt) && createdAt < expiry) expired.push(doc.key);
+      }
+      cursor = page.nextCursor || null;
+    } while (cursor);
+    // Removed after the scan, so the paging is not disturbed by the deletes.
+    for (const key of expired) await this.remove(key);
+    return { scanned, deleted: expired.length };
+  }
 }
 
 let defaultStore = null;

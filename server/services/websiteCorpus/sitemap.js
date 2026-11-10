@@ -22,6 +22,9 @@ import { hostKey, onSite, underPrefix } from './urls.js';
 /** Most sitemap files read for one site, and most URLs kept. */
 export const MAX_SITEMAP_FILES = 60;
 
+/** Most raw `<loc>` values kept before the scope filter: 60 files of 8 MB must not fill the memory. */
+export const MAX_RAW_LOCS = 500_000;
+
 const XML_ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
 function decodeEntities(text) {
@@ -139,7 +142,13 @@ export async function collectSiteUrls({
       sitemapsRead.push(url);
       const { kind, locs } = parseSitemap(text);
       if (kind === 'index') locs.forEach(enqueue);
-      else found.push(...locs);
+      else {
+        // A loop, not push(...locs): a few hundred thousand arguments overflow the stack.
+        for (const loc of locs) {
+          if (found.length >= MAX_RAW_LOCS) break;
+          found.push(loc);
+        }
+      }
     }
   };
 

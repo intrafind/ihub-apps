@@ -409,6 +409,10 @@ export class WebsiteCorpusService {
   ) {
     const ownerId = requireUser(user);
     const policy = await this.policyFor({ allowPrivateAddresses });
+    // Ownership first, so an unknown corpus or another user's id is answered at once instead of
+    // waiting behind a running crawl's lock (a batch holds it for up to 22 s, the wait is 5 s).
+    // It is checked again below, on the corpus as it is under the lock.
+    await this.store.get(corpusId, ownerId);
     return this.store.withCorpus(corpusId, async () => {
       let corpus = await this.store.get(corpusId, ownerId);
       let selector = corpus.dropSelector;

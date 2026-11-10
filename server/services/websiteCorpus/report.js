@@ -23,6 +23,10 @@ const LARGEST_PAGES = 20;
 const n = value => Number(value).toLocaleString('en-US');
 // Backslashes first: otherwise a backslash in the text would swallow the one added before a pipe.
 const md = text => String(text).replace(/\\/g, '\\\\').replace(/\|/g, '\\|');
+// Text that comes from the crawled site (a section name, a page path) also loses its link,
+// emphasis, code and HTML syntax: a path such as /[docs](https://other.example)/x would otherwise
+// put a link of the site operator's choice into a report the chat shows to the user.
+const mdSite = text => String(text).replace(/[\\|[\]()*_`<>!~]/g, '\\$&');
 
 function share(part, whole) {
   const value = percent(part, whole);
@@ -43,8 +47,12 @@ function link(url) {
     // Keep the slash.
   }
   const label = path.length <= 70 ? path : `${path.slice(0, 67)}...`;
-  const safe = url.replace(/\|/g, '%7C').replace(/\(/g, '%28').replace(/\)/g, '%29');
-  return `[${md(label)}](${safe})`;
+  // The destination: nothing that ends it, opens a title or starts markup.
+  const safe = url.replace(
+    /[|()<>`\s]/g,
+    char => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`
+  );
+  return `[${mdSite(label)}](${safe})`;
 }
 
 /** The label of a Mermaid axis entry: no quotes, which would end it. */
@@ -156,7 +164,7 @@ export function renderReport({ name, analysis, nearDuplicates, meta, tokenizer }
   w('|---|---:|---:|---:|---:|---:|---:|');
   for (const entry of sections) {
     w(
-      `| ${md(entry.section)} | ${n(entry.pages)} | ${n(entry.thin)} | ${n(entry.chars)} | ` +
+      `| ${mdSite(entry.section)} | ${n(entry.pages)} | ${n(entry.thin)} | ${n(entry.chars)} | ` +
         `${n(entry.tokens)} | ${n(entry.tokensDedup)} | ${share(entry.tokens - entry.tokensDedup, entry.tokens)} |`
     );
   }
@@ -175,7 +183,7 @@ export function renderReport({ name, analysis, nearDuplicates, meta, tokenizer }
     .sort((a, b) => b.tokens - a.tokens)
     .slice(0, LARGEST_PAGES)
     .forEach((row, index) => {
-      w(`| ${index + 1} | ${n(row.tokens)} | ${md(row.section)} | ${link(row.url)} |`);
+      w(`| ${index + 1} | ${n(row.tokens)} | ${mdSite(row.section)} | ${link(row.url)} |`);
     });
   w('');
 

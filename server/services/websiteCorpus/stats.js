@@ -48,6 +48,8 @@ const CANDIDATE_ESTIMATE = 0.6;
 const NEAR_DUP_MAX_WORDS = 5000;
 /** Most near-duplicate pairs reported. */
 const MAX_NEAR_DUP_PAIRS = 25;
+/** Most shingle sets held at once while candidate pairs are confirmed. */
+const SHINGLE_CACHE_SIZE = 200;
 
 const yieldToEventLoop = () => new Promise(resolve => setImmediate(resolve));
 
@@ -237,6 +239,19 @@ export async function findNearDuplicates(pages) {
     if (index % 25 === 24) await yieldToEventLoop();
   }
   const pairs = [];
+  // A page's shingle set is built once, however many candidate pairs it is in; the cache is
+  // dropped when it grows large, so a template-heavy site cannot hold every set at once.
+  const shingleSets = new Map();
+  const setOf = index => {
+    let set = shingleSets.get(index);
+    if (!set) {
+      if (shingleSets.size >= SHINGLE_CACHE_SIZE) shingleSets.clear();
+      set = shingleHashes(eligible[index].text);
+      shingleSets.set(index, set);
+    }
+    return set;
+  };
+  let verified = 0;
   for (let i = 0; i < eligible.length; i++) {
     for (let j = i + 1; j < eligible.length; j++) {
       let equal = 0;
@@ -244,7 +259,8 @@ export async function findNearDuplicates(pages) {
         if (signatures[i][k] === signatures[j][k]) equal += 1;
       if (equal / SIGNATURE_SIZE < CANDIDATE_ESTIMATE) continue;
       if (eligible[i].text === eligible[j].text) continue;
-      const similarity = jaccard(shingleHashes(eligible[i].text), shingleHashes(eligible[j].text));
+      const similarity = jaccard(setOf(i), setOf(j));
+      if (++verified % 50 === 0) await yieldToEventLoop();
       if (similarity >= NEAR_DUP_THRESHOLD) {
         pairs.push({
           similarity: Number(similarity.toFixed(2)),

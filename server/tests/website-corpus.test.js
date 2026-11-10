@@ -15,8 +15,10 @@ import { extractPage, outlinePage, validateSelector } from '../services/websiteC
 import {
   parseSitemap,
   sitemapsFromRobots,
-  collectSiteUrls
+  collectSiteUrls,
+  MAX_RAW_LOCS
 } from '../services/websiteCorpus/sitemap.js';
+import { sweepWebsiteCorpora } from '../services/websiteCorpus/corpusRetention.js';
 import {
   normalizePrefix,
   sectionCounts,
@@ -1093,5 +1095,128 @@ describe('DomainStore', () => {
     await assert.rejects(store.request({ host: 'wiki.corp', user: USER }), {
       code: 'STORAGE_UNAVAILABLE'
     });
+  });
+});
+
+describe('review findings', () => {
+  it('reads a sitemap with hundreds of thousands of URLs without overflowing the stack, and caps what it keeps', async () => {
+    const locs = count =>
+      `<urlset>${Array.from({ length: count }, (_v, i) => `<url><loc>https://a.test/p${i}</loc></url>`).join('')}</urlset>`;
+    const big = await collectSiteUrls({
+      siteUrl: 'https://a.test',
+      sitemapUrls: ['https://a.test/s.xml'],
+      fetchText: async () => locs(300_000),
+      maxUrls: 1_000_000
+    });
+    assert.equal(big.urls.length, 300_000);
+    const capped = await collectSiteUrls({
+      siteUrl: 'https://a.test',
+      sitemapUrls: ['https://a.test/s.xml'],
+      fetchText: async () => locs(MAX_RAW_LOCS + 5000),
+      maxUrls: 1_000_000
+    });
+    assert.equal(capped.urls.length, MAX_RAW_LOCS);
+  });
+
+  it('keeps links and formatting from a crawled path out of the report', async () => {
+    const hostile = 'https://a.test/de/[docs](https://other.example)/x*bold*_it_`code`<b>';
+    const pages = [
+      { url: hostile, text: words(200) },
+      { url: `${hostile}/2`, text: words(300) }
+    ];
+    const analysis = await analyseCorpus(pages, { countTokens: t => t.length, prefix: '/de/' });
+    const markdown = renderReport({
+      name: 'N',
+      analysis,
+      nearDuplicates: { total: 0, pairs: [] },
+      tokenizer: { method: 'heuristic', note: 'n' },
+      meta: {
+        crawlDate: '2026-11-10',
+        siteUrl: 'https://a.test',
+        prefix: '/de/',
+        dropSelector: '',
+        coverage: {
+          inSitemap: 2,
+          crawled: 2,
+          failed: 0,
+          blockedByRobots: 0,
+          notHtml: 0,
+          notCrawled: 0
+        }
+      }
+    });
+    // No link of the site's own making: every bracket, parenthesis and marker is escaped.
+    assert.ok(!markdown.includes('[docs](https://other.example)'));
+    assert.ok(markdown.includes('\\[docs\\]\\(https://other.example\\)'));
+    // (The URL parser already percent-encodes the backtick and the angle brackets of a path.)
+    assert.ok(markdown.includes('\\*bold\\*\\_it\\_%60code%60%3Cb%3E'));
+    // And a raw one in a stored address cannot end or open the link destination.
+    assert.ok(!markdown.includes('`code`<b>'));
+    // The fixed labels are as before.
+    assert.ok(markdown.includes('| Full corpus |'));
+  });
+
+  it('answers another users corpus id at once, without waiting for the lock of a running crawl', async () => {
+    const site = fakeSite({ pageCount: 3 });
+    const { service, facets } = makeService(site);
+    const { corpusId } = await service.discoverSite({ siteUrl: 'https://a.test' }, { user: USER });
+    let lockCalls = 0;
+    facets.locks.withLock = async () => {
+      lockCalls += 1;
+      return new Promise(() => {}); // a crawl that never lets go
+    };
+    await assert.rejects(service.crawlPages({ corpusId }, { user: OTHER }), {
+      code: 'CORPUS_NOT_FOUND'
+    });
+    await assert.rejects(service.crawlPages({ corpusId: 'wc_unknown' }, { user: USER }), {
+      code: 'CORPUS_NOT_FOUND'
+    });
+    assert.equal(lockCalls, 0, 'the lock was never asked for');
+  });
+
+  it('removes expired corpora of every owner, including their pages, and keeps the others', async () => {
+    const facets = memoryFacets();
+    const store = new CorpusStore(facets);
+    const day = 86_400_000;
+    const now = Date.parse('2026-11-10T12:00:00Z');
+    const old = async (owner, ageDays) => {
+      const corpus = await store.create(owner, { name: owner }, ['https://a.test/x']);
+      await store.putPages(corpus.id, 0, [{ url: 'https://a.test/x', text: 'x' }]);
+      facets.docs.get(`website-corpora/${corpus.id}`).data.createdAt = new Date(
+        now - ageDays * day
+      ).toISOString();
+      return corpus.id;
+    };
+    const expiredA = await old('inactive-1', RETENTION_DAYS + 1);
+    const expiredB = await old('inactive-2', RETENTION_DAYS + 30);
+    const fresh = await old('active', 1);
+    const result = await sweepWebsiteCorpora({ store, now: () => now });
+    assert.deepEqual(result, { scanned: 3, deleted: 2, skipped: false });
+    for (const id of [expiredA, expiredB]) {
+      assert.ok(!facets.docs.has(`website-corpora/${id}`));
+      assert.ok(
+        ![...facets.blobMap.keys()].some(key => key.includes(id)),
+        'pages and URL list went too'
+      );
+    }
+    assert.ok(facets.docs.has(`website-corpora/${fresh}`));
+    assert.ok([...facets.blobMap.keys()].some(key => key.includes(fresh)));
+    assert.deepEqual(await sweepWebsiteCorpora({ store: new CorpusStore({}) }), {
+      scanned: 0,
+      deleted: 0,
+      skipped: true
+    });
+  });
+
+  it('confirms many near-duplicate pages by building each shingle set once', async () => {
+    const base = Array.from({ length: 400 }, (_v, i) => `satz${i}`).join(' ');
+    const pages = Array.from({ length: 80 }, (_v, i) => ({
+      url: `https://a.test/p${i}`,
+      text: `${base} eigener Satz Nummer ${i}`
+    }));
+    const started = Date.now();
+    const result = await findNearDuplicates(pages);
+    assert.equal(result.total, (80 * 79) / 2);
+    assert.ok(Date.now() - started < 5000, 'took too long');
   });
 });

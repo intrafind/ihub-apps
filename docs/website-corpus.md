@@ -33,8 +33,9 @@ which tokenizer counts (see [How tokens are counted](#how-tokens-are-counted)).
 
 ## The tools
 
-Five tools only read (`sideEffect: read`): the two that fetch from the website send requests out of
-the server (`dataFlow: external`), the other three work on what was already stored (`internal`). The
+Five tools only read (`sideEffect: read`): the three that fetch from the website (discover, outline
+and crawl) send requests out of the server (`dataFlow: external`), the other two work on what was
+already stored (`internal`). The
 sixth, `website_corpus_request_domain`, creates a request for an admin (`sideEffect: write`,
 `dataFlow: internal`), so users confirm it before it is sent.
 
