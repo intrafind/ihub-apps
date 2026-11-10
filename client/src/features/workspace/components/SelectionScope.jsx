@@ -118,6 +118,8 @@ export default function SelectionScope({
       if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'k') {
         if (!selectionIn(rootRef.current)) return;
         event.preventDefault();
+        // The global search listens for Ctrl/Cmd+K on window: this keystroke is ours.
+        event.stopPropagation();
         quote('ask');
         return;
       }
@@ -137,11 +139,14 @@ export default function SelectionScope({
   let chipStyle = null;
   if (selection?.rect && rootRef.current && !coarse) {
     const box = rootRef.current.getBoundingClientRect();
-    const left = selection.rect.left - box.left + selection.rect.width / 2;
-    const top = selection.rect.top - box.top - 40;
+    // The scope may be the scroll container itself: its absolute children are placed
+    // in content coordinates, so the scroll offset is added to the viewport delta.
+    const root = rootRef.current;
+    const left = selection.rect.left - box.left + root.scrollLeft + selection.rect.width / 2;
+    const top = selection.rect.top - box.top + root.scrollTop - 40;
     chipStyle = {
-      left: Math.max(8, Math.min(left, box.width - 8)),
-      top: Math.max(4, top)
+      left: Math.max(root.scrollLeft + 8, Math.min(left, root.scrollLeft + box.width - 8)),
+      top: Math.max(root.scrollTop + 4, top)
     };
   }
 
@@ -164,7 +169,7 @@ export default function SelectionScope({
           aria-label={t('workspace.selection.label', 'Selection actions')}
           data-testid="selection-chip"
           className="absolute z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-full bg-gray-900 p-0.5 text-white shadow-lg dark:bg-gray-100 dark:text-gray-900"
-          style={chipStyle || { left: '50%', top: 8 }}
+          style={chipStyle || { left: '50%', top: (rootRef.current?.scrollTop || 0) + 8 }}
           onMouseDown={keepSelection}
         >
           <button

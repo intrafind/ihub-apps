@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { answerIndex, uploadedKeyOf } from '../utils/workspaceItems';
 
 /** How long to wait before asking once more for an answer's files the list lacks. */
@@ -30,13 +30,20 @@ export default function useWorkspaceLists({ artifacts, uploaded, messages, enabl
   const listKey = useMemo(() => answerIndex(messages).producedRuns.join(','), [messages]);
   const uploadedKey = useMemo(() => uploadedKeyOf(messages), [messages]);
 
+  // The list a source loaded: another source (another chat) starts empty, never
+  // with the previous chat's files.
+  const generatedFromRef = useRef(null);
+  const uploadedFromRef = useRef(null);
+
   useEffect(() => {
     if (!enabled || !artifacts) return undefined;
     let active = true;
     let retry = null;
     const expected = listKey ? listKey.split(',') : [];
+    const sameSource = generatedFromRef.current === artifacts;
+    generatedFromRef.current = artifacts;
     setGenerated(previous =>
-      previous.status === 'ready' ? previous : { ...previous, status: 'loading' }
+      sameSource && previous.status === 'ready' ? previous : { status: 'loading', items: [] }
     );
     const load = attempt =>
       artifacts
@@ -66,8 +73,10 @@ export default function useWorkspaceLists({ artifacts, uploaded, messages, enabl
   useEffect(() => {
     if (!enabled || !uploaded) return undefined;
     let active = true;
+    const sameSource = uploadedFromRef.current === uploaded;
+    uploadedFromRef.current = uploaded;
     setUploadedList(previous =>
-      previous.status === 'ready' ? previous : { ...previous, status: 'loading' }
+      sameSource && previous.status === 'ready' ? previous : { status: 'loading', items: [] }
     );
     uploaded
       .list()

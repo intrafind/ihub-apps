@@ -108,7 +108,11 @@ export function collectCitedSources(messages) {
 export function revealMessage(messageId) {
   if (!messageId || typeof document === 'undefined') return false;
   const escaped = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(messageId) : messageId;
-  const element = document.querySelector(`[data-message-id="${escaped}"]`);
+  // The chat mounts a phone and a desktop copy of the transcript, one of them
+  // hidden by CSS: only the one on screen can scroll and show the highlight.
+  const element = Array.from(document.querySelectorAll(`[data-message-id="${escaped}"]`)).find(
+    candidate => candidate.offsetParent !== null
+  );
   if (!element) return false;
   element.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;

@@ -33,6 +33,11 @@ export default function PaneMenu({
 }) {
   const menuRef = useRef(null);
   const wrapRef = useRef(null);
+  // Read through a ref: a parent that re-renders (an answer streaming next to the
+  // pane) passes a new function each time, and the effect must not run again then —
+  // it would pull focus back to the first item.
+  const onToggleRef = useRef(onToggle);
+  onToggleRef.current = onToggle;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -40,14 +45,14 @@ export default function PaneMenu({
       menuRef.current?.querySelector('[role="menuitem"]:not([disabled])')?.focus()
     );
     const onPointerDown = event => {
-      if (!wrapRef.current?.contains(event.target)) onToggle(false);
+      if (!wrapRef.current?.contains(event.target)) onToggleRef.current(false);
     };
     document.addEventListener('mousedown', onPointerDown);
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener('mousedown', onPointerDown);
     };
-  }, [open, onToggle]);
+  }, [open]);
 
   const onKeyDown = event => {
     const items = Array.from(

@@ -943,6 +943,8 @@ function AppChat({
     () => ({
       sendMessage: text => {
         setInput(text);
+        // Not the user's typed message: a quote waiting in the composer stays there.
+        skipQuoteRef.current = true;
         setTimeout(() => formRef.current?.requestSubmit(), 0);
       },
       isProcessing: processing,
@@ -1012,6 +1014,14 @@ function AppChat({
   // A passage quoted from the pane ("Ask about" / "Edit with AI"), shown above
   // the composer and sent with the next message.
   const [workspaceQuote, setWorkspaceQuote] = useState(null);
+  // Set by the submits the user did not type (a resend, an auto-send, an MCP App
+  // message): they leave a pending quote where it is.
+  const skipQuoteRef = useRef(false);
+  // A quote belongs to the chat it was taken in: another chat, or a cleared one,
+  // starts without it.
+  useEffect(() => {
+    setWorkspaceQuote(null);
+  }, [chatId, appId]);
   const filesContext = useMemo(
     () => ({
       openFile: fileId => workspaceRef.current?.openFile(fileId),
@@ -1812,6 +1822,7 @@ function AppChat({
         // Use setTimeout to ensure state updates are applied before submission
         setTimeout(() => {
           if (formRef.current) {
+            skipQuoteRef.current = true;
             formRef.current.requestSubmit();
           }
         }, 0);
@@ -1890,6 +1901,7 @@ function AppChat({
   useEffect(() => {
     if (!pendingAutoSubmit) return;
     setPendingAutoSubmit(false);
+    skipQuoteRef.current = true;
     formRef.current?.requestSubmit();
   }, [pendingAutoSubmit]);
 
@@ -1993,6 +2005,7 @@ function AppChat({
         t('pages.appChat.confirmClear', 'Are you sure you want to clear the entire chat history?')
       )
     ) {
+      setWorkspaceQuote(null);
       cancelGeneration('clear-chat');
 
       if (compareModeActive) {
@@ -2441,8 +2454,11 @@ function AppChat({
     if (fileUploadHandler.isAttachmentProcessing) return;
     const ownTyped = startFormMessage ?? (leavesComposer ? ownText : input);
     // A passage quoted from the workspace pane goes with what was typed in the composer.
-    const quote = !leavesComposer && startFormMessage === null ? workspaceQuote : null;
-    const typed = quote && ownTyped.trim() ? composeQuotedMessage(quote, ownTyped, t) : ownTyped;
+    const skipQuote = skipQuoteRef.current;
+    skipQuoteRef.current = false;
+    const quote =
+      !leavesComposer && startFormMessage === null && !skipQuote ? workspaceQuote : null;
+    const typed = quote ? composeQuotedMessage(quote, ownTyped, t) : ownTyped;
 
     // While recording, "send" means: finish the recording — sent to the
     // selected model, with anything typed when that is a chat model.
@@ -2860,7 +2876,11 @@ function AppChat({
     return { text, streaming: Boolean(last.loading) };
   }, [messages]);
 
-  const renderComposer = () => {
+  // `own`: the full-screen dock's composer. It mounts and unmounts with the dock, so
+  // it must not take the page's `inputRef` / `formRef`: React would leave them null
+  // when it goes, and every `formRef.current.requestSubmit()` (resend, auto-send)
+  // would then do nothing.
+  const renderComposer = ({ own = false } = {}) => {
     const currentModel = models.find(m => m.id === selectedModel);
 
     // In compare mode, processing/cancel must reflect every panel — not the regular chat.
@@ -2921,8 +2941,8 @@ function AppChat({
         app?.allowEmptyContent ||
         fileUploadHandler.selectedFile !== null ||
         isRecordingTranscription,
-      inputRef,
-      formRef,
+      inputRef: own ? undefined : inputRef,
+      formRef: own ? undefined : formRef,
       selectedFile: fileUploadHandler.selectedFile,
       showUploader: fileUploadHandler.showUploader,
       onToggleUploader: fileUploadHandler.toggleUploader,
@@ -2999,7 +3019,7 @@ function AppChat({
   // The chat of the full-screen workspace pane: the composer dock, bound to the
   // same draft as the chat's own composer. Swappable for a chat column (§12 Q1).
   const renderComposerDock = dock => (
-    <ComposerDock {...dock} composer={renderComposer()} latest={latestAnswer} />
+    <ComposerDock {...dock} composer={renderComposer({ own: true })} latest={latestAnswer} />
   );
 
   // Helper function to render the appropriate chat input component. `layout`

@@ -48,13 +48,13 @@ function Tile({ look }) {
 }
 
 /** "Answer 3": scrolls the chat to that answer and highlights it. */
-function AnswerLink({ number, messageId }) {
+function AnswerLink({ number, messageId, onReveal }) {
   const { t } = useTranslation();
   if (!number) return null;
   return (
     <button
       type="button"
-      onClick={() => revealMessage(messageId)}
+      onClick={() => (onReveal ? onReveal(messageId) : revealMessage(messageId))}
       disabled={!messageId}
       className="flex-none rounded px-1 text-xs font-medium text-indigo-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:text-gray-500 disabled:no-underline dark:text-indigo-300"
       aria-label={t('workspace.showAnswer', 'Show answer {{number}} in the chat', { number })}
@@ -303,7 +303,11 @@ export default function ArtifactsPanel({
                       </span>
                     </span>
                   </button>
-                  <AnswerLink number={answer} messageId={answers.messageIdOf.get(answer)} />
+                  <AnswerLink
+                    number={answer}
+                    messageId={answers.messageIdOf.get(answer)}
+                    onReveal={chrome?.onRevealMessage}
+                  />
                 </li>
               );
             })}
@@ -455,7 +459,11 @@ export default function ArtifactsPanel({
                   </span>
                 </span>
               </button>
-              <AnswerLink number={entry.answer} messageId={entry.messageId} />
+              <AnswerLink
+                number={entry.answer}
+                messageId={entry.messageId}
+                onReveal={chrome?.onRevealMessage}
+              />
             </li>
           );
         })}

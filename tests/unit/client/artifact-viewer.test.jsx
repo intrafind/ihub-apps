@@ -210,6 +210,37 @@ describe('ArtifactViewer in the pane', () => {
     document.removeEventListener('keydown', onKeyDown);
   });
 
+  it('attaches to the mail with visible feedback, once at a time', async () => {
+    let finish;
+    const run = jest.fn(() => new Promise(resolve => (finish = resolve)));
+    const chrome = renderPane(MD, { attachToMail: { prominent: true, run } });
+    const button = screen.getByRole('button', { name: 'Attach to email' });
+    fireEvent.click(button);
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(run).toHaveBeenCalledTimes(1);
+    await act(async () => finish({ ok: true, filename: 'notes.md' }));
+    expect(screen.getByTestId('artifact-viewer-notice')).toHaveTextContent(
+      'Attached notes.md to your email.'
+    );
+    expect(chrome.announce).toHaveBeenCalledWith('Attached notes.md to your email.');
+  });
+
+  it('keeps focus on the menu item a keyboard user moved to while the header re-renders', async () => {
+    const { rerender } = render(
+      <ArtifactViewer artifact={MD} getBlob={getBlob} chrome={chromeOf()} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'More copy and download options' }));
+    await act(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    const items = screen.getAllByRole('menuitem');
+    expect(items.length).toBeGreaterThan(1);
+    items[1].focus();
+    // An answer streaming next to the pane re-renders it with a new chrome object.
+    rerender(<ArtifactViewer artifact={MD} getBlob={getBlob} chrome={chromeOf()} />);
+    await act(() => new Promise(resolve => requestAnimationFrame(resolve)));
+    expect(document.activeElement).toBe(screen.getAllByRole('menuitem')[1]);
+  });
+
   it('requests browser full screen on its own container, not inside the frame', async () => {
     document.fullscreenEnabled = true;
     const request = jest.fn().mockResolvedValue(undefined);

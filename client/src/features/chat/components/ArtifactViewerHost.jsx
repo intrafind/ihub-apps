@@ -24,7 +24,7 @@ import { useEmbeddedHostKind } from '../../office/contexts/EmbeddedHostContext';
 import WorkspacePane from '../../workspace/components/WorkspacePane';
 import WorkspaceLayoutContext from '../../workspace/contexts/WorkspaceLayoutContext';
 import useWorkspaceLists from '../../workspace/hooks/useWorkspaceLists';
-import { collectCitedSources } from '../../workspace/utils/workspaceItems';
+import { collectCitedSources, revealMessage } from '../../workspace/utils/workspaceItems';
 import {
   PANE_PARAMS,
   SPLIT_MIN_VIEWPORT,
@@ -210,8 +210,11 @@ export default function ArtifactViewerHost({
     enabled: isOpen
   });
 
+  // Another chat: nothing fetched or open in memory belongs to it.
   useEffect(() => {
     blobsRef.current = new Map();
+    setLive(null);
+    setOrigin(null);
   }, [chatId]);
 
   // ---- announcements: one polite live region, never streamed text ----
@@ -258,7 +261,12 @@ export default function ArtifactViewerHost({
       const wasLive = Boolean(live);
       setLive(null);
       if (url.target) {
-        if (!sameTarget(url.target, next)) write(next, url.full, true);
+        if (!sameTarget(url.target, next)) {
+          // The full-screen entry now shows `next`: leaving full screen has to
+          // replace it in place, not go Back to the item it was pushed for.
+          if (url.full) fullPushedRef.current = false;
+          write(next, url.full, true);
+        }
       } else {
         const push = !wasLive && !isOpen;
         if (push) openPushedRef.current = true;
@@ -393,7 +401,13 @@ export default function ArtifactViewerHost({
       }
       const cited = citedSources.find(entry => entry.source.id === next.id);
       const known = knownRef.current.get(keyOf(next));
-      return known || (cited ? { source: cited.source } : null);
+      if (known) return known;
+      if (!cited) return null;
+      // Kept: the citations are rebuilt on every message update, and a new
+      // object would make the source view fetch its document again.
+      const descriptor = { source: cited.source };
+      knownRef.current.set(keyOf(next), descriptor);
+      return descriptor;
     },
     [live, collected, generatedItems, uploadedItems, citedSources]
   );
@@ -493,6 +507,12 @@ export default function ArtifactViewerHost({
         return;
       }
       if (event.key === 'F6') {
+        // A sheet is modal: the regions behind it are not reachable.
+        if (isOpen && !split && !sheetHidden) {
+          event.preventDefault();
+          headingRef.current?.focus();
+          return;
+        }
         const order = ['sidebar', 'chatlog', 'composer', 'pane'];
         const regions = order
           .map(name => [name, visibleRegion(name)])
@@ -632,10 +652,24 @@ export default function ArtifactViewerHost({
         ? quote => {
             onQuote(quote);
             if (!split) setSheetHidden(true);
+            // In full screen the composer is the dock's: open it, so the quote and
+            // the caret are in view.
+            else if (full && renderFullScreenChat) setDockExpanded(true);
             announce(t('workspace.quoted', 'Quoted in the message box'));
           }
         : null,
       bottomPadding: showDock ? dockHeight : 0,
+      // "Answer 3": the chat has to be in view before it can scroll to the answer.
+      onRevealMessage: messageId => {
+        if (split && full) setFull(false);
+        else if (!split) setSheetHidden(true);
+        // The chat column shows again a frame or two later (Back is asynchronous).
+        let tries = 0;
+        const attempt = () => {
+          if (!revealMessage(messageId) && tries++ < 20) requestAnimationFrame(attempt);
+        };
+        requestAnimationFrame(attempt);
+      },
       back:
         target.kind === 'files'
           ? null
@@ -689,19 +723,16 @@ export default function ArtifactViewerHost({
       const stored = !isLiveArtifact(descriptor);
       const newTab = stored && newTabUrl ? newTabUrl(descriptor) : null;
       const mailAttach = files?.mailAttach?.available ? files.mailAttach : null;
-      const attachGenerated = async () => {
-        const result = await mailAttach.attach({
-          file: { name: saveName(artifactDisplayName(descriptor)), bytes: descriptor.bytes },
-          fetchBlob: () => getBlob(descriptor)
-        });
-        announce(
-          result.ok
-            ? t('chatFiles.attached', 'Attached {{name}} to your email.', { name: result.filename })
-            : result.reason === 'tooLarge'
-              ? t('chatFiles.attachTooLarge', 'The file is too large to attach to an email.')
-              : t('chatFiles.attachFailed', 'The file could not be attached to your email.')
-        );
-      };
+      const attachToMail = mailAttach
+        ? {
+            prominent: outlook,
+            run: () =>
+              mailAttach.attach({
+                file: { name: saveName(artifactDisplayName(descriptor)), bytes: descriptor.bytes },
+                fetchBlob: () => getBlob(descriptor)
+              })
+          }
+        : null;
       content = (
         <ArtifactViewer
           artifact={descriptor}
@@ -718,32 +749,7 @@ export default function ArtifactViewerHost({
                 }
               : null
           }
-          extraMore={
-            mailAttach && !outlook
-              ? [
-                  {
-                    key: 'attach',
-                    icon: 'envelope',
-                    label: t('chatFiles.attachToEmail', 'Attach to email'),
-                    onClick: attachGenerated,
-                    testId: 'generated-attach-to-email'
-                  }
-                ]
-              : []
-          }
-          headerExtra={
-            mailAttach && outlook ? (
-              <button
-                type="button"
-                className={GHOST_BUTTON}
-                onClick={attachGenerated}
-                data-testid="generated-attach-to-email"
-              >
-                <Icon name="envelope" size="sm" />
-                {t('chatFiles.attachToEmail', 'Attach to email')}
-              </button>
-            ) : null
-          }
+          attachToMail={attachToMail}
         />
       );
     } else if (target.kind === 'file' && files?.uploaded) {
@@ -768,7 +774,12 @@ export default function ArtifactViewerHost({
       title = descriptor.source.title || descriptor.source.fileName || '';
       content = (
         <Suspense fallback={null}>
-          <SourceDetail source={descriptor.source} focus={descriptor.focus} chrome={chrome} />
+          <SourceDetail
+            key={descriptor.source.id}
+            source={descriptor.source}
+            focus={descriptor.focus}
+            chrome={chrome}
+          />
         </Suspense>
       );
     } else {

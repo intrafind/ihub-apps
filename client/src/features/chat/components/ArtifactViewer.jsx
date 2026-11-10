@@ -3,6 +3,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import Icon from '../../../shared/components/Icon';
+import { GHOST_BUTTON } from '../../../shared/utils/buttonTokens';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import PaneHeader from '../../workspace/components/PaneHeader';
 import SelectionScope from '../../workspace/components/SelectionScope';
@@ -54,7 +56,10 @@ function fenced(text, language) {
  * @param {Object[]} [props.artifacts] - Page mode: the artifacts the title switcher offers.
  * @param {(artifact: Object) => void} [props.onSelect] - Page mode: switch to another artifact.
  * @param {Object} [props.chrome] - Pane mode: what the pane gives every detail view.
- * @param {MenuAction[]} [props.extraMore] - More ⋯ items (Outlook: attach to email).
+ * @param {{ prominent: boolean, run: () => Promise<{ ok: boolean, filename?: string,
+ *   reason?: string }> }|null} [props.attachToMail] - "Attach to email" (Outlook, while a mail
+ *   is being written): a visible header button when `prominent`, else in ⋯.
+ * @param {MenuAction[]} [props.extraMore] - More ⋯ items.
  * @param {import('react').ReactNode} [props.headerExtra] - A visible header button.
  * @param {'pane'|'page'} [props.mode]
  * @param {boolean} [props.embed] - Page mode without the header.
@@ -69,6 +74,7 @@ export default function ArtifactViewer({
   artifacts = null,
   onSelect = null,
   chrome = null,
+  attachToMail = null,
   extraMore = [],
   headerExtra = null,
   mode = 'pane',
@@ -81,6 +87,7 @@ export default function ArtifactViewer({
   const [viewMode, setViewMode] = useState('preview');
   const [fullscreen, setFullscreen] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [attaching, setAttaching] = useState(false);
 
   const name = artifactDisplayName(artifact);
   const type = previewTypeOf(artifact);
@@ -91,6 +98,13 @@ export default function ArtifactViewer({
   const showingCode = viewMode === 'code';
   // The chip reads selections in the pane's own DOM: everything but a sandboxed frame.
   const selectable = !(['html', 'svg'].includes(type) && !showingCode) && type !== 'image';
+
+  // A confirmation goes away by itself; an error stays until the next action.
+  useEffect(() => {
+    if (notice?.tone !== 'info') return undefined;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   // Another artifact starts in its rendered view.
   useEffect(() => {
@@ -173,6 +187,32 @@ export default function ArtifactViewer({
     }
   };
 
+  // The result is shown, not only announced; a second click while it runs does nothing.
+  const attach = async () => {
+    if (attaching || !attachToMail) return;
+    setAttaching(true);
+    try {
+      const result = await attachToMail.run();
+      if (result?.ok) {
+        say(
+          'info',
+          t('chatFiles.attached', 'Attached {{name}} to your email.', { name: result.filename })
+        );
+      } else {
+        say(
+          'error',
+          result?.reason === 'tooLarge'
+            ? t('chatFiles.attachTooLarge', 'The file is too large to attach to an email.')
+            : t('chatFiles.attachFailed', 'The file could not be attached to your email.')
+        );
+      }
+    } catch {
+      say('error', t('chatFiles.attachFailed', 'The file could not be attached to your email.'));
+    } finally {
+      setAttaching(false);
+    }
+  };
+
   const toggleFullscreen = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -239,6 +279,17 @@ export default function ArtifactViewer({
             icon: 'archive-box',
             label: t('chatArtifacts.showInFiles', 'Show in files'),
             onClick: () => onShowInFiles(artifact)
+          }
+        ]
+      : []),
+    ...(attachToMail && !attachToMail.prominent
+      ? [
+          {
+            key: 'attach',
+            icon: 'envelope',
+            label: t('chatFiles.attachToEmail', 'Attach to email'),
+            onClick: attach,
+            testId: 'generated-attach-to-email'
           }
         ]
       : []),
@@ -315,7 +366,23 @@ export default function ArtifactViewer({
                 }
               : null
           }
-          extra={headerExtra}
+          extra={
+            attachToMail?.prominent ? (
+              <button
+                type="button"
+                className={GHOST_BUTTON}
+                onClick={attach}
+                disabled={attaching}
+                aria-busy={attaching || undefined}
+                data-testid="generated-attach-to-email"
+              >
+                <Icon name="envelope" size="sm" />
+                {t('chatFiles.attachToEmail', 'Attach to email')}
+              </button>
+            ) : (
+              headerExtra
+            )
+          }
           expand={chrome?.expand}
           close={chrome?.close}
           more={[...(chrome?.more || []), ...more]}
@@ -323,6 +390,17 @@ export default function ArtifactViewer({
           full={full}
           notice={notice?.text}
         />
+      )}
+      {/* The header shows a confirmation from lg up; a narrow pane (the Outlook task
+          pane) shows it here. Screen readers hear it from the pane's live region. */}
+      {notice?.tone === 'info' && (
+        <p
+          aria-hidden="true"
+          className="flex-none bg-gray-50 dark:bg-gray-800 px-3 py-1 text-xs text-gray-700 dark:text-gray-200 lg:hidden"
+          data-testid="artifact-viewer-notice"
+        >
+          {notice.text}
+        </p>
       )}
       {notice?.tone === 'error' && (
         <p

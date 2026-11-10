@@ -97,8 +97,13 @@ describe('SelectionScope', () => {
   test('Ctrl/Cmd+Shift+K asks about the selection; Esc dismisses the chip', async () => {
     const onQuote = mount();
     await select('text');
-    fireEvent.keyDown(document, { key: 'K', ctrlKey: true, shiftKey: true });
+    // The global search listens for Ctrl/Cmd+K on window: it must not also open.
+    const search = jest.fn();
+    window.addEventListener('keydown', search);
+    fireEvent.keyDown(document.body, { key: 'K', ctrlKey: true, shiftKey: true });
+    window.removeEventListener('keydown', search);
     expect(onQuote).toHaveBeenCalledWith(expect.objectContaining({ mode: 'ask' }));
+    expect(search).not.toHaveBeenCalled();
 
     await select('text');
     expect(screen.getByRole('toolbar')).toBeInTheDocument();

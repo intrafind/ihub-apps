@@ -233,6 +233,21 @@ describe('ArtifactViewerHost: docked pane', () => {
     expect(pane()).not.toBeInTheDocument();
   });
 
+  it('leaving full screen after switching items stays on the new item', async () => {
+    mount();
+    fireEvent.click(screen.getByText('open a.html'));
+    fireEvent.click(screen.getByRole('button', { name: 'Full screen' }));
+    fireEvent.click(screen.getByRole('button', { name: /^a.html.*switch file/ }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'b.html' }));
+    expect(where()).toBe('/chat?artifact=f2&view=full');
+    fireEvent.click(screen.getByRole('button', { name: 'Exit full screen' }));
+    expect(where()).toBe('/chat?artifact=f2');
+    expect(screen.getByRole('region', { name: 'Workspace: b.html' })).toHaveAttribute(
+      'data-state',
+      'docked'
+    );
+  });
+
   it('the back link of a detail goes to the Files index, in place', () => {
     mount();
     fireEvent.click(screen.getByText('open a.html'));
@@ -354,5 +369,16 @@ describe('ArtifactViewerHost: narrow viewport', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back to chat' }));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(where()).toBe('/chat');
+  });
+
+  it('keeps F6 inside the modal sheet', async () => {
+    setViewport(false);
+    mount();
+    fireEvent.click(screen.getByText('open a.html'));
+    await nextFrame();
+    const composer = screen.getByRole('textbox', { name: 'Message', hidden: true });
+    fireEvent.keyDown(document.activeElement, { key: 'F6' });
+    expect(document.activeElement).toHaveAttribute('id', 'workspace-pane-heading');
+    expect(document.activeElement).not.toBe(composer);
   });
 });
