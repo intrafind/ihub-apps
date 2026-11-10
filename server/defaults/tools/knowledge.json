@@ -49,8 +49,8 @@
     },
     "read": {
       "description": {
-        "en": "Read one document in full, or one of its sections, by the document id from a search result, from knowledge_list or from the document list of a searched project in the system prompt: a listed document can be read directly, without searching first. A long document comes back as an outline; pass a section id or heading to read that section.",
-        "de": "Ein Dokument vollständig oder abschnittsweise lesen, anhand der Dokument-ID aus einem Suchergebnis, aus knowledge_list oder aus der Dokumentliste eines durchsuchten Projekts im Systemprompt: Ein gelistetes Dokument kann direkt gelesen werden, ohne vorher zu suchen. Ein langes Dokument wird als Gliederung geliefert; mit einer Abschnitts-ID oder Überschrift den Abschnitt lesen."
+        "en": "Read one document in full, or one of its sections, by the document id from a search result, from knowledge_list or from the document list of a searched project in the system prompt: a listed document can be read directly, without searching first. A long document comes back as an outline; pass a section id or heading to read that section, or 'focus' (the question you are answering) to get the sections of the document that answer it, verbatim, with an outline of the rest.",
+        "de": "Ein Dokument vollständig oder abschnittsweise lesen, anhand der Dokument-ID aus einem Suchergebnis, aus knowledge_list oder aus der Dokumentliste eines durchsuchten Projekts im Systemprompt: Ein gelistetes Dokument kann direkt gelesen werden, ohne vorher zu suchen. Ein langes Dokument wird als Gliederung geliefert; mit einer Abschnitts-ID oder Überschrift den Abschnitt lesen, oder mit 'focus' (die zu beantwortende Frage) die Abschnitte des Dokuments erhalten, die sie beantworten, wörtlich, mit einer Gliederung des Rests."
       },
       "parameters": {
         "type": "object",
@@ -74,6 +74,13 @@
             "description": {
               "en": "Section id or heading to read; omit for the whole document (an id ending in #2, #3, … continues a long section)",
               "de": "Abschnitts-ID oder Überschrift; weglassen für das ganze Dokument (eine ID mit #2, #3, … setzt einen langen Abschnitt fort)"
+            }
+          },
+          "focus": {
+            "type": "string",
+            "description": {
+              "en": "The question you are answering, in a few words. For a long document, the result holds the sections that answer it (verbatim) and an outline of the rest instead of the outline alone. Ignored when 'section' is set and for documents that fit in one result.",
+              "de": "Die zu beantwortende Frage in wenigen Worten. Bei einem langen Dokument enthält das Ergebnis die Abschnitte, die sie beantworten (wörtlich), und eine Gliederung des Rests statt nur der Gliederung. Wird ignoriert, wenn 'section' gesetzt ist, und bei Dokumenten, die in ein Ergebnis passen."
             }
           }
         },

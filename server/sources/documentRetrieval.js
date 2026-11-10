@@ -539,8 +539,9 @@ export function searchCorpus(index, query, { docIds } = {}) {
  * @param {ReturnType<typeof buildCorpusIndex>} index
  * @param {string} query
  * @param {{limit?: number, budgetChars?: number, docIds?: Iterable<string>}} [options]
- * @returns {Array<{docId: string|null, sectionId: string, title: string, path: string[],
- *   part: number, partCount: number, text: string, score: number, chars: number}>}
+ * @returns {Array<{partIndex: number, docId: string|null, sectionId: string, title: string,
+ *   path: string[], part: number, partCount: number, text: string, score: number,
+ *   chars: number}>}
  */
 export function collectHits(
   index,
@@ -574,6 +575,7 @@ export function collectHits(
     members.forEach(i => included.add(i));
     used += text.length;
     hits.push({
+      partIndex,
       docId: hit.docId ?? null,
       sectionId: partId(section, hit.part, hit.partCount),
       title: section.title,
@@ -596,13 +598,59 @@ function partId(section, part, partCount) {
   return partCount > 1 && part > 1 ? `${section.id}#${part}` : section.id;
 }
 
-function renderPart(index, partIndex) {
+/**
+ * The first place at or after `from` where `line` starts a line (only spaces
+ * or tabs before it): `## Pricing details` is not found inside
+ * `### Pricing details`, nor inside a longer line that merely contains it.
+ *
+ * @returns {number} The index, or -1
+ */
+function indexOfLine(text, line, from) {
+  let at = text.indexOf(line, from);
+  while (at !== -1) {
+    const lineStart = text.lastIndexOf('\n', at - 1) + 1;
+    if (/^[ \t]*$/.test(text.slice(lineStart, at))) return at;
+    at = text.indexOf(line, at + 1);
+  }
+  return -1;
+}
+
+/**
+ * Where each part of a one-document index starts in the text it was built
+ * from, in characters: the first line of the part, searched forward from the
+ * end of the previous one. Best effort: the splitter normalizes line breaks
+ * and drops `<!-- Source: -->` markers, so a part that cannot be located is
+ * `null`; the offsets that are found never run backwards.
+ *
+ * @param {ReturnType<typeof getDocumentIndex>} index
+ * @param {string} text - The text the index was built from
+ * @returns {Array<number|null>} Indexed by part index
+ */
+export function partOffsets(index, text) {
+  const offsets = [];
+  let cursor = 0;
+  for (const part of index.parts) {
+    const firstLine = part.text.split('\n', 1)[0].slice(0, 200);
+    const at = firstLine ? indexOfLine(text, firstLine, cursor) : -1;
+    if (at === -1) {
+      offsets.push(null);
+      continue;
+    }
+    offsets.push(at);
+    cursor = at + firstLine.length;
+  }
+  return offsets;
+}
+
+function renderPart(index, partIndex, offsets = null) {
   const { sectionIndex, part, partCount, text } = index.parts[partIndex];
   const section = index.sections[sectionIndex];
   const attributes = [
     `id="${escapeAttribute(partId(section, part, partCount))}"`,
     `path="${escapeAttribute([...section.path, section.title].join(' › '))}"`
   ];
+  const offset = offsets?.[partIndex];
+  if (Number.isInteger(offset)) attributes.push(`offset="${offset}"`);
   if (partCount > 1) attributes.push(`part="${part}/${partCount}"`);
   if (section.file) attributes.push(`file="${escapeAttribute(section.file)}"`);
   return `<section ${attributes.join(' ')}>\n${text}\n</section>`;
@@ -616,12 +664,27 @@ const lengthOf = text => text.length;
  * @param {Object} index
  * @param {number} budgetChars - The budget, in the units `measure` counts
  * @param {(text: string) => number} [measure] - Size of a text (default: characters)
+ * @param {Array<number|null>|null} [offsets] - {@link partOffsets}: each entry
+ *   then names where its section starts (`@offset`), for a reader that pages by offset
  * @returns {string}
  */
-export function renderOutline(index, budgetChars, measure = lengthOf) {
-  const line = s => `${'  '.repeat(Math.max(0, s.level - 1))}- ${s.id}: ${s.title}`;
+export function renderOutline(index, budgetChars, measure = lengthOf, offsets = null) {
+  const startOf = new Map();
+  if (offsets) {
+    index.parts.forEach((part, partIndex) => {
+      if (part.part === 1 && Number.isInteger(offsets[partIndex])) {
+        startOf.set(part.sectionIndex, offsets[partIndex]);
+      }
+    });
+  }
+  const line = (s, sectionIndex) =>
+    `${'  '.repeat(Math.max(0, s.level - 1))}- ${s.id}: ${s.title}` +
+    (startOf.has(sectionIndex) ? ` @${startOf.get(sectionIndex)}` : '');
   for (const maxLevel of [2, 1]) {
-    const lines = index.sections.filter(s => s.level <= maxLevel).map(line);
+    const lines = index.sections
+      .map((s, sectionIndex) => [s, sectionIndex])
+      .filter(([s]) => s.level <= maxLevel)
+      .map(([s, sectionIndex]) => line(s, sectionIndex));
     const text = lines.join('\n');
     if (measure(text) <= budgetChars) return text;
     if (maxLevel === 1) {
@@ -717,22 +780,32 @@ function subtreeEnd(index, start) {
   return end;
 }
 
-function searchResult(index, name, query, budgetChars, measure = lengthOf) {
-  const ranked = searchDocument(index, query);
-  if (!ranked.length) {
-    return outlineResult(
-      index,
-      `${tooLargeNote(name, index)} No section matches "${query}". Try other keywords ` +
-        '(synonyms, English terms, configuration keys) or pick a section from the outline.',
-      budgetChars,
-      measure
-    );
-  }
+/** The passage of a part the sources panel shows: its text under its heading path. */
+function passageOf(index, partIndex, offsets) {
+  const { sectionIndex, text } = index.parts[partIndex];
+  const section = index.sections[sectionIndex];
+  const offset = offsets?.[partIndex];
+  return {
+    id: idOfPart(index, partIndex),
+    path: [...section.path, section.title].join(' › '),
+    text,
+    ...(Number.isInteger(offset) ? { offset } : {})
+  };
+}
 
+/**
+ * The best-matching groups of parts for a ranked result, best first, within a
+ * budget. A short hit (mostly a heading) brings its subsections along.
+ *
+ * @param {{fitFirst?: boolean}} [options] - `fitFirst`: when no group fits whole, return
+ *   a verbatim start of the best one instead of nothing
+ */
+function rankedGroups(index, ranked, budgetChars, measure, offsets, { fitFirst = false } = {}) {
   const best = ranked[0].score;
   const included = new Set();
   const groups = [];
   let used = 0;
+  let oversize = null;
   for (const { partIndex, score } of ranked) {
     if (groups.length >= MAX_SEARCH_RESULTS || score < best * MIN_RELATIVE_SCORE) break;
     if (included.has(partIndex)) continue;
@@ -758,20 +831,104 @@ function searchResult(index, name, query, budgetChars, measure = lengthOf) {
       }
     }
 
-    const rendered = members.map(i => renderPart(index, i)).join('\n\n') + note;
+    const rendered = members.map(i => renderPart(index, i, offsets)).join('\n\n') + note;
     const size = measure(rendered) + 2;
-    if (used + size > budgetChars) continue;
+    if (used + size > budgetChars) {
+      // Remembered, not cut yet: a lower-ranked group may still fit whole.
+      if (!oversize) oversize = { partIndex, rendered };
+      continue;
+    }
     members.forEach(i => included.add(i));
     groups.push({ members, rendered });
     used += size;
   }
+  // Nothing fits whole: keep the start of the best group, verbatim, rather than nothing.
+  if (fitFirst && !groups.length && oversize) {
+    const cut = cutToFit(oversize.rendered, budgetChars, measure);
+    if (cut) groups.push({ members: [oversize.partIndex], rendered: cut });
+  }
+  return groups;
+}
 
+/**
+ * The start of a rendered group, closed with a marker, within `budgetChars`.
+ * @returns {string|null} Null when the budget is too small to hold anything useful
+ */
+function cutToFit(rendered, budgetChars, measure) {
+  if (budgetChars < 100) return null;
+  const close = '\n[…]\n</section>';
+  let cut = rendered.slice(0, Math.max(0, budgetChars - 40));
+  while (cut && measure(cut + close) + 2 > budgetChars) {
+    cut = cut.slice(0, Math.floor(cut.length * 0.9));
+  }
+  return cut ? cut + close : null;
+}
+
+function searchResult(index, name, query, budgetChars, measure = lengthOf) {
+  const ranked = searchDocument(index, query);
+  if (!ranked.length) {
+    return outlineResult(
+      index,
+      `${tooLargeNote(name, index)} No section matches "${query}". Try other keywords ` +
+        '(synonyms, English terms, configuration keys) or pick a section from the outline.',
+      budgetChars,
+      measure
+    );
+  }
+
+  const groups = rankedGroups(index, ranked, budgetChars, measure, null);
   const header =
     `${tooLargeNote(name, index)} These are the parts of it that best match "${query}", ` +
     `best match first. ${USAGE_NOTE}`;
   return {
     text: `${header}\n\n${groups.map(g => g.rendered).join('\n\n')}`,
-    sections: groups.flatMap(g => g.members.map(i => idOfPart(index, i)))
+    sections: groups.flatMap(g => g.members.map(i => idOfPart(index, i))),
+    passages: groups.flatMap(g => g.members.map(i => passageOf(index, i, null)))
+  };
+}
+
+/** The outline's share of a focused result, and the most it may take. */
+const FOCUS_OUTLINE_SHARE = 0.25;
+const FOCUS_OUTLINE_MAX_CHARS = 8000;
+/** Below this budget a focused result is sections only: no room for an outline. */
+const FOCUS_OUTLINE_MIN_BUDGET = 2000;
+
+/**
+ * The sections of a long text that answer `focus`, verbatim and best match
+ * first, followed by an outline of the whole text. Every part is rendered as a
+ * `<section id path [offset]>` block, so a citation and a follow-up read can
+ * name it. Without a match the result is the outline alone (`sections` empty).
+ */
+function focusResult(index, name, focus, budgetChars, measure, { offsets, hint, compact }) {
+  const ranked = searchDocument(index, focus);
+  if (!ranked.length) {
+    return outlineResult(
+      index,
+      `${tooLargeNote(name, index)} No section matches "${focus}".`,
+      budgetChars,
+      measure
+    );
+  }
+  // A compact result (one of several pages a search returns) spends its small
+  // budget on the sections: a one-line header and no outline.
+  const header = compact
+    ? 'Excerpts, verbatim, best match first.'
+    : `${tooLargeNote(name, index)} These are excerpts of it, verbatim, that best match ` +
+      `"${focus}", best match first.${hint ? ` ${hint}` : ''}`;
+  const outlineBudget =
+    !compact && budgetChars >= FOCUS_OUTLINE_MIN_BUDGET
+      ? Math.min(FOCUS_OUTLINE_MAX_CHARS, Math.floor(budgetChars * FOCUS_OUTLINE_SHARE))
+      : 0;
+  const outline = outlineBudget ? renderOutline(index, outlineBudget, measure, offsets) : '';
+  const outlineBlock = outline
+    ? `\n\nOutline of the whole text${offsets ? ' (@ marks where a section starts)' : ''}:\n${outline}`
+    : '';
+  const room = budgetChars - measure(header) - measure(outlineBlock) - 2;
+  const groups = rankedGroups(index, ranked, room, measure, offsets, { fitFirst: true });
+  return {
+    text: `${header}\n\n${groups.map(g => g.rendered).join('\n\n')}${outlineBlock}`,
+    sections: groups.flatMap(g => g.members.map(i => idOfPart(index, i))),
+    passages: groups.flatMap(g => g.members.map(i => passageOf(index, i, offsets)))
   };
 }
 
@@ -821,7 +978,8 @@ function sectionResult(index, name, ref, budgetChars, measure = lengthOf) {
   }
   return {
     text: `${tooLargeNote(name, index)} ${USAGE_NOTE}\n\n${rendered.join('\n\n')}${footer}`,
-    sections: ids
+    sections: ids,
+    passages: Array.from({ length: ids.length }, (_, i) => passageOf(index, start + i, null))
   };
 }
 
@@ -832,6 +990,14 @@ function sectionResult(index, name, ref, budgetChars, measure = lengthOf) {
  * @param {Object} [options]
  * @param {string} [options.query] - Keywords to search for
  * @param {string} [options.section] - Section id (or title) to read
+ * @param {string} [options.focus] - The question being researched: the sections that
+ *   answer it, verbatim, best first, with an outline of the whole text. Ranked like
+ *   `query`; `section` wins over it, it wins over `query`
+ * @param {boolean} [options.withOffsets] - Name each focused section's start in
+ *   `content` (character offset), for a caller that pages the text by offset
+ * @param {string} [options.hint] - What a focused result tells the model to do next
+ * @param {boolean} [options.compact] - A focused result without outline and with a
+ *   one-line header, for a caller that returns many small excerpts
  * @param {string} [options.name] - Source name, used in the result's notes
  * @param {number} [options.budgetChars] - Most characters to return, or most of
  *   whatever `measure` counts
@@ -839,8 +1005,10 @@ function sectionResult(index, name, ref, budgetChars, measure = lengthOf) {
  *   budget (default: its length in characters); a caller bounded in serialized
  *   bytes passes a byte count, so a text that is short in characters but long in
  *   bytes is outlined and read in sections instead of returned whole
- * @returns {{content: string, retrieval: Object}} The text to return and a
- *   description of how it was chosen (`mode`: full, search, section, outline)
+ * @returns {{content: string, retrieval: Object, passages?: Array<{id: string,
+ *   path: string, text: string, offset?: number}>}} The text to return, a description
+ *   of how it was chosen (`mode`: full, search, focus, section, outline) and the
+ *   passages it holds, for the sources panel
  */
 export function selectContent(content, options = {}) {
   const text = typeof content === 'string' ? content : '';
@@ -848,6 +1016,7 @@ export function selectContent(content, options = {}) {
   const measure = typeof options.measure === 'function' ? options.measure : lengthOf;
   const query = typeof options.query === 'string' ? options.query.trim() : '';
   const section = typeof options.section === 'string' ? options.section.trim() : '';
+  const focus = typeof options.focus === 'string' ? options.focus.trim() : '';
 
   // Both measures are at least the length of the text, so a text longer than
   // the budget needs no measuring (serializing 10 MB takes 100 ms).
@@ -861,6 +1030,14 @@ export function selectContent(content, options = {}) {
   if (section) {
     mode = 'section';
     result = sectionResult(index, name, section, budgetChars, measure);
+  } else if (focus) {
+    mode = 'focus';
+    const offsets = options.withOffsets === true ? partOffsets(index, text) : null;
+    result = focusResult(index, name, focus, budgetChars, measure, {
+      offsets,
+      hint: options.hint,
+      compact: options.compact === true
+    });
   } else if (query) {
     mode = 'search';
     result = searchResult(index, name, query, budgetChars, measure);
@@ -879,11 +1056,13 @@ export function selectContent(content, options = {}) {
     retrieval: {
       mode: result.sections.length ? mode : 'outline',
       ...(query ? { query } : {}),
+      ...(focus && !section ? { focus } : {}),
       ...(section ? { section } : {}),
       sections: result.sections,
       totalSections: index.sections.length,
       totalTokens: index.tokens,
       returnedTokens: estimateTokens(result.text)
-    }
+    },
+    ...(result.passages?.length ? { passages: result.passages } : {})
   };
 }

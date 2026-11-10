@@ -29,6 +29,7 @@ import {
   reportToolCallSources
 } from '../services/sources/toolCallScope.js';
 import { RESULT_BUDGET_CHARS } from '../sources/documentRetrieval.js';
+import { normalizeFocus } from '../services/knowledge/focusQuery.js';
 
 const MAX_LIMIT = 20;
 
@@ -209,7 +210,7 @@ export async function search(params) {
 /**
  * `knowledge_read`
  *
- * @param {{document: string, project?: string, section?: string, user: Object, chatId?: string, appConfig: Object}} params
+ * @param {{document: string, project?: string, section?: string, focus?: string, user: Object, chatId?: string, appConfig: Object}} params
  */
 export async function read(params) {
   try {
@@ -262,6 +263,8 @@ export async function read(params) {
     );
     let budgetBytes = PAYLOAD_BUDGET_BYTES - envelope - READ_ROOM_BYTES;
     let response;
+    let passages = [];
+    const focus = normalizeFocus(params.focus);
     for (let attempt = 0; attempt < READ_ATTEMPTS; attempt++) {
       const result = await provider.read(
         entry.project,
@@ -269,13 +272,27 @@ export async function read(params) {
         { itemId: documentId },
         {
           section: typeof params.section === 'string' ? params.section : undefined,
+          ...(focus ? { focus } : {}),
           budgetBytes
         }
       );
+      passages = result.passages || [];
       response = respond(result);
       const over = jsonBytes(response) - PAYLOAD_BUDGET_BYTES;
       if (over <= 0) break;
       budgetBytes -= over + READ_ROOM_BYTES;
+    }
+    // The sections a focused read returned, for the sources panel: beside the
+    // result, so the model reads each passage once. They merge into the
+    // document's own source by its ref.
+    if (response?.retrieval?.mode === 'focus' && passages.length) {
+      reportToolCallSources(
+        [
+          projectSource(entry.project, item, {
+            passages: passages.map(({ path, text }) => ({ text: path ? `${path}\n${text}` : text }))
+          })
+        ].filter(Boolean)
+      );
     }
     return response;
   } catch (error) {

@@ -13,6 +13,14 @@ import {
   setCachedPage
 } from '../services/pageCache.js';
 import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
+import { normalizeFocus } from '../services/knowledge/focusQuery.js';
+import { reportToolCallSources } from '../services/sources/toolCallScope.js';
+import {
+  getDocumentIndex,
+  partOffsets,
+  renderOutline,
+  selectContent
+} from '../sources/documentRetrieval.js';
 import logger from '../utils/logger.js';
 import { enhanceFetchOptions, isSsrfTrustedHost } from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
@@ -296,6 +304,82 @@ async function loadDocument(validUrl, { shouldIgnoreSSL, acceptLanguage, progres
   };
 }
 
+/** The outline's share of a focused read, and the most it may take (characters). */
+const FOCUS_OUTLINE_SHARE = 0.25;
+const FOCUS_OUTLINE_MAX_CHARS = 8000;
+/** Below this `maxLength` a focused read has no room for an outline. */
+const FOCUS_OUTLINE_MIN_LENGTH = 2000;
+
+const FOCUS_HINT =
+  'Each section names where it starts (offset): call this tool again with that offset, ' +
+  'without focus, to read on from there, or with another focus to look for something else.';
+
+/**
+ * What a read with a `focus` returns instead of the first window of a long
+ * page: the sections that answer the question (BM25 over the page's own
+ * headings, `sources/documentRetrieval.js`), verbatim, best match first, each
+ * with its start offset, plus an outline of the whole page. No model call. A
+ * focus that matches nothing gets the first window and the outline.
+ *
+ * @param {Object} doc - The cached document
+ * @param {string} focus - From {@link normalizeFocus}
+ * @param {number} maxLength - Bounds the whole content, outline included
+ * @param {{outline?: boolean}} [options] - `outline: false`: the sections only (no
+ *   outline), and null when none matches
+ * @returns {{content: string, matched: boolean, slice?: Object, passages: Array}|null}
+ */
+function focusedWindow(doc, focus, maxLength, { outline: withOutline = true } = {}) {
+  const selected = selectContent(doc.text, {
+    focus,
+    name: doc.title || doc.finalUrl || 'This page',
+    budgetChars: maxLength,
+    withOffsets: true,
+    hint: withOutline ? FOCUS_HINT : undefined,
+    compact: !withOutline
+  });
+  if (selected.retrieval.mode === 'focus') {
+    return { content: selected.content, matched: true, passages: selected.passages || [] };
+  }
+  // Nothing matches and no outline is wanted: the caller reads the page as it
+  // would without a focus.
+  if (!withOutline) return null;
+  const index = getDocumentIndex(doc.text);
+  const outlineBudget =
+    maxLength >= FOCUS_OUTLINE_MIN_LENGTH
+      ? Math.min(FOCUS_OUTLINE_MAX_CHARS, Math.floor(maxLength * FOCUS_OUTLINE_SHARE))
+      : 0;
+  const outline = outlineBudget
+    ? renderOutline(index, outlineBudget, undefined, partOffsets(index, doc.text))
+    : '';
+  const block = outline
+    ? `\n\nOutline of the whole page (@ marks where a section starts):\n${outline}`
+    : '';
+  const slice = sliceDocument(doc.text, { offset: 0, maxLength: maxLength - block.length });
+  return { content: slice.content + block, matched: false, slice, passages: [] };
+}
+
+/** What the model is told about a focused read that matched. */
+function focusedNote(withOutline) {
+  return withOutline
+    ? 'This is a selection of the page, not the whole page: the sections that best match the focus, then an outline. There is no nextOffset: to read on, call again with the offset (@) of an outline entry.'
+    : 'This is a selection of the page, not the whole page: the sections that best match the focus. Open the page with read_url (and the offset of a section) to read more of it.';
+}
+
+/** The page's own fields at the head of every result. */
+function pageHead(doc, targetUrl, validUrl) {
+  return {
+    url: targetUrl,
+    ...(doc.finalUrl && doc.finalUrl !== validUrl.toString() ? { finalUrl: doc.finalUrl } : {}),
+    title: doc.title,
+    description: doc.description,
+    author: doc.author,
+    ...(doc.siteName ? { siteName: doc.siteName } : {}),
+    ...(doc.publishedDate ? { publishedDate: doc.publishedDate } : {}),
+    contentType: doc.contentType,
+    format: doc.format
+  };
+}
+
 /** Codes of a page the site refused to serve; they reach the caller unchanged. */
 const SITE_REFUSAL_CODES = new Set([BOT_PROTECTION_CODE, AUTH_REQUIRED_CODE, ACCESS_DENIED_CODE]);
 
@@ -354,6 +438,11 @@ function readerNote(doc, slice) {
  * @param {string} [params.link] - Alternative URL parameter name
  * @param {number} [params.maxLength=5000] - Maximum content length to return
  * @param {number} [params.offset=0] - Character offset to start reading at
+ * @param {string} [params.focus] - The question being researched. For a page longer
+ *   than `maxLength` read from its start (`offset` 0), the result holds the sections
+ *   that answer it, verbatim, plus an outline, instead of the first window
+ * @param {boolean} [params.outline=true] - With a `focus`: whether the result carries an
+ *   outline of the page. A caller that reads many pages (search extraction) turns it off
  * @param {string} [params.language] - The reader's language (Accept-Language)
  * @param {boolean} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
  * @param {string} [params.chatId] - The chat ID for action tracking
@@ -366,6 +455,8 @@ export default async function webContentExtractor({
   link,
   maxLength = 5000,
   offset = 0,
+  focus,
+  outline = true,
   language,
   ignoreSSL = null,
   chatId
@@ -418,20 +509,63 @@ export default async function webContentExtractor({
       logger.debug('Page reader cache hit', { component: 'WebContentExtractor' });
     }
 
+    const focusQuery = normalizeFocus(focus);
+    // An explicit offset is the model paging through the page; a page that fits
+    // is returned whole. Only the first read of a long page is focused.
+    const focused =
+      focusQuery && offset <= 0 && doc.text.length > maxLength
+        ? focusedWindow(doc, focusQuery, maxLength, { outline })
+        : null;
+    if (focused) {
+      const note = [
+        focused.matched
+          ? focusedNote(outline)
+          : `No section of the page matches the focus; this is the start of the page and an outline of the rest. ${FOCUS_HINT}`,
+        readerNote(doc, { offset: 0, totalLength: doc.text.length, truncated: false })
+      ]
+        .filter(Boolean)
+        .join(' ');
+      if (focused.passages.length) {
+        // For the sources panel: the passages the model was given, not the page.
+        reportToolCallSources([
+          {
+            provider: 'web',
+            kind: 'page',
+            url: targetUrl,
+            private: true,
+            passages: focused.passages.map(({ path, text }) => ({
+              text: path ? `${path}\n${text}` : text
+            }))
+          }
+        ]);
+      }
+      return {
+        ...pageHead(doc, targetUrl, validUrl),
+        content: focused.content,
+        offset: 0,
+        ...(focused.slice?.nextOffset ? { nextOffset: focused.slice.nextOffset } : {}),
+        truncated: true,
+        totalLength: doc.text.length,
+        focus: focusQuery,
+        excerpted: focused.matched,
+        ...(doc.capped === true || (doc.contentType === 'pdf' && doc.pagesRead < doc.pageCount)
+          ? { incomplete: true }
+          : {}),
+        wordCount: countWords(focused.content),
+        ...(doc.contentType === 'pdf'
+          ? { pageCount: doc.pageCount, pagesRead: doc.pagesRead }
+          : {}),
+        note,
+        extractedAt: new Date().toISOString()
+      };
+    }
+
     const slice = sliceDocument(doc.text, { offset, maxLength });
     const note = readerNote(doc, slice);
     const incomplete =
       doc.capped === true || (doc.contentType === 'pdf' && doc.pagesRead < doc.pageCount);
     return {
-      url: targetUrl,
-      ...(doc.finalUrl && doc.finalUrl !== validUrl.toString() ? { finalUrl: doc.finalUrl } : {}),
-      title: doc.title,
-      description: doc.description,
-      author: doc.author,
-      ...(doc.siteName ? { siteName: doc.siteName } : {}),
-      ...(doc.publishedDate ? { publishedDate: doc.publishedDate } : {}),
-      contentType: doc.contentType,
-      format: doc.format,
+      ...pageHead(doc, targetUrl, validUrl),
       content: slice.content,
       offset: slice.offset,
       nextOffset: slice.nextOffset,
@@ -530,6 +664,7 @@ const TOOL_DEFAULT_LENGTH = 10000;
  *
  * Tool arguments come straight from the model, and nothing validates them
  * against the schema, so this wrapper does it for the arguments that matter:
+ * `focus` is trimmed and cut at 500 characters (empty means none), and
  * `maxLength` is clamped to the schema's bounds (an oversized value would
  * otherwise land a whole PDF in the context), `offset` to a whole number of
  * characters from the start, and `ignoreSSL` is never taken from the model —
@@ -539,7 +674,16 @@ const TOOL_DEFAULT_LENGTH = 10000;
  * @param {Object} params - Tool arguments plus the runtime context runTool adds
  * @returns {Promise<Object>} Same result as {@link webContentExtractor}
  */
-export async function extractForTool({ url, uri, link, maxLength, offset, language, chatId } = {}) {
+export async function extractForTool({
+  url,
+  uri,
+  link,
+  maxLength,
+  offset,
+  focus,
+  language,
+  chatId
+} = {}) {
   let length = Number(maxLength);
   if (!Number.isFinite(length)) length = TOOL_DEFAULT_LENGTH;
   length = Math.min(TOOL_MAX_LENGTH, Math.max(TOOL_MIN_LENGTH, Math.floor(length)));
@@ -553,6 +697,7 @@ export async function extractForTool({ url, uri, link, maxLength, offset, langua
       link,
       maxLength: length,
       offset: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0,
+      focus: normalizeFocus(focus),
       language,
       chatId
     });

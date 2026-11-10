@@ -20,6 +20,16 @@
  * the rest is cut (`cut` lists the documents) and stays reachable through
  * `knowledge_read`.
  *
+ * When an `auto` project does not fit and the turn has a question
+ * (`options.question`, the user's latest message — never a model-written
+ * rewrite), the pinned documents are joined by the sections of the other
+ * documents that best match it: BM25 over the project's cached corpus index
+ * (`provider.search`), verbatim, each marked with its document id and section
+ * id (`excerpt`), up to what is left of the budget. The same question decides
+ * what is kept of the document the hard limit cuts: its best sections and an
+ * outline, not its first characters. Without a question (a workflow node, an
+ * empty message) the plan is what it was before.
+ *
  * A project whose usable documents could not all be loaded (a failed link,
  * an iFinder search without a configured query, a link its source cut at its
  * length limit) is `searched` as well: what did load is injected, the rest is
@@ -31,6 +41,8 @@
  * @module services/knowledge/KnowledgeScopePlanner
  */
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { selectContent } from '../../sources/documentRetrieval.js';
+import logger from '../../utils/logger.js';
 import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
@@ -40,6 +52,23 @@ export const CONTEXT_SHARE = 0.4;
 
 /** The share of the context window no injection may exceed, pinned or not. */
 const HARD_CONTEXT_SHARE = 0.75;
+
+/**
+ * The share of the load-all budget the excerpts of a whole scope may take: a
+ * later project that fits in full is not starved by an earlier one that does not.
+ */
+export const EXCERPT_SHARE = 0.5;
+
+/** Most excerpt sections one project asks its search for. */
+const EXCERPT_HITS = 12;
+
+/** Below this many tokens of room, a cut document keeps its start, not excerpts. */
+const MIN_EXCERPT_ROOM_TOKENS = 1500;
+
+/** What the model is told about an excerpted document. */
+const EXCERPT_NOTE =
+  'Excerpt: the sections of this document that best match the question, not the whole document. ' +
+  'Read the rest with knowledge_read (document id, section id).';
 
 /**
  * The load-all budget of a request.
@@ -72,17 +101,44 @@ export function hardLimit(model, settings) {
 }
 
 /**
+ * What remains of a document that does not fit the hard limit, when the turn
+ * has a question: its best sections for it and an outline of the rest, within
+ * `room` tokens. Null when nothing matches or the result does not fit.
+ */
+function focusedRemainder(entry, question, room) {
+  let budgetChars = Math.floor(room * 3.5);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const selected = selectContent(entry.text, {
+      focus: question,
+      name: entry.doc.name,
+      budgetChars,
+      hint: 'Read a section in full with knowledge_read.'
+    });
+    if (selected.retrieval?.mode !== 'focus') return null;
+    const tokens = estimateTokens(selected.content);
+    if (tokens <= room)
+      return { text: selected.content, tokens, sections: selected.retrieval.sections };
+    budgetChars = Math.floor(budgetChars * 0.8);
+  }
+  return null;
+}
+
+/**
  * Keep the injected documents of the whole scope within the hard limit:
  * every project's pinned documents first, in scope order, then the other
  * documents in scope order. A pinned document of a later project is never
  * dropped for unpinned text of an earlier one. The first document that does
- * not fit is truncated to the room left, the rest are dropped.
+ * not fit is cut to the room left, the rest are dropped. With a `question` the
+ * cut keeps the document's best sections for it and an outline of the rest
+ * (`excerpt`); without one, or when nothing matches, its first characters
+ * (`truncated`). An excerpt that does not fit is dropped whole.
  *
  * @param {Array<{injected: Array<{doc: Object, text: string, tokens?: number}>}>} projects
  * @param {number} limitTokens
+ * @param {string|null} [question]
  * @returns {Array<{docs: Array, cut: string[]}>} Per project, in its order.
  */
-function allocateHardLimit(projects, limitTokens) {
+function allocateHardLimit(projects, limitTokens, question = null) {
   const result = projects.map(() => ({ docs: [], cut: [] }));
   const queue = [];
   for (const pinned of [true, false]) {
@@ -101,7 +157,23 @@ function allocateHardLimit(projects, limitTokens) {
       continue;
     }
     result[index].cut.push(entry.doc.id);
+    // Sections picked for the question are not cut again.
+    if (entry.excerpt) continue;
     const room = limitTokens - used;
+    if (question && room >= MIN_EXCERPT_ROOM_TOKENS) {
+      const remainder = focusedRemainder(entry, question, room);
+      if (remainder) {
+        result[index].docs.push({
+          ...entry,
+          text: remainder.text,
+          tokens: remainder.tokens,
+          sections: remainder.sections,
+          excerpt: true
+        });
+        used = limitTokens;
+        continue;
+      }
+    }
     if (room > 0 && tokens > 0) {
       const chars = Math.floor(entry.text.length * (room / tokens));
       if (chars > 0) {
@@ -123,6 +195,86 @@ function pinnedFirst(docs) {
   return [...docs.filter(({ doc }) => doc.pinned), ...docs.filter(({ doc }) => !doc.pinned)];
 }
 
+function escapeXmlAttribute(value) {
+  return String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
+}
+
+/** One hit as the text of an excerpt: its section, with the id the model reads it by. */
+function renderExcerptSection(hit) {
+  const attributes = [
+    `id="${escapeXmlAttribute(hit.sectionId)}"`,
+    `path="${escapeXmlAttribute(hit.path.join(' › '))}"`
+  ];
+  const [part, partCount] = String(hit.part).split('/');
+  if (Number(partCount) > 1) attributes.push(`part="${part}/${partCount}"`);
+  return `<section ${attributes.join(' ')}>\n${hit.text}\n</section>`;
+}
+
+/**
+ * The sections of a project's unpinned documents that best match the question,
+ * verbatim, one excerpt per document (the best document first), within
+ * `roomTokens`. Ranked by the project's cached corpus index — the same one
+ * `knowledge_search` uses — so a turn pays for no second index. Never throws:
+ * a search that fails leaves the project as it would have been without
+ * excerpts.
+ *
+ * @param {Object} provider
+ * @param {Object} project
+ * @param {Object} ctx
+ * @param {{question: string, roomTokens: number, loaded: Object, pinnedIds: string[]}} options
+ * @returns {Promise<Array>} Injected entries, `excerpt: true`.
+ */
+async function excerptsFor(provider, project, ctx, { question, roomTokens, loaded, pinnedIds }) {
+  if (roomTokens <= 0) return [];
+  const pinned = new Set(pinnedIds);
+  const docIds = (project.items || [])
+    .filter(item => (item.status === 'ready' || item.status === 'stale') && !pinned.has(item.id))
+    .map(item => item.id);
+  if (!docIds.length) return [];
+  let found;
+  try {
+    found = await provider.search(
+      project,
+      { ...ctx, query: question },
+      { query: question, limit: EXCERPT_HITS, docIds, budgetChars: roomTokens * 4 }
+    );
+  } catch (error) {
+    logger.warn('Project excerpts could not be searched', {
+      component: 'KnowledgeScopePlanner',
+      projectId: project.id,
+      error: error.message
+    });
+    return [];
+  }
+  const byDoc = new Map();
+  let used = 0;
+  for (const hit of found.hits || []) {
+    const section = renderExcerptSection(hit);
+    const tokens = estimateTokens(section);
+    if (used + tokens > roomTokens) continue;
+    used += tokens;
+    if (!byDoc.has(hit.docId)) byDoc.set(hit.docId, []);
+    byDoc.get(hit.docId).push({ hit, section, tokens });
+  }
+  const loadedById = new Map((loaded?.docs || []).map(entry => [entry.doc.id, entry]));
+  const entries = [];
+  for (const [docId, parts] of byDoc) {
+    const item = (project.items || []).find(candidate => candidate.id === docId);
+    if (!item) continue;
+    const from = loadedById.get(docId);
+    entries.push({
+      doc: from?.doc || docOf(project, item),
+      text: parts.map(part => part.section).join('\n\n'),
+      tokens: parts.reduce((sum, part) => sum + part.tokens, 0),
+      sections: parts.map(part => part.hit.sectionId),
+      excerpt: true,
+      ...(from?.sourceTruncated ? { sourceTruncated: true } : {}),
+      ...(from?.sourceFailed ? { sourceFailed: from.sourceFailed } : {})
+    });
+  }
+  return entries;
+}
+
 /**
  * Plan a scope.
  *
@@ -131,10 +283,24 @@ function pinnedFirst(docs) {
  * @param {Object|null} options.model
  * @param {Object} options.settings - `projectSettings(platform)`
  * @param {import('./KnowledgeProvider.js').KnowledgeContext} options.ctx
+ * @param {string|null} [options.question] - What the turn asks (the user's latest
+ *   message, `focusQueryFromMessages`); null when there is none. Decides which
+ *   sections an `auto` project that does not fit injects, and what the hard limit keeps
+ * @param {number} [options.budgetTokens] - The load-all budget, instead of
+ *   {@link loadAllBudget}: a caller that spends more or less on a turn (a research
+ *   depth) says so here
  * @returns {Promise<{projects: Array, budgetTokens: number, usedTokens: number, tools: boolean}>}
  */
-export async function planKnowledgeScope(scope, { model, settings, ctx }) {
-  const budgetTokens = loadAllBudget(model, settings);
+export async function planKnowledgeScope(
+  scope,
+  { model, settings, ctx, question = null, budgetTokens: budgetOverride }
+) {
+  const budgetTokens =
+    Number.isFinite(budgetOverride) && budgetOverride > 0
+      ? Math.floor(budgetOverride)
+      : loadAllBudget(model, settings);
+  const query = typeof question === 'string' && question.trim() ? question.trim() : null;
+  let excerptRoom = Math.floor(budgetTokens * EXCERPT_SHARE);
   const limitTokens = hardLimit(model, settings);
   let remaining = budgetTokens;
   const projects = [];
@@ -207,6 +373,22 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
         } else {
           effective = 'searched';
           injected = loaded.docs.filter(({ doc }) => doc.pinned);
+          // The question's sections of the documents that did not fit, within
+          // what the pinned ones leave of the budget and of the excerpts' share.
+          if (query && capabilities.search) {
+            const pinnedTokens = injected.reduce(
+              (sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)),
+              0
+            );
+            const excerpts = await excerptsFor(provider, project, ctx, {
+              question: query,
+              roomTokens: Math.min(remaining - pinnedTokens, excerptRoom),
+              loaded,
+              pinnedIds
+            });
+            excerptRoom -= excerpts.reduce((sum, entry) => sum + entry.tokens, 0);
+            injected = [...injected, ...excerpts];
+          }
         }
       } else {
         injected = loaded.docs;
@@ -254,7 +436,7 @@ export async function planKnowledgeScope(scope, { model, settings, ctx }) {
   }
   // The hard limit bounds the whole prompt, not each project of it, and
   // pinned text of every project comes before unpinned text of any.
-  const allocated = allocateHardLimit(projects, limitTokens);
+  const allocated = allocateHardLimit(projects, limitTokens, query);
   let usedTokens = 0;
   projects.forEach((planned, index) => {
     if (planned.mode === 'unavailable') return;
@@ -398,7 +580,11 @@ function listLine(doc) {
  *   `<document-list>` element, none when every document is in the prompt.
  */
 function documentListLines(project, budgetTokens = MAX_LIST_TOKENS) {
-  const inPrompt = new Set(project.injected.map(({ doc }) => doc.id));
+  // An excerpted document is in the prompt in part: it stays listed, so the
+  // model knows there is more of it and can read it.
+  const inPrompt = new Set(
+    project.injected.filter(entry => !entry.excerpt).map(({ doc }) => doc.id)
+  );
   const docs = (project.catalog || []).filter(doc => !inPrompt.has(doc.id));
   if (!docs.length) return { lines: [], tokens: 0 };
   const ordered = [...docs.filter(doc => doc.pinned), ...docs.filter(doc => !doc.pinned)];
@@ -473,7 +659,7 @@ export function renderProjectsBlock(plan) {
       continue;
     }
     lines.push(`  <project ${attrs.join(' ')}>`);
-    for (const { doc, text, truncated, sourceFailed } of project.injected) {
+    for (const { doc, text, truncated, sourceFailed, excerpt } of project.injected) {
       const docAttrs = [
         `id="${escapeAttribute(doc.id)}"`,
         `name="${escapeAttribute(doc.name)}"`,
@@ -481,9 +667,11 @@ export function renderProjectsBlock(plan) {
       ];
       if (doc.pinned) docAttrs.push('pinned="true"');
       if (truncated) docAttrs.push('truncated="true"');
+      if (excerpt) docAttrs.push('excerpt="true"');
       if (sourceFailed) docAttrs.push('incomplete="true"');
       lines.push(
         `    <document ${docAttrs.join(' ')}>`,
+        ...(excerpt ? [EXCERPT_NOTE] : []),
         neutralizeProjectText(text),
         '    </document>'
       );
@@ -531,6 +719,7 @@ export function scopeSummary(plan) {
       pinned: project.pinned,
       ...(project.mode === 'unavailable' && project.reason ? { reason: project.reason } : {}),
       ...(project.overBudget ? { overBudget: true } : {}),
+      ...(project.injected?.some(entry => entry.excerpt) ? { excerpted: true } : {}),
       ...(project.cut?.length ? { cut: project.cut.length } : {}),
       ...(project.unavailable?.length ? { unavailable: project.unavailable.length } : {})
     }))

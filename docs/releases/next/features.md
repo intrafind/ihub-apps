@@ -1358,6 +1358,34 @@ live links.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
 
+## Long Pages and Documents Are Read for the Question, Not From the Top
+
+When the section that answers a question is far into a long web page or project document, the
+model now gets that section, not just the first part of the text. The text is returned
+word for word, ranked with the keyword search iHub already uses; no extra model call is made.
+
+- **Web pages:** `read_url` takes a `focus` (the question). On a page longer than the read length,
+  the result holds the best-matching sections with their headings and positions, plus an outline of
+  the whole page; the model can read on from any position in it. Without `focus`, nothing changes.
+- **Projects too large to load:** a project linked in `auto` mode now puts its pinned documents
+  and the sections of the other documents that best match the user's latest message into the
+  prompt, each marked with its document and section, instead of pinned documents alone.
+- **The 75 % limit of the context window:** the document that does not fit keeps its best
+  sections for the question and an outline, not its first characters.
+- **`knowledge_read` with `focus`:** a long document returns its best sections and an outline
+  instead of the outline alone.
+- **Web search:** the search tools of Brave, Qwant and Staan take the same optional `focus`. With
+  page extraction on, a long result page contributes the sections that answer the question instead
+  of its first characters. Without `focus`, nothing changes.
+- **Answer badge:** a searched project that also put the sections matching the question into the
+  prompt now reads "searched, relevant sections loaded" (German: "durchsucht, passende Abschnitte
+  geladen"), so the answer is not mistaken for one that rested on search alone.
+- The sections the model was given appear as passages of the page or document in the sources panel.
+- A chat turn that has excerpts changes the system prompt with the question, so a model
+  provider's prompt cache misses on those turns, and such a turn can use up to half of
+  the projects budget on excerpts. Lower `projects.loadAllMaxTokens` in the platform settings to
+  spend less.
+
 ## Short Links: Pick the App From a Search Box
 
 The short link editor offers the app as a search box, as other admin pages do: type part of an

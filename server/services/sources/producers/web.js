@@ -140,6 +140,15 @@ function asSource(item, fields = {}) {
   };
 }
 
+/**
+ * What a focused page read reported beside its result: the passages the model
+ * was given. They merge into the page's own source by URL.
+ */
+function reportedWebItems(reader, reported) {
+  if (!reader || !Array.isArray(reported)) return [];
+  return reported.filter(item => item?.provider === 'web');
+}
+
 export const webSourceProducer = {
   id: 'web',
 
@@ -149,11 +158,11 @@ export const webSourceProducer = {
   },
 
   /**
-   * @param {{toolId: string, toolDef?: Object, args?: Object, result: unknown, failed?: boolean}} call -
+   * @param {{toolId: string, toolDef?: Object, args?: Object, result: unknown, reported?: Array, failed?: boolean}} call -
    *   `result` parsed from JSON text already
    * @returns {{items: Array, queries: string[]}}
    */
-  fromToolResult({ toolId, toolDef, args, result, failed }) {
+  fromToolResult({ toolId, toolDef, args, result, reported = [], failed }) {
     const reader = isPageReader(toolId);
     const hitPrivacy = { private: !isBuiltInWebSearch(toolId, toolDef) };
     const queries = reader ? [] : [queryOf(args)].filter(Boolean);
@@ -206,6 +215,7 @@ export const webSourceProducer = {
         );
       }
     }
+    items.push(...reportedWebItems(reader, reported));
     return { items, queries };
   }
 };

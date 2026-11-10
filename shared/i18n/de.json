@@ -631,6 +631,7 @@
       "searched_other": "{{count}} durchsucht",
       "loadedOne": "vollständig geladen",
       "searchedOne": "durchsucht",
+      "searchedExcerptsOne": "durchsucht, passende Abschnitte geladen",
       "unavailableOne": "nicht verfügbar",
       "overBudget": "über dem Budget",
       "openProject": "Projekt öffnen",

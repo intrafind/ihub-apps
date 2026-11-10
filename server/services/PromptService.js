@@ -7,6 +7,7 @@ import configCache from '../configCache.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
 import { describeSkillCatalog, prepareActiveSkills } from './skillAccess.js';
 import logger from '../utils/logger.js';
+import { focusQueryFromMessages } from './knowledge/focusQuery.js';
 import { resolveProjectScope } from './knowledge/ProjectScope.js';
 import {
   planKnowledgeScope,
@@ -184,10 +185,15 @@ class PromptService {
    * @param {string} systemPrompt
    * @param {Object|null} app - App with its link fields (`projects`, `_projectId`, …)
    * @param {{user: Object|null, chatId: string|null, lang: string, modelName: string|null,
-   *   scopeKey: string|null}} ctx - `scopeKey` is what the knowledge scope is noted under
+   *   scopeKey: string|null, question?: string|null}} ctx - `scopeKey` is what the knowledge
+   *   scope is noted under; `question` is what the turn asks (`focusQueryFromMessages`)
    * @returns {Promise<string>}
    */
-  async _applyProjects(systemPrompt, app, { user, chatId, lang, modelName, scopeKey }) {
+  async _applyProjects(
+    systemPrompt,
+    app,
+    { user, chatId, lang, modelName, scopeKey, question = null }
+  ) {
     const placeholder = '{{projects}}';
     const hasPlaceholder = systemPrompt.includes(placeholder);
     // `includeUnavailable`: an attached iFinder collection that iFinder cannot deliver
@@ -203,7 +209,8 @@ class PromptService {
     const plan = await planKnowledgeScope(scope, {
       model: findModel(configCache.getModels?.()?.data || [], modelName),
       settings: projectSettings(platform),
-      ctx: { user, chatId, language: lang, purpose: 'chat' }
+      ctx: { user, chatId, language: lang, purpose: 'chat' },
+      question
     });
     const instructions = renderProjectInstructions(plan);
     const block = renderProjectsBlock(plan);
@@ -528,7 +535,9 @@ class PromptService {
           chatId,
           lang,
           modelName: modelId || modelName,
-          scopeKey: preparationId || chatId
+          scopeKey: preparationId || chatId,
+          // The user's own words, not the expanded templates or file text of `llmMessages`.
+          question: focusQueryFromMessages(messages)
         });
       } catch (error) {
         logger.error('Error applying the projects of the request', {

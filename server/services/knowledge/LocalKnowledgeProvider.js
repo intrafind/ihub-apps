@@ -253,10 +253,17 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     return { items: page, nextCursor };
   }
 
+  /**
+   * @param {{query: string, limit?: number, itemIds?: string[], docIds?: string[],
+   *   budgetChars?: number}} [options] - `itemIds` limits which items are loaded and
+   *   indexed (a different index per subset); `docIds` only filters the ranked hits of
+   *   the project's one cached index, so a caller that wants "everything but the
+   *   pinned documents" does not pay for a second index
+   */
   async search(
     project,
     ctx,
-    { query, limit = 8, itemIds, budgetChars = RESULT_BUDGET_CHARS } = {}
+    { query, limit = 8, itemIds, docIds, budgetChars = RESULT_BUDGET_CHARS } = {}
   ) {
     const q = typeof query === 'string' ? query.trim() : '';
     if (!q) throw new KnowledgeError('INVALID_REF', 'A query is needed', { projectId: project.id });
@@ -267,7 +274,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
       warm || (await this.texts(project, { ...ctx, query: q }, { itemIds }));
     const index = warm ? warm.index : this._index(project, ctx, texts);
     const byId = new Map(texts.map(({ item }) => [item.id, item]));
-    const hits = collectHits(index, q, { limit, budgetChars }).map(hit => ({
+    const hits = collectHits(index, q, { limit, budgetChars, docIds }).map(hit => ({
       docId: hit.docId,
       projectId: project.id,
       sectionId: hit.sectionId,
@@ -303,13 +310,14 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
    * One document, or a section of it, within a budget: `budgetBytes` bounds
    * the text as it serializes into a JSON result (UTF-8, escapes included),
    * `budgetChars` in characters. A document over the budget comes back as
-   * its outline, and a section read names the id it continues at.
+   * its outline (with `focus`, the sections that answer the question and the
+   * outline of the rest), and a section read names the id it continues at.
    */
   async read(
     project,
     ctx,
     { itemId },
-    { section, budgetChars = RESULT_BUDGET_CHARS, budgetBytes } = {}
+    { section, focus, budgetChars = RESULT_BUDGET_CHARS, budgetBytes } = {}
   ) {
     const item = (project.items || []).find(entry => entry.id === itemId);
     if (!item)
@@ -320,6 +328,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     const { text, truncated, failed = [] } = await getItemText(project, item, ctx);
     const selected = selectContent(text, {
       section,
+      focus,
+      hint: 'Read a section in full with `section` set to its id.',
       name: item.name,
       ...(Number.isFinite(budgetBytes)
         ? { budgetChars: budgetBytes, measure: serializedBytes }
@@ -328,6 +338,8 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     return {
       doc: docOf(project, item),
       text: selected.content,
+      // For the sources panel, not for the model: not part of `retrieval`.
+      passages: selected.passages || [],
       // The source handed over only the start of the document, or lacks
       // documents it could not fetch: even a `full` read is not the whole of
       // it, and no section reaches the rest.

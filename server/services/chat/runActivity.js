@@ -302,6 +302,7 @@ function boundScopeProject(project) {
     tokens: integer(project?.tokens),
     pinned: integer(project?.pinned),
     overBudget: project?.overBudget === true ? true : undefined,
+    excerpted: project?.excerpted === true ? true : undefined,
     cut: integer(project?.cut),
     unavailable: integer(project?.unavailable)
   });
