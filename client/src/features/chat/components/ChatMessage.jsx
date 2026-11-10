@@ -371,33 +371,6 @@ function ChatMessage({
     }
   }, [isEditing]);
 
-  // Post-process the rendered markdown to add target="_blank" to external links
-  useEffect(() => {
-    if (outputFormat === 'markdown' && !isUser && !isEditing && messageRef.current) {
-      // Get all links in this specific message's rendered markdown
-      const links = messageRef.current.querySelectorAll('a');
-      const currentDomain = window.location.hostname;
-
-      links.forEach(link => {
-        const href = link.getAttribute('href');
-
-        // Check if the link is external
-        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-          try {
-            const url = new URL(href);
-            // If the hostname is different from the current domain, open in a new tab
-            if (url.hostname !== currentDomain) {
-              link.setAttribute('target', '_blank');
-              link.setAttribute('rel', 'noopener noreferrer');
-            }
-          } catch (e) {
-            console.error('Error parsing URL:', href, e);
-          }
-        }
-      });
-    }
-  }, [outputFormat, isUser, isEditing, message.content]);
-
   const handleCopy = (format = 'text') => {
     // Use the original streamed content directly
     const raw = typeof message.content === 'string' ? message.content : message.content || '';
