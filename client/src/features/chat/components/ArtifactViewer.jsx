@@ -421,7 +421,8 @@ export default function ArtifactViewer({
         onQuote={chrome?.onQuote}
         source={{ kind: 'artifact', id: artifact.id, name }}
         allowEdit
-        bottomPadding={chrome?.bottomPadding || 0}
+        // The artifact fills the pane and scrolls behind the (transparent) composer dock.
+        dockClearance={chrome?.bottomPadding || 0}
         className="flex min-h-0 flex-1 flex-col bg-white dark:bg-gray-900"
         innerClassName={
           readingColumn ? 'mx-auto flex min-h-0 w-full max-w-[52rem] flex-1 flex-col' : ''

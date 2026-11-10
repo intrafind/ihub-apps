@@ -15,6 +15,11 @@ import {
   withPreviewCsp
 } from '../utils/artifactFiles';
 
+// A preview that fills the full-screen pane scrolls behind the composer dock; the workspace sets
+// `--workspace-dock-clearance` (0 without a dock) so the last lines can still be scrolled clear.
+const DOCK_CLEARANCE_1REM = 'calc(1rem + var(--workspace-dock-clearance, 0px))';
+const DOCK_CLEARANCE_2REM = 'calc(2rem + var(--workspace-dock-clearance, 0px))';
+
 /**
  * Read what a preview shows of a blob: an object URL for a picture or PDF, the
  * text (cut at {@link MAX_PREVIEW_BYTES}) for everything readable.
@@ -288,6 +293,7 @@ export default function ArtifactPreview({
         <div className={fill ? 'flex-1 min-h-0 overflow-auto' : undefined}>
           <article
             className={`prose prose-sm dark:prose-invert max-w-none ${fill ? 'mx-auto max-w-3xl px-6 py-8' : ''}`}
+            style={fill ? { paddingBottom: DOCK_CLEARANCE_2REM } : undefined}
             // Sanitized by renderMarkdown (DOMPurify).
             dangerouslySetInnerHTML={{ __html: renderMarkdown(state.text) }}
           />
@@ -474,6 +480,7 @@ export default function ArtifactPreview({
         className={`bg-gray-900 text-gray-100 overflow-auto text-xs leading-relaxed focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
           fill ? 'flex-1 min-h-0 p-4' : `rounded-md p-4 ${maxTall}`
         }`}
+        style={fill ? { paddingBottom: DOCK_CLEARANCE_1REM } : undefined}
       >
         <code
           className={language ? `hljs language-${language}` : undefined}
