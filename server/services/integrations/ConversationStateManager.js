@@ -8,6 +8,8 @@
  * Two fields carry the whole feature: `conversationId`, so a chat maps to one
  * iFinder conversation instead of creating a new one per turn, and
  * `lastParentId`, so the next message threads onto the previous answer.
+ * `responses` maps a run to the response message id of its answer, which is
+ * what feedback on that answer is addressed with.
  * `baseUrl` routes feedback; `searchProfile` (and, for a conversation an
  * iFinder iAssistant set up, `profileId`) are pinned at creation; `title` is
  * bookkeeping.
@@ -61,6 +63,9 @@ const CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
  * its parent id persisted while it is running rather than only at the end.
  */
 const DEFAULT_WRITE_DEBOUNCE_MS = 1000;
+
+/** Answers whose iFinder response id is remembered per chat (oldest dropped first). */
+const MAX_REMEMBERED_RESPONSES = 100;
 
 /** Documents examined per expiry sweep — bounded, and resumed by cursor. */
 const SWEEP_PAGE_SIZE = 200;
@@ -308,13 +313,31 @@ export class ConversationStateManager {
    * Called once per streamed chunk that carries a response message id, so it
    * only touches memory and leaves the write to the coalescing timer.
    *
+   * With a `runId` the id is also remembered against that run, so feedback on
+   * an older answer reaches iFinder with the id of *that* answer rather than
+   * the latest one (see {@link ConversationStateManager#getResponseMessageId}).
+   *
    * @param {string} chatId
    * @param {string} messageId - The response message ID to use as parent for next message
+   * @param {Object} [options]
+   * @param {string|null} [options.runId] - Run that produced the answer
    */
-  updateParentId(chatId, messageId) {
+  updateParentId(chatId, messageId, { runId = null } = {}) {
     const entry = this.states.get(chatId);
     if (entry) {
       entry.lastParentId = messageId;
+      if (runId) {
+        const responses =
+          entry.responses && typeof entry.responses === 'object' ? entry.responses : {};
+        // Re-insert so the newest run is last; the oldest fall off the front.
+        delete responses[runId];
+        responses[runId] = String(messageId);
+        const runIds = Object.keys(responses);
+        for (const old of runIds.slice(0, Math.max(0, runIds.length - MAX_REMEMBERED_RESPONSES))) {
+          delete responses[old];
+        }
+        entry.responses = responses;
+      }
       entry.updatedAt = Date.now();
       this._markDirty(chatId);
     } else {
@@ -323,6 +346,20 @@ export class ConversationStateManager {
         chatId
       });
     }
+  }
+
+  /**
+   * The iFinder response message id of the answer a run produced.
+   *
+   * @param {Object|null} state - State from {@link ConversationStateManager#loadState}
+   * @param {string|null} runId
+   * @returns {string|null} The id, or null when the run is unknown (an answer
+   *   from before this was recorded, or one that expired with its state).
+   */
+  getResponseMessageId(state, runId) {
+    if (!state || !runId) return null;
+    const id = state.responses?.[runId];
+    return typeof id === 'string' && id ? id : null;
   }
 
   /**
