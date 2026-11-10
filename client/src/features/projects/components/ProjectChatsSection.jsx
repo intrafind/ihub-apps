@@ -31,11 +31,16 @@ function formatWhen(value, language) {
  * caller's (`filter=mine`); each links into its app, read-only for the chats
  * of other members. Starting a chat is the composer above this card.
  *
+ * A project that holds no chats (one from the catalog, one from the
+ * administrators) is listed with `attached`: the caller's own chats that use it.
+ * The server sends nobody else's, so there is no filter to offer.
+ *
  * @param {Object} props
  * @param {Object} props.project
+ * @param {boolean} [props.attached=false] - The chats list the project as attached
  * @returns {JSX.Element}
  */
-function ProjectChatsSection({ project }) {
+function ProjectChatsSection({ project, attached = false }) {
   const { t, i18n } = useTranslation();
   const language = i18n.language;
   const { apps } = useApps();
@@ -90,31 +95,41 @@ function ProjectChatsSection({ project }) {
         >
           {t('projects.chats.title', 'Chats')}
         </h2>
-        <div
-          className="flex gap-1"
-          role="group"
-          aria-label={t('projects.chats.filterLabel', 'Show')}
-        >
-          {PROJECT_CHAT_FILTERS.map(id => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={filter === id}
-              onClick={() => {
-                setFilter(id);
-                setPage(1);
-              }}
-              className={`px-2.5 py-1 text-xs rounded-md ${
-                filter === id
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {filterLabels[id]}
-            </button>
-          ))}
-        </div>
+        {!attached && (
+          <div
+            className="flex gap-1"
+            role="group"
+            aria-label={t('projects.chats.filterLabel', 'Show')}
+          >
+            {PROJECT_CHAT_FILTERS.map(id => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={filter === id}
+                onClick={() => {
+                  setFilter(id);
+                  setPage(1);
+                }}
+                className={`px-2.5 py-1 text-xs rounded-md ${
+                  filter === id
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                {filterLabels[id]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+      {attached && (
+        <p className="-mt-1 mb-3 text-xs text-gray-500 dark:text-gray-400">
+          {t(
+            'projects.chats.attachedHint',
+            'Your chats that use this project. Other users’ chats are not shown.'
+          )}
+        </p>
+      )}
 
       {state.error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
@@ -125,7 +140,9 @@ function ProjectChatsSection({ project }) {
         <p className="text-sm text-gray-500">{t('common.loading', 'Loading…')}</p>
       ) : state.chats.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {t('projects.chats.empty', 'No chats in this project yet.')}
+          {attached
+            ? t('projects.chats.attachedEmpty', 'None of your chats uses this project yet.')
+            : t('projects.chats.empty', 'No chats in this project yet.')}
         </p>
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -142,11 +159,13 @@ function ProjectChatsSection({ project }) {
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {[
                     appName(chat.appId),
-                    chat.owner?.mine
-                      ? t('projects.chats.byMe', 'by you')
-                      : t('projects.chats.byOther', 'by {{name}} (read-only)', {
-                          name: chat.owner?.name || t('projects.chats.someone', 'another member')
-                        }),
+                    attached
+                      ? null
+                      : chat.owner?.mine
+                        ? t('projects.chats.byMe', 'by you')
+                        : t('projects.chats.byOther', 'by {{name}} (read-only)', {
+                            name: chat.owner?.name || t('projects.chats.someone', 'another member')
+                          }),
                     formatWhen(chat.lastMessageAt, language)
                   ]
                     .filter(Boolean)

@@ -1168,6 +1168,26 @@ export class ChatRepository {
   }
 
   /**
+   * An owner's kept chats that have a project attached (`attachedProjectIds`),
+   * newest activity first. What the page of a project from the catalog lists:
+   * a chat never runs inside such a project, it attaches it. Only the owner's
+   * own chats are walked, so nobody else's conversation can come up here.
+   *
+   * @param {string} ownerId - Owning principal id.
+   * @param {string} projectId - The attached project.
+   * @returns {Promise<Object[]>} The owner's chats with the project attached.
+   */
+  async listChatsAttachingProject(ownerId, projectId) {
+    if (!this.isAvailable() || !ownerId || !projectId) return [];
+    return (await this._loadOwnerChats(ownerId))
+      .filter(
+        chat =>
+          Array.isArray(chat.attachedProjectIds) && chat.attachedProjectIds.includes(projectId)
+      )
+      .sort(compareChatsDesc);
+  }
+
+  /**
    * How many stored chat documents an owner has — temporary chats included,
    * unlike {@link listChats} — bounded at `MAX_OWNER_CHATS`.
    *

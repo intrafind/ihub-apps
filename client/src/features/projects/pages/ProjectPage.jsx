@@ -253,6 +253,7 @@ function ProjectPageContent({ projectId }) {
   const usableAdminProject =
     project.ownership === 'admin' && typeof project.subscribed === 'boolean';
   const description = localizedText(project.description, language);
+  const showComposer = isIFinder || (isUserProject ? !readOnlyOwnerGone : usableAdminProject);
 
   return (
     <div className="min-h-full px-4 sm:px-6 py-8">
@@ -339,7 +340,7 @@ function ProjectPageContent({ projectId }) {
             {/* The main thing to do with a project: chat with its documents. Someone
                 who took it from the catalog starts a chat outside it, with it attached;
                 so does everyone with an admin project made available to everyone. */}
-            {(isIFinder || (isUserProject ? !readOnlyOwnerGone : usableAdminProject)) && (
+            {showComposer && (
               <ProjectChatComposer
                 project={project}
                 projectName={projectDisplayName(project, language)}
@@ -347,8 +348,13 @@ function ProjectPageContent({ projectId }) {
               />
             )}
             {/* Chats before the documents: a long document list must not push them out of sight.
-                Someone from the catalog holds no chats here: theirs attach the project. */}
-            {permissions.canHoldChats !== false && <ProjectChatsSection project={project} />}
+                Someone from the catalog holds no chats here: theirs attach the project, so the
+                list shows their own chats that use it. */}
+            {permissions.canHoldChats !== false ? (
+              <ProjectChatsSection project={project} />
+            ) : (
+              showComposer && <ProjectChatsSection project={project} attached />
+            )}
             <ProjectItemsSection
               project={project}
               config={config}

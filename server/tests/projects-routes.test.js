@@ -998,6 +998,54 @@ describe('the project catalog', () => {
     assert.equal(opened.body.permissions.canHoldChats, false);
   });
 
+  it('lists only her own chats that attach a project from the catalog', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Handbook' });
+    await publish(ADA, project.id);
+    const chats = getChatRepository();
+    const mineChat = await chats.ensureChat({
+      chatId: 'chat-attach-mine',
+      ownerId: CAROL.id,
+      appId: 'chat',
+      title: 'Carol asks'
+    });
+    const otherChat = await chats.ensureChat({
+      chatId: 'chat-attach-other',
+      ownerId: GRACE.id,
+      appId: 'chat',
+      title: 'Grace asks'
+    });
+    const unrelated = await chats.ensureChat({
+      chatId: 'chat-attach-none',
+      ownerId: CAROL.id,
+      appId: 'chat',
+      title: 'No project'
+    });
+    for (const chat of [mineChat, otherChat]) {
+      await chats.setAttachedProjects(chat.id, [project.id], 5);
+    }
+    assert.ok(unrelated);
+
+    for (const filter of ['all', 'others', undefined]) {
+      const listed = await drive(route.chats, {
+        user: CAROL,
+        params: { projectId: project.id },
+        query: filter ? { filter } : {}
+      });
+      assert.equal(listed.statusCode, 200, JSON.stringify(listed.body));
+      assert.deepEqual(
+        listed.body.items.map(item => item.id),
+        [mineChat.id],
+        `filter ${filter}: only her own chat`
+      );
+      assert.equal(listed.body.items[0].owner.mine, true);
+      assert.equal(listed.body.total, 1);
+    }
+    // The owner holds chats inside the project: neither attached chat is listed there.
+    const asOwner = await drive(route.chats, { user: ADA, params: { projectId: project.id } });
+    assert.deepEqual(asOwner.body.items, []);
+  });
+
   it('lets a full admin keep the compliance view and take any project out', async () => {
     setProjectSettings({ sharing: { allowCatalog: true } });
     const project = await create(ADA, { name: 'Left behind' });
