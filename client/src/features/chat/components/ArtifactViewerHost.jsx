@@ -47,7 +47,8 @@ import {
   blobOfBase64,
   collectOpenableArtifacts,
   isLiveArtifact,
-  saveName
+  saveName,
+  storedCounterpart
 } from '../utils/artifactFiles';
 import ArtifactsPanel from './ArtifactsPanel';
 import ArtifactViewer from './ArtifactViewer';
@@ -434,8 +435,10 @@ export default function ArtifactViewerHost({
     given => {
       if (!given) return;
       // A live picture has no id yet: give it the key the chat's list knows it by.
+      // A card hands over its file as the message holds it; the chat's list adds the
+      // answer it belongs to, which is how a live item finds its stored copy.
       const artifact = given.id
-        ? given
+        ? { ...collected.find(item => item.id === given.id), ...given }
         : collected.find(item => item.data && item.data === given.data) || {
             ...given,
             id: `live:open:${Date.now()}`
@@ -721,6 +724,21 @@ export default function ArtifactViewerHost({
     } else if (target.kind === 'artifact' && descriptor) {
       title = artifactDisplayName(descriptor);
       const stored = !isLiveArtifact(descriptor);
+      // Share is always offered where the page allows it. A live item is shared
+      // through its stored copy; until the answer is stored there is none yet.
+      const shareArtifact = onShare
+        ? artifact => {
+            const copy = storedCounterpart(artifact, generatedItems);
+            if (copy) onShare(copy);
+            else
+              announce(
+                t(
+                  'chatArtifacts.shareNotStored',
+                  'This file is still being saved to the chat. Try again in a moment.'
+                )
+              );
+          }
+        : null;
       const newTab = stored && newTabUrl ? newTabUrl(descriptor) : null;
       const mailAttach = files?.mailAttach?.available ? files.mailAttach : null;
       const attachToMail = mailAttach
@@ -738,7 +756,7 @@ export default function ArtifactViewerHost({
           artifact={descriptor}
           getBlob={getBlob}
           chrome={chrome}
-          onShare={onShare && stored ? onShare : null}
+          onShare={shareArtifact}
           onShowInFiles={() => show({ kind: 'files', tab: 'generated' })}
           onOpenInNewTab={
             newTab
