@@ -138,3 +138,48 @@ test('the chat turn seam streams the state with every call and reply', async () 
     { inputTokens: 920, source: 'provider' }
   );
 });
+
+test('reasoning tokens are not counted in the reply that joins the context', () => {
+  const tracker = createContextTracker(model);
+  const state = tracker.recordStep(
+    { promptTokens: 1_000, completionTokens: 9_000, reasoningTokens: 8_000, source: 'provider' },
+    2
+  );
+  assert.equal(state.inputTokens, 2_000);
+});
+
+test('replay is what the next turn sends: the first prompt and the answer, no tool results', () => {
+  const tracker = createContextTracker(model);
+  const prompt = [
+    { role: 'system', content: 'sys' },
+    { role: 'user', content: 'research this' }
+  ];
+  tracker.recordStep({ promptTokens: 1_000, completionTokens: 50, source: 'provider' }, 2);
+  // a second call, after three long pages were read
+  const second = tracker.recordStep(
+    { promptTokens: 61_000, completionTokens: 300, source: 'provider' },
+    7
+  );
+  assert.equal(second.inputTokens, 61_300, 'the live figure holds the pages');
+  const answer = 'The short answer. '.repeat(20);
+  const replay = tracker.replay(answer);
+  assert.equal(replay.source, 'provider');
+  assert.equal(replay.contextWindow, 100_000);
+  assert.equal(replay.inputTokens, 1_000 + estimateTranscriptTokens([{ content: answer }]));
+  assert.ok(replay.inputTokens < 2_000, 'the pages are not replayed');
+  assert.ok(prompt.length === 2);
+});
+
+test('without provider usage replay estimates the starting prompt', () => {
+  const tracker = createContextTracker(model);
+  const messages = [
+    { role: 'system', content: 'You are helpful.' },
+    { role: 'user', content: 'Hello' }
+  ];
+  tracker.estimate(messages);
+  tracker.estimate([...messages, { role: 'tool', content: page }]);
+  const replay = tracker.replay('ok');
+  assert.equal(replay.source, 'estimate');
+  assert.ok(replay.inputTokens < estimateTranscriptTokens([{ content: page }]));
+  assert.equal(createContextTracker(model).replay('x'), null);
+});

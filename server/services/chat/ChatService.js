@@ -1218,10 +1218,10 @@ class ChatService {
     };
     // The window as the turn left it (tool results included), sent with the
     // end of the run and stored with the answer, so a reopened chat shows it.
-    // The last reported state: after the final reply it holds the prompt the
-    // provider counted plus the answer.
-    const context =
-      contextTracker?.last() || contextTracker?.estimate(result.messages) || undefined;
+    // What the next turn sends: the prompt this turn started from plus its
+    // answer. Tool calls and results are not replayed (later prompts are built
+    // from the stored messages), so they are in the live frames only.
+    const context = contextTracker?.replay(content) || contextTracker?.last() || undefined;
     if (context) summary.context = context;
     const endRun = data =>
       stream.emit(SSE_V2_EVENTS.RUN_ENDED, {

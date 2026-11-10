@@ -186,9 +186,14 @@ read, not one model step later. `inputTokens` is input only;
 `maxOutputTokens` is the model's output reserve, which the client adds for
 the remaining capacity.
 
-`run/ended` carries the last state as `context`, and the stored assistant
-message keeps it (`message.context`), so a reopened chat shows the same
-figure. The frame itself is live only and is not written to the run ledger.
+`run/ended` carries `context` too, but not the last live state: it is what
+the *next* turn will send — the prompt the turn started from (system prompt,
+history, the question) plus the answer. Later prompts are built from the
+stored messages (role and content), so the tool calls and results of a
+finished turn are not replayed and must not count against the next turn. The
+stored assistant message keeps that figure (`message.context`), so a reopened
+chat shows it. Reasoning tokens are left out of the figure after a reply: they
+are billed as output but never become part of the transcript. The frame itself is live only and is not written to the run ledger.
 The composer's context counter (`ChatInput`) starts from the latest
 `message.context` and estimates only what came after it — the pending input
 and the messages not yet answered. A chat without one (a fresh chat, a chat

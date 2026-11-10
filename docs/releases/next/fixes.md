@@ -510,12 +510,14 @@ Outlook's own error.
 
 ## Chat: The Context Counter Includes What the Model Read
 
-After a research turn the context counter under the message box did not move: it counted only
-the messages the browser held, not the web pages and documents the model had read to answer, so
-a chat could run into the model's limit while the counter showed plenty of room. The server now
-counts the context window — from the token count the model provider reports for each call, plus
-an estimate for what was added since — and the counter follows it while the answer is being
-written. The figure is stored with the answer, so a reopened chat shows it too.
+While the model researched, the context counter under the message box did not move: it counted
+only the messages the browser held, not the web pages and documents the model was reading, so a
+single long research turn could run into the model's limit while the counter showed plenty of
+room. The server now counts the context window — from the token count the model provider reports
+for each call, plus an estimate for what was added since — and the counter follows it while the
+answer is being written. When the answer is done the counter shows what the next message will
+send (the conversation so far plus the answer; a finished turn's tool results are not sent
+again), and a reopened chat shows the same figure.
 
 ## Chat: An Empty Answer Says So and Offers Retry
 
