@@ -6,6 +6,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { responseEtag } from '../../utils/etag.js';
 import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { isApiErrorCode } from '../../../shared/apiErrors.js';
@@ -418,7 +419,7 @@ export default function registerAdminModelsRoutes(app) {
       return maskedModel;
     });
 
-    res.setHeader('ETag', modelsEtag);
+    res.setHeader('ETag', responseEtag(modelsEtag));
     res.json({ items: maskedModels });
   });
 
@@ -614,7 +615,7 @@ export default function registerAdminModelsRoutes(app) {
       maskedModel.apiKeySet = false;
     }
 
-    res.setHeader('ETag', modelsEtag);
+    res.setHeader('ETag', responseEtag(modelsEtag));
     res.json(maskedModel);
   });
 

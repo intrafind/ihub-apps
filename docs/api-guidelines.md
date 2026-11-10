@@ -180,6 +180,10 @@ GET /api/conversations?limit=50&cursor=eyJ…&status=active
   meaning of a status code is **breaking**.
 - A breaking change to an endpoint that only our own client calls ships with that client in the same release, and
   needs no deprecation period. Ask before adding a compatibility shim (see `CLAUDE.md`, "Breaking Changes").
+- **A changed body needs a changed `ETag`.** A route that sets its `ETag` from a config hash (`/api/apps`,
+  `/api/models`, the admin lists, …) sends it through `responseEtag()` (`server/utils/etag.js`). Changing the shape
+  of such a body means bumping `RESPONSE_SHAPE_REVISION` there: the config hash stays the same, so the browser
+  would revalidate its cached old body, get `304` and keep serving it to the new client.
 - A breaking change to an endpoint that has external callers (integrations, browser extension, Nextcloud app,
   Office add-in, API keys) is announced first: the old endpoint answers with `Deprecation` and `Sunset` headers and
   a link to the replacement, for at least one release, and the release changelog says so.

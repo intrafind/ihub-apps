@@ -38,7 +38,8 @@ let savedPlatform;
 before(() => {
   savedGetModelsForUser = configCache.getModelsForUser;
   savedPlatform = configCache.cache.get('config/platform.json');
-  configCache.getModelsForUser = async () => ({ data: MODELS, etag: 'models-etag' });
+  // Quoted, like the ETags `configCache` produces.
+  configCache.getModelsForUser = async () => ({ data: MODELS, etag: '"models-etag"' });
   configCache.cache.set('config/platform.json', {
     data: { auth: { mode: 'local' }, anonymousAuth: { enabled: true, defaultGroups: [] } },
     etag: 'p'
@@ -92,6 +93,46 @@ describe('GET /api/models?type=', () => {
     assert.notEqual(chat.headers.etag, both.headers.etag);
     const again = await request(app).get('/api/models?type=chat,transcription');
     assert.equal(again.headers.etag, both.headers.etag);
+    // No comma inside: it would split the tag in an If-None-Match list.
+    assert.match(both.headers.etag, /^"[^",]+"$/);
+    const revalidated = await request(app)
+      .get('/api/models?type=chat,transcription')
+      .set('If-None-Match', both.headers.etag);
+    assert.equal(revalidated.status, 304);
+  });
+
+  test('an ETag from before the { items } body is not answered 304', async () => {
+    // The ETag the route sent while it answered a bare array: the config hash
+    // and the type. A browser that cached that array revalidates with it after
+    // the upgrade; a 304 would hand the client the array, and the start page
+    // showed "No models available".
+    const app = buildApp();
+    const stale = await request(app).get('/api/models').set('If-None-Match', '"models-etag"-chat');
+    assert.equal(stale.status, 200);
+    assert.deepEqual(ids(stale), ['gemini-flash']);
+    // One well-formed entity tag: the type and the revision inside the quotes.
+    assert.match(stale.headers.etag, /^"[^",]+"$/);
+    // The current ETag still revalidates.
+    const fresh = await request(app).get('/api/models').set('If-None-Match', stale.headers.etag);
+    assert.equal(fresh.status, 304);
+  });
+
+  test('a text-to-speech list ETag from before the { items } body is not answered 304', async () => {
+    // Read aloud and voice mode show their buttons only when the TTS model is
+    // in this list. A 304 to the old ETag handed the client the cached bare
+    // array, `fetchTtsModels` read no `items` from it, and the voice mode
+    // button was gone even with voice mode switched on.
+    const app = buildApp();
+    const stale = await request(app)
+      .get('/api/models?type=tts')
+      .set('If-None-Match', '"models-etag"-tts');
+    assert.equal(stale.status, 200);
+    assert.deepEqual(ids(stale), ['voxtral-tts']);
+    assert.match(stale.headers.etag, /^"[^",]+"$/);
+    const fresh = await request(app)
+      .get('/api/models?type=tts')
+      .set('If-None-Match', stale.headers.etag);
+    assert.equal(fresh.status, 304);
   });
 
   test('an unknown type in the list is a 400', async () => {

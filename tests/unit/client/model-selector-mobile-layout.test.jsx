@@ -139,3 +139,19 @@ describe('ModelSelector menu layout', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
   });
 });
+
+describe('ModelSelector button size', () => {
+  // In the one-line composer the toolbar row is as tall as the text row; the
+  // selector must not be the one control that makes it taller on a phone.
+  test('in the one-line composer, as tall as the toolbar buttons on a phone too', () => {
+    renderSelector({ compact: true });
+    expect(screen.getByTitle('Select Model')).toHaveClass('py-2', 'sm:py-2.5');
+    expect(screen.getByTitle('Select Model')).not.toHaveClass('py-2.5');
+  });
+
+  test('unchanged elsewhere', () => {
+    renderSelector();
+    expect(screen.getByTitle('Select Model')).toHaveClass('py-2.5');
+    expect(screen.getByTitle('Select Model')).not.toHaveClass('py-2');
+  });
+});

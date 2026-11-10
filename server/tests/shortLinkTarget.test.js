@@ -4,7 +4,7 @@
 import {
   isAllowedHost,
   isAllowedShortLinkTarget,
-  normalizeAllowedHosts
+  shortLinkTargetRefusal
 } from '../utils/shortLinkTarget.js';
 
 describe('isAllowedShortLinkTarget', () => {
@@ -70,29 +70,17 @@ describe('isAllowedHost with patterns', () => {
     expect(isAllowedHost(hostname, [entry])).toBe(expected);
   });
 
-  test.each([
-    ['/[a-z]+\\.example\\.com/', 'docs.example.com', true],
-    ['/[a-z]+\\.example\\.com/', 'a.b.example.com', false],
-    ['/(docs|wiki)\\.intrafind\\.io/', 'wiki.intrafind.io', true],
-    ['/(docs|wiki)\\.intrafind\\.io/', 'blog.intrafind.io', false],
-    ['/.*\\.intrafind\\.(io|de)/', 'docs.intrafind.de', true],
-    ['/.*\\.intrafind\\.(io|de)/', 'docs.intrafind.de.example.net', false],
-    ['/intrafind\\.io/', 'docs.intrafind.io', false],
-    ['/^intrafind\\.io$/', 'intrafind.io', true]
-  ])('regex %s with %s is %s', (entry, hostname, expected) => {
-    expect(isAllowedHost(hostname, [entry])).toBe(expected);
+  test('a /regex/ entry is not a pattern: the SSRF allowlist has none', () => {
+    expect(isAllowedHost('docs.example.com', ['/[a-z]+\\.example\\.com/'])).toBe(false);
   });
 
-  test('a regex entry that does not compile or is not bounded matches nothing', () => {
-    expect(isAllowedHost('docs.example.com', ['/([a-z/'])).toBe(false);
-    expect(isAllowedHost('docs.example.com', ['/(.*)+/'])).toBe(false);
-    expect(isAllowedHost('docs.example.com', [`/${'a'.repeat(300)}/`])).toBe(false);
-    // Other entries in the list still apply.
-    expect(isAllowedHost('docs.example.com', ['/([a-z/', 'docs.example.com'])).toBe(true);
+  test('trims and lowercases entries and ignores non-string ones', () => {
+    expect(isAllowedHost('docs.example.com', [' Docs.Example.com ', null, 3])).toBe(true);
+    expect(isAllowedHost('docs.example.com', 'docs.example.com')).toBe(false);
   });
 
   test('an absolute target is accepted when its host matches a pattern', () => {
-    const hosts = ['*.intrafind.io', '/[a-z]+\\.example\\.org/'];
+    const hosts = ['*.intrafind.io', '.example.org'];
     expect(isAllowedShortLinkTarget('https://docs.intrafind.io/guide', hosts)).toBe(true);
     expect(isAllowedShortLinkTarget('https://wiki.example.org/', hosts)).toBe(true);
     expect(isAllowedShortLinkTarget('https://intrafind.io/', hosts)).toBe(false);
@@ -101,18 +89,30 @@ describe('isAllowedHost with patterns', () => {
   });
 });
 
-describe('normalizeAllowedHosts', () => {
-  test('lowercases, trims and drops empty or non-string entries', () => {
-    expect(normalizeAllowedHosts([' Docs.Example.com ', '', null, 3])).toEqual([
-      'docs.example.com'
-    ]);
-    expect(normalizeAllowedHosts('docs.example.com')).toEqual([]);
+describe('shortLinkTargetRefusal', () => {
+  test('is null for an allowed target', () => {
+    expect(shortLinkTargetRefusal('/apps/chat', [])).toBeNull();
+    expect(shortLinkTargetRefusal('https://www.qwant.com/', ['www.qwant.com'])).toBeNull();
   });
 
-  test('keeps regex entries as written', () => {
-    expect(normalizeAllowedHosts([' /[A-Z]\\.Example\\.com/ ', '*.Example.com'])).toEqual([
-      '/[A-Z]\\.Example\\.com/',
-      '*.example.com'
-    ]);
+  // The host an administrator has to allow, so the error can name it.
+  test.each([
+    ['https://www.qwant.com/', 'www.qwant.com'],
+    ['http://Docs.Example.com:8080/x?y=1', 'docs.example.com'],
+    ['https://bücher.de/', 'xn--bcher-kva.de']
+  ])('names the host of %s when only the host is missing', (target, host) => {
+    expect(shortLinkTargetRefusal(target, [])).toEqual({ reason: 'host', host });
+  });
+
+  test.each([
+    'ftp://www.qwant.com/',
+    'javascript:alert(1)',
+    'https://user:pass@www.qwant.com/',
+    '//www.qwant.com/',
+    '/\\www.qwant.com/',
+    'not a url',
+    42
+  ])('refuses %s without naming a host: allowing one would not help', target => {
+    expect(shortLinkTargetRefusal(target, [])).toEqual({ reason: 'target' });
   });
 });
