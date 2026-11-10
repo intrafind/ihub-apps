@@ -64,12 +64,14 @@ it appears, in sitemap order. Corpus totals do not depend on the order; the per-
 
 ## How tokens are counted
 
-Tokens come from the shared token estimator (`shared/tokenEstimator.js`), the one the usage tracker
-uses. With the `gpt-tokenizer` package installed it counts with `o200k_base`: exact for OpenAI
-models, typically within 10 to 20 percent for other families. **Without it, the estimator falls back
-to one token per four characters**, and the server does not ship that package (the browser client
-does). The report always says which method counted. If the numbers matter, install `gpt-tokenizer`
-next to the server and restart; this also makes the usage figures of the chat more accurate.
+Tokens come from the shared token estimator (`shared/tokenEstimator.js`), the one the agent loop,
+context compaction, the skill budgets and the project size figures use. With the `gpt-tokenizer`
+package available to it, it counts with `o200k_base`: exact for OpenAI models, typically within 10
+to 20 percent for other families. **Without it, the estimator falls back to one token per four
+characters**, a rough approximation that can be off in either direction. The report always says
+which method counted, and **Test** on the integration shows it. Whether the server ships the
+package is decided separately from this integration (see the server's release notes); if the
+numbers matter, check the method named in the report.
 
 ## What it will and will not fetch
 
