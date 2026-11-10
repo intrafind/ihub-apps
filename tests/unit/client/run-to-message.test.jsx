@@ -61,7 +61,7 @@ describe('projectRunToMessage — streaming content', () => {
     expect(extras.answerSource).toBeUndefined();
   });
 
-  test('completion carries finishReason, answerSource and ifinderMessageId', () => {
+  test('completion carries finishReason and answerSource; the iFinder id stays on the server', () => {
     const run = runFrom([
       started,
       env(2, 'step/delta', { step: 0, kind: 'text', content: 'Answer' }),
@@ -86,7 +86,7 @@ describe('projectRunToMessage — streaming content', () => {
     expect(extras.finishReason).toBe('stop');
     // Exactly what run/ended named — a tool's own hint is not merged in.
     expect(extras.answerSource).toEqual({ sources: ['websearch'], type: 'mixed' });
-    expect(extras.ifinderMessageId).toBe('resp-9');
+    expect(extras.ifinderMessageId).toBeUndefined();
   });
 
   test('a stream/error appends the message (legacy error path) and stops loading', () => {

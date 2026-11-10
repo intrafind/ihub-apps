@@ -253,6 +253,10 @@ function ProjectPageContent({ projectId }) {
   const usableAdminProject =
     project.ownership === 'admin' && typeof project.subscribed === 'boolean';
   const description = localizedText(project.description, language);
+  // Someone who took a project from the catalog chats inside it, but reads only their
+  // own chats there: theirs are private to them, the members' are not theirs to read.
+  const privateChats = permissions.canHoldChats !== false && permissions.readsAllChats === false;
+  const showComposer = isIFinder || (isUserProject ? !readOnlyOwnerGone : usableAdminProject);
 
   return (
     <div className="min-h-full px-4 sm:px-6 py-8">
@@ -337,18 +341,24 @@ function ProjectPageContent({ projectId }) {
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6 min-w-0">
             {/* The main thing to do with a project: chat with its documents. Someone
-                who took it from the catalog starts a chat outside it, with it attached;
-                so does everyone with an admin project made available to everyone. */}
-            {(isIFinder || (isUserProject ? !readOnlyOwnerGone : usableAdminProject)) && (
+                who took it from the catalog chats inside it, privately; with an admin
+                project made available to everyone, a chat starts with it attached. */}
+            {showComposer && (
               <ProjectChatComposer
                 project={project}
                 projectName={projectDisplayName(project, language)}
                 attach={permissions.canHoldChats === false}
+                privateChats={privateChats}
               />
             )}
             {/* Chats before the documents: a long document list must not push them out of sight.
-                Someone from the catalog holds no chats here: theirs attach the project. */}
-            {permissions.canHoldChats !== false && <ProjectChatsSection project={project} />}
+                Someone from the catalog sees their own chats only; a project that holds no
+                chats lists the chats that attach it. */}
+            {permissions.canHoldChats === false ? (
+              showComposer && <ProjectChatsSection project={project} scope="attached" />
+            ) : (
+              <ProjectChatsSection project={project} scope={privateChats ? 'private' : 'members'} />
+            )}
             <ProjectItemsSection
               project={project}
               config={config}

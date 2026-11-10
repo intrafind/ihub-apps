@@ -7,10 +7,10 @@
  *
  * The three historical regressions (both handlers used to throw
  * "X is not defined" at runtime) are kept as scenarios:
- *   - `meta.responseMessageId` attaches ifinderMessageId while still loading
+ *   - `meta.responseMessageId` leaves the message streaming (the server keeps the id)
  *   - `run/ended` finalises the message, flips processing off and calls
  *     onMessageComplete
- *   - a delta → meta → run/ended sequence keeps ifinderMessageId
+ *   - a delta → meta → run/ended sequence keeps the streamed content
  *
  * These exercise the real hook end-to-end through the real `useChatMessages`.
  */
@@ -131,19 +131,19 @@ test("'stream/connected' sends the pending message", async () => {
   expect(result.current.processing).toBe(true);
 });
 
-test("'meta.responseMessageId' attaches ifinderMessageId while the message keeps loading", async () => {
+test("'meta.responseMessageId' does not put the iFinder id on the message and keeps it loading", async () => {
   const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-resp' }));
 
   const assistant = startAssistantMessage(result);
   expect(assistant).toBeTruthy();
   expect(assistant.loading).toBe(true);
-  expect(assistant.ifinderMessageId).toBeUndefined();
 
   await startRun(assistant.id);
   await deliver('meta', { responseMessageId: 'resp-123' });
 
   const updated = result.current.messages.find(m => m.id === assistant.id);
-  expect(updated.ifinderMessageId).toBe('resp-123');
+  // The server resolves the iFinder id for feedback; the client never holds it.
+  expect(updated.ifinderMessageId).toBeUndefined();
   // Emitted before run/ended, so the message keeps streaming: loading preserved.
   expect(updated.loading).toBe(true);
 });
@@ -182,7 +182,7 @@ test('a delta → meta → run/ended sequence keeps both effects', async () => {
   await deliver('run/ended', { status: 'completed', finishReason: 'stop' });
 
   const msg = result.current.messages.find(m => m.id === assistant.id);
-  expect(msg.ifinderMessageId).toBe('resp-999'); // survived the run/ended finalize
+  expect(msg.ifinderMessageId).toBeUndefined();
   expect(msg.content).toBe('partial done');
   expect(msg.loading).toBe(false);
   expect(result.current.processing).toBe(false);

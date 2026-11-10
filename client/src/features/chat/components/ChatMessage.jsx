@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { abortCauseText } from '../../../shared/utils/abortCause';
 import { sendMessageFeedback, answerInteraction } from '../../../api';
-import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
@@ -371,33 +370,6 @@ function ChatMessage({
     }
   }, [isEditing]);
 
-  // Post-process the rendered markdown to add target="_blank" to external links
-  useEffect(() => {
-    if (outputFormat === 'markdown' && !isUser && !isEditing && messageRef.current) {
-      // Get all links in this specific message's rendered markdown
-      const links = messageRef.current.querySelectorAll('a');
-      const currentDomain = window.location.hostname;
-
-      links.forEach(link => {
-        const href = link.getAttribute('href');
-
-        // Check if the link is external
-        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-          try {
-            const url = new URL(href);
-            // If the hostname is different from the current domain, open in a new tab
-            if (url.hostname !== currentDomain) {
-              link.setAttribute('target', '_blank');
-              link.setAttribute('rel', 'noopener noreferrer');
-            }
-          } catch (e) {
-            console.error('Error parsing URL:', href, e);
-          }
-        }
-      });
-    }
-  }, [outputFormat, isUser, isEditing, message.content]);
-
   const handleCopy = (format = 'text') => {
     // Use the original streamed content directly
     const raw = typeof message.content === 'string' ? message.content : message.content || '';
@@ -604,10 +576,6 @@ function ChatMessage({
 
       console.log(`Submitting feedback with exact messageId: ${exactMessageId}`);
 
-      // Get conversation ID for iAssistant messages
-      const conversationId = appId ? getConversationId(appId) : null;
-      const ifinderMessageId = message.ifinderMessageId || null;
-
       await sendMessageFeedback({
         messageId: exactMessageId,
         appId,
@@ -616,8 +584,6 @@ function ChatMessage({
         rating: feedbackRating, // Numeric rating (1-5)
         feedback: feedbackText,
         messageContent: message.content.substring(0, 300), // Send a snippet for context
-        conversationId, // Include for iAssistant messages
-        ifinderMessageId, // Include iFinder message ID for routing to iFinder API
         ...(message.runId ? { runId: message.runId } : {}) // Recorded as a human/event on the run
       });
 

@@ -272,7 +272,8 @@ function collectionStubPermissions(project, user, { isAdmin = false } = {}) {
  *   isOwner: boolean, role: 'owner'|'editor'|'user'|'catalog'|'admin'|'linked'|null,
  *   readOnly: boolean}}
  *   `readsAllChats`: the caller may open the other members' chats in the project;
- *   `canHoldChats`: a chat of theirs may run inside it (which opens it to the members).
+ *   `canHoldChats`: a chat of theirs may run inside it. A member's chat is open to the other
+ *   members; one of someone from the catalog (`readsAllChats: false`) is private to them.
  */
 export function projectPermissions(
   project,
@@ -349,9 +350,10 @@ export function projectPermissions(
     // Someone who only took the project from the catalog is no member: the
     // members' chats stay among the members.
     readsAllChats: role !== 'catalog',
-    // A chat inside a project is open to its members; someone who only took
-    // the project from the catalog attaches it to their chats instead.
-    canHoldChats: role !== 'catalog',
+    // Someone who only took the project from the catalog holds chats inside it
+    // too, but theirs are private to them: the chat records it
+    // (`projectPrivate`) and the members never read it (`readsAllChats`).
+    canHoldChats: true,
     isOwner,
     role: isOwner ? 'owner' : role || 'admin',
     readOnly: readOnly && !isAdmin

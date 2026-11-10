@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { renderMarkdown } from '../../../client/src/config/marked.config';
+import { renderInlineMarkdown, renderMarkdown } from '../../../client/src/config/marked.config';
 
 describe('renderMarkdown', () => {
   test('sanitizes unsafe html', () => {
@@ -76,5 +76,54 @@ describe('link tooltips', () => {
     const html = renderMarkdown(md);
 
     expect(html).toContain('<td><a href="https://example.com/a" title="https://example.com/a"');
+  });
+});
+
+describe('external links', () => {
+  const anchorOf = html => {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    return container.querySelector('a');
+  };
+
+  test('a link to another origin opens in a new tab without the opener', () => {
+    const a = anchorOf(renderMarkdown('[Report](https://example.com/report)'));
+
+    expect(a.getAttribute('target')).toBe('_blank');
+    expect(a.getAttribute('rel')).toBe('noopener noreferrer');
+  });
+
+  test('another port or host counts as external, the page origin does not', () => {
+    const { origin, hostname } = window.location;
+    const otherPort = anchorOf(renderMarkdown(`[x](http://${hostname}:65000/y)`));
+    const samePage = anchorOf(renderMarkdown(`[x](${origin}/apps/chat)`));
+
+    expect(otherPort.getAttribute('target')).toBe('_blank');
+    expect(samePage.hasAttribute('target')).toBe(false);
+  });
+
+  test('relative, fragment and mailto links stay in the current tab', () => {
+    for (const href of ['/apps/chat', '#section', 'mailto:team@example.com']) {
+      expect(anchorOf(renderMarkdown(`[x](${href})`)).hasAttribute('target')).toBe(false);
+    }
+  });
+
+  test('raw HTML cannot choose the target or drop the opener protection', () => {
+    const external = anchorOf(renderMarkdown('<a href="https://example.com" target="_self">x</a>'));
+    const internal = anchorOf(renderMarkdown('<a href="/apps/chat" target="_blank">x</a>'));
+
+    expect(external.getAttribute('target')).toBe('_blank');
+    expect(external.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(internal.hasAttribute('target')).toBe(false);
+  });
+
+  test('inline rendering pins links too, and the hook does not leak to other DOMPurify calls', () => {
+    const DOMPurify = require('dompurify');
+    const inline = anchorOf(renderInlineMarkdown('[x](https://example.com)'));
+
+    expect(inline.getAttribute('target')).toBe('_blank');
+    expect(DOMPurify.sanitize('<a href="https://example.com" target="_blank">x</a>')).not.toContain(
+      'target'
+    );
   });
 });

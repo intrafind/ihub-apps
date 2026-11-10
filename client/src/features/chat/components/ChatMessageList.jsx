@@ -202,6 +202,9 @@ function MessageLog({
     <div
       ref={observeContainer}
       className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+      // A composer floating over the end of the list (FloatingComposer) sets this on
+      // the parent; 0 where there is none.
+      style={{ paddingBottom: 'calc(1rem + var(--chat-composer-clearance, 0px))' }}
       role="log"
       aria-live="polite"
       aria-label={t('chat.messageList', 'Chat messages')}
