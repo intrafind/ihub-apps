@@ -512,7 +512,9 @@ export const urlCrawlSchema = z
     url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed'),
     maxPages: z.number().int().min(1).max(200).optional(),
     maxDepth: z.number().int().min(0).max(3).optional(),
-    samePath: z.boolean().optional()
+    samePath: z.boolean().optional(),
+    // Also list documents on other hosts that pages in scope link to (#3536).
+    otherHostDocuments: z.boolean().optional()
   })
   .strict();
 

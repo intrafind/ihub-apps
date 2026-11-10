@@ -24,6 +24,7 @@ import {
 } from '../../tools/lib/botProtection.js';
 import { dropRawTextElements } from '../../tools/lib/pageContent.js';
 import { HTML_MIME, acceptedTypeOf } from './extractText.js';
+import { DOCUMENT_EXTENSIONS } from './webFileDownload.js';
 
 /** Defaults and upper bounds of a crawl request. */
 export const CRAWL_DEFAULT_MAX_PAGES = 50;
@@ -62,9 +63,10 @@ const MAX_LEVEL_CANDIDATES = 5000;
 
 /**
  * Links to these are documents, listed but not crawled: added to a project,
- * they are downloaded and extracted like an upload (#3536).
+ * they are downloaded and extracted like an upload (#3536). Defined with the
+ * download, which also trusts them for an address it cannot check.
  */
-export const DOCUMENT_EXTENSIONS = new Set(['pdf', 'docx', 'pptx', 'xlsx', 'odt', 'ods', 'odp']);
+export { DOCUMENT_EXTENSIONS };
 
 /**
  * Links to these are neither pages nor documents: never listed. A filter that
@@ -555,6 +557,9 @@ function stoppedError() {
  * @param {number} [params.maxPages=50] - Most pages listed, the start page included
  * @param {number} [params.maxDepth=2] - Most links followed away from the start page
  * @param {boolean} [params.samePath=true] - Stay in the start page's folder
+ * @param {boolean} [params.otherHostDocuments=false] - Also list documents on
+ *   other hosts that pages in scope link to (a CDN, an asset domain). Only
+ *   listed, never fetched by the crawl; a page on another host never is
  * @param {AbortSignal} [params.signal] - Stops the crawl (the client went away)
  * @param {Object} [deps]
  * @param {(url: string, options: {signal: AbortSignal}) => Promise<{finalUrl: string,
@@ -579,6 +584,7 @@ export async function crawlSite(
     maxPages = CRAWL_DEFAULT_MAX_PAGES,
     maxDepth = CRAWL_DEFAULT_MAX_DEPTH,
     samePath = true,
+    otherHostDocuments = false,
     signal: callerSignal
   },
   {
@@ -646,11 +652,21 @@ export async function crawlSite(
     /** The in-scope links of a page worth visiting, in document order. */
     const candidatesOf = (links, depth, into) => {
       for (const link of links) {
-        if (seen.has(link) || !inCrawlScope(link, scope)) continue;
+        if (seen.has(link)) continue;
         const type = linkTypeOf(link);
         if (!type) continue;
+        const inScope = inCrawlScope(link, scope);
+        // A document on another host may be listed; nothing outside the
+        // scope is ever crawled, and another host's robots.txt is not ours
+        // to read (the crawl fetches nothing there).
+        const elsewhere =
+          !inScope &&
+          otherHostDocuments &&
+          type === 'document' &&
+          !sameHostname(new URL(link).hostname, scope.origin);
+        if (!inScope && !elsewhere) continue;
         seen.add(link);
-        if (!robotsAllows(link, robotsRules)) {
+        if (inScope && !robotsAllows(link, robotsRules)) {
           robotsExcluded += 1;
           continue;
         }

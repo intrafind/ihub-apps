@@ -9,6 +9,7 @@
 
 export const CREATE_WEB_ARTIFACT_TOOL = {
   id: 'create_web_artifact',
+  outputKind: 'webArtifact',
   name: { en: 'Create interactive web artifact', de: 'Interaktives Web-Artefakt erstellen' },
   description: {
     en: 'Create a self-contained interactive HTML micro-app (.html) — dashboards, calculators, data explorers, simulators, clickable UI prototypes, HTML5 Canvas/generative visuals — or a standalone vector graphic (.svg). Rendered live in the chat\'s Artifacts panel with a Preview | Code toggle and a download card. Inline all CSS and JS in one file. Activate the "web-artifacts" skill first for design and sandbox rules.',

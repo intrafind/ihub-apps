@@ -130,8 +130,9 @@ describe('default read_url definition', () => {
     assert.equal(typeof extractorModule.extractForTool, 'function');
   });
 
-  it('asks only for a url, a length and an offset, never for ignoreSSL', () => {
+  it('asks only for a url, a length, an offset and a focus, never for ignoreSSL', () => {
     assert.deepEqual(Object.keys(READER.parameters.properties).sort(), [
+      'focus',
       'maxLength',
       'offset',
       'url'

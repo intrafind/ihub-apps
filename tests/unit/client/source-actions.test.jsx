@@ -6,7 +6,8 @@ import {
   copySourceLink,
   openSource,
   resolveSourceFilename,
-  sourceActionsOf
+  sourceActionsOf,
+  readProblemBody
 } from '../../../client/src/features/chat/sources/sourceActions';
 import { fetchIntegrationFileContent } from '../../../client/src/api/endpoints/integrationFiles';
 import { resolveCitations } from '../../../shared/sources/index.js';
@@ -366,6 +367,69 @@ describe('"Add to email" in the Outlook task pane', () => {
       'The document could not be attached to your email.'
     );
     expect(attach).not.toHaveBeenCalled();
+  });
+
+  // The document route answers a refusal as application/problem+json, which a
+  // request for a Blob receives as a Blob. Unread, every failure looked the
+  // same ("could not be attached") and the cause was invisible in the pane.
+  test("says why the document route refused it, read from the Blob's problem body", async () => {
+    const attach = installOffice({ mode: 'compose' });
+    const problem = {
+      type: 'about:blank',
+      title: 'Forbidden',
+      status: 403,
+      code: 'INTEGRATION_NOT_GRANTED',
+      detail: 'Your groups may not use this integration'
+    };
+    fetchIntegrationFileContent.mockRejectedValue(
+      Object.assign(new Error('Request failed with status code 403'), {
+        response: {
+          status: 403,
+          data: new Blob([JSON.stringify(problem)], { type: 'application/problem+json' })
+        }
+      })
+    );
+    renderSources();
+    openMenu();
+    fireEvent.click(screen.getByText('Add to email'));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('The document could not be attached to your email.');
+    expect(alert).toHaveTextContent('Your groups may not use this integration');
+    expect(attach).not.toHaveBeenCalled();
+  });
+
+  test('says what Outlook answered when it refuses the attachment', async () => {
+    installOffice({
+      mode: 'compose',
+      addFileAttachmentFromBase64Async: jest.fn((base64, name, options, callback) =>
+        callback({
+          status: 'failed',
+          error: { name: 'AttachmentError', code: 9000, message: 'The attachment is blocked.' }
+        })
+      )
+    });
+    renderSources();
+    openMenu();
+    fireEvent.click(screen.getByText('Add to email'));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'AttachmentError (9000): The attachment is blocked.'
+    );
+  });
+});
+
+describe('readProblemBody', () => {
+  test('leaves a binary error body alone', async () => {
+    const body = new Blob(['%PDF'], { type: 'application/pdf' });
+    const error = { response: { status: 502, data: body } };
+    await readProblemBody(error);
+    expect(error.response.data).toBe(body);
+  });
+
+  test('keeps a body that only claims to be JSON', async () => {
+    const body = new Blob(['<html>'], { type: 'application/json' });
+    const error = { response: { status: 502, data: body } };
+    await readProblemBody(error);
+    expect(error.response.data).toBe(body);
   });
 });
 

@@ -22,11 +22,14 @@ import CustomResponseRenderer from '../../../shared/components/CustomResponseRen
 import ClarificationCard from './ClarificationCard';
 import ApprovalCard from './ApprovalCard';
 import GeneratedImage from './GeneratedImage';
-import AnswerSources, { CitedSources, hasAnswerResults } from './AnswerSources';
+import AnswerSources, { CitedSources, ReadSources, hasAnswerResults } from './AnswerSources';
 import { findTrailingSourceList, resolveCitations } from '../../../../../shared/sources/index.js';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
+import { isActivityLineBusy } from '../activityHeadline.js';
+import { settleActivity } from '../settleActivity.js';
+import { useGracedActivity } from '../hooks/useGracedActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -164,6 +167,29 @@ function ChatMessage({
 
   const isUser = message.role === 'user';
   const isError = message.error === true;
+  // What the turn is doing (searches, files being written, "Waiting for the
+  // model…"), without the rows still in their grace period (#3534).
+  // A turn the user stopped (or that failed in transport) never delivers the
+  // frames that end its rows, and a decided approval leaves its row behind:
+  // settle both before the grace period is applied.
+  const stoppedHere =
+    !message.loading &&
+    (message.cancelled === true ||
+      message.error === true ||
+      INTERRUPTED_FINISH_REASONS.has(message.finishReason));
+  const approvalDecided = Boolean(message.toolApproval?.decision);
+  const settledActivity = useMemo(
+    () =>
+      settleActivity(message.toolActivity, {
+        interrupted: stoppedHere,
+        decided: approvalDecided
+      }),
+    [message.toolActivity, stoppedHere, approvalDecided]
+  );
+  const toolActivity = useGracedActivity(settledActivity);
+  // Its headline shows a spinner or a label, so the three-dot loader below
+  // stands down: two loaders on one message are one too many.
+  const activityLineBusy = isActivityLineBusy(toolActivity, message.loading);
 
   // Everything the answer found and which of it the answer cites — shared by
   // the inline citation badges and the sources panel under the answer.
@@ -192,18 +218,21 @@ function ChatMessage({
   );
   // The footer at the answer's end (#3521): the cited list, then one row with
   // the entry to everything found and the badge saying what the answer is
-  // based on. Only once the answer is complete.
+  // based on. Only once the answer is complete. An answer that cites nothing
+  // lists what was read for it in the cited list's place.
   const finished = !message.loading;
   const hasCited = Boolean(citationView?.cited.length);
+  const hasRead = Boolean(citationView?.read?.length);
+  const hasList = hasCited || hasRead;
   const hasResults = hasAnswerResults(citationView);
   const showAnswerSourceBadge =
     !isUser &&
     !isError &&
     finished &&
     Boolean(message.answerSource || message.workflowResult || message.knowledgeScope);
-  const showSourcesBlock = !isUser && finished && (hasCited || hasResults);
+  const showSourcesBlock = !isUser && finished && (hasList || hasResults);
   const showFooterRow = !isUser && finished && (hasResults || showAnswerSourceBadge);
-  const footerRowClass = hasCited
+  const footerRowClass = hasList
     ? 'mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5'
     : 'flex flex-wrap items-center gap-x-2 gap-y-1.5';
   const citations = useMemo(
@@ -224,6 +253,18 @@ function ChatMessage({
   // nothing.
   const interrupted =
     message.cancelled === true || INTERRUPTED_FINISH_REASONS.has(message.finishReason);
+  // The model finished normally but wrote nothing — a reasoning model can end
+  // its turn right after thinking. Without a notice the bubble is just blank.
+  const emptyAnswer =
+    !isUser &&
+    !isError &&
+    !message.loading &&
+    !message.cancelled &&
+    message.finishReason === 'stop' &&
+    !answerText.trim() &&
+    !message.images?.length &&
+    !message.generatedFiles?.length &&
+    !message.artifacts?.length;
   const skillDraft = useMemo(
     () =>
       onSaveAsSkill && !isUser && !isError && !readOnly && !message.loading && !interrupted
@@ -745,16 +786,17 @@ function ChatMessage({
             <SearchSummary summary={message.searchSummary} />
             {/* The generic three-dot pulse is the fallback indicator only.
                 SearchStatusIndicator animates its own dots and names the phase
-                it is in, so showing both put two loaders on one message. */}
-            {!hasSearchStatus && (
+                it is in, and the activity headline has its own spinner, so
+                showing either with these put two loaders on one message. */}
+            {!hasSearchStatus && !activityLineBusy && (
               <div className="flex mt-2">
-                <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
+                <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"></span>
                 <span
-                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
                   style={{ animationDelay: '0.2s' }}
                 ></span>
                 <span
-                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
                   style={{ animationDelay: '0.4s' }}
                 ></span>
               </div>
@@ -766,13 +808,13 @@ function ChatMessage({
       return (
         <div className="flex items-center">
           <span>{contentToRender}</span>
-          <span className="ml-2 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
+          <span className="ml-2 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"></span>
           <span
-            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
             style={{ animationDelay: '0.2s' }}
           ></span>
           <span
-            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
             style={{ animationDelay: '0.4s' }}
           ></span>
         </div>
@@ -1005,8 +1047,8 @@ function ChatMessage({
         )}
         {/* Searches, sources and other tool calls behind the answer. Above it,
             like the thoughts, so it stays put while the answer streams. */}
-        {!isUser && message.toolActivity && (
-          <ToolActivity activity={message.toolActivity} loading={!!message.loading} />
+        {!isUser && toolActivity && (
+          <ToolActivity activity={toolActivity} loading={!!message.loading} />
         )}
         {/* Interactive MCP App views the answer's tool calls rendered. */}
         {!isUser && message.mcpApps?.length > 0 && (
@@ -1102,6 +1144,9 @@ function ChatMessage({
           >
             {showSourcesBlock && hasCited && (
               <CitedSources messageKey={messageKey} sources={citationView.cited} />
+            )}
+            {showSourcesBlock && hasRead && (
+              <ReadSources messageKey={messageKey} sources={citationView.read} />
             )}
             <div className={showFooterRow ? footerRowClass : undefined}>
               {citationView && (
@@ -1233,6 +1278,15 @@ function ChatMessage({
               <Icon name="exclamation-triangle" size="sm" />
               {t('pages.appChat.truncated', 'Truncated')}
             </span>
+          )}
+          {emptyAnswer && (
+            <>
+              <Icon name="exclamation-circle" size="sm" className="text-amber-500" />
+              <span>{t('pages.appChat.emptyAnswer', 'The model returned no answer.')}</span>
+              <button onClick={() => handleResend()} className="underline text-amber-700">
+                {t('common.retry', 'Retry')}
+              </button>
+            </>
           )}
           {(message.finishReason === 'connection_closed' || message.finishReason === 'error') && (
             <>

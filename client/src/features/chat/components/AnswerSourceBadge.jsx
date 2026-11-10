@@ -171,10 +171,18 @@ function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null
   );
 }
 
-/** How one project of the scope was used, as a short phrase. */
+/**
+ * How one project of the scope was used, as a short phrase. A searched project
+ * the server marked `excerpted` also put the sections that match the question
+ * into the prompt: the answer did not rest on search alone.
+ */
 function scopeModeText(project, t) {
   if (project.mode === 'loaded') return t('chatMessage.knowledgeScope.loadedOne', 'loaded in full');
-  if (project.mode === 'searched') return t('chatMessage.knowledgeScope.searchedOne', 'searched');
+  if (project.mode === 'searched') {
+    return project.excerpted
+      ? t('chatMessage.knowledgeScope.searchedExcerptsOne', 'searched, relevant sections loaded')
+      : t('chatMessage.knowledgeScope.searchedOne', 'searched');
+  }
   return t('chatMessage.knowledgeScope.unavailableOne', 'unavailable');
 }
 

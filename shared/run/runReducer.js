@@ -11,6 +11,7 @@
  *
  *   StreamState { streamId, connected, lastSeq, gap, runs: { [runId]: RunState }, order, activeRunId, error }
  *   RunState    { runId, kind, status, refs, model, text, thinking, images, steps, tools, progress,
+ *                 argStreams, argOrder, waiting,
  *                 nodes, interactions, pendingInteractionId, meta, knowledgeSources, sources, … }
  *
  * Surfaces project this state onto their own view (a chat message, a
@@ -23,8 +24,21 @@
 import { SSE_V2_EVENTS } from '../runEvents.js';
 import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 import { generatedFilesOf } from '../generatedFiles.js';
+import { ARGS_OUTCOMES, KNOWN_ARGS_OUTCOMES, PROGRESS_PHASES } from './argProgress.js';
 
 const TERMINAL_STATUSES = new Set(['completed', 'aborted', 'error', 'budget_exhausted']);
+
+/**
+ * `tool/progress` phases that describe a tool call whose arguments are still
+ * being written by the model, and the model call itself (issue #3534). They
+ * are folded into `run.argStreams` and `run.waiting`, never appended to
+ * `run.progress`: they repeat about once a second, so keeping every frame
+ * would grow the list without end, and `progress` is read for things (the
+ * page being fetched, skill activations) that these frames are not.
+ */
+const ARG_PHASE = PROGRESS_PHASES.ARGS;
+const ARG_ENDED_PHASE = PROGRESS_PHASES.ARGS_ENDED;
+const WAITING_PHASE = PROGRESS_PHASES.MODEL_WAITING;
 
 export function createStreamState(streamId = null) {
   return {
@@ -67,6 +81,14 @@ export function createRunState(runId, init = {}) {
     tools: [],
     // free-form progress (tool/progress + progress/node, in arrival order)
     progress: [],
+    // Calls whose arguments the model is still writing (`tool/progress` phases
+    // `args` and `args.ended`), by call id, and the order they first appeared in.
+    // One entry per call, updated in place: the row keeps its place and its id
+    // matches the later `tool/started` and `tool/completed`.
+    argStreams: {},
+    argOrder: [],
+    // The model call has shown nothing for a while (`model.waiting`), or null.
+    waiting: null,
     nodes: {},
     nodeOrder: [],
     // interactions
@@ -247,6 +269,245 @@ export function foldSkill(skills, skill) {
   return skills.map((entry, i) => (i === index ? merged : entry));
 }
 
+/** A finite number, or `fallback`. */
+function finiteOr(value, fallback) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+/** A non-empty string, or null. */
+function textOrNull(value) {
+  return typeof value === 'string' && value ? value : null;
+}
+
+/**
+ * The monotonic clock the client measures a progress frame's age against. An
+ * envelope may carry its own `receivedAt` (tests, replays); a live frame is
+ * stamped when it is folded. Never the wall clock: a wrong system time must not
+ * move the stopwatch the user reads.
+ */
+function frameClock(envelope) {
+  if (typeof envelope.receivedAt === 'number' && Number.isFinite(envelope.receivedAt)) {
+    return envelope.receivedAt;
+  }
+  return typeof performance !== 'undefined' && typeof performance.now === 'function'
+    ? performance.now()
+    : Date.now();
+}
+
+/** The `data` object of a frame, or an empty one. */
+function detailOf(frame) {
+  return frame.data && typeof frame.data === 'object' ? frame.data : {};
+}
+
+/** The run with one call's stream entry replaced, and the model no longer silent. */
+function withArgStream(run, entry, extra = {}) {
+  return {
+    ...run,
+    ...extra,
+    argStreams: { ...run.argStreams, [entry.callId]: entry },
+    // The row exists, so the model is no longer silent.
+    waiting: null
+  };
+}
+
+/**
+ * Fold `args.ended`: the model stopped writing a call's arguments. Only an
+ * announced call can end, and it ends once.
+ */
+function foldArgsEnded(run, known, detail, when) {
+  if (!known || known.ended) return run;
+  // An outcome the client does not know yet is read as `ready`, so the wire can grow.
+  const outcome = KNOWN_ARGS_OUTCOMES.has(detail.outcome) ? detail.outcome : ARGS_OUTCOMES.READY;
+  const argBytes = Math.max(known.argBytes, finiteOr(detail.argBytes, known.argBytes));
+  const elapsedMs = Math.max(known.elapsedMs, finiteOr(detail.elapsedMs, known.elapsedMs));
+  return withArgStream(run, {
+    ...known,
+    argBytes,
+    elapsedMs,
+    receivedAt: when.receivedAt,
+    grewAtMs: argBytes > known.argBytes ? elapsedMs : known.grewAtMs,
+    ended: { outcome, argBytes, elapsedMs, receivedAt: when.receivedAt }
+  });
+}
+
+/**
+ * What the server decided the call is (`utils/toolDisplay`): the first frame
+ * that names a field wins, later frames only fill gaps.
+ */
+function argDisplayFields(frame, detail, known) {
+  const occurrence = finiteOr(detail.occurrence, 0);
+  return {
+    toolId: textOrNull(frame.toolId) || known?.toolId || null,
+    name: textOrNull(detail.name) || known?.name || null,
+    title: textOrNull(detail.title) || known?.title || null,
+    integration: textOrNull(detail.integration) || known?.integration || null,
+    activityKind: textOrNull(detail.activityKind) || known?.activityKind || null,
+    outputKind: textOrNull(detail.outputKind) || known?.outputKind || null,
+    occurrence: occurrence > 1 ? occurrence : (known?.occurrence ?? null)
+  };
+}
+
+/** Where the call sits in the list: when it first appeared, and among how many started calls. */
+function argPlaceFields(run, known, when) {
+  if (known) {
+    const { firstSeen, afterTools, firstSeenAt, firstReceivedAt } = known;
+    return { firstSeen, afterTools, firstSeenAt, firstReceivedAt };
+  }
+  return {
+    firstSeen: run.argOrder.length,
+    afterTools: run.tools.length,
+    firstSeenAt: when.ts || null,
+    firstReceivedAt: when.receivedAt
+  };
+}
+
+/** Fold `args`: the model is writing a call's arguments, `argBytes` so far. */
+function foldArgsProgress(run, frame, known, detail, when) {
+  if (known?.ended) return run;
+  const argBytes = Math.max(known?.argBytes ?? 0, finiteOr(detail.argBytes, 0));
+  const elapsedMs = Math.max(known?.elapsedMs ?? 0, finiteOr(detail.elapsedMs, 0));
+  const entry = {
+    callId: frame.callId,
+    step: Number.isInteger(frame.step) ? frame.step : (known?.step ?? null),
+    ...argDisplayFields(frame, detail, known),
+    argBytes,
+    elapsedMs,
+    receivedAt: when.receivedAt,
+    // The server clock reading at which the size last grew: a call whose size
+    // sits still for long is stalled (the client measures it, see
+    // `isStalled` in features/chat/activityTiming.js).
+    grewAtMs: !known || argBytes > known.argBytes ? elapsedMs : known.grewAtMs,
+    ...argPlaceFields(run, known, when),
+    ended: null
+  };
+  return withArgStream(run, entry, {
+    argOrder: known ? run.argOrder : [...run.argOrder, entry.callId]
+  });
+}
+
+/**
+ * Fold a `tool/progress` frame of phase `args` or `args.ended`: the model is
+ * writing the arguments of a call, or has stopped.
+ *
+ * One entry per call id, updated in place. Values on the wire are absolute, so
+ * `argBytes` is kept at its maximum (a replayed or reordered frame cannot make
+ * it shrink) and a frame after `args.ended` is ignored. The entry remembers how
+ * many tool calls had started when it first appeared (`afterTools`), which is
+ * what lets `buildToolActivity` keep the row where it first showed up even
+ * though `tool/started` later moves the call to the end of `run.tools`.
+ *
+ * @param {Object} run - RunState
+ * @param {Object} frame - the `tool/progress` frame (`phase`, `callId`, `toolId`, `step`, `data`)
+ * @param {{ts: string|undefined, receivedAt: number}} when - server time and client clock of the frame
+ * @returns {Object} the new RunState (the same object when the frame changes nothing)
+ */
+function foldArgFrame(run, frame, when) {
+  const callId = textOrNull(frame.callId);
+  if (!callId) return run;
+  const known = run.argStreams[callId];
+  const detail = detailOf(frame);
+  return frame.phase === ARG_ENDED_PHASE
+    ? foldArgsEnded(run, known, detail, when)
+    : foldArgsProgress(run, { ...frame, callId }, known, detail, when);
+}
+
+/**
+ * Visible model output ends the waiting line: answer text and images always;
+ * reasoning too, unless the server already said the silence is reasoning
+ * (`waiting.reasoning`), in which case the "Thinking" line stays up while the
+ * thoughts stream instead of flickering with every token.
+ */
+function clearWaitingOnOutput(run, delta) {
+  if (!run.waiting) return run;
+  const visible =
+    (delta.kind === 'text' && delta.content) ||
+    (delta.kind === 'image' && delta.image) ||
+    (delta.kind === 'thinking' && (delta.content || delta.meta) && !run.waiting.reasoning);
+  return visible ? { ...run, waiting: null } : run;
+}
+
+/**
+ * Fold a `model.waiting` frame: the model call has produced nothing visible for
+ * a while. `data.reasoning` is the server's statement that the silence is the
+ * model reasoning; the client never infers it. A frame that arrives after the
+ * run ended is a late straggler and is dropped.
+ */
+function foldWaitingFrame(run, frame, when) {
+  if (TERMINAL_STATUSES.has(run.status)) return run;
+  const detail = detailOf(frame);
+  return {
+    ...run,
+    waiting: {
+      step: Number.isInteger(frame.step) ? frame.step : null,
+      elapsedMs: Math.max(0, finiteOr(detail.elapsedMs, 0)),
+      reasoning: detail.reasoning === true,
+      receivedAt: when.receivedAt
+    }
+  };
+}
+
+/**
+ * Fold a `tool/progress` frame of one of the live phases (`args`,
+ * `args.ended`, `model.waiting`) into the run's own state.
+ *
+ * @returns {Object|null} the new RunState, or null when the frame is another phase
+ */
+function foldLiveProgress(run, frame, envelope) {
+  const when = { ts: envelope.ts, receivedAt: frameClock(envelope) };
+  if (frame.phase === ARG_PHASE || frame.phase === ARG_ENDED_PHASE) {
+    return foldArgFrame(run, frame, when);
+  }
+  return frame.phase === WAITING_PHASE ? foldWaitingFrame(run, frame, when) : null;
+}
+
+/** The skill a `skill.activation` frame names, for `foldSkill`. */
+function activatedSkillOf(frame) {
+  const detail = frame.data;
+  return {
+    name: detail?.skillName || frame.message,
+    description: detail?.description || '',
+    // The global skill name or user skill id the next turns of the chat keep
+    // the skill active by (`name` is for display).
+    ...(typeof detail?.skillId === 'string' && detail.skillId ? { id: detail.skillId } : {}),
+    // Who activated it: a skill only users may start stays active only when a
+    // user did.
+    ...(detail?.activatedBy === 'user' || detail?.activatedBy === 'model'
+      ? { activatedBy: detail.activatedBy }
+      : {})
+  };
+}
+
+/**
+ * Fold a `tool/progress` frame. Arguments being written and the model's
+ * silence have their own state (see `ARG_PHASE`) and never reach
+ * `run.progress`; every other phase is appended to it, and a few also fold
+ * into state of their own.
+ */
+function foldToolProgress(run, frame, envelope) {
+  const live = foldLiveProgress(run, frame, envelope);
+  if (live) return live;
+  const { ts, seq, runId } = envelope;
+  const entry = { kind: 'tool/progress', at: ts, seq, runId, ...frame };
+  const appended = { ...run, progress: [...run.progress, entry] };
+  switch (frame.phase) {
+    case 'search.status':
+      return {
+        ...appended,
+        searchStatus: frame.data ?? null,
+        searchSummary: accumulateSearch(appended.searchSummary, frame.data)
+      };
+    case 'skill.activation':
+      // `run.skills` is the set of skills the turn used, one entry each. Every
+      // activation (the user's `/name`, each time the model loads it) stays on
+      // `run.progress` for the thought chain to list.
+      return { ...appended, skills: foldSkill(appended.skills, activatedSkillOf(frame)) };
+    case 'grounding':
+      return { ...appended, grounding: mergeGrounding(appended.grounding, frame.data) };
+    default:
+      return appended;
+  }
+}
+
 /**
  * Fold one envelope into the stream state. Unknown or malformed envelopes are
  * ignored (the state object is returned unchanged).
@@ -337,8 +598,7 @@ export function reduceRunEvent(state, envelope) {
         endedAt: ts,
         lastLifecycleAt: ts,
         pendingInteractionId: null,
-        // A call whose arguments never finished (the user stopped the run) never ran.
-        tools: run.tools.filter(t => !t.preparing)
+        waiting: null
       };
       return withRun(next, run);
 
@@ -347,7 +607,8 @@ export function reduceRunEvent(state, envelope) {
         ...run,
         status: 'paused',
         lastLifecycleAt: ts,
-        pendingInteractionId: data.interactionId || run.pendingInteractionId
+        pendingInteractionId: data.interactionId || run.pendingInteractionId,
+        waiting: null
       };
       return withRun(next, run);
 
@@ -384,6 +645,7 @@ export function reduceRunEvent(state, envelope) {
         run = { ...run, images: [...run.images, data.image] };
       }
       run = { ...run, currentStep: stepNo, steps: { ...run.steps, [stepNo]: step } };
+      run = clearWaitingOnOutput(run, data);
       return withRun(next, run);
     }
 
@@ -449,18 +711,12 @@ export function reduceRunEvent(state, envelope) {
         // MCP App view the tool renders (server + `ui://` resource).
         mcpApp: data.mcpApp || null
       };
-      // Replaces the row its `tool.preparing` drew — matched by id, or, when the
-      // loop gave the call another id, the first such row of the same tool and step.
-      const preparing =
-        run.tools.find(t => t.preparing && t.callId === data.callId) ||
-        run.tools.find(t => t.preparing && t.step === data.step && t.toolId === data.toolId);
-      if (preparing) tool.startedAt = preparing.startedAt;
-      const tools = preparing
-        ? run.tools
-            .filter(t => t.callId !== data.callId || t === preparing)
-            .map(t => (t === preparing ? tool : t))
-        : [...run.tools.filter(t => t.callId !== data.callId), tool];
-      run = { ...run, tools };
+      // A tool row is visible output: the model is no longer silent.
+      run = {
+        ...run,
+        tools: [...run.tools.filter(t => t.callId !== data.callId), tool],
+        waiting: null
+      };
       return withRun(next, run);
     }
 
@@ -522,84 +778,8 @@ export function reduceRunEvent(state, envelope) {
       return withRun(next, run);
     }
 
-    case SSE_V2_EVENTS.TOOL_PROGRESS: {
-      // The model is still writing the call's arguments: a running row now,
-      // replaced by the call's own `tool/started` (server `chatChannel`).
-      if (data.phase === 'tool.preparing') {
-        if (!data.callId) return next;
-        const d = data.data || {};
-        const chars = Number.isFinite(d.chars) && d.chars > 0 ? d.chars : 0;
-        const existing = run.tools.find(t => t.callId === data.callId);
-        if (existing) {
-          if (!existing.preparing) return next;
-          const tools = run.tools.map(t => (t === existing ? { ...t, writtenChars: chars } : t));
-          return withRun(next, { ...run, tools });
-        }
-        const tool = {
-          callId: data.callId,
-          step: data.step,
-          toolId: d.toolId,
-          name: d.name || d.toolId,
-          title: d.title || null,
-          integration: d.integration || null,
-          activityKind: d.activityKind || null,
-          activityScope: d.activityScope || null,
-          args: undefined,
-          execution: 'server',
-          status: 'running',
-          preparing: true,
-          writtenChars: chars,
-          startedAt: ts,
-          completedAt: null,
-          result: undefined,
-          error: null,
-          durationMs: null,
-          knowledgeSource: null,
-          sources: [],
-          mcpApp: null
-        };
-        return withRun(next, { ...run, tools: [...run.tools, tool] });
-      }
-      const entry = { kind: 'tool/progress', at: ts, seq, runId, ...data };
-      run = { ...run, progress: [...run.progress, entry] };
-      switch (data.phase) {
-        case 'search.status':
-          run = {
-            ...run,
-            searchStatus: data.data ?? null,
-            searchSummary: accumulateSearch(run.searchSummary, data.data)
-          };
-          break;
-        case 'skill.activation':
-          // `run.skills` is the set of skills the turn used, one entry each.
-          // Every activation (the user's `/name`, each time the model loads it)
-          // stays on `run.progress` for the thought chain to list.
-          run = {
-            ...run,
-            skills: foldSkill(run.skills, {
-              name: data.data?.skillName || data.message,
-              description: data.data?.description || '',
-              // The global skill name or user skill id the next turns of the
-              // chat keep the skill active by (`name` is for display).
-              ...(typeof data.data?.skillId === 'string' && data.data.skillId
-                ? { id: data.data.skillId }
-                : {}),
-              // Who activated it: a skill only users may start stays active
-              // only when a user did.
-              ...(data.data?.activatedBy === 'user' || data.data?.activatedBy === 'model'
-                ? { activatedBy: data.data.activatedBy }
-                : {})
-            })
-          };
-          break;
-        case 'grounding':
-          run = { ...run, grounding: mergeGrounding(run.grounding, data.data) };
-          break;
-        default:
-          break;
-      }
-      return withRun(next, run);
-    }
+    case SSE_V2_EVENTS.TOOL_PROGRESS:
+      return withRun(next, foldToolProgress(run, data, envelope));
 
     case SSE_V2_EVENTS.PROGRESS_NODE: {
       const nodeId = data.nodeId;

@@ -3,7 +3,7 @@
 
 import crypto from 'node:crypto';
 import { createSharedJsonFile } from './utils/sharedJsonFile.js';
-import { isAllowedShortLinkTarget } from './utils/shortLinkTarget.js';
+import { shortLinkTargetRefusal } from './utils/shortLinkTarget.js';
 import { getContentsPath } from './utils/contentsPath.js';
 import { ServiceError } from './utils/ServiceError.js';
 
@@ -62,14 +62,37 @@ function generateCode(length = 6) {
   return code;
 }
 
-/** A link's target could not be accepted (see utils/shortLinkTarget.js). */
+/**
+ * A link's target could not be accepted (see utils/shortLinkTarget.js).
+ *
+ * A URL whose host is not allowed answers `SHORT_LINK_HOST_NOT_ALLOWED` with the
+ * host in `details`, so the message can name it and say where an administrator
+ * allows it; any other target answers `BAD_REQUEST`.
+ */
 export class ShortLinkTargetError extends ServiceError {
-  constructor(
-    message = 'The target must be a path on this server or a URL on an allowed host (shortLinks.allowedHosts)'
-  ) {
-    super('BAD_REQUEST', message);
+  /** @param {{ reason: string, host?: string }} [refusal] - From `shortLinkTargetRefusal` */
+  constructor(refusal) {
+    if (refusal?.reason === 'host') {
+      super(
+        'SHORT_LINK_HOST_NOT_ALLOWED',
+        `Short links may not lead to ${refusal.host}. An administrator can allow this host on the ` +
+          'SSRF allowlist under Admin → Security → SSRF Allowlist (ssrf.allowedHosts).',
+        { details: { host: refusal.host } }
+      );
+    } else {
+      super(
+        'BAD_REQUEST',
+        'The target must be a path on this server, such as /apps/chat, or an http(s) URL'
+      );
+    }
     this.name = 'ShortLinkTargetError';
   }
+}
+
+/** Throw `ShortLinkTargetError` when a link may not redirect to `target`. */
+function assertAllowedTarget(target, allowedHosts) {
+  const refusal = shortLinkTargetRefusal(target, allowedHosts);
+  if (refusal) throw new ShortLinkTargetError(refusal);
 }
 
 /** The fields a link's owner (or an admin) may change after creation. */
@@ -116,9 +139,7 @@ export async function createLink(
   { allowedHosts = [] } = {}
 ) {
   const finalUrl = url || buildTarget({ appId, path, params, includeParams });
-  if (!isAllowedShortLinkTarget(finalUrl, allowedHosts)) {
-    throw new ShortLinkTargetError();
-  }
+  assertAllowedTarget(finalUrl, allowedHosts);
 
   return updateLinks(data => {
     let finalCode = code;
@@ -208,9 +229,7 @@ export async function updateLink(code, data, { allowedHosts = [] } = {}) {
     if (!link) return null;
     const next = { ...link, ...changes };
     if (!next.url) next.url = buildTarget(next);
-    if (!isAllowedShortLinkTarget(next.url, allowedHosts)) {
-      throw new ShortLinkTargetError();
-    }
+    assertAllowedTarget(next.url, allowedHosts);
     Object.assign(link, changes, { url: next.url });
     return { ...link };
   });

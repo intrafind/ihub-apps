@@ -20,6 +20,7 @@ import { isPlausibleToolName, validateProviderToolName } from './toolNameValidat
 import { buildThoughtSignatureExtraContent, extractThoughtSignature } from './thoughtSignatures.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+import { noteArgumentFragment, pendingCallsProgress } from './toolCallProgress.js';
 
 /**
  * Map a Chat Completions `usage` object onto the generic shape. Shared by the
@@ -307,6 +308,7 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
     return result;
   }
 
+  let earlyProgress = [];
   try {
     const parsed = await parseJsonAsync(data);
 
@@ -361,21 +363,26 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
       }
       if (delta.tool_calls) {
         // Process each tool call delta - accumulate in state
+        const touched = new Set();
         for (const toolCall of delta.tool_calls) {
           const index = toolCall.index || 0;
 
-          if (!state.pendingToolCalls.has(index)) {
+          const isNew = !state.pendingToolCalls.has(index);
+          if (isNew) {
             state.pendingToolCalls.set(index, {
               id: '',
               name: '',
               arguments: '',
-              index: index
+              index: index,
+              argBytes: 0
             });
           }
 
           const pending = state.pendingToolCalls.get(index);
 
-          if (toolCall.id) {
+          // The first id a call carries is the one the chat announced; a server that
+          // repeats the id with every fragment (or changes it) must not rename the call.
+          if (toolCall.id && !pending.id) {
             pending.id = toolCall.id;
           }
           if (toolCall.function?.name) {
@@ -383,8 +390,14 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
           }
           if (toolCall.function?.arguments) {
             pending.arguments += toolCall.function.arguments;
+            noteArgumentFragment(pending, toolCall.function.arguments, isNew);
           }
+          touched.add(pending);
         }
+        // What the call looks like so far, for the chat's "preparing" row. It
+        // never changes `tool_calls`; a chunk that also finishes the stream
+        // (below) carries the finished calls instead.
+        earlyProgress = pendingCallsProgress(touched);
 
         // Log accumulation progress for debugging
         logger.debug('Accumulated tool calls', {
@@ -453,6 +466,7 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
 
       streamingState.delete(streamId);
     }
+    if (earlyProgress.length > 0 && !result.complete) result.toolCallProgress = earlyProgress;
   } catch (error) {
     logger.error('Error parsing OpenAI response chunk', {
       component: 'OpenAIConverter',

@@ -99,7 +99,7 @@ function SsrfConfig() {
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
             {t(
               'admin.system.ssrf.description',
-              'Allow outbound HTTP calls (OpenAPI tools, MCP servers, web tools) to reach intentionally internal services even when their hostname resolves to a private IP.'
+              'Allow outbound HTTP calls (OpenAPI tools, MCP servers, web tools) to reach intentionally internal services even when their hostname resolves to a private IP. Short links may also lead only to websites whose host is on this list.'
             )}
           </p>
         </div>

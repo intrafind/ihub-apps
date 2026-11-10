@@ -4,6 +4,7 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import ChatMessage from './ChatMessage';
+import RunAnnouncer from './RunAnnouncer';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -23,11 +24,11 @@ function hasUserAttachments(message) {
 }
 
 /**
- * A reusable component to display chat messages with smart auto-scrolling
+ * The messages of a chat as one `role="log"` region, with smart auto-scrolling
  * Auto-scrolls to new messages and during streaming unless user manually scrolls up
  * Only renders when there are actual messages to display
  */
-function ChatMessageList({
+function MessageLog({
   messages,
   outputFormat = 'markdown',
   onDelete,
@@ -274,6 +275,27 @@ function ChatMessageList({
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * A reusable component to display chat messages: the log, and beside it the
+ * announcer that tells a screen reader what the turn is doing (#3534). The
+ * announcer is a sibling of the log, not inside it: the activity list in the
+ * log is silent, because a clock inside a live region is read every second,
+ * and a live region inside another one is read as part of it. Every host (chat
+ * page, embed, Office pane) gets both.
+ *
+ * @param {Object} props - see `MessageLog`; `messages` is also what the announcer follows
+ * @param {string} [props.announceLabel] - said before each announcement, for a
+ *   list that is shown beside others (compare mode), so a screen reader says which one
+ */
+function ChatMessageList({ announceLabel, ...props }) {
+  return (
+    <>
+      <MessageLog {...props} />
+      <RunAnnouncer messages={props.messages} label={announceLabel} />
+    </>
   );
 }
 

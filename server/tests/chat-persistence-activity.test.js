@@ -249,6 +249,62 @@ describe('recording what a turn did', () => {
     assert.equal(takeRunActivity(RUN_ID)?.answerSource, undefined);
   });
 
+  it('keeps the live argument progress and the waiting line out of the stored activity', () => {
+    recordRunActivity(RUN_ID);
+    const stream = emitter();
+    stream.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', refs: {} });
+    stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+      step: 1,
+      phase: 'model.waiting',
+      data: { elapsedMs: 3000, reasoning: true }
+    });
+    stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+      step: 1,
+      callId: 'call-art',
+      toolId: 'create_web_artifact',
+      phase: 'args',
+      data: {
+        name: 'create_web_artifact',
+        outputKind: 'webArtifact',
+        argBytes: 4096,
+        elapsedMs: 40
+      }
+    });
+    stream.emit(SSE_V2_EVENTS.TOOL_STARTED, {
+      step: 1,
+      callId: 'call-art',
+      toolId: 'create_web_artifact',
+      name: 'create_web_artifact',
+      args: { filename: 'a.html' }
+    });
+    stream.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+      step: 1,
+      callId: 'call-art',
+      toolId: 'create_web_artifact',
+      phase: 'args.ended',
+      data: { outcome: 'ready', argBytes: 8192, elapsedMs: 900 }
+    });
+    stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
+      step: 1,
+      callId: 'call-art',
+      toolId: 'create_web_artifact',
+      name: 'create_web_artifact',
+      resultPreview: null
+    });
+    stream.emit(SSE_V2_EVENTS.RUN_ENDED, { status: 'completed', finishReason: 'stop' });
+
+    const activity = takeRunActivity(RUN_ID);
+    const stored = JSON.stringify(activity);
+    for (const phase of ['model.waiting', 'args.ended', '"args"']) {
+      assert.ok(!stored.includes(phase), `${phase} is not stored`);
+    }
+    assert.ok(!stored.includes('outputKind'), 'neither is the output kind');
+    assert.ok(!stored.includes('argBytes'));
+    // The call itself is stored as before: one row, from tool/started and tool/completed.
+    assert.equal(activity.toolActivity.items.length, 1);
+    assert.equal(activity.toolActivity.items[0].status, 'completed');
+  });
+
   it('keeps the steps and the result of an @mention workflow run', () => {
     const runId = 'workflow-mention';
     recordRunActivity(runId);
@@ -554,6 +610,21 @@ describe('the stored form of the activity', () => {
         }
       ]
     });
+  });
+
+  it('keeps that a searched project contributed excerpts, and nothing else of its text', () => {
+    const stored = boundStoredActivity({
+      knowledgeScope: {
+        projects: [
+          { id: 'prj_2', name: 'Manual', mode: 'searched', excerpted: true, injected: ['x'] },
+          { id: 'prj_3', name: 'Notes', mode: 'searched', excerpted: 'yes' }
+        ]
+      }
+    });
+    assert.deepEqual(stored.knowledgeScope.projects, [
+      { id: 'prj_2', name: 'Manual', mode: 'searched', excerpted: true },
+      { id: 'prj_3', name: 'Notes', mode: 'searched' }
+    ]);
   });
 
   it('is nothing when there is nothing', () => {

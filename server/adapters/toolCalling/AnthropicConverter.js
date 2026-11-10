@@ -21,6 +21,7 @@ import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 import { citationMarkers } from '../../../shared/sources/index.js';
+import { progressEntry, utf8Bytes } from './toolCallProgress.js';
 
 /**
  * Sanitize a JSON Schema for Anthropic's tool `input_schema`. Anthropic's
@@ -364,8 +365,26 @@ function replayableBlocks(blocks) {
   );
 }
 
+/**
+ * The early-progress entries for the tool call being streamed (`toolCallProgress`
+ * on the chunk, see `toolCallProgress.js`). The index is the one the finished
+ * call will get: Anthropic streams its content blocks one after the other, so
+ * it is the number of calls finished so far.
+ */
+function anthropicProgress(state) {
+  const pending = state.pendingToolCall;
+  const entry = progressEntry(pending, {
+    index: state.toolCallIndex || 0,
+    id: pending.id,
+    name: pending.name,
+    argBytes: pending.argBytes
+  });
+  return entry ? [entry] : [];
+}
+
 export async function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
+  let pendingProgress = [];
 
   // Get or create state for this stream
   if (!streamingState.has(streamId)) {
@@ -481,16 +500,21 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
         id: parsed.content_block.id,
         name: parsed.content_block.name,
         index: parsed.index,
-        arguments: ''
+        arguments: '',
+        argBytes: 0
       };
       // Track if this is the first tool call
       if (!state.toolCallIndex) {
         state.toolCallIndex = 0;
       }
+      // The name and id are known before any argument: the early signal.
+      pendingProgress = anthropicProgress(state);
     } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'input_json_delta') {
       // Accumulate arguments in state
       if (state.pendingToolCall && parsed.delta.partial_json) {
         state.pendingToolCall.arguments += parsed.delta.partial_json;
+        state.pendingToolCall.argBytes += utf8Bytes(parsed.delta.partial_json);
+        pendingProgress = anthropicProgress(state);
       }
     } else if (parsed.type === 'content_block_stop' && state.pendingToolCall) {
       // Now we have the complete tool call with all arguments
@@ -544,6 +568,8 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
     ) {
       addWebSearchCitations(result, [parsed.delta.citation]);
     }
+
+    if (pendingProgress.length > 0) result.toolCallProgress = pendingProgress;
 
     if (parsed.type === 'message_stop') {
       result.complete = true;

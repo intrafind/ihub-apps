@@ -9,7 +9,7 @@
  *
  *   normalizeSource(input) → Source              (source.js)
  *   mergeSources(set, frame) → SourceSet          (sourceSet.js)
- *   resolveCitations(markdown, set) → { cited, considered, … }   (citations.js)
+ *   resolveCitations(markdown, set) → { cited, read, considered, … }   (citations.js)
  *   findTrailingSourceList(markdown, citations) → { start } | null  (trailingSourceList.js)
  *   sourcesFromGrounding(meta) → SourceFrame      (grounding.js)
  *

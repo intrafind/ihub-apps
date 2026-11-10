@@ -51,8 +51,8 @@
           "type": "string"
         },
         "description": {
-          "en": "Query strings ANDed with the query but excluded from relevance ranking — the right place for narrowing criteria. Same syntax as `query`. Use the `.keyword` variant for exact text matches, e.g. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`.",
-          "de": "Ausdrücke, die mit UND an die Anfrage gehängt werden, aber die Relevanz nicht beeinflussen — der richtige Ort für Einschränkungen. Gleiche Syntax wie `query`. Für exakte Textwerte die `.keyword`-Variante nutzen, z. B. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`."
+          "en": "Query strings ANDed with the query but excluded from relevance ranking — the right place for narrowing criteria. Same syntax as `query`. Use the `.keyword` variant for exact text matches, e.g. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`. Quote every value that contains a space: `application.keyword:\"Jira Work Item\"` — unquoted, only the first word is bound to the field and the filter matches nothing.",
+          "de": "Ausdrücke, die mit UND an die Anfrage gehängt werden, aber die Relevanz nicht beeinflussen — der richtige Ort für Einschränkungen. Gleiche Syntax wie `query`. Für exakte Textwerte die `.keyword`-Variante nutzen, z. B. `creators.keyword:\"DOE, John\"`, `application.keyword:PDF`, `modificationDate:[2026-01-01 TO *]`. Werte mit Leerzeichen immer in Anführungszeichen setzen: `application.keyword:\"Jira Work Item\"` — ohne sie gilt nur das erste Wort für das Feld und der Filter findet nichts."
         }
       },
       "returnFacets": {

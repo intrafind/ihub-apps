@@ -9,6 +9,7 @@
 
 export const CREATE_DOCX_TOOL = {
   id: 'create_docx',
+  outputKind: 'document',
   name: { en: 'Create Word document', de: 'Word-Dokument erstellen' },
   description: {
     en: String.raw`Create an editable Word document (.docx) on the server and give it to the user as a download. Write the content as Markdown (headings, paragraphs, lists, GFM tables, code, quotes, GitHub alerts like "> [!NOTE]"; "\pagebreak" on its own line starts a new page). Headings become real Word headings, so the user can restyle the document and update the table of contents. The user sees a download card in the chat, so do not paste a link — name the file in your answer instead. Activate the "docx" skill first for guidance.`,

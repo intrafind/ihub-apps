@@ -109,6 +109,17 @@ The application uses `aria-live` regions to announce dynamic content changes to 
 - **Loading states**: Progress indicators and loading spinners have appropriate `aria-busy` and `aria-live` attributes.
 - **Notifications**: Toast messages and alerts use `role="alert"` or `aria-live="assertive"` for time-sensitive information.
 
+### Run activity and live regions
+
+While an answer is produced, the activity list above it (`ToolActivity`) shows what the turn is doing: searches, a file that is being written, "Waiting for the model…". It is the pattern to copy for any status that changes while the user waits.
+
+- The chat log (`role="log"`) is a polite live region, and a clock inside it would be read every second. So the list opts out with `aria-live="off"`, and every ticking part (the size and the clock of `12 KB written · 0:41`) is also `aria-hidden`. If a screen reader ignored the nested `off`, the failure would be a missed number, never a chatter of numbers.
+- What a screen reader needs is said by one persistent announcer, `RunAnnouncer` (`role="status" aria-live="polite" aria-atomic="true"`, `sr-only`). It is rendered by `ChatMessageList` next to the log, not inside it, from the start, because a live region that is injected together with its text is unreliable. Every host of the list (chat page, embed, Office pane) gets it.
+- It speaks a short script, at most once per event: a call starts ("Creating web artifact"), a file is done, a call is cut off or refused, a file was stopped, the size has stopped growing, the model has been silent for a while ("Waiting for the model", "Thinking"). It never speaks sizes, clocks or reasoning text. The wording comes from the visible strings without their ellipsis. `deriveAnnouncements` decides this and is pure (unit-tested); at least 1.5 s separate two messages, at most three wait (the least important is dropped first), and the text is emptied after 5 s so an identical later message is read again. A turn that is already finished when it first appears (a reopened chat) is not read out. Where several lists are visible at once (compare mode) each has its own announcer and says its list first ("Model A: Creating web artifact"), so a screen reader says which model it means.
+- The progress is a count and a clock, never `role="progressbar"`: there is no total, so there is no value to expose, and an indeterminate progress bar with changing text is noisy in several screen readers. A row is a plain `<li>`, not a status.
+- The headline toggle has a 24 px hit area and a visible focus ring. Its accessible name is the label without the ticking suffix, so it does not change every second while it has focus.
+- The spinner is `motion-safe` only: under `prefers-reduced-motion` a static clock or light-bulb glyph replaces it (`BusyIcon`), and the three-dot loader does not pulse. The text and the clock carry the liveness; a number changing is not motion. The clock and size update automatically for longer than 5 s; they are the essential feedback of an operation the user started, change at most once a second, do not move, and the Stop button ends the operation, which is how WCAG 2.2.2 is read here.
+
 ### Dialog Announcements
 
 Modal dialogs are implemented with:
@@ -314,6 +325,7 @@ The following accessibility gaps are tracked and will be addressed in future ite
 - **Canvas page** (`/apps/:appId/canvas`): the editor styles use fixed white backgrounds, so it has no dark mode, and one `<select>` is unlabelled.
 - **Login page:** rendered by the inlined auth gate (`client/src/auth-gate/`), outside React; it is not covered by the axe suite.
 - **Screen-reader testing:** the axe and keyboard suites are automated. A walkthrough with NVDA or JAWS (login, chat, apps, prompts, admin) is a manual step and no results are recorded here yet.
+- **Run activity announcements:** that the nested `aria-live="off"` really silences the activity list, and that `RunAnnouncer` is heard at most once per event, is not verified: unit tests and axe cannot show what a screen reader announces, and no end-to-end (Playwright) or screen-reader run has been done yet. The manual script (run a slow file creation with NVDA and Chrome or Firefox, JAWS and Chrome, VoiceOver and Safari; pass if "Creating web artifact" is heard once, no numbers are heard, "Created web artifact" is heard once) is still to do.
 - **Heading order:** several pages skip a heading level (for example an `h3` empty-state heading directly under the `h1`). axe reports this as a moderate best-practice finding, so it does not fail the suite.
 
 These items are tracked as part of the ongoing accessibility initiative and will be addressed in subsequent phases.

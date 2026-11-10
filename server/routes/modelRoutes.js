@@ -9,6 +9,7 @@ import {
 } from '../utils/authorization.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { etagWithSuffix, responseEtag } from '../utils/etag.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
@@ -148,7 +149,6 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     if (unknownType !== undefined) {
       throw new ServiceError('BAD_REQUEST', `Unknown model type: ${unknownType}`);
     }
-    const requestedType = requestedTypes.join(',');
     const typedModels = models.filter(m => requestedTypes.includes(m.modelType || 'chat'));
 
     // Strip server-side secrets (encrypted apiKey for all; url for
@@ -156,8 +156,12 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     const sanitizedModels = typedModels.map(sanitizeModelForPublic);
 
     // Discriminate the ETag by type so the chat and transcription lists don't
-    // collide in the shared conditional-request cache.
-    const typedEtag = userSpecificEtag ? `${userSpecificEtag}-${requestedType}` : null;
+    // collide in the shared conditional-request cache. The type goes inside the
+    // quotes, so the ETag stays one well-formed entity tag, and without a comma,
+    // which separates the tags of an If-None-Match list.
+    const typedEtag = userSpecificEtag
+      ? responseEtag(etagWithSuffix(userSpecificEtag, requestedTypes.join('+')))
+      : null;
 
     // Handle conditional requests with ETag
     if (typedEtag) {

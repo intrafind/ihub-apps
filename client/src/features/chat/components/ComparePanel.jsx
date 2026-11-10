@@ -204,6 +204,7 @@ const ComparePanel = forwardRef(function ComparePanel(
           onOpenSourceInApp={onOpenSourceInApp}
           linkPath={linkPath}
           compact={true}
+          announceLabel={label}
         />
       </div>
     </div>

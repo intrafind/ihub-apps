@@ -1118,6 +1118,56 @@ describe('tools', () => {
     evictProjectIndex(jp.id);
   });
 
+  it('read with a focus returns the sections that answer the question (#3537)', async () => {
+    const filler = n =>
+      `Lorem ipsum dolor sit amet number ${n}, consectetur adipiscing. `.repeat(120);
+    const chapters = Array.from(
+      { length: 10 },
+      (_, i) => `## Chapter ${i + 1}\n\n${filler(i + 1)}`
+    );
+    const text = `# Manual\n\n${chapters.join('\n\n')}\n\n## Warranty\n\nThe warranty lasts 36 months and covers the quasar module.\n`;
+    const long = await repo.createUser({ owner: ADA, content: { name: 'Long manual' } });
+    await repo.mutate(long.id, p => ({ ...p, items: [textItem('itm_long', 'Manual.md', text)] }));
+    const readLong = extra =>
+      read({
+        ...params({ document: 'itm_long', ...extra }),
+        appConfig: { id: 'chat', _projectId: long.id }
+      });
+    const bytesOf = value => Buffer.byteLength(JSON.stringify(value), 'utf8');
+
+    const outline = await readLong();
+    assert.equal(outline.retrieval.mode, 'outline');
+    assert.ok(!outline.content.includes('quasar'));
+
+    const reported = [];
+    const focused = await runToolCallScope(reported, () =>
+      readLong({ focus: 'how long is the quasar warranty' })
+    );
+    assert.equal(focused.retrieval.mode, 'focus');
+    assert.deepEqual(focused.retrieval.sections, ['warranty']);
+    assert.ok(focused.content.includes('The warranty lasts 36 months'));
+    assert.match(focused.content, /Outline of the whole text/);
+    assert.ok(bytesOf(focused) <= 40000, `${bytesOf(focused)} bytes`);
+    assert.equal(focused.sources[0].read.truncated, true);
+    assert.ok(!JSON.stringify(focused).includes('"passages"'), 'passages go beside the result');
+    // The sections reach the sources panel beside the result, under their heading.
+    assert.equal(reported.length, 1);
+    assert.equal(reported[0].ref.id, 'itm_long');
+    assert.match(reported[0].passages[0].text, /^Manual › Warranty\n## Warranty/);
+
+    // A section read wins over the focus and reports nothing extra.
+    const sectionReport = [];
+    const section = await runToolCallScope(sectionReport, () =>
+      readLong({ section: 'chapter-1', focus: 'quasar' })
+    );
+    assert.equal(section.retrieval.mode, 'section');
+    assert.deepEqual(sectionReport, []);
+    // A short document is read in full, whatever the focus.
+    const whole = await read(params({ document: 'itm_policy', focus: 'passwords' }));
+    assert.equal(whole.retrieval.mode, 'full');
+    evictProjectIndex(long.id);
+  });
+
   it('read and list work by document id', async () => {
     const doc = await read(params({ document: 'itm_policy' }));
     assert.equal(doc.name, 'Policy.md');

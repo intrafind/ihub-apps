@@ -20,6 +20,7 @@ import {
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 import { citationMarkers, linkTargets, urlKey } from '../../../shared/sources/index.js';
+import { progressEntry, utf8Bytes } from './toolCallProgress.js';
 
 /**
  * Sanitize a JSON Schema for the OpenAI Responses API's tool `parameters`.
@@ -286,9 +287,54 @@ const streamingState = new Map();
 
 function streamStateFor(streamId) {
   if (!streamingState.has(streamId)) {
-    streamingState.set(streamId, { texts: new Map(), citationNumbers: new Map() });
+    streamingState.set(streamId, {
+      texts: new Map(),
+      citationNumbers: new Map(),
+      // Function calls being streamed, by output index (early progress).
+      calls: new Map()
+    });
   }
   return streamingState.get(streamId);
+}
+
+/**
+ * Early progress of the function call an event belongs to (`toolCallProgress`,
+ * see `toolCallProgress.js`), derived from the same events that already
+ * produce the partial `tool_calls` deltas. The id is the item's `call_id` as
+ * `output_item.added` announced it: argument deltas only carry the `item_id`,
+ * which is not the id the finished call has.
+ *
+ * @param {Object} event - the parsed stream event
+ * @param {string} streamId
+ * @returns {Array<{index: number, id?: string, name?: string, argBytes: number}>}
+ */
+function functionCallProgress(event, streamId) {
+  const state = streamStateFor(streamId);
+  const index = event.output_index || 0;
+  let call = state.calls.get(index);
+  if (event.type === 'response.output_item.added' || event.type === 'response.output_item.done') {
+    const item = event.item;
+    if (!call) {
+      call = { argBytes: 0 };
+      state.calls.set(index, call);
+    }
+    call.id = item.call_id || item.id || call.id;
+    call.name = item.name || call.name;
+    call.argBytes = Math.max(call.argBytes, utf8Bytes(item.arguments));
+  } else if (call && event.type === 'response.function_call_arguments.delta') {
+    call.argBytes += utf8Bytes(event.delta);
+  } else if (call && event.type === 'response.function_call_arguments.done') {
+    call.argBytes = Math.max(call.argBytes, utf8Bytes(event.arguments));
+  } else {
+    return [];
+  }
+  const entry = progressEntry(call, {
+    index,
+    id: call.id,
+    name: call.name,
+    argBytes: call.argBytes
+  });
+  return entry ? [entry] : [];
 }
 
 /** The output_text part an event belongs to. */
@@ -461,6 +507,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, streamId = '
     const toolCalls = [];
     const webSearchMetadata = [];
     const annotations = [];
+    let progress = [];
     let complete = false;
     let finishReason = null;
     let nonStreamingUsage = null;
@@ -627,6 +674,18 @@ export async function convertOpenaiResponsesResponseToGeneric(data, streamId = '
         addWebSearchMetadata(webSearchMetadata, parsed.item);
       }
 
+      // Early progress of a function call being streamed: name and id from
+      // `output_item.added`, then the size of the arguments as they grow.
+      if (
+        ((parsed.type === 'response.output_item.added' ||
+          parsed.type === 'response.output_item.done') &&
+          parsed.item?.type === 'function_call') ||
+        parsed.type === 'response.function_call_arguments.delta' ||
+        parsed.type === 'response.function_call_arguments.done'
+      ) {
+        progress = functionCallProgress(parsed, streamId);
+      }
+
       // Event: response.output_text.annotation.added - a citation on the
       // answer text (`url_citation` for web search), streamed as it is made.
       // When the text does not link the source there, a marker follows the
@@ -734,6 +793,7 @@ export async function convertOpenaiResponsesResponseToGeneric(data, streamId = '
       annotations
     );
     if (groundingMetadata) response.groundingMetadata = groundingMetadata;
+    if (progress.length > 0) response.toolCallProgress = progress;
     return response;
   } catch (error) {
     logger.error('Error parsing OpenAI Responses API response', {

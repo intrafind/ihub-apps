@@ -380,6 +380,10 @@ function ChatInput({
     setExpandedByUser(false);
   }
   const expanded = expandable && expandedByUser;
+  // The one-line composer: its text row is as tall as the toolbar row (the
+  // padding is in ChatInput.css), and the icons in it sit on its one line.
+  const oneLine = compact && !expanded;
+  const textRowIconTop = oneLine ? 'top-4 sm:top-5' : 'top-3';
   const { minLines, maxLines } = composerLineLimits({
     multiline: multilineMode,
     rows: inputMode?.rows,
@@ -917,7 +921,7 @@ function ChatInput({
             {expandable && (
               <button
                 type="button"
-                className="absolute right-3 top-3 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                className={`absolute right-3 ${textRowIconTop} text-gray-500 hover:text-gray-600 dark:hover:text-gray-300`}
                 // Keep the focus, and with it the caret, in the text area.
                 onMouseDown={e => e.preventDefault()}
                 onClick={handleToggleExpanded}
@@ -945,7 +949,7 @@ function ChatInput({
             {value && (
               <button
                 type="button"
-                className={`absolute ${expandable ? 'right-9' : 'right-3'} top-3 text-gray-500 hover:text-gray-600 dark:hover:text-gray-300`}
+                className={`absolute ${expandable ? 'right-9' : 'right-3'} ${textRowIconTop} text-gray-500 hover:text-gray-600 dark:hover:text-gray-300`}
                 onClick={handleClearInput}
                 aria-label={t('chat.clearInput', 'Clear input')}
                 title={t('common.clear', 'Clear')}
@@ -1141,6 +1145,9 @@ function ChatInput({
                 onModelChange={onModelChange}
                 currentLanguage={currentLanguage}
                 disabled={isInputDisabled || isProcessing}
+                // Not `oneLine`: the toolbar, and with it Send, keeps its
+                // place when the composer is expanded and collapsed.
+                compact={compact}
               />
             )}
 

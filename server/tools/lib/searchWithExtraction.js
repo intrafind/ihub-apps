@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import webSearchService from '../../services/WebSearchService.js';
+import { normalizeFocus } from '../../services/knowledge/focusQuery.js';
 import webContentExtractor from '../webContentExtractor.js';
 import { BOT_PROTECTION_CODE } from './botProtection.js';
 import logger from '../../utils/logger.js';
@@ -164,6 +165,10 @@ export function filterByFreshness(results, freshness, now = Date.now()) {
  * @param {boolean} [params.extractContent=false] - Fetch page content for the results
  * @param {number} [params.maxResults=10] - Cap on results returned / pages extracted
  * @param {number} [params.contentMaxLength=3000] - Characters of content kept per page
+ * @param {string} [params.focus] - The question being researched. With `extractContent`, a
+ *   page longer than `contentMaxLength` is returned as the sections that answer it
+ *   (verbatim) instead of its first `contentMaxLength` characters; a page where none
+ *   matches, and a call without `focus`, are read from the start as before
  * @param {string} [params.freshness] - `day` | `week` | `month` | `year`
  * @param {string[]|string} [params.includeDomains] - Restrict results to these domains
  * @param {string} [params.chatId] - Chat id, for progress events
@@ -177,6 +182,7 @@ export default async function searchWithExtraction({
   extractContent = false,
   maxResults = 10,
   contentMaxLength = 3000,
+  focus,
   freshness,
   includeDomains,
   chatId,
@@ -249,6 +255,9 @@ export default async function searchWithExtraction({
       const content = await webContentExtractor({
         url: result.url,
         maxLength: contentMaxLength,
+        // No outline per page: ten results would carry ten of them.
+        focus: normalizeFocus(focus),
+        outline: false,
         language: searchOptions.language,
         chatId
       });

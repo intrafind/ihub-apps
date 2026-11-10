@@ -6,6 +6,7 @@ import { rawRelPath } from '../../storage/namespaces.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { responseEtag } from '../../utils/etag.js';
 import { assertValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
@@ -160,7 +161,7 @@ export default function registerAdminAgentsRoutes(app) {
   // ── Profiles list ─────────────────────────────────────────────────────────
   app.get(buildServerPath('/api/admin/agents/profiles'), adminAuth, async (req, res) => {
     const { data: profiles = [], etag } = configCache.getAgentProfiles(true);
-    if (etag) res.setHeader('ETag', etag);
+    if (etag) res.setHeader('ETag', responseEtag(etag));
     res.json({ items: profiles });
   });
 

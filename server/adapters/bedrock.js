@@ -19,6 +19,7 @@ import {
   convertBedrockUsageToGeneric
 } from './toolCalling/BedrockConverter.js';
 import { BedrockEventStreamDecoder } from './bedrockEventStream.js';
+import { progressEntry, utf8Bytes } from './toolCalling/toolCallProgress.js';
 import { getReadableStream } from '../utils/streamUtils.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
@@ -129,6 +130,25 @@ function sanitizeDocumentName(name) {
   if (!sanitized) sanitized = 'document';
   if (!DOCUMENT_NAME_RE.test(sanitized)) sanitized = 'document';
   return sanitized;
+}
+
+/**
+ * The early-progress chunk for a toolUse block being streamed (`toolCallProgress`,
+ * see `toolCalling/toolCallProgress.js`), or null when nothing changed. The
+ * block index is the index the finished call carries.
+ *
+ * @param {number} index - contentBlockIndex of the block
+ * @param {{id: string, name: string, argBytes: number}} block
+ * @returns {{toolCallProgress: Array}|null}
+ */
+function bedrockProgress(index, block) {
+  const entry = progressEntry(block, {
+    index,
+    id: block.id,
+    name: block.name,
+    argBytes: block.argBytes
+  });
+  return entry ? { toolCallProgress: [entry] } : null;
 }
 
 class BedrockAdapterClass extends BaseAdapter {
@@ -406,11 +426,16 @@ class BedrockAdapterClass extends BaseAdapter {
             case 'contentBlockStart': {
               const idx = payload.contentBlockIndex;
               if (payload.start?.toolUse) {
-                toolUseBlocks.set(idx, {
+                const block = {
                   id: payload.start.toolUse.toolUseId,
                   name: payload.start.toolUse.name,
-                  inputBuf: ''
-                });
+                  inputBuf: '',
+                  argBytes: 0
+                };
+                toolUseBlocks.set(idx, block);
+                // The name and id are known before any argument: the early signal.
+                const progress = bedrockProgress(idx, block);
+                if (progress) yield progress;
               }
               break;
             }
@@ -424,7 +449,11 @@ class BedrockAdapterClass extends BaseAdapter {
               if (delta.toolUse?.input !== undefined) {
                 const block = toolUseBlocks.get(idx);
                 if (block) {
-                  block.inputBuf += String(delta.toolUse.input ?? '');
+                  const fragment = String(delta.toolUse.input ?? '');
+                  block.inputBuf += fragment;
+                  block.argBytes += utf8Bytes(fragment);
+                  const progress = bedrockProgress(idx, block);
+                  if (progress) yield progress;
                 }
               }
               if (delta.reasoningContent?.text) {

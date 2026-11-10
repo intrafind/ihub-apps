@@ -10,6 +10,7 @@
 
 export const CREATE_PDF_TOOL = {
   id: 'create_pdf',
+  outputKind: 'pdf',
   name: { en: 'Create PDF', de: 'PDF erstellen' },
   description: {
     en: String.raw`Create a PDF document on the server and give it to the user as a download. Write the content as Markdown (headings, paragraphs, lists, GFM tables, code, quotes; "\pagebreak" on its own line starts a new page). Use "blocks" only for layouts Markdown cannot express (columns, callouts, SVG charts, QR codes). The user sees a download card in the chat, so do not paste a link — name the file in your answer instead. Activate the "pdf" skill first for layout guidance.`,

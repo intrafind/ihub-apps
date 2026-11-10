@@ -1454,7 +1454,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           chatId: context.executionId,
           language: context.language,
           purpose: 'workflow'
-        }
+        },
+        // A node's prompt is templated from the run's state after this point:
+        // there is no question to read the projects for yet.
+        question: null
       });
       const instructions = renderProjectInstructions(plan);
       const block = plan.projects.some(

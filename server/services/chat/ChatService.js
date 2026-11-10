@@ -765,6 +765,8 @@ class ChatService {
         chatId,
         buildLogData: log,
         logInteraction: this.logInteraction,
+        // Live progress is for a client that watches the stream.
+        streamProgress: Boolean(streaming),
         mcpAppViews,
         authPrompts,
         scheduledTaskProposals,

@@ -61,7 +61,8 @@ name's extension only as a hint (the same rule as for an upload):
 | An HTML page                                                        | `url`: a live link, read when it is used                     |
 | A type the upload extractors read: PDF, Word, PowerPoint, Excel, OpenDocument, e-mail, text, … | `web-file`: downloaded and stored like an upload |
 | Anything else (an image, an archive, `.doc`, `.xls`, `.ppt`)        | Refused with `UNSUPPORTED_TYPE`, as the same upload would be |
-| Nothing readable right now (the server is down, an error status)    | `url`, as before                                             |
+| Nothing readable right now (the server is down, an error status), and the address ends in `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.odt`, `.ods` or `.odp` | `web-file`: its download fails on the item, and **Retry** downloads it once the site answers |
+| Nothing readable right now, any other address                       | `url`, as before                                             |
 
 A **file from a website** is treated as a file uploaded to the project:
 
@@ -99,7 +100,9 @@ and 30 days) or `never`.
 
 - **Files from websites** are refreshed on their own: every 15 minutes the ingest reconciler
   queues the files whose last check is older than their TTL (at most 50 per run, on the
-  `ingest.concurrency` queue). The request is conditional (`If-None-Match` with the stored ETag,
+  `ingest.concurrency` queue). These background refreshes wait behind every upload, pick and
+  refresh someone asked for, and with more than one slot they never take the last free one, so
+  an upload starts within one job's time however many files are due. The request is conditional (`If-None-Match` with the stored ETag,
   `If-Modified-Since` with the stored `Last-Modified`): an unchanged file is neither downloaded
   nor extracted again and keeps its text. A changed file replaces the text once the new one is
   stored; until then the old one stays readable. A refresh that fails leaves the item
@@ -108,7 +111,8 @@ and 30 days) or `never`.
   refreshed next.
 - **Web pages** stay live links: the TTL is how long a page's read is kept before it is read
   again (`never` keeps it for 30 days in the server's memory; a restart reads it again).
-  **Refresh** reads the page again on its next use.
+  **Refresh** reads the page again on its next use, on every server process: the one that
+  handled it forgets the page at once, the others when the cluster message arrives.
 - **Picked cloud documents** (OneDrive / SharePoint, Google Drive, Nextcloud) are refreshed only
   by hand. Their download needs the account of the user who picked them, which a background job
   must not use: that user may have left, lost access to the file, or let the connection expire.
@@ -430,11 +434,14 @@ the app's links, projects attached to the chat, the workflow's links.
 - `context`: every usable document goes into the prompt.
 - `tools`: only pinned documents go into the prompt; the model searches the rest.
 - `auto`: the whole project goes into the prompt when it fits what is left of the budget;
-  otherwise only its pinned documents, and the model searches the rest.
+  otherwise its pinned documents plus the sections of the other documents that best match the
+  question (see [Reading with the question in mind](#reading-with-the-question-in-mind)), and the
+  model searches the rest.
 - **Pinned** documents always go into the prompt, in every mode, ahead of the other documents of
   their project, even when they exceed the budget.
 - Nothing injected may exceed **75 % of the model's context window**, whatever the mode. Documents
-  beyond that limit are cut from the prompt and stay reachable through `knowledge_read`. The limit
+  beyond that limit are cut from the prompt and stay reachable through `knowledge_read`; the cut
+  keeps the sections that answer the question when there is one. The limit
   is spent project by project, in the order of the links: a pinned document of a later project is
   cut when the projects before it have used the limit up. Link the project whose pinned documents
   must always be present first.
@@ -444,6 +451,37 @@ readable. Documents that are waiting, failed or unreadable for this user are lis
 so the model can say so.
 
 The budget depends on the model's `contextWindow` (see [Models](models.md)).
+
+### Reading with the question in mind
+
+A document that is cut to its first characters loses the part that answers the question. When a
+chat turn has a question, iHub reads long documents for it instead — with the BM25 keyword ranking
+that `knowledge_search` uses, the text kept **verbatim**, and no model call.
+
+- **The question** is the user's latest message. When it is short (under 40 characters or six
+  words, like "and in German?"), the user message before it is added. Assistant text is never part
+  of it, and nothing rewrites it. It is cut at 500 characters. A workflow node, an empty message
+  and a request without text have no question; they behave as before.
+- **`auto` project that does not fit:** the prompt holds the pinned documents (in full) plus the
+  best sections of the other documents, up to what is left of the budget, at most half of the
+  budget for the excerpts of all projects together. Each document with excerpts is marked
+  `excerpt="true"`, each section carries its document id and `<section id path>`, and a note tells
+  the model to read the rest with `knowledge_read`. The document stays in the project's document
+  list, so the model knows there is more of it. The ranking uses the project's cached search index,
+  the same one `knowledge_search` uses.
+- **The 75 % limit:** the document that does not fit keeps its best sections for the question and
+  an outline of the rest instead of its first characters, when at least 1,500 tokens are left for
+  it and a section matches; otherwise its start, as before. A document that was already reduced
+  to excerpts and does not fit is dropped whole.
+- **`knowledge_read` with `focus`:** a long document returns its best sections and an outline of
+  the rest, not the outline alone (`retrieval.mode` is `focus`). An explicit `section` wins over
+  `focus`, and a document that fits in one result is returned in full. The sections appear as
+  passages of the document's source in the sources panel; a citation points to the document.
+
+Excerpts depend on the question, so the system prompt of a project that does not fit changes from
+turn to turn. A model provider's prompt cache then misses on those turns, and the first call of a
+turn can carry up to half of the budget in excerpts. Lower `projects.loadAllMaxTokens` to spend
+less per turn. There is no setting to switch excerpts off.
 
 ### The knowledge tools
 
@@ -456,7 +494,7 @@ integration and cannot be switched off. The definition ships with iHub
 | Tool               | What it does                                                                                               |
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `knowledge_search` | Searches the projects (all, or one with `project`) for passages that answer a query; ranked, numbered hits. |
-| `knowledge_read`   | Reads one document in full, or one section of it, by an id from a search, `knowledge_list` or a project's document list. A long document comes back as an outline first. |
+| `knowledge_read`   | Reads one document in full, or one section of it, by an id from a search, `knowledge_list` or a project's document list. A long document comes back as an outline first, or, with `focus` (the question), as its best sections and an outline of the rest. |
 | `knowledge_list`   | Lists the documents of the projects with id, name, title and description (when known), kind, size, status and provenance. |
 
 Each tool's description names the projects in scope and whether each one is loaded in full, so
@@ -530,7 +568,10 @@ and add it again. Sources migrated from `config/sources.json` keep their `maxLen
 
 - A badge on the answer says which projects it used and how: _3 projects · 2 loaded in full · 1
   searched_. With one project it names the project and links to it when it is a user project;
-  a project the viewer may not see reads _Private project_.
+  a project the viewer may not see reads _Private project_. A searched project that also put the
+  sections matching the question into the prompt (see [Reading with the question in
+  mind](#reading-with-the-question-in-mind)) reads _searched, relevant sections loaded_; with
+  several projects the project's line in the tooltip says so.
 - Every search hit and every read document is an answer source in the **Sources** panel (see
   [Answer Sources](answer-sources.md)). The card shows the provenance: _Uploaded_, _Picked from
   SharePoint · text taken 12 Oct 2026_ or _Linked_. A document written by a workflow shows as
@@ -656,7 +697,12 @@ several pages of a website:
   - Links to documents (PDF, Word, PowerPoint, Excel and OpenDocument files) are listed too and
     added as [files from websites](#files-from-websites); a link without such an extension that
     turns out to serve one is listed as a document as well. Images, scripts, archives and the
-    legacy Office formats are not. Links
+    legacy Office formats are not.
+  - **Include files on other websites** also lists documents that the pages found link to on
+    another host (a CDN, a download server). They are only listed, never searched for further
+    links, and pages on other hosts are never listed; added, they are downloaded with the same
+    protections as any file. The start site's `robots.txt` does not apply to another host.
+  - Links
     marked `rel="nofollow"` are not followed, and dead links are left out. A page that redirects
     is listed once, under the address it was read from.
   - The website's `robots.txt` is honored: links its rules for every crawler (`User-agent: *`)
@@ -1275,7 +1321,7 @@ Picker helpers, needing the `projects` flag and a signed-in user:
 | `GET`  | `/api/projects/pickers/ifinder/metadata` | One iFinder document's metadata; `?documentId=&profile=`.      |
 | `POST` | `/api/projects/pickers/url/_check`       | Check a URL `{ url }` before adding it.                         |
 | `POST` | `/api/projects/pickers/url/_preview`    | The text a URL `{ url }` gives the model, before it is added.   |
-| `POST` | `/api/projects/pickers/url/_crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
+| `POST` | `/api/projects/pickers/url/_crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath?, otherHostDocuments? }` (`otherHostDocuments`: also list documents on other hosts). |
 | `GET`  | `/api/projects/pickers/cloud`           | The enabled cloud storage providers.                            |
 
 ### Admin API
