@@ -29,10 +29,7 @@ const definition = JSON.parse(fs.readFileSync(path.join(DIR, 'integration.json')
 describe('Website Corpus integration', () => {
   it('ships a valid definition with release notes', () => {
     const result = validateIntegrationDefinition(definition);
-    assert.ok(
-      result.success ?? result.valid ?? result === true,
-      JSON.stringify(result.error?.issues ?? result)
-    );
+    assert.equal(result.success, true, JSON.stringify(result.errors));
     for (const release of definition.releases) {
       for (const note of Object.values(release.notes || {})) {
         assert.ok(fs.existsSync(path.join(DIR, note)), `${note} exists`);
