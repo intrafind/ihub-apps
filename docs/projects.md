@@ -847,9 +847,9 @@ everyone else uses it:
 - **Publish to the catalog** (`sharing.allowCatalog`): the project does not appear in anyone's list
   by itself. Users find it under **Projects → Browse catalog**, open it and add it with **Add to my
   projects** (and take it away with **Remove from my projects**). It shows **From the catalog** for them. They read its documents
-  and instructions, link its documents and attach it to their chats, but never hold a chat inside
-  it: **New chat** on its page starts a chat with the project attached, and a chat cannot be moved
-  into it. So the members do not see their chats, and they do not see the members' chats.
+  and instructions, link its documents, attach it to their chats and chat inside it. A chat they
+  start in it is **private to them**: the owner, the editors and the other members cannot read it, and
+  they do not read the members' chats. The project's page lists their own chats, and only those.
 
 Owners and editors publish a project with **Publish to the catalog** on the project page, after a
 confirmation, and take it out with **Take out of the catalog**. Publishing needs the `projectSharing` permission;
@@ -888,6 +888,18 @@ instructions and documents (in the chat's [knowledge mode](#knowledge-modes): `a
 a project from its first message on: it is started from the project page. A chip beside the message
 box and the chat history show which project a chat belongs to. Only user projects hold chats.
 
+Someone who took a project from the catalog chats inside it too, but their chats are **private**:
+the chat records it when it opens (`projectPrivate`), and nobody but its owner reads it, not the
+project's owner, editors or members. A full administrator keeps the compliance read every chat has.
+Their page of the project lists their own chats in it and the ones that attach it, newest first,
+without an **All chats / My chats** switch. A chat that is private stays so for good, even if the
+person is later made a member. When the project is deleted its private chats are kept outside it, like
+the members' chats; when it is taken out of the catalog, the chats stay in the history and answer without
+the project.
+
+An admin project made available to everyone holds no chats: a chat starts with it attached, and its
+page lists your own chats that have it attached.
+
 Every member may open the chats in a project; chats of other members are read-only. Only kept
 chats are listed: a temporary chat (incognito, or every chat while the Chat History feature is off,
 see [Chat Persistence](chat-persistence.md#temporary-chats-and-guests)) runs with the project but
@@ -909,8 +921,9 @@ would contradict each other and steer a chat that is not theirs. To have a proje
 start the chat in the project (from its page). The smart collections you added to your projects are
 listed here too, under **My projects**, marked **Smart collection from iFinder**. A chip beside the message box names each attached project and links to it; its
 **×** takes the project away again. Up to 10
-projects can be attached. Once the chat has its first message, the change is saved at once and is still there when the
-chat is opened later; before that, the choice is kept and saved with the chat. Projects picked on
+projects can be attached. The project picker is only there until the first message is sent: it is
+gone from the message box afterwards, and the chips still show what the chat draws on. Before the
+first message the choice is kept and saved with the chat; projects picked on
 the start page ride along to the chat that opens. Attaching
 does not move the chat into the project: it stays where it is, and the project's members do not
 see it. When the chat runs in a shared project, its members read the answers, including what was

@@ -1,5 +1,21 @@
 # Fixes — Unreleased
 
+## Attaching More Files No Longer Duplicates the Ones Already Attached
+
+Selecting files in the file dialog, confirming, and then opening the dialog again to add more attached
+the first files twice: 5 files plus 2 more gave 12 attachments instead of 7. Only the newly selected
+files are added now. Files picked from cloud storage stay attached next to local files.
+
+## Rating a Chat Answer Works Again
+
+Sending a star rating or comment under an answer failed with "Some of the entered data is not valid"
+and nothing was saved. The chat now sends only the chat, message and run; for an iAssistant answer
+the server works out the iFinder conversation and message id itself and still forwards the rating to
+iFinder, addressed to the answer that was rated. `POST /api/feedback` no longer reads
+`conversationId` or `ifinderMessageId` from the request body; the server ignores them if a client
+still sends them. Ratings given on iAssistant answers from before this update are stored but are not
+forwarded to iFinder.
+
 ## Share Is Always Offered When You Open a File From the Chat
 
 Opening a generated picture or a file from the answer that has just produced it showed the viewer
@@ -531,3 +547,13 @@ again), and a reopened chat shows the same figure.
 An answer could stay completely blank, so the chat looked stuck after the question. This happens
 when a reasoning model finishes its turn right after thinking and writes no answer. The answer now
 reads "The model returned no answer." with a Retry button that asks the question again.
+
+## Links to Other Sites Always Open in a New Tab
+
+A link in rendered Markdown that points outside iHub — in a chat answer, a shared chat, a source or
+project text, an uploaded file or an artifact preview — could replace iHub in the current tab
+instead of opening a new one. Only live chat answers handled this reliably.
+
+- Links to another host or port open in a new tab and cannot reach the iHub window.
+- Links within iHub, anchors (`#section`) and `mailto:` links stay in the current tab.
+- The same holds for links an answer writes as raw HTML.

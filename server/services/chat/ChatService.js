@@ -698,7 +698,7 @@ class ChatService {
       });
     }
 
-    const channel = streaming ? createChatChannel({ chatId, stream }) : null;
+    const channel = streaming ? createChatChannel({ chatId, runId, stream }) : null;
     // MCP App views this turn rendered, stored with the answer so reopening
     // the chat draws them again.
     const mcpAppViews = [];

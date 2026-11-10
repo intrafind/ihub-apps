@@ -39,7 +39,8 @@ import { authorizeChat } from '../services/chat/chatAccess.js';
 import { getProjectRepository } from '../services/projects/ProjectRepository.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
 import { cleanUpProjectsOfUser } from '../services/projects/projectUserCleanup.js';
-import { resolveChatProjects } from '../services/knowledge/chatProjects.js';
+import { resolveProjectScope } from '../services/knowledge/ProjectScope.js';
+import { recordChatInProject, resolveChatProjects } from '../services/knowledge/chatProjects.js';
 import { content as projectSourceContent } from '../services/sources/providers/project.js';
 import { listSnapshots } from '../services/ChangeHistoryService.js';
 
@@ -206,6 +207,30 @@ async function joinProject(chat, projectId, ownerId = ADA.id) {
     settle: () => getProjectService().attachChat(projectId, chat.id, { ownerId })
   });
   assert.equal(moved, true, `chat ${chat.id} joins ${projectId}`);
+}
+
+/**
+ * What the first turn of a chat that opens inside a project does: resolve the project fields,
+ * store the chat with the container claimed, record it in the project.
+ */
+async function startChatIn(user, projectId, chatId) {
+  const resolved = await resolveChatProjects({
+    req: { user: { ...user, groups: [...(user.groups || [])] }, headers: {} },
+    chat: null,
+    app: { id: 'chat' },
+    projectId,
+    projects: undefined
+  });
+  assert.equal(resolved.ok, true, JSON.stringify(resolved));
+  const chats = getChatRepository();
+  await chats.ensureChat({ chatId, ownerId: user.id, appId: 'chat', title: `${user.name} asks` });
+  const { chat, conflict } = await chats.updateChatProjects(chatId, resolved.projectPatch);
+  assert.equal(conflict, false);
+  await recordChatInProject(projectId, chatId, {
+    ownerId: user.id,
+    private: resolved.projectPatch.privateContainer === true
+  });
+  return { chat, resolved };
 }
 
 function setProjectSettings(overrides = {}) {
@@ -970,32 +995,188 @@ describe('the project catalog', () => {
     assert.equal((await listIds(CAROL)).includes(project.id), false);
   });
 
-  it('keeps the chats of someone from the catalog out of the project, so members never read them', async () => {
+  it('lets someone from the catalog chat inside the project, privately', async () => {
     setProjectSettings({ sharing: { allowCatalog: true } });
     const project = await create(ADA, { name: 'Salary bands' });
+    await setMembers(ADA, project.id, [{ type: 'user', id: GRACE.id, role: 'user' }]);
     await publish(ADA, project.id);
-
-    const req = { user: { ...CAROL }, headers: {} };
-    const inside = await resolveChatProjects({
-      req,
-      chat: null,
-      app: { id: 'chat' },
-      projectId: project.id,
-      projects: undefined
-    });
-    assert.equal(inside.ok, false, 'no chat starts inside it');
-    const attached = await resolveChatProjects({
-      req: { user: { ...CAROL }, headers: {} },
-      chat: null,
-      app: { id: 'chat' },
-      projectId: undefined,
-      projects: [project.id]
-    });
-    assert.equal(attached.ok, true, JSON.stringify(attached));
-    assert.deepEqual(attached.attachedIds, [project.id], 'attached to a chat of her own');
+    const chats = getChatRepository();
 
     const opened = await drive(route.get, { user: CAROL, params: { projectId: project.id } });
-    assert.equal(opened.body.permissions.canHoldChats, false);
+    assert.equal(opened.body.permissions.canHoldChats, true, 'a chat of hers may run inside it');
+    assert.equal(opened.body.permissions.readsAllChats, false, 'but she reads no member chats');
+
+    const { chat, resolved } = await startChatIn(CAROL, project.id, 'chat-private-1');
+    assert.equal(resolved.containerId, project.id);
+    assert.equal(chat.projectId, project.id);
+    assert.equal(chat.projectPrivate, true, 'the chat records that it is private');
+
+    // Her chat is hers alone: not the owner's, not a member's, not another subscriber's;
+    // a full admin keeps the compliance read.
+    assert.equal((await authorizeChat(chat.id, CAROL, { repository: chats })).ok, true);
+    for (const reader of [ADA, GRACE, { id: 'user-dan', name: 'Dan', groups: ['authenticated'] }]) {
+      assert.equal(
+        (await authorizeChat(chat.id, reader, { repository: chats })).ok,
+        false,
+        `${reader.name} reads no private chat`
+      );
+    }
+    const asAdmin = await authorizeChat(chat.id, ROOT, { repository: chats });
+    assert.equal(asAdmin.ok, true);
+    assert.equal(asAdmin.viaAdmin, true);
+
+    // A member's chat in the same project stays open to the members, and is not private.
+    const { chat: memberChat } = await startChatIn(GRACE, project.id, 'chat-member-1');
+    assert.equal(memberChat.projectPrivate, undefined);
+    assert.equal((await authorizeChat(memberChat.id, ADA, { repository: chats })).ok, true);
+    assert.equal((await authorizeChat(memberChat.id, CAROL, { repository: chats })).ok, false);
+
+    // The lists: she sees her own chat only; the members see theirs and never hers.
+    const hers = await drive(route.chats, { user: CAROL, params: { projectId: project.id } });
+    assert.deepEqual(
+      hers.body.items.map(item => item.id),
+      [chat.id]
+    );
+    assert.equal(hers.body.items[0].owner.mine, true);
+    for (const member of [ADA, GRACE]) {
+      const listed = await drive(route.chats, { user: member, params: { projectId: project.id } });
+      assert.deepEqual(
+        listed.body.items.map(item => item.id),
+        [memberChat.id],
+        `${member.name} lists the members' chat, not hers`
+      );
+    }
+    assert.deepEqual(
+      (await getProjectRepository().listChatMarkers(project.id)).map(marker => marker.chatId),
+      [memberChat.id],
+      'a private chat is not among the members markers'
+    );
+
+    // Made a member later, she finds her own private chat on the page next to the members' chats,
+    // and it stays hers: the other members still do not read it.
+    await setMembers(ADA, project.id, [
+      { type: 'user', id: GRACE.id, role: 'user' },
+      { type: 'user', id: CAROL.id, role: 'user' }
+    ]);
+    const asMember = await drive(route.chats, { user: CAROL, params: { projectId: project.id } });
+    assert.deepEqual(
+      new Set(asMember.body.items.map(item => item.id)),
+      new Set([chat.id, memberChat.id])
+    );
+    assert.equal((await authorizeChat(chat.id, GRACE, { repository: chats })).ok, false);
+  });
+
+  it('answers a private chat with the project while it is published, and without it after', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Pulled back' });
+    await publish(ADA, project.id);
+    const scopeOf = async () =>
+      resolveProjectScope({
+        appConfig: { id: 'chat', _projectId: project.id },
+        user: { ...CAROL }
+      });
+    const before = await scopeOf();
+    assert.deepEqual(
+      before.map(entry => [entry.project.id, entry.origin]),
+      [[project.id, 'container']]
+    );
+    const unpublished = await publish(ADA, project.id, false);
+    assert.equal(unpublished.statusCode, 200, JSON.stringify(unpublished.body));
+    assert.deepEqual(await scopeOf(), [], 'the chat goes on without the project');
+  });
+
+  it('detaches the private chats too when the project is deleted', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Short lived' });
+    await publish(ADA, project.id);
+    const chats = getChatRepository();
+    const { chat } = await startChatIn(CAROL, project.id, 'chat-private-gone');
+    assert.deepEqual(
+      (await getProjectRepository().listChatMarkers(project.id, { includePrivate: true })).map(
+        marker => marker.chatId
+      ),
+      [chat.id]
+    );
+
+    await getProjectService().deleteProject(project.id, {
+      detachChat: chatId => chats.moveProjectIf(chatId, project.id, null)
+    });
+    const kept = await chats.getChat(chat.id);
+    assert.ok(kept, 'the chat is kept');
+    assert.equal(kept.projectId ?? null, null, 'outside the project');
+    assert.equal(kept.projectPrivate ?? null, null);
+    assert.deepEqual(
+      await getProjectRepository().listChatMarkers(project.id, { includePrivate: true }),
+      []
+    );
+  });
+
+  it('lists her chats that attach the project next to the ones inside it', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Both ways' });
+    await publish(ADA, project.id);
+    const chats = getChatRepository();
+    const { chat: inside } = await startChatIn(CAROL, project.id, 'chat-inside');
+    const attached = await chats.ensureChat({
+      chatId: 'chat-attached',
+      ownerId: CAROL.id,
+      appId: 'chat',
+      title: 'Attached'
+    });
+    await chats.setAttachedProjects(attached.id, [project.id], 5);
+    const listed = await drive(route.chats, { user: CAROL, params: { projectId: project.id } });
+    assert.deepEqual(
+      new Set(listed.body.items.map(item => item.id)),
+      new Set([inside.id, attached.id])
+    );
+  });
+
+  it('lists only her own chats that attach a project from the catalog', async () => {
+    setProjectSettings({ sharing: { allowCatalog: true } });
+    const project = await create(ADA, { name: 'Handbook' });
+    await publish(ADA, project.id);
+    const chats = getChatRepository();
+    const mineChat = await chats.ensureChat({
+      chatId: 'chat-attach-mine',
+      ownerId: CAROL.id,
+      appId: 'chat',
+      title: 'Carol asks'
+    });
+    const otherChat = await chats.ensureChat({
+      chatId: 'chat-attach-other',
+      ownerId: GRACE.id,
+      appId: 'chat',
+      title: 'Grace asks'
+    });
+    const unrelated = await chats.ensureChat({
+      chatId: 'chat-attach-none',
+      ownerId: CAROL.id,
+      appId: 'chat',
+      title: 'No project'
+    });
+    for (const chat of [mineChat, otherChat]) {
+      await chats.setAttachedProjects(chat.id, [project.id], 5);
+    }
+    assert.ok(unrelated);
+
+    for (const filter of ['all', 'others', undefined]) {
+      const listed = await drive(route.chats, {
+        user: CAROL,
+        params: { projectId: project.id },
+        query: filter ? { filter } : {}
+      });
+      assert.equal(listed.statusCode, 200, JSON.stringify(listed.body));
+      assert.deepEqual(
+        listed.body.items.map(item => item.id),
+        [mineChat.id],
+        `filter ${filter}: only her own chat`
+      );
+      assert.equal(listed.body.items[0].owner.mine, true);
+      assert.equal(listed.body.total, 1);
+    }
+    // The owner holds chats inside the project: neither attached chat is listed there.
+    const asOwner = await drive(route.chats, { user: ADA, params: { projectId: project.id } });
+    assert.deepEqual(asOwner.body.items, []);
   });
 
   it('lets a full admin keep the compliance view and take any project out', async () => {

@@ -29,10 +29,12 @@ import { INPUT_CLASS } from './item-dialog/dialogStyles';
  * @param {{id: string, name: string, defaultAppId?: string|null}} props.project
  * @param {string} props.projectName - The name to show.
  * @param {boolean} [props.attach=false] - Start the chat outside the project with the
- *   project attached (someone who took it from the catalog holds no chats in it).
+ *   project attached (an administrators' project holds no chats).
+ * @param {boolean} [props.privateChats=false] - Someone who took the project from the
+ *   catalog: the chat runs inside it, but only they can read it.
  * @returns {JSX.Element}
  */
-function ProjectChatComposer({ project, projectName, attach = false }) {
+function ProjectChatComposer({ project, projectName, attach = false, privateChats = false }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { choices, loading } = useProjectChatApps();
@@ -131,7 +133,15 @@ function ProjectChatComposer({ project, projectName, attach = false }) {
                 'projects.composer.hintAttached',
                 'This chat runs outside the project and uses its documents. The project’s instructions apply to its members’ chats inside it.'
               )
-            : t('projects.composer.hint', 'The app gets the project’s instructions and documents.')}
+            : privateChats
+              ? t(
+                  'projects.composer.hintPrivate',
+                  'The app gets the project’s instructions and documents. Only you can read this chat: the project’s members cannot.'
+                )
+              : t(
+                  'projects.composer.hint',
+                  'The app gets the project’s instructions and documents.'
+                )}
         </p>
       )}
     </section>

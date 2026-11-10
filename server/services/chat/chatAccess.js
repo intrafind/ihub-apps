@@ -116,10 +116,14 @@ export async function authorizeChat(
   // spec 1 §6.4): the project page lists them, and a member opens another's
   // chat read-only. Never a write, and never the live stream: `viaProject`
   // lets the stream routes keep the member at the transcript.
-  // A temporary chat is nobody's but its owner's, inside a project or not.
+  // A temporary chat is nobody's but its owner's, inside a project or not, and so
+  // is a private chat (`projectPrivate`) of someone who took the project from the catalog.
   if (
     intent === 'read' &&
     chat.temporary !== true &&
+    // The chat of someone who took the project from the catalog is theirs alone,
+    // inside the project or not: the members never read it.
+    chat.projectPrivate !== true &&
     chat.projectId &&
     (await isProjectMember(chat.projectId, user))
   ) {

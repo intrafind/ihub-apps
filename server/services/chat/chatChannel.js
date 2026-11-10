@@ -25,10 +25,11 @@ function thoughtToDelta(thought) {
 /**
  * @param {Object} params
  * @param {string} params.chatId
+ * @param {string} [params.runId] - Run of the turn; remembered with the iAssistant response id
  * @param {import('../loop/RunStream.js').RunStreamEmitter} params.stream
  * @returns {{ state: {answerOutput: boolean}, onChunk: Function, onSources: Function }}
  */
-export function createChatChannel({ chatId, stream }) {
+export function createChatChannel({ chatId, runId = null, stream }) {
   const state = { answerOutput: false, conversationIdEmitted: false };
   const emit = (type, data) => stream?.emit(type, data);
 
@@ -55,7 +56,7 @@ export function createChatChannel({ chatId, stream }) {
       state.conversationIdEmitted = true;
     }
     if (chunk.responseMessageId) {
-      conversationStateManager.updateParentId(chatId, chunk.responseMessageId);
+      conversationStateManager.updateParentId(chatId, chunk.responseMessageId, { runId });
       emit(SSE_V2_EVENTS.META, { chatId, responseMessageId: String(chunk.responseMessageId) });
     }
   };
