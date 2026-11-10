@@ -452,6 +452,7 @@
       "showThoughts": "Denkanalyse anzeigen",
       "truncated": "Abgeschnitten",
       "truncatedHint": "Das Modell hat sein Ausgabelimit erreicht, bevor es fertig war. Reasoning-Modelle verbrauchen dasselbe Limit für ihr Denken, sodass ein langer Gedankengang es aufbrauchen kann, bevor die Antwort beginnt. Erhöhen Sie „Max. Ausgabe-Tokens“ des Modells oder senken Sie den Reasoning-Aufwand.",
+      "emptyAnswer": "Das Modell hat keine Antwort geliefert.",
       "hideThoughts": "Denkanalyse verbergen",
       "inputParameters": "Eingabeparameter",
       "starterPromptsTitle": "Start-Prompts",
