@@ -82,6 +82,30 @@ export function setCachedPage(key, value, size, ttlMs, now = Date.now()) {
   totalChars += chars;
 }
 
+/**
+ * Forget every cached read of one page, in every language: a project item
+ * refreshed by hand must be read again.
+ *
+ * @param {string} url
+ * @returns {number} Entries dropped.
+ */
+export function forgetCachedPage(url) {
+  let prefix;
+  try {
+    prefix = `${new URL(url).toString()}::`;
+  } catch {
+    return 0;
+  }
+  let dropped = 0;
+  for (const key of [...store.keys()]) {
+    if (key.startsWith(prefix)) {
+      drop(key);
+      dropped += 1;
+    }
+  }
+  return dropped;
+}
+
 /** Test helper — clear all cached pages. */
 export function _clearPageCache() {
   store.clear();

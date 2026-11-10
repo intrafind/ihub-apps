@@ -35,7 +35,11 @@ import { getProjectService } from '../../services/projects/ProjectService.js';
 import { NO_ACCESS } from '../../services/projects/projectAccess.js';
 import { defaultsDir } from '../../services/projects/projectImport.js';
 import { findDependencies } from '../../services/projects/projectLinks.js';
-import { PROJECTS_FEATURE, projectSettings } from '../../services/projects/projectSettings.js';
+import {
+  MAX_FILES_CEILING,
+  PROJECTS_FEATURE,
+  projectSettings
+} from '../../services/projects/projectSettings.js';
 import { enabledItemKinds, listItemKinds } from '../../services/projects/kinds/registry.js';
 import {
   projectName,
@@ -248,9 +252,24 @@ export default function registerAdminProjectsRoutes(app) {
       },
       scan: { provider: settings.scan.provider },
       limits: settings.limits,
-      loadAllMaxTokens: settings.loadAllMaxTokens
+      loadAllMaxTokens: settings.loadAllMaxTokens,
+      refreshTtl: settings.refreshTtl
     });
   });
+
+  /** The part of the effective `platform.projects` block the settings panel edits. */
+  const editableSettings = platformConfig => {
+    const { sharing, tierPolicy, defaultAppId, limits, refreshTtl } =
+      projectSettings(platformConfig);
+    return {
+      sharing,
+      tierPolicy,
+      defaultAppId,
+      limits,
+      refreshTtl,
+      maxFilesCeiling: MAX_FILES_CEILING
+    };
+  };
 
   /**
    * @swagger
@@ -263,16 +282,23 @@ export default function registerAdminProjectsRoutes(app) {
    *       to browse and add) and `tierPolicy` (`ihub`, `both` or `ifinder`:
    *       whether the user's iFinder smart collections can be added as projects)
    *       and `defaultAppId` (the app a project chat starts in when the project
-   *       names none). Full admins only.
+   *       names none) and `limits` (items per project, at most
+   *       `MAX_FILES_CEILING`; bytes per file and per project; projects per
+   *       user, 0 for no cap) and `refreshTtl` (seconds or `never`: how long
+   *       files downloaded from websites and web pages are current, unless a
+   *       project or an item sets its own). Full admins only.
    *     tags: [Admin Projects]
    *   put:
-   *     summary: Change the sharing audiences, the tier policy and the default app
-   *     description: Only the fields sent are written; unknown ones are refused.
+   *     summary: Change the sharing audiences, the tier policy, the default app and the limits
+   *     description: |
+   *       Only the fields sent are written; unknown ones are refused. Every
+   *       change applies at once, without a restart: the limits are read from
+   *       the config cache on each request. Lowering a limit does not remove
+   *       anything; it only refuses what would go past it.
    *     tags: [Admin Projects]
    */
   app.get(route('/_settings'), ...gate, adminAuth, (req, res) => {
-    const { sharing, tierPolicy, defaultAppId } = projectSettings(configCache.getPlatform() || {});
-    res.json({ sharing, tierPolicy, defaultAppId });
+    res.json(editableSettings(configCache.getPlatform() || {}));
   });
 
   app.put(route('/_settings'), ...gate, adminAuth, async (req, res) => {
@@ -292,7 +318,9 @@ export default function registerAdminProjectsRoutes(app) {
             ...stored,
             ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
             ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId } : {}),
-            ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {})
+            ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {}),
+            ...(body.limits ? { limits: { ...stored.limits, ...body.limits } } : {}),
+            ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {})
           }
         };
       }
@@ -306,15 +334,14 @@ export default function registerAdminProjectsRoutes(app) {
       summary: `Updated project settings (${Object.entries({
         ...body.sharing,
         ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
-        ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId || '(none)' } : {})
+        ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId || '(none)' } : {}),
+        ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
+        ...body.limits
       })
         .map(([key, value]) => `${key}=${value}`)
         .join(', ')})`
     });
-    const { sharing, tierPolicy, defaultAppId } = projectSettings(
-      configCache.getPlatform() || platformConfig
-    );
-    res.json({ sharing, tierPolicy, defaultAppId });
+    res.json(editableSettings(configCache.getPlatform() || platformConfig));
   });
 
   // The sizes the app editor shows beside a linked project (the successor
@@ -509,7 +536,10 @@ export default function registerAdminProjectsRoutes(app) {
         category: body.category,
         tags: body.tags,
         // A PUT carries the whole project: an absent default app clears it.
-        defaultAppId: body.defaultAppId ?? null
+        defaultAppId: body.defaultAppId ?? null,
+        // The refresh TTL is set on its own (PATCH): a document without it,
+        // as the settings form sends it, keeps the stored one.
+        ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {})
       },
       { actor: req.user }
     );
@@ -594,7 +624,9 @@ export default function registerAdminProjectsRoutes(app) {
       }
       const project = await loadAdminProject(req);
       const body = parseBody(addItemSchema, req);
-      const { item } = await getProjectService().addItem(project.id, body, { user: req.user });
+      const { item, project: stored } = await getProjectService().addItem(project.id, body, {
+        user: req.user
+      });
       logAudit({
         req,
         action: 'create',
@@ -606,7 +638,7 @@ export default function registerAdminProjectsRoutes(app) {
         res,
         item.status === 'ready' ? 201 : 202,
         `/api/admin/projects/${segment(project.id)}/items/${segment(item.id)}`,
-        serializeItem(item)
+        serializeItem(item, stored)
       );
     }
   );
@@ -677,7 +709,7 @@ export default function registerAdminProjectsRoutes(app) {
       resourceId: project.id,
       summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in admin project "${projectName(project)}"`
     });
-    res.json(serializeItem(result.item));
+    res.json(serializeItem(result.item, result.project));
   });
 
   app.get(route('/:id/items/:itemId/text'), ...gate, contentAdminAuth, async (req, res) => {

@@ -29,7 +29,8 @@ stores, or links to content that is fetched when it is used.
 | Kind                | What it adds                                         | Stored as           | Read with the rights of                         | Offered when                                     |
 | ------------------- | ---------------------------------------------------- | ------------------- | ----------------------------------------------- | ------------------------------------------------ |
 | `upload`            | An uploaded file, or text written in the dialog      | Extracted text      | —                                               | Project file storage is available                |
-| `url`               | A web page                                           | Link, cached 2 h    | —                                               | Always                                           |
+| `url`               | A web page (HTML)                                    | Link, cached for the refresh TTL | —                                  | Always                                           |
+| `web-file`          | A file linked from a website (PDF, Office, …)        | Text, downloaded    | —                                               | While `url` is                                   |
 | `page`              | An iHub page (`contents/pages`) in one language      | Link                | The reading user (the page's own access rules)  | Always                                           |
 | `ifinder-document`  | One iFinder document                                 | Link                | The reading user                                | iFinder is configured                            |
 | `ifinder-query`     | The hits of an iFinder search                        | Link                | The reading user                                | iFinder is configured                            |
@@ -46,7 +47,75 @@ stores, or links to content that is fetched when it is used.
   item to take the text again.
 - An iFinder document the reading user may not open is left out of that user's answer and named
   as unavailable; the item itself is not changed, because another member may still have access.
-- `platform.projects.kinds` switches kinds off by id, for example `{ "url": false }`.
+- `platform.projects.kinds` switches kinds off by id, for example `{ "url": false }`. Switching
+  `url` off also switches `web-file` off.
+
+### Files from websites
+
+An address added as a web page (one URL, or pages picked from the site search) is looked at
+first: what the server answers decides the item, by the response's content type, with the file
+name's extension only as a hint (the same rule as for an upload):
+
+| The address serves                                                  | Item                                                         |
+| ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| An HTML page                                                        | `url`: a live link, read when it is used                     |
+| A type the upload extractors read: PDF, Word, PowerPoint, Excel, OpenDocument, e-mail, text, … | `web-file`: downloaded and stored like an upload |
+| Anything else (an image, an archive, `.doc`, `.xls`, `.ppt`)        | Refused with `UNSUPPORTED_TYPE`, as the same upload would be |
+| Nothing readable right now (the server is down, an error status), and the address ends in `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.odt`, `.ods` or `.odp` | `web-file`: its download fails on the item, and **Retry** downloads it once the site answers |
+| Nothing readable right now, any other address                       | `url`, as before                                             |
+
+A **file from a website** is treated as a file uploaded to the project:
+
+- the same pipeline: downloaded, scanned by the malware scanner, extracted, encrypted and stored;
+  the downloaded original is discarded;
+- the same limits: `maxFileBytes` (a declared size over it is refused when the item is added, a
+  download that grows past it is cut off and fails with `QUOTA_FILE_BYTES`), `maxProjectBytes`,
+  `maxFiles` and the accepted types;
+- the same text limit as an upload (10,000,000 characters), with no 50,000-character cap of the
+  page reader.
+
+The source address stays with the item: the item card, citations and `knowledge_list` (`url`,
+`snapshotAt`) link to it, and a refresh downloads from it again. The download goes through the
+page reader's protections (no private addresses unless the host is in `ssl.domainWhitelist` or
+`ssrf.allowedHosts`, every redirect checked, DNS pinned, certificate checks skipped only for
+whitelisted hosts, the proxy settings) on its own request queue, `project_download`.
+
+An existing `url` item is not changed. A web page item cannot be pointed at a file later; add the
+file as a new item. Admin projects created through the API with their items keep `url` items as
+links; files are added through the item endpoints.
+
+### Refresh
+
+How long a file from a website or a web page is taken as current is its **refresh TTL**, set on
+three levels; the most specific one that is set applies:
+
+1. the item (**Refresh schedule** in the item menu),
+2. the project (**Refresh** in the project's side panel; owners and editors, and admins for admin
+   projects),
+3. the installation: `platform.projects.refreshTtl` (**Admin → Projects → Project settings**),
+   one day by default.
+
+A TTL is a number of seconds (15 minutes to a year; the dialogs offer 1 hour, 6 hours, 1 day, 7 days
+and 30 days) or `never`.
+
+- **Files from websites** are refreshed on their own: every 15 minutes the ingest reconciler
+  queues the files whose last check is older than their TTL (at most 50 per run, on the
+  `ingest.concurrency` queue). These background refreshes wait behind every upload, pick and
+  refresh someone asked for, and with more than one slot they never take the last free one, so
+  an upload starts within one job's time however many files are due. The request is conditional (`If-None-Match` with the stored ETag,
+  `If-Modified-Since` with the stored `Last-Modified`): an unchanged file is neither downloaded
+  nor extracted again and keeps its text. A changed file replaces the text once the new one is
+  stored; until then the old one stays readable. A refresh that fails leaves the item
+  **Outdated** with the old text, and is tried again after another TTL. `never` refreshes only
+  when someone chooses **Refresh**. The item shows when its text was taken and when it is
+  refreshed next.
+- **Web pages** stay live links: the TTL is how long a page's read is kept before it is read
+  again (`never` keeps it for 30 days in the server's memory; a restart reads it again).
+  **Refresh** reads the page again on its next use, on every server process: the one that
+  handled it forgets the page at once, the others when the cluster message arrives.
+- **Picked cloud documents** (OneDrive / SharePoint, Google Drive, Nextcloud) are refreshed only
+  by hand. Their download needs the account of the user who picked them, which a background job
+  must not use: that user may have left, lost access to the file, or let the connection expire.
 
 In the admin **Add item** dialog the three cloud tabs are disabled ("coming in a later release");
 users pick cloud files from their own projects.
@@ -128,8 +197,10 @@ its category and tags and when it was last updated, with counts of all, enabled 
 projects and of the user projects on the installation; filter by item kind and status. The page
 needs the `projects` feature flag and the admin page switch `admin.pages.projects`; content admins
 and full admins may use it. Full administrators also find **Project settings** there: the sharing
-audiences (see [Roles and sharing](#roles-and-sharing)) and the tier policy (see
-[The iFinder tier](#the-ifinder-tier-smart-collections)).
+audiences (see [Roles and sharing](#roles-and-sharing)), the tier policy (see
+[The iFinder tier](#the-ifinder-tier-smart-collections)) and the limits of user projects (items per
+project, size of one file and of one project, projects per user; see
+[Platform settings](#platform-settings)).
 
 1. **New project** opens one form: the name (the **Project ID** is filled in from it until you
    type one; it cannot be changed later), an optional description, **Who can use this project?**,
@@ -257,9 +328,19 @@ system prompt.
   <project id="faq" name="FAQ" mode="loaded">
     <document id="itm_…" name="faq.md" origin="uploaded">…text…</document>
   </project>
-  <project id="ihub-documentation" name="iHub Documentation" mode="searched" documents="1" tool="knowledge_search"/>
+  <project id="ihub-documentation" name="iHub Documentation" mode="searched" documents="2" tool="knowledge_search">
+    <document-list documents="2" listed="2">
+Read a listed document directly with knowledge_read (its id), or search them all with knowledge_search.
+- itm_… "release-notes-5.2.pdf" (12000 tokens) — Release notes 5.2: What changed in iHub 5.2.
+- itm_… "Install guide" https://docs.example.com/install — Installing iHub: Requirements and first steps.
+    </document-list>
+  </project>
 </projects>
 ```
+
+A **searched** project lists the documents that are not in the prompt already, so the model can
+pick the one to read instead of searching blindly. See
+[What the model knows about a searched project](#what-the-model-knows-about-a-searched-project).
 
 ### Switching projects off for an app
 
@@ -379,12 +460,50 @@ integration and cannot be switched off. The definition ships with iHub
 | Tool               | What it does                                                                                               |
 | ------------------ | ---------------------------------------------------------------------------------------------------------- |
 | `knowledge_search` | Searches the projects (all, or one with `project`) for passages that answer a query; ranked, numbered hits. |
-| `knowledge_read`   | Reads one document in full, or one section of it. A long document comes back as an outline first.           |
-| `knowledge_list`   | Lists the documents of the projects with id, name, kind, size, status and provenance.                     |
+| `knowledge_read`   | Reads one document in full, or one section of it, by an id from a search, `knowledge_list` or a project's document list. A long document comes back as an outline first. |
+| `knowledge_list`   | Lists the documents of the projects with id, name, title and description (when known), kind, size, status and provenance. |
 
 Each tool's description names the projects in scope and whether each one is loaded in full, so
 the model knows which ids it may pass. A tool call can never reach a project the request did not
 bring. Search is keyword search (BM25) over the stored text; there are no embeddings.
+
+#### What the model knows about a searched project
+
+A project that is searched rather than loaded in full carries a `<document-list>` inside its
+`<project>` element of the `<projects>` block. One line per document: its id, its name, its size in
+tokens, whether it is pinned, its URL (web pages and other linked documents) and, when known, the
+document's title and a short description. Pinned documents come first; documents already in the
+prompt (pinned ones, in `auto` and `tools` mode) are not listed again.
+
+- **Bounded.** At most 50 documents and about 2,000 tokens per project, and all lists of a
+  request together at most 10 % of the model's context window (never more than the 75 % limit
+  leaves beside the documents in the prompt), spent in scope order. When the list is cut, its
+  last line says how many documents are left out and to call `knowledge_list` for the complete
+  list. The `<document-list>` element says how many documents there are (`documents`) and how many
+  it lists (`listed`).
+- **In the prompt, not the tool descriptions.** Document names, titles and descriptions of a user
+  project are text its editors control, so they go into the `<projects>` block, with any tag that
+  could close it escaped, and never into the tool descriptions, which carry only what an admin wrote.
+- **Read directly.** `knowledge_read` takes a listed document's id; the model need not search first.
+
+The **title and description** are captured, not typed:
+
+| Document                    | Title                                                         | Description                                          |
+| --------------------------- | ------------------------------------------------------------- | ---------------------------------------------------- |
+| Upload, picked or written   | The document's metadata title (PDF, HTML), else its first heading or short first line | The HTML meta description, else its first paragraph |
+| Web page (URL item)         | The page's title                                              | The page's meta description                          |
+| iHub page | The page's configured title, in the item's language (else English, else the page id) | none |
+| iFinder document | The document's `title` field, else its file name | none |
+
+An upload records them when it is extracted, and again on every new version or refresh. A web
+page records them when it is added or its URL changes; a web page added before this existed, or
+one that could not be read when it was added, records them the first time it is read. An iFinder
+document records its title the first time it is read. An iHub page's title is not stored: it is
+read from the page configuration each time, so a renamed page is listed by its new title. In a
+smart collection (the iFinder tier) a document is named by its title, else its file name, as the
+reader may see it. A title the
+same as the document's name is not repeated in the list. `knowledge_list` returns both, as `title`
+and `description`, beside the other fields.
 
 #### How much of a linked document is searchable
 
@@ -518,7 +637,9 @@ several pages of a website:
 - **Check** tells whether the page can be read.
 - **Preview** shows the text the model gets from the page, before it is added: the same reader
   and the same 50,000-character limit as the item, so a page that needs JavaScript or blocks
-  automated access shows up here as an empty or short text.
+  automated access shows up here as an empty or short text. An address that serves a document
+  (PDF, Office, …) is downloaded when it is added and stored like an upload, without that limit
+  (see [Files from websites](#files-from-websites)).
 - **Find more pages of this website** opens the site search. **Find pages** follows the links of
   the page that stay on the same website and lists the pages it finds, with their titles. Tick the
   pages to add (filter the list, **Select all**, or preview a page with its eye icon); **Add N
@@ -536,7 +657,15 @@ several pages of a website:
     below `/docs/` or `/blog/`; from `https://example.com/docs` it lists the pages below `/docs/`
     when the page links there. The list shows which part was searched. Untick it to search the
     whole website.
-  - Links to PDF files are listed too; images, scripts, archives and office files are not. Links
+  - Links to documents (PDF, Word, PowerPoint, Excel and OpenDocument files) are listed too and
+    added as [files from websites](#files-from-websites); a link without such an extension that
+    turns out to serve one is listed as a document as well. Images, scripts, archives and the
+    legacy Office formats are not.
+  - **Include files on other websites** also lists documents that the pages found link to on
+    another host (a CDN, a download server). They are only listed, never searched for further
+    links, and pages on other hosts are never listed; added, they are downloaded with the same
+    protections as any file. The start site's `robots.txt` does not apply to another host.
+  - Links
     marked `rel="nofollow"` are not followed, and dead links are left out. A page that redirects
     is listed once, under the address it was read from.
   - The website's `robots.txt` is honored: links its rules for every crawler (`User-agent: *`)
@@ -829,7 +958,7 @@ What the owner can do, and how:
 - **Delete:** `DELETE /api/projects/:projectId` deletes the project; its chats stay, outside it.
   `?deleteCollection=true` deletes the collection in iFinder first (its documents stay there).
 - **Add documents:** `POST /api/projects/:projectId/items` with `{ kind: "ifinder-document", ref: { documentId } }`,
-  or `{ items: [...] }` for up to 50 at once. Only that kind is accepted. iFinder does not check ids,
+  or `{ items: [...] }` for up to 200 at once. Only that kind is accepted. iFinder does not check ids,
   so iHub does, with the user's own token: a document the user cannot read (or that does not exist)
   is refused with `DOCUMENT_NOT_READABLE` and nothing from that call is added. A document that is a
   member already is skipped (`200`, `alreadyMember`). More than 200 documents in total is refused
@@ -922,17 +1051,19 @@ default, 0, keeps projects until someone deletes them. Admin projects have no re
 
 ## Platform settings
 
-`platform.json` → `projects`. Platform changes take effect after a server restart, except the
-sharing audiences changed under **Admin → Projects → Sharing of user projects**.
+`platform.json` → `projects`. A change to the file takes effect after a server restart. What
+**Admin → Projects → Project settings** changes (the sharing audiences, the tier policy, the default
+app, the refresh TTL and the four `limits`) applies at once. Lowering a limit removes nothing; it only refuses what
+would go past it.
 
 ```json
 {
   "projects": {
     "tierPolicy": "ihub",
     "limits": {
-      "maxFiles": 25,
+      "maxFiles": 100,
       "maxFileBytes": 20971520,
-      "maxProjectBytes": 209715200,
+      "maxProjectBytes": 524288000,
       "maxProjectsPerUser": 20
     },
     "sharing": {
@@ -943,6 +1074,7 @@ sharing audiences changed under **Admin → Projects → Sharing of user project
     },
     "retentionDays": 0,
     "loadAllMaxTokens": 50000,
+    "refreshTtl": 86400,
     "kinds": {},
     "encryption": { "keyProvider": "local-file" },
     "scan": { "provider": "none", "command": "", "timeoutMs": 30000, "onError": "reject" },
@@ -953,9 +1085,9 @@ sharing audiences changed under **Admin → Projects → Sharing of user project
 
 | Key                         | Default             | Meaning                                                                                                  |
 | --------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------- |
-| `limits.maxFiles`           | `25`                | Items per project, every kind counted. At most 50.                                                       |
+| `limits.maxFiles`           | `100`               | Items per project, every kind counted. At most 200 (the document cap of an iFinder smart collection).    |
 | `limits.maxFileBytes`       | `20971520` (20 MB)  | Size of one uploaded or picked file.                                                                     |
-| `limits.maxProjectBytes`    | `209715200` (200 MB) | Sum of the original file sizes in one project.                                                          |
+| `limits.maxProjectBytes`    | `524288000` (500 MB) | Sum of the original file sizes in one project.                                                          |
 | `limits.maxProjectsPerUser` | `20`                | User projects one person may own; 0 or less means no limit. Admin projects do not count.                 |
 | `sharing.allowUsers`        | `true`              | Users may share with individual users.                                                                   |
 | `sharing.allowGroups`       | `true`              | Users may share with groups.                                                                             |
@@ -963,6 +1095,7 @@ sharing audiences changed under **Admin → Projects → Sharing of user project
 | `sharing.allowCatalog`      | `false`             | Owners and editors may publish projects to the catalog. Off hides published projects again.              |
 | `retentionDays`             | `0`                 | Days without activity after which a user project is deleted; 0 keeps them.                               |
 | `loadAllMaxTokens`          | `50000`             | Upper bound of the load-all budget (also capped at 40 % of the model's context window).                  |
+| `refreshTtl`                | `86400` (1 day)     | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
 | `kinds`                     | `{}`                | Item kinds to switch off, `{ "<kind>": false }`.                                                         |
 | `scan.provider`             | `none`              | `none` (no scan) or `command` (run a scanner on every upload and picked file before extraction).         |
 | `scan.command`              | `""`                | The scanner command; `{path}` is replaced by the file, or the path is appended. Exit code 0 is clean, 1 infected, anything else an error. |
@@ -1118,15 +1251,15 @@ changing it takes a content admin.
 | `POST`   | `/api/projects/_collections`                  | `projects` permission | Add a collection to your projects: `{ collectionId, instructions?, defaultAppId? }`. |
 | `GET`    | `/api/projects/share-targets?q=`              | —         | Users and groups you may share with.                                                             |
 | `GET`    | `/api/projects/:projectId`                    | member    | The project with its items and your `permissions`.                                               |
-| `PATCH`  | `/api/projects/:projectId`                    | editor    | Change `name`, `description`, `instructions`, `defaultAppId` (`null` clears it). For a smart collection the name and the description are changed in iFinder too; one attached by its `ifc_…` id takes `name` and `description` only. |
+| `PATCH`  | `/api/projects/:projectId`                    | editor    | Change `name`, `description`, `instructions`, `defaultAppId` (`null` clears it), `refreshTtl` (seconds or `"never"`, `null` for the installation's). For a smart collection the name and the description are changed in iFinder too; one attached by its `ifc_…` id takes `name` and `description` only. |
 | `POST`   | `/api/projects/:projectId/estimate`           | member    | Tokens of every document and the recommendation (prompt or search).                              |
 | `DELETE` | `/api/projects/:projectId`                    | owner     | Delete the project and its documents. For a smart collection, `?deleteCollection=true` deletes the collection in iFinder too. |
 | `GET`    | `/api/projects/:projectId/items`              | member    | The items.                                                                                       |
 | `POST`   | `/api/projects/:projectId/items`              | editor    | Add an item: multipart field `file` (plus `name`, `pinned`), or JSON `{ kind, ref, name?, pinned? }`, or `{ kind: "upload", text, name }`. Text kinds answer `202` while extracting, link kinds `201`. A smart collection takes `ifinder-document` only (also `{ items: [...] }`). |
 | `GET`    | `/api/projects/:projectId/items/:itemId`      | member    | One item; poll it while it extracts.                                                             |
-| `PATCH`  | `/api/projects/:projectId/items/:itemId`      | editor    | Change `name`, `pinned`.                                                                         |
+| `PATCH`  | `/api/projects/:projectId/items/:itemId`      | editor    | Change `name`, `pinned`, and for a file from a website or a web page `refreshTtl` (seconds or `"never"`, `null` for the project's). Item answers carry `refresh`: the TTL that applies, where it comes from, and for a file `checkedAt` and `nextAt`. |
 | `DELETE` | `/api/projects/:projectId/items/:itemId`      | editor    | Remove the item. From a smart collection: the membership only.                                   |
-| `POST`   | `/api/projects/:projectId/items/:itemId/_refresh` | editor | Take the text of a picked file again, with your account.                                         |
+| `POST`   | `/api/projects/:projectId/items/:itemId/_refresh` | editor | Take the text of a picked file again, with your account; download a file from a website again (conditionally); drop a web page's cached read. |
 | `PUT`    | `/api/projects/:projectId/items/:itemId/text` | editor    | Replace the text of an uploaded, written or imported document: `{ text }`. Links and picked documents are refused (`INVALID_REF`). |
 | `GET`    | `/api/projects/:projectId/items/:itemId/text` | member    | The text as `text/plain`; `?maxChars=`, `?download=1` saves it as `.txt`.                        |
 | `PUT`    | `/api/projects/:projectId/members`            | editor    | Replace the member list `{ members: [{ type, id?, role }] }`.                                    |
@@ -1151,7 +1284,7 @@ Picker helpers, needing the `projects` flag and a signed-in user:
 | `GET`  | `/api/projects/pickers/ifinder/metadata` | One iFinder document's metadata; `?documentId=&profile=`.      |
 | `POST` | `/api/projects/pickers/url/_check`       | Check a URL `{ url }` before adding it.                         |
 | `POST` | `/api/projects/pickers/url/_preview`    | The text a URL `{ url }` gives the model, before it is added.   |
-| `POST` | `/api/projects/pickers/url/_crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath? }`.    |
+| `POST` | `/api/projects/pickers/url/_crawl`       | Pages of a site: `{ url, maxPages?, maxDepth?, samePath?, otherHostDocuments? }` (`otherHostDocuments`: also list documents on other hosts). |
 | `GET`  | `/api/projects/pickers/cloud`           | The enabled cloud storage providers.                            |
 
 ### Admin API
@@ -1165,7 +1298,7 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `GET`    | `/api/admin/projects/_kinds`                | Every item kind with whether it is enabled.                                                 |
 | `GET`    | `/api/admin/projects/_config`               | Upload availability and accepted types, scan provider, limits, `loadAllMaxTokens`.          |
 | `GET`    | `/api/admin/projects/_settings`             | The sharing audiences of user projects (full admins).                                       |
-| `PUT`    | `/api/admin/projects/_settings`             | Change them: `{ sharing: { allowUsers?, allowGroups?, allowEveryone?, allowCatalog? } }` (full admins). |
+| `PUT`    | `/api/admin/projects/_settings`             | Change them: `{ sharing: { allowUsers?, allowGroups?, allowEveryone?, allowCatalog? } }`, also `tierPolicy`, `defaultAppId`, `limits` and `refreshTtl` (full admins). |
 | `GET`    | `/api/admin/projects/_tokens`               | Size of each admin project and the budgets, for the app editor.                             |
 | `GET`    | `/api/admin/projects/_dependencies/:id`     | Apps, workflows and agents that link the project.                                           |
 | `POST`   | `/api/admin/projects/:id/estimate`          | Tokens of every item and the recommendation (prompt or search) per item and for the project. |
@@ -1173,11 +1306,11 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `POST`   | `/api/admin/projects/_merge`                | Merge projects `{ sourceIds, targetId, deleteSources? }`: moves the items, re-points the links, optionally deletes the emptied projects. Answers `{ target, sources: [{ id, moved, failed, relinked, merged, deleted }] }`. |
 | `POST`   | `/api/admin/projects`                       | Create an admin project.                                                                    |
 | `GET`    | `/api/admin/projects/:id`                   | One project (a user project for full admins).                                               |
-| `PUT`    | `/api/admin/projects/:id`                   | Replace the settings; items change through the item routes.                                 |
-| `PATCH`  | `/api/admin/projects/:id`                   | Change some settings.                                                                       |
+| `PUT`    | `/api/admin/projects/:id`                   | Replace the settings; items change through the item routes. Without `refreshTtl` the stored one stays. |
+| `PATCH`  | `/api/admin/projects/:id`                   | Change some settings, `refreshTtl` among them (`null` for the installation's).               |
 | `DELETE` | `/api/admin/projects/:id`                   | Delete; `PROJECT_IN_USE` with the dependencies while something links it.                    |
 | `POST`   | `/api/admin/projects/:id/items`             | Add an item, as in the user API.                                                            |
-| `PATCH`  | `/api/admin/projects/:id/items/:itemId`     | Change `name`, `pinned`.                                                                    |
+| `PATCH`  | `/api/admin/projects/:id/items/:itemId`     | Change `name`, `pinned`, `refreshTtl` (a file from a website or a web page).                |
 | `DELETE` | `/api/admin/projects/:id/items/:itemId`     | Remove an item.                                                                             |
 | `POST`   | `/api/admin/projects/_move`                 | Move items into another admin project `{ sourceId, targetId, itemIds }`. Answers `{ transferred, failed, source, target }`; an item that cannot go is in `failed` with its code. |
 | `POST`   | `/api/admin/projects/_copy`                 | The same body and answer; the items stay in the source.                                     |

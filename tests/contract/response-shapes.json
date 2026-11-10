@@ -981,6 +981,7 @@
           "maxProjectsPerUser": "number"
         },
         "loadAllMaxTokens": "number",
+        "refreshTtl": "number",
         "retentionDays": "number",
         "sharing": {
           "allowCatalog": "boolean",
@@ -2376,6 +2377,7 @@
           "ownership": "string",
           "permissions": "object",
           "published": "boolean",
+          "refreshTtl": "null",
           "role": "string",
           "tags": "[]|array",
           "tier": "string",
@@ -2403,6 +2405,7 @@
       "items": [
         {
           "createdAt": "string",
+          "description": "string",
           "error": "null",
           "id": "string",
           "kind": "string",
@@ -2413,7 +2416,8 @@
           "snapshotAt": "null",
           "status": "string",
           "storage": "string",
-          "text": "object",
+          "text": "null|object",
+          "title": "string",
           "updatedAt": "string"
         }
       ],
@@ -2437,6 +2441,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshTtl": "null",
       "role": "string",
       "tags": [],
       "tier": "string",
@@ -2461,6 +2466,7 @@
         "maxProjectsPerUser": "number"
       },
       "loadAllMaxTokens": "number",
+      "refreshTtl": "number",
       "scan": {
         "provider": "string"
       },
@@ -2500,6 +2506,14 @@
     "status": 200,
     "shape": {
       "defaultAppId": "string",
+      "limits": {
+        "maxFileBytes": "number",
+        "maxFiles": "number",
+        "maxProjectBytes": "number",
+        "maxProjectsPerUser": "number"
+      },
+      "maxFilesCeiling": "number",
+      "refreshTtl": "number",
       "sharing": {
         "allowCatalog": "boolean",
         "allowEveryone": "boolean",
@@ -4210,8 +4224,7 @@
           "showDemoAccounts": "boolean"
         },
         "ntlm": {
-          "enabled": "boolean",
-          "type": "string"
+          "enabled": "boolean"
         },
         "oidc": {
           "enabled": "boolean",
@@ -4701,6 +4714,7 @@
           "maxProjectBytes": "number",
           "maxProjectsPerUser": "number"
         },
+        "refreshTtl": "number",
         "retentionDays": "number",
         "sharing": {
           "allowCatalog": "boolean",
@@ -5545,6 +5559,7 @@
           "ownership": "string",
           "permissions": "object",
           "published?": "boolean",
+          "refreshTtl": "null",
           "role": "string",
           "subscribed?": "boolean",
           "tags?": "[]|array",
@@ -5575,6 +5590,7 @@
       "items": [
         {
           "createdAt": "string",
+          "description": "string",
           "error": "null",
           "id": "string",
           "kind": "string",
@@ -5586,6 +5602,7 @@
           "status": "string",
           "storage": "string",
           "text": "object",
+          "title": "string",
           "updatedAt": "string"
         }
       ],
@@ -5609,6 +5626,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshTtl": "null",
       "role": "string",
       "tags": ["string"],
       "tier": "string",
@@ -5634,6 +5652,7 @@
       "items": [
         {
           "createdAt": "string",
+          "description": "string",
           "error": "null",
           "id": "string",
           "kind": "string",
@@ -5645,6 +5664,7 @@
           "status": "string",
           "storage": "string",
           "text": "object",
+          "title": "string",
           "updatedAt": "string"
         }
       ]
@@ -5654,6 +5674,7 @@
     "status": 200,
     "shape": {
       "createdAt": "string",
+      "description": "string",
       "error": "null",
       "id": "string",
       "kind": "string",
@@ -5688,6 +5709,7 @@
         "tokens": "number",
         "truncated": "boolean"
       },
+      "title": "string",
       "updatedAt": "string"
     }
   },
@@ -5737,6 +5759,7 @@
         "maxProjectBytes": "number",
         "maxProjectsPerUser": "number"
       },
+      "refreshTtl": "number",
       "retentionDays": "number",
       "sharing": {
         "allowCatalog": "boolean",

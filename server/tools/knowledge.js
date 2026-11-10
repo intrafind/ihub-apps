@@ -288,6 +288,8 @@ function listedDoc(doc) {
   return {
     id: doc.id,
     name: doc.name,
+    ...(doc.title && doc.title !== doc.name ? { title: doc.title } : {}),
+    ...(doc.description ? { description: doc.description } : {}),
     kind: doc.kind,
     status: doc.status,
     pinned: doc.pinned,

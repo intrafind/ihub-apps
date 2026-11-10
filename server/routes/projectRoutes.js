@@ -718,7 +718,7 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     (req, res) => {
-      res.json({ items: (req.project.items || []).map(serializeItem) });
+      res.json({ items: (req.project.items || []).map(item => serializeItem(item, req.project)) });
     }
   );
 
@@ -738,7 +738,7 @@ export default function registerProjectRoutes(app) {
       }
       const body = parseBody(addItemSchema, req);
       const service = getProjectService();
-      const { item } = await service.addItem(req.project.id, body, {
+      const { item, project: stored } = await service.addItem(req.project.id, body, {
         user: req.user,
         authorize: req.projectContext.authorize('edit')
       });
@@ -753,7 +753,7 @@ export default function registerProjectRoutes(app) {
         res,
         item.status === 'ready' ? 201 : 202,
         `/api/projects/${segment(req.project.id)}/items/${segment(item.id)}`,
-        serializeItem(item)
+        serializeItem(item, stored)
       );
     }
   );
@@ -768,7 +768,7 @@ export default function registerProjectRoutes(app) {
       assertValidId(itemId, 'item');
       const item = (req.project.items || []).find(entry => entry.id === itemId);
       if (!item) throw new ServiceError('NOT_FOUND', 'Item not found');
-      res.json(serializeItem(item));
+      res.json(serializeItem(item, req.project));
     }
   );
 
@@ -793,7 +793,7 @@ export default function registerProjectRoutes(app) {
         resourceId: req.project.id,
         summary: `Changed ${result.item.kind} "${result.item.name || itemId}" (${Object.keys(body).join(', ')}) in project "${projectName(req.project)}"`
       });
-      res.json(serializeItem(result.item));
+      res.json(serializeItem(result.item, result.project));
     }
   );
 

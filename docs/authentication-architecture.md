@@ -83,15 +83,11 @@ Add to `contents/config/platform.json`:
     "enabled": true,
     "domain": "EXAMPLE",
     "domainController": "ldaps://dc.example.com:636",
-    "type": "ntlm",
     "debug": false,
-    "getUserInfo": true,
-    "getGroups": true,
+    "ldapGroupLookupProvider": "corporate-ldap",
     "defaultGroups": ["ntlm-users"],
     "sessionTimeoutMinutes": 480,
-    "generateJwtToken": true,
-    "domainControllerUser": "${NTLM_LDAP_USER}",
-    "domainControllerPassword": "${NTLM_LDAP_PASSWORD}"
+    "generateJwtToken": true
   }
 }
 ```
@@ -153,11 +149,12 @@ Add to `contents/config/platform.json`:
    - Browser responds with NTLM negotiation token
    - Server validates against domain controller LDAP
 
-4. **Group Extraction**
-   - `getNtlmMiddleware()` receives NTLM config with domain controller
-   - `domainControllerUser` and `domainControllerPassword` used for LDAP bind
-   - `getGroups: true` triggers LDAP query for user's group membership
-   - Groups extracted from `req.ntlm.Groups` or `req.ntlm.groups`
+4. **Group Lookup**
+   - express-ntlm returns only `UserName`, `DomainName`, `Workstation` and `Authenticated`; it
+     never reads groups
+   - When `ldapGroupLookupProvider` names an entry in `ldapAuth.providers`, the server queries
+     that provider for the user's groups at sign-in (`lookupLdapGroupsForUser`)
+   - Without it the user gets only `defaultGroups`
 
 5. **Group Mapping**
    ```javascript
@@ -183,19 +180,13 @@ Client Browser --HTTPS--> Server (with NTLM challenge-response)
 
 #### NTLM Group Retrieval
 
-For groups to be retrieved:
-1. **Domain Controller must be configured** (`domainController` in ntlmAuth)
-2. **LDAP credentials required** (`domainControllerUser`, `domainControllerPassword`)
-3. **Configuration passed to express-ntlm**:
-   ```javascript
-   const options = {
-     domain: ntlmAuth.domain,
-     domaincontroller: ntlmAuth.domainController,
-     domaincontrolleruser: ldapUser,       // For LDAP bind
-     domaincontrollerpassword: ldapPassword,
-     getGroups: true
-   };
-   ```
+`domainController` only checks the sign-in: express-ntlm relays the NTLM messages to it as an LDAP
+bind and reports success or failure. Groups come from a separate LDAP provider:
+1. **Configure an LDAP provider** in `ldapAuth.providers` with admin bind credentials and group
+   search (`ldapAuth.enabled` can stay `false`)
+2. **Name it** in `ntlmAuth.ldapGroupLookupProvider`
+3. The server looks up the user's groups in that provider at sign-in and maps them through
+   `groups.json`
 
 ---
 
@@ -758,8 +749,6 @@ const apiClient = axios.create({
 
 ```bash
 # Authentication
-NTLM_LDAP_USER=CN=Service Account,OU=Users,DC=muc,DC=intrafind,DC=de
-NTLM_LDAP_PASSWORD=password123
 LDAP_ADMIN_PASSWORD=password123
 
 # JWT (optional - auto-generated if not provided)
@@ -825,12 +814,12 @@ SKIP_NTLM_VITE_PROXY=false npm run dev
 
 ### Issue: Groups not retrieved
 
-**Cause**: Domain controller not configured or LDAP credentials missing
+**Cause**: No `ldapGroupLookupProvider` set — NTLM sign-in itself returns no groups
 
 **Solution**:
-1. Configure `domainController` in platform.json
-2. Set `NTLM_LDAP_USER` and `NTLM_LDAP_PASSWORD` environment variables
-3. Verify domain controller is accessible from the server
+1. Configure an LDAP provider in `ldapAuth.providers` with admin bind credentials and group search
+2. Set `ntlmAuth.ldapGroupLookupProvider` to its `name`
+3. Verify the LDAP server is accessible from the server
 
 ### Issue: NTLM on non-Windows server
 

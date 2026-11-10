@@ -77,8 +77,8 @@ function Location() {
 
 function renderPage({ models = [], providerList = providers, url = '/admin/models' } = {}) {
   mockMakeAdminApiCall.mockImplementation(async path => {
-    if (path === '/admin/models') return { data: models };
-    if (path === '/admin/providers') return { data: providerList };
+    if (path === '/admin/models') return { data: { items: models } };
+    if (path === '/admin/providers') return { data: { items: providerList } };
     return { data: {} };
   });
   return render(

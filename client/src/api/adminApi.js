@@ -298,7 +298,7 @@ const adminProjectItemPath = (projectId, itemId) =>
  */
 export const fetchAdminProjects = async () => {
   const response = await makeAdminApiCall(ADMIN_PROJECTS_PATH);
-  return Array.isArray(response.data) ? response.data : [];
+  return Array.isArray(response.data?.items) ? response.data.items : [];
 };
 
 /**
@@ -314,11 +314,15 @@ export const fetchAdminProjectStats = async () => {
 
 /**
  * The project settings an admin edits on the projects page (full admins only):
- * who users may share their projects with, and the tier policy (whether the
- * users' iFinder smart collections are listed as projects).
+ * who users may share their projects with, the tier policy (whether the
+ * users' iFinder smart collections are listed as projects), the default app
+ * and the limits of the local tier, with the most items a project may hold
+ * (`maxFilesCeiling`).
  *
  * @returns {Promise<{sharing: {allowUsers: boolean, allowGroups: boolean,
- *   allowEveryone: boolean, allowCatalog: boolean}, tierPolicy: 'ihub'|'both'|'ifinder'}>}
+ *   allowEveryone: boolean, allowCatalog: boolean}, tierPolicy: 'ihub'|'both'|'ifinder',
+ *   defaultAppId: string, limits: {maxFiles: number, maxFileBytes: number,
+ *   maxProjectBytes: number, maxProjectsPerUser: number}, maxFilesCeiling: number}>}
  */
 export const fetchProjectSettings = async () => {
   const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`);
@@ -326,10 +330,12 @@ export const fetchProjectSettings = async () => {
 };
 
 /**
- * Change the sharing audiences and/or the tier policy; only the fields sent change.
+ * Change the sharing audiences, the tier policy, the default app and/or the
+ * limits; only the fields sent change.
  *
- * @param {{sharing?: Object, tierPolicy?: 'ihub'|'both'|'ifinder'}} settings
- * @returns {Promise<{sharing: Object, tierPolicy: string}>} The effective settings.
+ * @param {{sharing?: Object, tierPolicy?: 'ihub'|'both'|'ifinder', defaultAppId?: string,
+ *   limits?: Object}} settings
+ * @returns {Promise<Object>} The effective settings, as {@link fetchProjectSettings} reads them.
  */
 export const saveProjectSettings = async settings => {
   const response = await makeAdminApiCall(`${ADMIN_PROJECTS_PATH}/_settings`, {
@@ -422,6 +428,21 @@ export const updateAdminProject = async (projectId, project) => {
   const response = await makeAdminApiCall(adminProjectPath(projectId), {
     method: 'PUT',
     body: project
+  });
+  return response.data;
+};
+
+/**
+ * Change some fields of an admin project (`PATCH`), such as its refresh TTL.
+ *
+ * @param {string} projectId
+ * @param {{refreshTtl?: number|'never'|null}} changes
+ * @returns {Promise<Object>} The updated project.
+ */
+export const patchAdminProject = async (projectId, changes) => {
+  const response = await makeAdminApiCall(adminProjectPath(projectId), {
+    method: 'PATCH',
+    body: changes
   });
   return response.data;
 };
@@ -561,7 +582,7 @@ export const uploadAdminProjectItem = async (projectId, { file, name, pinned = f
  *
  * @param {string} projectId
  * @param {string} itemId
- * @param {{name?: string, pinned?: boolean, ref?: Object}} changes
+ * @param {{name?: string, pinned?: boolean, ref?: Object, refreshTtl?: number|'never'|null}} changes
  * @returns {Promise<Object>} The updated item.
  */
 export const updateAdminProjectItem = async (projectId, itemId, changes) => {

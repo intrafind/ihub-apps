@@ -424,6 +424,8 @@ Two new system skills, enabled per app by adding `xlsx` and `web-artifacts` to i
   contact other sites.
   Links in an artifact (sources, details, menu items) open content inside the file instead of
   pointing nowhere; a link the preview cannot follow is flagged so the model rebuilds it.
+  A rebuilt artifact replaces the earlier version: the answer shows one card per file name, not one
+  per attempt.
 - **Previews:** PDFs, HTML, SVG, CSV/TSV tables and Jupyter notebooks open in the panel, with a
   **Preview | Code** switch.
 - **Open:** the Files panel's preview has an **Open** button (or double-click a file) that opens the
@@ -1293,6 +1295,62 @@ about half the pane — so a long prompt can be read and edited without scrollin
 A web page added to a project without a name now shows the page's title instead of its URL. A name
 you type is kept as it is, and pages picked from a site crawl keep the titles the crawl found. A
 page that cannot be read when it is added keeps its URL as the name.
+
+## Projects: Up to 200 Items, and the Limits Are Set in the Admin UI
+
+A project can now hold up to 200 items, the same number of documents an iFinder smart collection
+holds, and by default holds 100 items and 500 MB (was 25 items and 200 MB). Admins set the project
+limits under **Admin → Projects → Project settings** instead of
+editing `platform.json`, and a change applies at once, without a restart.
+
+- Four limits: items per project (100 by default, at most 200), size of one file (20 MB) and of
+  one project (500 MB), and projects per user (0 for no limit).
+- An upgrade raises the item and project size limits only where they still hold the old defaults; a
+  value an admin chose stays.
+- Lowering a limit removes nothing; it only refuses what would go past it.
+- Adding several iFinder documents to a smart collection project at once takes up to 200 per call.
+
+## Projects: The Model Knows Which Documents a Searched Project Holds
+
+When a project is too large to load in full and is searched instead, the model now sees a list of
+its documents, not just a count. It can pick the page or file that answers the question and read it
+directly, instead of searching blindly first.
+
+- Each listed document shows its name, size and, for web pages, its URL, plus the document's own
+  title and a short description when iHub knows them.
+- The title and description are captured automatically: from an uploaded file's metadata or first
+  heading and paragraph, from a web page's title and description when it is added (or, for
+  pages added earlier, the first time it is read), from an iHub page's configured title, and from
+  an iFinder document's title, else its file name.
+- The list stops at 50 documents per project; the model is told how many more there are and how to
+  list them all.
+
+## Projects: Files Linked From Websites Are Stored Like Uploads, With a Refresh Schedule
+
+A web address that serves a document — PDF, Word, PowerPoint, Excel, OpenDocument or any other
+type an upload accepts — is now downloaded when it is added to a project and stored like an
+uploaded file, instead of being read live. Its whole text is available, no longer cut at 50,000
+characters, and the item keeps its source address for citations and refreshes. HTML pages stay
+live links.
+
+- The download follows the upload rules: the file size and project size limits, the accepted
+  types and the malware scan. An address that serves an image, an archive or a legacy Office file
+  is refused like the same upload would be.
+- **Find more pages of this website** now also lists Word, PowerPoint, Excel and OpenDocument
+  files, not only PDFs. **Include files on other websites** adds the documents its pages link to
+  on another host, such as a download server.
+- An address that ends in `.pdf`, `.docx` and the like is added as a file even when the website
+  does not answer at that moment; **Retry** downloads it later.
+- How long a file from a website or a web page counts as current is set per installation
+  (**Admin → Projects → Project settings**, one day by default), per project (**Refresh** in the
+  project's side panel) and per item (**Refresh schedule** in the item menu), or set to **Never**.
+- Files are downloaded again on their own once that time has passed. An unchanged file is
+  neither downloaded nor read again and keeps its text. The item shows when its text was taken
+  and when it is refreshed next; **Refresh** still works at any time. Web pages are read again
+  after the same time, and **Refresh** on a web page applies on every server process.
+- Uploads never wait behind scheduled refreshes.
+- Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
+  hand, because that needs the account of the user who picked them.
 
 ## Chat: Progress While the Model Writes a Document, File or Web Artifact
 

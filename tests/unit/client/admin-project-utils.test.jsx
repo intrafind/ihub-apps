@@ -12,6 +12,7 @@ import {
   filterProjects,
   normalizeProjectLinks,
   parseTags,
+  projectDependencyHref,
   projectFormFromProject,
   setProjectLinkMode,
   toggleProjectLink,
@@ -300,5 +301,24 @@ describe('availability', () => {
     expect(projectIdFromName({ en: '', de: 'Über uns' })).toBe('ber-uns');
     expect(projectIdFromName({ en: '' })).toBe('');
     expect(projectIdFromName({ en: 'x'.repeat(80) })).toHaveLength(50);
+  });
+});
+
+describe('project dependency links', () => {
+  const flags = enabled => ({ isEnabled: feature => enabled.includes(feature) });
+
+  test('links apps, and workflows and agents only while their feature is on', () => {
+    const on = flags(['workflows', 'agentFactory']);
+    expect(projectDependencyHref({ type: 'app', id: 'faq bot' }, on)).toBe('/admin/apps/faq%20bot');
+    expect(projectDependencyHref({ type: 'workflow', id: 'knowledge-qa' }, on)).toBe(
+      '/admin/workflows/knowledge-qa'
+    );
+    expect(projectDependencyHref({ type: 'agent', id: 'a1' }, on)).toBe('/admin/agents/a1');
+
+    const off = flags([]);
+    expect(projectDependencyHref({ type: 'app', id: 'faq' }, off)).toBe('/admin/apps/faq');
+    expect(projectDependencyHref({ type: 'workflow', id: 'knowledge-qa' }, off)).toBeNull();
+    expect(projectDependencyHref({ type: 'agent', id: 'a1' }, off)).toBeNull();
+    expect(projectDependencyHref({ type: 'unknown', id: 'x' }, on)).toBeNull();
   });
 });

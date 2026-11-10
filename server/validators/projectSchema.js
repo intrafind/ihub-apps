@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { isHttpUrl, zSafeId } from './common.js';
 import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
+import { MAX_ITEM_DESCRIPTION_CHARS, MAX_ITEM_TITLE_CHARS } from '../services/projects/itemInfo.js';
 import {
   LINK_MODES,
   MAX_FILES_CEILING,
@@ -15,6 +16,7 @@ import {
   IFINDER_PROJECT_ID_PREFIX,
   PROJECT_TIERS
 } from '../services/projects/projectConstants.js';
+import { zRefreshTtl } from '../services/projects/refreshTtl.js';
 
 /**
  * Schemas of the project model (#1036, spec 1 §2 and §3): the stored
@@ -168,6 +170,9 @@ export const projectItemSchema = z
     id: itemIdSchema,
     kind: zSafeId.min(1).max(50),
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH),
+    /** The document's own title and a short description, captured at ingest or first read. */
+    title: z.string().max(MAX_ITEM_TITLE_CHARS).nullable().optional(),
+    description: z.string().max(MAX_ITEM_DESCRIPTION_CHARS).nullable().optional(),
     ref: z.record(z.string(), z.unknown()).prefault({}),
     storage: z.enum(ITEM_STORAGE),
     pinned: z.boolean().prefault(false),
@@ -179,6 +184,10 @@ export const projectItemSchema = z
       .optional(),
     text: itemTextSchema.nullable().optional(),
     cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional(),
+    /** The item's own refresh TTL (#3536); absent takes the project's. */
+    refreshTtl: zRefreshTtl.optional(),
+    /** When the source of a fetched or live item was last checked. */
+    checkedAt: z.string().nullable().optional(),
     provenance: itemProvenanceSchema,
     snapshotAt: z.string().nullable().optional(),
     /** Set while a refresh runs; the status keeps the readable snapshot. */
@@ -225,6 +234,8 @@ export const adminProjectSchema = z
     tags: z.array(z.string().max(100)).prefault([]),
     // The app new chats start in; users who open the project get it preselected.
     defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    // How long its files from websites and web pages are current (#3536).
+    refreshTtl: zRefreshTtl.optional(),
     items: z.array(projectItemSchema).max(MAX_FILES_CEILING).prefault([]),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
@@ -330,7 +341,9 @@ export const userProjectUpdateSchema = z
     name: z.string().trim().min(1).max(MAX_NAME_LENGTH).optional(),
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
-    defaultAppId: zSafeId.min(1).max(100).nullable().optional()
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    // Seconds or 'never'; null goes back to the platform's (#3536).
+    refreshTtl: zRefreshTtl.nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
@@ -345,7 +358,8 @@ export const adminProjectUpdateSchema = z
     published: z.boolean().optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).optional(),
-    defaultAppId: zSafeId.min(1).max(100).nullable().optional()
+    defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    refreshTtl: zRefreshTtl.nullable().optional()
   })
   .strict();
 
@@ -381,7 +395,9 @@ export const itemUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().optional(),
-    ref: z.record(z.string(), z.unknown()).optional()
+    ref: z.record(z.string(), z.unknown()).optional(),
+    // A file from a website or a web page: its own refresh TTL, null for the project's.
+    refreshTtl: zRefreshTtl.nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
@@ -496,11 +512,17 @@ export const urlCrawlSchema = z
     url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed'),
     maxPages: z.number().int().min(1).max(200).optional(),
     maxDepth: z.number().int().min(0).max(3).optional(),
-    samePath: z.boolean().optional()
+    samePath: z.boolean().optional(),
+    // Also list documents on other hosts that pages in scope link to (#3536).
+    otherHostDocuments: z.boolean().optional()
   })
   .strict();
 
-/** What `PUT /api/admin/projects/_settings` accepts: the sharing audiences. */
+/**
+ * What `PUT /api/admin/projects/_settings` accepts: the sharing audiences, the
+ * tier policy, the default app and the limits of the local tier. Each limit
+ * is optional; `maxProjectsPerUser` of 0 means no cap.
+ */
 export const projectSharingSettingsSchema = z
   .object({
     sharing: z
@@ -515,13 +537,27 @@ export const projectSharingSettingsSchema = z
       .optional(),
     tierPolicy: z.enum(['ihub', 'both', 'ifinder']).optional(),
     // The app a project chat starts in when the project names none; '' clears it.
-    defaultAppId: z.union([zSafeId.min(1).max(100), z.literal('')]).optional()
+    defaultAppId: z.union([zSafeId.min(1).max(100), z.literal('')]).optional(),
+    limits: z
+      .object({
+        maxFiles: z.number().int().min(1).max(MAX_FILES_CEILING),
+        maxFileBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        maxProjectBytes: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+        maxProjectsPerUser: z.number().int().min(0).max(100_000)
+      })
+      .partial()
+      .strict()
+      .optional(),
+    // How long files from websites and web pages are current (#3536).
+    refreshTtl: zRefreshTtl.optional()
   })
   .strict()
   .refine(
     body =>
       body.sharing !== undefined ||
       body.tierPolicy !== undefined ||
-      body.defaultAppId !== undefined,
-    { message: 'Send sharing, tierPolicy or defaultAppId' }
+      body.defaultAppId !== undefined ||
+      body.limits !== undefined ||
+      body.refreshTtl !== undefined,
+    { message: 'Send sharing, tierPolicy, defaultAppId, limits or refreshTtl' }
   );

@@ -3,7 +3,8 @@
 
 /**
  * `GET/PUT /api/admin/projects/_settings`: who users may share their projects
- * with — users, groups, everyone signed in and the catalog. Full admins only;
+ * with — users, groups, everyone signed in and the catalog — the tier policy,
+ * the default app and the limits of user projects. Full admins only;
  * a save changes only the fields sent and keeps the rest of platform.json.
  */
 import fs from 'node:fs/promises';
@@ -12,6 +13,7 @@ import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { answerWithError } from './helpers/answerError.js';
+import { MAX_FILES_CEILING } from '../services/projects/projectConstants.js';
 
 let scratch;
 let configCache;
@@ -176,6 +178,65 @@ describe('project sharing settings', () => {
     assert.equal(invalid.statusCode, 400);
     assert.equal(invalid.headers['content-type'], 'application/problem+json');
     assert.equal(invalid.body.code, 'BAD_REQUEST');
+  });
+
+  it('reads the limits and the ceiling of the item count', async () => {
+    const res = await drive(route.get, { user: ROOT });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.deepEqual(res.body.limits, {
+      maxFiles: 10,
+      maxFileBytes: 20 * 1024 * 1024,
+      maxProjectBytes: 500 * 1024 * 1024,
+      maxProjectsPerUser: 20
+    });
+    assert.equal(res.body.maxFilesCeiling, MAX_FILES_CEILING);
+  });
+
+  it('writes only the limits sent, and they apply without a restart', async () => {
+    const res = await drive(route.put, {
+      user: ROOT,
+      body: { limits: { maxFiles: 150, maxProjectsPerUser: 0 } }
+    });
+    assert.equal(res.statusCode, 200, JSON.stringify(res.body));
+    assert.equal(res.body.limits.maxFiles, 150);
+    assert.equal(res.body.limits.maxProjectsPerUser, 0);
+    assert.equal(res.body.limits.maxFileBytes, 20 * 1024 * 1024, 'the default stays');
+    const stored = JSON.parse(
+      await fs.readFile(path.join(scratch, 'config', 'platform.json'), 'utf8')
+    );
+    assert.deepEqual(stored.projects.limits, { maxFiles: 150, maxProjectsPerUser: 0 });
+    assert.equal(stored.projects.tierPolicy, 'both', 'the other settings stay');
+    const { projectSettings, projectsClientConfig } =
+      await import('../services/projects/projectSettings.js');
+    // What the services and the upload route read on each request.
+    assert.equal(projectSettings(configCache.getPlatform()).limits.maxFiles, 150);
+    assert.equal(projectsClientConfig({}, configCache.getPlatform()).limits.maxFiles, 150);
+
+    const bytes = await drive(route.put, {
+      user: ROOT,
+      body: { limits: { maxFileBytes: 50 * 1024 * 1024, maxProjectBytes: 1024 * 1024 * 1024 } }
+    });
+    assert.equal(bytes.statusCode, 200, JSON.stringify(bytes.body));
+    assert.equal(bytes.body.limits.maxFiles, 150, 'an earlier limit stays');
+    assert.equal(bytes.body.limits.maxProjectBytes, 1024 * 1024 * 1024);
+  });
+
+  it('refuses limits out of range or unknown', async () => {
+    for (const limits of [
+      { maxFiles: MAX_FILES_CEILING + 1 },
+      { maxFiles: 0 },
+      { maxFiles: 2.5 },
+      { maxFileBytes: 0 },
+      { maxProjectBytes: -1 },
+      { maxProjectsPerUser: -1 },
+      { maxFiles: '30' },
+      { maxItems: 30 }
+    ]) {
+      const res = await drive(route.put, { user: ROOT, body: { limits } });
+      assert.equal(res.statusCode, 400, JSON.stringify(limits));
+      assert.equal(res.headers['content-type'], 'application/problem+json');
+    }
+    assert.equal(configCache.getPlatform().projects.limits.maxFiles, 150, 'nothing written');
   });
 
   it('refuses an unknown tier policy and an empty body', async () => {

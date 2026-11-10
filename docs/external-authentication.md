@@ -21,7 +21,7 @@ The platform supports seven authentication methods:
 3. **Local Authentication** - Built-in user database
 4. **Proxy Authentication** - Reverse proxy headers
 5. **LDAP Authentication** - Directory server authentication (Active Directory, OpenLDAP)
-6. **NTLM Authentication** - Windows integrated/Kerberos authentication
+6. **NTLM Authentication** - Windows integrated authentication (NTLM; Kerberos only through proxy authentication or an OIDC identity provider)
 7. **Anonymous** - No authentication (default)
 
 - **Proxy Mode**: Authentication handled by reverse proxy or external service
@@ -623,13 +623,13 @@ LDAP groups are mapped to iHub groups using the `mappings` array in `groups.json
 
 ### 5. NTLM Authentication
 
-NTLM (Windows Integrated Authentication) allows users on domain-joined Windows machines to authenticate transparently using their Windows credentials via the NTLM/Negotiate protocol. This is implemented using the `express-ntlm` package.
+NTLM (Windows Integrated Authentication) allows users on domain-joined Windows machines to authenticate transparently using their Windows credentials via the NTLM protocol. This is implemented using the `express-ntlm` package, which relays the NTLM messages to the domain controller over LDAP. Kerberos (`Negotiate`) is not supported; see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md#kerberos) for alternatives.
 
 #### How It Works
 
-1. The browser sends an NTLM negotiate request automatically (no login form required for SSO)
+1. The browser answers iHub's `WWW-Authenticate: NTLM` challenge automatically (no login form required for SSO)
 2. `server/middleware/ntlmAuth.js` handles the multi-round NTLM handshake
-3. Active Directory groups are queried via LDAP using the configured bind credentials
+3. The domain controller checks the sign-in; it returns no groups. When `ldapGroupLookupProvider` names an LDAP provider, the user's groups are looked up there
 4. Groups are mapped to iHub internal groups and a JWT token is optionally generated
 
 #### Configuration
@@ -640,10 +640,7 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
     "enabled": true,
     "domain": "COMPANY",
     "domainController": "ldaps://dc.company.com:636",
-    "domainControllerUser": "CN=Service Account,OU=Users,DC=company,DC=com",
-    "domainControllerPassword": "${NTLM_LDAP_PASSWORD}",
-    "getGroups": true,
-    "getUserInfo": true,
+    "ldapGroupLookupProvider": "corporate-ldap",
     "generateJwtToken": true,
     "defaultGroups": ["authenticated"],
     "sessionTimeoutMinutes": 480
@@ -651,12 +648,7 @@ NTLM (Windows Integrated Authentication) allows users on domain-joined Windows m
 }
 ```
 
-LDAP credentials can also be supplied via environment variables instead of the configuration file:
-
-```bash
-export NTLM_LDAP_USER="CN=Service Account,OU=Users,DC=company,DC=com"
-export NTLM_LDAP_PASSWORD="secure-password"
-```
+`corporate-ldap` is an entry in `ldapAuth.providers` with admin bind credentials and group search; its credentials are configured there. Without `ldapGroupLookupProvider`, NTLM users get only `defaultGroups`.
 
 #### Multiple Provider Co-existence
 
@@ -673,8 +665,7 @@ NTLM authentication is automatically skipped for requests proxied through Vite's
 
 #### Security Notes
 
-- The `domainControllerPassword` field is encrypted at rest using AES-256-GCM (see [Security Guide](security.md))
-- NTLM requires a domain controller with LDAP access for group retrieval
+- Without `domainController`, every NTLM sign-in is accepted without checking the password; always set it in production
 - For production deployments, use LDAPS (`ldaps://`) for the domain controller URL
 
 ## API Endpoints

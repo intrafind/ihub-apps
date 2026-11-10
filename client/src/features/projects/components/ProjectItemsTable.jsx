@@ -11,14 +11,20 @@ import {
   kindIcon,
   localizedText
 } from '../utils/projectItems';
+import { refreshSummary, takesRefreshTtl } from '../utils/refreshTtl';
 import ItemEstimate from './ItemEstimate';
 import ItemProvenance from './ItemProvenance';
 import ProjectItemStatus from './ProjectItemStatus';
 
-/** Whether an item can be read again from its source (refresh). */
+/**
+ * Whether an item can be read again from its source (refresh): a stale
+ * item, a picked document or a file from a website, or a web page (whose
+ * cached read is dropped).
+ */
 function isRefreshable(item) {
   return (
-    item.status === 'stale' || (item.status === 'ready' && item.provenance?.origin === 'picked')
+    item.status === 'stale' ||
+    (item.status === 'ready' && (item.provenance?.origin === 'picked' || item.kind === 'url'))
   );
 }
 
@@ -55,6 +61,8 @@ function isRetryable(item) {
  *   reading only, so offered on a read-only list too.
  * @param {(item: Object) => void} [props.onRefresh] - Retry (failed, not an upload) or
  *   refresh (stale, picked).
+ * @param {(item: Object) => void} [props.onSchedule] - Set the refresh TTL of a file
+ *   from a website or a web page.
  * @param {(item: Object) => void} [props.onRename]
  * @param {(item: Object) => void} [props.onEdit] - Change what a link item points at
  *   (offered for the kinds of `EDITABLE_ITEM_KINDS`; it covers the name too).
@@ -77,6 +85,7 @@ function ProjectItemsTable({
   onPreview,
   onDocumentAction,
   onRefresh,
+  onSchedule,
   onRename,
   onEdit,
   onRemove,
@@ -161,6 +170,11 @@ function ProjectItemsTable({
             <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.ref.url}</div>
           )}
           <ItemProvenance provenance={item.provenance} item={item} className="mt-0.5" />
+          {item.refresh && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {refreshSummary(item, t, language)}
+            </div>
+          )}
         </div>
       )
     },
@@ -246,6 +260,14 @@ function ProjectItemsTable({
       hidden: item => !canChange(onRefresh) || !isRefreshable(item),
       busy: item => busyItemId === item.id,
       onClick: item => onRefresh(item)
+    },
+    {
+      id: 'schedule',
+      label: t('projects.items.actions.schedule', 'Refresh schedule'),
+      icon: 'clock',
+      hidden: item => !canChange(onSchedule) || !takesRefreshTtl(item),
+      disabled: item => busyItemId === item.id,
+      onClick: item => onSchedule(item)
     },
     {
       id: 'rename',

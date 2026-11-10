@@ -31,6 +31,7 @@ import { apiClient } from '../../../client/src/api/client.js';
 import {
   addAdminProjectItem,
   fetchAdminProjectItemText,
+  fetchAdminProjects,
   toggleAdminProjects,
   uploadAdminProjectItem
 } from '../../../client/src/api/adminApi.js';
@@ -50,6 +51,19 @@ function captureRequests(response = { data: { id: 'i1' }, status: 202, headers: 
 }
 
 describe('admin projects API', () => {
+  test('reads the project list from { items }', async () => {
+    const requests = captureRequests({
+      data: { items: [{ id: 'faq' }, { id: 'handbook' }] },
+      status: 200,
+      headers: {}
+    });
+
+    const projects = await fetchAdminProjects();
+
+    expect(requests[0].url).toBe('/admin/projects');
+    expect(projects.map(project => project.id)).toEqual(['faq', 'handbook']);
+  });
+
   test('uploads a file as multipart with the field "file"', async () => {
     const requests = captureRequests();
     const file = new File(['hello'], 'notes.txt', { type: 'text/plain' });

@@ -23,6 +23,8 @@ import {
   classifyBlockedResponse
 } from '../../tools/lib/botProtection.js';
 import { dropRawTextElements } from '../../tools/lib/pageContent.js';
+import { HTML_MIME, acceptedTypeOf } from './extractText.js';
+import { DOCUMENT_EXTENSIONS } from './webFileDownload.js';
 
 /** Defaults and upper bounds of a crawl request. */
 export const CRAWL_DEFAULT_MAX_PAGES = 50;
@@ -59,8 +61,12 @@ const MAX_QUERY_VARIANTS = 3;
 /** Most links queued for one level; the page limit is far below it. */
 const MAX_LEVEL_CANDIDATES = 5000;
 
-/** Links to these are documents the reader can read, listed but not crawled. */
-const DOCUMENT_EXTENSIONS = new Set(['pdf']);
+/**
+ * Links to these are documents, listed but not crawled: added to a project,
+ * they are downloaded and extracted like an upload (#3536). Defined with the
+ * download, which also trusts them for an address it cannot check.
+ */
+export { DOCUMENT_EXTENSIONS };
 
 /**
  * Links to these are neither pages nor documents: never listed. A filter that
@@ -75,7 +81,6 @@ const SKIPPED_EXTENSIONS = new Set([
   'csv',
   'dmg',
   'doc',
-  'docx',
   'eot',
   'exe',
   'gif',
@@ -92,14 +97,10 @@ const SKIPPED_EXTENSIONS = new Set([
   'mp3',
   'mp4',
   'msi',
-  'odp',
-  'ods',
-  'odt',
   'ogg',
   'otf',
   'png',
   'ppt',
-  'pptx',
   'rar',
   'rss',
   'svg',
@@ -112,7 +113,6 @@ const SKIPPED_EXTENSIONS = new Set([
   'woff',
   'woff2',
   'xls',
-  'xlsx',
   'xml',
   'zip'
 ]);
@@ -170,7 +170,7 @@ function extensionOf(url) {
 /**
  * What a link points at, from its extension: a `page` to crawl, a `document`
  * to list without crawling, or `null` for anything else (images, scripts,
- * archives, office files the URL reader does not read).
+ * archives, legacy Office files the extractors do not read).
  *
  * @param {string} url - Absolute URL
  * @returns {'page'|'document'|null}
@@ -452,6 +452,30 @@ export function decodeHtml(bytes, contentType) {
   }
 }
 
+/**
+ * Whether a response that is not HTML is a document a project can take: a
+ * type the upload extractors read (PDF, Office, OpenDocument, …), decided by
+ * its content type with the file name's extension as a hint.
+ *
+ * @param {string} contentType
+ * @param {string} url
+ * @returns {boolean}
+ */
+export function isDocumentResponse(contentType, url) {
+  const name = (() => {
+    try {
+      return new URL(url).pathname.split('/').pop() || '';
+    } catch {
+      return '';
+    }
+  })();
+  const accepted = acceptedTypeOf({ contentType, name });
+  if (!accepted || accepted === HTML_MIME) return false;
+  // Plain text, JSON or XML a site serves are data, not documents: only the
+  // types a document extension names, or a document type.
+  return !/^(text\/|application\/(json|xml|x-ndjson|ld\+json|javascript))/.test(accepted);
+}
+
 /** The default fetcher: the page reader's guarded fetch, the body read with bounds. */
 async function fetchHtml(url, { signal } = {}) {
   const { response, finalUrl } = await fetchWebPage(url, {
@@ -518,7 +542,7 @@ function stoppedError() {
  *
  * Every listed page has been fetched (so dead links and pages that turn out
  * not to be HTML are left out), and the links of a page are followed while it
- * is less than `maxDepth` links away from the start. Documents (PDF) are
+ * is less than `maxDepth` links away from the start. Documents (PDF, Office, OpenDocument) are
  * listed without being fetched. A page is listed under the address it was
  * read from after redirects, once. Links `robots.txt` disallows are not
  * followed; tracking parameters are dropped, and at most a few variants of
@@ -533,6 +557,9 @@ function stoppedError() {
  * @param {number} [params.maxPages=50] - Most pages listed, the start page included
  * @param {number} [params.maxDepth=2] - Most links followed away from the start page
  * @param {boolean} [params.samePath=true] - Stay in the start page's folder
+ * @param {boolean} [params.otherHostDocuments=false] - Also list documents on
+ *   other hosts that pages in scope link to (a CDN, an asset domain). Only
+ *   listed, never fetched by the crawl; a page on another host never is
  * @param {AbortSignal} [params.signal] - Stops the crawl (the client went away)
  * @param {Object} [deps]
  * @param {(url: string, options: {signal: AbortSignal}) => Promise<{finalUrl: string,
@@ -557,6 +584,7 @@ export async function crawlSite(
     maxPages = CRAWL_DEFAULT_MAX_PAGES,
     maxDepth = CRAWL_DEFAULT_MAX_DEPTH,
     samePath = true,
+    otherHostDocuments = false,
     signal: callerSignal
   },
   {
@@ -595,7 +623,7 @@ export async function crawlSite(
     }
     const firstUrl = normalizeCrawlUrl(first.finalUrl) || start;
     if (first.html === null) {
-      if (/pdf/i.test(first.contentType || '')) {
+      if (isDocumentResponse(first.contentType, firstUrl)) {
         return {
           pages: [{ url: firstUrl, title: fileNameOf(firstUrl), depth: 0, type: 'document' }],
           truncated: false,
@@ -624,11 +652,21 @@ export async function crawlSite(
     /** The in-scope links of a page worth visiting, in document order. */
     const candidatesOf = (links, depth, into) => {
       for (const link of links) {
-        if (seen.has(link) || !inCrawlScope(link, scope)) continue;
+        if (seen.has(link)) continue;
         const type = linkTypeOf(link);
         if (!type) continue;
+        const inScope = inCrawlScope(link, scope);
+        // A document on another host may be listed; nothing outside the
+        // scope is ever crawled, and another host's robots.txt is not ours
+        // to read (the crawl fetches nothing there).
+        const elsewhere =
+          !inScope &&
+          otherHostDocuments &&
+          type === 'document' &&
+          !sameHostname(new URL(link).hostname, scope.origin);
+        if (!inScope && !elsewhere) continue;
         seen.add(link);
-        if (!robotsAllows(link, robotsRules)) {
+        if (inScope && !robotsAllows(link, robotsRules)) {
           robotsExcluded += 1;
           continue;
         }
@@ -660,8 +698,8 @@ export async function crawlSite(
           if (!inCrawlScope(finalUrl, scope) || listedTargets.has(finalUrl)) return null;
         }
         if (page.html === null) {
-          // A link without an extension may still serve a PDF.
-          if (!/pdf/i.test(page.contentType || '')) return null;
+          // A link without an extension may still serve a document.
+          if (!isDocumentResponse(page.contentType, finalUrl)) return null;
           return { finalUrl, title: fileNameOf(finalUrl), links: [], document: true };
         }
         return { finalUrl, ...extractPageLinks(page.html, finalUrl) };

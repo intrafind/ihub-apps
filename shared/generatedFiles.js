@@ -193,6 +193,10 @@ export function generatedFileOf(entry) {
 /**
  * Normalize a list of descriptors: valid ones only, no duplicates, bounded.
  *
+ * A later file with the same name and type replaces the earlier one in its
+ * place: a tool called again with the same filename (`create_web_artifact`
+ * fixing its own warnings) is a corrected version, not another file.
+ *
  * @param {unknown} list
  * @returns {Array<Object>}
  */
@@ -202,6 +206,14 @@ export function generatedFilesOf(list) {
   for (const entry of list) {
     const file = generatedFileOf(entry);
     if (!file || (file.id && out.some(f => f.id === file.id))) continue;
+    const named = typeof entry.name === 'string' && entry.name.trim();
+    const earlier = named
+      ? out.findIndex(f => f.name === file.name && f.mimeType === file.mimeType)
+      : -1;
+    if (earlier !== -1) {
+      out[earlier] = file;
+      continue;
+    }
     out.push(file);
     if (out.length >= MAX_GENERATED_FILES) break;
   }

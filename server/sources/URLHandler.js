@@ -5,6 +5,7 @@ import SourceHandler from './SourceHandler.js';
 import configCache from '../configCache.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import logger from '../utils/logger.js';
+import { publish, subscribe } from '../clusterBus.js';
 import { htmlToText } from 'html-to-text';
 
 /**
@@ -268,6 +269,27 @@ class URLHandler extends SourceHandler {
   }
 
   /**
+   * Forget every cached read of one URL, whatever its options.
+   * @param {string} url
+   * @returns {number} Entries dropped.
+   */
+  forget(url) {
+    const key = this.getCacheKey({ url });
+    const target = JSON.parse(key).url;
+    let dropped = 0;
+    for (const cacheKey of [...this.cache.keys()]) {
+      try {
+        if (JSON.parse(cacheKey).url !== target) continue;
+      } catch {
+        continue;
+      }
+      this.cache.delete(cacheKey);
+      dropped += 1;
+    }
+    return dropped;
+  }
+
+  /**
    * Batch load multiple URLs
    * @param {Array} urls - Array of URL configs
    * @param {Object} options - Batch options
@@ -306,6 +328,42 @@ class URLHandler extends SourceHandler {
 
     return results;
   }
+}
+
+/** The cluster channel that tells every worker to forget a page's cached reads. */
+export const FORGET_URL_CHANNEL = 'project-url-cache:forget';
+
+/** Forget a page's cached reads in this process only. */
+async function forgetLocally(url) {
+  if (typeof url !== 'string' || !url) return;
+  const { createSourceManager } = await import('./index.js');
+  createSourceManager().getHandler('url')?.forget?.(url);
+  const { forgetCachedPage } = await import('../services/pageCache.js');
+  forgetCachedPage(url);
+}
+
+subscribe(FORGET_URL_CHANNEL, payload => {
+  forgetLocally(payload?.url).catch(error =>
+    logger.warn('Could not forget a cached page read', {
+      component: 'URLHandler',
+      error: error.message
+    })
+  );
+});
+
+/**
+ * Forget a web page's cached reads — the URL handler's and the page
+ * reader's — on every worker, so its next read fetches it again ("Refresh
+ * now" of a project's web page item, #3536). This worker forgets at once; the
+ * others when the cluster bus delivers the message.
+ *
+ * @param {string} url
+ * @returns {Promise<void>}
+ */
+export async function forgetCachedUrl(url) {
+  if (typeof url !== 'string' || !url) return;
+  await forgetLocally(url);
+  publish(FORGET_URL_CHANNEL, { url });
 }
 
 export default URLHandler;

@@ -455,8 +455,7 @@ If you're migrating from NTLM to ADFS:
        "mode": "oidc"
      },
      "ntlmAuth": {
-       "enabled": true,
-       "type": "ntlm"
+       "enabled": true
      },
      "oidcAuth": {
        "enabled": true,

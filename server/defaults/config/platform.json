@@ -513,9 +513,9 @@
   "projects": {
     "tierPolicy": "ihub",
     "limits": {
-      "maxFiles": 25,
+      "maxFiles": 100,
       "maxFileBytes": 20971520,
-      "maxProjectBytes": 209715200,
+      "maxProjectBytes": 524288000,
       "maxProjectsPerUser": 20
     },
     "sharing": {
@@ -526,6 +526,7 @@
     },
     "retentionDays": 0,
     "loadAllMaxTokens": 50000,
+    "refreshTtl": 86400,
     "kinds": {},
     "encryption": {
       "keyProvider": "local-file"

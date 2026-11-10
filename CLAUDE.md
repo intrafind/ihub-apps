@@ -38,7 +38,7 @@ Fresh `contents/` ships `admin` / `password123` via `POST /api/auth/local/login`
 
 ### Secret Encryption at Rest
 
-Platform config secrets (Jira, OIDC, LDAP, NTLM, Cloud Storage) are AES-256-GCM encrypted in `platform.json`; key at `contents/.encryption-key`. Encrypt on admin save, decrypt + redact on admin read, decrypt into cache at runtime. Plaintext passes through and is lazily encrypted on next save. Key files: `server/services/TokenStorageService.js`, `server/routes/admin/configs.js`, `server/configCache.js`.
+Platform config secrets (Jira, OIDC, LDAP, Cloud Storage) are AES-256-GCM encrypted in `platform.json`; key at `contents/.encryption-key`. Encrypt on admin save, decrypt + redact on admin read, decrypt into cache at runtime. Plaintext passes through and is lazily encrypted on next save. Key files: `server/services/TokenStorageService.js`, `server/routes/admin/configs.js`, `server/configCache.js`.
 
 ## Development Rules
 

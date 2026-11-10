@@ -30,13 +30,8 @@ import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
 import { ADMIN_ITEM_API } from '../utils/adminProjectItemApi';
 import { useAdminProject } from '../hooks/useAdminProject';
 import { localizedText } from '../../projects/utils/projectItems';
-
-/** Where the admin edits each kind of resource that links a project. */
-const DEPENDENCY_LINKS = {
-  app: id => `/admin/apps/${encodeURIComponent(id)}`,
-  workflow: id => `/admin/workflows/${encodeURIComponent(id)}`,
-  agent: id => `/admin/agents/${encodeURIComponent(id)}`
-};
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { projectDependencyHref } from '../utils/projectAdmin';
 
 const fetchAdminItemText = (...args) => fetchAdminProjectItemText(...args);
 const adminErrorMessage = err => getAdminApiErrorMessage(err);
@@ -65,6 +60,7 @@ function Card({ title, action, children }) {
  */
 function AdminProjectViewPageContent({ id }) {
   const { t, i18n } = useTranslation();
+  const featureFlags = useFeatureFlags();
   const language = i18n?.language || 'en';
   const navigate = useNavigate();
   const { project, setProject, loading, error: loadError, reload } = useAdminProject(id);
@@ -225,7 +221,7 @@ function AdminProjectViewPageContent({ id }) {
                 ) : (
                   <ul className="space-y-2" data-testid="project-dependencies">
                     {dependencies.map(dependency => {
-                      const href = DEPENDENCY_LINKS[dependency.type]?.(dependency.id);
+                      const href = projectDependencyHref(dependency, featureFlags);
                       const label = dependency.name || dependency.id;
                       return (
                         <li
