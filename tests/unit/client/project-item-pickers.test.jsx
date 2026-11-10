@@ -232,7 +232,8 @@ describe('UrlPicker — preview and site crawl', () => {
     expect(crawlUrl).toHaveBeenCalledWith('https://x.com/docs/', {
       maxPages: 50,
       maxDepth: 3,
-      samePath: true
+      samePath: true,
+      otherHostDocuments: false
     });
     expect(screen.getByTestId('crawl-status')).toHaveTextContent(
       '0 of 4 pages selected · 1 already added'

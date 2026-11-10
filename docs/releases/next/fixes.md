@@ -507,3 +507,9 @@ attached to your email." (or "…downloaded.") whatever had gone wrong. The mess
 cause: iHub's reason, for example "You are not allowed to use this integration." when the user's
 groups are not granted the iFinder integration (documents in iAssistant answers need it too), or
 Outlook's own error.
+
+## Chat: An Empty Answer Says So and Offers Retry
+
+An answer could stay completely blank, so the chat looked stuck after the question. This happens
+when a reasoning model finishes its turn right after thinking and writes no answer. The answer now
+reads "The model returned no answer." with a Retry button that asks the question again.

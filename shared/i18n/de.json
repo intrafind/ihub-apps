@@ -452,6 +452,7 @@
       "showThoughts": "Denkanalyse anzeigen",
       "truncated": "Abgeschnitten",
       "truncatedHint": "Das Modell hat sein Ausgabelimit erreicht, bevor es fertig war. Reasoning-Modelle verbrauchen dasselbe Limit für ihr Denken, sodass ein langer Gedankengang es aufbrauchen kann, bevor die Antwort beginnt. Erhöhen Sie „Max. Ausgabe-Tokens“ des Modells oder senken Sie den Reasoning-Aufwand.",
+      "emptyAnswer": "Das Modell hat keine Antwort geliefert.",
       "hideThoughts": "Denkanalyse verbergen",
       "inputParameters": "Eingabeparameter",
       "starterPromptsTitle": "Start-Prompts",
@@ -8503,7 +8504,8 @@
       "linkPublishedDetail": "Für alle veröffentlicht",
       "linkFromAppsDetail": "Gehört zu einer Ihrer Apps",
       "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar.",
-      "ifinderProfile": "Suchen in"
+      "ifinderProfile": "Suchen in",
+      "crawlOtherHosts": "Dateien auf anderen Websites einbeziehen"
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",

@@ -227,6 +227,18 @@ function ChatMessage({
   // nothing.
   const interrupted =
     message.cancelled === true || INTERRUPTED_FINISH_REASONS.has(message.finishReason);
+  // The model finished normally but wrote nothing — a reasoning model can end
+  // its turn right after thinking. Without a notice the bubble is just blank.
+  const emptyAnswer =
+    !isUser &&
+    !isError &&
+    !message.loading &&
+    !message.cancelled &&
+    message.finishReason === 'stop' &&
+    !answerText.trim() &&
+    !message.images?.length &&
+    !message.generatedFiles?.length &&
+    !message.artifacts?.length;
   const skillDraft = useMemo(
     () =>
       onSaveAsSkill && !isUser && !isError && !readOnly && !message.loading && !interrupted
@@ -1239,6 +1251,15 @@ function ChatMessage({
               <Icon name="exclamation-triangle" size="sm" />
               {t('pages.appChat.truncated', 'Truncated')}
             </span>
+          )}
+          {emptyAnswer && (
+            <>
+              <Icon name="exclamation-circle" size="sm" className="text-amber-500" />
+              <span>{t('pages.appChat.emptyAnswer', 'The model returned no answer.')}</span>
+              <button onClick={() => handleResend()} className="underline text-amber-700">
+                {t('common.retry', 'Retry')}
+              </button>
+            </>
           )}
           {(message.finishReason === 'connection_closed' || message.finishReason === 'error') && (
             <>

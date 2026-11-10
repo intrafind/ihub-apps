@@ -1351,14 +1351,18 @@ live links.
   types and the malware scan. An address that serves an image, an archive or a legacy Office file
   is refused like the same upload would be.
 - **Find more pages of this website** now also lists Word, PowerPoint, Excel and OpenDocument
-  files, not only PDFs.
+  files, not only PDFs. **Include files on other websites** adds the documents its pages link to
+  on another host, such as a download server.
+- An address that ends in `.pdf`, `.docx` and the like is added as a file even when the website
+  does not answer at that moment; **Retry** downloads it later.
 - How long a file from a website or a web page counts as current is set per installation
   (**Admin → Projects → Project settings**, one day by default), per project (**Refresh** in the
   project's side panel) and per item (**Refresh schedule** in the item menu), or set to **Never**.
 - Files are downloaded again on their own once that time has passed. An unchanged file is
   neither downloaded nor read again and keeps its text. The item shows when its text was taken
   and when it is refreshed next; **Refresh** still works at any time. Web pages are read again
-  after the same time.
+  after the same time, and **Refresh** on a web page applies on every server process.
+- Uploads never wait behind scheduled refreshes.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
 
