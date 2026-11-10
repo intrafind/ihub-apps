@@ -71,8 +71,8 @@ function generateCode(length = 6) {
  */
 export class ShortLinkTargetError extends ServiceError {
   /** @param {{ reason: string, host?: string }} [refusal] - From `shortLinkTargetRefusal` */
-  constructor(refusal = { reason: 'target' }) {
-    if (refusal.reason === 'host') {
+  constructor(refusal) {
+    if (refusal?.reason === 'host') {
       super(
         'SHORT_LINK_HOST_NOT_ALLOWED',
         `Short links may not lead to ${refusal.host}. An administrator can allow this host under ` +
@@ -273,5 +273,12 @@ export async function findBlockedHosts(allowedHosts) {
   }
   return [...counts]
     .map(([host, links]) => ({ host, links }))
-    .sort((a, b) => b.links - a.links || (a.host < b.host ? -1 : a.host > b.host ? 1 : 0));
+    .sort((a, b) => b.links - a.links || compareCodeUnits(a.host, b.host));
+}
+
+/** Plain code-unit order, independent of the server's locale. */
+function compareCodeUnits(a, b) {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
 }

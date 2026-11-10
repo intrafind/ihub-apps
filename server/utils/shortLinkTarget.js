@@ -205,7 +205,7 @@ export function isAllowedShortLinkTarget(target, allowedHosts = []) {
 /** One label of a hostname: letters, digits, underscores and inner hyphens. */
 const LABEL = '[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?';
 /** A hostname or IPv4 address, in lower case and ASCII. */
-const HOSTNAME = new RegExp(`^${LABEL}(?:\\.${LABEL})*$`);
+const HOSTNAME = new RegExp(String.raw`^${LABEL}(?:\.${LABEL})*$`);
 /** An IPv6 address the way `new URL()` writes it: in brackets. */
 const IPV6_HOST = /^\[[0-9a-f:.]+\]$/;
 
@@ -232,25 +232,33 @@ export function normalizeAllowedHostEntry(entry) {
   }
 
   if (trimmed.includes('/') || (trimmed.includes(':') && !trimmed.startsWith('['))) {
-    let host = '';
-    try {
-      host = new URL(trimmed).hostname;
-    } catch {
-      // Not a URL either; the message below covers it.
-    }
-    return {
-      error: host
-        ? `is a URL; enter its host ${host} instead`
-        : 'must be a host name such as docs.example.com, *.example.com or a /regex/'
-    };
+    return { error: urlEntryError(trimmed) };
   }
 
-  const prefix = trimmed.startsWith('*.') ? '*.' : trimmed.startsWith('.') ? '.' : '';
+  const prefix = subdomainPrefix(trimmed);
   const name = trimmed.slice(prefix.length);
   const ascii = name.startsWith('[') ? name.toLowerCase() : domainToASCII(name);
   const valid = prefix ? HOSTNAME.test(ascii) : HOSTNAME.test(ascii) || IPV6_HOST.test(ascii);
-  if (!valid) {
-    return { error: 'must be a host name such as docs.example.com, *.example.com or a /regex/' };
-  }
+  if (!valid) return { error: NOT_A_HOST };
   return { entry: prefix + ascii };
+}
+
+const NOT_A_HOST = 'must be a host name such as docs.example.com, *.example.com or a /regex/';
+
+/** The message for an entry written as a URL: name its host when it has one. */
+function urlEntryError(entry) {
+  let host = '';
+  try {
+    host = new URL(entry).hostname;
+  } catch {
+    // Not a URL either.
+  }
+  return host ? `is a URL; enter its host ${host} instead` : NOT_A_HOST;
+}
+
+/** The subdomain marker an entry starts with: `*.`, `.` or none. */
+function subdomainPrefix(entry) {
+  if (entry.startsWith('*.')) return '*.';
+  if (entry.startsWith('.')) return '.';
+  return '';
 }
