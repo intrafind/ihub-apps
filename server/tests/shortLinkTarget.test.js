@@ -4,7 +4,9 @@
 import {
   isAllowedHost,
   isAllowedShortLinkTarget,
-  normalizeAllowedHosts
+  normalizeAllowedHostEntry,
+  normalizeAllowedHosts,
+  shortLinkTargetRefusal
 } from '../utils/shortLinkTarget.js';
 
 describe('isAllowedShortLinkTarget', () => {
@@ -115,4 +117,73 @@ describe('normalizeAllowedHosts', () => {
       '*.example.com'
     ]);
   });
+});
+
+describe('shortLinkTargetRefusal', () => {
+  test('is null for an allowed target', () => {
+    expect(shortLinkTargetRefusal('/apps/chat', [])).toBeNull();
+    expect(shortLinkTargetRefusal('https://www.qwant.com/', ['www.qwant.com'])).toBeNull();
+  });
+
+  // The host an administrator has to allow, so the error can name it.
+  test.each([
+    ['https://www.qwant.com/', 'www.qwant.com'],
+    ['http://Docs.Example.com:8080/x?y=1', 'docs.example.com'],
+    ['https://bücher.de/', 'xn--bcher-kva.de']
+  ])('names the host of %s when only the host is missing', (target, host) => {
+    expect(shortLinkTargetRefusal(target, [])).toEqual({ reason: 'host', host });
+  });
+
+  test.each([
+    'ftp://www.qwant.com/',
+    'javascript:alert(1)',
+    'https://user:pass@www.qwant.com/',
+    '//www.qwant.com/',
+    '/\\www.qwant.com/',
+    'not a url',
+    42
+  ])('refuses %s without naming a host: allowing one would not help', target => {
+    expect(shortLinkTargetRefusal(target, [])).toEqual({ reason: 'target' });
+  });
+});
+
+describe('normalizeAllowedHostEntry', () => {
+  test.each([
+    ['www.qwant.com', 'www.qwant.com'],
+    ['  Docs.Example.COM ', 'docs.example.com'],
+    ['*.Example.com', '*.example.com'],
+    ['.local', '.local'],
+    ['bücher.de', 'xn--bcher-kva.de'],
+    ['*.bücher.de', '*.xn--bcher-kva.de'],
+    ['10.0.0.1', '10.0.0.1'],
+    ['[::1]', '[::1]'],
+    ['my_host.local', 'my_host.local'],
+    ['/(docs|wiki)\\.example\\.org/', '/(docs|wiki)\\.example\\.org/']
+  ])('accepts %j as %j', (input, entry) => {
+    expect(normalizeAllowedHostEntry(input)).toEqual({ entry });
+  });
+
+  test('every accepted host entry matches the host it names', () => {
+    for (const [input, url] of [
+      ['bücher.de', 'https://bücher.de/'],
+      ['*.Example.com', 'https://docs.example.com/'],
+      ['[::1]', 'http://[::1]:3000/']
+    ]) {
+      const { entry } = normalizeAllowedHostEntry(input);
+      expect([input, isAllowedShortLinkTarget(url, [entry])]).toEqual([input, true]);
+    }
+  });
+
+  test('refuses a URL and says which host to enter instead', () => {
+    expect(normalizeAllowedHostEntry('https://www.qwant.com/')).toEqual({
+      error: 'is a URL; enter its host www.qwant.com instead'
+    });
+  });
+
+  test.each(['', '   ', 'bad host!', '*.', 'www.qwant.com/path', 'host:8080', '/(.*)+/', 42])(
+    'refuses %j',
+    input => {
+      expect(normalizeAllowedHostEntry(input)).toHaveProperty('error');
+    }
+  );
 });

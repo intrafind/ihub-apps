@@ -31,6 +31,7 @@ import registerAdminRateLimitRoutes from './admin/rateLimits.js';
 import registerAdminLlmTimeoutRoutes from './admin/llmTimeouts.js';
 import registerAdminCorsRoutes from './admin/cors.js';
 import registerAdminSsrfRoutes from './admin/ssrf.js';
+import registerAdminShortLinkRoutes from './admin/shortLinks.js';
 import registerAdminProxyRoutes from './admin/proxy.js';
 import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
@@ -92,6 +93,7 @@ export default async function registerAdminRoutes(app) {
   registerAdminLlmTimeoutRoutes(app);
   registerAdminCorsRoutes(app);
   registerAdminSsrfRoutes(app);
+  registerAdminShortLinkRoutes(app);
   registerAdminProxyRoutes(app);
   registerAdminFeaturesRoutes(app);
   registerAdminUsageRoutes(app);

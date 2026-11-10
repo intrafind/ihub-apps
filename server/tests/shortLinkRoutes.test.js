@@ -231,8 +231,43 @@ describe('short link targets', () => {
       url: 'https://elsewhere.example/'
     });
     expect(put.status).toBe(400);
-    expect(put.body.code).toBe('BAD_REQUEST');
-    expect(put.body.detail).toMatch(/allowed host/);
+    expect(put.body.code).toBe('SHORT_LINK_HOST_NOT_ALLOWED');
+    expect(put.body.details).toEqual({ host: 'elsewhere.example' });
+  });
+
+  test('a refused host is named, with where an administrator allows it', async () => {
+    const app = buildApp();
+    const res = await create(app, 'admin', { url: 'https://www.qwant.com/' });
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body).toMatchObject({
+      code: 'SHORT_LINK_HOST_NOT_ALLOWED',
+      details: { host: 'www.qwant.com' }
+    });
+    expect(res.body.detail).toContain('www.qwant.com');
+    expect(res.body.detail).toContain('Admin → Short Links → Allowed external hosts');
+
+    // Allowing a host would not help these, so they are not blamed on one.
+    for (const url of ['ftp://www.qwant.com/', 'https://u:p@www.qwant.com/']) {
+      const other = await create(app, 'admin', { url });
+      expect([url, other.status, other.body.code]).toEqual([url, 400, 'BAD_REQUEST']);
+      expect(other.body.details).toBeUndefined();
+    }
+  });
+
+  test('the SSRF allowlist does not allow a short link host', async () => {
+    const app = buildApp();
+    const platform = configCache.cache.get('config/platform.json');
+    configCache.cache.set('config/platform.json', {
+      data: { ...platform.data, ssrf: { allowedHosts: ['www.qwant.com'] } }
+    });
+    try {
+      const res = await create(app, 'admin', { url: 'https://www.qwant.com/' });
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('SHORT_LINK_HOST_NOT_ALLOWED');
+    } finally {
+      configCache.cache.set('config/platform.json', platform);
+    }
   });
 
   test('answers an unknown code with NOT_FOUND, a missing target with BAD_REQUEST and a taken code with CONFLICT', async () => {

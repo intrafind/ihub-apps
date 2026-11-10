@@ -35,7 +35,8 @@ const {
   searchLinks,
   isLinkExpired,
   canManageLink,
-  ShortLinkTargetError
+  ShortLinkTargetError,
+  findBlockedHosts
 } = await import('../shortLinkManager.js');
 
 afterAll(() => {
@@ -151,6 +152,23 @@ describe('owner and targets', () => {
     await expect(createLink({ path: '//elsewhere.example', ownerId: 'u1' })).rejects.toBeInstanceOf(
       ShortLinkTargetError
     );
+  });
+
+  it('names the refused host and where to allow it; other targets are a plain BAD_REQUEST', async () => {
+    const refused = await createLink({ url: 'https://www.qwant.com/', ownerId: 'u1' }).catch(
+      e => e
+    );
+    expect(refused).toBeInstanceOf(ShortLinkTargetError);
+    expect(refused).toMatchObject({
+      code: 'SHORT_LINK_HOST_NOT_ALLOWED',
+      status: 400,
+      details: { host: 'www.qwant.com' }
+    });
+    expect(refused.message).toContain('Admin → Short Links → Allowed external hosts');
+
+    const scheme = await createLink({ url: 'mailto:a@b.c', ownerId: 'u1' }).catch(e => e);
+    expect(scheme).toMatchObject({ code: 'BAD_REQUEST', status: 400 });
+    expect(scheme.details).toBeUndefined();
   });
 
   it('accepts an absolute URL on an allowed host', async () => {
@@ -288,5 +306,34 @@ describe('saving', () => {
   it('writes a new link to disk right away', async () => {
     const link = await createLink({ appId: 'a1', ownerId: 'u1' });
     expect(readFile().links.some(l => l.code === link.code)).toBe(true);
+  });
+});
+
+describe('findBlockedHosts', () => {
+  it('counts the unexpired stored links per host the allowlist refuses, most links first', async () => {
+    const allowed = ['docs.example.com', 'www.qwant.com', 'other.example'];
+    for (const url of [
+      'https://www.qwant.com/',
+      'https://www.qwant.com/?q=a',
+      'https://other.example/',
+      'https://docs.example.com/'
+    ]) {
+      await createLink({ url, ownerId: 'u1' }, { allowedHosts: allowed });
+    }
+    const expired = await createLink(
+      { url: 'https://expired.example/', ownerId: 'u1' },
+      { allowedHosts: ['expired.example'] }
+    );
+    await updateLink(
+      expired.code,
+      { expiresAt: '2000-01-01T00:00:00.000Z' },
+      { allowedHosts: ['expired.example'] }
+    );
+
+    expect(await findBlockedHosts(['docs.example.com'])).toEqual([
+      { host: 'www.qwant.com', links: 2 },
+      { host: 'other.example', links: 1 }
+    ]);
+    expect(await findBlockedHosts(['*.example', 'www.qwant.com', 'docs.example.com'])).toEqual([]);
   });
 });

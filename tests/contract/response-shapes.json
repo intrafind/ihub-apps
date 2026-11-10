@@ -3193,6 +3193,13 @@
       "type": "string"
     }
   },
+  "GET /api/admin/shortlinks/config": {
+    "status": 200,
+    "shape": {
+      "allowedHosts": [],
+      "blockedHosts": []
+    }
+  },
   "GET /api/admin/skills": {
     "status": 200,
     "shape": {

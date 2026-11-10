@@ -12,6 +12,7 @@ import { useClipboard } from '../../../shared/hooks/useClipboard';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable, SearchInput, parseSortParam, formatSortParam } from '../components/data-table';
 import AdminLoadError from '../components/AdminLoadError';
+import ShortLinkHostsConfig from '../components/ShortLinkHostsConfig';
 
 function CodeCell({ link }) {
   return (
@@ -209,6 +210,10 @@ function AdminShortLinks() {
                 {t('admin.shortlinks.addNew', 'Add New Link')}
               </button>
             </div>
+          </div>
+
+          <div className="mt-6">
+            <ShortLinkHostsConfig />
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">

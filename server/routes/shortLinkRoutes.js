@@ -14,7 +14,7 @@ import {
 import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { isAdmin } from '../utils/authorization.js';
-import { isAllowedShortLinkTarget } from '../utils/shortLinkTarget.js';
+import { shortLinkTargetRefusal } from '../utils/shortLinkTarget.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
@@ -130,10 +130,13 @@ export default function registerShortLinkRoutes(app) {
       }
       // Checked on every redirect, not only on save: links stored before the
       // check existed, or before an admin narrowed the allowlist, are covered.
-      if (!isAllowedShortLinkTarget(link.url, allowedHosts())) {
+      const refusal = shortLinkTargetRefusal(link.url, allowedHosts());
+      if (refusal) {
         logger.warn('Short link target not allowed; not redirecting', {
           component: 'ShortLinkRoutes',
-          code: link.code
+          code: link.code,
+          // An administrator allows a host in Admin → Short Links → Allowed external hosts.
+          ...(refusal.host ? { host: refusal.host } : {})
         });
         return res.status(404).send('Not found');
       }

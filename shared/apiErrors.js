@@ -84,7 +84,9 @@ export const FEATURE_ERROR_CODES = Object.freeze({
   CHAT_TEMPORARY: 409,
   FILES_NOT_SHARED: 403,
   ORIGINAL_NOT_SHARED: 403,
-  ORIGINAL_DISCARDED: 410
+  ORIGINAL_DISCARDED: 410,
+  // Short links: an absolute target whose host is not in `shortLinks.allowedHosts`.
+  SHORT_LINK_HOST_NOT_ALLOWED: 400
 });
 
 /** Codes of the scheduled-task routes and tools (`server/services/scheduler/tasks`). */

@@ -29,6 +29,7 @@
  *
  * @module utils/shortLinkTarget
  */
+import { domainToASCII } from 'node:url';
 import { testRegexSafely, validateRegexPattern } from './safeRegex.js';
 import logger from './logger.js';
 
@@ -155,6 +156,41 @@ function isLocalPath(target) {
   }
 }
 
+/** The refusal of a target that is not a path or an `http(s)` URL at all. */
+const NOT_A_TARGET = Object.freeze({ reason: 'target' });
+
+/**
+ * Why a short link may not redirect to `target`, or `null` when it may.
+ *
+ * - `{ reason: 'host', host }` — an `http(s)` URL that would be allowed if its
+ *   host were on `allowedHosts`; `host` is the hostname an administrator would
+ *   add (lower case, punycode).
+ * - `{ reason: 'target' }` — anything else: another scheme, a
+ *   protocol-relative URL, credentials in the URL, unsafe characters.
+ *
+ * @param {unknown} target - The link's `url`
+ * @param {unknown} [allowedHosts] - `platform.shortLinks.allowedHosts`
+ * @returns {null | { reason: 'host', host: string } | { reason: 'target' }}
+ */
+export function shortLinkTargetRefusal(target, allowedHosts = []) {
+  if (typeof target !== 'string' || !target || target.length > MAX_TARGET_LENGTH) {
+    return NOT_A_TARGET;
+  }
+  if (UNSAFE_CHARACTERS.test(target)) return NOT_A_TARGET;
+  if (target.startsWith('/')) return isLocalPath(target) ? null : NOT_A_TARGET;
+
+  let url;
+  try {
+    url = new URL(target);
+  } catch {
+    return NOT_A_TARGET;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return NOT_A_TARGET;
+  if (url.username || url.password || !url.hostname) return NOT_A_TARGET;
+  if (isAllowedHost(url.hostname, allowedHosts)) return null;
+  return { reason: 'host', host: url.hostname };
+}
+
 /**
  * Whether a short link may redirect to `target`.
  *
@@ -163,17 +199,58 @@ function isLocalPath(target) {
  * @returns {boolean}
  */
 export function isAllowedShortLinkTarget(target, allowedHosts = []) {
-  if (typeof target !== 'string' || !target || target.length > MAX_TARGET_LENGTH) return false;
-  if (UNSAFE_CHARACTERS.test(target)) return false;
-  if (target.startsWith('/')) return isLocalPath(target);
+  return shortLinkTargetRefusal(target, allowedHosts) === null;
+}
 
-  let url;
-  try {
-    url = new URL(target);
-  } catch {
-    return false;
+/** One label of a hostname: letters, digits, underscores and inner hyphens. */
+const LABEL = '[a-z0-9_](?:[a-z0-9_-]*[a-z0-9_])?';
+/** A hostname or IPv4 address, in lower case and ASCII. */
+const HOSTNAME = new RegExp(`^${LABEL}(?:\\.${LABEL})*$`);
+/** An IPv6 address the way `new URL()` writes it: in brackets. */
+const IPV6_HOST = /^\[[0-9a-f:.]+\]$/;
+
+/**
+ * Check an entry an administrator wants to add to `shortLinks.allowedHosts`,
+ * and bring it into the form it is compared in.
+ *
+ * Host entries are lowercased, and an internationalised name is converted to
+ * its `xn--` form, since that is what `new URL()` gives for a target. A URL is
+ * refused rather than guessed at: the entry names a host, and the message says
+ * which one to enter.
+ *
+ * @param {unknown} entry
+ * @returns {{ entry: string } | { error: string }}
+ */
+export function normalizeAllowedHostEntry(entry) {
+  if (typeof entry !== 'string') return { error: 'must be a string' };
+  const trimmed = entry.trim();
+  if (!trimmed) return { error: 'must not be empty' };
+
+  if (isRegexEntry(trimmed)) {
+    const { valid, error } = validateRegexPattern(`^(?:${trimmed.slice(1, -1)})$`);
+    return valid ? { entry: trimmed } : { error: `is not a usable pattern: ${error}` };
   }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-  if (url.username || url.password) return false;
-  return isAllowedHost(url.hostname, allowedHosts);
+
+  if (trimmed.includes('/') || (trimmed.includes(':') && !trimmed.startsWith('['))) {
+    let host = '';
+    try {
+      host = new URL(trimmed).hostname;
+    } catch {
+      // Not a URL either; the message below covers it.
+    }
+    return {
+      error: host
+        ? `is a URL; enter its host ${host} instead`
+        : 'must be a host name such as docs.example.com, *.example.com or a /regex/'
+    };
+  }
+
+  const prefix = trimmed.startsWith('*.') ? '*.' : trimmed.startsWith('.') ? '.' : '';
+  const name = trimmed.slice(prefix.length);
+  const ascii = name.startsWith('[') ? name.toLowerCase() : domainToASCII(name);
+  const valid = prefix ? HOSTNAME.test(ascii) : HOSTNAME.test(ascii) || IPV6_HOST.test(ascii);
+  if (!valid) {
+    return { error: 'must be a host name such as docs.example.com, *.example.com or a /regex/' };
+  }
+  return { entry: prefix + ascii };
 }

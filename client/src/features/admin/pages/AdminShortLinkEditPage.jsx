@@ -4,7 +4,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import { makeAdminApiCall } from '../../../api/adminApi';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -87,7 +88,15 @@ function AdminShortLinkEditPage() {
       markSaved();
       navigate('/admin/shortlinks');
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      // A refused host comes back as SHORT_LINK_HOST_NOT_ALLOWED: the message names
+      // the host and where an administrator allows it.
+      setError(
+        apiErrorMessage(
+          err,
+          t,
+          t('admin.shortlinks.saveError', 'The short link could not be saved.')
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -116,7 +125,11 @@ function AdminShortLinkEditPage() {
             ? t('admin.shortlinks.new', 'Create Short Link')
             : t('admin.shortlinks.edit', 'Edit Short Link')}
         </h1>
-        {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
+        {error && (
+          <div role="alert" className="text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">

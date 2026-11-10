@@ -382,6 +382,14 @@ Where short links (feature `shortLinks`) may redirect.
     patterns with nested quantifiers are rejected; an entry that is not a usable pattern matches
     nothing and is logged as a warning.
 
+Administrators edit this list in **Admin → Short Links → Allowed external hosts** (no restart
+needed; `GET`/`PUT /api/admin/shortlinks/config`). A pasted URL is reduced to its host there, and
+the section lists the hosts that existing short links lead to but the list refuses, each with an
+**Allow** button. Saving a link to a host that is not allowed fails with the error code
+`SHORT_LINK_HOST_NOT_ALLOWED` (the host is in `details.host`); opening such a link answers
+"Not found" and logs the host. The SSRF allowlist (`ssrf.allowedHosts`) does not apply to short
+links. Editing `platform.json` by hand takes effect after a server restart.
+
 Short links belong to the signed-in user who creates them. Only that user and administrators can
 list, change or delete them; links saved before links had owners can be managed by administrators
 only.
