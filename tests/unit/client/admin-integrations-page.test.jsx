@@ -4,8 +4,11 @@
 /**
  * Admin → Integrations is one page (`/admin/integrations`):
  *
- *   - Installed (default) groups the installations, each a tile with its key
- *     facts (no secret), linking to the installation's page;
+ *   - Installed (default) starts with the Clients section (Outlook add-in,
+ *     browser extension, Microsoft 365 Copilot, Nextcloud embed: each linking
+ *     to its page, with its status from platform.json), then groups the
+ *     installations, each a tile with its key facts (no secret), linking to
+ *     the installation's page; the search filters both;
  *   - Catalog groups the definitions the same way, and lists the marketplace's
  *     integrations: Install fetches the definition from its registry first;
  *   - Inbound lists what connects to iHub, with the status from platform.json;
@@ -21,6 +24,7 @@ import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
+import de from '../../../shared/i18n/de.json';
 
 const mockApi = {
   fetchInstalledIntegrations: jest.fn(),
@@ -212,7 +216,7 @@ beforeEach(() => {
   mockApi.fetchIntegrationCatalog.mockResolvedValue({ items: CATALOG });
   mockApi.fetchAdminApps.mockResolvedValue([]);
   mockApi.fetchAdminPlatformConfig.mockResolvedValue({
-    features: { browserExtension: true },
+    browserExtension: { enabled: true },
     mcpServer: { enabled: true }
   });
 });
@@ -231,17 +235,18 @@ describe('Installed tab', () => {
 
     const groups = screen.getAllByTestId('integration-group');
     expect(groups.map(g => g.getAttribute('data-group'))).toEqual([
+      'clients',
       'people-directories',
       'web-search',
       'mcp',
       'built-in',
       'catalog'
     ]);
-    expect(within(groups[0]).getByRole('heading', { level: 2 })).toHaveTextContent(
+    expect(within(groups[1]).getByRole('heading', { level: 2 })).toHaveTextContent(
       'People directories(1)'
     );
     expect(
-      within(groups[0]).getByText('LDAP and Entra ID directories the model looks people up in.')
+      within(groups[1]).getByText('LDAP and Entra ID directories the model looks people up in.')
     ).toBeInTheDocument();
     expect(document.body.textContent).not.toMatch(/MISSING:/);
   });
@@ -291,6 +296,113 @@ describe('Installed tab', () => {
     fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'x.500' } });
     expect(screen.getAllByTestId('installation-tile')).toHaveLength(1);
     expect(screen.getByText('X.500 Bund')).toBeInTheDocument();
+  });
+});
+
+describe('Clients section', () => {
+  const clientsSection = () =>
+    screen
+      .getAllByTestId('integration-group')
+      .find(g => g.getAttribute('data-group') === 'clients');
+
+  test('heads the Installed tab: each client links to its page with its status', async () => {
+    renderPage();
+    await screen.findByText('GovData');
+
+    const section = clientsSection();
+    expect(within(section).getByRole('heading', { level: 2 })).toHaveTextContent('Clients(4)');
+    const cards = within(section).getAllByTestId('inbound-card');
+    expect(cards.map(c => c.getAttribute('data-inbound'))).toEqual([
+      'outlook',
+      'browser-extension',
+      'copilot-agent',
+      'nextcloud-embed'
+    ]);
+    const card = id => cards.find(c => c.getAttribute('data-inbound') === id);
+    expect(within(card('outlook')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/admin/office-integration'
+    );
+    expect(within(card('browser-extension')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/admin/browser-extension'
+    );
+    expect(within(card('nextcloud-embed')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/admin/nextcloud-embed'
+    );
+    expect(within(card('copilot-agent')).getByRole('link')).toHaveAttribute(
+      'href',
+      '/admin/copilot-agent'
+    );
+    // The browser extension is switched on in platform.json (`browserExtension.enabled`).
+    expect(await within(card('browser-extension')).findByText('On')).toBeInTheDocument();
+    expect(within(card('outlook')).getByText('Available')).toBeInTheDocument();
+    // The MCP gateway is not a client: it stays on the Inbound tab and in the sidebar.
+    expect(within(section).queryByText('MCP gateway')).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/MISSING:/);
+  });
+
+  test('the search filters the clients with the installations', async () => {
+    renderPage();
+    await screen.findByText('GovData');
+
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'chrome' } });
+    expect(
+      within(clientsSection())
+        .getAllByTestId('inbound-card')
+        .map(c => c.dataset.inbound)
+    ).toEqual(['browser-extension']);
+    expect(screen.queryAllByTestId('installation-tile')).toHaveLength(0);
+    expect(screen.queryByText(/Nothing matches/)).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'x.500' } });
+    expect(clientsSection()).toBeUndefined();
+    expect(screen.getAllByTestId('installation-tile')).toHaveLength(1);
+
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'no such thing' } });
+    expect(screen.getByText('Nothing matches "no such thing".')).toBeInTheDocument();
+  });
+
+  test('shows with nothing installed, above the empty state', async () => {
+    mockApi.fetchInstalledIntegrations.mockResolvedValue({ items: [] });
+    renderPage();
+    await screen.findByText('Nothing installed yet');
+    expect(within(clientsSection()).getAllByTestId('inbound-card')).toHaveLength(4);
+  });
+
+  test('the status comes from the switches the client pages write', () => {
+    const {
+      CLIENT_INTEGRATIONS,
+      inboundStatus
+    } = require('../../../client/src/features/admin/components/integrations/inboundChannels');
+    const statusOf = (id, platform) =>
+      inboundStatus(
+        CLIENT_INTEGRATIONS.find(entry => entry.id === id),
+        platform
+      );
+    expect(statusOf('browser-extension', { browserExtension: { enabled: true } })).toBe(
+      'connected'
+    );
+    // No `features.browserExtension` flag exists; it never switched the card on.
+    expect(statusOf('browser-extension', { features: { browserExtension: true } })).toBe(
+      'available'
+    );
+    expect(statusOf('outlook', { officeIntegration: { enabled: true } })).toBe('connected');
+    expect(statusOf('nextcloud-embed', { nextcloudEmbed: { enabled: true } })).toBe('connected');
+    expect(statusOf('copilot-agent', { copilotAgent: { enabled: true } })).toBe('connected');
+    expect(statusOf('outlook', null)).toBe('available');
+  });
+
+  test('the heading and description are translated into German', () => {
+    for (const lang of [en, de]) {
+      const clients = lang.admin.integrations.groups.clients;
+      expect(clients.title).toBeTruthy();
+      expect(clients.description).toBeTruthy();
+    }
+    expect(de.admin.integrations.groups.clients.description).not.toBe(
+      en.admin.integrations.groups.clients.description
+    );
   });
 });
 

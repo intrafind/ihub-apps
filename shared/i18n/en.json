@@ -3353,6 +3353,10 @@
         "noSources": "none"
       },
       "groups": {
+        "clients": {
+          "title": "Clients",
+          "description": "Where users work with iHub outside the web app: Outlook, the browser, Nextcloud and Microsoft 365 Copilot. Each one is set up on its own page."
+        },
         "peopleDirectories": {
           "title": "People directories",
           "description": "LDAP and Entra ID directories the model looks people up in."

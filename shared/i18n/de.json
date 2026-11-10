@@ -3704,6 +3704,10 @@
         "noSources": "keine"
       },
       "groups": {
+        "clients": {
+          "title": "Clients",
+          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud und in Microsoft 365 Copilot. Jeder Client wird auf seiner eigenen Seite eingerichtet."
+        },
         "peopleDirectories": {
           "title": "Personenverzeichnisse",
           "description": "LDAP- und Entra-ID-Verzeichnisse, in denen das Modell Personen nachschlägt."
