@@ -40,6 +40,19 @@ A **skip-to-main-content** link is the first focusable element on every page. It
 
 The link is the `SkipLink` component (`client/src/shared/components/SkipLink.jsx`). Use it, not a bare `<a href="#id">`: `index.html` injects a `<base>` element for sub-path deployments, which makes a plain fragment link resolve against the app root and leave the page.
 
+### Workspace Pane
+
+The chat's workspace pane (files and sources next to the chat, see
+[Artifacts → The workspace pane](artifacts.md#the-workspace-pane)) is a labelled region
+("Workspace: <name>") inside `<main>`, not a dialog, while it is docked or full screen; below
+1024px and on embedded surfaces it is a modal sheet with a focus trap. While it is open a second
+skip link, **Skip to workspace**, leads to its heading. **F6 / Shift+F6** cycle sidebar → chat
+messages → composer → pane, **Ctrl/Cmd+.** opens and closes it, and **Esc** closes the innermost
+layer only (menu, selection chip, composer dock, full screen, pane) and never from the composer.
+The divider is a focusable `role="separator"` with a value, resized with the arrow keys and
+Home/End. One polite live region per pane announces copies and width changes; streamed answer
+text never goes into it. Not yet tested with NVDA or JAWS.
+
 Each page has exactly one `<main>`. The app layout provides it, `AdminLayout` provides it for admin pages; a page rendered inside either must not add another (use a `<div>`).
 
 ### Tab Order

@@ -230,87 +230,149 @@ A client fetches through its API client rather than pointing an `<img src>` at
 the URL: the URL is credentialed, and a bearer token in `localStorage` only
 travels on a request the client makes itself.
 
-## The Artifacts panel
+## The workspace pane
 
-The chat shows a chat's artifacts in the **Artifacts** panel (header button,
-or the actions menu on small screens), offered once an answer produced a
-picture or a file. In a stored chat the panel is the chat's **Files** drawer
-with two tabs: **Uploaded**, the files the user attached (see
-[Durable chat and task files](chat-files.md)), and **Generated**, the
-artifacts. Without stored uploads (a chat that is not stored, a shared chat)
-it is the plain **Artifacts** list. The Generated tab lists
-`GET /api/chats/:chatId/artifacts`, newest first, with the size, the answer
-that produced each one and its time, and:
+<!-- Older links: the Artifacts panel and the artifact viewer are this pane now. -->
+<a id="the-artifacts-panel"></a><a id="the-artifact-viewer"></a>
 
-- previews pictures, Markdown (rendered and sanitized), JSON (pretty-printed)
-  and every other `code` artifact as highlighted text. PDFs open in an
-  embedded viewer. HTML, SVG, CSV/TSV and Jupyter notebooks (`.ipynb`) get a
-  **Preview | Code** toggle: HTML runs in a sandboxed frame (`allow-scripts`
-  only, under a restrictive Content-Security-Policy), SVG is sanitized and
-  drawn, CSV/TSV is a table (first 200 rows) and a notebook shows its cells.
-  Word, PowerPoint, Excel and archives have no preview. A text preview reads
-  at most 512 KB.
-- downloads one artifact (`GET …/:artifactId`), saved under the last part of
-  its name, and copies a text artifact to the clipboard.
-- downloads a selection or everything as one ZIP
-  (`POST …/artifacts/zip`), and says so when the archive is over the
-  [ZIP limits](#configuration).
+A chat shows its files, generated and uploaded, and the sources its answers cite in one
+**workspace pane** on the right of the chat. The pane is part of the chat page's layout, so
+the chat reflows next to it and stays usable: you can keep asking while a document is open.
+(Design: `concepts/2026-11-10 Workspace Pane for Artifacts, Files and Sources.md`.)
 
-A shared chat offers the same panel, through the share's routes: it lists and
-packs only the artifacts the snapshot named. The panel is a modal dialog: it
-takes focus when it opens, keeps Tab inside, closes with Escape and gives
-focus back to the button that opened it.
+### States and layout
 
-The HTML preview never touches the server's `text/plain` serving described
-under [Kinds](#kinds): the browser gets the text through the API client and
-renders it in a frame without access to the iHub origin.
+| State | How you get there | Layout |
+| --- | --- | --- |
+| Closed | ✕, Esc with focus in the pane, Back | Chat at full width |
+| Docked | A file card, a source's **Preview**, the header's **Files** button, Ctrl/Cmd+. | Next to the chat, which reflows |
+| Full screen | ⤢ or Ctrl/Cmd+Shift+E | The pane fills the content area, text in a reading column, a composer dock at the bottom |
 
-A selected file can be **shared** on its own: the preview has a Share button
-that opens a dialog for a read-only link to just that file, optionally
-embeddable on allowlisted websites. See
-[Chat Sharing → Sharing a single file](chat-sharing.md#sharing-a-single-file).
+- **Width.** The docked pane opens at half the row, clamped to 420–960 px. Drag the divider
+  (or focus it and use the arrow keys, Shift for bigger steps, Home/End for the limits) to
+  resize it between 360 px and 70 %; the chat never gets narrower than 360 px. A double-click
+  on the divider resets the width. The width is remembered in the browser (`localStorage`), as
+  a convenience only.
+- **Sidebar.** Below 1280 px, opening the pane folds the left sidebar to its icon rail, once
+  per browser tab, and unfolds it when the pane closes. Expanding the sidebar by hand wins.
+- **No split.** Below 1024 px, at high zoom, in the Outlook task pane, in the browser
+  extension and in the admin app test panel, the pane opens as a full-screen sheet over the
+  chat (a modal dialog with a focus trap) with **Back to chat**.
+- **One element.** Docked and full screen are the same element: the viewer is not reloaded,
+  and its scroll position and Preview/Code mode are kept.
 
-The panel is for managing files (list, selection, ZIP). Its preview is a quick
-look; **Open** (or a double-click on a list entry) opens the file in the
-[viewer](#the-artifact-viewer).
+### URL and history
 
-Code: `client/src/features/chat/components/ArtifactsPanel.jsx`,
-`ArtifactPreview.jsx`, `ArtifactShareDialog.jsx`,
+What the pane shows is in the chat URL, so a reload or a copied link reopens it:
+`?artifact=<id>` (a generated file), `?file=<id>` (an uploaded file), `?source=<id>` (a cited
+source), `?files=<tab>` (the Files index) and `&view=full` (full screen). Opening the pane
+adds one history entry, switching between items replaces it, and full screen adds one more:
+**Back** steps out one level at a time (full screen → docked → closed). A file of an answer
+that is still streaming has no id yet and is kept in memory, not in the URL.
+
+### Files index and detail
+
+The pane is a small list → detail stack:
+
+- **Files index**, with the tabs **Generated** (`GET /api/chats/:chatId/artifacts`, newest
+  first), **Uploaded** (the files of the chat, see [Chat files](chat-files.md)) and
+  **Sources** (what the answers cite; only where the pane is docked). A row shows the size,
+  date and the answer that produced it; **Answer 3** scrolls the chat to that answer and
+  highlights it. A click opens the detail; the checkbox of a generated file selects it without
+  opening it. **Download all (.zip)**, or select some and use the bar that appears
+  ("2 selected · Download .zip · Clear"); the server builds the archive
+  (`POST …/artifacts/zip`) and says so when it is over the [ZIP limits](#configuration).
+- **Detail** of one item, always with a back link: **‹ Files**, or **‹ <file>** when a source
+  was opened while a file was shown. The title is also a menu to switch to any other file of
+  the chat.
+
+A shared chat offers the same pane through the share's routes: it lists and packs only what
+the snapshot named, read-only.
+
+### The header
+
+One header for every kind of item:
+
+`[‹ Files] [name BADGE ▾]  …  [Preview | Code] [Copy | ▾] [⤓] [Share] [⤢] [✕] [⋯]`
+
+- **Preview | Code** for Markdown, HTML, SVG, CSV/TSV and notebooks.
+- **Copy** copies the text; its dropdown ("More copy and download options") holds **Copy as
+  Markdown** and the exports (Markdown, HTML, PDF through `shared/utils/markdownExports.js`; an
+  HTML artifact exports as its own file).
+- **Download**, **Share** (a read-only link to the one file; see
+  [Chat Sharing → Sharing a single file](chat-sharing.md#sharing-a-single-file)).
+- **⋯**: open in new tab, show in Files, browser full screen, and for uploads Download text,
+  Attach to email and Delete.
+- Below a pane width of 480 px, Share and the Preview/Code switch move into ⋯ and Download
+  into the Copy dropdown.
+- A **source** shows **Passage 2/5 ↑↓** in place of versions, **Open in source system** in
+  place of Share, and a small zoom control at the bottom right of the PDF.
+
+### Previews
+
+Pictures, Markdown (rendered and sanitized), JSON (pretty-printed) and every other `code`
+artifact as highlighted text. PDFs open in an embedded viewer. HTML runs in a sandboxed frame,
+SVG is sanitized and drawn, CSV/TSV is a table (first 200 rows) and a notebook shows its
+cells. Word, PowerPoint, Excel and archives have no preview: download them. A text preview
+reads at most 512 KB. The HTML preview never touches the server's `text/plain` serving
+described under [Kinds](#kinds): the browser gets the text through the API client.
+
+### Keep chatting
+
+- **Ask about a passage.** Select text in the pane: a chip offers **Ask about**, **Edit with
+  AI** and **Copy** (Ctrl/Cmd+Shift+K asks from the keyboard; on a touch screen a button
+  "Ask about selection" appears). The passage goes above the composer as a quote with the file
+  name, and is sent as a Markdown quote naming the file (and the artifact id) before your
+  question. **Edit with AI** asks the assistant for the whole document again **as a new file**:
+  the original is not changed. For HTML and SVG the chip works in the **Code** view only; the
+  rendered preview is a sandboxed frame the page cannot read.
+- **Full screen** keeps a floating composer dock at the bottom: one line, "Ask to change this
+  document…", which expands to the composer with the latest answer and **Open chat** (back to
+  the docked pane; on a sheet, back to the chat, with the file still on its card for one tap to
+  reopen).
+- The card of the file that is open in the pane is highlighted (`aria-current`).
+
+### Keyboard and screen readers
+
+- Docked and full screen are not modal: no focus trap. The pane is a region "Workspace: <name>"
+  inside `<main>`, and **Skip to workspace** is a skip link while it is open.
+- Opening the pane by a click moves focus to its heading; closing returns focus to what opened
+  it (or to the composer).
+- **F6 / Shift+F6** cycle sidebar → chat messages → composer → pane. **Ctrl/Cmd+.** opens and
+  closes the pane.
+- **Esc** closes the innermost layer only — a menu, the selection chip, the composer dock, full
+  screen, then the pane — and only while focus is in the pane. Esc in the composer never closes
+  the pane.
+- One polite live region per pane announces copies, the width while resizing ("Workspace 55
+  percent"), a folded sidebar and a quoted passage. Streamed answer text is never put into it.
+
+### Pages without a chat
+
+**Open in new tab** opens `/artifacts/:chatId/:artifactId` (`ArtifactPage`, owner only; the
+route is in `KNOWN_ROUTES` and `client/index.html`): the same viewer as a whole page, without
+close or expand. A single-file share (`/share/:shareId`) renders the same way; `?embed=1`
+hides the header.
+
+### Security
+
+HTML stays in `<iframe sandbox="allow-scripts">` under the preview CSP (`HTML_PREVIEW_CSP`), in
+the pane and on the standalone pages; being inline next to the chat never makes it
+same-origin. A `blob:` URL of an HTML artifact is never navigated to. Browser full screen is
+requested on the viewer's container, never inside the frame, so the frame has no
+`allow-same-origin`, `allow-popups` or `allow="fullscreen"`.
+
+### Not included yet
+
+Versions of an artifact, revising it in place, a diff between versions, share links pinned to
+a version, Office previews and an admin setting to turn the pane or its auto-open off. These
+are Phase 2 of the concept.
+
+Code: `client/src/features/workspace/` (pane, divider, header, selection chip, composer dock,
+`utils/workspaceState.js`), `client/src/features/chat/components/ArtifactViewerHost.jsx` (state,
+URL, keyboard), `ArtifactViewer.jsx`, `ArtifactsPanel.jsx` (the Files index),
+`UploadedFilesTab.jsx` (an uploaded file), `ArtifactPreview.jsx`, `ArtifactShareDialog.jsx`,
+`contexts/ArtifactViewerContext.jsx`, `pages/ArtifactPage.jsx`, `SharedArtifactView.jsx`,
 `client/src/features/chat/utils/artifactFiles.js`.
-
-## The artifact viewer
-
-`ArtifactViewer` shows one artifact immersively: a fixed full-window dialog with a single
-48 px toolbar, and `ArtifactPreview` in `fill` mode below it (no frame, padding or fixed
-height; the parent decides the size, whereas the panel uses `panel` mode).
-
-- **Opening.** `ArtifactViewerHost` (provided by `AppChat` and `SharedChatPage`) offers
-  `openArtifact(descriptor, siblings?)` through `ArtifactViewerContext`. The cards of
-  previewable generated files, generated images and the panel's **Open** use it. A
-  descriptor either names a stored artifact (fetched by id, through the share in a shared
-  chat) or carries a live turn's bytes inline as base64 `data`.
-- **Toolbar.** Name and file menu (copy, share, export, download, show in files, open in
-  new tab, full screen, prev/next), "n of m" with prev/next (also ←/→ in the toolbar),
-  Preview/Code for HTML, SVG, CSV and notebooks, copy, **Chat**, share, **Export**
-  (Markdown, HTML, PDF through `shared/utils/markdownExports.js`; an HTML artifact
-  exports as its own file), download, browser full screen, close. Esc closes a menu first,
-  then the viewer.
-- **Chat beside it.** **Chat** turns the viewer into the right 60 % of the window, not modal,
-  with the page behind it usable.
-- **URL.** A stored artifact is recorded as `?artifact=<id>`: reload reopens, Back closes.
-  Live files have no URL. **Open in new tab** opens `/artifacts/:chatId/:artifactId`
-  (`ArtifactPage`, owner only; the route is in `KNOWN_ROUTES` and `client/index.html`).
-  A single-file share (`/share/:shareId`) renders as the same viewer in page mode;
-  `?embed=1` hides the toolbar.
-- **Not included.** Rename, duplicate, delete and versions of an artifact.
-
-Security is unchanged: HTML stays in `<iframe sandbox="allow-scripts">` under the preview
-CSP, in the viewer and on the standalone pages. A `blob:` URL of an HTML artifact is never
-navigated to. Full screen is requested on the viewer's container, never inside the frame, so
-the frame has no `allow-same-origin`, `allow-popups` or `allow="fullscreen"`.
-
-Code: `ArtifactViewer.jsx`, `ArtifactViewerHost.jsx`,
-`contexts/ArtifactViewerContext.jsx`, `pages/ArtifactPage.jsx`, `SharedArtifactView.jsx`.
 
 ## Lifetime
 

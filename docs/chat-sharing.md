@@ -3,7 +3,7 @@
 A stored chat can be handed to other people as a **read-only link**. The
 recipient sees the conversation as it was when it was shared — the messages
 and the files it generated — and can view or download those artifacts, one
-by one or together as a ZIP in the [Artifacts panel](artifacts.md#the-artifacts-panel). They
+by one or together as a ZIP in the [workspace pane](artifacts.md#the-workspace-pane). They
 cannot type into it, edit it, rate it or continue it.
 
 Sharing rides on [Chat Persistence](chat-persistence.md): only a kept chat
@@ -236,8 +236,8 @@ open limit, revoke, admin list and `/share/<id>` URL; the share document just
 has `target: "artifact"` (a missing `target` means `chat`) and carries one
 artifact id and no transcript.
 
-- **Share** on a file or image card in the chat, in the file viewer, or in the
-  preview of the Artifacts panel opens the dialog. It is the
+- **Share** on a file or image card in the chat, or in the header of a file in
+  the workspace pane, opens the dialog. It is the
   conversation form minus the uploaded-file options; below it, the links of
   that file. Offered when chat sharing and `allowArtifacts` are on and the chat
   is kept and has a message.
