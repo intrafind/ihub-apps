@@ -447,7 +447,10 @@ export class ProjectService {
   async _detachChats(projectId, detachChat, where) {
     let markers = [];
     try {
-      markers = await this.repository.listChatMarkers(projectId, { all: true });
+      markers = await this.repository.listChatMarkers(projectId, {
+        all: true,
+        includePrivate: true
+      });
     } catch (error) {
       throw translateError(error);
     }
@@ -1517,9 +1520,24 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {string} chatId
-   * @param {{ownerId?: string|null}} [options]
+   * @param {{ownerId?: string|null, private?: boolean}} [options] - `private`: the chat is
+   *   one of someone who took the project from the catalog. It is recorded without taking
+   *   the project's lock and without touching its activity, so subscribers' chats never
+   *   queue behind each other on a popular project.
    */
-  async attachChat(projectId, chatId, { ownerId = null, authorize } = {}) {
+  async attachChat(
+    projectId,
+    chatId,
+    { ownerId = null, authorize, private: isPrivate = false } = {}
+  ) {
+    if (isPrivate) {
+      // A project that is gone or being deleted takes no chat, as on the locked path.
+      const project = await this.repository.get(projectId);
+      // A delete that lists the markers just before this one leaves the chat with a
+      // container that no longer exists, which a chat's scope skips like any missing project.
+      if (!project || project.deleting === true) return false;
+      return this.repository.addChatMarker(projectId, chatId, { ownerId, private: true });
+    }
     // Under the project's lock, so a deletion that lists the markers cannot
     // slip between the existence check and the marker; a project that is
     // gone answers null and gets no marker, and `authorize` is judged again

@@ -326,6 +326,20 @@ async function listProjects(user, repo, scope) {
   );
 }
 
+/** One chat as the project page lists it. */
+function chatListItem(chat, ownerId, mine) {
+  return {
+    id: chat.id,
+    title: chat.title || '',
+    appId: chat.appId || null,
+    createdAt: chat.createdAt,
+    lastMessageAt: chat.lastMessageAt || chat.updatedAt || chat.createdAt,
+    messageCount: chat.messageCount || 0,
+    status: chat.status || 'active',
+    owner: { id: mine ? ownerId : null, name: chat.ownerName || '', mine }
+  };
+}
+
 /** Chats of a project per page: the default and the most one request may ask for. */
 const CHATS_PAGE_DEFAULT = 20;
 const CHATS_PAGE_MAX = 100;
@@ -1115,7 +1129,7 @@ export default function registerProjectRoutes(app) {
    * @swagger
    * /api/projects/{projectId}/chats:
    *   get:
-   *     summary: The chats inside a project, or for a project that holds none (from the catalog, from the administrators), the caller's own chats that have it attached
+   *     summary: The chats inside a project; for someone who took it from the catalog, or a project that holds none, only the caller's own chats that use it
    *     tags: [Projects]
    *     parameters:
    *       - in: query
@@ -1141,39 +1155,31 @@ export default function registerProjectRoutes(app) {
     async (req, res) => {
       const chats = getChatRepository();
       if (!chats.isAvailable()) return res.json({ items: [], nextCursor: null, total: 0 });
-      // A project that holds no chats (from the catalog, from the administrators, a
-      // smart collection) is attached to chats instead: the caller's own chats that
-      // use it, never anyone else's.
-      if (req.projectPermissions.canHoldChats === false) {
+      // Someone who reads only their own chats here (the project is from the catalog, or
+      // from the administrators) gets those that use the project: inside it, where it holds
+      // chats (a chat of someone from the catalog is private to them), and attached to it.
+      // Never anyone else's.
+      if (req.projectPermissions.canHoldChats === false || !req.projectPermissions.readsAllChats) {
         const principal = await resolvePrincipal(req.user, { mode: runLog.identityMode() });
-        const attached = await chats.listChatsAttachingProject(principal.id, req.project.id);
+        const own = await chats.listChatsUsingProject(principal.id, req.project.id, {
+          inside: req.projectPermissions.canHoldChats !== false
+        });
         const limit = Math.min(
           CHATS_PAGE_MAX,
           Math.max(1, Number.parseInt(req.query.limit, 10) || CHATS_PAGE_DEFAULT)
         );
         const start = Math.max(0, Number.parseInt(req.query.cursor, 10) || 0);
         return res.json({
-          items: attached.slice(start, start + limit).map(chat => ({
-            id: chat.id,
-            title: chat.title || '',
-            appId: chat.appId || null,
-            createdAt: chat.createdAt,
-            lastMessageAt: chat.lastMessageAt || chat.updatedAt || chat.createdAt,
-            messageCount: chat.messageCount || 0,
-            status: chat.status || 'active',
-            owner: { id: String(req.user.id), name: chat.ownerName || '', mine: true }
-          })),
-          nextCursor: start + limit < attached.length ? String(start + limit) : null,
-          total: attached.length
+          items: own
+            .slice(start, start + limit)
+            .map(chat => chatListItem(chat, String(req.user.id), true)),
+          nextCursor: start + limit < own.length ? String(start + limit) : null,
+          total: own.length
         });
       }
-      // Someone who took the project from the catalog sees their own chats
-      // only; the members' chats stay among the members.
-      const filter = !req.projectPermissions.readsAllChats
-        ? 'mine'
-        : ['all', 'mine', 'others'].includes(req.query.filter)
-          ? req.query.filter
-          : 'all';
+      const filter = ['all', 'mine', 'others'].includes(req.query.filter)
+        ? req.query.filter
+        : 'all';
       const markers = await getProjectRepository().listChatMarkers(req.project.id);
       const me = String(req.user.id);
       // A chat records its owner in the identity mode of its day (a
@@ -1203,17 +1209,23 @@ export default function registerProjectRoutes(app) {
         }
         const principalId = await principalIdFor(chat.identityMode);
         const mine = String(chat.ownerId) === principalId || String(marker.ownerId) === principalId;
+        // A private chat (of someone who took the project from the catalog) is its owner's
+        // alone; its marker sits apart from the members', so this is a guard.
+        if (chat.projectPrivate === true && !mine) continue;
         if ((filter === 'mine' && !mine) || (filter === 'others' && mine)) continue;
-        items.push({
-          id: chat.id,
-          title: chat.title || '',
-          appId: chat.appId || null,
-          createdAt: chat.createdAt,
-          lastMessageAt: chat.lastMessageAt || chat.updatedAt || chat.createdAt,
-          messageCount: chat.messageCount || 0,
-          status: chat.status || 'active',
-          owner: { id: mine ? me : null, name: chat.ownerName || '', mine }
-        });
+        items.push(chatListItem(chat, me, mine));
+      }
+      // A chat of their own that stayed private from the days they only took the project from
+      // the catalog: kept apart from the members' markers, but theirs to find here.
+      if (filter !== 'others') {
+        const principal = await resolvePrincipal(req.user, { mode: runLog.identityMode() });
+        for (const chat of await chats.listChatsUsingProject(principal.id, req.project.id, {
+          inside: true
+        })) {
+          if (chat.projectPrivate === true && chat.projectId === req.project.id) {
+            items.push(chatListItem(chat, me, true));
+          }
+        }
       }
       items.sort((a, b) =>
         String(b.lastMessageAt || '').localeCompare(String(a.lastMessageAt || ''))

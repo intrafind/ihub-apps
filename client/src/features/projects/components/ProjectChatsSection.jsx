@@ -31,16 +31,19 @@ function formatWhen(value, language) {
  * caller's (`filter=mine`); each links into its app, read-only for the chats
  * of other members. Starting a chat is the composer above this card.
  *
- * A project that holds no chats (one from the catalog, one from the
- * administrators) is listed with `attached`: the caller's own chats that use it.
- * The server sends nobody else's, so there is no filter to offer.
+ * Someone who took the project from the catalog sees their own chats only
+ * (`scope` `private`: the ones they started in it, which its members cannot
+ * read, and the ones that attach it); a project that holds no chats (from the
+ * administrators) lists the chats that attach it (`scope` `attached`). The server
+ * sends nobody else's, so there is no filter to offer.
  *
  * @param {Object} props
  * @param {Object} props.project
- * @param {boolean} [props.attached=false] - The chats list the project as attached
+ * @param {'members'|'private'|'attached'} [props.scope='members'] - Whose chats the card lists
  * @returns {JSX.Element}
  */
-function ProjectChatsSection({ project, attached = false }) {
+function ProjectChatsSection({ project, scope = 'members' }) {
+  const ownOnly = scope !== 'members';
   const { t, i18n } = useTranslation();
   const language = i18n.language;
   const { apps } = useApps();
@@ -95,7 +98,7 @@ function ProjectChatsSection({ project, attached = false }) {
         >
           {t('projects.chats.title', 'Chats')}
         </h2>
-        {!attached && (
+        {!ownOnly && (
           <div
             className="flex gap-1"
             role="group"
@@ -122,12 +125,17 @@ function ProjectChatsSection({ project, attached = false }) {
           </div>
         )}
       </div>
-      {attached && (
+      {ownOnly && (
         <p className="-mt-1 mb-3 text-xs text-gray-500 dark:text-gray-400">
-          {t(
-            'projects.chats.attachedHint',
-            'Your chats that use this project. Other users’ chats are not shown.'
-          )}
+          {scope === 'private'
+            ? t(
+                'projects.chats.privateHint',
+                'Your chats with this project. Only you can read them: the project’s members cannot, and you do not see theirs.'
+              )
+            : t(
+                'projects.chats.attachedHint',
+                'Your chats that use this project. Other users’ chats are not shown.'
+              )}
         </p>
       )}
 
@@ -140,7 +148,7 @@ function ProjectChatsSection({ project, attached = false }) {
         <p className="text-sm text-gray-500">{t('common.loading', 'Loading…')}</p>
       ) : state.chats.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {attached
+          {ownOnly
             ? t('projects.chats.attachedEmpty', 'None of your chats uses this project yet.')
             : t('projects.chats.empty', 'No chats in this project yet.')}
         </p>
@@ -159,7 +167,7 @@ function ProjectChatsSection({ project, attached = false }) {
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {[
                     appName(chat.appId),
-                    attached
+                    ownOnly
                       ? null
                       : chat.owner?.mine
                         ? t('projects.chats.byMe', 'by you')

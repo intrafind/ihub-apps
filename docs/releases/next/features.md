@@ -1504,18 +1504,26 @@ and every other place the name appears.
 
 See [Localization](../../localization.md).
 
-## Projects From the Catalog Show the Chats That Use Them
+## Chat Inside a Project From the Catalog, Privately
 
-A project you added from the catalog, or one the administrators made available to everyone, never
-holds chats: yours only attach it. Its page had no chat list at all, so there was no way to see which
-chats used it. It now has a **Chats** card with your chats that have the project attached, newest
-first, a page at a time.
+A project you added from the catalog used to hold no chats: **New chat** started a chat outside it
+with the project attached, and its page showed no chats at all. Now the chat runs **inside** the
+project, like a chat in your own project, and the page lists your chats.
 
-- **Only your own chats.** Other users' chats are never listed, however many people use the project.
-  Temporary (incognito) chats are not listed either.
-- **Same card, no filter.** The card looks like the one of your own projects, without the **All
-  chats / My chats** switch, since there is nothing else to show.
-- **API:** `GET /api/projects/{projectId}/chats` answers, for such a project, with the caller's own
-  chats that have it attached, whatever `filter` says.
+- **Private to you.** The project's owner, its editors and its other members cannot read a chat you
+  start in it, and you cannot read theirs. A full administrator keeps the read access for compliance,
+  as for every chat. Chats of the members stay open to the members, as before.
+- **The Chats card.** It shows your own chats in the project and the chats that have it attached,
+  newest first, a page at a time, without the **All chats / My chats** switch. A project the
+  administrators made available to everyone still holds no chats: its card lists your chats that have
+  it attached.
+- **The project's instructions apply** to the chat, and the app you start with is the project's default
+  app, as in your own projects.
+- **If the project goes away.** When its owner deletes it, your chats are kept outside it. When it is
+  taken out of the catalog, your chats stay in your history and answer without the project.
+- **API:** `GET /api/projects/{projectId}/chats` lists the caller's own chats for someone who took the
+  project from the catalog, whatever `filter` says. A project's `permissions.canHoldChats` is now `true`
+  for them; `permissions.readsAllChats` stays `false`. A chat records that it is private
+  (`projectPrivate`) when it opens in such a project.
 
 See [Projects → Chats in a project](../../projects.md#chats-in-a-project).

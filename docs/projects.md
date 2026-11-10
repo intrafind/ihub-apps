@@ -847,10 +847,9 @@ everyone else uses it:
 - **Publish to the catalog** (`sharing.allowCatalog`): the project does not appear in anyone's list
   by itself. Users find it under **Projects → Browse catalog**, open it and add it with **Add to my
   projects** (and take it away with **Remove from my projects**). It shows **From the catalog** for them. They read its documents
-  and instructions, link its documents and attach it to their chats, but never hold a chat inside
-  it: **New chat** on its page starts a chat with the project attached, and a chat cannot be moved
-  into it. So the members do not see their chats, and they do not see the members' chats. The
-  project's page lists your own chats that have it attached, and only those.
+  and instructions, link its documents, attach it to their chats and chat inside it. A chat they
+  start in it is **private to them**: the owner, the editors and the other members cannot read it, and
+  they do not read the members' chats. The project's page lists their own chats, and only those.
 
 Owners and editors publish a project with **Publish to the catalog** on the project page, after a
 confirmation, and take it out with **Take out of the catalog**. Publishing needs the `projectSharing` permission;
@@ -889,9 +888,17 @@ instructions and documents (in the chat's [knowledge mode](#knowledge-modes): `a
 a project from its first message on: it is started from the project page. A chip beside the message
 box and the chat history show which project a chat belongs to. Only user projects hold chats.
 
-A project from the catalog (or an admin project made available to everyone) holds no chats, but
-its page lists **your own chats that have it attached**, newest first. Chats of other users are never
-shown there, and there is no **All chats / My chats** switch.
+Someone who took a project from the catalog chats inside it too, but their chats are **private**:
+the chat records it when it opens (`projectPrivate`), and nobody but its owner reads it, not the
+project's owner, editors or members. A full administrator keeps the compliance read every chat has.
+Their page of the project lists their own chats in it and the ones that attach it, newest first,
+without an **All chats / My chats** switch. A chat that is private stays so for good, even if the
+person is later made a member. When the project is deleted its private chats are kept outside it, like
+the members' chats; when it is taken out of the catalog, the chats stay in the history and answer without
+the project.
+
+An admin project made available to everyone holds no chats: a chat starts with it attached, and its
+page lists your own chats that have it attached.
 
 Every member may open the chats in a project; chats of other members are read-only. Only kept
 chats are listed: a temporary chat (incognito, or every chat while the Chat History feature is off,

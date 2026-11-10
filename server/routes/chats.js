@@ -675,7 +675,10 @@ export default function registerChatRoutes(app) {
       // the project's page; kept, it belongs there like any chat.
       if (chat.projectId) {
         const { recordChatInProject } = await import('../services/knowledge/chatProjects.js');
-        await recordChatInProject(chat.projectId, chatId, { ownerId: chat.ownerId }).catch(() => {
+        await recordChatInProject(chat.projectId, chatId, {
+          ownerId: chat.ownerId,
+          private: chat.projectPrivate === true
+        }).catch(() => {
           /* the project may be gone; the chat is kept either way */
         });
       }

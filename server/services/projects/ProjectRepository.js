@@ -207,6 +207,19 @@ export function memberMarkerKey(projectId, targetKey) {
  * @param {string} chatId
  * @returns {string}
  */
+/**
+ * The index partition of the private chat markers of a project: the chats of
+ * people who took it from the catalog. A different partition than the members'
+ * chats keeps a popular catalog project from crowding the members' list, which
+ * reads its own partition only.
+ *
+ * @param {string} projectId
+ * @returns {string}
+ */
+export function privateChatPartition(projectId) {
+  return `${projectId}:private`;
+}
+
 export function chatMarkerKey(projectId, chatId) {
   // Both digested: a project id plus a chat id can exceed the store's key
   // length (`isValidId`, 100 characters), and the raw ids stay in the data.
@@ -1051,14 +1064,18 @@ export class ProjectRepository {
 
   // --- chat markers ---------------------------------------------------------
 
-  /** Record that a chat lives inside a project. */
-  async addChatMarker(projectId, chatId, { ownerId = null } = {}) {
+  /**
+   * Record that a chat lives inside a project. A private chat (of someone who
+   * took the project from the catalog) is recorded apart from the members' chats,
+   * for the delete cascade to find; no listing of the members reads it.
+   */
+  async addChatMarker(projectId, chatId, { ownerId = null, private: isPrivate = false } = {}) {
     if (!this.documents || !isProjectId(projectId) || !isValidId(chatId)) return false;
     await this.documents.put(
       PROJECT_CHATS_NAMESPACE,
       chatMarkerKey(projectId, chatId),
-      { projectId, chatId, ownerId },
-      { ownerId: projectId }
+      { projectId, chatId, ownerId, ...(isPrivate ? { private: true } : {}) },
+      { ownerId: isPrivate ? privateChatPartition(projectId) : projectId }
     );
     return true;
   }
@@ -1073,27 +1090,38 @@ export class ProjectRepository {
    * The chat markers of one project.
    *
    * @param {string} projectId
-   * @param {{all?: boolean}} [options] - `all` follows every page (for a
-   *   cascade); the default stops at the scan budget (for a listing).
-   * @returns {Promise<Array<{chatId: string, ownerId: string|null}>>}
+   * @param {{all?: boolean, includePrivate?: boolean}} [options] - `all` follows every
+   *   page (for a cascade); the default stops at the scan budget (for a listing).
+   *   `includePrivate` adds the private chats of people from the catalog, which no
+   *   listing of the members shows: only a cascade asks for them.
+   * @returns {Promise<Array<{chatId: string, ownerId: string|null, private: boolean}>>}
    */
-  async listChatMarkers(projectId, { all = false } = {}) {
+  async listChatMarkers(projectId, { all = false, includePrivate = false } = {}) {
     if (!this.documents || !isProjectId(projectId)) return [];
-    const docs = await collect(
-      this.documents,
-      PROJECT_CHATS_NAMESPACE,
-      { ownerId: projectId },
-      all ? Infinity : MAX_SCANNED
-    );
-    return docs
-      .map(doc => doc.data)
-      .filter(data => data && isValidId(data.chatId))
-      .map(data => ({ chatId: data.chatId, ownerId: data.ownerId ?? null }));
+    const partitions = includePrivate ? [projectId, privateChatPartition(projectId)] : [projectId];
+    const markers = [];
+    for (const ownerId of partitions) {
+      const docs = await collect(
+        this.documents,
+        PROJECT_CHATS_NAMESPACE,
+        { ownerId },
+        all ? Infinity : MAX_SCANNED
+      );
+      for (const { data } of docs) {
+        if (!data || !isValidId(data.chatId)) continue;
+        markers.push({
+          chatId: data.chatId,
+          ownerId: data.ownerId ?? null,
+          private: data.private === true
+        });
+      }
+    }
+    return markers;
   }
 
   /** Remove every chat marker of a project; returns the chat ids it had. */
   async removeAllChatMarkers(projectId) {
-    const markers = await this.listChatMarkers(projectId, { all: true });
+    const markers = await this.listChatMarkers(projectId, { all: true, includePrivate: true });
     for (const marker of markers) await this.removeChatMarker(projectId, marker.chatId);
     return markers.map(marker => marker.chatId);
   }

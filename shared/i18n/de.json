@@ -8818,6 +8818,7 @@
     },
     "chats": {
       "attachedEmpty": "Noch keiner Ihrer Chats nutzt dieses Projekt.",
+      "privateHint": "Ihre Chats mit diesem Projekt. Nur Sie können sie lesen: Die Mitglieder des Projekts können es nicht, und Sie sehen deren Chats nicht.",
       "attachedHint": "Ihre Chats, die dieses Projekt nutzen. Chats anderer Nutzer werden nicht angezeigt.",
       "byMe": "von Ihnen",
       "byOther": "von {{name}} (nur lesen)",
@@ -9153,6 +9154,7 @@
       "placeholder": "Neuer Chat in {{name}}",
       "hint": "Die App erhält die Anweisungen und Dokumente des Projekts.",
       "app": "App",
+      "hintPrivate": "Die App erhält die Anweisungen und Dokumente des Projekts. Nur Sie können diesen Chat lesen: Die Mitglieder des Projekts nicht.",
       "hintAttached": "Dieser Chat läuft außerhalb des Projekts und nutzt seine Dokumente. Die Anweisungen des Projekts gelten für die Chats seiner Mitglieder im Projekt."
     },
     "appSelect": {
@@ -9166,7 +9168,7 @@
     },
     "catalog": {
       "title": "Katalog",
-      "addedHint": "Sie haben dieses Projekt aus dem Katalog hinzugefügt; Besitzer und Bearbeiter halten es aktuell. Neuer Chat startet einen Chat mit dem Projekt als Anhang. Ihre Chats bleiben Ihre: Die Mitglieder sehen sie nicht.",
+      "addedHint": "Sie haben dieses Projekt aus dem Katalog hinzugefügt; Besitzer und Bearbeiter halten es aktuell. Neuer Chat startet einen Chat im Projekt. Ihre Chats bleiben Ihre: Die Mitglieder sehen sie nicht.",
       "notAddedHint": "Dieses Projekt ist im Katalog. Fügen Sie es zu Ihren Projekten hinzu, um es in Ihrer Liste und in Chats zu finden.",
       "publishedHint": "Veröffentlicht am {{date}}. Alle angemeldeten Personen finden es im Katalog und können es nutzen.",
       "unpublishedHint": "Veröffentlichen Sie das Projekt, damit alle angemeldeten Personen es im Katalog finden und hinzufügen können.",
