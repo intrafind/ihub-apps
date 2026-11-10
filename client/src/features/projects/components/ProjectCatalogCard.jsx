@@ -125,7 +125,7 @@ function ProjectCatalogCard({ project, config, onChanged }) {
               ? project.subscribed
                 ? t(
                     'projects.catalog.addedHint',
-                    'You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat with the project attached. Your chats stay yours: its members do not see them.'
+                    'You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat in the project. Your chats stay yours: its members do not see them.'
                   )
                 : t(
                     'projects.catalog.notAddedHint',

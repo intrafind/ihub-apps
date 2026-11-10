@@ -784,7 +784,7 @@ describe('ProjectPage – the catalog', () => {
           canDelete: false,
           canTransfer: false,
           readsAllChats: false,
-          canHoldChats: false,
+          canHoldChats: true,
           isOwner: false,
           readOnly: false
         }
@@ -795,11 +795,13 @@ describe('ProjectPage – the catalog', () => {
 
     expect(await screen.findByText('From the catalog')).toBeInTheDocument();
     expect(screen.getByText('Published')).toBeInTheDocument();
-    // No chat runs inside it for them: theirs attach the project, and the card lists
-    // those of their own chats only, without the all/mine switch.
+    // Chats run inside it for them, privately: the composer starts one in the project, and the
+    // card lists their own chats only, without the all/mine switch.
+    const composer = screen.getByTestId('project-chat-composer');
+    expect(within(composer).getByText(/Only you can read this chat/)).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Chats' })).toBeInTheDocument();
     expect(await screen.findByText('Notice period')).toBeInTheDocument();
-    expect(screen.getByText(/Other users’ chats are not shown/)).toBeInTheDocument();
+    expect(screen.getByText(/Only you can read them/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'All chats' })).toBeNull();
     expect(screen.queryByText(/by you/)).toBeNull();
     expect(mockApi.fetchProjectChats).toHaveBeenCalledWith(
