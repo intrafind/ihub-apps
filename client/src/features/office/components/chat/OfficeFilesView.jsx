@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   deleteChatFile,
   downloadChatArtifactsZip,
@@ -11,11 +11,9 @@ import {
   fetchChatFileText,
   fetchChatFiles
 } from '../../../../api';
+import ArtifactViewerHost from '../../../chat/components/ArtifactViewerHost';
 import ChatFilesContext from '../../../chat/contexts/ChatFilesContext';
 import { attachStoredFileToMail, mailAttachState } from '../../../chat/utils/attachToMail';
-
-// Opened from a card only: most chats never open it
-const ArtifactsPanel = lazy(() => import('../../../chat/components/ArtifactsPanel'));
 
 /** A chat the server has no record of yet has no files: read as an empty list. */
 const emptyWhenMissing = request =>
@@ -27,11 +25,11 @@ const emptyWhenMissing = request =>
 /**
  * The Files view of the Outlook task pane (and the browser extension's side panel).
  *
- * A card of a message that names a stored file used to be a plain card here: the pane had no
- * place to open it in. This gives it one, the same Files drawer the web app has, which on a
- * narrow surface is a full-pane sheet over the chat with its own close button: the uploaded
- * files with their preview, download and delete, and what the assistant generated. While a mail
- * is being written, a file can also be attached to it from there.
+ * A card of a message that names a stored file, or a file the assistant generated, opens in
+ * the same workspace pane the web app has. These surfaces never split: the pane is a
+ * full-screen sheet over the chat with a "Back to chat" button — the uploaded files with their
+ * preview, download and delete, and what the assistant generated. While a mail is being
+ * written, "Attach to email" is a visible button of the header.
  *
  * It wraps the message list and offers it what a card needs: opening a file, and reading the
  * bytes of a stored picture for its thumbnail.
@@ -44,9 +42,13 @@ const emptyWhenMissing = request =>
  * @param {import('react').ReactNode} props.children - The message list.
  */
 export default function OfficeFilesView({ chatId, messages = [], zipName = 'files', children }) {
-  // Which file a card asked for, and in which chat: a chat that is left closes the view
-  const [request, setRequest] = useState(null);
-  const open = request !== null && request.chatId === chatId;
+  const workspaceRef = useRef(null);
+  // A chat that is left closes the pane.
+  const shownChatRef = useRef(chatId);
+  useEffect(() => {
+    if (shownChatRef.current !== chatId) workspaceRef.current?.close();
+    shownChatRef.current = chatId;
+  }, [chatId]);
 
   const uploadedSource = useMemo(
     () => ({
@@ -82,30 +84,32 @@ export default function OfficeFilesView({ chatId, messages = [], zipName = 'file
 
   const filesContext = useMemo(
     () => ({
-      openFile: fileId => setRequest({ chatId, fileId }),
+      openFile: fileId => workspaceRef.current?.openFile(fileId),
       fetchBlob: uploadedSource.fetchBlob
     }),
-    [chatId, uploadedSource]
+    [uploadedSource]
+  );
+  const files = useMemo(
+    () => ({
+      artifacts: artifactSource,
+      uploaded: uploadedSource,
+      mailAttach: mailAttachSource,
+      zipName
+    }),
+    [artifactSource, uploadedSource, mailAttachSource, zipName]
   );
 
   return (
     <ChatFilesContext value={filesContext}>
-      {children}
-      {open && (
-        <Suspense fallback={null}>
-          <ArtifactsPanel
-            isOpen
-            onClose={() => setRequest(null)}
-            source={artifactSource}
-            uploadedSource={uploadedSource}
-            initialTab="uploaded"
-            initialFileId={request.fileId}
-            mailAttach={mailAttachSource}
-            zipName={zipName}
-            messages={messages}
-          />
-        </Suspense>
-      )}
+      <ArtifactViewerHost
+        messages={messages}
+        chatId={chatId}
+        files={files}
+        forceSheet
+        controllerRef={workspaceRef}
+      >
+        {children}
+      </ArtifactViewerHost>
     </ChatFilesContext>
   );
 }

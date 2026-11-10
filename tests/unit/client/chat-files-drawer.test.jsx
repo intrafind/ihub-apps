@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The unified Files drawer (#3159): the Uploaded and Generated tabs, the
- * preview of uploaded files (extracted text, e-mail viewer), Download original
- * (aware of a discarded original), Delete, "Attach to email", and the read-only
- * variant of a shared chat. Plus the helpers behind them.
+ * The Files index of the workspace pane and the detail of an uploaded file (concept §7):
+ * the Generated / Uploaded tabs, list → detail with a back link, the preview of uploaded
+ * files (extracted text, e-mail viewer), Download original (aware of a discarded original),
+ * Delete, "Attach to email" (⋯, or a visible button in Outlook), and the read-only variant
+ * of a shared chat. Plus the helpers behind them.
  */
 import '@testing-library/jest-dom';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -29,8 +30,23 @@ jest.mock('../../../client/src/utils/externalNavigation', () => ({
 }));
 
 const { saveBlobAs } = require('../../../client/src/utils/externalNavigation');
-const ArtifactsPanel =
-  require('../../../client/src/features/chat/components/ArtifactsPanel').default;
+jest.mock('../../../client/src/api', () => ({ fetchChatArtifact: jest.fn() }));
+jest.mock('../../../client/src/config/marked.config', () => ({
+  highlightCode: code => code,
+  renderMarkdown: text => `<p>${text}</p>`
+}));
+jest.mock('../../../client/src/utils/mermaidSecurity', () => ({ sanitizeMermaidSvg: s => s }));
+let mockHostKind = null;
+jest.mock('../../../client/src/features/office/contexts/EmbeddedHostContext', () => ({
+  useEmbeddedHostKind: () => mockHostKind
+}));
+
+const { MemoryRouter, Route, Routes, useLocation } = require('react-router-dom');
+const ArtifactViewerHost =
+  require('../../../client/src/features/chat/components/ArtifactViewerHost').default;
+const {
+  useArtifactViewer
+} = require('../../../client/src/features/chat/contexts/ArtifactViewerContext');
 const helpers = require('../../../client/src/features/chat/utils/uploadedFiles');
 const { isOriginalDiscarded } = require('../../../client/src/api/utils/fileErrors');
 
@@ -209,374 +225,290 @@ describe('uploaded file helpers', () => {
   });
 });
 
-describe('the Files drawer', () => {
-  beforeEach(() => saveBlobAs.mockClear());
+function Openers() {
+  const viewer = useArtifactViewer();
+  const location = useLocation();
+  return (
+    <>
+      <output data-testid="where">{location.search}</output>
+      <button type="button" onClick={() => viewer.openFiles()}>
+        files
+      </button>
+      <button type="button" onClick={() => viewer.openFiles('uploaded')}>
+        uploaded files
+      </button>
+      <button type="button" onClick={() => viewer.openFile('file_pdf')}>
+        card contract.pdf
+      </button>
+      <button type="button" onClick={() => viewer.openFile('file_gone')}>
+        card gone
+      </button>
+    </>
+  );
+}
 
-  it('is the plain Artifacts panel without a source of uploaded files', async () => {
-    render(<ArtifactsPanel isOpen onClose={() => {}} source={makeSource()} />);
-    expect(await screen.findByRole('dialog', { name: /Artifacts/ })).toBeInTheDocument();
-    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+function mount({
+  uploaded = makeUploaded(),
+  artifacts = makeSource(),
+  messages = [],
+  mailAttach = null,
+  uploadedAccess = null,
+  entry = '/c'
+} = {}) {
+  const files = { artifacts, uploaded, mailAttach, uploadedAccess, zipName: 'chat' };
+  const utils = render(
+    <MemoryRouter initialEntries={[entry]}>
+      <Routes>
+        <Route
+          path="*"
+          element={
+            <ArtifactViewerHost messages={messages} chatId="c1" files={files}>
+              <Openers />
+            </ArtifactViewerHost>
+          }
+        />
+      </Routes>
+    </MemoryRouter>
+  );
+  return { ...utils, files, uploaded, artifacts };
+}
+
+const tab = name => screen.getByRole('tab', { name: new RegExp(`^${name}`) });
+
+describe('the Files index of the pane', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockHostKind = null;
   });
 
-  it('has Uploaded (N) and Generated (M) tabs and opens on Generated when there are some', async () => {
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={makeUploaded()}
-      />
-    );
-    const uploadedTab = await screen.findByRole('tab', { name: 'Uploaded (3)' });
-    const generatedTab = screen.getByRole('tab', { name: 'Generated (1)' });
-    expect(generatedTab).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByLabelText('Files of this chat')).toBeInTheDocument();
-
-    fireEvent.click(uploadedTab);
-    expect(uploadedTab).toHaveAttribute('aria-selected', 'true');
-    expect(await screen.findByTestId('uploaded-files-tab')).toBeInTheDocument();
+  it('has Generated, Uploaded tabs with counts and opens on the first with files', async () => {
+    mount();
+    fireEvent.click(screen.getByText('files'));
+    expect(screen.getByRole('dialog', { name: 'Workspace: Files' })).toBeInTheDocument();
+    await waitFor(() => expect(tab('Generated')).toHaveTextContent('1'));
+    expect(tab('Uploaded')).toHaveTextContent('3');
+    expect(tab('Generated')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('index.js')).toBeInTheDocument();
   });
 
-  it('opens on Uploaded when nothing was generated, or the clicked chip names a file', async () => {
-    const source = { ...makeSource(), list: jest.fn(async () => ({ items: [] })) };
-    const { unmount } = render(
-      <ArtifactsPanel isOpen onClose={() => {}} source={source} uploadedSource={makeUploaded()} />
+  it('opens on Uploaded when nothing was generated, and tabs move with the arrow keys', async () => {
+    mount({ artifacts: { ...makeSource(), list: jest.fn(async () => ({ items: [] })) } });
+    fireEvent.click(screen.getByText('files'));
+    await waitFor(() => expect(tab('Uploaded')).toHaveAttribute('aria-selected', 'true'));
+    fireEvent.keyDown(tab('Uploaded'), { key: 'ArrowLeft' });
+    expect(tab('Generated')).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('generated-empty')).toHaveTextContent(
+      'No files yet. Files the assistant creates or you upload appear here.'
     );
-    expect(await screen.findByTestId('uploaded-files-tab')).toBeInTheDocument();
-    unmount();
-
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={makeUploaded()}
-        initialTab="uploaded"
-        initialFileId="file_docx"
-      />
-    );
-    expect(await screen.findByRole('heading', { name: 'plan.docx' })).toBeInTheDocument();
   });
 
-  it('says so when the file a card named is gone, instead of opening another one', async () => {
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={makeUploaded()}
-        initialTab="uploaded"
-        initialFileId="file_deleted"
-      />
-    );
-    expect(await screen.findByTestId('uploaded-file-gone')).toHaveTextContent(
-      'This file is no longer in the chat.'
-    );
-    // Not the first file in its place: no preview heading until the user picks one
-    expect(screen.queryByRole('heading', { name: 'plan.docx' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'contract.pdf' })).not.toBeInTheDocument();
+  it('a row opens the detail, whose back link returns to the list', async () => {
+    mount();
+    fireEvent.click(screen.getByText('uploaded files'));
     fireEvent.click(await screen.findByRole('button', { name: /plan\.docx/ }));
-    expect(await screen.findByRole('heading', { name: 'plan.docx' })).toBeInTheDocument();
-    expect(screen.queryByTestId('uploaded-file-gone')).not.toBeInTheDocument();
+    expect(screen.getByTestId('where')).toHaveTextContent('?file=file_docx');
+    expect(await screen.findByRole('heading', { name: /plan\.docx/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Back to Files' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('?files=uploaded');
+    expect(tab('Uploaded')).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('says the file is gone, not that nothing was uploaded, when none is left', async () => {
-    const empty = { ...makeUploaded(), list: jest.fn(async () => ({ items: [] })) };
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={empty}
-        initialTab="uploaded"
-        initialFileId="file_deleted"
-      />
+  it('selects without navigating and downloads the selection, then everything, as a ZIP', async () => {
+    const { artifacts } = mount();
+    fireEvent.click(screen.getByText('files'));
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Select index.js' }));
+    expect(screen.getByTestId('where')).toHaveTextContent('?files=');
+    const bar = screen.getByTestId('files-selection-bar');
+    expect(bar).toHaveTextContent('1 selected');
+    fireEvent.click(within(bar).getByRole('button', { name: /Download \.zip/ }));
+    await waitFor(() => expect(artifacts.zip).toHaveBeenCalledWith(['a1']));
+    await waitFor(() => expect(saveBlobAs).toHaveBeenCalledWith(expect.any(Blob), 'chat.zip'));
+    fireEvent.click(within(bar).getByRole('button', { name: 'Clear' }));
+    expect(screen.queryByTestId('files-selection-bar')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('files-download-all'));
+    await waitFor(() => expect(artifacts.zip).toHaveBeenLastCalledWith(undefined));
+  });
+
+  it('says why a ZIP was refused', async () => {
+    const artifacts = makeSource();
+    artifacts.zip.mockRejectedValueOnce(
+      Object.assign(new Error('x'), { response: { data: { code: 'ZIP_TOO_MANY_FILES' } } })
     );
+    mount({ artifacts });
+    fireEvent.click(screen.getByText('files'));
+    fireEvent.click(await screen.findByTestId('files-download-all'));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('shows a failed load', async () => {
+    mount({
+      artifacts: { ...makeSource(), list: jest.fn(async () => Promise.reject(new Error('x'))) }
+    });
+    fireEvent.click(screen.getByText('files'));
+    fireEvent.click(await screen.findByRole('tab', { name: /^Generated/ }));
+    expect(
+      await screen.findByText('The files of this chat could not be loaded.')
+    ).toBeInTheDocument();
+  });
+
+  it('says which answer made a file', async () => {
+    const artifacts = makeSource();
+    artifacts.list.mockResolvedValue({ items: [{ ...ARTIFACTS[0], runId: 'r2' }] });
+    mount({
+      artifacts,
+      messages: [
+        { id: 'q1', role: 'user', content: 'a' },
+        { id: 'm1', role: 'assistant', runId: 'r1', content: 'x' },
+        { id: 'm2', role: 'assistant', runId: 'r2', content: 'y', generatedFiles: [ARTIFACTS[0]] }
+      ]
+    });
+    fireEvent.click(screen.getByText('files'));
+    expect(
+      await screen.findByRole('button', { name: 'Show answer 2 in the chat' })
+    ).toHaveTextContent('Answer 2');
+  });
+});
+
+describe('an uploaded file in the pane', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockHostKind = null;
+  });
+
+  it('a card opens its file straight in the detail, with a back link to Files', async () => {
+    mount();
+    fireEvent.click(screen.getByText('card contract.pdf'));
+    expect(await screen.findByRole('heading', { name: /contract\.pdf/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Back to Files' })).toBeInTheDocument();
+    expect(screen.getByTestId('uploaded-template-hint')).toBeInTheDocument();
+  });
+
+  it('says so when the file a card named is gone', async () => {
+    mount();
+    fireEvent.click(screen.getByText('card gone'));
     expect(await screen.findByTestId('uploaded-file-gone')).toHaveTextContent(
       'This file is no longer in the chat.'
     );
-    expect(screen.queryByTestId('uploaded-empty')).not.toBeInTheDocument();
   });
 
-  it('shows type badge, size, pages and what is stored per uploaded file', async () => {
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={makeUploaded()}
-        initialTab="uploaded"
-      />
-    );
-    const list = await screen.findByRole('list', { name: 'Files uploaded to this chat' });
-    const rows = within(list).getAllByRole('listitem');
-    expect(rows).toHaveLength(3);
-    expect(within(rows[0]).getByText('PDF')).toBeInTheDocument();
-    expect(rows[0]).toHaveTextContent('4 KB');
-    expect(rows[0]).toHaveTextContent('3 pages');
-    expect(rows[0]).toHaveTextContent('Original saved');
-    expect(rows[1]).toHaveTextContent('Original removed');
-    expect(rows[2]).toHaveTextContent('Text only');
+  it('previews an Office file as its extracted text', async () => {
+    mount({ entry: '/c?file=file_docx' });
+    expect(
+      await screen.findByText('Showing the text the assistant reads from this file.')
+    ).toBeInTheDocument();
   });
 
-  it('previews an Office file as its extracted text and an e-mail in the mail viewer', async () => {
-    const uploaded = makeUploaded();
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={uploaded}
-        initialTab="uploaded"
-        initialFileId="file_docx"
-      />
+  it('previews an e-mail in the mail viewer', async () => {
+    mount({ entry: '/c?file=file_mail' });
+    await waitFor(() =>
+      expect(screen.getByTestId('uploaded-email-viewer')).toHaveTextContent('ada@example.com')
     );
-    expect(await screen.findByText('Launch in March.')).toBeInTheDocument();
-    expect(uploaded.fetchText).toHaveBeenCalledWith('file_docx');
-    expect(screen.queryByTestId('uploaded-download-original')).not.toBeInTheDocument();
-
-    fireEvent.click(await screen.findByRole('button', { name: /Offer\.eml/ }));
-    const viewer = await screen.findByTestId('uploaded-email-viewer');
-    expect(viewer).toHaveTextContent('ada@example.com');
-    expect(viewer).toHaveTextContent('Subject');
-    expect(viewer).toHaveTextContent('Please find the offer.');
   });
 
-  it('downloads the original, and says so when only the text is left', async () => {
-    const uploaded = makeUploaded();
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={uploaded}
-        initialTab="uploaded"
-        initialFileId="file_pdf"
-      />
-    );
+  it('downloads the original, and the text from ⋯', async () => {
+    const { uploaded } = mount({ entry: '/c?file=file_pdf' });
     fireEvent.click(await screen.findByTestId('uploaded-download-original'));
-    await waitFor(() => expect(saveBlobAs).toHaveBeenCalled());
-    expect(saveBlobAs.mock.calls[0][1]).toBe('contract.pdf');
+    await waitFor(() => expect(saveBlobAs).toHaveBeenCalledWith(expect.any(Blob), 'contract.pdf'));
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Download text' }));
+    await waitFor(() => expect(uploaded.fetchText).toHaveBeenCalledWith('file_pdf'));
+    await waitFor(() =>
+      expect(saveBlobAs).toHaveBeenLastCalledWith(expect.any(Blob), expect.stringMatching(/\.txt$/))
+    );
+  });
+
+  it('has no Download original once only the text is kept', async () => {
+    mount({ entry: '/c?file=file_docx' });
+    await screen.findByRole('heading', { name: /plan\.docx/ });
+    expect(screen.queryByTestId('uploaded-download-original')).not.toBeInTheDocument();
   });
 
   it('reports a discarded original (410) instead of failing silently', async () => {
     const uploaded = makeUploaded({
-      fetchBlob: jest.fn(async () => {
-        throw Object.assign(new Error('gone'), { response: { status: 410 } });
-      })
+      fetchBlob: jest.fn(async () =>
+        Promise.reject(
+          Object.assign(new Error('gone'), { status: 410, code: 'ORIGINAL_DISCARDED' })
+        )
+      )
     });
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={uploaded}
-        initialTab="uploaded"
-        initialFileId="file_pdf"
-      />
-    );
+    mount({ uploaded, entry: '/c?file=file_pdf' });
     fireEvent.click(await screen.findByTestId('uploaded-download-original'));
-    expect(await screen.findByText(/no longer stored; only its text is kept/)).toBeInTheDocument();
-    expect(saveBlobAs).not.toHaveBeenCalled();
+    expect(await screen.findByText(/only its text is kept/)).toBeInTheDocument();
   });
 
-  it('downloads the extracted text as a .txt file', async () => {
-    const uploaded = makeUploaded();
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={uploaded}
-        initialTab="uploaded"
-        initialFileId="file_docx"
-      />
-    );
-    fireEvent.click(await screen.findByTestId('uploaded-download-text'));
-    await waitFor(() => expect(saveBlobAs).toHaveBeenCalled());
-    expect(saveBlobAs.mock.calls[0][1]).toBe('plan.docx.txt');
-  });
-
-  it('lists a picture the user attached, previews it and downloads it, with no text to download', async () => {
-    const picture = {
-      id: 'file_img',
-      name: 'whiteboard.png',
-      mimeType: 'image/png',
-      origin: 'image',
-      bytes: 5000,
-      hasOriginal: true,
-      createdAt: '2026-11-01T11:00:00Z'
-    };
-    const uploaded = makeUploaded({
-      list: jest.fn(async () => ({ items: [picture, ...FILES] })),
-      fetchBlob: jest.fn(async () => new Blob(['png'], { type: 'image/png' }))
-    });
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={uploaded}
-        initialTab="uploaded"
-        initialFileId="file_img"
-      />
-    );
-    fireEvent.click(await screen.findByTestId('uploaded-download-original'));
-    await waitFor(() => expect(saveBlobAs).toHaveBeenCalled());
-    expect(saveBlobAs.mock.calls[0][1]).toBe('whiteboard.png');
-    // A picture has no extracted text, and the drawer does not offer one
-    expect(screen.queryByTestId('uploaded-download-text')).not.toBeInTheDocument();
-    expect(uploaded.fetchText).not.toHaveBeenCalled();
-  });
-
-  it('deletes a file after a confirmation and refreshes the list', async () => {
-    const uploaded = makeUploaded();
-    const onChanged = jest.fn();
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={uploaded}
-        initialTab="uploaded"
-        initialFileId="file_docx"
-        onUploadedChanged={onChanged}
-      />
-    );
-    fireEvent.click(await screen.findByTestId('uploaded-delete'));
-    expect(uploaded.remove).not.toHaveBeenCalled();
-    fireEvent.click(await screen.findByTestId('uploaded-delete-confirm'));
+  it('deletes a file after a confirmation and goes back to the list', async () => {
+    const { uploaded } = mount({ entry: '/c?file=file_docx' });
+    await screen.findByRole('heading', { name: /plan\.docx/ });
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete file' }));
+    expect(screen.getByText('Delete plan.docx?')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('uploaded-delete-confirm'));
     await waitFor(() => expect(uploaded.remove).toHaveBeenCalledWith('file_docx'));
-    await waitFor(() => expect(onChanged).toHaveBeenCalled());
-    // The list is read again.
-    await waitFor(() => expect(uploaded.list.mock.calls.length).toBeGreaterThan(1));
+    await waitFor(() => expect(screen.getByTestId('where')).toHaveTextContent('?files=uploaded'));
+    expect(uploaded.list.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('offers "Attach to email" only while composing, for files with an original', async () => {
+  it('puts "Attach to email" in ⋯, and makes it a visible button in Outlook', async () => {
     const attach = jest.fn(async () => ({ ok: true, filename: 'contract.pdf' }));
-    const { rerender } = render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={makeUploaded()}
-        initialTab="uploaded"
-        initialFileId="file_pdf"
-        mailAttach={{ available: false, attach }}
-      />
-    );
-    await screen.findByTestId('uploaded-download-original');
-    expect(screen.queryByTestId('uploaded-attach-to-email')).not.toBeInTheDocument();
-
-    rerender(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={makeUploaded()}
-        initialTab="uploaded"
-        initialFileId="file_pdf"
-        mailAttach={{ available: true, attach }}
-      />
-    );
-    fireEvent.click(await screen.findByTestId('uploaded-attach-to-email'));
+    const mailAttach = { supported: true, available: true, attach };
+    const first = mount({ mailAttach, entry: '/c?file=file_pdf' });
+    await screen.findByRole('heading', { name: /contract\.pdf/ });
+    expect(screen.queryByRole('button', { name: 'Attach to email' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Attach to email' }));
     await waitFor(() => expect(attach).toHaveBeenCalled());
-    expect(attach.mock.calls[0][0].file.name).toBe('contract.pdf');
+    first.unmount();
+
+    mockHostKind = 'office';
+    mount({ mailAttach, entry: '/c?file=file_pdf' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Attach to email' }));
+    await waitFor(() => expect(attach).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Attached contract.pdf to your email.')).toBeInTheDocument();
   });
 
+  it('offers no "Attach to email" for a file without its original', async () => {
+    const mailAttach = { supported: true, available: true, attach: jest.fn() };
+    mockHostKind = 'office';
+    mount({ mailAttach, entry: '/c?file=file_docx' });
+    await screen.findByRole('heading', { name: /plan\.docx/ });
+    expect(screen.queryByRole('button', { name: 'Attach to email' })).not.toBeInTheDocument();
+  });
+
   it('is read-only on a shared chat: no delete, and text-only access hides the original', async () => {
-    const shared = makeUploaded({ remove: undefined });
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={shared}
-        uploadedAccess="extracted_text"
-        initialTab="uploaded"
-        initialFileId="file_pdf"
-      />
-    );
-    await screen.findByTestId('uploaded-download-text');
-    expect(screen.queryByTestId('uploaded-delete')).not.toBeInTheDocument();
+    const uploaded = makeUploaded();
+    delete uploaded.remove;
+    mount({ uploaded, uploadedAccess: 'extracted_text', entry: '/c?file=file_pdf' });
+    await screen.findByRole('heading', { name: /contract\.pdf/ });
     expect(screen.queryByTestId('uploaded-download-original')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
+    expect(screen.queryByRole('menuitem', { name: 'Delete file' })).not.toBeInTheDocument();
   });
 
   it('tells a viewer that the owner did not share the files', async () => {
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={makeUploaded({
-          list: jest.fn(async () => ({ items: [] })),
-          remove: undefined
-        })}
-        uploadedAccess="none"
-        initialTab="uploaded"
-      />
+    mount({
+      uploaded: makeUploaded({ list: jest.fn(async () => ({ items: [] })) }),
+      artifacts: { ...makeSource(), list: jest.fn(async () => ({ items: [] })) },
+      uploadedAccess: 'none'
+    });
+    fireEvent.click(screen.getByText('uploaded files'));
+    expect(await screen.findByTestId('uploaded-empty')).toHaveTextContent(
+      'The owner did not share the files attached to this chat.'
     );
-    expect(
-      await screen.findByText('The owner did not share the files attached to this chat.')
-    ).toBeInTheDocument();
   });
 
   it('shows an error when the uploaded files cannot be listed, and none for a missing chat', async () => {
-    const failing = makeUploaded({
-      list: jest.fn(async () => {
-        throw Object.assign(new Error('boom'), { response: { status: 500 } });
-      })
+    const first = mount({
+      uploaded: makeUploaded({ list: jest.fn(async () => Promise.reject(new Error('boom'))) })
     });
-    const { unmount } = render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={failing}
-        initialTab="uploaded"
-      />
-    );
+    fireEvent.click(screen.getByText('uploaded files'));
     expect(await screen.findByText('The uploaded files could not be loaded.')).toBeInTheDocument();
-    unmount();
-
-    const missing = makeUploaded({
-      list: jest.fn(async () => {
-        throw Object.assign(new Error('nf'), { response: { status: 404 } });
+    first.unmount();
+    mount({
+      uploaded: makeUploaded({
+        list: jest.fn(async () => Promise.reject(Object.assign(new Error('nf'), { status: 404 })))
       })
     });
-    render(
-      <ArtifactsPanel
-        isOpen
-        onClose={() => {}}
-        source={makeSource()}
-        uploadedSource={missing}
-        initialTab="uploaded"
-      />
-    );
+    fireEvent.click(screen.getByText('uploaded files'));
     expect(await screen.findByTestId('uploaded-empty')).toBeInTheDocument();
-  });
-
-  it('reads the uploaded files again when the conversation names other files', async () => {
-    const uploaded = makeUploaded();
-    const props = {
-      isOpen: true,
-      onClose: () => {},
-      source: makeSource(),
-      uploadedSource: uploaded,
-      initialTab: 'uploaded'
-    };
-    const { rerender } = render(<ArtifactsPanel {...props} messages={[]} />);
-    await screen.findByTestId('uploaded-files-tab');
-    const calls = uploaded.list.mock.calls.length;
-    await act(async () => {
-      rerender(
-        <ArtifactsPanel
-          {...props}
-          messages={[{ role: 'user', content: 'q', attachments: [{ id: 'file_new' }] }]}
-        />
-      );
-    });
-    await waitFor(() => expect(uploaded.list.mock.calls.length).toBeGreaterThan(calls));
   });
 });
