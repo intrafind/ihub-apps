@@ -617,9 +617,8 @@ export default function registerChatRoutes(app) {
       throw new ServiceError('BAD_REQUEST', 'A chat cannot be moved into or out of a project');
     }
     const hasAttached = req.body && Object.hasOwn(req.body, 'attachedProjectIds');
-    const hasKnowledgeMode = req.body && Object.hasOwn(req.body, 'knowledgeMode');
     const keep = req.body?.temporary === false;
-    if (typeof title !== 'string' && !hasAttached && !hasKnowledgeMode && !keep) {
+    if (typeof title !== 'string' && !hasAttached && !keep) {
       throw new ServiceError('BAD_REQUEST', 'title is required and must be a string');
     }
     if (req.body && Object.hasOwn(req.body, 'temporary') && !keep) {
@@ -627,7 +626,7 @@ export default function registerChatRoutes(app) {
       // kept is deleted, and a conversation that should be is a new chat.
       throw new ServiceError('BAD_REQUEST', 'temporary can only be set to false');
     }
-    if (keep && (hasAttached || hasKnowledgeMode)) {
+    if (keep && hasAttached) {
       // Keeping writes the chat before the attached projects are even
       // checked, so a change refused after it would leave the request failed
       // but the chat kept. Two requests make each step all-or-nothing.
@@ -683,18 +682,6 @@ export default function registerChatRoutes(app) {
     }
     if (hasAttached) {
       chat = await setChatAttachedProjects(req, repository, chat);
-    }
-    if (hasKnowledgeMode) {
-      const { chatKnowledgeModeSchema, describeIssues } =
-        await import('../validators/projectSchema.js');
-      const parsed = chatKnowledgeModeSchema.safeParse({
-        knowledgeMode: req.body.knowledgeMode
-      });
-      if (!parsed.success) {
-        throw new ServiceError('BAD_REQUEST', `Invalid request: ${describeIssues(parsed.error)}`);
-      }
-      chat = await repository.setKnowledgeMode(chatId, parsed.data.knowledgeMode);
-      if (!chat) throw notFound('Chat');
     }
     if (typeof title === 'string') {
       // The repository caps and marks the title as user-set so no later turn

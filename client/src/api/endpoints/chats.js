@@ -180,28 +180,6 @@ export const setChatAttachedProjects = async (chatId, projectIds) => {
 };
 
 /**
- * Set how a stored chat reaches the knowledge of its projects (#3538).
- *
- * @param {string} chatId - Chat id.
- * @param {string|null} knowledgeMode - A knowledge mode, or null for the projects' own.
- * @returns {Promise<Object>} the chat; `knowledgeMode` is absent when cleared
- */
-export const setChatKnowledgeMode = async (chatId, knowledgeMode) => {
-  if (!chatId) {
-    throw new Error('Missing required parameters');
-  }
-
-  return handleApiResponse(
-    () =>
-      apiClient.patch(`/chats/${encodeURIComponent(chatId)}`, {
-        knowledgeMode: knowledgeMode || null
-      }),
-    null,
-    null
-  );
-};
-
-/**
  * Erase a chat, its transcript and the runs it produced. Reports success even
  * when a concurrent delete won the race — the postcondition holds either way.
  *

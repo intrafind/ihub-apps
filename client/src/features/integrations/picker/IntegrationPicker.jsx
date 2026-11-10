@@ -50,7 +50,7 @@ export function IntegrationPickerSearch({ value, onChange, onArrowDown, onClose,
   return (
     <div className="border-b border-gray-200 p-2 dark:border-gray-700">
       <label className="relative block">
-        <span className="sr-only">{t('integrationPicker.search', 'Search')}</span>
+        <span className="sr-only">{t('integrationPicker.search', 'Search integrations')}</span>
         <Icon
           name="search"
           size="sm"
@@ -72,7 +72,7 @@ export function IntegrationPickerSearch({ value, onChange, onArrowDown, onClose,
               onClose();
             }
           }}
-          placeholder={t('integrationPicker.searchPlaceholder', 'Search…')}
+          placeholder={t('integrationPicker.searchPlaceholder', 'Search integrations…')}
           className="w-full rounded-md border border-gray-300 bg-white py-1.5 pl-8 pr-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
         />
       </label>
@@ -197,8 +197,6 @@ function ScopePicker({ integration, disabled, onScopeChange, onPicked }) {
  * @param {Object[]} [props.scopeIntegrations] - `useIntegrationScopes().integrations`
  * @param {((integrationId: string, scopeId: string) => void)|null} [props.onScopeChange]
  * @param {React.ReactNode} [props.imageGeneration] - Controls, when the model draws images
- * @param {React.ReactNode} [props.projectSection] - A "Project" row of its own (the chat's
- *   knowledge mode), already filtered by the search text; none when absent
  * @param {{localUploadEnabled: boolean, onUpload: Function, cloudProviders: Object[], onCloudProviderSelect: Function}} [props.attach]
  * @param {(row: Object) => Promise<void>} [props.onConnect]
  * @param {(() => Promise<void>)|null} [props.onSaveDefault]
@@ -215,7 +213,6 @@ export default function IntegrationPicker({
   scopeIntegrations = [],
   onScopeChange = null,
   imageGeneration = null,
-  projectSection = null,
   attach = null,
   onConnect = null,
   onSaveDefault = null,
@@ -256,7 +253,6 @@ export default function IntegrationPicker({
   );
   const imageLabel = t('integrationPicker.imageGeneration', 'Image generation');
   const showImage = Boolean(imageGeneration) && matchesQuery({ name: imageLabel }, query);
-  // Nothing in the "Use in this chat" group; the "Project" section is a group of its own.
   const nothing =
     attachItems.length === 0 &&
     !showWebsearch &&
@@ -344,125 +340,76 @@ export default function IntegrationPicker({
         </div>
       )}
 
-      {(!nothing || loading || !projectSection) && (
-        <div role="group" aria-label={t('integrationScopes.menuTitle', 'Use in this chat')}>
-          <div className={SECTION_TITLE} aria-hidden="true">
-            {t('integrationScopes.menuTitle', 'Use in this chat')}
-          </div>
+      <div role="group" aria-label={t('integrationScopes.menuTitle', 'Use in this chat')}>
+        <div className={SECTION_TITLE} aria-hidden="true">
+          {t('integrationScopes.menuTitle', 'Use in this chat')}
+        </div>
 
-          {showWebsearch && (
-            <div
-              role="menuitemcheckbox"
-              tabIndex={-1}
-              aria-checked={websearch.enabled}
-              aria-disabled={disabled ? 'true' : undefined}
-              className={`${ROW} cursor-pointer`}
-              onClick={() => !disabled && websearch.onChange(!websearch.enabled)}
-              onKeyDown={onActivateKey(() => !disabled && websearch.onChange(!websearch.enabled))}
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                <IntegrationLogo row={{ kind: 'websearch' }} />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {websearchLabel}
-                  </span>
-                  <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
-                    {t('integrationPicker.effect.read', 'read')}
-                  </span>
+        {showWebsearch && (
+          <div
+            role="menuitemcheckbox"
+            tabIndex={-1}
+            aria-checked={websearch.enabled}
+            aria-disabled={disabled ? 'true' : undefined}
+            className={`${ROW} cursor-pointer`}
+            onClick={() => !disabled && websearch.onChange(!websearch.enabled)}
+            onKeyDown={onActivateKey(() => !disabled && websearch.onChange(!websearch.enabled))}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <IntegrationLogo row={{ kind: 'websearch' }} />
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {websearchLabel}
+                </span>
+                <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                  {t('integrationPicker.effect.read', 'read')}
                 </span>
               </span>
-              <SwitchIndicator checked={websearch.enabled} size="sm" />
-            </div>
-          )}
+            </span>
+            <SwitchIndicator checked={websearch.enabled} size="sm" />
+          </div>
+        )}
 
-          {loading && rows.length === 0 && (
-            <div className="px-2 py-1 text-sm text-gray-500 dark:text-gray-400">
-              {t('common.loading', 'Loading...')}
-            </div>
-          )}
+        {loading && rows.length === 0 && (
+          <div className="px-2 py-1 text-sm text-gray-500 dark:text-gray-400">
+            {t('common.loading', 'Loading...')}
+          </div>
+        )}
 
-          {visibleRows.map(row => {
-            const on = isRowOn(row, enabledTools);
-            const effects = effectSummary(row.effects, t);
-            const scope = scopeOf(row);
-            const dot = connectionDotOf(row);
-            const unavailable = row.connection?.status === 'unavailable';
-            if (needsConnect(row)) {
-              const reconnect = row.connection.status === 'needs_reconnect';
-              const canConnect = row.connection.connectable && onConnect && !disabled;
-              return (
-                <div key={row.id} role="none">
-                  <div
-                    role="menuitem"
-                    tabIndex={-1}
-                    aria-disabled={canConnect ? undefined : 'true'}
-                    data-row={row.id}
-                    className={`${ROW} ${canConnect ? 'cursor-pointer' : ''}`}
-                    onClick={() => canConnect && connect(row)}
-                    onKeyDown={onActivateKey(() => canConnect && connect(row))}
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      <IntegrationLogo row={row} />
-                      <span className="min-w-0">
-                        <span className="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100">
-                          <span className="truncate">{row.name}</span>
-                          <StatusDot
-                            status="warn"
-                            size="sm"
-                            label={
-                              reconnect
-                                ? t('integrationPicker.status.reconnect', 'Reconnect needed')
-                                : t('integrationPicker.status.notConnected', 'Not connected')
-                            }
-                          />
-                        </span>
-                        {effects && (
-                          <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
-                            {effects}
-                          </span>
-                        )}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs font-medium text-indigo-600 dark:text-indigo-400">
-                      {reconnect
-                        ? t('integrationPicker.reconnect', 'Reconnect →')
-                        : t('integrationPicker.connect', 'Connect →')}
-                    </span>
-                  </div>
-                  {connectError === row.id && (
-                    <p role="alert" className="px-2 text-xs text-red-600 dark:text-red-400">
-                      {t('integrationPicker.connectFailed', 'The sign-in could not be started.')}
-                    </p>
-                  )}
-                </div>
-              );
-            }
-            const canToggle = toggleable && !disabled && !unavailable;
+        {visibleRows.map(row => {
+          const on = isRowOn(row, enabledTools);
+          const effects = effectSummary(row.effects, t);
+          const scope = scopeOf(row);
+          const dot = connectionDotOf(row);
+          const unavailable = row.connection?.status === 'unavailable';
+          if (needsConnect(row)) {
+            const reconnect = row.connection.status === 'needs_reconnect';
+            const canConnect = row.connection.connectable && onConnect && !disabled;
             return (
               <div key={row.id} role="none">
                 <div
-                  role="menuitemcheckbox"
+                  role="menuitem"
                   tabIndex={-1}
-                  aria-checked={on}
-                  aria-disabled={canToggle ? undefined : 'true'}
+                  aria-disabled={canConnect ? undefined : 'true'}
                   data-row={row.id}
-                  className={`${ROW} ${canToggle ? 'cursor-pointer' : 'opacity-60'}`}
-                  onClick={() => canToggle && toggleRow(row)}
-                  onKeyDown={onActivateKey(() => canToggle && toggleRow(row))}
-                  title={row.description || undefined}
+                  className={`${ROW} ${canConnect ? 'cursor-pointer' : ''}`}
+                  onClick={() => canConnect && connect(row)}
+                  onKeyDown={onActivateKey(() => canConnect && connect(row))}
                 >
                   <span className="flex min-w-0 items-center gap-2">
                     <IntegrationLogo row={row} />
                     <span className="min-w-0">
                       <span className="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100">
                         <span className="truncate">{row.name}</span>
-                        {dot === 'error' && (
-                          <StatusDot
-                            status="error"
-                            size="sm"
-                            label={t('integrationPicker.status.unavailable', 'Unavailable')}
-                          />
-                        )}
+                        <StatusDot
+                          status="warn"
+                          size="sm"
+                          label={
+                            reconnect
+                              ? t('integrationPicker.status.reconnect', 'Reconnect needed')
+                              : t('integrationPicker.status.notConnected', 'Not connected')
+                          }
+                        />
                       </span>
                       {effects && (
                         <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
@@ -471,84 +418,118 @@ export default function IntegrationPicker({
                       )}
                     </span>
                   </span>
-                  <SwitchIndicator checked={on} size="sm" />
+                  <span className="shrink-0 text-xs font-medium text-indigo-600 dark:text-indigo-400">
+                    {reconnect
+                      ? t('integrationPicker.reconnect', 'Reconnect →')
+                      : t('integrationPicker.connect', 'Connect →')}
+                  </span>
                 </div>
-                {scope && on && onScopeChange && (
-                  <ScopePicker
-                    integration={scope}
-                    disabled={disabled}
-                    onScopeChange={onScopeChange}
-                    onPicked={onDone}
-                  />
+                {connectError === row.id && (
+                  <p role="alert" className="px-2 text-xs text-red-600 dark:text-red-400">
+                    {t('integrationPicker.connectFailed', 'The sign-in could not be started.')}
+                  </p>
                 )}
               </div>
             );
-          })}
-
-          {onScopeChange &&
-            visibleScopeOnly.map(integration => (
-              <div key={`scope-${integration.id}`} role="none" className="py-1">
-                <div className="flex items-center gap-2 px-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                  <IntegrationLogo row={{ name: scopeDisplayName(integration, i18n.language) }} />
-                  <span className="truncate">{scopeDisplayName(integration, i18n.language)}</span>
-                </div>
+          }
+          const canToggle = toggleable && !disabled && !unavailable;
+          return (
+            <div key={row.id} role="none">
+              <div
+                role="menuitemcheckbox"
+                tabIndex={-1}
+                aria-checked={on}
+                aria-disabled={canToggle ? undefined : 'true'}
+                data-row={row.id}
+                className={`${ROW} ${canToggle ? 'cursor-pointer' : 'opacity-60'}`}
+                onClick={() => canToggle && toggleRow(row)}
+                onKeyDown={onActivateKey(() => canToggle && toggleRow(row))}
+                title={row.description || undefined}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <IntegrationLogo row={row} />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100">
+                      <span className="truncate">{row.name}</span>
+                      {dot === 'error' && (
+                        <StatusDot
+                          status="error"
+                          size="sm"
+                          label={t('integrationPicker.status.unavailable', 'Unavailable')}
+                        />
+                      )}
+                    </span>
+                    {effects && (
+                      <span className="block truncate text-xs text-gray-500 dark:text-gray-400">
+                        {effects}
+                      </span>
+                    )}
+                  </span>
+                </span>
+                <SwitchIndicator checked={on} size="sm" />
+              </div>
+              {scope && on && onScopeChange && (
                 <ScopePicker
-                  integration={integration}
+                  integration={scope}
                   disabled={disabled}
                   onScopeChange={onScopeChange}
                   onPicked={onDone}
                 />
-              </div>
-            ))}
-
-          {showImage && (
-            <div role="none">
-              <div
-                role="menuitem"
-                tabIndex={-1}
-                aria-haspopup="true"
-                aria-expanded={imageOpen}
-                className={`${ROW} cursor-pointer`}
-                onClick={() => setImageOpen(!imageOpen)}
-                onKeyDown={onActivateKey(() => setImageOpen(!imageOpen))}
-              >
-                <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                  <Icon name="photograph" size="sm" aria-hidden="true" className="text-gray-500" />
-                  <span className="truncate">{imageLabel}</span>
-                </span>
-                <Icon
-                  name={imageOpen ? 'chevronDown' : 'chevronRight'}
-                  size="sm"
-                  aria-hidden="true"
-                  className="shrink-0 text-gray-400"
-                />
-              </div>
-              {imageOpen && <div className="px-2 pb-2">{imageGeneration}</div>}
+              )}
             </div>
-          )}
+          );
+        })}
 
-          {nothing && !loading && !projectSection && (
-            <p className="px-2 py-1 text-sm text-gray-500 dark:text-gray-400">
-              {query
-                ? t('integrationPicker.noMatch', 'No integrations match.')
-                : t('integrationPicker.none', 'This app uses no integrations.')}
-            </p>
-          )}
-        </div>
-      )}
+        {onScopeChange &&
+          visibleScopeOnly.map(integration => (
+            <div key={`scope-${integration.id}`} role="none" className="py-1">
+              <div className="flex items-center gap-2 px-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                <IntegrationLogo row={{ name: scopeDisplayName(integration, i18n.language) }} />
+                <span className="truncate">{scopeDisplayName(integration, i18n.language)}</span>
+              </div>
+              <ScopePicker
+                integration={integration}
+                disabled={disabled}
+                onScopeChange={onScopeChange}
+                onPicked={onDone}
+              />
+            </div>
+          ))}
 
-      {projectSection && (
-        <div
-          role="group"
-          aria-label={t('projects.knowledgeMode.menu.section', 'Project')}
-          className="mt-2"
-        >
-          <div className={SECTION_TITLE} aria-hidden="true">
-            {t('projects.knowledgeMode.menu.section', 'Project')}
+        {showImage && (
+          <div role="none">
+            <div
+              role="menuitem"
+              tabIndex={-1}
+              aria-haspopup="true"
+              aria-expanded={imageOpen}
+              className={`${ROW} cursor-pointer`}
+              onClick={() => setImageOpen(!imageOpen)}
+              onKeyDown={onActivateKey(() => setImageOpen(!imageOpen))}
+            >
+              <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+                <Icon name="photograph" size="sm" aria-hidden="true" className="text-gray-500" />
+                <span className="truncate">{imageLabel}</span>
+              </span>
+              <Icon
+                name={imageOpen ? 'chevronDown' : 'chevronRight'}
+                size="sm"
+                aria-hidden="true"
+                className="shrink-0 text-gray-400"
+              />
+            </div>
+            {imageOpen && <div className="px-2 pb-2">{imageGeneration}</div>}
           </div>
-          {projectSection}
-        </div>
-      )}
+        )}
+
+        {nothing && !loading && (
+          <p className="px-2 py-1 text-sm text-gray-500 dark:text-gray-400">
+            {query
+              ? t('integrationPicker.noMatch', 'No integrations match.')
+              : t('integrationPicker.none', 'This app uses no integrations.')}
+          </p>
+        )}
+      </div>
 
       <div className="mt-2 border-t border-gray-200 pt-2 dark:border-gray-700" role="none">
         {onSaveDefault && toggleable && (

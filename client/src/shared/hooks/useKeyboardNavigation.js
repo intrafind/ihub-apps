@@ -212,9 +212,6 @@ export function useKeyboardNavigation(
         }
 
         case 'Escape': {
-          // A submenu that is open (`data-submenu-open`) takes the key first:
-          // it closes itself and keeps the menu.
-          if (event.target?.closest?.('[data-submenu-open="true"]')) break;
           event.preventDefault();
           if (callbacksRef.current.onClose) {
             callbacksRef.current.onClose();

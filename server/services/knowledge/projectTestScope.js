@@ -128,7 +128,6 @@ export async function resolveProjectTestScope({ user, testProjectId, repository 
 const OMITTED_FIELDS = [
   '_projectId',
   '_attachedProjectIds',
-  '_knowledgeMode',
   '_workflowProjects',
   'apps',
   'workflows'

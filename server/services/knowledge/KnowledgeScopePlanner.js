@@ -5,7 +5,7 @@
  * KnowledgeScopePlanner — load all, or search (spec 2 §6).
  *
  * For every project in a request's scope, with its knowledge mode
- * (`shared/knowledgeModes.js`, decided by `resolveProjectScope`: chat → link →
+ * (`shared/knowledgeModes.js`, decided by `resolveProjectScope`: link →
  * project default):
  *
  *  - `context` injects every usable item (the old `exposeAs: prompt`);
