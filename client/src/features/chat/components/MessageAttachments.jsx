@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { contentLineFromInfo } from '../../upload/utils/attachmentDescription';
 import { useStoredThumbnail } from '../messageAttachments/useStoredThumbnail';
+import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 import { PDF_LOOK, formatBytes } from '../utils/artifactFiles';
 import { uploadedFileBadge, uploadedFileLook } from '../utils/uploadedFiles';
 
@@ -35,6 +36,9 @@ const RING =
   'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-indigo-400 dark:focus-visible:ring-offset-gray-900';
 const STYLES = {
   card: 'group relative flex w-full min-h-14 min-w-0 scroll-my-24 items-center rounded-lg border border-gray-300 bg-white text-left text-gray-900 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 contrast-more:border-gray-500 dark:contrast-more:border-gray-400',
+  // Open in the workspace pane right now (concept §8).
+  cardActive:
+    '!border-indigo-500 ring-1 ring-indigo-500/30 !bg-indigo-50/40 dark:!bg-indigo-900/20',
   cardOpenable: `cursor-pointer transition-colors hover:border-indigo-300 hover:bg-gray-50 hover:shadow-xs active:bg-gray-100 dark:hover:border-indigo-600 dark:hover:bg-gray-700/50 dark:active:bg-gray-700 ${RING}`,
   warn: 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-900/20',
   noAccess:
@@ -56,7 +60,7 @@ const NEUTRAL_LOOK = {
   className: 'bg-gray-100 text-gray-700 dark:bg-gray-700/50 dark:text-gray-200'
 };
 
-/** Whether a card is a button: there is a Files drawer to open it in and a stored file to open. */
+/** Whether a card is a button: there is a workspace pane to open it in and a stored file to open. */
 const isOpenable = (view, onOpenFile) => Boolean(onOpenFile && view.id && view.shared !== false);
 
 /** The type label (PDF, DOCX), from the media type, else the extension. */
@@ -240,7 +244,7 @@ function RowBody({ view, thumbSrc, look, showThumb, name, size, line, lineId, co
 }
 
 /**
- * One file: a button that opens it in the Files drawer when there is something to open, a plain
+ * One file: a button that opens it in the workspace pane when there is something to open, a plain
  * card (not a tab stop) otherwise.
  */
 function AttachmentCard({
@@ -256,6 +260,8 @@ function AttachmentCard({
   const lineId = useId();
   const cardRef = useRef(null);
   const openable = isOpenable(view, onOpenFile);
+  const viewer = useArtifactViewer();
+  const active = openable && Boolean(viewer?.activeId) && viewer.activeId === view.id;
   const line = stateLineOf(view, t);
   // A picture sent in this session is in memory; one read back from the store is fetched
   const stored = useStoredThumbnail({
@@ -298,7 +304,9 @@ function AttachmentCard({
       type="button"
       onClick={() => onOpenFile(view.id)}
       {...shared}
-      className={`${shared.className} ${STYLES.cardOpenable}`}
+      aria-current={active ? 'true' : undefined}
+      data-active={active ? 'true' : undefined}
+      className={`${shared.className} ${STYLES.cardOpenable} ${active ? STYLES.cardActive : ''}`}
     >
       {body}
     </button>
@@ -329,7 +337,7 @@ function useNarrow(compact) {
  * The files that went with a sent message, as a block of their own above the message's bubble
  * (never inside its text). Documents, e-mails, meetings and audio are rows; images are a
  * thumbnail row up to two, a grid beyond. More than fits folds into "+N more files". A card opens
- * its file in the Files drawer when the chat has one and the file is stored.
+ * its file in the workspace pane when the chat has one and the file is stored.
  *
  * @param {Object} props
  * @param {import('../messageAttachments/attachmentViews').AttachmentView[]} props.attachments
@@ -469,7 +477,7 @@ function MessageAttachments({
       {/* Said once per card, not per read: the hint every openable card points at */}
       {views.some(view => isOpenable(view, onOpenFile)) && (
         <span id={hintId} className="sr-only">
-          {t('chatMessage.attachments.opensInFiles', 'Opens in the Files panel')}
+          {t('chatMessage.attachments.opensInWorkspace', 'Opens in the workspace')}
         </span>
       )}
       <output className="sr-only">{announcement}</output>
