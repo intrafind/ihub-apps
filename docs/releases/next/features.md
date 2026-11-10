@@ -1527,8 +1527,9 @@ the prompt" is a realistic alternative to retrieval.
   `host:port`). The setting **Allow company-internal websites** lets every crawl
   reach the company network instead. Loopback, link-local and cloud metadata addresses stay blocked
   in both cases.
-- Tokens are counted with the server's token estimator (`o200k_base`); the report says which
-  method counted.
+- Tokens are counted with the shared token estimator. The server does not ship `gpt-tokenizer`, so
+  without it the estimator counts one token per four characters; the report says which method it
+  used.
 
 See [Website Corpus](../../website-corpus.md).
 

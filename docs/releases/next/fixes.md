@@ -548,23 +548,6 @@ An answer could stay completely blank, so the chat looked stuck after the questi
 when a reasoning model finishes its turn right after thinking and writes no answer. The answer now
 reads "The model returned no answer." with a Retry button that asks the question again.
 
-## Server: Token Estimates Count With the Real Tokenizer
-
-The server's token estimates were one token per four characters, although they are meant to use the
-`o200k_base` tokenizer: the tokenizer package was installed for the browser only, and the server
-fell back to the rough figure without a message. The package is now a dependency of the server, so
-the figures behind the agent loop and context compaction, the skill catalog and skill-body budgets,
-project size estimates, tool search and knowledge retrieval are real token counts.
-
-- **Numbers move, in both directions.** English prose comes out about 5 to 14 percent lower than
-  before, and a German sentence of 101 characters counted 26 tokens before and 18 now. JSON counts
-  about 11 percent higher, and Chinese or Japanese text two to three times higher. Limits written
-  in tokens, such as `skills.maxCatalogTokens` and `skills.maxSkillBodyTokens`, now apply to the
-  real counts: they fit more English or German prose and less JSON or Chinese and Japanese text.
-- **Cost.** Counting is exact but not free: about 30 ms for 100 KB of text on a typical server.
-- Installations that run from a copy without the package keep the old behaviour. See
-  [Website Corpus](../../website-corpus.md#how-tokens-are-counted).
-
 ## Links to Other Sites Always Open in a New Tab
 
 A link in rendered Markdown that points outside iHub — in a chat answer, a shared chat, a source or
