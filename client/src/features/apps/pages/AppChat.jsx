@@ -2827,6 +2827,9 @@ function AppChat({
           value: attachedProjectIds,
           onChange: setAttachedProjectIds,
           disabled: processing || hydrating,
+          // The project picker is only offered until the first message: after
+          // that the chat's projects can only be reviewed (chips).
+          started: messages.length > 0,
           attached: attachedProjects
         };
 
