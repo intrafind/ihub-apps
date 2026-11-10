@@ -62,7 +62,7 @@ export function composeQuotedMessage(quote, typed, t) {
     quote.source?.kind === 'artifact' &&
     quote.source.id &&
     !String(quote.source.id).startsWith('live:')
-      ? ` (artifact id: ${quote.source.id})`
+      ? t('workspace.quote.artifactRef', ' (artifact id: {{id}})', { id: quote.source.id })
       : '';
   const lead =
     quote.mode === 'edit'

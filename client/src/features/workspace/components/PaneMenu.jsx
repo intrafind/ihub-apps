@@ -89,6 +89,7 @@ export default function PaneMenu({
           ref={menuRef}
           id={id}
           role="menu"
+          tabIndex={-1}
           aria-label={label}
           onKeyDown={onKeyDown}
           className={`absolute top-full z-30 mt-1 max-h-[70vh] min-w-[14rem] max-w-[calc(100vw-1rem)] overflow-y-auto rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 py-1 shadow-lg ${align === 'right' ? 'right-0' : 'left-0'}`}

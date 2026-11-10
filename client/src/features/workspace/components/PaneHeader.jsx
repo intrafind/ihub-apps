@@ -160,12 +160,11 @@ export default function PaneHeader({
                 {...props}
                 data-testid="artifact-viewer-name"
                 title={title}
-                aria-label={t('workspace.switchFileNamed', '{{name}}, switch file', {
-                  name: title
-                })}
                 className="inline-flex h-8 min-w-0 max-w-full items-center gap-1.5 rounded-md px-2 hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 {titleContent}
+                {/* The name starts with what is visible (WCAG 2.5.3): the hint comes after it. */}
+                <span className="sr-only">{t('workspace.switchFileHint', ', switch file')}</span>
                 <Icon name="chevron-down" size="xs" className="flex-none" />
               </button>
             )}

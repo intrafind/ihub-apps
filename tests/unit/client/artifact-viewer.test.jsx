@@ -191,7 +191,7 @@ describe('ArtifactViewer in the pane', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Open in new tab' }));
     expect(onOpenInNewTab).toHaveBeenCalledWith(HTML);
     fireEvent.click(screen.getByRole('button', { name: 'More actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Show in Files' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Show in files' }));
     expect(onShowInFiles).toHaveBeenCalledWith(HTML);
   });
 
@@ -243,7 +243,7 @@ describe('ArtifactViewer in the pane', () => {
         }
       })
     });
-    fireEvent.click(screen.getByRole('button', { name: 'dash.html, switch file' }));
+    fireEvent.click(screen.getByRole('button', { name: /^dash.html.*switch file/ }));
     expect(screen.getByRole('menuitem', { name: 'dash.html' })).toHaveAttribute(
       'aria-current',
       'true'
@@ -268,7 +268,7 @@ describe('ArtifactViewer as a page', () => {
     expect(screen.queryByTestId('artifact-viewer-close')).not.toBeInTheDocument();
     expect(screen.queryByTestId('pane-expand')).not.toBeInTheDocument();
     expect(screen.queryByTestId('pane-back')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'dash.html, switch file' }));
+    fireEvent.click(screen.getByRole('button', { name: /^dash.html.*switch file/ }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'chart.png' }));
     expect(onSelect).toHaveBeenCalledWith(PNG);
   });

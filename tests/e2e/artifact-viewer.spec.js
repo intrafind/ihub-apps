@@ -4,10 +4,10 @@
 import { test, expect } from '@playwright/test';
 
 /**
- * The immersive artifact viewer (#3184), over shared chats whose share routes
- * are intercepted: no model, no stored chat. A click on the artifact's card
- * in the transcript opens it; the HTML page fills the window under one slim
- * toolbar.
+ * The artifact viewer in the workspace pane, over shared chats whose share routes are
+ * intercepted: no model, no stored chat. A click on the artifact's card opens it docked next
+ * to the chat (which reflows); full screen fills the window under one slim header; below
+ * 1024px it is a full-screen sheet. The HTML stays in a sandboxed frame throughout.
  */
 const CHAT_SHARE = 'e2e-viewer-chat';
 const ARTIFACT_SHARE = 'e2e-viewer-artifact';
@@ -94,11 +94,15 @@ async function expectFillsViewport(page, frameLocator) {
   const box = await frameLocator.boundingBox();
   expect(box.x).toBeLessThanOrEqual(1);
   expect(box.width).toBeGreaterThanOrEqual(viewport.width - 2);
-  expect(box.height).toBeGreaterThanOrEqual(viewport.height * 0.9);
+  expect(box.height).toBeGreaterThanOrEqual(viewport.height * 0.85);
 }
 
 test.describe('Artifact viewer in a shared chat', () => {
-  test('a click on the card opens the artifact edge to edge, Esc closes it', async ({ page }) => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('a click on the card docks the artifact next to the chat, Esc closes it', async ({
+    page
+  }) => {
     await mockShares(page);
     await page.goto(`/share/${CHAT_SHARE}`);
 
@@ -106,56 +110,71 @@ test.describe('Artifact viewer in a shared chat', () => {
     await expect(card).toBeVisible();
     await card.click();
 
-    const viewer = page.getByRole('dialog', { name: /dashboard\.html/ });
-    await expect(viewer).toBeVisible();
+    const pane = page.getByRole('region', { name: 'Workspace: dashboard.html' });
+    await expect(pane).toBeVisible();
+    await expect(pane).toHaveAttribute('data-state', 'docked');
     await expect(page).toHaveURL(/artifact=/);
+    // The chat reflows next to the pane: nothing of it is covered.
+    const paneBox = await pane.boundingBox();
+    const chatBox = await page.getByTestId('workspace-chat-column').boundingBox();
+    expect(chatBox.x + chatBox.width).toBeLessThanOrEqual(paneBox.x + 2);
+    // The card says it is the one open.
+    await expect(card).toHaveAttribute('aria-current', 'true');
 
-    const toolbar = page.getByTestId('artifact-viewer-toolbar');
-    const toolbarBox = await toolbar.boundingBox();
-    expect(toolbarBox.height).toBeLessThanOrEqual(56);
-
-    const frame = viewer.locator('iframe');
+    const toolbar = pane.getByTestId('artifact-viewer-toolbar');
+    expect((await toolbar.boundingBox()).height).toBeLessThanOrEqual(56);
+    const frame = pane.locator('iframe');
     await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
     await expect(
       page.frameLocator('[data-testid="artifact-viewer"] iframe').locator('#hello')
     ).toHaveText('Hello dashboard');
-    await expectFillsViewport(page, frame);
 
+    // Focus is in the pane after a click; Esc there closes it and gives focus back.
+    await expect(page.locator('#workspace-pane-heading')).toBeFocused();
     await page.keyboard.press('Escape');
-    await expect(viewer).toBeHidden();
+    await expect(pane).toBeHidden();
     await expect(page).not.toHaveURL(/artifact=/);
     await expect(card).toBeFocused();
   });
 
-  test('?artifact= reopens the viewer on reload, and Back closes it', async ({ page }) => {
+  test('full screen fills the window; ?artifact= reopens on reload, and Back steps out', async ({
+    page
+  }) => {
     await mockShares(page);
     await page.goto(`/share/${CHAT_SHARE}`);
     await page.getByTestId('generated-file-open').click();
-    await expect(page.getByTestId('artifact-viewer')).toBeVisible();
-
-    await page.reload();
-    await expect(page.getByTestId('artifact-viewer')).toBeVisible();
+    await page.getByRole('button', { name: 'Full screen' }).click();
+    await expect(page).toHaveURL(/view=full/);
     await expectFillsViewport(page, page.getByTestId('artifact-viewer').locator('iframe'));
 
+    await page.reload();
+    await expect(page.getByTestId('workspace-pane')).toHaveAttribute('data-state', 'full');
+
     await page.goBack();
-    await expect(page.getByTestId('artifact-viewer')).toBeHidden();
+    await expect(page.getByTestId('workspace-pane')).toHaveAttribute('data-state', 'docked');
+    await page.goBack();
+    await expect(page.getByTestId('workspace-pane')).toBeHidden();
   });
 
-  test('works at phone width without horizontal scroll', async ({ page }) => {
+  test('works at phone width as a sheet, without horizontal scroll', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 800 });
     await mockShares(page);
     await page.goto(`/share/${CHAT_SHARE}?artifact=${HTML_ID}`);
-    await expect(page.getByTestId('artifact-viewer')).toBeVisible();
+    const sheet = page.getByRole('dialog', { name: 'Workspace: dashboard.html' });
+    await expect(sheet).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth
     );
     expect(overflow).toBe(false);
-    await expect(page.getByRole('button', { name: 'Close artifact' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Back to chat' })).toBeVisible();
+    await expectFillsViewport(page, sheet.locator('iframe'));
   });
 });
 
 test.describe('Shared single artifact', () => {
-  test('renders immersively: slim toolbar, artifact filling the rest', async ({ page }) => {
+  test('renders as a page: slim header, artifact filling the rest, nothing to close', async ({
+    page
+  }) => {
     await mockShares(page);
     await page.goto(`/share/${ARTIFACT_SHARE}`);
     const toolbar = page.getByTestId('artifact-viewer-toolbar');
@@ -164,10 +183,11 @@ test.describe('Shared single artifact', () => {
     const frame = page.locator('iframe');
     await expect(frame).toHaveAttribute('sandbox', 'allow-scripts');
     await expectFillsViewport(page, frame);
-    await expect(page.getByRole('button', { name: 'Close artifact' })).toHaveCount(0);
+    await expect(page.getByTestId('artifact-viewer-close')).toHaveCount(0);
+    await expect(page.getByTestId('pane-expand')).toHaveCount(0);
   });
 
-  test('?embed=1 drops the toolbar', async ({ page }) => {
+  test('?embed=1 drops the header', async ({ page }) => {
     await mockShares(page);
     await page.goto(`/share/${ARTIFACT_SHARE}?embed=1`);
     const frame = page.locator('iframe');

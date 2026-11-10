@@ -225,7 +225,7 @@ describe('ArtifactViewerHost: docked pane', () => {
   it('switching items replaces the entry: one Back still closes', async () => {
     mount();
     fireEvent.click(screen.getByText('open a.html'));
-    fireEvent.click(screen.getByRole('button', { name: 'a.html, switch file' }));
+    fireEvent.click(screen.getByRole('button', { name: /^a.html.*switch file/ }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'b.html' }));
     expect(where()).toBe('/chat?artifact=f2');
     expect(screen.getByRole('region', { name: 'Workspace: b.html' })).toBeInTheDocument();

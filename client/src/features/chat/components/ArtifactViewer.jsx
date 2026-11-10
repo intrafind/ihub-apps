@@ -237,7 +237,7 @@ export default function ArtifactViewer({
           {
             key: 'files',
             icon: 'archive-box',
-            label: t('chatArtifacts.showInFiles', 'Show in Files'),
+            label: t('chatArtifacts.showInFiles', 'Show in files'),
             onClick: () => onShowInFiles(artifact)
           }
         ]

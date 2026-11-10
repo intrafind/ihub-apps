@@ -478,7 +478,6 @@ export default function ArtifactsPanel({
         role="tablist"
         aria-label={t('chatFiles.tabsLabel', 'Kinds of files in this chat')}
         className="flex flex-none gap-1 border-b border-gray-200 px-3 dark:border-gray-700"
-        onKeyDown={onTabKeyDown}
       >
         {tabs.map(([id, label, count]) => (
           <button
@@ -491,6 +490,7 @@ export default function ArtifactsPanel({
             tabIndex={activeTab === id ? 0 : -1}
             data-testid={`files-tab-${id}`}
             onClick={() => onTab(id)}
+            onKeyDown={onTabKeyDown}
             className={`-mb-px inline-flex h-10 items-center gap-1.5 border-b-2 px-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
               activeTab === id
                 ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-300'

@@ -484,39 +484,54 @@ test.describe('Accessibility — the integration action detail', () => {
 // practices), so they are run explicitly: a screen-reader user navigates by
 // landmark, and a second <main> (or an unlabelled duplicate) makes that list
 // ambiguous.
-// The Artifacts panel of a chat, open, over a shared chat whose share routes
-// are intercepted (see helpers/sharedChatWithArtifacts.js): no model, no
-// stored chat needed.
-test.describe('Accessibility — the Artifacts panel', () => {
-  test('has no critical or serious violations when open', async ({ page }) => {
+// The workspace pane of a chat (concept "Workspace Pane for Artifacts, Files and Sources"),
+// over a shared chat whose share routes are intercepted (see helpers/sharedChatWithArtifacts.js):
+// no model, no stored chat needed. Docked it is a labelled region next to the chat with a
+// separator; full screen it is the same region; below 1024px it is a modal sheet.
+test.describe('Accessibility — the workspace pane', () => {
+  test('has no critical or serious violations docked: the Files index, a file, a menu', async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await mockSharedChatWithArtifacts(page);
     await page.goto(`/share/${SHARE_ID}`);
     await page.getByTestId('open-artifacts').click();
-    const panel = page.getByRole('dialog', { name: /Artifacts/ });
-    await expect(panel.getByRole('listitem')).toHaveCount(3);
-    await panel.getByRole('button', { name: /^src\/index\.js/ }).click();
-    await expect(panel.getByLabel('Content of src/index.js')).toBeVisible();
+    const files = page.getByRole('region', { name: 'Workspace: Files' });
+    await expect(files.getByRole('listitem')).toHaveCount(3);
+    await expect(page.getByRole('separator', { name: 'Resize workspace' })).toBeVisible();
+    await expectNoBlockingViolations(page, 'Workspace pane — Files index');
 
-    await expectNoBlockingViolations(page, 'Artifacts panel');
+    await files.getByRole('button', { name: /src\/index\.js/ }).click();
+    const viewer = page.getByRole('region', { name: 'Workspace: src/index.js' });
+    await expect(viewer.getByLabel('Content of src/index.js')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Workspace pane — artifact');
+
+    await viewer.getByRole('button', { name: 'More actions' }).click();
+    await expect(viewer.getByRole('menu')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Workspace pane — menu');
   });
-});
 
-// The immersive artifact viewer (#3184), open from a card of the shared chat.
-test.describe('Accessibility — the artifact viewer', () => {
-  test('has no critical or serious violations when open, with its menu open too', async ({
-    page
-  }) => {
+  test('has no critical or serious violations in full screen', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await mockSharedChatWithArtifacts(page);
     await page.goto(`/share/${SHARE_ID}`);
     await page.getByTestId('generated-file-open').filter({ hasText: 'src/index.js' }).click();
-    const viewer = page.getByRole('dialog', { name: /src\/index\.js/ });
-    await expect(viewer).toBeVisible();
+    await page.getByRole('button', { name: 'Full screen' }).click();
+    const viewer = page.getByRole('region', { name: 'Workspace: src/index.js' });
+    await expect(viewer).toHaveAttribute('data-state', 'full');
     await expect(viewer.getByLabel('Content of src/index.js')).toBeVisible();
-    await expectNoBlockingViolations(page, 'Artifact viewer');
+    await expectNoBlockingViolations(page, 'Workspace pane — full screen');
+  });
 
-    await viewer.getByTestId('artifact-viewer-name').click();
-    await expect(viewer.getByRole('menu')).toBeVisible();
-    await expectNoBlockingViolations(page, 'Artifact viewer menu');
+  test('is a modal sheet below 1024px with no critical or serious violations', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockSharedChatWithArtifacts(page);
+    await page.goto(`/share/${SHARE_ID}`);
+    await page.getByTestId('generated-file-open').filter({ hasText: 'src/index.js' }).click();
+    const sheet = page.getByRole('dialog', { name: 'Workspace: src/index.js' });
+    await expect(sheet).toHaveAttribute('aria-modal', 'true');
+    await expect(sheet.getByLabel('Content of src/index.js')).toBeVisible();
+    await expectNoBlockingViolations(page, 'Workspace pane — sheet');
   });
 });
 

@@ -9507,7 +9507,7 @@
     "sourceNoPreview": "There is no preview of this source. Open it in its system.",
     "sourcesListLabel": "Sources cited in this chat",
     "switchFile": "Switch file",
-    "switchFileNamed": "{{name}}, switch file",
+    "switchFileHint": ", switch file",
     "tabSources": "Sources",
     "widthPercent": "Workspace {{percent}} percent",
     "zoom": "Zoom",
@@ -9520,6 +9520,7 @@
       "placeholder": "Ask to change this document…"
     },
     "quote": {
+      "artifactRef": " (artifact id: {{id}})",
       "askFrom": "About {{name}}",
       "askLead": "About this passage of \"{{name}}\"{{ref}}:",
       "editFrom": "Edit in {{name}}",

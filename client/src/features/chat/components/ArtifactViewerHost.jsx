@@ -304,12 +304,17 @@ export default function ArtifactViewerHost({
 
   // ---- focus: heading on a user open, opener (or the composer) on close ----
   const wasOpenRef = useRef(isOpen);
+  // A string, not the target object: that is new on every render, and a cleanup on
+  // each one would cancel the frame that moves the focus.
+  const targetKey = target ? keyOf(target) : '';
   useEffect(() => {
     const wasOpen = wasOpenRef.current;
     wasOpenRef.current = isOpen;
     if (isOpen && focusHeadingRef.current) {
-      focusHeadingRef.current = false;
-      const frame = requestAnimationFrame(() => headingRef.current?.focus({ preventScroll: true }));
+      const frame = requestAnimationFrame(() => {
+        focusHeadingRef.current = false;
+        headingRef.current?.focus({ preventScroll: true });
+      });
       return () => cancelAnimationFrame(frame);
     }
     if (wasOpen && !isOpen) {
@@ -322,7 +327,7 @@ export default function ArtifactViewerHost({
       return () => cancelAnimationFrame(frame);
     }
     return undefined;
-  }, [isOpen, target]);
+  }, [isOpen, targetKey]);
 
   // ---- the sidebar folds to its rail while a docked pane is open below 1280px ----
   const splitOpen = isOpen && split;
