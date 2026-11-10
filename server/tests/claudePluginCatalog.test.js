@@ -403,7 +403,7 @@ describe('fetchCatalog of a plugin marketplace', () => {
       source: 'https://mirror.example/marketplace.json',
       auth
     });
-    const mirrorTree = seen.find(c => c.url.includes('api.github.com'));
+    const mirrorTree = seen.find(c => new URL(c.url).host === 'api.github.com');
     expect(mirrorTree.headers.Authorization).toBeUndefined();
 
     seen.length = 0;
@@ -415,7 +415,7 @@ describe('fetchCatalog of a plugin marketplace', () => {
       return json({ tree: [] });
     });
     await registryService.fetchCatalog({ ...REGISTRY, auth });
-    const githubTree = seen.find(c => c.url.includes('api.github.com'));
+    const githubTree = seen.find(c => new URL(c.url).host === 'api.github.com');
     expect(githubTree.headers.Authorization).toBe('Bearer secret');
   });
 });
