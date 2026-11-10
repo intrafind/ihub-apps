@@ -921,8 +921,9 @@ would contradict each other and steer a chat that is not theirs. To have a proje
 start the chat in the project (from its page). The smart collections you added to your projects are
 listed here too, under **My projects**, marked **Smart collection from iFinder**. A chip beside the message box names each attached project and links to it; its
 **×** takes the project away again. Up to 10
-projects can be attached. Once the chat has its first message, the change is saved at once and is still there when the
-chat is opened later; before that, the choice is kept and saved with the chat. Projects picked on
+projects can be attached. The project picker is only there until the first message is sent: it is
+gone from the message box afterwards, and the chips still show what the chat draws on. Before the
+first message the choice is kept and saved with the chat; projects picked on
 the start page ride along to the chat that opens. Attaching
 does not move the chat into the project: it stays where it is, and the project's members do not
 see it. When the chat runs in a shared project, its members read the answers, including what was

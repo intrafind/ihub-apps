@@ -1,5 +1,21 @@
 # Fixes — Unreleased
 
+## Attaching More Files No Longer Duplicates the Ones Already Attached
+
+Selecting files in the file dialog, confirming, and then opening the dialog again to add more attached
+the first files twice: 5 files plus 2 more gave 12 attachments instead of 7. Only the newly selected
+files are added now. Files picked from cloud storage stay attached next to local files.
+
+## Rating a Chat Answer Works Again
+
+Sending a star rating or comment under an answer failed with "Some of the entered data is not valid"
+and nothing was saved. The chat now sends only the chat, message and run; for an iAssistant answer
+the server works out the iFinder conversation and message id itself and still forwards the rating to
+iFinder, addressed to the answer that was rated. `POST /api/feedback` no longer reads
+`conversationId` or `ifinderMessageId` from the request body; the server ignores them if a client
+still sends them. Ratings given on iAssistant answers from before this update are stored but are not
+forwarded to iFinder.
+
 ## Share Is Always Offered When You Open a File From the Chat
 
 Opening a generated picture or a file from the answer that has just produced it showed the viewer

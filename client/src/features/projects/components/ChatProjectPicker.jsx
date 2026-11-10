@@ -34,10 +34,11 @@ export function useOfferedProjects(projectContext) {
  * runs in) without the chat having been started in them; their instructions
  * do not apply. A chat that belongs to a project from its first message is
  * started from that project's page. The ticked projects show as chips beside
- * the button ({@link ChatProjectChips}).
+ * the button ({@link ChatProjectChips}). Not shown once the chat has started
+ * (`projectContext.started`).
  *
  * @param {Object} props
- * @param {Object} props.projectContext - `{ value, disabled, attached, … }`; `attached` is the
+ * @param {Object} props.projectContext - `{ value, disabled, started, attached, … }`; `attached` is the
  *   chat page's one {@link useChatAttachedProjects}, shared with the chips so the two never
  *   race and a failure still shows after the picker has closed.
  * @param {Array<Object>} props.offered - From {@link useOfferedProjects}.
@@ -45,9 +46,11 @@ export function useOfferedProjects(projectContext) {
  */
 function ChatProjectPicker({ projectContext, offered }) {
   const { t } = useTranslation();
-  const { value = [], disabled = false, attached } = projectContext;
+  const { value = [], disabled = false, started = false, attached } = projectContext;
   const { toggle, saving, full } = attached;
-  if (offered.length === 0) return null;
+  // Projects are picked before the first message; once the chat has begun the
+  // picker is gone (the chips still show what the chat draws on).
+  if (started || offered.length === 0) return null;
   const label = t('projects.attach.title', 'Projects for this chat');
 
   return (
