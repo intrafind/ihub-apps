@@ -556,6 +556,21 @@ describe('the stored form of the activity', () => {
     });
   });
 
+  it('keeps that a searched project contributed excerpts, and nothing else of its text', () => {
+    const stored = boundStoredActivity({
+      knowledgeScope: {
+        projects: [
+          { id: 'prj_2', name: 'Manual', mode: 'searched', excerpted: true, injected: ['x'] },
+          { id: 'prj_3', name: 'Notes', mode: 'searched', excerpted: 'yes' }
+        ]
+      }
+    });
+    assert.deepEqual(stored.knowledgeScope.projects, [
+      { id: 'prj_2', name: 'Manual', mode: 'searched', excerpted: true },
+      { id: 'prj_3', name: 'Notes', mode: 'searched' }
+    ]);
+  });
+
   it('is nothing when there is nothing', () => {
     assert.equal(boundStoredActivity(null), null);
     assert.equal(boundStoredActivity({}), null);

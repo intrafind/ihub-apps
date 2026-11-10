@@ -576,6 +576,7 @@ web search feature, read from `server/defaults/tools/read_url.json` (see
 - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
 - `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10)
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `focus` (string, optional): The question being researched. With `extractContent`, a result page longer than `contentMaxLength` contributes the sections that answer it, verbatim, instead of its first `contentMaxLength` characters — see [Focused reading](#focused-reading-focus)
 - `language` (string, optional): Language or locale for the results, e.g. `en`, `de` or `en-GB` (default: the user's language — see [Search Language](#search-language))
 - `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year` (sent to Brave as its own `freshness` parameter)
 - `includeDomains` (string[], optional): Only results from these domains (max 10; sent as `site:` operators in the query)
@@ -597,6 +598,7 @@ app's `websearch` config.
 - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
 - `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10 — one Qwant web request pages in tens)
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `focus` (string, optional): The question being researched. With `extractContent`, a result page longer than `contentMaxLength` contributes the sections that answer it, verbatim, instead of its first `contentMaxLength` characters — see [Focused reading](#focused-reading-focus)
 - `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `de-CH` (default: `en_US`)
 - `freshness` (string, optional): Only results from the last `day`, `week`, `month` or `year`. Qwant has no such parameter: dated results outside the window are dropped, undated ones kept, and the result says so
 - `includeDomains` (string[], optional): Only results from these domains (max 10; sent as `site:` operators in the query)
@@ -632,6 +634,7 @@ injected from the app's `websearch` config. Two things set it apart:
 - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
 - `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 40). Staan serves 10 results per request, so more than 10 costs one extra request per further 10
 - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
+- `focus` (string, optional): The question being researched. With `extractContent`, a result page longer than `contentMaxLength` contributes the sections that answer it, verbatim, instead of its first `contentMaxLength` characters — see [Focused reading](#focused-reading-focus)
 - `language` (string, optional): Language or locale for the results, e.g. `en`, `de`, `en-GB` (default: `en-us`)
 - `includeDomains` (string[], optional): Only return results from these domains (max 10)
 - `excludeDomains` (string[], optional): Drop results from these domains (max 10)
@@ -800,7 +803,7 @@ The result also carries `focus` (the question as used) and `excerpted: true`; `t
 - **Sources:** the sections the model was given appear as the passages of the page's source in the sources panel (private, like every page the reader opens). They have no numbered markers: a citation points to the page.
 - **Counts as one page read** for `maxPageReads`. PDFs, the 400,000-character cap, caching and bot-protection results behave as before.
 
-Search results with `extractContent` still return the first `contentMaxLength` characters of each page; they do not take a `focus`.
+**Search results (`extractContent`).** The search tools of all three engines take the same optional `focus`. With `extractContent` and a `focus`, each result page longer than `contentMaxLength` is read the same way, within `contentMaxLength`: the best-matching sections, verbatim, each with its heading — but no outline (ten results would carry ten of them), and the `note` of such a page says to open it with `read_url` to read more. A page where no section matches, a page that fits, a search without `focus` and a search without `extractContent` are exactly what they were. The model chooses `focus`; nothing sets it from the search query, and there is no app setting for it. No config change is needed: the engines' parameters ship with iHub.
 
 ## Complete Example
 

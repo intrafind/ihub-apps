@@ -47,6 +47,13 @@
           "minimum": 500,
           "maximum": 50000
         },
+        "focus": {
+          "type": "string",
+          "description": {
+            "en": "The question you are researching, in a few words. Used with extractContent: a result page longer than contentMaxLength then contributes the sections that answer it (verbatim) instead of its first contentMaxLength characters. Ignored without extractContent.",
+            "de": "Die recherchierte Frage in wenigen Worten. Zusammen mit extractContent: Eine Ergebnisseite, die länger als contentMaxLength ist, liefert dann die Abschnitte, die sie beantworten (wörtlich), statt ihrer ersten contentMaxLength Zeichen. Ohne extractContent wirkungslos."
+          }
+        },
         "language": {
           "type": "string",
           "description": {
@@ -125,6 +132,13 @@
           "default": 3000,
           "minimum": 500,
           "maximum": 50000
+        },
+        "focus": {
+          "type": "string",
+          "description": {
+            "en": "The question you are researching, in a few words. Used with extractContent: a result page longer than contentMaxLength then contributes the sections that answer it (verbatim) instead of its first contentMaxLength characters. Ignored without extractContent.",
+            "de": "Die recherchierte Frage in wenigen Worten. Zusammen mit extractContent: Eine Ergebnisseite, die länger als contentMaxLength ist, liefert dann die Abschnitte, die sie beantworten (wörtlich), statt ihrer ersten contentMaxLength Zeichen. Ohne extractContent wirkungslos."
+          }
         },
         "language": {
           "type": "string",
@@ -214,6 +228,13 @@
           "default": 3000,
           "minimum": 500,
           "maximum": 50000
+        },
+        "focus": {
+          "type": "string",
+          "description": {
+            "en": "The question you are researching, in a few words. Used with extractContent: a result page longer than contentMaxLength then contributes the sections that answer it (verbatim) instead of its first contentMaxLength characters. Ignored without extractContent.",
+            "de": "Die recherchierte Frage in wenigen Worten. Zusammen mit extractContent: Eine Ergebnisseite, die länger als contentMaxLength ist, liefert dann die Abschnitte, die sie beantworten (wörtlich), statt ihrer ersten contentMaxLength Zeichen. Ohne extractContent wirkungslos."
+          }
         },
         "language": {
           "type": "string",

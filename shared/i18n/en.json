@@ -6213,6 +6213,7 @@
       "searched_other": "{{count}} searched",
       "loadedOne": "loaded in full",
       "searchedOne": "searched",
+      "searchedExcerptsOne": "searched, relevant sections loaded",
       "unavailableOne": "unavailable",
       "overBudget": "over budget",
       "openProject": "Open the project",

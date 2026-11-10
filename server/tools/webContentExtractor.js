@@ -324,19 +324,25 @@ const FOCUS_HINT =
  * @param {Object} doc - The cached document
  * @param {string} focus - From {@link normalizeFocus}
  * @param {number} maxLength - Bounds the whole content, outline included
- * @returns {{content: string, matched: boolean, slice?: Object, passages: Array}}
+ * @param {{outline?: boolean}} [options] - `outline: false`: the sections only (no
+ *   outline), and null when none matches
+ * @returns {{content: string, matched: boolean, slice?: Object, passages: Array}|null}
  */
-function focusedWindow(doc, focus, maxLength) {
+function focusedWindow(doc, focus, maxLength, { outline: withOutline = true } = {}) {
   const selected = selectContent(doc.text, {
     focus,
     name: doc.title || doc.finalUrl || 'This page',
     budgetChars: maxLength,
     withOffsets: true,
-    hint: FOCUS_HINT
+    hint: withOutline ? FOCUS_HINT : undefined,
+    compact: !withOutline
   });
   if (selected.retrieval.mode === 'focus') {
     return { content: selected.content, matched: true, passages: selected.passages || [] };
   }
+  // Nothing matches and no outline is wanted: the caller reads the page as it
+  // would without a focus.
+  if (!withOutline) return null;
   const index = getDocumentIndex(doc.text);
   const outlineBudget =
     maxLength >= FOCUS_OUTLINE_MIN_LENGTH
@@ -350,6 +356,13 @@ function focusedWindow(doc, focus, maxLength) {
     : '';
   const slice = sliceDocument(doc.text, { offset: 0, maxLength: maxLength - block.length });
   return { content: slice.content + block, matched: false, slice, passages: [] };
+}
+
+/** What the model is told about a focused read that matched. */
+function focusedNote(withOutline) {
+  return withOutline
+    ? 'This is a selection of the page, not the whole page: the sections that best match the focus, then an outline. There is no nextOffset: to read on, call again with the offset (@) of an outline entry.'
+    : 'This is a selection of the page, not the whole page: the sections that best match the focus. Open the page with read_url (and the offset of a section) to read more of it.';
 }
 
 /** The page's own fields at the head of every result. */
@@ -428,6 +441,8 @@ function readerNote(doc, slice) {
  * @param {string} [params.focus] - The question being researched. For a page longer
  *   than `maxLength` read from its start (`offset` 0), the result holds the sections
  *   that answer it, verbatim, plus an outline, instead of the first window
+ * @param {boolean} [params.outline=true] - With a `focus`: whether the result carries an
+ *   outline of the page. A caller that reads many pages (search extraction) turns it off
  * @param {string} [params.language] - The reader's language (Accept-Language)
  * @param {boolean} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
  * @param {string} [params.chatId] - The chat ID for action tracking
@@ -441,6 +456,7 @@ export default async function webContentExtractor({
   maxLength = 5000,
   offset = 0,
   focus,
+  outline = true,
   language,
   ignoreSSL = null,
   chatId
@@ -496,11 +512,14 @@ export default async function webContentExtractor({
     const focusQuery = normalizeFocus(focus);
     // An explicit offset is the model paging through the page; a page that fits
     // is returned whole. Only the first read of a long page is focused.
-    if (focusQuery && offset <= 0 && doc.text.length > maxLength) {
-      const focused = focusedWindow(doc, focusQuery, maxLength);
+    const focused =
+      focusQuery && offset <= 0 && doc.text.length > maxLength
+        ? focusedWindow(doc, focusQuery, maxLength, { outline })
+        : null;
+    if (focused) {
       const note = [
         focused.matched
-          ? 'This is a selection of the page, not the whole page: the sections that best match the focus, then an outline. There is no nextOffset: to read on, call again with the offset (@) of an outline entry.'
+          ? focusedNote(outline)
           : `No section of the page matches the focus; this is the start of the page and an outline of the rest. ${FOCUS_HINT}`,
         readerNote(doc, { offset: 0, totalLength: doc.text.length, truncated: false })
       ]

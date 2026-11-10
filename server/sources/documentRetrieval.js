@@ -886,7 +886,7 @@ const FOCUS_OUTLINE_MIN_BUDGET = 2000;
  * `<section id path [offset]>` block, so a citation and a follow-up read can
  * name it. Without a match the result is the outline alone (`sections` empty).
  */
-function focusResult(index, name, focus, budgetChars, measure, offsets, hint) {
+function focusResult(index, name, focus, budgetChars, measure, { offsets, hint, compact }) {
   const ranked = searchDocument(index, focus);
   if (!ranked.length) {
     return outlineResult(
@@ -896,11 +896,14 @@ function focusResult(index, name, focus, budgetChars, measure, offsets, hint) {
       measure
     );
   }
-  const header =
-    `${tooLargeNote(name, index)} These are excerpts of it, verbatim, that best match ` +
-    `"${focus}", best match first.${hint ? ` ${hint}` : ''}`;
+  // A compact result (one of several pages a search returns) spends its small
+  // budget on the sections: a one-line header and no outline.
+  const header = compact
+    ? 'Excerpts, verbatim, best match first.'
+    : `${tooLargeNote(name, index)} These are excerpts of it, verbatim, that best match ` +
+      `"${focus}", best match first.${hint ? ` ${hint}` : ''}`;
   const outlineBudget =
-    budgetChars >= FOCUS_OUTLINE_MIN_BUDGET
+    !compact && budgetChars >= FOCUS_OUTLINE_MIN_BUDGET
       ? Math.min(FOCUS_OUTLINE_MAX_CHARS, Math.floor(budgetChars * FOCUS_OUTLINE_SHARE))
       : 0;
   const outline = outlineBudget ? renderOutline(index, outlineBudget, measure, offsets) : '';
@@ -980,6 +983,8 @@ function sectionResult(index, name, ref, budgetChars, measure = lengthOf) {
  * @param {boolean} [options.withOffsets] - Name each focused section's start in
  *   `content` (character offset), for a caller that pages the text by offset
  * @param {string} [options.hint] - What a focused result tells the model to do next
+ * @param {boolean} [options.compact] - A focused result without outline and with a
+ *   one-line header, for a caller that returns many small excerpts
  * @param {string} [options.name] - Source name, used in the result's notes
  * @param {number} [options.budgetChars] - Most characters to return, or most of
  *   whatever `measure` counts
@@ -1015,7 +1020,11 @@ export function selectContent(content, options = {}) {
   } else if (focus) {
     mode = 'focus';
     const offsets = options.withOffsets === true ? partOffsets(index, text) : null;
-    result = focusResult(index, name, focus, budgetChars, measure, offsets, options.hint);
+    result = focusResult(index, name, focus, budgetChars, measure, {
+      offsets,
+      hint: options.hint,
+      compact: options.compact === true
+    });
   } else if (query) {
     mode = 'search';
     result = searchResult(index, name, query, budgetChars, measure);

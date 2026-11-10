@@ -568,7 +568,10 @@ and add it again. Sources migrated from `config/sources.json` keep their `maxLen
 
 - A badge on the answer says which projects it used and how: _3 projects · 2 loaded in full · 1
   searched_. With one project it names the project and links to it when it is a user project;
-  a project the viewer may not see reads _Private project_.
+  a project the viewer may not see reads _Private project_. A searched project that also put the
+  sections matching the question into the prompt (see [Reading with the question in
+  mind](#reading-with-the-question-in-mind)) reads _searched, relevant sections loaded_; with
+  several projects the project's line in the tooltip says so.
 - Every search hit and every read document is an answer source in the **Sources** panel (see
   [Answer Sources](answer-sources.md)). The card shows the provenance: _Uploaded_, _Picked from
   SharePoint · text taken 12 Oct 2026_ or _Linked_. A document written by a workflow shows as

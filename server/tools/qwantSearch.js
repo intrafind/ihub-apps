@@ -18,6 +18,7 @@ import { QWANT_MAX_WEB_RESULTS } from '../services/search/qwantProvider.js';
  * @param {boolean} [params.extractContent=false] - Whether to extract full content from result pages
  * @param {number} [params.maxResults=10] - Maximum results to return / pages to extract (Qwant returns at most 10 per search)
  * @param {number} [params.contentMaxLength=3000] - Maximum characters of extracted content per page
+ * @param {string} [params.focus] - The question being researched: with `extractContent`, a long page returns the sections that answer it
  * @param {string} [params.language] - Language/locale for the results (e.g. "de", "en-GB")
  * @param {string} [params.freshness] - Only results from the last `day` | `week` | `month` | `year`
  * @param {string[]|string} [params.includeDomains] - Restrict results to these domains (max 10)
@@ -31,6 +32,7 @@ export default async function qwantSearch({
   extractContent = false,
   maxResults = QWANT_MAX_WEB_RESULTS,
   contentMaxLength = 3000,
+  focus,
   language,
   freshness,
   includeDomains,
@@ -54,6 +56,7 @@ export default async function qwantSearch({
     extractContent,
     maxResults: limit,
     contentMaxLength,
+    focus,
     freshness,
     includeDomains,
     chatId,
