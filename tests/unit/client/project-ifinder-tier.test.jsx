@@ -456,7 +456,7 @@ describe('a smart collection its owner manages', () => {
     expect(screen.queryByRole('button', { name: /refresh|retry/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Rename item' })).not.toBeInTheDocument();
     // The only checkboxes select documents for a removal; none pins one.
-    expect(screen.queryByLabelText(/^Pin /)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Use of .* by the AI$/)).not.toBeInTheDocument();
     expect(screen.getByLabelText('Select Lease 2026')).toBeInTheDocument();
     expect(screen.queryByText('Pinned')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /instructions/i })).not.toBeInTheDocument();

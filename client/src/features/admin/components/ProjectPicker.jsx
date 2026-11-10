@@ -14,6 +14,7 @@ import {
   toggleProjectLink
 } from '../utils/projectAdmin';
 import { localizedText } from '../../projects/utils/projectItems';
+import { knowledgeModeLabel } from '../../projects/utils/knowledgeModes';
 import AdminLoadError from './AdminLoadError';
 
 /**
@@ -23,8 +24,9 @@ import AdminLoadError from './AdminLoadError';
  * The value is the link list `[{ id, mode, write }]`. Bare string ids are
  * accepted on input and normalized to `{ id, mode: 'auto', write: false }`;
  * `onChange` always receives the normalized list. Each linked project shows
- * a mode select (`auto`, `context` = always in the prompt, `tools` = search
- * tools only) and its estimated size. `write` is kept as it came in.
+ * a mode select (the project's default, or one of the knowledge modes:
+ * automatic, full context, relevant sections, search, pinned only) and its
+ * estimated size. `write` is kept as it came in.
  *
  * Renders nothing when the projects feature is disabled on the server.
  *
@@ -95,12 +97,6 @@ function ProjectPicker({
     { search, language }
   );
 
-  const modeLabels = {
-    auto: t('admin.projects.picker.modes.auto', 'Auto'),
-    context: t('admin.projects.picker.modes.context', 'Always in the prompt'),
-    tools: t('admin.projects.picker.modes.tools', 'Search tools only')
-  };
-
   if (featureDisabled) return null;
 
   const tokenProps = {
@@ -148,15 +144,18 @@ function ProjectPicker({
                 <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                   <span>{t('admin.projects.picker.mode', 'Mode')}</span>
                   <select
-                    value={link.mode}
+                    value={link.mode || ''}
                     disabled={disabled}
                     aria-label={t('admin.projects.picker.modeFor', 'Mode of {{name}}', { name })}
                     onChange={e => emit(setProjectLinkMode(links, link.id, e.target.value))}
                     className="text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   >
+                    <option value="">
+                      {t('admin.projects.picker.modes.projectDefault', 'Project default')}
+                    </option>
                     {PROJECT_LINK_MODES.map(mode => (
                       <option key={mode} value={mode}>
-                        {modeLabels[mode]}
+                        {knowledgeModeLabel(t, mode)}
                       </option>
                     ))}
                   </select>
@@ -164,7 +163,7 @@ function ProjectPicker({
                 <ProjectTokenCount
                   inline={compact}
                   estimate={estimates.projects?.[link.id]}
-                  mode={link.mode}
+                  mode={link.mode || project?.knowledgeMode || 'auto'}
                   {...tokenProps}
                 />
                 <button

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { DataTable } from '../../admin/components/data-table';
 import {
+  aiAccessOf,
   hasDocumentActions,
   isEditableItem,
   isItemReadable,
@@ -54,7 +55,8 @@ function isRetryable(item) {
  * @param {boolean} [props.readOnly=false] - Hide every action that changes an item.
  * @param {boolean} [props.hidePinned=false] - Leave out the pinned column (a project whose
  *   items cannot be pinned, such as a smart collection from iFinder).
- * @param {(item: Object) => void} [props.onTogglePinned]
+ * @param {(item: Object, state: 'normal'|'pinned'|'excluded') => void} [props.onSetAiAccess] -
+ *   Pinned, normal or "Not for AI": three states of one setting (#3538).
  * @param {(item: Object) => void} [props.onPreview]
  * @param {(action: 'previewDocument'|'download'|'details'|'open', item: Object) => void} [props.onDocumentAction] -
  *   The document actions of an iFinder document (`ProjectItemDocumentActions.jsx`);
@@ -81,7 +83,7 @@ function ProjectItemsTable({
   busyItemId = null,
   readOnly = false,
   hidePinned = false,
-  onTogglePinned,
+  onSetAiAccess,
   onPreview,
   onDocumentAction,
   onRefresh,
@@ -199,22 +201,32 @@ function ProjectItemsTable({
       : [
           {
             key: 'pinned',
-            header: t('projects.items.columns.pinned', 'Pinned'),
-            width: 'w-20',
-            render: item => (
-              <input
-                type="checkbox"
-                checked={item.pinned === true}
-                disabled={!canChange(onTogglePinned) || busyItemId === item.id}
-                onChange={() => onTogglePinned(item)}
-                aria-label={t('projects.items.pinItem', 'Pin {{name}}', { name: item.name })}
-                title={t(
-                  'projects.items.pinnedHint',
-                  'Pinned items are always in the prompt, even when the project is searched.'
-                )}
-                className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm focus:ring-indigo-500"
-              />
-            )
+            header: t('projects.items.columns.aiAccess', 'For the AI'),
+            width: 'w-36',
+            render: item => {
+              const state = aiAccessOf(item);
+              return (
+                <select
+                  value={state}
+                  disabled={!canChange(onSetAiAccess) || busyItemId === item.id}
+                  onChange={event => onSetAiAccess(item, event.target.value)}
+                  aria-label={t('projects.items.aiAccessFor', 'Use of {{name}} by the AI', {
+                    name: item.name
+                  })}
+                  title={t(
+                    'projects.items.aiAccessHint',
+                    'Pinned items are always in the prompt. "Not for AI" items stay in the project for people but are never given to the model, listed or searched.'
+                  )}
+                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="normal">{t('projects.items.aiAccess.normal', 'Normal')}</option>
+                  <option value="pinned">{t('projects.items.aiAccess.pinned', 'Pinned')}</option>
+                  <option value="excluded">
+                    {t('projects.items.aiAccess.excluded', 'Not for AI')}
+                  </option>
+                </select>
+              );
+            }
           }
         ])
   ];

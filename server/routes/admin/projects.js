@@ -259,7 +259,7 @@ export default function registerAdminProjectsRoutes(app) {
 
   /** The part of the effective `platform.projects` block the settings panel edits. */
   const editableSettings = platformConfig => {
-    const { sharing, tierPolicy, defaultAppId, limits, refreshTtl } =
+    const { sharing, tierPolicy, defaultAppId, limits, refreshTtl, knowledgeModes } =
       projectSettings(platformConfig);
     return {
       sharing,
@@ -267,6 +267,7 @@ export default function registerAdminProjectsRoutes(app) {
       defaultAppId,
       limits,
       refreshTtl,
+      knowledgeModes,
       maxFilesCeiling: MAX_FILES_CEILING
     };
   };
@@ -320,7 +321,8 @@ export default function registerAdminProjectsRoutes(app) {
             ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId } : {}),
             ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {}),
             ...(body.limits ? { limits: { ...stored.limits, ...body.limits } } : {}),
-            ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {})
+            ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
+            ...(body.knowledgeModes ? { knowledgeModes: [...new Set(body.knowledgeModes)] } : {})
           }
         };
       }
@@ -336,6 +338,7 @@ export default function registerAdminProjectsRoutes(app) {
         ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
         ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId || '(none)' } : {}),
         ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
+        ...(body.knowledgeModes ? { knowledgeModes: body.knowledgeModes.join('|') } : {}),
         ...body.limits
       })
         .map(([key, value]) => `${key}=${value}`)
@@ -537,6 +540,8 @@ export default function registerAdminProjectsRoutes(app) {
         tags: body.tags,
         // A PUT carries the whole project: an absent default app clears it.
         defaultAppId: body.defaultAppId ?? null,
+        // Kept when the document carries none, like the refresh TTL below.
+        ...(body.knowledgeMode !== undefined ? { knowledgeMode: body.knowledgeMode } : {}),
         // The refresh TTL is set on its own (PATCH): a document without it,
         // as the settings form sends it, keeps the stored one.
         ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {})

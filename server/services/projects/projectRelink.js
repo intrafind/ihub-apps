@@ -43,9 +43,9 @@ const KINDS = Object.freeze([
  * `toId`, or null when the list names none of them.
  *
  * The merged link takes the place of the first link to a source or to the
- * target. Its access mode is the mode they share, `auto` when they differ
- * (the project is loaded in full while it fits and searched otherwise, which
- * serves either), and it may write when any of them could.
+ * target. Its access mode is the mode they share, none when they differ
+ * (the project's own default then applies), and it may write when any of
+ * them could.
  *
  * @param {unknown} list
  * @param {Set<string>} fromIds
@@ -60,9 +60,11 @@ export function relinkList(list, fromIds, toId) {
   };
   if (!list.some(link => fromIds.has(normalizeProjectLink(link).id))) return null;
   const merging = list.filter(merges).map(link => normalizeProjectLink(link));
-  const mode = merging.every(link => link.mode === merging[0].mode) ? merging[0].mode : 'auto';
+  // Links that disagree leave the mode to the project's own default, which
+  // serves either (a link that sets none is the one that does).
+  const mode = merging.every(link => link.mode === merging[0].mode) ? merging[0].mode : null;
   const write = merging.some(link => link.write);
-  const merged = mode === 'auto' && !write ? toId : { id: toId, mode, write };
+  const merged = mode === null && !write ? toId : { id: toId, ...(mode ? { mode } : {}), write };
   const first = list.findIndex(merges);
   const result = [];
   list.forEach((link, index) => {

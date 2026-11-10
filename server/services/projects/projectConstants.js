@@ -131,5 +131,8 @@ export const MAX_FILES_CEILING = 200;
 /** Most members one project may carry. */
 export const MAX_MEMBERS = 100;
 
-/** The access modes a link on an app, workflow or profile may declare. */
-export const LINK_MODES = Object.freeze(['auto', 'context', 'tools']);
+/**
+ * The knowledge modes a link on an app, workflow or profile, a project and a
+ * chat may declare (`shared/knowledgeModes.js`, one list for server and client).
+ */
+export { KNOWLEDGE_MODES } from '../../../shared/knowledgeModes.js';

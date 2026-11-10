@@ -194,6 +194,8 @@ export function serializeProject(
         }
       : {}),
     defaultAppId: project.defaultAppId || null,
+    // How the project reaches the model unless a chat or a link says otherwise (#3538).
+    knowledgeMode: project.knowledgeMode || null,
     // The project's own refresh TTL (#3536); null takes the platform's.
     refreshTtl: project.refreshTtl ?? null,
     owner: project.owner

@@ -12,7 +12,11 @@
  * The request hands the ids over on the app object, the way skills travel
  * (`_activeSkills`): `_projectId` (container), `_attachedProjectIds`
  * (picker), `_workflowProjects` (executor), beside the configured
- * `projects`.
+ * `projects`, and `_knowledgeMode`, the mode the user chose for this chat.
+ *
+ * Each entry carries the knowledge mode it is used in, decided here once
+ * (`resolveKnowledgeMode`: chat → link → project default → `auto`), so the
+ * planner and the tools never decide it again.
  *
  * @module services/knowledge/ProjectScope
  */
@@ -25,15 +29,19 @@ import {
   appAllowsUserProjects,
   appUsesProjects,
   isProjectsConfigured,
-  isUserProjectsConfigured
+  isUserProjectsConfigured,
+  projectSettings
 } from '../projects/projectSettings.js';
+import { resolveKnowledgeMode } from '../../../shared/knowledgeModes.js';
+import { withoutExcludedItems } from '../projects/aiAccess.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 
 /**
  * @typedef {Object} ScopeEntry
  * @property {Object} project - The stored project.
- * @property {'auto'|'context'|'tools'} mode
+ * @property {'auto'|'context'|'relevant'|'tools'|'pinned'} mode - The knowledge mode.
+ * @property {'chat'|'link'|'project'|'default'} [modeSource] - Which level decided it.
  * @property {boolean} write
  * @property {'container'|'app'|'attached'|'workflow'} origin
  * @property {boolean} instructions - Whether its instructions apply to the prompt.
@@ -47,6 +55,9 @@ import { projectDescription, projectName } from '../projects/projectView.js';
  * @param {Object} options
  * @param {Object} options.appConfig - The app (or node config) with its link fields.
  * @param {Object} options.user - The requesting user with resolved permissions.
+ * @param {boolean} [options.forAi=true] - Leave out the items marked "Not for AI"
+ *   (`excludedFromAi`): the scope feeds a prompt or the knowledge tools. A workflow
+ *   project node works on the documents themselves and asks for them all.
  * @param {boolean} [options.includeUnavailable=false] - Keep a smart collection of the
  *   iFinder tier that iFinder could not be asked about as an entry flagged `unavailable`
  *   (an empty stand-in, named as the user last saw it), instead of leaving it out. The
@@ -54,7 +65,12 @@ import { projectDescription, projectName } from '../projects/projectView.js';
  *   tools and workflow nodes work on what can be read and do not.
  * @returns {Promise<ScopeEntry[]>} In order: container, app links, attachments, workflow links.
  */
-export async function resolveProjectScope({ appConfig, user, includeUnavailable = false }) {
+export async function resolveProjectScope({
+  appConfig,
+  user,
+  includeUnavailable = false,
+  forAi = true
+}) {
   if (!appConfig || !user) return [];
   // The master switch darkens every project, admin ones included: a chat
   // must not inject or search knowledge the Projects API itself refuses.
@@ -62,17 +78,31 @@ export async function resolveProjectScope({ appConfig, user, includeUnavailable 
   if (!isProjectsConfigured(features)) return [];
   const wanted = [];
   const seen = new Set();
+  // The mode chosen for this chat reaches the projects the chat brought itself
+  // (its container and the attached ones), also when an app links the same one.
+  const chatMode = typeof appConfig._knowledgeMode === 'string' ? appConfig._knowledgeMode : null;
+  const chatProjectIds = new Set([
+    ...(typeof appConfig._projectId === 'string' ? [appConfig._projectId] : []),
+    ...(Array.isArray(appConfig._attachedProjectIds) ? appConfig._attachedProjectIds : [])
+  ]);
   const add = (id, mode, write, origin, instructions) => {
     if (!id || seen.has(id)) return;
     seen.add(id);
-    wanted.push({ id, mode, write, origin, instructions });
+    wanted.push({
+      id,
+      mode,
+      write,
+      origin,
+      instructions,
+      chat: origin !== 'workflow' && chatProjectIds.has(id) ? chatMode : null
+    });
   };
   // An app the admin switched projects off for (`features.projects: false`)
   // reaches none of its own: no container, no linked or attached project.
   // A workflow's links are the workflow's, not the app's.
   if (appUsesProjects(appConfig)) {
     if (typeof appConfig._projectId === 'string')
-      add(appConfig._projectId, 'auto', false, 'container', true);
+      add(appConfig._projectId, null, false, 'container', true);
     for (const link of Array.isArray(appConfig.projects) ? appConfig.projects : []) {
       const { id, mode, write } = normalizeProjectLink(link);
       add(id, mode, write, 'app', true);
@@ -80,7 +110,7 @@ export async function resolveProjectScope({ appConfig, user, includeUnavailable 
     for (const id of Array.isArray(appConfig._attachedProjectIds)
       ? appConfig._attachedProjectIds
       : []) {
-      if (typeof id === 'string') add(id, 'auto', false, 'attached', false);
+      if (typeof id === 'string') add(id, null, false, 'attached', false);
     }
   }
   for (const link of Array.isArray(appConfig._workflowProjects)
@@ -104,6 +134,7 @@ export async function resolveProjectScope({ appConfig, user, includeUnavailable 
   const loads = await Promise.all(
     wanted.map(entry => loadProjectFor(user, entry.id, { repository }))
   );
+  const allowedModes = projectSettings(configCache.getPlatform() || {}).knowledgeModes;
   const scope = [];
   for (const [index, entry] of wanted.entries()) {
     const loaded = loads[index];
@@ -136,14 +167,27 @@ export async function resolveProjectScope({ appConfig, user, includeUnavailable 
       }
       continue;
     }
-    const project = loaded.project;
-    if (!project) continue;
-    if (project.ownership === 'user' && !userProjectsOn) continue;
-    const permissions = permissionsFor(project, user, context);
+    const loadedProject = loaded.project;
+    if (!loadedProject) continue;
+    if (loadedProject.ownership === 'user' && !userProjectsOn) continue;
+    const permissions = permissionsFor(loadedProject, user, context);
     if (!permissions.canUse) continue;
+    // "Not for AI" items stay in the project for people; the model never sees them.
+    const project = forAi ? withoutExcludedItems(loadedProject) : loadedProject;
+    // The platform's list is what users may choose, for their chats and their own
+    // projects. An administrator's choice, on a link or on an admin project, is
+    // not narrowed by it.
+    const { mode, source } = resolveKnowledgeMode({
+      chat: entry.chat,
+      link: entry.mode,
+      project: loadedProject.knowledgeMode,
+      allowed: allowedModes,
+      allowedForProject: loadedProject.ownership === 'user'
+    });
     scope.push({
       project,
-      mode: entry.mode,
+      mode,
+      modeSource: source,
       write: entry.write && (permissions.canEdit || project.ownership === 'admin'),
       origin: entry.origin,
       instructions: entry.instructions

@@ -113,6 +113,7 @@ import {
   MAX_ATTACHED_PROJECTS,
   useChatAttachedProjects
 } from '../../projects/hooks/useChatAttachedProjects';
+import { useChatKnowledgeMode } from '../../projects/hooks/useChatKnowledgeMode';
 import { ATTACH_PROJECT_QUERY_PARAM, PROJECT_QUERY_PARAM } from '../../projects/utils/projectView';
 import { appAllowsUserProjects } from '../../../../../shared/appProjects.js';
 import useIntegrationScopes from '../../chat/hooks/useIntegrationScopes';
@@ -448,6 +449,9 @@ function AppChat({
   // The projects attached to the chat besides its container (`attachedProjectIds`
   // on the stored chat): picked in the project bar, sent as `projects`.
   const [attachedProjectIds, setAttachedProjectIds] = useState([]);
+  // The knowledge mode picked for this chat (`knowledgeMode` on the stored chat, #3538); '' is
+  // the projects' own. Sent with the first message of a chat that is not stored yet.
+  const [chatKnowledgeMode, setChatKnowledgeModeState] = useState('');
   const containerProjectId = chatProjectId || (embedded ? null : projectParam) || null;
 
   // Shared app settings hook
@@ -1134,6 +1138,12 @@ function AppChat({
     value: attachedProjectIds,
     onChange: setAttachedProjectIds
   });
+  const knowledgeModeControl = useChatKnowledgeMode({
+    chatId,
+    stored: chatStoredServerSide,
+    value: chatKnowledgeMode,
+    onChange: setChatKnowledgeModeState
+  });
   useEffect(() => {
     if (
       embedded ||
@@ -1163,7 +1173,8 @@ function AppChat({
     setChatOrigin(null);
     setChatProjectId(null);
     setStoredTemporary(null);
-    // A stored chat brings its own list when it loads below.
+    // A stored chat brings its own list and mode when it loads below.
+    setChatKnowledgeModeState('');
     setAttachedProjectIds(
       embedded
         ? []
@@ -1247,6 +1258,9 @@ function AppChat({
         setStoredTemporary(result?.chat?.temporary === true);
         setAttachedProjectIds(
           Array.isArray(result?.chat?.attachedProjectIds) ? result.chat.attachedProjectIds : []
+        );
+        setChatKnowledgeModeState(
+          typeof result?.chat?.knowledgeMode === 'string' ? result.chat.knowledgeMode : ''
         );
         // Opening a chat is what "seen" means: this same GET cleared the
         // chat's unseen flag server-side, so every list already on screen is
@@ -1924,6 +1938,7 @@ function AppChat({
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }
         : {}),
+      ...(!chatStoredServerSide && chatKnowledgeMode ? { knowledgeMode: chatKnowledgeMode } : {}),
       ...extra
     }),
     [
@@ -1934,6 +1949,7 @@ function AppChat({
       containerProjectId,
       projectTestParams,
       attachedProjectIds,
+      chatKnowledgeMode,
       chatStoredServerSide
     ]
   );
@@ -2575,7 +2591,9 @@ function AppChat({
       // The projects picked for this chat; the server adds them to the chat's own.
       ...(!chatStoredServerSide && attachedProjectIds.length > 0
         ? { projects: attachedProjectIds }
-        : {})
+        : {}),
+      // The mode picked for this chat, until the chat is stored; after that it is changed with PATCH.
+      ...(!chatStoredServerSide && chatKnowledgeMode ? { knowledgeMode: chatKnowledgeMode } : {})
     };
 
     debugLog('📤 Sending message with params:', params);
@@ -2826,7 +2844,8 @@ function AppChat({
           value: attachedProjectIds,
           onChange: setAttachedProjectIds,
           disabled: processing || hydrating,
-          attached: attachedProjects
+          attached: attachedProjects,
+          knowledgeMode: knowledgeModeControl
         };
 
   // What the workspace pane's Files index lists: the chat's generated and

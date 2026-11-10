@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { MODEL_KNOWLEDGE_SOURCE } from '../../../../../shared/runEvents.js';
+import { knowledgeModeLabel } from '../../projects/utils/knowledgeModes';
 
 /**
  * A status badge: tinted, without an outline, 24px high like the sources
@@ -178,6 +179,9 @@ function AnswerSourceBadge({ answerSource, workflowResult, knowledgeScope = null
  */
 function scopeModeText(project, t) {
   if (project.mode === 'loaded') return t('chatMessage.knowledgeScope.loadedOne', 'loaded in full');
+  if (project.mode === 'pinned') {
+    return t('chatMessage.knowledgeScope.pinnedOne', 'pinned documents only');
+  }
   if (project.mode === 'searched') {
     return project.excerpted
       ? t('chatMessage.knowledgeScope.searchedExcerptsOne', 'searched, relevant sections loaded')
@@ -226,8 +230,12 @@ function KnowledgeScopeBadge({ scope, t }) {
 function ReachedScopeBadge({ projects, t }) {
   const loaded = projects.filter(project => project.mode === 'loaded');
   const searched = projects.filter(project => project.mode === 'searched');
+  const pinnedOnly = projects.filter(project => project.mode === 'pinned');
   const parts = [];
   if (loaded.length) parts.push(t('chatMessage.knowledgeScope.loaded', { count: loaded.length }));
+  if (pinnedOnly.length) {
+    parts.push(t('chatMessage.knowledgeScope.pinned', { count: pinnedOnly.length }));
+  }
   if (searched.length)
     parts.push(t('chatMessage.knowledgeScope.searched', { count: searched.length }));
   const single = projects.length === 1 ? projects[0] : null;
@@ -238,6 +246,15 @@ function ReachedScopeBadge({ projects, t }) {
     .map(
       project =>
         `${scopeProjectName(project, t)}: ${scopeModeText(project, t)}${
+          // The knowledge mode the server used, and the level that chose it (#3538).
+          project.knowledgeMode
+            ? ` [${knowledgeModeLabel(t, project.knowledgeMode)}${
+                project.modeFallback
+                  ? `, ${t('chatMessage.knowledgeScope.noTools', 'the model cannot call tools')}`
+                  : ''
+              }]`
+            : ''
+        }${
           project.overBudget
             ? ` (${t('chatMessage.knowledgeScope.overBudget', 'over budget')})`
             : ''

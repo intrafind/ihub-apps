@@ -10,6 +10,8 @@ import {
 } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
+import { knowledgeModeDescription, knowledgeModeLabel } from '../../projects/utils/knowledgeModes';
+import { KNOWLEDGE_MODES } from '../../../../../shared/knowledgeModes.js';
 import { LIMIT_FIELDS, LIMIT_LABELS, limitInputsOf, parseLimits } from '../utils/projectLimits';
 import {
   parseRefreshTtl,
@@ -117,6 +119,17 @@ function ProjectSharingSettingsPanel() {
     setDraft(previous => ({ ...previous, defaultAppId }));
     setSaved(false);
   };
+  const toggleKnowledgeMode = (mode, on) => {
+    setDraft(previous => {
+      const current = new Set(previous.knowledgeModes || KNOWLEDGE_MODES);
+      if (on) current.add(mode);
+      else current.delete(mode);
+      // `auto` is always offered: it is where a project lands when its mode is switched off.
+      current.add('auto');
+      return { ...previous, knowledgeModes: KNOWLEDGE_MODES.filter(entry => current.has(entry)) };
+    });
+    setSaved(false);
+  };
   const updateRefreshTtl = value => {
     const refreshTtl = parseRefreshTtl(value);
     if (refreshTtl === null) return;
@@ -128,16 +141,22 @@ function ProjectSharingSettingsPanel() {
     setSaving(true);
     setError(null);
     try {
-      const { sharing, tierPolicy, defaultAppId, refreshTtl } = draft;
+      const { sharing, tierPolicy, defaultAppId, refreshTtl, knowledgeModes } = draft;
+      const modesChanged =
+        Array.isArray(knowledgeModes) &&
+        JSON.stringify(knowledgeModes) !== JSON.stringify(stored.knowledgeModes);
       const settings = await saveProjectSettings({
         sharing,
         tierPolicy,
         defaultAppId,
+        ...(modesChanged ? { knowledgeModes } : {}),
         ...(refreshTtl !== undefined && refreshTtl !== stored.refreshTtl ? { refreshTtl } : {}),
         ...(limitsChanged ? { limits: limits.values } : {})
       });
       // The default app and the limits reach the project pages through the platform config.
-      if (settings?.defaultAppId !== stored?.defaultAppId || limitsChanged) refreshConfig?.();
+      if (settings?.defaultAppId !== stored?.defaultAppId || limitsChanged || modesChanged) {
+        refreshConfig?.();
+      }
       setStored(settings);
       setDraft(settings);
       setLimitInputs(limitInputsOf(settings.limits));
@@ -249,6 +268,39 @@ function ProjectSharingSettingsPanel() {
               )}
             </p>
           </div>
+        )}
+        {Array.isArray(draft.knowledgeModes) && (
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.projects.knowledgeModes.legend', 'Knowledge modes users may choose')}
+            </legend>
+            {KNOWLEDGE_MODES.map(mode => (
+              <label
+                key={mode}
+                className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={draft.knowledgeModes.includes(mode)}
+                  disabled={mode === 'auto'}
+                  onChange={e => toggleKnowledgeMode(mode, e.target.checked)}
+                />
+                <span>
+                  {knowledgeModeLabel(t, mode)}
+                  <span className="block text-xs text-gray-500 dark:text-gray-400">
+                    {knowledgeModeDescription(t, mode)}
+                  </span>
+                </span>
+              </label>
+            ))}
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.projects.knowledgeModes.help',
+                'Switch off a mode, for example full context to save cost. A project or chat that uses it falls back to automatic; the links of apps and workflows keep the mode an administrator set.'
+              )}
+            </p>
+          </fieldset>
         )}
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">

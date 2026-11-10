@@ -293,7 +293,13 @@ describe('schemas and ids', () => {
   });
 
   it('normalizes links', () => {
-    assert.deepEqual(normalizeProjectLink('faq'), { id: 'faq', mode: 'auto', write: false });
+    // A link without a mode leaves it to the project's own default (#3538).
+    assert.deepEqual(normalizeProjectLink('faq'), { id: 'faq', mode: null, write: false });
+    assert.deepEqual(normalizeProjectLink({ id: 'faq', mode: 'auto' }), {
+      id: 'faq',
+      mode: 'auto',
+      write: false
+    });
     assert.deepEqual(normalizeProjectLink({ id: 'faq', mode: 'tools', write: true }), {
       id: 'faq',
       mode: 'tools',
@@ -304,6 +310,9 @@ describe('schemas and ids', () => {
       true
     );
     assert.equal(projectLinksSchema.safeParse([{ id: 'docs', mode: 'vector' }]).success, false);
+    for (const mode of ['relevant', 'pinned']) {
+      assert.equal(projectLinksSchema.safeParse([{ id: 'docs', mode }]).success, true);
+    }
   });
 
   it('validates the request bodies', () => {

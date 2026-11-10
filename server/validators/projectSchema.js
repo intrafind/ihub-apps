@@ -6,7 +6,7 @@ import { isHttpUrl, zSafeId } from './common.js';
 import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
 import { MAX_ITEM_DESCRIPTION_CHARS, MAX_ITEM_TITLE_CHARS } from '../services/projects/itemInfo.js';
 import {
-  LINK_MODES,
+  KNOWLEDGE_MODES,
   MAX_FILES_CEILING,
   MAX_ATTACHED_PROJECTS,
   MAX_ITEM_TEXT_CHARS,
@@ -17,6 +17,9 @@ import {
   PROJECT_TIERS
 } from '../services/projects/projectConstants.js';
 import { zRefreshTtl } from '../services/projects/refreshTtl.js';
+
+/** One of the knowledge modes (`shared/knowledgeModes.js`). */
+export const knowledgeModeSchema = z.enum(KNOWLEDGE_MODES);
 
 /**
  * Schemas of the project model (#1036, spec 1 §2 and §3): the stored
@@ -176,6 +179,8 @@ export const projectItemSchema = z
     ref: z.record(z.string(), z.unknown()).prefault({}),
     storage: z.enum(ITEM_STORAGE),
     pinned: z.boolean().prefault(false),
+    /** "Not for AI": the item stays for people, never reaches the model. Never set with `pinned`. */
+    excludedFromAi: z.boolean().optional(),
     status: z.enum(ITEM_STATUSES).prefault('pending'),
     error: z
       .object({ code: z.string().max(64), message: z.string().max(2000) })
@@ -234,6 +239,8 @@ export const adminProjectSchema = z
     tags: z.array(z.string().max(100)).prefault([]),
     // The app new chats start in; users who open the project get it preselected.
     defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    // How the project reaches the model unless a chat or a link says otherwise (#3538).
+    knowledgeMode: knowledgeModeSchema.optional(),
     // How long its files from websites and web pages are current (#3536).
     refreshTtl: zRefreshTtl.optional(),
     items: z.array(projectItemSchema).max(MAX_FILES_CEILING).prefault([]),
@@ -259,6 +266,7 @@ export const adminItemCreateSchema = z
     ref: z.record(z.string(), z.unknown()).prefault({}),
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().prefault(false),
+    excludedFromAi: z.boolean().optional(),
     cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional()
   })
   .strict();
@@ -284,6 +292,7 @@ export const adminProjectCreateSchema = z
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).prefault([]),
     defaultAppId: zSafeId.min(1).max(100).optional(),
+    knowledgeMode: knowledgeModeSchema.optional(),
     items: z.array(adminItemCreateSchema).max(MAX_FILES_CEILING).prefault([])
   })
   .strict()
@@ -301,6 +310,7 @@ export const userProjectCreateSchema = z
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
     defaultAppId: zSafeId.min(1).max(100).optional(),
+    knowledgeMode: knowledgeModeSchema.optional(),
     /** `ifinder` creates a smart collection in iFinder and its stub; omitted is `ihub`. */
     tier: z.enum(['ihub', 'ifinder']).optional()
   })
@@ -342,6 +352,8 @@ export const userProjectUpdateSchema = z
     description: z.string().trim().max(MAX_DESCRIPTION_LENGTH).optional(),
     instructions: z.string().max(MAX_INSTRUCTIONS_LENGTH).optional(),
     defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    // How the project reaches the model; null goes back to `auto` (#3538).
+    knowledgeMode: knowledgeModeSchema.nullable().optional(),
     // Seconds or 'never'; null goes back to the platform's (#3536).
     refreshTtl: zRefreshTtl.nullable().optional()
   })
@@ -359,6 +371,7 @@ export const adminProjectUpdateSchema = z
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).optional(),
     defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
+    knowledgeMode: knowledgeModeSchema.nullable().optional(),
     refreshTtl: zRefreshTtl.nullable().optional()
   })
   .strict();
@@ -370,6 +383,7 @@ export const addItemSchema = z
     ref: z.record(z.string(), z.unknown()).prefault({}),
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().optional(),
+    excludedFromAi: z.boolean().optional(),
     text: z.string().max(MAX_ITEM_TEXT_CHARS).optional()
   })
   .strict();
@@ -395,6 +409,8 @@ export const itemUpdateSchema = z
   .object({
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().optional(),
+    // "Not for AI" (#3538): never injected, listed or searched. It excludes `pinned`.
+    excludedFromAi: z.boolean().optional(),
     ref: z.record(z.string(), z.unknown()).optional(),
     // A file from a website or a web page: its own refresh TTL, null for the project's.
     refreshTtl: zRefreshTtl.nullable().optional()
@@ -446,6 +462,11 @@ export const toggleSchema = z
   })
   .strict();
 
+/** What `PATCH /api/chats/:id` accepts to set the knowledge mode of a chat; null clears it. */
+export const chatKnowledgeModeSchema = z
+  .object({ knowledgeMode: knowledgeModeSchema.nullable() })
+  .strict();
+
 /** What `PATCH /api/chats/:id` accepts to set the projects attached to a chat. */
 export const attachedProjectsSchema = z
   .object({ attachedProjectIds: z.array(zSafeId.min(1).max(100)).max(MAX_ATTACHED_PROJECTS) })
@@ -460,7 +481,8 @@ export const projectLinkSchema = z.union([
   z
     .object({
       id: zSafeId.min(1).max(100),
-      mode: z.enum(LINK_MODES).prefault('auto'),
+      // Absent: the project's own default applies (#3538).
+      mode: knowledgeModeSchema.optional(),
       write: z.boolean().prefault(false)
     })
     .strict()
@@ -469,16 +491,18 @@ export const projectLinkSchema = z.union([
 export const projectLinksSchema = z.array(projectLinkSchema);
 
 /**
- * A link as an object, whatever shape the config used.
+ * A link as an object, whatever shape the config used. `mode` is null when the
+ * link sets none: the project's own default then applies, which an explicit
+ * `auto` does not leave to it.
  *
  * @param {string|{id: string, mode?: string, write?: boolean}} link
- * @returns {{id: string, mode: 'auto'|'context'|'tools', write: boolean}}
+ * @returns {{id: string, mode: string|null, write: boolean}}
  */
 export function normalizeProjectLink(link) {
-  if (typeof link === 'string') return { id: link, mode: 'auto', write: false };
+  if (typeof link === 'string') return { id: link, mode: null, write: false };
   return {
     id: String(link?.id || ''),
-    mode: LINK_MODES.includes(link?.mode) ? link.mode : 'auto',
+    mode: KNOWLEDGE_MODES.includes(link?.mode) ? link.mode : null,
     write: link?.write === true
   };
 }
@@ -549,7 +573,9 @@ export const projectSharingSettingsSchema = z
       .strict()
       .optional(),
     // How long files from websites and web pages are current (#3536).
-    refreshTtl: zRefreshTtl.optional()
+    refreshTtl: zRefreshTtl.optional(),
+    // The knowledge modes users may choose (#3538); `auto` is always offered.
+    knowledgeModes: z.array(knowledgeModeSchema).min(1).max(KNOWLEDGE_MODES.length).optional()
   })
   .strict()
   .refine(
@@ -558,6 +584,7 @@ export const projectSharingSettingsSchema = z
       body.tierPolicy !== undefined ||
       body.defaultAppId !== undefined ||
       body.limits !== undefined ||
-      body.refreshTtl !== undefined,
-    { message: 'Send sharing, tierPolicy, defaultAppId, limits or refreshTtl' }
+      body.refreshTtl !== undefined ||
+      body.knowledgeModes !== undefined,
+    { message: 'Send sharing, tierPolicy, defaultAppId, limits, refreshTtl or knowledgeModes' }
   );

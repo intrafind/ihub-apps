@@ -49,7 +49,7 @@ import {
   uploadsAreUnscanned,
   validateProjectForm
 } from '../utils/projectAdmin';
-import { localizedText } from '../../projects/utils/projectItems';
+import { aiAccessChange, localizedText } from '../../projects/utils/projectItems';
 import { removeItemsInTurn, withoutItems } from '../../projects/utils/removeItems';
 
 // The chat pulls in the whole chat page: load it when an admin opens it.
@@ -246,9 +246,9 @@ function AdminProjectEditPageContent({ id }) {
     }
   };
 
-  const handleTogglePinned = item =>
+  const handleSetAiAccess = (item, state) =>
     runItemAction(item, async () =>
-      replaceItem(await updateAdminProjectItem(id, item.id, { pinned: !item.pinned }))
+      replaceItem(await updateAdminProjectItem(id, item.id, aiAccessChange(state)))
     );
 
   // Throws: the edit dialog shows the failure next to its form.
@@ -464,7 +464,7 @@ function AdminProjectEditPageContent({ id }) {
         estimates={estimate ? estimateByItem : undefined}
         selectedIds={new Set(selectedItems.map(item => item.id))}
         onSelectionChange={setSelectedItemIds}
-        onTogglePinned={handleTogglePinned}
+        onSetAiAccess={handleSetAiAccess}
         onPreview={setPreviewItem}
         onRefresh={handleRefresh}
         onRename={setRenameTarget}

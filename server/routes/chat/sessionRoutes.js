@@ -3,6 +3,8 @@
 
 import configCache from '../../configCache.js';
 import { resolveChatProjects } from '../../services/knowledge/chatProjects.js';
+import { isKnowledgeMode } from '../../../shared/knowledgeModes.js';
+import { chatKnowledgeModeSchema } from '../../validators/projectSchema.js';
 import {
   checkProjectTestChat,
   projectTestOrigin,
@@ -892,6 +894,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           voiceMode,
           projectId: requestedProjectId,
           projects: requestedProjects,
+          knowledgeMode: requestedKnowledgeMode,
           testProjectId: requestedTestProjectId,
           integrationScopes: requestedScopes,
           toolApprovalCapable
@@ -955,6 +958,29 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           throw refusal(chatProjects.status, chatProjects.message, {
             code: chatProjects.code
           });
+        }
+        // How this chat reaches its projects' knowledge (#3538): the mode of the
+        // request when it names one (null or '' clears it), else the one stored
+        // with the chat. A project test is scoped to its project and has none.
+        let chatKnowledgeMode = null;
+        let knowledgeModePatch = null;
+        if (!projectTest) {
+          const stored = isKnowledgeMode(access.chat?.knowledgeMode)
+            ? access.chat.knowledgeMode
+            : null;
+          if (requestedKnowledgeMode === undefined) {
+            chatKnowledgeMode = stored;
+          } else {
+            const parsed = chatKnowledgeModeSchema.safeParse({
+              knowledgeMode: requestedKnowledgeMode === '' ? null : requestedKnowledgeMode
+            });
+            if (!parsed.success) {
+              throw refusal(400, 'Invalid knowledgeMode', { code: 'BAD_REQUEST' });
+            }
+            chatKnowledgeMode = parsed.data.knowledgeMode;
+            if (chatKnowledgeMode !== stored)
+              knowledgeModePatch = { knowledgeMode: chatKnowledgeMode };
+          }
         }
 
         let messageId = null;
@@ -1271,7 +1297,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
                 origin: projectTestOrigin(projectTest.projectId),
                 chat: { origin: projectTestOrigin(projectTest.projectId) }
               }
-            : {}),
+            : knowledgeModePatch
+              ? { chat: knowledgeModePatch }
+              : {}),
           // How this turn is being answered, so reopening the chat comes
           // back with the same setup rather than the app's defaults. Only
           // the keys this request actually carried: the repository merges
@@ -1343,6 +1371,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           chatId,
           projectId: chatProjects.containerId,
           attachedProjectIds: chatProjects.attachedIds,
+          knowledgeMode: chatKnowledgeMode,
           ...(projectTest ? { testProjectId: projectTest.projectId } : {}),
           integrationScopes
         };

@@ -396,7 +396,7 @@ describe('relinking a list', () => {
     assert.deepEqual(relinkList(['site-a', 'x', 'site-b', 'site'], from, 'site'), ['site', 'x']);
   });
 
-  it('keeps the mode they share and widens to auto when they differ', () => {
+  it('keeps the mode they share and leaves it to the project’s default when they differ', () => {
     assert.deepEqual(
       relinkList(
         [
@@ -424,7 +424,8 @@ describe('relinking a list', () => {
   it('writes when any merged link could write', () => {
     assert.deepEqual(
       relinkList(['site-a', { id: 'site-b', mode: 'auto', write: true }], from, 'site'),
-      [{ id: 'site', mode: 'auto', write: true }]
+      // The bare link sets no mode and the other says `auto`: they differ, the project decides.
+      [{ id: 'site', write: true }]
     );
   });
 });

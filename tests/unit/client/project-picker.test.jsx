@@ -52,18 +52,26 @@ beforeEach(() => {
 });
 
 describe('ProjectPicker', () => {
-  test('normalizes bare string ids when the mode changes', async () => {
+  test('a link without a mode shows the project default, and bare ids are normalized when the mode changes', async () => {
     const onChange = jest.fn();
     render(<ProjectPicker value={['handbook', 'faq']} onChange={onChange} />);
 
     const select = await screen.findByLabelText('Mode of Employee handbook');
-    expect(select).toHaveValue('auto');
+    expect(select).toHaveValue('');
     fireEvent.change(select, { target: { value: 'tools' } });
 
     expect(onChange).toHaveBeenCalledWith([
       { id: 'handbook', mode: 'tools', write: false },
-      { id: 'faq', mode: 'auto', write: false }
+      { id: 'faq', write: false }
     ]);
+  });
+
+  test('offers every knowledge mode, and the project default', async () => {
+    render(<ProjectPicker value={['handbook']} onChange={jest.fn()} />);
+
+    const select = await screen.findByLabelText('Mode of Employee handbook');
+    const values = Array.from(select.querySelectorAll('option')).map(option => option.value);
+    expect(values).toEqual(['', 'auto', 'context', 'relevant', 'tools', 'pinned']);
   });
 
   test('keeps the write flag of an object link', async () => {
@@ -77,16 +85,14 @@ describe('ProjectPicker', () => {
     expect(onChange).toHaveBeenCalledWith([{ id: 'faq', mode: 'auto', write: true }]);
   });
 
-  test('links a project in auto mode and unlinks it again', async () => {
+  test('links a project without a mode of its own and unlinks it again', async () => {
     const onChange = jest.fn();
     const { rerender } = render(<ProjectPicker value={[]} onChange={onChange} />);
 
     fireEvent.click(await screen.findByRole('checkbox', { name: 'FAQ' }));
-    expect(onChange).toHaveBeenLastCalledWith([{ id: 'faq', mode: 'auto', write: false }]);
+    expect(onChange).toHaveBeenLastCalledWith([{ id: 'faq', write: false }]);
 
-    rerender(
-      <ProjectPicker value={[{ id: 'faq', mode: 'auto', write: false }]} onChange={onChange} />
-    );
+    rerender(<ProjectPicker value={[{ id: 'faq', write: false }]} onChange={onChange} />);
     fireEvent.click(screen.getByRole('button', { name: 'Unlink FAQ' }));
     expect(onChange).toHaveBeenLastCalledWith([]);
   });

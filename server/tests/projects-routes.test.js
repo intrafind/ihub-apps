@@ -158,6 +158,7 @@ const route = {
   remove: handlersFor(projectRoutes, 'delete', '/api/projects/:projectId'),
   items: handlersFor(projectRoutes, 'get', '/api/projects/:projectId/items'),
   addItem: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/items'),
+  updateItem: handlersFor(projectRoutes, 'patch', '/api/projects/:projectId/items/:itemId'),
   removeItem: handlersFor(projectRoutes, 'delete', '/api/projects/:projectId/items/:itemId'),
   members: handlersFor(projectRoutes, 'put', '/api/projects/:projectId/members'),
   transfer: handlersFor(projectRoutes, 'post', '/api/projects/:projectId/transfer'),
@@ -423,6 +424,71 @@ describe('user projects', () => {
       assert.equal(refused.statusCode, 400, `refuses ${JSON.stringify(bad)}`);
     }
     assert.equal((await create(ADA)).defaultAppId, null, 'a project starts without one');
+  });
+
+  it('keeps a knowledge mode per project: set on create, changed, cleared, validated (#3538)', async () => {
+    const project = await create(ADA, { knowledgeMode: 'relevant' });
+    assert.equal(project.knowledgeMode, 'relevant');
+    const params = { projectId: project.id };
+
+    for (const mode of ['pinned', 'context', 'tools', 'auto']) {
+      const changed = await drive(route.update, {
+        user: ADA,
+        params,
+        body: { knowledgeMode: mode }
+      });
+      assert.equal(changed.statusCode, 200, JSON.stringify(changed.body));
+      assert.equal(changed.body.knowledgeMode, mode);
+    }
+    const cleared = await drive(route.update, { user: ADA, params, body: { knowledgeMode: null } });
+    assert.equal(cleared.body.knowledgeMode, null);
+    const refused = await drive(route.update, {
+      user: ADA,
+      params,
+      body: { knowledgeMode: 'all' }
+    });
+    assert.equal(refused.statusCode, 400);
+    assert.equal((await create(ADA)).knowledgeMode, null, 'a project starts on the default');
+  });
+
+  it('marks an item "Not for AI", which excludes pinning and back (#3538)', async () => {
+    const project = await create(ADA);
+    const added = await drive(route.addItem, {
+      user: ADA,
+      params: { projectId: project.id },
+      body: { kind: 'url', ref: { url: 'https://example.com/private' }, pinned: true }
+    });
+    assert.equal(added.statusCode, 201, JSON.stringify(added.body));
+    const params = { projectId: project.id, itemId: added.body.id };
+    assert.equal(added.body.pinned, true);
+
+    const excluded = await drive(route.updateItem, {
+      user: ADA,
+      params,
+      body: { excludedFromAi: true }
+    });
+    assert.equal(excluded.statusCode, 200, JSON.stringify(excluded.body));
+    assert.equal(excluded.body.excludedFromAi, true);
+    assert.equal(excluded.body.pinned, false, 'it is not pinned any more');
+
+    const pinned = await drive(route.updateItem, { user: ADA, params, body: { pinned: true } });
+    assert.equal(pinned.body.pinned, true);
+    assert.ok(!pinned.body.excludedFromAi, 'pinning takes it back in');
+
+    const both = await drive(route.updateItem, {
+      user: ADA,
+      params,
+      body: { pinned: true, excludedFromAi: true }
+    });
+    assert.equal(both.statusCode, 400, 'one state at a time');
+
+    const normal = await drive(route.updateItem, {
+      user: ADA,
+      params,
+      body: { pinned: false, excludedFromAi: false }
+    });
+    assert.equal(normal.body.pinned, false);
+    assert.ok(!normal.body.excludedFromAi);
   });
 
   it('gives an editor and a user their roles, and revokes at once', async () => {
@@ -1746,6 +1812,47 @@ describe('chats in a project', () => {
     } finally {
       configCache.setCacheEntry('config/apps.json', apps?.data || []);
     }
+  });
+
+  it('stores the knowledge mode of a chat, clears it and refuses an unknown one (#3538)', async () => {
+    const chats = getChatRepository();
+    const chat = await chats.ensureChat({
+      chatId: 'chat-knowledge-mode',
+      ownerId: ADA.id,
+      appId: 'chat',
+      title: 'Mode'
+    });
+    assert.ok(chat);
+    for (const mode of ['pinned', 'relevant']) {
+      const set = await drive(route.chatPatch, {
+        user: ADA,
+        params: { chatId: chat.id },
+        body: { knowledgeMode: mode }
+      });
+      assert.equal(set.statusCode, 200, JSON.stringify(set.body));
+      assert.equal(set.body.knowledgeMode, mode);
+      assert.equal((await chats.getChat(chat.id)).knowledgeMode, mode);
+    }
+    const cleared = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { knowledgeMode: null }
+    });
+    assert.equal(cleared.statusCode, 200, JSON.stringify(cleared.body));
+    assert.equal((await chats.getChat(chat.id)).knowledgeMode, undefined);
+    const refused = await drive(route.chatPatch, {
+      user: ADA,
+      params: { chatId: chat.id },
+      body: { knowledgeMode: 'everything' }
+    });
+    assert.equal(refused.statusCode, 400);
+    // Someone else's chat is not theirs to set.
+    const stranger = await drive(route.chatPatch, {
+      user: GRACE,
+      params: { chatId: chat.id },
+      body: { knowledgeMode: 'pinned' }
+    });
+    assert.equal(stranger.statusCode, 404);
   });
 
   it('attaches projects to a stored chat, takes them away and refuses ones it may not use', async () => {

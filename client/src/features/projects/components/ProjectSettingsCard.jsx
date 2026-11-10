@@ -18,6 +18,7 @@ import ProjectFormFields from './ProjectFormFields';
 import ProjectPanelRow, { ROW_ACTION } from './ProjectPanelRow';
 import RefreshTtlDialog from './RefreshTtlDialog';
 import { refreshTtlLabel } from '../utils/refreshTtl';
+import { knowledgeModeLabel } from '../utils/knowledgeModes';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
 
 const PREVIEW = 'text-gray-600 dark:text-gray-400 whitespace-pre-wrap break-words line-clamp-3';
@@ -240,6 +241,32 @@ function ProjectSettingsCard({
           </p>
         </ProjectPanelRow>
       )}
+      {/* How the project reaches the model (#3538); a collection that is not stored
+          in iHub (no stub) has no setting of its own. */}
+      {project.ownership === 'user' && !String(project.id).startsWith('ifc_') && (
+        <ProjectPanelRow
+          icon="sliders"
+          title={t('projects.knowledgeMode.label', 'Knowledge mode')}
+          titleId="project-knowledge-mode-title"
+          action={
+            editable ? (
+              <button
+                type="button"
+                onClick={() => openEditor('knowledgeMode')}
+                className={ROW_ACTION}
+                aria-label={t('projects.knowledgeMode.change', 'Change knowledge mode')}
+              >
+                {t('projects.panel.change', 'Change')}
+              </button>
+            ) : null
+          }
+        >
+          <p className="text-gray-600 dark:text-gray-400">
+            {knowledgeModeLabel(t, project.knowledgeMode || 'auto')}
+            {!project.knowledgeMode && ` ${t('projects.knowledgeMode.defaultSuffix', '(default)')}`}
+          </p>
+        </ProjectPanelRow>
+      )}
       {showRefresh && (
         <ProjectPanelRow
           icon="clock"
@@ -321,6 +348,9 @@ function ProjectSettingsCard({
                 errors={errors}
                 idPrefix="project-settings"
                 showDefaultApp
+                showKnowledgeMode={
+                  project.ownership === 'user' && !String(project.id).startsWith('ifc_')
+                }
                 lockedFields={nameLocked ? ['name', 'description'] : []}
                 lockedHint={t(
                   'projects.settings.collectionNameLocked',

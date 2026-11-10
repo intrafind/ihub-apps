@@ -20,7 +20,7 @@ import { formatTokenCount } from '../utils/tokenStats';
  *
  * @param {Object} props
  * @param {{tokens?: number, items?: number, bytes?: number}} [props.estimate]
- * @param {'auto'|'context'|'tools'} [props.mode]
+ * @param {'auto'|'context'|'relevant'|'tools'|'pinned'} [props.mode]
  * @param {number} [props.loadAllBudgetTokens] - Most tokens loaded into the prompt in `auto` mode.
  * @param {number} [props.toolResultBudgetTokens] - Most tokens one tool call returns.
  * @param {boolean} [props.inline=false] - Render on one line (for compact lists).
@@ -66,6 +66,13 @@ function ProjectTokenCount({
       : t('admin.projects.tokens.autoSearched', 'too large to load; searched with tools');
   } else if (mode === 'context') {
     note = t('admin.projects.tokens.everyRequest', 'sent with every request');
+  } else if (mode === 'relevant') {
+    note = t(
+      'admin.projects.tokens.relevant',
+      'the pinned documents and the best sections for the question'
+    );
+  } else if (mode === 'pinned') {
+    note = t('admin.projects.tokens.pinnedOnly', 'only the pinned documents; nothing is searched');
   } else if (mode === 'tools' && Number.isFinite(toolResultBudgetTokens)) {
     note = t('admin.projects.tokens.searched', 'searched, up to ~{{tokens}} per call', {
       tokens: formatTokenCount(toolResultBudgetTokens)

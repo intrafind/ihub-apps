@@ -11,6 +11,7 @@ import {
 } from '../../services/skillLoader.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getVisibleProjectIds } from './permissions.js';
+import { withoutExcludedItems } from '../projects/aiAccess.js';
 import logger from '../../utils/logger.js';
 import { getLocalizedString } from '../../utils/localize.js';
 
@@ -295,7 +296,8 @@ export async function readMcpResource(uri, { user, platform, language = 'en' }) 
  */
 async function readProjectContent(project, { user, language }) {
   const provider = providerFor(project);
-  const result = await provider.loadAll(project, {
+  // An MCP client is an AI agent: items marked "Not for AI" are not for it either.
+  const result = await provider.loadAll(withoutExcludedItems(project), {
     user,
     language,
     chatId: `mcp-${project.id}`,

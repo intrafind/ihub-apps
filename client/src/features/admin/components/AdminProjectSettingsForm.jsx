@@ -7,6 +7,9 @@ import Icon from '../../../shared/components/Icon';
 import { MAX_PROJECT_ID_LENGTH } from '../utils/projectAdmin';
 import ProjectAppSelect from '../../projects/components/ProjectAppSelect';
 import ProjectAvailability from './ProjectAvailability';
+import KnowledgeModeSelect from '../../projects/components/KnowledgeModeSelect';
+import { knowledgeModeDescription } from '../../projects/utils/knowledgeModes';
+import { KNOWLEDGE_MODES } from '../../../../../shared/knowledgeModes.js';
 
 const INPUT_CLASS =
   'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
@@ -73,6 +76,40 @@ export function ProjectDefaultAppField({ value, onChange }) {
         {t(
           'admin.projects.fields.defaultAppHint',
           'Chats in this project start in this app, so users who add the project to theirs get the right app selected automatically. They can still pick another app.'
+        )}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * How an admin project reaches the model unless a chat or a link says otherwise
+ * (#3538): every knowledge mode is on offer here, whatever users may choose.
+ *
+ * @param {Object} props
+ * @param {string} props.value
+ * @param {(mode: string) => void} props.onChange
+ * @returns {JSX.Element}
+ */
+export function ProjectKnowledgeModeField({ value, onChange }) {
+  const { t } = useTranslation();
+  return (
+    <div>
+      <label htmlFor="project-knowledgeMode" className={LABEL_CLASS}>
+        {t('admin.projects.fields.knowledgeMode', 'Knowledge mode')}
+      </label>
+      <KnowledgeModeSelect
+        id="project-knowledgeMode"
+        value={value || 'auto'}
+        modes={KNOWLEDGE_MODES}
+        onChange={next => onChange(next || 'auto')}
+        className={INPUT_CLASS}
+      />
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {knowledgeModeDescription(t, value || 'auto')}{' '}
+        {t(
+          'admin.projects.fields.knowledgeModeHint',
+          'A link on an app or workflow can set its own mode; chats use this one for the projects users add.'
         )}
       </p>
     </div>
@@ -236,6 +273,11 @@ function AdminProjectSettingsForm({
       <ProjectDefaultAppField
         value={form.defaultAppId}
         onChange={value => onFieldChange('defaultAppId', value)}
+      />
+
+      <ProjectKnowledgeModeField
+        value={form.knowledgeMode}
+        onChange={value => onFieldChange('knowledgeMode', value)}
       />
 
       <details

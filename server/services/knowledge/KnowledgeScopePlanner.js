@@ -4,12 +4,25 @@
 /**
  * KnowledgeScopePlanner — load all, or search (spec 2 §6).
  *
- * For every project in a request's scope, with its link mode:
+ * For every project in a request's scope, with its knowledge mode
+ * (`shared/knowledgeModes.js`, decided by `resolveProjectScope`: chat → link →
+ * project default):
  *
  *  - `context` injects every usable item (the old `exposeAs: prompt`);
  *  - `tools` injects pinned items only and leaves the rest to the tools;
+ *  - `relevant` injects the pinned items and the sections of all the other
+ *    documents that best match the question, and leaves the rest to the tools;
+ *    it works for a project that cannot be loaded in full (an iFinder smart
+ *    collection) as well;
+ *  - `pinned` injects the pinned items and nothing else: the other documents are
+ *    not reachable, no knowledge tool is offered for the project;
  *  - `auto` injects everything when the project's text fits the remaining
- *    load-all budget and falls back to pinned-plus-tools when it does not.
+ *    load-all budget and falls back to `relevant` when it does not.
+ *
+ * A model that cannot call tools (`supportsTools: "none"`) cannot search: for it
+ * `tools` is `relevant`, so what is not pinned is not silently out of reach.
+ * Documents marked "Not for AI" never reach the planner (`resolveProjectScope`
+ * leaves them out).
  *
  * The budget is `min(platform.projects.loadAllMaxTokens, 0.4 × the model's
  * context window)`, spent in scope order (container, app links,
@@ -41,12 +54,14 @@
  * @module services/knowledge/KnowledgeScopePlanner
  */
 import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { selectContent } from '../../sources/documentRetrieval.js';
 import logger from '../../utils/logger.js';
 import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
 import { docOf } from './types.js';
+import { DEFAULT_KNOWLEDGE_MODE, KNOWLEDGE_MODES } from '../../../shared/knowledgeModes.js';
 
 export const CONTEXT_SHARE = 0.4;
 
@@ -69,6 +84,10 @@ const MIN_EXCERPT_ROOM_TOKENS = 1500;
 const EXCERPT_NOTE =
   'Excerpt: the sections of this document that best match the question, not the whole document. ' +
   'Read the rest with knowledge_read (document id, section id).';
+
+/** The same for a project the model has no tools for: there is nothing to read the rest with. */
+const EXCERPT_NOTE_NO_TOOLS =
+  'Excerpt: the sections of this document that best match the question, not the whole document.';
 
 /**
  * The load-all budget of a request.
@@ -276,6 +295,30 @@ async function excerptsFor(provider, project, ctx, { question, roomTokens, loade
 }
 
 /**
+ * The excerpts a `relevant` project, or an `auto` one that does not fit, injects
+ * beside its pinned documents: none without a question or a search, otherwise
+ * what {@link excerptsFor} finds within the room the pinned documents leave.
+ */
+async function relevantExcerpts(
+  provider,
+  project,
+  ctx,
+  { query, capabilities, injected, remaining, excerptRoom, loaded, pinnedIds }
+) {
+  if (!query || !capabilities.search) return [];
+  const pinnedTokens = injected.reduce(
+    (sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)),
+    0
+  );
+  return excerptsFor(provider, project, ctx, {
+    question: query,
+    roomTokens: Math.min(remaining - pinnedTokens, excerptRoom),
+    loaded,
+    pinnedIds
+  });
+}
+
+/**
  * Plan a scope.
  *
  * @param {import('./ProjectScope.js').ScopeEntry[]} scope
@@ -289,7 +332,9 @@ async function excerptsFor(provider, project, ctx, { question, roomTokens, loade
  * @param {number} [options.budgetTokens] - The load-all budget, instead of
  *   {@link loadAllBudget}: a caller that spends more or less on a turn (a research
  *   depth) says so here
- * @returns {Promise<{projects: Array, budgetTokens: number, usedTokens: number, tools: boolean}>}
+ * @returns {Promise<{projects: Array, budgetTokens: number, usedTokens: number, tools: boolean,
+ *   toolless: boolean}>} `tools`: a project is left to the knowledge tools; `toolless`: the
+ *   model cannot call them
  */
 export async function planKnowledgeScope(
   scope,
@@ -302,6 +347,10 @@ export async function planKnowledgeScope(
   const query = typeof question === 'string' && question.trim() ? question.trim() : null;
   let excerptRoom = Math.floor(budgetTokens * EXCERPT_SHARE);
   const limitTokens = hardLimit(model, settings);
+  // A model that cannot be given tools cannot call the knowledge tools either.
+  // A model that does not say (a bare test double, an unknown model) is taken to have them.
+  const toolless =
+    Boolean(model) && model.supportsTools !== undefined && !modelSupportsTools(model);
   let remaining = budgetTokens;
   const projects = [];
   let tools = false;
@@ -354,10 +403,20 @@ export async function planKnowledgeScope(
     );
     const pinnedIds = usable.filter(item => item.pinned).map(item => item.id);
 
+    // The mode the project is used in: its knowledge mode, and `relevant` for a
+    // model that cannot search where the mode would have left the rest to a search.
+    let knowledgeMode = KNOWLEDGE_MODES.includes(entry.mode) ? entry.mode : DEFAULT_KNOWLEDGE_MODE;
+    if (toolless && knowledgeMode === 'tools') knowledgeMode = 'relevant';
+    const fellBack = knowledgeMode !== entry.mode && KNOWLEDGE_MODES.includes(entry.mode);
+
     let effective;
-    if (!capabilities.loadAll) effective = 'searched';
-    else if (entry.mode === 'context') effective = 'loaded';
-    else if (entry.mode === 'tools') effective = 'searched';
+    if (knowledgeMode === 'pinned') effective = 'pinned';
+    else if (knowledgeMode === 'relevant') effective = 'relevant';
+    // A project that cannot be loaded in full is searched, or, for a model
+    // without tools, read by the question like `relevant` does.
+    else if (!capabilities.loadAll) effective = toolless ? 'relevant' : 'searched';
+    else if (knowledgeMode === 'context') effective = 'loaded';
+    else if (knowledgeMode === 'tools') effective = 'searched';
     else effective = 'auto';
 
     let injected = [];
@@ -375,28 +434,42 @@ export async function planKnowledgeScope(
           injected = loaded.docs.filter(({ doc }) => doc.pinned);
           // The question's sections of the documents that did not fit, within
           // what the pinned ones leave of the budget and of the excerpts' share.
-          if (query && capabilities.search) {
-            const pinnedTokens = injected.reduce(
-              (sum, doc) => sum + (doc.tokens ?? estimateTokens(doc.text)),
-              0
-            );
-            const excerpts = await excerptsFor(provider, project, ctx, {
-              question: query,
-              roomTokens: Math.min(remaining - pinnedTokens, excerptRoom),
-              loaded,
-              pinnedIds
-            });
-            excerptRoom -= excerpts.reduce((sum, entry) => sum + entry.tokens, 0);
-            injected = [...injected, ...excerpts];
-          }
+          const excerpts = await relevantExcerpts(provider, project, ctx, {
+            query,
+            capabilities,
+            injected,
+            remaining,
+            excerptRoom,
+            loaded,
+            pinnedIds
+          });
+          excerptRoom -= excerpts.reduce((sum, entry) => sum + entry.tokens, 0);
+          injected = [...injected, ...excerpts];
         }
       } else {
         injected = loaded.docs;
       }
     } else if (pinnedIds.length && capabilities.loadAll) {
+      // `relevant`, `tools` and `pinned`: the pinned documents are in the prompt.
       const loaded = await provider.loadAll(project, ctx, { itemIds: pinnedIds });
       unavailable = loaded.unavailable;
       injected = loaded.docs;
+    }
+    if (effective === 'relevant') {
+      // The pinned documents, and the best sections of every other one for
+      // the question, whether or not the project would have fit.
+      const excerpts = await relevantExcerpts(provider, project, ctx, {
+        query,
+        capabilities,
+        injected,
+        remaining,
+        excerptRoom,
+        loaded: null,
+        pinnedIds
+      });
+      excerptRoom -= excerpts.reduce((sum, entry) => sum + entry.tokens, 0);
+      injected = [...injected, ...excerpts];
+      effective = 'searched';
     }
     // A usable document whose text could not be loaded (its source failed,
     // or it is an iFinder search that needs the question's query) is not in
@@ -423,6 +496,9 @@ export async function planKnowledgeScope(
       origin: entry.origin,
       instructions: entry.instructions && project.instructions ? project.instructions : '',
       mode: effective,
+      knowledgeMode,
+      modeSource: entry.modeSource || 'default',
+      ...(fellBack ? { modeFallback: entry.mode } : {}),
       documents: usable.length,
       tokens,
       pinned: pinnedIds.length,
@@ -448,16 +524,21 @@ export async function planKnowledgeScope(
     // What was cut from the prompt stays reachable through the tools, and a
     // project that lost text to the cap is not "loaded in full": the model
     // and the badge are told to search for the rest.
-    if (cut.length > 0) planned.mode = 'searched';
+    if (cut.length > 0 && planned.mode !== 'pinned') planned.mode = 'searched';
     planned.overBudget = planned.tokens > budgetTokens || cut.length > 0;
-    if (planned.mode === 'searched') tools = true;
+    if (planned.mode === 'searched' && !toolless) tools = true;
   });
   // The document lists of the searched projects share one budget, spent in
   // scope order, so many searched projects cannot crowd a small window.
-  let listRoom = listBudget(model, limitTokens, usedTokens);
+  // A model without tools gets no list to read from: it could not read from it.
+  let listRoom = toolless ? 0 : listBudget(model, limitTokens, usedTokens);
   const listBudgetTokens = listRoom;
   for (const planned of projects) {
     if (planned.mode !== 'searched') continue;
+    if (toolless) {
+      planned.documentList = [];
+      continue;
+    }
     const list = documentListLines(planned, listRoom);
     planned.documentList = list.lines;
     listRoom = Math.max(0, listRoom - list.tokens);
@@ -466,6 +547,7 @@ export async function planKnowledgeScope(
     projects,
     budgetTokens,
     limitTokens,
+    toolless,
     listBudgetTokens,
     usedTokens: Math.min(budgetTokens, usedTokens),
     tools
@@ -639,7 +721,8 @@ export function renderProjectsBlock(plan) {
       attrs.push(`description="${escapeAttribute(neutralizeProjectText(project.description))}"`);
     }
     if (project.mode === 'searched') {
-      attrs.push(`documents="${project.documents}"`, 'tool="knowledge_search"');
+      attrs.push(`documents="${project.documents}"`);
+      if (!plan.toolless) attrs.push('tool="knowledge_search"');
     }
     // Said to the model in so many words: a project it was told about, that the
     // user attached, and whose documents are not in this answer. Without it the
@@ -671,7 +754,9 @@ export function renderProjectsBlock(plan) {
       if (sourceFailed) docAttrs.push('incomplete="true"');
       lines.push(
         `    <document ${docAttrs.join(' ')}>`,
-        ...(excerpt ? [EXCERPT_NOTE] : []),
+        ...(excerpt
+          ? [plan.toolless || project.mode === 'pinned' ? EXCERPT_NOTE_NO_TOOLS : EXCERPT_NOTE]
+          : []),
         neutralizeProjectText(text),
         '    </document>'
       );
@@ -714,6 +799,16 @@ export function scopeSummary(plan) {
       ownership: project.ownership,
       origin: project.origin,
       mode: project.mode,
+      // The knowledge mode the project is used in and the level that chose it
+      // (`chat`, `link`, `project` or `default`); `modeFallback` names the mode
+      // it replaced when the model cannot call the knowledge tools.
+      ...(project.knowledgeMode
+        ? {
+            knowledgeMode: project.knowledgeMode,
+            modeSource: project.modeSource,
+            ...(project.modeFallback ? { modeFallback: project.modeFallback } : {})
+          }
+        : {}),
       documents: project.documents,
       tokens: project.tokens,
       pinned: project.pinned,

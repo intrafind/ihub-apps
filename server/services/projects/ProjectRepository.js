@@ -38,6 +38,7 @@ import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js
 import configStore from '../config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { memberTargetKey } from './projectAccess.js';
+import { isKnowledgeMode } from '../../../shared/knowledgeModes.js';
 import { isReservedAdminProjectId } from '../../validators/projectSchema.js';
 import { SMART_COLLECTION_SOURCE, isCollectionStub } from './projectConstants.js';
 
@@ -395,6 +396,7 @@ export class ProjectRepository {
       description: String(content?.description || ''),
       instructions: String(content?.instructions || ''),
       ...(content?.defaultAppId ? { defaultAppId: String(content.defaultAppId) } : {}),
+      ...(isKnowledgeMode(content?.knowledgeMode) ? { knowledgeMode: content.knowledgeMode } : {}),
       owner: actor,
       members: [],
       items: [],
