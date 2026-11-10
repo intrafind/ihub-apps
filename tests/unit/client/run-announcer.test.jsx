@@ -423,6 +423,14 @@ describe('RunAnnouncer', () => {
     expect(region()).toBeEmptyDOMElement();
   });
 
+  test('says which list it speaks for when several chats are visible (compare mode)', () => {
+    render(<RunAnnouncer messages={[user, assistant([grow()])]} label="Model B" />);
+    act(() => {
+      jest.advanceTimersByTime(600);
+    });
+    expect(region()).toHaveTextContent('Model B: Creating web artifact');
+  });
+
   test('puts two events at least 1.5 s apart, the more important one first', () => {
     const frames = [grow(), argsEnded(3, 'x1', T0 + 600, 'truncated')];
     const { rerender } = render(<RunAnnouncer messages={[assistant([grow()])]} />);

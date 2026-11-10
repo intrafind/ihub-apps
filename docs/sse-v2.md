@@ -67,7 +67,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `fetch.loading` / `fetch.parsing` / `fetch.extracting` | `read_url`   | `{ url, status, type? }`                                |
 | `ifinder_search` / `ifinder_content` / `ifinder_download` | iFinder tools        | `{ query? \| documentId, searchProfile, … }`             |
 | `agent.*`                      | agent runtime (workflow / agent streams)    | the former internal event payload (task queue, plan, artifacts, inbox, memory, skills, hallucinated tools …) |
-| `args`                         | chat turn, while a tool call's arguments stream | `{ name, title?, integration?, activityKind?, outputKind?, argBytes, elapsedMs, occurrence? }` (first frame), then `{ argBytes, elapsedMs }`; frame also carries `step`, `callId`, `toolId` |
+| `args`                         | chat turn, while a tool call's arguments stream | `{ name, title?, integration?, activityKind?, outputKind?, argBytes, elapsedMs, occurrence? }` (first frame and every 5th after it), otherwise `{ argBytes, elapsedMs }`; frame also carries `step`, `callId`, `toolId` |
 | `args.ended`                   | chat turn, when that model call ends        | `{ outcome, argBytes, elapsedMs }`; frame also carries `step`, `callId`, `toolId` |
 | `model.waiting`                | chat turn, while the model shows nothing    | `{ elapsedMs, reasoning? }`; frame also carries `step` |
 
@@ -93,16 +93,21 @@ not send them. Logic and every timing: `server/services/chat/toolArgProgress.js`
   skill tool that makes nothing such as `preview_pdf` included, only once its
   arguments are still streaming 1.5 s after its name was seen, so a fast search
   never flickers.
-- **Call id.** `callId` is the id `tool/started` and `tool/completed` will carry.
-  Nothing is sent before the provider has sent the id.
+- **Call id.** `callId` is the id `tool/started` and `tool/completed` will carry:
+  the first id the provider sent for the call (the OpenAI-compatible and vLLM
+  converters keep it even when a server repeats or changes the id with later
+  fragments). Nothing is sent before the provider has sent the id.
 - **First frame** (the announcement): `name` (the name the model called),
   `title` / `integration` / `activityKind` as on `tool/started` (from
   `utils/toolDisplay.js`), `outputKind` for the built-in creators (`webArtifact`,
   `document`, `presentation`, `workbook`, `pdf`, `file`, `archive`; decided on the
   server, `undefined` for every other tool), `argBytes`, `elapsedMs`, and
   `occurrence` (only when 2 or more: how many calls of this tool the turn has
-  announced). **Later frames carry `argBytes` and `elapsedMs` only**: merge them
-  into what the first frame said, do not replace it.
+  announced). **Most later frames carry `argBytes` and `elapsedMs` only**: merge
+  them into what the first frame said, do not replace it. **Every 5th frame
+  repeats the display fields**, because the run ledger does not replay `args`
+  frames: a client that attaches mid-call (a reload) has missed the first one and
+  draws the row from the next repeat, at most 5 s later.
 - **`argBytes`**: UTF-8 bytes of the raw argument JSON received so far, escapes
   counted as sent (a little more than the finished file). Absolute, never
   decreases. **`elapsedMs`**: since the call's first fragment.

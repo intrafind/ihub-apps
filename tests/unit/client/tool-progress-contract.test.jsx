@@ -10,6 +10,7 @@
  */
 import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
 import { buildToolActivity } from '../../../shared/run/toolActivity.js';
+import { ARGS_OUTCOMES } from '../../../shared/run/argProgress.js';
 
 const TOOL = 'create_web_artifact';
 let seq = 0;
@@ -120,6 +121,41 @@ describe('tool-call progress frames through the reducer and buildToolActivity', 
     expect(items.map(item => item.id)).toEqual(['c1', 'c2']);
     expect(items[0].occurrence).toBeNull();
     expect(items[1]).toMatchObject({ status: 'preparing', occurrence: 2, argBytes: 500 });
+  });
+
+  test('a client that attached mid-call draws the row from the next frame that repeats the display fields', () => {
+    // The ledger does not replay `args` frames: such a client never saw the first one.
+    const lean = itemsOf(play([progress('args', 'c1', leanFrame(9000, 2000))]));
+    expect(lean[0]).toMatchObject({ id: 'c1', status: 'preparing', outputKind: null });
+    const repeated = itemsOf(
+      play([
+        progress('args', 'c1', leanFrame(9000, 2000)),
+        progress('args', 'c1', { ...firstFrame(), argBytes: 12000, elapsedMs: 5000 })
+      ])
+    );
+    expect(repeated).toHaveLength(1);
+    expect(repeated[0]).toMatchObject({ outputKind: 'webArtifact', argBytes: 12000 });
+  });
+
+  // One row per outcome the server can send. A value added to ARGS_OUTCOMES without
+  // an entry here fails this test: the client would read it as `ready`.
+  const OUTCOME_ROWS = {
+    [ARGS_OUTCOMES.READY]: { status: 'preparing', ready: true },
+    [ARGS_OUTCOMES.DROPPED]: { status: 'error', errorCode: 'dropped' },
+    [ARGS_OUTCOMES.TRUNCATED]: { status: 'error', errorCode: 'truncated' },
+    [ARGS_OUTCOMES.INVALID]: { status: 'error', errorCode: 'invalid' },
+    [ARGS_OUTCOMES.ABORTED]: { status: 'stopped' }
+  };
+
+  test.each(Object.values(ARGS_OUTCOMES))('the outcome %s has its own row state', outcome => {
+    expect(OUTCOME_ROWS).toHaveProperty([outcome]);
+    const [row] = itemsOf(
+      play([
+        progress('args', 'c1', firstFrame()),
+        progress('args.ended', 'c1', { outcome, argBytes: 100, elapsedMs: 10 })
+      ])
+    );
+    expect(row).toMatchObject(OUTCOME_ROWS[outcome]);
   });
 
   test('arguments the loop repaired are still run: tool/started wins over args.ended invalid', () => {

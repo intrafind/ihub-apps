@@ -13,13 +13,6 @@
 /** A row whose arguments are still being written is first painted after this long (no flicker for tiny calls). */
 export const PREPARING_GRACE_MS = 500;
 
-/**
- * The model is silent for this long before the server sends `model.waiting`
- * ("Waiting for the model…", "Thinking…"). The clock of that line starts here,
- * so it is shown from its first paint.
- */
-export const IDLE_LABEL_AFTER_MS = 3000;
-
 /** The size of the arguments has not grown for this long: the stall caption appears. */
 export const STALL_AFTER_MS = 20000;
 

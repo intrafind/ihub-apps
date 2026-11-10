@@ -24,6 +24,7 @@
 import { SSE_V2_EVENTS } from '../runEvents.js';
 import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 import { generatedFilesOf } from '../generatedFiles.js';
+import { ARGS_OUTCOMES, KNOWN_ARGS_OUTCOMES, PROGRESS_PHASES } from './argProgress.js';
 
 const TERMINAL_STATUSES = new Set(['completed', 'aborted', 'error', 'budget_exhausted']);
 
@@ -35,12 +36,9 @@ const TERMINAL_STATUSES = new Set(['completed', 'aborted', 'error', 'budget_exha
  * would grow the list without end, and `progress` is read for things (the
  * page being fetched, skill activations) that these frames are not.
  */
-const ARG_PHASE = 'args';
-const ARG_ENDED_PHASE = 'args.ended';
-const WAITING_PHASE = 'model.waiting';
-
-/** Why an announced call ended without running (`args.ended` `data.outcome`). */
-const ARG_OUTCOMES = new Set(['ready', 'dropped', 'truncated', 'invalid', 'aborted']);
+const ARG_PHASE = PROGRESS_PHASES.ARGS;
+const ARG_ENDED_PHASE = PROGRESS_PHASES.ARGS_ENDED;
+const WAITING_PHASE = PROGRESS_PHASES.MODEL_WAITING;
 
 export function createStreamState(streamId = null) {
   return {
@@ -318,7 +316,8 @@ function withArgStream(run, entry, extra = {}) {
  */
 function foldArgsEnded(run, known, detail, when) {
   if (!known || known.ended) return run;
-  const outcome = ARG_OUTCOMES.has(detail.outcome) ? detail.outcome : 'ready';
+  // An outcome the client does not know yet is read as `ready`, so the wire can grow.
+  const outcome = KNOWN_ARGS_OUTCOMES.has(detail.outcome) ? detail.outcome : ARGS_OUTCOMES.READY;
   const argBytes = Math.max(known.argBytes, finiteOr(detail.argBytes, known.argBytes));
   const elapsedMs = Math.max(known.elapsedMs, finiteOr(detail.elapsedMs, known.elapsedMs));
   return withArgStream(run, {

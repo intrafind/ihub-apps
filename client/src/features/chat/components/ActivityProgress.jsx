@@ -151,7 +151,6 @@ export function BusyIcon({ size = 'sm', tone = 'accent', staticIcon = 'clock', c
  * @param {number} [props.elapsedMs] - the newest frame's stopwatch reading
  * @param {number} [props.receivedAt] - when that frame arrived (`performance.now()`)
  * @param {boolean} [props.running=true] - false freezes the clock (finished, stopped, ready)
- * @param {number} [props.showClockAfterMs=0] - the clock shows once it reads this much
  * @param {'readyToRun'|null} [props.suffix] - replaces the clock with "ready to run"
  * @param {boolean} [props.lead=false] - start with a separator, for a suffix after a label
  * @param {string} [props.className]
@@ -161,7 +160,6 @@ export function ArgumentProgress({
   elapsedMs = 0,
   receivedAt,
   running = true,
-  showClockAfterMs = 0,
   suffix = null,
   lead = false,
   className = ''
@@ -173,8 +171,7 @@ export function ArgumentProgress({
   const size = formatSize(argBytes, i18n?.language);
   if (size) parts.push(t('toolActivity.written', '{{size}} written', { size }));
   if (suffix === 'readyToRun') parts.push(t('toolActivity.readyToRun', 'ready to run'));
-  else if (elapsed >= showClockAfterMs) parts.push(formatClock(elapsed));
-  if (parts.length === 0) return null;
+  else parts.push(formatClock(elapsed));
   return (
     <span aria-hidden="true" className={`tabular-nums ${className}`}>
       <bdi>{(lead ? SEPARATOR : '') + parts.join(SEPARATOR)}</bdi>

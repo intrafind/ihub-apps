@@ -34,8 +34,8 @@ import {
   sameArgs
 } from '../loop/seams/approvalSeam.js';
 import { startedDisplayOf } from '../../utils/toolDisplay.js';
+import { PROGRESS_PHASES } from '../../../shared/run/argProgress.js';
 import {
-  PROGRESS_PHASES,
   chunkHasReasoning,
   chunkShowsOutput,
   createToolArgTracker,

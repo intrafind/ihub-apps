@@ -14,8 +14,6 @@
 import test, { mock } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  ARGS_OUTCOMES,
-  PROGRESS_PHASES,
   TOOL_ARG_PROGRESS,
   argsOutcomeOf,
   createToolArgTracker,
@@ -25,9 +23,15 @@ import {
 import { chatToolSeam } from '../../services/chat/chatSeams.js';
 import { buildEnvelope } from '../../services/loop/RunStream.js';
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { ARGS_OUTCOMES, PROGRESS_PHASES } from '../../../shared/run/argProgress.js';
 
-const { ANNOUNCE_AFTER_MS, MIN_FRAME_INTERVAL_MS, MAX_FRAME_GAP_MS, WAITING_AFTER_MS } =
-  TOOL_ARG_PROGRESS;
+const { ANNOUNCE_AFTER_MS, MIN_FRAME_INTERVAL_MS, WAITING_AFTER_MS } = TOOL_ARG_PROGRESS;
+/**
+ * While fragments flow a call is reported at least this often. The throttle is
+ * driven by the chunks themselves, so this is a property of the 1 s throttle and
+ * the test's fragment pace, not a setting.
+ */
+const MAX_FRAME_GAP_MS = 2000;
 
 // ── tools ───────────────────────────────────────────────────────────────────
 
@@ -261,15 +265,25 @@ test('at most one frame per second per call, absolute values, argBytes never dec
   assert.equal(grown.data.argBytes, bytes + 1);
 });
 
-test('later frames carry the two numbers only; the announcement carries the display fields', () => {
+test('the announcement carries the display fields, most later frames the two numbers only, and every fifth repeats the fields', () => {
   const now = clock();
   const tracker = createToolArgTracker({ now });
-  const [first] = tracker.observe([entry(0, 'c', 'create_web_artifact', 0)], resolveTool);
-  now.advance(MIN_FRAME_INTERVAL_MS);
-  const [next] = tracker.observe([entry(0, 'c', 'create_web_artifact', 5000)], resolveTool);
-  assert.ok(first.data.name && first.data.title && first.data.outputKind);
-  assert.deepEqual(Object.keys(next.data).sort(), ['argBytes', 'elapsedMs']);
-  assert.equal(next.data.elapsedMs, MIN_FRAME_INTERVAL_MS);
+  const frames = [];
+  for (let step = 0; step < 11; step++) {
+    frames.push(
+      ...tracker.observe([entry(0, 'c', 'create_web_artifact', step * 1000)], resolveTool)
+    );
+    now.advance(MIN_FRAME_INTERVAL_MS);
+  }
+  assert.equal(frames.length, 11);
+  assert.ok(frames[0].data.name && frames[0].data.title && frames[0].data.outputKind);
+  assert.deepEqual(Object.keys(frames[1].data).sort(), ['argBytes', 'elapsedMs']);
+  assert.equal(frames[1].data.elapsedMs, MIN_FRAME_INTERVAL_MS);
+  const withDisplay = frames.map(f => ('outputKind' in f.data ? 1 : 0));
+  assert.deepEqual(withDisplay, [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  // A client that attached late draws the row from a repeat.
+  assert.equal(frames[5].data.name, 'create_web_artifact');
+  assert.equal(frames[5].data.outputKind, 'webArtifact');
 });
 
 test('120 s of streaming stay within 130 frames and 40 KB, never more than 2 s apart, with no argument text', () => {
@@ -731,13 +745,5 @@ test('the phase names are the documented ones', () => {
     ARGS: 'args',
     ARGS_ENDED: 'args.ended',
     MODEL_WAITING: 'model.waiting'
-  });
-  assert.deepEqual(TOOL_ARG_PROGRESS, {
-    ANNOUNCE_AFTER_MS: 1500,
-    MIN_FRAME_INTERVAL_MS: 1000,
-    MAX_FRAME_GAP_MS: 2000,
-    WAITING_AFTER_MS: 3000,
-    WAITING_INTERVAL_MS: 1000,
-    REASONING_RESETS_WAITING: false
   });
 });

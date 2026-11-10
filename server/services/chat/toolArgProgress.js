@@ -27,6 +27,7 @@
  */
 import { repairToolArguments } from '../loop/toolArgs.js';
 import { outputKindOf, toolDisplayOf } from '../../utils/toolDisplay.js';
+import { ARGS_OUTCOMES, PROGRESS_PHASES } from '../../../shared/run/argProgress.js';
 
 /** Every timing of the feature, in one place so product can tune it. */
 export const TOOL_ARG_PROGRESS = Object.freeze({
@@ -38,46 +39,10 @@ export const TOOL_ARG_PROGRESS = Object.freeze({
   ANNOUNCE_AFTER_MS: 1500,
   /** At most one `args` frame per call in this interval. */
   MIN_FRAME_INTERVAL_MS: 1000,
-  /**
-   * While fragments flow, a call is reported at least this often. The
-   * throttle is driven by the chunks themselves, so it keeps this without a
-   * timer; tests assert it.
-   */
-  MAX_FRAME_GAP_MS: 2000,
   /** `model.waiting` starts after this long without visible output ... */
   WAITING_AFTER_MS: 3000,
   /** ... and repeats at this interval while the silence lasts. */
-  WAITING_INTERVAL_MS: 1000,
-  /**
-   * Whether streamed reasoning counts as visible output and so resets the
-   * waiting clock. It does not: reasoning that is not shown is exactly the
-   * silence the line explains, and `model.waiting` carries `reasoning: true`
-   * so the chat says "Thinking" instead. Set it to true to restart the clock
-   * with every reasoning fragment (then a model that reasons without a pause
-   * never produces a waiting frame).
-   */
-  REASONING_RESETS_WAITING: false
-});
-
-/** The `tool/progress` phases of this feature. */
-export const PROGRESS_PHASES = Object.freeze({
-  ARGS: 'args',
-  ARGS_ENDED: 'args.ended',
-  MODEL_WAITING: 'model.waiting'
-});
-
-/** Why an announced call stopped streaming (`args.ended` `data.outcome`). */
-export const ARGS_OUTCOMES = Object.freeze({
-  /** The finished call exists; a `tool/started` or an interaction follows. */
-  READY: 'ready',
-  /** The loop will not run it. */
-  DROPPED: 'dropped',
-  /** The model hit its output limit inside the arguments. */
-  TRUNCATED: 'truncated',
-  /** The arguments could not be read as JSON. */
-  INVALID: 'invalid',
-  /** Stop, a deadline or a provider error ended the model call. */
-  ABORTED: 'aborted'
+  WAITING_INTERVAL_MS: 1000
 });
 
 /**
@@ -147,6 +112,7 @@ function newCall(index, t) {
     argBytes: 0,
     firstSeenAt: t,
     nameSeenAt: null,
+    framesSent: 0,
     stage: 'pending'
   };
 }
@@ -193,15 +159,33 @@ function dueForProgress(call, t) {
   );
 }
 
-/** The frame of a call that is on screen: the two numbers only, to keep the budget of a long call. */
+/**
+ * Every this many `args` frames of a call repeat its display fields. The ledger
+ * does not replay `args` frames, so a client that attaches mid-call (a reload)
+ * has missed the announcement; it draws the row from the next frame that carries
+ * them, at most this many seconds later. Repeating them on every frame would add
+ * about 75 % to the bytes of a long call.
+ */
+const DISPLAY_REPEAT_EVERY = 5;
+
+/**
+ * An `args` frame of a call: the two numbers, and every
+ * {@link DISPLAY_REPEAT_EVERY}th frame (the first included) the display fields.
+ */
 function progressFrame(call, t) {
   call.lastFrameAt = t;
   call.sentBytes = call.argBytes;
+  const withDisplay = call.framesSent % DISPLAY_REPEAT_EVERY === 0;
+  call.framesSent += 1;
   return {
     phase: PROGRESS_PHASES.ARGS,
     callId: call.id,
     toolId: call.toolId,
-    data: { argBytes: call.argBytes, elapsedMs: t - call.firstSeenAt }
+    data: {
+      ...(withDisplay ? call.display : {}),
+      argBytes: call.argBytes,
+      elapsedMs: t - call.firstSeenAt
+    }
   };
 }
 
@@ -248,20 +232,13 @@ export function createToolArgTracker({ now = () => Date.now() } = {}) {
     const occurrence = (occurrences.get(call.toolId) || 0) + 1;
     occurrences.set(call.toolId, occurrence);
     call.stage = 'announced';
-    call.lastFrameAt = t;
-    call.sentBytes = call.argBytes;
-    return {
-      phase: PROGRESS_PHASES.ARGS,
-      callId: call.id,
-      toolId: call.toolId,
-      data: {
-        name: call.name,
-        ...toolDisplayOf(call.toolDef),
-        argBytes: call.argBytes,
-        elapsedMs: t - call.firstSeenAt,
-        ...(occurrence >= 2 ? { occurrence } : {})
-      }
+    // Kept to repeat on later frames, see DISPLAY_REPEAT_EVERY.
+    call.display = {
+      name: call.name,
+      ...toolDisplayOf(call.toolDef),
+      ...(occurrence >= 2 ? { occurrence } : {})
     };
+    return progressFrame(call, t);
   };
 
   /** The frame a call is due, by where it stands: announce it, report it, or nothing. */
@@ -341,7 +318,9 @@ export function createToolArgTracker({ now = () => Date.now() } = {}) {
 
 /**
  * Whether a chunk shows the user something that ends the silence: answer text
- * or an image (reasoning does not, see {@link TOOL_ARG_PROGRESS.REASONING_RESETS_WAITING}).
+ * or an image. Reasoning does not: reasoning that is not shown is exactly the
+ * silence the line explains, and `model.waiting` carries `reasoning: true` so the
+ * chat says "Thinking" instead.
  *
  * @param {Object} chunk - a normalized stream chunk
  * @returns {boolean}
@@ -368,8 +347,7 @@ export function chunkHasReasoning(chunk) {
  *
  * Visible output (answer text, an image, an announced tool row) resets the
  * clock; so does the end of the model call, which stops it. Streamed reasoning
- * is remembered and reported as `reasoning` (see
- * {@link TOOL_ARG_PROGRESS.REASONING_RESETS_WAITING}). A tick that finds an
+ * does not reset it; it is remembered and reported as `reasoning`. A tick that finds an
  * announced row on screen stays silent: the row owns the headline then.
  *
  * Timers are read at call time (`setTimeout` / `Date.now`) so fake timers
@@ -381,7 +359,7 @@ export function chunkHasReasoning(chunk) {
  * @returns {{arm: () => void, visible: () => void, thinking: () => void, stop: () => void}}
  */
 export function createWaitingLine({ onWaiting, isSuppressed = () => false }) {
-  const { WAITING_AFTER_MS, WAITING_INTERVAL_MS, REASONING_RESETS_WAITING } = TOOL_ARG_PROGRESS;
+  const { WAITING_AFTER_MS, WAITING_INTERVAL_MS } = TOOL_ARG_PROGRESS;
   let armed = false;
   let timer = null;
   let lastVisibleAt = 0;
@@ -427,7 +405,6 @@ export function createWaitingLine({ onWaiting, isSuppressed = () => false }) {
     thinking() {
       if (!armed) return;
       reasoning = true;
-      if (REASONING_RESETS_WAITING) lastVisibleAt = Date.now();
     },
     /** The model call is over. */
     stop() {

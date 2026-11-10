@@ -300,7 +300,9 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
 
           const pending = state.pendingToolCalls.get(index);
 
-          if (toolCall.id) {
+          // The first id a call carries is the one the chat announced; a server that
+          // repeats the id with every fragment (or changes it) must not rename the call.
+          if (toolCall.id && !pending.id) {
             pending.id = toolCall.id;
           }
           if (toolCall.function?.name) {

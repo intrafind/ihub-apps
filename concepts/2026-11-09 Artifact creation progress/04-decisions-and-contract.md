@@ -29,9 +29,11 @@ Anyone continuing this work: read this file first, then the brief that owns the 
 
 **In** (this PR):
 
-- **A. Waiting line.** After 3 s without visible output (answer text, reasoning, image, a tool row),
-  `tool/progress` phase `model.waiting` with `elapsedMs`; the client shows "Waiting for the model… 0:12",
-  or "Thinking… 0:07" while reasoning streams. Works on every provider.
+- **A. Waiting line.** After 3 s without visible output (answer text, an image, a tool row; streamed
+  reasoning does **not** count, it is the silence the line explains),
+  `tool/progress` phase `model.waiting` with `elapsedMs` and `reasoning` (true when reasoning streamed);
+  the client shows "Waiting for the model… 0:12", or "Thinking… 0:07" while reasoning streams. Works on
+  every provider.
 - **B. Early signal.** Converters expose a progress signal while a tool call's arguments stream; the
   server announces the call (phase `args`), throttles progress, and closes every announced call
   (phase `args.ended`) on normal end, error and abort. Row `preparing` with `12 KB · 0:41`.
@@ -54,13 +56,15 @@ in `docs/sse-v2.md`.
 |---|---|---|
 | `args` | `step`, `callId`, `toolId` | `name`, `title?`, `integration?`, `activityKind?`, `outputKind?`, `argBytes` (UTF-8 bytes of the raw argument JSON received so far, escapes counted as sent, never decreases), `elapsedMs` since the first fragment, `occurrence?` (only when 2 or more) |
 | `args.ended` | `step`, `callId`, `toolId` | `outcome`: `ready` (the finished call exists; a `tool/started` or an interaction follows), `dropped` (the loop will not run it), `truncated` (output limit hit), `invalid` (arguments unparsable), `aborted` (Stop or provider error); `argBytes`, `elapsedMs` |
-| `model.waiting` | `step` | `elapsedMs` since the last visible output |
+| `model.waiting` | `step` | `elapsedMs` since the last visible output, `reasoning?` (true when reasoning streamed during the silence) |
 
 Rules:
 
 1. **The call id is stable.** The `callId` of the first `args` frame equals the `callId` of the later
    `tool/started` and `tool/completed`. If the provider sends the id late, key by index until it is
-   known and emit nothing until then (risk R2 in the product brief).
+   known and emit nothing until then (risk R2 in the product brief). The Chat Completions converters
+   keep the first id a call carries, so a server that repeats or changes it per fragment does not
+   rename the call.
 2. **No argument text on the wire.** No frame of this feature carries any part of the arguments.
 3. **Which calls are announced** (server-side, no tool id list in the feature code): the call must
    resolve to a known, visible, server-executed tool (not `activate_skill`, `ask_user`, passthrough,
@@ -132,7 +136,7 @@ Rules:
   weight. Tailwind utilities only;
   no new CSS or theme token in release 1 (UI spec decision 8). Logical properties (`ms-`, `ps-`,
   `border-s`) for RTL.
-- Constants live in one module (UX 17.3): `PREPARING_GRACE_MS=500`, `IDLE_LABEL_AFTER_MS=3000`,
+- Constants live in one module (UX 17.3): `PREPARING_GRACE_MS=500`,
   `STALL_AFTER_MS=20000`, `PROGRESS_RENDER_MS=1000`, `ANNOUNCE_*`.
 - Strings under `toolActivity.*` in `shared/i18n/en.json` and `de.json` (the UX 12.1 table) with these
   release-1 changes: `waitingForModel` = "Waiting for the model…" / "Wartet auf das Modell…" replaces
