@@ -227,72 +227,19 @@ export async function applySlideFrame(buffer, frame, options = {}) {
   const { paths, slideSize } = await readSlides(zip);
   if (!paths.length) throw new SlideFrameError('The presentation has no slides.');
 
-  const scaler = scalerFor(slideSize);
-  const style = {
-    lang: options.lang || 'en-US',
-    textColor: hex(frame.textColor, DEFAULT_TEXT_COLOR),
-    panelColor: hex(frame.panelColor, 'FFFFFF'),
-    font: frame.font || DEFAULT_FONT
-  };
-  const mediaPath = mediaRegistry(zip, types, images);
-  const coverWanted = options.cover !== false && Boolean(images.coverBackground);
-  let coverBuilt = false;
-
-  const slides = await Promise.all(
-    paths.map((slidePath, index) => loadSlide(zip, slidePath, index))
-  );
-  for (const slide of slides.filter(Boolean)) {
-    const { doc, tree } = slide;
-    const relFor = key => slide.relFor(key, mediaPath);
-    const isCover = slide.index === 0 && coverWanted;
-    let shapes;
-    if (isCover) {
-      shapes = coverShapes({
-        images,
-        scaler,
-        slideSize,
-        style,
-        text: coverText(doc, options),
-        id: slide.id,
-        relFor
-      });
-      // The cover replaces whatever the first slide showed.
-      clearShapes(tree);
-      coverBuilt = true;
-    } else {
-      // Content slide: the shapes stay; the frame goes on top.
-      shapes = contentShapes({ images, scaler, slideSize, id: slide.id, relFor });
-    }
-    appendShapes(doc, tree, shapes);
-    writeXmlPart(zip, slide.path, doc);
-    writeRels(zip, slide.path, slide.rels);
-  }
-
-  types.write(zip);
-  return { buffer: await writePackage(zip), slides: paths.length, cover: coverBuilt };
-}
-
-// --- Pieces of applySlideFrame -------------------------------------------------------
-
-/** Reference inches scaled to the slide: `ix`/`iy` for lengths, `box` for a rectangle. */
-function scalerFor(slideSize) {
+  const lang = options.lang || 'en-US';
+  const textColor = hex(frame.textColor, DEFAULT_TEXT_COLOR);
+  const panelColor = hex(frame.panelColor, 'FFFFFF');
+  const font = frame.font || DEFAULT_FONT;
   const sx = slideSize.cx / emu(REFERENCE.width);
   const sy = slideSize.cy / emu(REFERENCE.height);
   const ix = inches => Math.round(emu(inches) * sx);
   const iy = inches => Math.round(emu(inches) * sy);
-  return {
-    ix,
-    iy,
-    box: (b, h = b.h) => ({ x: ix(b.x), y: iy(b.y), cx: ix(b.w), cy: iy(h) }),
-    // Font sizes follow the smaller axis, so text stays readable.
-    scale: Math.min(sx, sy)
-  };
-}
+  const box = (b, h = b.h) => ({ x: ix(b.x), y: iy(b.y), cx: ix(b.w), cy: iy(h) });
 
-/** One media part per picture, shared by every slide that shows it. */
-function mediaRegistry(zip, types, images) {
+  // One media part per picture, shared by every slide that shows it.
   const media = new Map();
-  return key => {
+  const mediaPath = key => {
     if (!media.has(key)) {
       const image = images[key];
       const target = `ppt/media/ihub-frame-${key}.${image.extension}`;
@@ -302,28 +249,17 @@ function mediaRegistry(zip, types, images) {
     }
     return media.get(key);
   };
-}
 
-/** A slide part with its relationships and the next free shape id; null without a shape tree. */
-async function loadSlide(zip, slidePath, index) {
-  const doc = await readXmlPart(zip, slidePath);
-  const tree = descendants(doc.documentElement, 'spTree')[0];
-  if (!tree) return null;
-  const rels = await readRels(zip, slidePath);
-  let nextId =
-    Math.max(
-      1,
-      ...descendants(doc.documentElement, 'cNvPr').map(n => Number(n.getAttribute('id')) || 0)
-    ) + 1;
-  return {
-    index,
-    path: slidePath,
-    doc,
-    tree,
-    rels,
-    id: () => nextId++,
-    /** The relationship id of a frame picture on this slide (added when it is new). */
-    relFor(key, mediaPath) {
+  const coverWanted = options.cover !== false && Boolean(images.coverBackground);
+  let coverBuilt = false;
+
+  for (let index = 0; index < paths.length; index += 1) {
+    const slidePath = paths[index];
+    const doc = await readXmlPart(zip, slidePath);
+    const tree = descendants(doc.documentElement, 'spTree')[0];
+    if (!tree) continue;
+    const rels = await readRels(zip, slidePath);
+    const relFor = key => {
       const target = relativeTarget(slidePath, mediaPath(key));
       let rel = rels.find(r => r.type === REL_TYPES.image && r.target === target);
       if (!rel) {
@@ -331,165 +267,168 @@ async function loadSlide(zip, slidePath, index) {
         rels.push(rel);
       }
       return rel.id;
+    };
+    let nextId =
+      Math.max(
+        1,
+        ...descendants(doc.documentElement, 'cNvPr').map(n => Number(n.getAttribute('id')) || 0)
+      ) + 1;
+    const id = () => nextId++;
+    const shapes = [];
+
+    if (index === 0 && coverWanted) {
+      const own = coverTextOf(doc);
+      const title = clip(options.title) || own.title;
+      const date = clip(options.date) || own.date;
+      const footer = options.footer
+        ? clip(String(options.footer).replaceAll('{title}', title).replaceAll('{date}', date))
+        : [title, date].filter(Boolean).join(' · ');
+      // The cover replaces whatever the first slide showed.
+      for (const child of childElements(tree)) {
+        if (!['nvGrpSpPr', 'grpSpPr'].includes(child.localName)) tree.removeChild(child);
+      }
+      const scale = Math.min(sx, sy);
+      const logo = images.logo;
+      shapes.push(
+        pictureXml({
+          id: id(),
+          name: 'Cover background',
+          relId: relFor('coverBackground'),
+          rect: { x: 0, y: 0, cx: slideSize.cx, cy: slideSize.cy },
+          crop: coverCrop(images.coverBackground, slideSize)
+        }),
+        rectXml({ id: id(), name: 'Cover panel', rect: box(COVER.panel), color: panelColor })
+      );
+      if (logo) {
+        shapes.push(
+          pictureXml({
+            id: id(),
+            name: 'Logo',
+            descr: 'Logo',
+            relId: relFor('logo'),
+            rect: {
+              x: ix(COVER.logo.x),
+              y: iy(COVER.logo.y),
+              cx: ix(COVER.logo.w),
+              cy: Math.round(ix(COVER.logo.w) * (logo.height / logo.width))
+            }
+          })
+        );
+      }
+      shapes.push(
+        textXml({
+          id: id(),
+          name: 'Title',
+          rect: box(COVER.title),
+          text: title,
+          size: Math.max(14, Math.round(26 * scale)),
+          bold: true,
+          color: textColor,
+          font,
+          lang
+        }),
+        textXml({
+          id: id(),
+          name: 'Date',
+          rect: box(COVER.date),
+          text: date,
+          size: Math.max(9, Math.round(14 * scale)),
+          color: textColor,
+          font,
+          lang
+        }),
+        rectXml({ id: id(), name: 'Footer strip', rect: box(COVER.strip), color: panelColor }),
+        textXml({
+          id: id(),
+          name: 'Footer',
+          rect: box(COVER.footerText),
+          text: footer,
+          size: Math.max(7, Math.round(9 * scale)),
+          color: textColor,
+          font,
+          lang
+        })
+      );
+      if (logo) {
+        shapes.push(
+          pictureXml({
+            id: id(),
+            name: 'Logo (small)',
+            descr: 'Logo',
+            relId: relFor('logo'),
+            rect: {
+              x: ix(COVER.smallLogo.x),
+              y: iy(COVER.smallLogo.y),
+              cx: ix(COVER.smallLogo.w),
+              cy: Math.round(ix(COVER.smallLogo.w) * (logo.height / logo.width))
+            }
+          })
+        );
+      }
+      coverBuilt = true;
+    } else {
+      // Content slide: the shapes stay; the frame goes on top.
+      const topHeight = images.stripTop
+        ? Math.round(slideSize.cx * (images.stripTop.height / images.stripTop.width))
+        : 0;
+      if (images.stripTop) {
+        shapes.push(
+          pictureXml({
+            id: id(),
+            name: 'Frame top',
+            relId: relFor('stripTop'),
+            rect: { x: 0, y: 0, cx: slideSize.cx, cy: topHeight }
+          })
+        );
+      }
+      if (images.stripLeft) {
+        const height = slideSize.cy - topHeight;
+        shapes.push(
+          pictureXml({
+            id: id(),
+            name: 'Frame left',
+            relId: relFor('stripLeft'),
+            rect: {
+              x: 0,
+              y: topHeight,
+              cx: Math.round(height * (images.stripLeft.width / images.stripLeft.height)),
+              cy: height
+            }
+          })
+        );
+      }
+      if (images.logo) {
+        const width = ix(CONTENT_LOGO.widthInches);
+        const height = Math.round(width * (images.logo.height / images.logo.width));
+        const margin = ix(CONTENT_LOGO.marginInches);
+        shapes.push(
+          pictureXml({
+            id: id(),
+            name: 'Logo',
+            descr: 'Logo',
+            relId: relFor('logo'),
+            rect: {
+              x: slideSize.cx - width - margin,
+              y: slideSize.cy - height - margin,
+              cx: width,
+              cy: height
+            }
+          })
+        );
+      }
     }
-  };
-}
 
-/** The cover's title, date and footer: the options, else the first slide's own. */
-function coverText(doc, options) {
-  const own = coverTextOf(doc);
-  const title = clip(options.title) || own.title;
-  const date = clip(options.date) || own.date;
-  const footer = options.footer
-    ? clip(String(options.footer).replaceAll('{title}', title).replaceAll('{date}', date))
-    : [title, date].filter(Boolean).join(' · ');
-  return { title, date, footer };
-}
-
-/** Remove every shape of a slide (the group properties stay). */
-function clearShapes(tree) {
-  for (const child of childElements(tree)) {
-    if (!['nvGrpSpPr', 'grpSpPr'].includes(child.localName)) tree.removeChild(child);
-  }
-}
-
-function appendShapes(doc, tree, shapes) {
-  const fragment = parseXml(
-    `<p:spTree ${PML_NAMESPACES}>${shapes.join('')}</p:spTree>`,
-    'frame shapes'
-  );
-  for (const shape of childElements(fragment.documentElement)) {
-    tree.appendChild(doc.importNode(shape, true));
-  }
-}
-
-/** A picture of a logo at a width, in the logo's proportions. */
-function logoPicture({ id, name, relId, logo, ix, iy, at }) {
-  const cx = ix(at.w);
-  return pictureXml({
-    id,
-    name,
-    descr: 'Logo',
-    relId,
-    rect: { x: ix(at.x), y: iy(at.y), cx, cy: Math.round(cx * (logo.height / logo.width)) }
-  });
-}
-
-/** The cover: picture, white panel with logo, title and date, footer strip with text and logo. */
-function coverShapes({ images, scaler, slideSize, style, text, id, relFor }) {
-  const { ix, iy, box, scale } = scaler;
-  const { logo } = images;
-  const shapes = [
-    pictureXml({
-      id: id(),
-      name: 'Cover background',
-      relId: relFor('coverBackground'),
-      rect: { x: 0, y: 0, cx: slideSize.cx, cy: slideSize.cy },
-      crop: coverCrop(images.coverBackground, slideSize)
-    }),
-    rectXml({ id: id(), name: 'Cover panel', rect: box(COVER.panel), color: style.panelColor })
-  ];
-  if (logo) {
-    shapes.push(
-      logoPicture({ id: id(), name: 'Logo', relId: relFor('logo'), logo, ix, iy, at: COVER.logo })
+    const fragment = parseXml(
+      `<p:spTree ${PML_NAMESPACES}>${shapes.join('')}</p:spTree>`,
+      'frame shapes'
     );
+    for (const shape of childElements(fragment.documentElement)) {
+      tree.appendChild(doc.importNode(shape, true));
+    }
+    writeXmlPart(zip, slidePath, doc);
+    writeRels(zip, slidePath, rels);
   }
-  const textStyle = { color: style.textColor, font: style.font, lang: style.lang };
-  shapes.push(
-    textXml({
-      id: id(),
-      name: 'Title',
-      rect: box(COVER.title),
-      text: text.title,
-      size: Math.max(14, Math.round(26 * scale)),
-      bold: true,
-      ...textStyle
-    }),
-    textXml({
-      id: id(),
-      name: 'Date',
-      rect: box(COVER.date),
-      text: text.date,
-      size: Math.max(9, Math.round(14 * scale)),
-      ...textStyle
-    }),
-    rectXml({ id: id(), name: 'Footer strip', rect: box(COVER.strip), color: style.panelColor }),
-    textXml({
-      id: id(),
-      name: 'Footer',
-      rect: box(COVER.footerText),
-      text: text.footer,
-      size: Math.max(7, Math.round(9 * scale)),
-      ...textStyle
-    })
-  );
-  if (logo) {
-    shapes.push(
-      logoPicture({
-        id: id(),
-        name: 'Logo (small)',
-        relId: relFor('logo'),
-        logo,
-        ix,
-        iy,
-        at: COVER.smallLogo
-      })
-    );
-  }
-  return shapes;
-}
 
-/** A content slide's frame: strip along the top, strip along the left edge, logo bottom right. */
-function contentShapes({ images, scaler, slideSize, id, relFor }) {
-  const { ix } = scaler;
-  const shapes = [];
-  const topHeight = images.stripTop
-    ? Math.round(slideSize.cx * (images.stripTop.height / images.stripTop.width))
-    : 0;
-  if (images.stripTop) {
-    shapes.push(
-      pictureXml({
-        id: id(),
-        name: 'Frame top',
-        relId: relFor('stripTop'),
-        rect: { x: 0, y: 0, cx: slideSize.cx, cy: topHeight }
-      })
-    );
-  }
-  if (images.stripLeft) {
-    const height = slideSize.cy - topHeight;
-    shapes.push(
-      pictureXml({
-        id: id(),
-        name: 'Frame left',
-        relId: relFor('stripLeft'),
-        rect: {
-          x: 0,
-          y: topHeight,
-          cx: Math.round(height * (images.stripLeft.width / images.stripLeft.height)),
-          cy: height
-        }
-      })
-    );
-  }
-  if (images.logo) {
-    const width = ix(CONTENT_LOGO.widthInches);
-    const height = Math.round(width * (images.logo.height / images.logo.width));
-    const margin = ix(CONTENT_LOGO.marginInches);
-    shapes.push(
-      pictureXml({
-        id: id(),
-        name: 'Logo',
-        descr: 'Logo',
-        relId: relFor('logo'),
-        rect: {
-          x: slideSize.cx - width - margin,
-          y: slideSize.cy - height - margin,
-          cx: width,
-          cy: height
-        }
-      })
-    );
-  }
-  return shapes;
+  types.write(zip);
+  return { buffer: await writePackage(zip), slides: paths.length, cover: coverBuilt };
 }

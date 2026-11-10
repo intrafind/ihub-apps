@@ -322,13 +322,11 @@ export async function loadTemplateBundle(idOrTemplate, format) {
       'powerpointTemplate'
     );
     if (template.pptx.frame?.enabled) {
-      const files = await Promise.all(
-        Object.entries(FRAME_SLOT_KEYS).map(async ([slot, key]) => [
-          key,
-          await optionalAsset(template, template.pptx.frame[key], slot)
-        ])
-      );
-      assets.frame = Object.fromEntries(files.filter(([, file]) => file));
+      assets.frame = {};
+      for (const [slot, key] of Object.entries(FRAME_SLOT_KEYS)) {
+        const file = await optionalAsset(template, template.pptx.frame[key], slot);
+        if (file) assets.frame[key] = file;
+      }
     }
   }
   return { template, assets };
@@ -386,7 +384,7 @@ function withStoredFiles(template, stored) {
   set('pptx', 'template', stored?.pptx?.template);
   // The frame's pictures are files too; its other settings come with the save.
   if (next.pptx.frame || stored?.pptx?.frame) {
-    next.pptx.frame = { ...next.pptx.frame };
+    next.pptx.frame = { ...(next.pptx.frame || {}) };
     for (const key of Object.values(FRAME_SLOT_KEYS)) {
       if (stored?.pptx?.frame?.[key]) next.pptx.frame[key] = stored.pptx.frame[key];
       else delete next.pptx.frame[key];
@@ -547,7 +545,7 @@ export async function saveTemplateAsset(id, { slot, data, originalName, family, 
       else if (slot === 'wordTemplate') next.docx.template = name;
       else if (slot === 'powerpointTemplate') next.pptx.template = name;
       else if (FRAME_SLOT_KEYS[slot]) {
-        next.pptx.frame = { ...next.pptx.frame, [FRAME_SLOT_KEYS[slot]]: name };
+        next.pptx.frame = { ...(next.pptx.frame || {}), [FRAME_SLOT_KEYS[slot]]: name };
       }
     }
     const template = validate(next, id);
@@ -563,27 +561,6 @@ export async function saveTemplateAsset(id, { slot, data, originalName, family, 
     });
     return { template, file: name, info };
   });
-}
-
-/**
- * Drop the file a slot refers to from a template (a copy the caller owns).
- *
- * @param {Object} next
- * @param {string} slot - Any slot but `font`.
- * @returns {boolean} False for a slot that does not exist.
- */
-function clearFileSlot(next, slot) {
-  if (slot === 'logo') delete next.brand.logo;
-  else if (slot === 'letterhead') delete next.pdf.letterhead;
-  else if (slot === 'letterheadFollowing') delete next.pdf.letterheadFollowing;
-  else if (slot === 'wordTemplate') delete next.docx.template;
-  else if (slot === 'powerpointTemplate') {
-    delete next.pptx.template;
-    delete next.pptx.layouts;
-  } else if (FRAME_SLOT_KEYS[slot]) {
-    if (next.pptx.frame) delete next.pptx.frame[FRAME_SLOT_KEYS[slot]];
-  } else return false;
-  return true;
 }
 
 /**
@@ -608,9 +585,16 @@ export async function removeTemplateAsset(id, { slot, family, face }) {
       if (index < 0) throw new DocumentTemplateError('Font not found.', 404);
       if (face === 'normal' || !face) next.fonts.splice(index, 1);
       else delete next.fonts[index][face];
-    } else if (!clearFileSlot(next, slot)) {
-      throw new DocumentTemplateError(`Unknown template file slot "${slot}".`);
-    }
+    } else if (slot === 'logo') delete next.brand.logo;
+    else if (slot === 'letterhead') delete next.pdf.letterhead;
+    else if (slot === 'letterheadFollowing') delete next.pdf.letterheadFollowing;
+    else if (slot === 'wordTemplate') delete next.docx.template;
+    else if (slot === 'powerpointTemplate') {
+      delete next.pptx.template;
+      delete next.pptx.layouts;
+    } else if (FRAME_SLOT_KEYS[slot]) {
+      if (next.pptx.frame) delete next.pptx.frame[FRAME_SLOT_KEYS[slot]];
+    } else throw new DocumentTemplateError(`Unknown template file slot "${slot}".`);
     const template = validate(next, id);
     await atomicWriteJSON(configPath(id), template);
     await removeUnusedAssets(id, template);
