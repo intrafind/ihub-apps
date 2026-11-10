@@ -153,6 +153,23 @@ describe('owner and targets', () => {
     );
   });
 
+  it('names the refused host and where to allow it; other targets are a plain BAD_REQUEST', async () => {
+    const refused = await createLink({ url: 'https://www.qwant.com/', ownerId: 'u1' }).catch(
+      e => e
+    );
+    expect(refused).toBeInstanceOf(ShortLinkTargetError);
+    expect(refused).toMatchObject({
+      code: 'SHORT_LINK_HOST_NOT_ALLOWED',
+      status: 400,
+      details: { host: 'www.qwant.com' }
+    });
+    expect(refused.message).toContain('Admin → Security → SSRF Allowlist');
+
+    const scheme = await createLink({ url: 'mailto:a@b.c', ownerId: 'u1' }).catch(e => e);
+    expect(scheme).toMatchObject({ code: 'BAD_REQUEST', status: 400 });
+    expect(scheme.details).toBeUndefined();
+  });
+
   it('accepts an absolute URL on an allowed host', async () => {
     const link = await createLink(
       { url: 'https://Docs.Example.com/page', ownerId: 'u1' },

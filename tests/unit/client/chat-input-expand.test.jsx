@@ -215,4 +215,22 @@ describe('ChatInput expand button', () => {
     expect(screen.getByRole('button', { name: 'Clear input' })).toHaveClass('right-9');
     expect(textbox()).toHaveClass('pr-16');
   });
+
+  test("sits on the one-line composer's line, and on the first line when expanded", () => {
+    // The one-line composer's text row is taller (as tall as the toolbar), so
+    // its icons move down with the line; ChatInput.css holds the padding.
+    const clearButton = () => screen.getByRole('button', { name: 'Clear input' });
+    const { rerender } = render(<Harness />);
+    expect(expandButton()).toHaveClass('top-3');
+    expect(clearButton()).toHaveClass('top-3');
+
+    rerender(<Harness compact />);
+    expect(expandButton()).toHaveClass('top-4', 'sm:top-5');
+    expect(clearButton()).toHaveClass('top-4', 'sm:top-5');
+
+    fireEvent.click(expandButton());
+    expect(expandButton()).toHaveClass('top-3');
+    expect(expandButton()).not.toHaveClass('top-4');
+    expect(clearButton()).toHaveClass('top-3');
+  });
 });

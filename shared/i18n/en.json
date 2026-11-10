@@ -2045,7 +2045,7 @@
       },
       "ssrf": {
         "title": "SSRF Allowlist",
-        "description": "Allow outbound HTTP calls (OpenAPI tools, MCP servers, web tools) to reach intentionally internal services even when their hostname resolves to a private IP.",
+        "description": "Allow outbound HTTP calls (OpenAPI tools, MCP servers, web tools) to reach intentionally internal services even when their hostname resolves to a private IP. Short links may also lead only to websites whose host is on this list.",
         "addHost": "Add host",
         "removeHost": "Remove",
         "hostPlaceholder": "*.intrafind.io, api.internal.company.com",
@@ -3354,6 +3354,10 @@
         "noSources": "none"
       },
       "groups": {
+        "clients": {
+          "title": "Clients",
+          "description": "Where users work with iHub outside the web app: Outlook, the browser, Nextcloud and Microsoft 365 Copilot. Each one is set up on its own page."
+        },
         "peopleDirectories": {
           "title": "People directories",
           "description": "LDAP and Entra ID directories the model looks people up in."
@@ -5607,6 +5611,15 @@
       }
     },
     "translateField": "Translate",
+    "shortlinks": {
+      "saveError": "The short link could not be saved.",
+      "app": "App",
+      "appSearch": "Search apps...",
+      "noApp": "No app selected",
+      "urlHint": "A path on this server (/apps/chat) always works. A link to another website works only when its host is on the SSRF allowlist.",
+      "ssrfNotice": "Short links to other websites work only for hosts on the SSRF allowlist; links to any other host answer \"Not found\".",
+      "ssrfLink": "Admin → Security → SSRF Allowlist"
+    },
     "toolApproval": {
       "mode": {
         "never": "Never ask",
@@ -7732,14 +7745,14 @@
     "resultsCount_other": "{{count}} results",
     "queries": "Searches",
     "cited": "Cited in this answer",
-    "noneCited": "The answer cites none of the sources directly.",
-    "noneCitedInScope": "The answer cites none of the sources found here.",
+    "read": "Read for this answer",
     "foundIn": "Found in {{scope}}",
     "searchedIn": "Searched in {{scope}}",
     "asked": "Asked {{scope}}",
     "scopeFilter": "Filter by where the sources were found",
     "scopeFilterAll": "All",
     "considered": "Also considered",
+    "consideredOnly": "Considered",
     "showInPanel": "Show source {{n}} in the sources panel",
     "showMoreCited_one": "Show {{count}} more",
     "showMoreCited_other": "Show {{count}} more",
@@ -9243,6 +9256,7 @@
     "FILES_NOT_SHARED": "The owner did not share the attached files.",
     "ORIGINAL_NOT_SHARED": "The owner shared the text of this file, not the original.",
     "ORIGINAL_DISCARDED": "The original file is no longer available.",
+    "SHORT_LINK_HOST_NOT_ALLOWED": "Short links may not lead to this website. An administrator can allow its host on the SSRF allowlist under Admin → Security → SSRF Allowlist.",
     "SCHEDULED_TASKS_UNAVAILABLE": "Scheduled tasks are not available on this installation.",
     "INTERACTIVE_USER_REQUIRED": "Scheduled tasks need a signed-in person, not a token or agent.",
     "PERMISSION_DENIED": "You are not allowed to use scheduled tasks.",

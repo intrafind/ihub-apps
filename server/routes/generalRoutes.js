@@ -10,6 +10,7 @@ import {
 import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
+import { responseEtag } from '../utils/etag.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import { getStorage, isStorageReady } from '../storage/bootstrap.js';
 import { describeWebSearchAvailability } from '../services/tools/webSearchResolver.js';
@@ -191,7 +192,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       throw new ServiceError('INTERNAL_ERROR', 'Failed to load apps configuration');
     }
 
-    res.setHeader('ETag', userSpecificEtag);
+    res.setHeader('ETag', responseEtag(userSpecificEtag));
     res.json({ items: withoutUsageGuideContent(apps) });
   });
 

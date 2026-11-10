@@ -3,7 +3,13 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { etagForIds, etagWithSuffix, shortHash } from '../utils/etag.js';
+import {
+  etagForIds,
+  etagWithSuffix,
+  responseEtag,
+  RESPONSE_SHAPE_REVISION,
+  shortHash
+} from '../utils/etag.js';
 
 describe('etagWithSuffix', () => {
   it('puts the suffix inside the quotes of a quoted ETag', () => {
@@ -36,5 +42,22 @@ describe('etagForIds', () => {
     const ids = ['b', 'a'];
     etagForIds('"abc"', ids);
     assert.deepEqual(ids, ['b', 'a']);
+  });
+});
+
+describe('responseEtag', () => {
+  it('differs from the config ETag it is built from, inside its quotes', () => {
+    assert.equal(responseEtag('"abc"'), `"abc-r${RESPONSE_SHAPE_REVISION}"`);
+    assert.notEqual(responseEtag('"abc"'), '"abc"');
+  });
+
+  it('is stable for the same config ETag', () => {
+    assert.equal(responseEtag('"abc"'), responseEtag('"abc"'));
+  });
+
+  it('passes an empty ETag through, so no header is set for it', () => {
+    assert.equal(responseEtag(null), null);
+    assert.equal(responseEtag(undefined), undefined);
+    assert.equal(responseEtag(''), '');
   });
 });

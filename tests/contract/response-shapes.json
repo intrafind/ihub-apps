@@ -1073,9 +1073,6 @@
         "configured": "boolean",
         "disabled": "boolean"
       },
-      "shortLinks": {
-        "allowedHosts": []
-      },
       "skills": {
         "maxCatalogTokens": "number",
         "maxSkillBodyTokens": "number"
@@ -3106,7 +3103,6 @@
           "runLog": "object",
           "scheduledTasks": "object",
           "setup": "object",
-          "shortLinks": "object",
           "speech": "object",
           "ssl": "object",
           "ssrf": "object",

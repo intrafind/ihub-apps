@@ -16,7 +16,13 @@ import IntegrationConnectionsDialog from '../components/integrations/Integration
 import IntegrationGroupSection from '../components/integrations/IntegrationGroupSection';
 import InstallationTile from '../components/integrations/InstallationTile';
 import CatalogTile from '../components/integrations/CatalogTile';
-import InboundIntegrations from '../components/integrations/InboundIntegrations';
+import InboundIntegrations, {
+  ClientsSection
+} from '../components/integrations/InboundIntegrations';
+import {
+  CLIENT_INTEGRATIONS,
+  matchesInboundQuery
+} from '../components/integrations/inboundChannels';
 import IntegrationRequestsPanel from '../components/integrations/IntegrationRequestsPanel';
 import { announceIntegrationRequestCount } from '../hooks/useIntegrationRequestCount';
 import {
@@ -107,9 +113,12 @@ export function matchesIntegrationQuery(entry, query) {
  *
  * Tabs (`?tab=`):
  *
- * - **Installed** (default): every installation as a tile, grouped (people
- *   directories, web search, storage providers, MCP servers, agents,
- *   built-in, from the catalog). A tile opens the installation's page
+ * - **Installed** (default): first the **Clients** section, the channels
+ *   users work in (Outlook add-in, browser extension, Microsoft 365 Copilot,
+ *   Nextcloud embed), each linking to its page with its status; then every
+ *   installation as a tile, grouped (people directories, web search, storage
+ *   providers, MCP servers, agents, built-in, from the catalog). The search
+ *   filters both. A tile opens the installation's page
  *   (`/admin/integrations/:instanceId`); its quick actions test, enable /
  *   disable (asking first when apps bind it), remove and list the connected
  *   users. An installation with a migration state also offers the actions
@@ -323,6 +332,12 @@ function AdminIntegrationsPage() {
   const installedGroups = useMemo(
     () => groupIntegrations(installed.filter(item => matchesIntegrationQuery(item, query))),
     [installed, query]
+  );
+  // The Clients section above the installations; `t` gives the search the
+  // titles and descriptions in the current language.
+  const clientEntries = useMemo(
+    () => CLIENT_INTEGRATIONS.filter(entry => matchesInboundQuery(entry, query, t)),
+    [query, t]
   );
   const catalogGroups = useMemo(
     () => groupIntegrations(catalog.filter(item => matchesIntegrationQuery(item, query))),
@@ -611,6 +626,12 @@ function AdminIntegrationsPage() {
               />
             </div>
           )}
+          {/* Without a search box (nothing installed) the Clients section is shown whole. */}
+          {installed.length === 0 && (
+            <div className="mb-8">
+              <ClientsSection entries={CLIENT_INTEGRATIONS} platform={platform} />
+            </div>
+          )}
           {installed.length === 0 ? (
             <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700">
               <Icon name="link" size="lg" className="mx-auto text-gray-400" />
@@ -634,10 +655,11 @@ function AdminIntegrationsPage() {
           ) : (
             <>
               {searchBox}
-              {installedGroups.length === 0 ? (
+              {installedGroups.length === 0 && clientEntries.length === 0 ? (
                 noMatch
               ) : (
                 <div className="space-y-8">
+                  <ClientsSection entries={clientEntries} platform={platform} />
                   {installedGroups.map(group => (
                     <IntegrationGroupSection key={group.id} group={group} scope="installed">
                       {group.items.map(item => (

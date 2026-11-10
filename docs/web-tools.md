@@ -252,6 +252,12 @@ with the searches in its header and two sections:
 - **Also considered**: what the searches returned, or the page reader read,
   without being cited.
 
+An answer that cites no page at all (some models, local ones especially, write
+no links) shows **Read for this answer** in place of the cited list, under the
+answer and in the panel: the pages the search or the page reader read, which is
+what the answer was written from. The other results stay under **Also
+considered**. An empty list is never shown.
+
 Each source card shows the site's favicon (as the search provider returned it;
 iHub fetches none from a third-party service, sites without one get their
 initial), the site, the title (opening the page), the snippet or

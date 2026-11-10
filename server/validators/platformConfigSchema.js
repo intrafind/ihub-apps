@@ -442,7 +442,7 @@ export const platformConfigSchema = z
           .array(z.string())
           .prefault([])
           .describe(
-            'Hostnames or patterns that bypass the SSRF private-IP guard for outbound HTTP calls (OpenAPI tools, MCP servers, web tools). Use this to reach intentionally internal services. Supports wildcards (*.example.com), exact domains (api.example.com), and subdomain (.example.com) patterns.'
+            'Hostnames or patterns that bypass the SSRF private-IP guard for outbound HTTP calls (OpenAPI tools, MCP servers, web tools), and the hosts a short link may redirect to with an absolute URL. Use this to reach intentionally internal services. Supports wildcards (*.example.com), exact domains (api.example.com), and subdomain (.example.com) patterns.'
           )
       })
       .prefault({}),
@@ -666,20 +666,6 @@ export const platformConfigSchema = z
       .object({
         retentionDays: z.number().prefault(30),
         cleanupEnabled: z.boolean().prefault(true)
-      })
-      .passthrough()
-      .prefault({}),
-    // Short links (feature `shortLinks`): an absolute http(s) target's host must
-    // match one of these entries; paths on this server are always allowed.
-    // Matching lives in utils/shortLinkTarget.js.
-    shortLinks: z
-      .object({
-        allowedHosts: z
-          .array(z.string())
-          .prefault([])
-          .describe(
-            'Hosts a short link may redirect to with an absolute URL: exact hostnames (docs.example.com), subdomain patterns (*.example.com or .example.com, not the domain itself), or /regex/ entries matched against the whole hostname. Paths on this server are always allowed.'
-          )
       })
       .passthrough()
       .prefault({}),

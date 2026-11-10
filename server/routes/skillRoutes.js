@@ -5,6 +5,7 @@ import { authRequired } from '../middleware/authRequired.js';
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { responseEtag } from '../utils/etag.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { getSkillContent, getSkillResource } from '../services/skillLoader.js';
 import { assertValidId } from '../utils/pathSecurity.js';
@@ -89,7 +90,7 @@ export default function registerSkillRoutes(app) {
           });
         }
       } else if (etag) {
-        res.setHeader('ETag', etag);
+        res.setHeader('ETag', responseEtag(etag));
       }
 
       res.json(safeSkills);

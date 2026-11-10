@@ -29,6 +29,11 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   badges, and everything else it found under **Also considered**. Web pages, documents and records
   share one card design: the site or system they come from, the title, an excerpt or cited passage,
   the date, and whether the page or document was read.
+- An answer that cites none of its sources (a model that writes no links) lists what was read for
+  it instead, at its end and at the top of the panel: **Read for this answer**, the pages and
+  documents whose content went to the model (`read.ok`, which the producer sets on the server).
+  Unnumbered, because no badge in the text points at them. A list with nothing in it is never
+  shown; with nothing cited or read, the panel has one list, **Considered**.
 - Each citation in the text is a numbered badge. This covers links to a source (`[n](url)`, a
   document's deep link) and iAssistant's `<cite>` markers alike. Hover or focus highlights the
   paragraph and its card. A click opens the panel on that card.
@@ -72,7 +77,8 @@ An answer's sources are `{ items, queries, scopes? }`: the sources, merged by `i
 they were first found, plus what was searched for and the integration scopes the answer was
 produced with. The same `mergeSources` folds them on the server, for the stored answer, and on the
 client, for the live panel. `resolveCitations(markdown, sources)` numbers the sources in the order
-the answer first cites them.
+the answer first cites them; when it cites none, it returns the sources that were read as `read`
+and only the rest as `considered`.
 
 Each stored answer keeps its sources (`sources` on the message), but they do not go back to
 the model with the history. On a later turn the model looks them up with `chat_sources_list` and

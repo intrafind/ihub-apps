@@ -90,7 +90,9 @@ configuration moves into installations on the first start (see Breaking Changes)
   an iAssistant. The settings are stored in the app as before.
 - **One admin page:** the tabs **Installed**, **Catalog**, **Requests** and **Inbound** (what
   connects to iHub: Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, the
-  MCP gateway). Installations are grouped (people directories, web search, storage providers, MCP
+  MCP gateway). **Installed** opens with a **Clients** section: the Outlook add-in, the browser
+  extension, Microsoft 365 Copilot and the Nextcloud embed, each with whether it is switched on and
+  a link to its settings page; the search box finds them too. Installations are grouped (people directories, web search, storage providers, MCP
   servers, agents, built-in, custom, from the catalog); a tile shows version, status, sign-in mode
   and key facts, and opens `/admin/integrations/<id>` with **Overview**, **Settings** and, where
   the definition has a history, **Releases**. iFinder, iAssistant, the web search engines, people
@@ -1257,6 +1259,10 @@ the end says what it rests on.
   message box, stays there.
 - The entry and the badge are the same height. The entry has an outline because it can be
   clicked, and the badge has a soft fill without an outline because it is only a label.
+- An answer that links none of its sources, but was written from pages the search read, lists
+  those pages as **Read for this answer** in the cited list's place, and at the top of the panel;
+  the other results stay under **Also considered**. The panel shows a section only when it has
+  entries, so an empty **Cited in this answer (0)** no longer appears.
 
 See [Answer Sources](../../answer-sources.md#what-users-see).
 
@@ -1351,6 +1357,12 @@ live links.
 - Uploads never wait behind scheduled refreshes.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
+
+## Short Links: Pick the App From a Search Box
+
+The short link editor offers the app as a search box, as other admin pages do: type part of an
+app's name and pick it, instead of typing its ID. The **Redirect URL** field says that a link to
+another website needs its host on the SSRF allowlist, with a link to it.
 
 ## Chat: Progress While the Model Writes a Document, File or Web Artifact
 
