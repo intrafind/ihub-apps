@@ -499,3 +499,11 @@ NTLM again without any change.
   identity provider with Windows single sign-on (ADFS, Keycloak, Entra ID) via OIDC.
 - The NTLM documentation now explains how the sign-in is checked by the domain controller and which
   domain controller settings (LDAP signing, channel binding, NTLM restrictions) affect it.
+
+## Sources Panel: A Refused Download or Email Attachment Says Why
+
+**Download** and **Add to email** in the sources panel showed only "The document could not be
+attached to your email." (or "…downloaded.") whatever had gone wrong. The message now adds the
+cause: iHub's reason, for example "You are not allowed to use this integration." when the user's
+groups are not granted the iFinder integration (documents in iAssistant answers need it too), or
+Outlook's own error.

@@ -90,7 +90,9 @@ configuration moves into installations on the first start (see Breaking Changes)
   an iAssistant. The settings are stored in the app as before.
 - **One admin page:** the tabs **Installed**, **Catalog**, **Requests** and **Inbound** (what
   connects to iHub: Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, the
-  MCP gateway). Installations are grouped (people directories, web search, storage providers, MCP
+  MCP gateway). **Installed** opens with a **Clients** section: the Outlook add-in, the browser
+  extension, Microsoft 365 Copilot and the Nextcloud embed, each with whether it is switched on and
+  a link to its settings page; the search box finds them too. Installations are grouped (people directories, web search, storage providers, MCP
   servers, agents, built-in, custom, from the catalog); a tile shows version, status, sign-in mode
   and key facts, and opens `/admin/integrations/<id>` with **Overview**, **Settings** and, where
   the definition has a history, **Releases**. iFinder, iAssistant, the web search engines, people
@@ -1257,6 +1259,10 @@ the end says what it rests on.
   message box, stays there.
 - The entry and the badge are the same height. The entry has an outline because it can be
   clicked, and the badge has a soft fill without an outline because it is only a label.
+- An answer that links none of its sources, but was written from pages the search read, lists
+  those pages as **Read for this answer** in the cited list's place, and at the top of the panel;
+  the other results stay under **Also considered**. The panel shows a section only when it has
+  entries, so an empty **Cited in this answer (0)** no longer appears.
 
 See [Answer Sources](../../answer-sources.md#what-users-see).
 
@@ -1355,3 +1361,20 @@ live links.
   after the same time.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
+
+## Short Links: Allow External Hosts in the Admin UI
+
+A short link may lead to a page of this installation or to an external website whose host is on
+the allowed list. Admins could only edit that list in `platform.json` and had to restart, so links
+to external sites answered "Not found" and new ones were refused. **Admin → Short Links** now has an
+**Allowed external hosts** section.
+
+- Changes take effect at once, for new and existing links.
+- **Links that do not work** lists the hosts existing links lead to that the list blocks, with how
+  many links each, and an **Allow** button.
+- Enter a host (`www.example.com`), any subdomain (`*.example.com`) or a `/regular expression/`. A
+  pasted URL is reduced to its host. `www.example.com` and `example.com` are different hosts.
+- Saving a link to a host that is not allowed now names the host and says where to allow it. The
+  SSRF allowlist does not apply to short links.
+
+See [Platform Configuration](../../platform.md#shortlinks).
