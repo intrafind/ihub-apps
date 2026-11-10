@@ -1037,7 +1037,7 @@ function PassageItem({ passage, onShow }) {
             onClick={() => setExpanded(shown => !shown)}
             className="ml-0.5 font-medium text-indigo-600 hover:underline dark:text-indigo-400"
           >
-            {expanded ? t('common.showLess', 'less') : t('common.showMore', 'more')}
+            {expanded ? t('chat.sourcePassage.less', 'less') : t('chat.sourcePassage.more', 'more')}
           </button>
         )}
       </p>

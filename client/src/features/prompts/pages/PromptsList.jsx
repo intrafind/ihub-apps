@@ -194,7 +194,7 @@ function PromptsList() {
         setError(null);
       } catch (err) {
         console.error('Error loading prompts:', err);
-        setError(t('error.loadingFailed', 'Failed to load prompts'));
+        setError(t('error.promptsLoadingFailed', 'Failed to load prompts'));
       } finally {
         setLoading(false);
       }

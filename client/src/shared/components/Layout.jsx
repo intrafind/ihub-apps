@@ -8,6 +8,7 @@ import LanguageSelector from './LanguageSelector';
 import DarkModeToggle from './DarkModeToggle';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
+import { resolveTranslationRefs } from '../../utils/translationRefs';
 import DisclaimerPopup from './DisclaimerPopup';
 import SmartSearch from './SmartSearch';
 import ScheduledTaskNotifier from '../../features/tasks/components/ScheduledTaskNotifier';
@@ -47,6 +48,19 @@ function Layout() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { headerColor, uiConfig, resetHeaderColor } = useUIConfig();
+  // The tagline may refer to a translation key (`$t(product.tagline)`), so it is resolved here.
+  const tagline = uiConfig?.header?.tagline
+    ? resolveTranslationRefs(getLocalizedContent(uiConfig.header.tagline, currentLanguage), t)
+    : null;
+  // The footer text may refer to a translation key (`$t(footer.legal)`), which takes the year.
+  const footerYear = { year: new Date().getFullYear() };
+  const footerText = uiConfig?.footer?.text
+    ? resolveTranslationRefs(
+        getLocalizedContent(uiConfig.footer.text, currentLanguage),
+        t,
+        footerYear
+      )
+    : t('footer.copyright', '© {{year}} iHub Apps', footerYear);
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
@@ -159,13 +173,7 @@ function Layout() {
     uiConfig?.footer?.enabled !== false && showFooter && !isAppPage ? (
       <footer className="flex-none border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 py-2.5 text-xs text-gray-500 dark:text-gray-400">
-          <span className="truncate">
-            {uiConfig?.footer?.text
-              ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-              : t('footer.copyright', '© {{year}} iHub Apps', {
-                  year: new Date().getFullYear()
-                })}
-          </span>
+          <span className="truncate">{footerText}</span>
           {uiConfig?.footer?.links && (
             <nav
               aria-label={t('footer.navigation', 'Footer navigation')}
@@ -334,13 +342,13 @@ function Layout() {
                             <span className="font-semibold">
                               {uiConfig?.header?.title
                                 ? getLocalizedContent(uiConfig.header.title, currentLanguage)
-                                : 'iHub Apps'}
+                                : t('product.name', 'iHub Apps')}
                             </span>
                           )}
                         </span>
-                        {uiConfig?.header?.tagline && (
+                        {tagline && (
                           <span className="text-[0.5625rem] text-white/60 font-normal">
-                            {getLocalizedContent(uiConfig.header.tagline, currentLanguage)}
+                            {tagline}
                           </span>
                         )}
                       </div>
@@ -440,13 +448,7 @@ function Layout() {
               <div className="container mx-auto px-4">
                 <div className="flex flex-col md:flex-row justify-between items-center">
                   <div className="mb-4 md:mb-0">
-                    <p>
-                      {uiConfig?.footer?.text
-                        ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-                        : t('footer.copyright', '© {{year}} iHub Apps', {
-                            year: new Date().getFullYear()
-                          })}
-                    </p>
+                    <p>{footerText}</p>
                   </div>
                   <nav
                     aria-label={t('footer.navigation', 'Footer navigation')}

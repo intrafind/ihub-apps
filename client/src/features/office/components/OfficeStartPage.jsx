@@ -153,7 +153,8 @@ function OfficeStartPage({
     [user, t]
   );
 
-  const paneTitle = getLocalizedContent(officeConfig?.displayName, officeLocale) || 'iHub Apps';
+  const paneTitle =
+    getLocalizedContent(officeConfig?.displayName, officeLocale) || t('product.name', 'iHub Apps');
   const defaultAppName = getLocalizedContent(defaultApp?.name, officeLocale) || defaultApp?.id;
 
   // Everything the chat needs to start exactly as the user prepared it here:

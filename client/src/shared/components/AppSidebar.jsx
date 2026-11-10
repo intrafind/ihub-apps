@@ -18,6 +18,7 @@ import Icon from './Icon';
 import ConfirmDialog from './ConfirmDialog';
 import IHubLogo from './IHubLogo';
 import { getLocalizedContent } from '../../utils/localizeContent';
+import { resolveTranslationRefs } from '../../utils/translationRefs';
 import { rankAppShortcuts, readAppShortcutConfig } from '../../utils/appShortcuts';
 import useRecentAppIds from '../hooks/useRecentAppIds';
 import { START_PAGE_PATH } from '../../utils/homePage';
@@ -582,7 +583,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   const logoAlt = getLocalizedContent(uiConfig?.header?.logo?.alt, currentLanguage) || 'iHub';
   // Vendor tagline is only shown when configured (no hard-coded vendor name).
   const tagline = uiConfig?.header?.tagline
-    ? getLocalizedContent(uiConfig.header.tagline, currentLanguage)
+    ? resolveTranslationRefs(getLocalizedContent(uiConfig.header.tagline, currentLanguage), t)
     : null;
 
   // Plain render helper (not a nested component) to avoid remounting on render.

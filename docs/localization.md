@@ -25,6 +25,35 @@ Customers can override any of the built-in strings by creating files in `content
 
 Save this as `contents/locales/de.json`. During startup the server merges these overrides with the built-in locales.
 
+## The Product Name and Tagline
+
+The product name has one translation key, `product.name` ("iHub Apps"). Every other text that
+mentions it, such as the footer copyright, the welcome title or the share-link button, refers to it
+as `$t(product.name)`, which i18next fills in from the same file. Override that one key and the
+name changes everywhere:
+
+```json
+{
+  "product": {
+    "name": "Acme Assistant"
+  }
+}
+```
+
+Use the same reference in your own overrides (`"Welcome to $t(product.name)"`) instead of
+spelling the name out. A key can refer to any other key the same way.
+
+The header tagline ("by IntraFind") is `product.tagline`, and the footer line ("© 2026 IntraFind
+Software AG. All rights reserved.") is `footer.legal`, which takes the current year as `{{year}}`.
+The shipped `header.tagline` and `footer.text` in `contents/config/ui.json` point at them as
+`$t(product.tagline)` and `$t(footer.legal)`; text you type into those fields instead, or an empty
+value, takes their place. The client resolves `$t(key)` in these two fields only.
+
+Every text the end-user frontend asks for by key exists in the built-in English and German files, so
+it can be overridden. A unit test (`tests/unit/client/translation-keys-exist.test.jsx`) fails when
+a `t('some.key', …)` call uses a key that is not there. The admin area, the login gate (its own
+table) and keys built at run time are not covered.
+
 ## Merge Behaviour
 
 1. The server loads the built-in file from `shared/i18n/{lang}.json`.

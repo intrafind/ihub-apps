@@ -1,10 +1,15 @@
 {
+  "product": {
+    "name": "iHub Apps",
+    "tagline": "by IntraFind"
+  },
   "accessibility": {
     "skipToContent": "Skip to main content"
   },
   "footer": {
     "navigation": "Footer navigation",
-    "copyright": "© {{year}} iHub Apps"
+    "copyright": "© {{year}} $t(product.name)",
+    "legal": "© {{year}} IntraFind Software AG. All rights reserved."
   },
   "attachedFiles": {
     "removeAll": "Remove All",
@@ -53,7 +58,7 @@
     "downloadFailed": "The download failed. Please try again."
   },
   "app": {
-    "title": "iHub Apps",
+    "title": "$t(product.name)",
     "loading": "Loading...",
     "error": "An error occurred",
     "retry": "Retry"
@@ -151,7 +156,23 @@
     "enabled": "Enabled",
     "disabled": "Disabled",
     "saving": "Saving…",
-    "moreActions": "More actions"
+    "moreActions": "More actions",
+    "untitledFile": "Document {{index}}",
+    "ok": "OK",
+    "retry": "Retry",
+    "hideParameters": "Hide Parameters",
+    "showParameters": "Show Parameters",
+    "confirm": "Confirm",
+    "clearSelection": "Clear",
+    "refresh": "Refresh",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "empty": "empty",
+    "showLess": "Show less",
+    "expandArray": "Expand array ({{count}} items)",
+    "expandObject": "Expand object ({{count}} fields)",
+    "details": "Details",
+    "tryAgain": "Try again"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -257,7 +278,7 @@
   },
   "pages": {
     "home": {
-      "title": "iHub Apps",
+      "title": "$t(product.name)",
       "description": "Interact with various AI models through a simple interface",
       "featured": "Featured Apps",
       "viewAll": "View All Apps"
@@ -278,7 +299,9 @@
         "continueWithout": "You can still pick an app and start without the document."
       },
       "nextcloudSelection": {
-        "description": "Pick an app below to start a chat — your selected files will be attached automatically."
+        "description": "Pick an app below to start a chat — your selected files will be attached automatically.",
+        "title_one": "{{count}} file selected in Nextcloud",
+        "title_other": "{{count}} files selected in Nextcloud"
       },
       "noApps": "No applications found",
       "loading": "Loading…",
@@ -294,7 +317,13 @@
         "chat": "Chat",
         "redirect": "External",
         "iframe": "Embedded"
-      }
+      },
+      "sort": {
+        "relevance": "Relevance",
+        "nameAsc": "Name A-Z",
+        "nameDesc": "Name Z-A"
+      },
+      "noFavorites": "No favourite apps yet"
     },
     "sort": {
       "label": "Sort by",
@@ -330,7 +359,7 @@
       "title": "External Application",
       "externalSite": "External Site",
       "continueButton": "Continue to {{appName}}",
-      "warning": "You are about to leave iHub Apps",
+      "warning": "You are about to leave $t(product.name)",
       "openingInNewTab": "Opening in new tab...",
       "redirecting": "Redirecting...",
       "invalidUrl": "This app has no valid web address configured. Only http and https links can be opened."
@@ -387,7 +416,17 @@
           "jsonl": "JSON Lines format"
         },
         "companyTemplates": "Company templates",
-        "templatePinned": "This app exports in the \"{{name}}\" template."
+        "templatePinned": "This app exports in the \"{{name}}\" template.",
+        "template": "Template",
+        "templateDefault": "Default",
+        "templateProfessional": "Professional",
+        "templateMinimal": "Minimal",
+        "watermarkText": "Watermark Text",
+        "watermarkPosition": "Position",
+        "bottomRight": "Bottom Right",
+        "bottomLeft": "Bottom Left",
+        "bottomCenter": "Bottom Center",
+        "watermarkOpacity": "Opacity"
       },
       "copyToClipboard": "Copy to clipboard",
       "showThoughts": "Show thinking analysis",
@@ -419,12 +458,23 @@
         "collapse": "Hide input parameters",
         "pin": "Pin: keep the input parameters open",
         "unpin": "Unpin: hide the input parameters after each message"
-      }
+      },
+      "errorTitle": "Error",
+      "clearCache": "Clear Cache & Reload",
+      "canvas": "Canvas",
+      "share": "Share",
+      "canvasMode": "Canvas Mode",
+      "answerQuestionAbove": "Please answer the question above to continue",
+      "optionalMessagePlaceholder": "Type here (optional)..."
     },
     "authRequired": {
       "title": "Authentication Required",
       "description": "You need to log in to access this page.",
       "login": "Login"
+    },
+    "appCanvas": {
+      "errorTitle": "Error",
+      "backToChat": "Back to Chat"
     }
   },
   "chat": {
@@ -506,6 +556,13 @@
         "internal": "Internal",
         "external": "External"
       }
+    },
+    "sourcePassage": {
+      "less": "less",
+      "more": "more"
+    },
+    "input": {
+      "contextSection": "Message context"
     }
   },
   "auth": {
@@ -516,8 +573,10 @@
       "signOut": "Sign Out",
       "signIn": "Sign In",
       "closeLogin": "Close login dialog",
-      "usage": "Usage"
-    }
+      "usage": "Usage",
+      "integrations": "Integrations"
+    },
+    "userMenu": "User menu"
   },
   "widget": {
     "fallback": {
@@ -2007,7 +2066,7 @@
       "versionLoading": "Loading version information...",
       "versionError": "Failed to load version information",
       "updateCheckTitle": "Update Available",
-      "updateAvailable": "A new version of iHub Apps is available!",
+      "updateAvailable": "A new version of $t(product.name) is available!",
       "currentVersion": "Current Version",
       "latestVersion": "Latest Version",
       "viewRelease": "View Release on GitHub",
@@ -4442,7 +4501,7 @@
     },
     "changelog": {
       "title": "What's New",
-      "subtitle": "Release notes for every iHub Apps release, newest first.",
+      "subtitle": "Release notes for every $t(product.name) release, newest first.",
       "loading": "Loading changelog...",
       "loadingRelease": "Loading release notes...",
       "loadError": "Failed to load changelog",
@@ -4838,7 +4897,7 @@
       "delete": "Delete",
       "edit": "Edit",
       "searchPlaceholder": "Search skills...",
-      "subtitle": "Install, configure, and manage skills for your iHub Apps",
+      "subtitle": "Install, configure, and manage skills for your $t(product.name)",
       "table": {
         "name": "Name"
       },
@@ -5445,7 +5504,7 @@
         "manifest-invalid": "The update manifest is not valid: {{error}}",
         "legacy-archive": "The archive has no update manifest (built before manifests were introduced); its contents cannot be checked file by file.",
         "manifest-mismatch": "The archive's files do not match its manifest ({{changed}} changed, {{missing}} missing, {{unlisted}} unlisted: {{sample}}).",
-        "wrong-product": "The archive is not an iHub Apps release ({{product}}).",
+        "wrong-product": "The archive is not an $t(product.name) release ({{product}}).",
         "incomplete": "The archive does not contain the application files (server/, public/, version.txt).",
         "version-conflict": "The manifest says {{manifest}}, version.txt says {{versionTxt}}.",
         "signature-invalid": "The manifest signature does not match: the archive was modified after signing.",
@@ -5926,7 +5985,7 @@
     },
     "docs": {
       "title": "Documentation",
-      "subtitle": "The iHub Apps documentation for the version you are running.",
+      "subtitle": "The $t(product.name) documentation for the version you are running.",
       "searchLabel": "Search the documentation",
       "searchPlaceholder": "Search the documentation...",
       "searching": "Searching...",
@@ -5965,7 +6024,8 @@
     "size": "Size",
     "modified": "Modified",
     "googleDrive": {},
-    "nextcloud": {}
+    "nextcloud": {},
+    "virtualFile": "Cloud document"
   },
   "components": {
     "uploader": {
@@ -5994,7 +6054,9 @@
       "detail": {
         "page": "Page {{current}} of {{total}}",
         "slide": "Slide {{current}} of {{total}}"
-      }
+      },
+      "dropZoneActive": "Drop zone active. Release to upload files.",
+      "dropFileHere": "Drop file here"
     },
     "statusDot": {
       "ok": "OK",
@@ -6009,7 +6071,8 @@
     "commentPlaceholder": "Tell us more about your rating (optional)",
     "rated": "Rated",
     "sendFeedback": "Send Feedback",
-    "thankYou": "Thank you for your feedback!"
+    "thankYou": "Thank you for your feedback!",
+    "sending": "Sending..."
   },
   "errors": {
     "componentError": "Component Error",
@@ -6058,7 +6121,9 @@
     "fileProcessingError": "Error processing file. Please try again.",
     "documentTooLarge": "\"{{fileName}}\" is large (~{{estimatedTokens}} estimated tokens) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider using a shorter document or selecting a model with a larger context window.",
     "documentTooLargeCombined": "The {{fileCount}} attached documents together are large (~{{estimatedTokens}} estimated tokens combined) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider removing some documents or selecting a model with a larger context window.",
-    "documentTooLargeFileItem": "{{fileName}}: ~{{estimatedTokens}} tokens"
+    "documentTooLargeFileItem": "{{fileName}}: ~{{estimatedTokens}} tokens",
+    "rendererError": "Renderer Error",
+    "noComponentFound": "No renderer found"
   },
   "toolbar": {
     "bold": "Bold",
@@ -6129,7 +6194,16 @@
     "tryAgain": "Try Again",
     "backToHome": "Back to Home",
     "malformedSseData": "The model sent invalid data that could not be processed. This may be due to a model configuration issue. Please try again or contact your administrator if the problem persists.",
-    "sseParsingError": "Error processing server response: {{error}}. The model may have sent malformed data. Please try a different model or contact support."
+    "sseParsingError": "Error processing server response: {{error}}. The model may have sent malformed data. Please try a different model or contact support.",
+    "failedToLoadApp": "Failed to load application data. Please try again later.",
+    "loadingFailed": "Failed to load applications. Please try again later.",
+    "noAppsAvailable": "No apps available from server",
+    "checkServer": "Check if the server is running and returning data correctly.",
+    "sendMessageFailed": "Failed to send message.",
+    "feedbackSubmission": "Error submitting feedback. Please try again.",
+    "clarificationFailed": "Failed to submit clarification response.",
+    "promptsLoadingFailed": "Failed to load prompts",
+    "fetchApps": "Failed to load apps"
   },
   "network": {
     "offline": {
@@ -6176,7 +6250,12 @@
     "thinkingLevelMinimal": "Minimal",
     "thinkingLevelLow": "Low",
     "thinkingLevelMedium": "Medium",
-    "thinkingLevelHigh": "High"
+    "thinkingLevelHigh": "High",
+    "settingsDisabled": "Settings have been disabled for this application.",
+    "includeChatHistory": "Include chat history in requests",
+    "thinkingSettings": "Thinking Settings",
+    "enableThinking": "Enable thinking mode",
+    "showThoughts": "Show thinking process"
   },
   "chatMessage": {
     "user": "You",
@@ -6283,7 +6362,8 @@
     "readAloudResume": "Resume",
     "readAloudStop": "Stop reading",
     "readAloudError": "Read aloud failed: {{error}}",
-    "openImage": "Open image {{number}}"
+    "openImage": "Open image {{number}}",
+    "generatingResponse": "Generating response..."
   },
   "serverErrors": {
     "appNotFound": "Application not found",
@@ -6414,14 +6494,31 @@
       "copyOptions": "Copy Options",
       "downloadText": "as Text",
       "downloadMarkdown": "as Markdown",
-      "downloadHTML": "as HTML"
+      "downloadHTML": "as HTML",
+      "downloadOptions": "Download Options",
+      "printPDF": "Print as PDF",
+      "title": "Export Document",
+      "export": "Export"
     },
     "insertIntoDocument": "Insert into document",
     "voiceInput": {
       "tooltipManual": "Dictate to editor (Ctrl+M) - manual",
       "tooltipAutomatic": "Dictate to editor (Ctrl+M) - automatic",
       "ariaLabel": "Dictate text to editor"
-    }
+    },
+    "promptWithSelection": "What would you like to do with the selected text?",
+    "promptPlaceholder": "Ask the AI to help with your document...",
+    "confirmReplaceTitle": "Content Replacement Confirmation",
+    "confirmReplaceMessage": "You have existing content in your document. What would you like to do with the new content?",
+    "currentContent": "Current Document",
+    "emptyDocument": "Empty document",
+    "newContent": "New Content",
+    "appendContent": "Append Content",
+    "replaceContent": "Replace Content",
+    "aiProcessing": "AI is working...",
+    "placeholder": "Start typing or use the AI assistant to create your document...",
+    "confirmClear": "Are you sure you want to clear the document and chat history?",
+    "confirmReplaceWithNewContentTitle": "Content from Chat"
   },
   "teams": {
     "status": {
@@ -6445,15 +6542,15 @@
     },
     "manifest": {
       "name": {
-        "short": "iHub Apps",
-        "full": "iHub Apps - Enterprise AI Assistant"
+        "short": "$t(product.name)",
+        "full": "$t(product.name) - Enterprise AI Assistant"
       },
       "description": {
         "short": "Access AI-powered applications directly in Microsoft Teams",
-        "full": "iHub Apps provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
+        "full": "$t(product.name) provides a comprehensive suite of AI-powered applications for enterprise users. Access chat assistants, document analyzers, and specialized AI tools directly within Microsoft Teams."
       },
       "staticTabs": {
-        "name": "iHub Apps"
+        "name": "$t(product.name)"
       }
     }
   },
@@ -6472,7 +6569,7 @@
       },
       "apiKeys": {
         "title": "Personal API Key",
-        "description": "Generate a key that lets external tools call iHub Apps as you, with exactly your permissions.",
+        "description": "Generate a key that lets external tools call $t(product.name) as you, with exactly your permissions.",
         "available": "Available",
         "endpointsTitle": "Endpoints",
         "endpoints": {
@@ -6517,12 +6614,12 @@
       "sections": {
         "access": {
           "title": "Access to iHub",
-          "description": "Tools and applications that use iHub Apps as you."
+          "description": "Tools and applications that use $t(product.name) as you."
         }
       },
       "connections": {
         "title": "Connected apps",
-        "description": "Applications you have allowed to access iHub Apps as you.",
+        "description": "Applications you have allowed to access $t(product.name) as you.",
         "empty": "You have not connected any applications yet.",
         "disconnect": "Disconnect",
         "disconnectTitle": "Disconnect application",
@@ -6761,7 +6858,12 @@
       "button": "Chat with Results",
       "title": "Continue chatting with the workflow output in an app",
       "contextMessage": "Here are the results from the workflow \"{{name}}\":",
-      "failed": "The chat could not be started. Please try again."
+      "failed": "The chat could not be started. Please try again.",
+      "selectApp": "Select an App",
+      "selectAppDescription": "Choose an app to continue chatting with the workflow output",
+      "searchApps": "Search apps...",
+      "noApps": "No apps available",
+      "noMatchingApps": "No apps match your search"
     },
     "newWorkflow": "New Workflow",
     "modelUsed": "Model",
@@ -6814,7 +6916,19 @@
       "showRawJson": "Show raw data",
       "hideRawJson": "Hide raw data",
       "longValueShowMore": "Show full value",
-      "longValueShowLess": "Show less"
+      "longValueShowLess": "Show less",
+      "relevantData": "Relevant Data",
+      "submitError": "Failed to submit response",
+      "title": "Action Required",
+      "selectOption": "Select an option",
+      "yourAnswer": "Your answer",
+      "otherAnswer": "Other (type your own answer)",
+      "answerPlaceholder": "Type your answer",
+      "additionalInfo": "Additional Information",
+      "submitting": "Submitting...",
+      "submit": "Submit Response",
+      "skip": "Skip this question",
+      "expiresAt": "Expires"
     },
     "startModal": {
       "aboutTitle": "About this workflow",
@@ -6829,7 +6943,19 @@
         "loadError": "Your projects could not be loaded.",
         "unavailable": "Projects are not available to you here. Enter a project id.",
         "notListed": "{{id}} (not in your projects)"
-      }
+      },
+      "title": "Start Workflow",
+      "model": "Model",
+      "loadingModels": "Loading models...",
+      "defaultModel": "Use workflow default",
+      "modelHelp": "Select which AI model to use for this workflow",
+      "inputFields": "Input",
+      "message": "Message (optional)",
+      "messagePlaceholder": "Enter your message or leave empty to start with defaults...",
+      "advanced": "Advanced: Raw JSON",
+      "advancedHelp": "Edit raw JSON data directly. Changes here override form fields.",
+      "starting": "Starting...",
+      "start": "Start Workflow"
     },
     "emptyState": {
       "available": {
@@ -7051,7 +7177,86 @@
           "outputHelp": "State variable for the stored document. Default: {{name}}. Keep \"wait\" on when a later step reads the document."
         }
       }
-    }
+    },
+    "checkpointAwaiting": "Awaiting your input",
+    "join": "Join",
+    "view": "View",
+    "progress": {
+      "parameters": "Parameters",
+      "error": "Error",
+      "outputVariable": "Output Variable",
+      "decisionResult": "Decision Result",
+      "humanResponse": "Human Response",
+      "rawOutput": "Output",
+      "title": "Execution Progress",
+      "collapseAll": "Collapse All",
+      "expandAll": "Expand All",
+      "iterations": "iterations",
+      "plannedTasks": "Planned Tasks",
+      "tasks": "tasks",
+      "noNodes": "Waiting to start...",
+      "errors": "Errors"
+    },
+    "startError": "Failed to start workflow",
+    "noDescription": "No description provided.",
+    "card": {
+      "edit": "Edit workflow"
+    },
+    "start": "Start workflow",
+    "filter": {
+      "all": "All",
+      "running": "Running",
+      "paused": "Paused",
+      "completed": "Completed",
+      "failed": "Failed"
+    },
+    "loadingExecutions": "Loading executions...",
+    "showMoreChars": "Show {{count}} more",
+    "fileCount": "{{count}} file(s)",
+    "loadingExecution": "Loading execution...",
+    "executionNotFound": {
+      "title": "Execution Not Found",
+      "description": "This execution could not be found."
+    },
+    "backToWorkflows": "Back to Workflows",
+    "output": {
+      "copyToClipboard": "Copy to clipboard",
+      "copied": "Copied",
+      "copy": "Copy",
+      "viewFullscreen": "View report in full-screen",
+      "view": "View",
+      "showFull": "Show full content",
+      "showLess": "Show less",
+      "chars": "chars",
+      "additionalData": "Additional Data",
+      "field": "field",
+      "fields": "fields"
+    },
+    "startedAt": "Started",
+    "completedAt": "Completed",
+    "executionId": "Execution",
+    "editWorkflow": "Edit Workflow",
+    "exportState": "Export execution state for debugging",
+    "export": "Export",
+    "cancel": "Cancel",
+    "status": "Status",
+    "nodesExecuted": "Executed",
+    "active": "Active",
+    "failed": "Failed",
+    "metrics": "Metrics",
+    "totalDuration": "Duration",
+    "totalTokens": "Total Tokens",
+    "inputTokens": "Input",
+    "outputTokens": "Output",
+    "approvedSuccess": "Workflow approved!",
+    "completedSuccess": "Workflow completed successfully!",
+    "rejectedMessage": "Workflow was rejected",
+    "cancelledMessage": "Workflow was cancelled",
+    "failedMessage": "Workflow failed",
+    "outputTitle": "Workflow Output",
+    "downloadAllJson": "Download all output as JSON",
+    "downloadJson": "Download JSON",
+    "loading": "Loading workflows..."
   },
   "documentTitle": {
     "admin": "Admin",
@@ -7159,7 +7364,7 @@
   },
   "setup": {
     "step1": {
-      "title": "Welcome to iHub Apps",
+      "title": "Welcome to $t(product.name)",
       "description": "Your all-in-one platform for AI-powered applications. To get started, connect your first AI provider — it only takes a minute.",
       "getStarted": "Get Started",
       "skipLater": "Skip, I'll configure later"
@@ -7208,7 +7413,14 @@
     },
     "finish": {
       "addModels": "Add your models",
-      "addModelsDesc": "No model is set up yet. Pick the models of {{provider}} to use in iHub."
+      "addModelsDesc": "No model is set up yet. Pick the models of {{provider}} to use in iHub.",
+      "createApp": "Create your first app",
+      "createAppDesc": "Build a custom AI assistant with a system prompt",
+      "inviteUsers": "Invite users",
+      "inviteUsersDesc": "Manage who can access the platform",
+      "configureSso": "Configure SSO",
+      "configureSsoDesc": "Set up OIDC, LDAP, or NTLM authentication",
+      "skipToApps": "Skip — take me to the apps"
     }
   },
   "apps": {
@@ -7458,7 +7670,8 @@
     "scheduled": "Scheduled",
     "inProject": "In project {{name}}",
     "sharedFile": "File",
-    "untitledFile": "Untitled file"
+    "untitledFile": "Untitled file",
+    "noResultsSoFar": "No chats match your search in the ones loaded so far"
   },
   "transcription": {
     "record": "Record audio for the selected model",
@@ -7706,7 +7919,7 @@
       "readOnly": "Read-only",
       "sharedBy": "Shared by {{name}}",
       "sharedAnonymously": "Shared with you",
-      "openApp": "Open iHub Apps",
+      "openApp": "Open $t(product.name)",
       "publicBanner": "This conversation is publicly accessible. Anyone with the link can read it.",
       "signInTitle": "Sign in to open this shared chat",
       "signInHint": "This link was shared with signed-in users only. Sign in and you will be brought back here.",
@@ -9627,5 +9840,45 @@
       "editHint": "The assistant writes a new file with the change. The original stays as it is.",
       "label": "Selection actions"
     }
+  },
+  "clarification": {
+    "skipped": "Skipped",
+    "typeYourAnswer": "Type your answer...",
+    "fileUploadPlaceholder": "File upload not yet implemented",
+    "skipQuestion": "Skip this question",
+    "skip": "Skip",
+    "submitAnswer": "Submit answer",
+    "submitting": "Submitting...",
+    "submit": "Submit",
+    "keyboardHint": "Press Ctrl+Enter to submit",
+    "other": "Other",
+    "selectOptions": "Select options",
+    "enterCustomValue": "Enter your answer...",
+    "customAnswer": "Custom answer",
+    "selectOption": "Select an option",
+    "itemsSelected": "{{count}} items selected",
+    "searchOptions": "Search options...",
+    "noOptionsFound": "No options found",
+    "selectedCount": "{{count}} selected",
+    "validation": {
+      "minValue": "Value must be at least {{min}}",
+      "maxValue": "Value must be at most {{max}}",
+      "dateRange": "Start date must be before end date"
+    },
+    "textPlaceholder": "Type your answer...",
+    "numberPlaceholder": "Enter a number...",
+    "numberRange": "Range: {{min}} - {{max}}",
+    "numberMin": "Minimum: {{min}}",
+    "numberMax": "Maximum: {{max}}",
+    "datePlaceholder": "Select a date",
+    "startDate": "Start Date",
+    "endDate": "End Date"
+  },
+  "upload": {
+    "fileTypeNotSupported": "File type not supported",
+    "fileTooLarge": "File exceeds size limit ({{limit}}MB)"
+  },
+  "smartSearch": {
+    "placeholder": "Search apps..."
   }
 }
