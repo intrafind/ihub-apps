@@ -106,6 +106,19 @@ describe('search extraction with a focus', () => {
     }
   });
 
+  test('the sections the model was given are reported for the sources panel', async () => {
+    const { runToolCallScope } = await import('../services/sources/toolCallScope.js');
+    const reported = [];
+    await runToolCallScope(reported, () => run({ focus: 'enterprise plan price per seat' }));
+    expect(reported).toHaveLength(1);
+    expect(reported[0]).toMatchObject({ provider: 'web', kind: 'page', url });
+    expect(reported[0].passages[0].text).toContain('The enterprise plan costs 4711 euros');
+
+    const none = [];
+    await runToolCallScope(none, () => run());
+    expect(none).toEqual([]);
+  });
+
   test('a focus that matches nothing reads the page from its start, without an outline', async () => {
     const plain = (await run()).extractedContent[0].extractedContent;
     const none = (await run({ focus: 'zzzqqq' })).extractedContent[0].extractedContent;
