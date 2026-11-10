@@ -393,6 +393,7 @@
       "showThoughts": "Show thinking analysis",
       "truncated": "Truncated",
       "truncatedHint": "The model reached its output limit before it finished. Reasoning models spend the same limit on their thinking, so a long thought can use it up before the answer starts. Raise \"Max Output Tokens\" of the model, or lower its reasoning effort.",
+      "emptyAnswer": "The model returned no answer.",
       "hideThoughts": "Hide thinking analysis",
       "inputParameters": "Input parameters",
       "starterPromptsTitle": "Starter prompts",
