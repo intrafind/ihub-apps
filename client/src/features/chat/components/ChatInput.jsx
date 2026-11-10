@@ -316,17 +316,37 @@ function ChatInput({
   // the model on the next turn (message content plus attached document text).
   // Re-tokenized only when the message list actually changes, and per-fragment
   // counts are memoized, so a long conversation is not re-scanned per render.
+  // The server owns the window: after a turn it reports how full the window
+  // was — the system prompt, the history and everything its tools read, which
+  // the client never holds. That count (`context/usage`, stored with the
+  // answer) anchors the estimate; only the messages after that answer — and
+  // the pending input — are estimated here. Without one (a fresh chat, an
+  // older stored chat, history switched off) the whole conversation is.
+  const serverContext = useMemo(() => {
+    if (sendChatHistory === false || !Array.isArray(messages)) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const ctx = messages[i]?.context;
+      if (ctx && Number(ctx.inputTokens) >= 0 && Number(ctx.contextWindow) > 0) {
+        return { inputTokens: Number(ctx.inputTokens), index: i };
+      }
+    }
+    return null;
+  }, [messages, sendChatHistory]);
+
   const historyFragments = useMemo(
     () =>
-      conversationTokenFragments(messages, {
-        includeHistory: sendChatHistory !== false,
-        // The server leaves earlier files out only for a model that can read
-        // them back with a tool (`shared/historyFileBudget.js`).
-        contextWindow: modelSupportsTools(selectedModelData)
-          ? selectedModelData?.contextWindow
-          : undefined
-      }),
-    [messages, sendChatHistory, selectedModelData]
+      conversationTokenFragments(
+        serverContext ? messages.slice(serverContext.index + 1) : messages,
+        {
+          includeHistory: sendChatHistory !== false,
+          // The server leaves earlier files out only for a model that can read
+          // them back with a tool (`shared/historyFileBudget.js`).
+          contextWindow: modelSupportsTools(selectedModelData)
+            ? selectedModelData?.contextWindow
+            : undefined
+        }
+      ),
+    [messages, serverContext, sendChatHistory, selectedModelData]
   );
   const historyTokens = useEstimatedTokensForFragments(historyFragments, { debounceMs: 150 });
 
@@ -350,13 +370,24 @@ function ChatInput({
     const contextWindow = selectedModelData?.contextWindow;
     if (!contextWindow) return null;
     const pendingTokens = valueTokens + fileTokens + extraContextTokens;
-    if (pendingTokens === 0 && historyTokens === 0) return null;
+    if (pendingTokens === 0 && historyTokens === 0 && !serverContext) return null;
     return computeContextUsage({
       contextWindow,
-      inputTokens: systemTokens + historyTokens + pendingTokens,
+      // The server's count already holds the system prompt and the history up
+      // to its answer; messages after it are in `historyTokens`.
+      inputTokens:
+        (serverContext ? serverContext.inputTokens : systemTokens) + historyTokens + pendingTokens,
       maxOutputTokens: selectedModelData?.maxOutputTokens || 0
     });
-  }, [selectedModelData, fileTokens, valueTokens, extraContextTokens, historyTokens, systemTokens]);
+  }, [
+    selectedModelData,
+    fileTokens,
+    valueTokens,
+    extraContextTokens,
+    historyTokens,
+    systemTokens,
+    serverContext
+  ]);
 
   // Warn as the window fills up: the indicator is the only place a user can see
   // a multiturn conversation approaching the limit.

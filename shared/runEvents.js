@@ -84,6 +84,8 @@ export const SSE_V2_EVENTS = Object.freeze({
   TOOL_COMPLETED: 'tool/completed',
   SOURCES_ADDED: 'sources/added',
   KNOWLEDGE_SCOPE: 'knowledge/scope',
+  /** How full the model's context window is, as the server counts it (live; not stored). */
+  CONTEXT_USAGE: 'context/usage',
   INTERACTION_RAISED: 'interaction/raised',
   INTERACTION_ANSWERED: 'interaction/answered',
   PROGRESS_NODE: 'progress/node',

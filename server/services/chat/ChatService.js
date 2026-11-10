@@ -33,6 +33,7 @@ import logger from '../../utils/logger.js';
 import { abortCause, abortReason, causeOfSignal, describeCause } from './abortCause.js';
 import defaultAgentLoop from '../loop/AgentLoop.js';
 import { OPTIONAL_COUNTERS } from '../loop/llmUsage.js';
+import { createContextTracker } from '../loop/contextTracker.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
 import { RunStreamEmitter, bindStreamRun, unbindStreamRun } from '../loop/RunStream.js';
@@ -714,11 +715,14 @@ class ChatService {
     // Pictures the turn's tools returned (an MCP server's `image` block); they
     // join the pictures the model generated.
     const generatedImages = [];
+    // How full the model's context window is, reported live and with the end of the run.
+    const contextTracker = createContextTracker(model);
     const turnSeam = chatTurnSeam({
       chatId,
       buildLogData: log,
       streaming,
-      telemetry: this.telemetry
+      telemetry: this.telemetry,
+      contextTracker
     });
     const outputSeam =
       typeof structuredOutput?.validate === 'function'
@@ -983,6 +987,7 @@ class ChatService {
         generatedFiles,
         generatedImages,
         promptSources,
+        contextTracker,
         signal: controller.signal,
         structured: outputSeam
           ? {
@@ -1171,6 +1176,7 @@ class ChatService {
     generatedFiles = [],
     generatedImages = [],
     promptSources = [],
+    contextTracker = null,
     structured = null,
     signal = null
   }) {
@@ -1210,8 +1216,19 @@ class ChatService {
         return null;
       }
     };
+    // The window as the turn left it (tool results included), sent with the
+    // end of the run and stored with the answer, so a reopened chat shows it.
+    // What the next turn sends: the prompt this turn started from plus its
+    // answer. Tool calls and results are not replayed (later prompts are built
+    // from the stored messages), so they are in the live frames only.
+    const context = contextTracker?.replay(content) || contextTracker?.last() || undefined;
+    if (context) summary.context = context;
     const endRun = data =>
-      stream.emit(SSE_V2_EVENTS.RUN_ENDED, { ...(usage ? { usage } : {}), ...data });
+      stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
+        ...(usage ? { usage } : {}),
+        ...(context ? { context } : {}),
+        ...data
+      });
     // Whether the turn wrote any answer — text or a picture — the user sees.
     const producedOutput = channel
       ? channel.state.answerOutput

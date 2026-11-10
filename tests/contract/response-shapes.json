@@ -4362,6 +4362,7 @@
           "activity?": "object",
           "clientMessageId?": "string",
           "content": "string",
+          "context?": "object",
           "finishReason?": "string",
           "id": "string",
           "role": "string",

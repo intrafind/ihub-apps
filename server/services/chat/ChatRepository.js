@@ -163,6 +163,8 @@ const PROTECTED_CHAT_FIELDS = new Set([
 const OPTIONAL_MESSAGE_FIELDS = [
   'clientMessageId',
   'usage',
+  // How full the context window was when the answer ended (see loop/contextTracker.js).
+  'context',
   'error',
   'finishReason',
   'attachments',

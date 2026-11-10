@@ -173,6 +173,8 @@ function addToolSideChannels(extras, run) {
   // Which projects the turn reached and how (`knowledge/scope`): the badge
   // of the answer, streamed and stored alike.
   if (run.knowledgeScope?.projects?.length) extras.knowledgeScope = run.knowledgeScope;
+  // How full the context window is, as the server counts it — tool results included.
+  if (run.context) extras.context = run.context;
   if (run.searchStatus !== null && run.searchStatus !== undefined) {
     extras.searchStatus = run.searchStatus;
   }

@@ -67,6 +67,8 @@ export function transformStoredMessage(msg) {
     message.hostContext = msg.hostContext;
   }
   if (msg.usage) message.usage = msg.usage;
+  // The context window as the server counted it when the answer ended.
+  if (msg.context) message.context = msg.context;
   if (msg.finishReason) message.finishReason = msg.finishReason;
   // A transcription turn (its audio is not kept: no edit, no resend).
   if (msg.transcription === true) message.transcription = true;

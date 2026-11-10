@@ -68,6 +68,8 @@ export function createRunState(runId, init = {}) {
     lastLifecycleAt: null,
     finishReason: null,
     usage: null,
+    // How full the model's context window is, as the server counts it.
+    context: null,
     refs: init.refs || {},
     model: init.model || null,
     parentRunId: init.parentRunId || null,
@@ -589,6 +591,7 @@ export function reduceRunEvent(state, envelope) {
         status: data.status || 'completed',
         finishReason: data.finishReason ?? null,
         usage: data.usage || run.usage,
+        context: data.context || run.context,
         knowledgeSources: union([], data.knowledgeSources),
         toolName: data.toolName || run.toolName,
         output: data.output !== undefined ? data.output : run.output,
@@ -760,6 +763,9 @@ export function reduceRunEvent(state, envelope) {
 
     case SSE_V2_EVENTS.KNOWLEDGE_SCOPE:
       return withRun(next, { ...run, knowledgeScope: data || null });
+
+    case SSE_V2_EVENTS.CONTEXT_USAGE:
+      return withRun(next, { ...run, context: data || run.context });
 
     case SSE_V2_EVENTS.SOURCES_ADDED: {
       // The run's set, and — for a tool call's frame — that call's own list,

@@ -42,7 +42,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `stream/connected`     | `{ runId, lastSeq, protocol: 2 }`                                                                                             | Subscription established                                                      |
 | `stream/error`         | `{ code, message, details?, retryable, isContextWindowError? }`                                                               | The run failed; always followed by `run/ended { status: 'error' }`            |
 | `run/started`          | `{ kind, model?, parentRunId?, refs }`                                                                                        | A run began (`kind`: chat, workflow, agent, subagent, inference, utility)     |
-| `run/ended`            | `{ status, finishReason, usage?, knowledgeSources?, toolName?, output?, cause?, error? }`                                    | Terminal frame of a run                                                       |
+| `run/ended`            | `{ status, finishReason, usage?, context?, knowledgeSources?, toolName?, output?, cause?, error? }`                          | Terminal frame of a run                                                       |
 | `run/paused`           | `{ reason: interaction \| manual \| system, interactionId? }`                                                                  | The run waits (a question, an approval)                                       |
 | `run/resumed`          | `{ interactionId? }`                                                                                                          | The run continues                                                             |
 | `step/delta`           | `{ step, kind: text \| thinking \| image, content?, image?, meta? }`                                                           | Streamed answer output of model step `step`                                   |
@@ -51,6 +51,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `tool/progress`        | `{ phase, message?, data?, step?, callId?, toolId? }`                                                                         | Free-form progress (see phases below)                                         |
 | `tool/completed`       | `{ step, callId, toolId, name, resultPreview, error?, durationMs?, knowledgeSource? }`                                        | A tool call finished; `resultPreview` is bounded                              |
 | `sources/added`        | `{ step?, callId?, toolId?, items, queries?, supports? }`                                                                     | What a tool call, a model adapter or provider search found (see below)        |
+| `context/usage`        | `{ contextWindow, inputTokens, maxOutputTokens, source: provider \| estimate, step? }`                                         | How full the model's context window is, as the server counts it (see below)   |
 | `interaction/raised`   | `{ interaction }`                                                                                                             | A human touchpoint (question, approval, review) — see `contracts/interaction.js` |
 | `interaction/answered` | `{ interactionId, kind, answer }`                                                                                             | The touchpoint was answered                                                   |
 | `progress/node`        | `{ executionId?, nodeId, nodeName?, nodeType?, status, iteration?, progress?, output?, error? }`                              | Workflow node progress (also chat-launched workflows)                         |
@@ -171,6 +172,33 @@ Sources are taken from the tool's *full* result on the server
 Provider-run web search reports its queries as `webSearchQueries` on the
 grounding metadata as well (Google natively; Anthropic's `web_search` queries
 are mapped onto the same field), which the activity panel shows.
+
+### `context/usage`
+
+How full the model's context window is. The server owns the transcript, so
+it reports the figure: a research turn that reads pages fills the window with
+tool results the client never holds. The frame goes out before every model
+call (the transcript as that call will find it) and after every reply
+(`source: provider`: the prompt the provider counted for that call plus its
+answer). Between two provider counts, what the transcript grew by — the
+reply, tool results — is estimated, so the figure rises as soon as a page is
+read, not one model step later. `inputTokens` is input only;
+`maxOutputTokens` is the model's output reserve, which the client adds for
+the remaining capacity.
+
+`run/ended` carries `context` too, but not the last live state: it is what
+the *next* turn will send — the prompt the turn started from (system prompt,
+history, the question) plus the answer. Later prompts are built from the
+stored messages (role and content), so the tool calls and results of a
+finished turn are not replayed and must not count against the next turn. The
+stored assistant message keeps that figure (`message.context`), so a reopened
+chat shows it. Reasoning tokens are left out of the figure after a reply: they
+are billed as output but never become part of the transcript. The frame itself is live only and is not written to the run ledger.
+The composer's context counter (`ChatInput`) starts from the latest
+`message.context` and estimates only what came after it — the pending input
+and the messages not yet answered. A chat without one (a fresh chat, a chat
+stored before this existed, an app that sends no history) is estimated on
+the client alone.
 
 ### `meta.extra`
 
