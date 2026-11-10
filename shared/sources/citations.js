@@ -117,6 +117,15 @@ function containsToken(value, token) {
 }
 
 /**
+ * Whether the producer that found a source reports its content as read: a
+ * page the search or the page reader read, a document whose text a tool
+ * fetched. What was read went to the model in full.
+ */
+function wasRead(source) {
+  return source?.read?.ok === true;
+}
+
+/**
  * Which of an answer's sources its text cites, numbered in the order it first
  * cites them, and which it only considered.
  *
@@ -127,11 +136,20 @@ function containsToken(value, token) {
  * even when the text points at it nowhere. Both are numbered after the ones
  * the text points at.
  *
+ * An answer that cites none of its sources still rests on what was read for
+ * it: a model that writes no links (or links nothing the turn found) leaves
+ * nothing cited although the pages it read went into the answer. Then the
+ * sources whose content was read (`read.ok`, which the server's producer sets)
+ * are `read`, and only the rest `considered`. An answer that cites anything
+ * names its sources itself, and `read` is empty.
+ *
  * @param {string} markdown - the answer
  * @param {{items?: Array}|null} set - the answer's source set
- * @returns {{cited: Array<Object>, considered: Array<Object>, numbers: Map<string, number>,
- *   numberOfUrl: (url: string) => number|null, numberOfMarker: (marker: string) => number|null}}
- *   `cited` entries carry their number as `n`; `numbers` maps a source id to it
+ * @returns {{cited: Array<Object>, read: Array<Object>, considered: Array<Object>,
+ *   numbers: Map<string, number>, numberOfUrl: (url: string) => number|null,
+ *   numberOfMarker: (marker: string) => number|null}}
+ *   `cited` entries carry their number as `n`; `numbers` maps a source id to it.
+ *   `cited`, `read` and `considered` together hold every source once.
  */
 export function resolveCitations(markdown, set) {
   const items = Array.isArray(set?.items) ? set.items : [];
@@ -168,10 +186,13 @@ export function resolveCitations(markdown, set) {
   for (const source of items) {
     if (source?.cited) cite(source);
   }
-  const considered = items.filter(source => source && !numbers.has(source.id));
+  const uncited = items.filter(source => source && !numbers.has(source.id));
+  const read = cited.length ? [] : uncited.filter(wasRead);
+  const considered = read.length ? uncited.filter(source => !wasRead(source)) : uncited;
 
   return {
     cited,
+    read,
     considered,
     numbers,
     numberOfUrl: url => {

@@ -51,8 +51,8 @@ const DocumentPreviewModal = lazy(
 
 const PASSAGE_TRUNCATE_LENGTH = 200;
 
-/** Cited sources listed under the answer before the rest fold away. */
-const CITED_LIST_LIMIT = 5;
+/** Sources listed under the answer before the rest fold away. */
+const ANSWER_LIST_LIMIT = 5;
 
 /**
  * Everything an answer found — web pages, documents, records, whichever
@@ -63,13 +63,16 @@ const CITED_LIST_LIMIT = 5;
  * it counts everything found, and only what the answer cites is a source of
  * it (#3521).
  *
- * Above it, `CitedSources` lists what the answer cites like footnotes.
+ * Above it, `CitedSources` lists what the answer cites like footnotes; an
+ * answer that cites nothing lists what was read for it instead
+ * (`ReadSources`).
  *
- * The panel lists what the answer cites, numbered like its inline badges, and
- * what was found without being cited. Every card offers the actions its
- * source allows (`sources/sourceActions.js`). Hovering or focusing a card
- * highlights the passages that cite it; hovering a badge in the answer
- * highlights its card (see `sourcesStore`).
+ * The panel lists what the answer cites, numbered like its inline badges —
+ * or, when it cites nothing, what was read for it — and what was found
+ * without being cited. A list with nothing in it is left out. Every card
+ * offers the actions its source allows (`sources/sourceActions.js`).
+ * Hovering or focusing a card highlights the passages that cite it; hovering
+ * a badge in the answer highlights its card (see `sourcesStore`).
  *
  * Where the answer's integrations searched or whom they asked ("Searched in
  * Contracts", "Asked HR assistant") heads the panel, every card names the
@@ -87,7 +90,8 @@ const CITED_LIST_LIMIT = 5;
  * @param {Object} props
  * @param {string} props.messageKey - The answer's id
  * @param {{items: Object[], queries: string[]}} props.sources - The answer's source set
- * @param {{cited: Object[], considered: Object[]}} props.citations - from `resolveCitations`
+ * @param {{cited: Object[], read?: Object[], considered: Object[]}} props.citations - from
+ *   `resolveCitations`
  * @param {Function} [props.onOpenInApp] - `(source, appId)`: open the source in a
  *   new chat of another app. Only surfaces with a router pass it (the Outlook
  *   task pane and the extension side panel have none, issue #2453).
@@ -107,11 +111,12 @@ function AnswerSources({
   const isPanelHost = useSourcesPanelHost(messageKey);
 
   const cited = citations?.cited || [];
+  const read = citations?.read || [];
   const considered = citations?.considered || [];
-  const total = cited.length + considered.length;
+  const total = cited.length + read.length + considered.length;
   if (!sources || total === 0) return null;
 
-  const stack = [...cited, ...considered].slice(0, 4);
+  const stack = [...cited, ...read, ...considered].slice(0, 4);
   const highlighted = highlight?.messageKey === messageKey ? highlight.n : null;
 
   return (
@@ -157,6 +162,7 @@ function AnswerSources({
           messageKey={messageKey}
           sources={sources}
           cited={cited}
+          read={read}
           considered={considered}
           focus={open.focus}
           highlight={highlighted}
@@ -169,13 +175,17 @@ function AnswerSources({
 
 /**
  * Whether an answer has anything for the entry to open: one source or more,
- * cited or only considered.
+ * cited, read or only considered.
  *
- * @param {{cited: Object[], considered: Object[]}|null} citations - from `resolveCitations`
+ * @param {{cited: Object[], read?: Object[], considered: Object[]}|null} citations - from
+ *   `resolveCitations`
  * @returns {boolean}
  */
 export function hasAnswerResults(citations) {
-  return Boolean(citations && citations.cited.length + citations.considered.length > 0);
+  return Boolean(
+    citations &&
+    citations.cited.length + (citations.read?.length || 0) + citations.considered.length > 0
+  );
 }
 
 /**
@@ -191,13 +201,46 @@ export function hasAnswerResults(citations) {
  */
 export function CitedSources({ messageKey, sources }) {
   const { t } = useTranslation();
+  return (
+    <AnswerSourceList
+      messageKey={messageKey}
+      sources={sources}
+      title={t('sources.cited', 'Cited in this answer')}
+    />
+  );
+}
+
+/**
+ * What was read for an answer that cites none of its sources, in the place of
+ * the cited list: the pages and documents whose content the answer was
+ * written from (`resolveCitations().read`; the server's producer marks a
+ * read). Not numbered: the answer has no badges that point at them.
+ *
+ * @param {Object} props
+ * @param {string} props.messageKey - The answer's id
+ * @param {Object[]} props.sources - `resolveCitations().read`
+ */
+export function ReadSources({ messageKey, sources }) {
+  const { t } = useTranslation();
+  return (
+    <AnswerSourceList
+      messageKey={messageKey}
+      sources={sources}
+      title={t('sources.read', 'Read for this answer')}
+    />
+  );
+}
+
+/** A titled list of sources at the answer's end; nothing when it is empty. */
+function AnswerSourceList({ messageKey, sources, title }) {
+  const { t } = useTranslation();
   const headingId = useId();
   const { highlight: current } = useSourcesState();
   const [showAll, setShowAll] = useState(false);
   if (!sources?.length) return null;
   const highlight = current?.messageKey === messageKey ? current.n : null;
-  const shown = showAll ? sources : sources.slice(0, CITED_LIST_LIMIT);
-  const folded = sources.length - CITED_LIST_LIMIT;
+  const shown = showAll ? sources : sources.slice(0, ANSWER_LIST_LIMIT);
+  const folded = sources.length - ANSWER_LIST_LIMIT;
 
   return (
     <div>
@@ -205,15 +248,15 @@ export function CitedSources({ messageKey, sources }) {
         id={headingId}
         className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400"
       >
-        {t('sources.cited', 'Cited in this answer')}
+        {title}
       </h4>
       <ol aria-labelledby={headingId} className="space-y-0.5">
         {shown.map(source => (
-          <CitedSourceRow
+          <AnswerSourceRow
             key={source.id}
             source={source}
             messageKey={messageKey}
-            active={source.n === highlight}
+            active={source.n != null && source.n === highlight}
           />
         ))}
       </ol>
@@ -238,22 +281,72 @@ export function CitedSources({ messageKey, sources }) {
   );
 }
 
-/** One cited source under the answer. Hover and focus highlight its badges. */
-function CitedSourceRow({ source, messageKey, active }) {
+/**
+ * One source under the answer. A cited one carries its number: hover and
+ * focus highlight its badges, and the row opens the panel on its card. A
+ * source that was only read has no badges and no number.
+ */
+function AnswerSourceRow({ source, messageKey, active }) {
   const { t } = useTranslation();
   const site = siteOf(source);
   const title = source.title || site || source.url || t('sources.untitled', 'Untitled');
   const where = site || source.fileName || '';
-  // Focus returns to the number when the panel closes, however it was opened.
-  const numberRef = useRef(null);
-  const showInPanel = () => openSources(messageKey, source.n, { opener: numberRef.current });
+  const numbered = source.n != null;
+  // Focus returns to the number (or to the title of a source without one)
+  // when the panel closes, however it was opened.
+  const openerRef = useRef(null);
+  const showInPanel = () =>
+    openSources(messageKey, numbered ? source.n : null, { opener: openerRef.current });
   const titleClass =
     'min-w-0 truncate text-left text-gray-800 hover:text-indigo-600 hover:underline dark:text-gray-200 dark:hover:text-indigo-300';
+  const rowClass = '-mx-1 flex min-w-0 items-center gap-2 rounded-md px-1 py-0.5 text-sm';
+
+  const body = (
+    <>
+      <SourceIcon source={source} className="h-4 w-4" />
+      {hasHttpUrl(source) ? (
+        // A real link (middle click, copy link address), but a plain click
+        // opens it through the host (`openSource`), as on the card. Where the
+        // host cannot open it, the panel shows the source and its actions.
+        <a
+          ref={numbered ? undefined : openerRef}
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={event => {
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            if (!openSource(source).ok) showInPanel();
+          }}
+          className={titleClass}
+        >
+          {title}
+          <span className="sr-only"> {t('sources.opensInNewTab', '(opens in a new tab)')}</span>
+        </a>
+      ) : (
+        <button
+          ref={numbered ? undefined : openerRef}
+          type="button"
+          onClick={showInPanel}
+          className={titleClass}
+        >
+          {title}
+        </button>
+      )}
+      {where && where !== title && (
+        <span className="max-w-[40%] shrink-0 truncate text-xs text-gray-500 dark:text-gray-400">
+          {where}
+        </span>
+      )}
+    </>
+  );
+
+  if (!numbered) return <li className={rowClass}>{body}</li>;
 
   return (
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-noninteractive-element-interactions -- mouse shortcut; the row's buttons serve the keyboard
     <li
-      className={`-mx-1 flex min-w-0 cursor-pointer items-center gap-2 rounded-md px-1 py-0.5 text-sm transition-colors ${
+      className={`${rowClass} cursor-pointer transition-colors ${
         active ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
       }`}
       // The whole row opens the panel, a mouse shortcut for the number button
@@ -271,7 +364,7 @@ function CitedSourceRow({ source, messageKey, active }) {
       }}
     >
       <button
-        ref={numberRef}
+        ref={openerRef}
         type="button"
         onClick={showInPanel}
         className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[0.625rem] font-semibold text-indigo-700 hover:bg-indigo-600 hover:text-white dark:bg-indigo-900/60 dark:text-indigo-200 dark:hover:bg-indigo-500"
@@ -284,35 +377,7 @@ function CitedSourceRow({ source, messageKey, active }) {
       >
         {source.n}
       </button>
-      <SourceIcon source={source} className="h-4 w-4" />
-      {hasHttpUrl(source) ? (
-        // A real link (middle click, copy link address), but a plain click
-        // opens it through the host (`openSource`), as on the card. Where the
-        // host cannot open it, the panel shows the source and its actions.
-        <a
-          href={source.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={event => {
-            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-            event.preventDefault();
-            if (!openSource(source).ok) showInPanel();
-          }}
-          className={titleClass}
-        >
-          {title}
-          <span className="sr-only"> {t('sources.opensInNewTab', '(opens in a new tab)')}</span>
-        </a>
-      ) : (
-        <button type="button" onClick={showInPanel} className={titleClass}>
-          {title}
-        </button>
-      )}
-      {where && where !== title && (
-        <span className="max-w-[40%] shrink-0 truncate text-xs text-gray-500 dark:text-gray-400">
-          {where}
-        </span>
-      )}
+      {body}
     </li>
   );
 }
@@ -401,8 +466,20 @@ function returnFocus(messageKey) {
  * badges keep highlighting the cards. The sheet covers the chat, so it is
  * modal and keeps keyboard focus inside until it is closed — except while one
  * of its dialogs (preview, details, app picker) is open on top of it.
+ *
+ * Its lists: what the answer cites, what was read for an answer that cites
+ * nothing, and the rest it found — each only when it holds something.
  */
-function SourcesPanel({ messageKey, sources, cited, considered, focus, highlight, onOpenInApp }) {
+function SourcesPanel({
+  messageKey,
+  sources,
+  cited,
+  read,
+  considered,
+  focus,
+  highlight,
+  onOpenInApp
+}) {
   const { t, i18n } = useTranslation();
   const titleId = useId();
   const panelRef = useRef(null);
@@ -501,9 +578,13 @@ function SourcesPanel({ messageKey, sources, cited, considered, focus, highlight
   const cardProps = { messageKey, highlight, host, attachEnabled, onAction: runAction };
   // The scopes the sources were found in; with more than one, the lists can
   // show one at a time. A filter whose scope is gone shows everything.
-  const foundIn = useMemo(() => sourceScopesOf([...cited, ...considered]), [cited, considered]);
+  const foundIn = useMemo(
+    () => sourceScopesOf([...cited, ...read, ...considered]),
+    [cited, read, considered]
+  );
   const shownScope = foundIn.some(scope => scope.id === scopeFilter) ? scopeFilter : null;
   const shownCited = cited.filter(source => matchesScope(source, shownScope));
+  const shownRead = read.filter(source => matchesScope(source, shownScope));
   const shownConsidered = considered.filter(source => matchesScope(source, shownScope));
 
   return createPortal(
@@ -585,19 +666,29 @@ function SourcesPanel({ messageKey, sources, cited, considered, focus, highlight
           {foundIn.length > 1 && (
             <ScopeFilter scopes={foundIn} selected={shownScope} onSelect={setScopeFilter} />
           )}
-          <SourceSection
-            title={t('sources.cited', 'Cited in this answer')}
-            empty={
-              shownScope
-                ? t('sources.noneCitedInScope', 'The answer cites none of the sources found here.')
-                : t('sources.noneCited', 'The answer cites none of the sources directly.')
-            }
-            sources={shownCited}
-            {...cardProps}
-          />
+          {/* No list without sources: an answer that cites nothing gets no
+              empty "Cited in this answer", but what was read for it. */}
+          {shownCited.length > 0 && (
+            <SourceSection
+              title={t('sources.cited', 'Cited in this answer')}
+              sources={shownCited}
+              {...cardProps}
+            />
+          )}
+          {shownRead.length > 0 && (
+            <SourceSection
+              title={t('sources.read', 'Read for this answer')}
+              sources={shownRead}
+              {...cardProps}
+            />
+          )}
           {shownConsidered.length > 0 && (
             <SourceSection
-              title={t('sources.considered', 'Also considered')}
+              title={
+                shownCited.length || shownRead.length
+                  ? t('sources.considered', 'Also considered')
+                  : t('sources.consideredOnly', 'Considered')
+              }
               sources={shownConsidered}
               {...cardProps}
             />
@@ -701,27 +792,26 @@ function ScopeFilter({ scopes, selected, onSelect }) {
   );
 }
 
-/** A titled list of source cards ("Cited in this answer", "Also considered"). */
-function SourceSection({ title, empty, sources, highlight, ...cardProps }) {
+/**
+ * A titled list of source cards ("Cited in this answer", "Read for this
+ * answer", "Also considered"). Only rendered with sources in it.
+ */
+function SourceSection({ title, sources, highlight, ...cardProps }) {
   return (
     <section className="mb-4 last:mb-0">
       <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
         {title} <span className="font-normal">({sources.length})</span>
       </h3>
-      {sources.length === 0 ? (
-        empty && <p className="text-sm text-gray-500 dark:text-gray-400">{empty}</p>
-      ) : (
-        <ol className="space-y-2">
-          {sources.map(source => (
-            <SourceCard
-              key={source.id}
-              source={source}
-              active={Boolean(source.n) && source.n === highlight}
-              {...cardProps}
-            />
-          ))}
-        </ol>
-      )}
+      <ol className="space-y-2">
+        {sources.map(source => (
+          <SourceCard
+            key={source.id}
+            source={source}
+            active={Boolean(source.n) && source.n === highlight}
+            {...cardProps}
+          />
+        ))}
+      </ol>
     </section>
   );
 }
