@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import rateLimit from 'express-rate-limit';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';
@@ -12,6 +13,18 @@ import { normalizeAllowedHostEntry } from '../../utils/shortLinkTarget.js';
 import logger from '../../utils/logger.js';
 
 const PLATFORM_FILE = 'config/platform.json';
+
+/**
+ * The admin API limiter in `middleware/setup.js` already covers `/api/admin`;
+ * this one sits on the routes themselves, where CodeQL's
+ * js/missing-rate-limiting looks (it ignores suppression comments).
+ */
+const configLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 /** The settings answer: the allowlist and the hosts stored links lead to that it refuses. */
 async function settingsPayload() {
@@ -59,9 +72,14 @@ export default function registerAdminShortLinkRoutes(app) {
    *       403:
    *         description: FORBIDDEN — not an administrator
    */
-  app.get(buildServerPath('/api/admin/shortlinks/config'), adminAuth, async (req, res) => {
-    res.json(await settingsPayload());
-  });
+  app.get(
+    buildServerPath('/api/admin/shortlinks/config'),
+    configLimiter,
+    adminAuth,
+    async (req, res) => {
+      res.json(await settingsPayload());
+    }
+  );
 
   /**
    * @swagger
@@ -97,56 +115,61 @@ export default function registerAdminShortLinkRoutes(app) {
    *       403:
    *         description: FORBIDDEN — not an administrator
    */
-  app.put(buildServerPath('/api/admin/shortlinks/config'), adminAuth, async (req, res) => {
-    const { allowedHosts } = req.body || {};
-    if (!Array.isArray(allowedHosts)) {
-      throw new ServiceError('VALIDATION_FAILED', 'allowedHosts must be an array', {
-        details: [{ path: ['allowedHosts'], code: 'INVALID_TYPE', message: 'must be an array' }]
-      });
-    }
-
-    const cleaned = [];
-    const problems = [];
-    allowedHosts.forEach((value, index) => {
-      const result = normalizeAllowedHostEntry(value);
-      if (result.error) {
-        problems.push({
-          path: ['allowedHosts', index],
-          code: 'INVALID_HOST',
-          message: `${JSON.stringify(value)} ${result.error}`
+  app.put(
+    buildServerPath('/api/admin/shortlinks/config'),
+    configLimiter,
+    adminAuth,
+    async (req, res) => {
+      const { allowedHosts } = req.body || {};
+      if (!Array.isArray(allowedHosts)) {
+        throw new ServiceError('VALIDATION_FAILED', 'allowedHosts must be an array', {
+          details: [{ path: ['allowedHosts'], code: 'INVALID_TYPE', message: 'must be an array' }]
         });
-      } else if (!cleaned.includes(result.entry)) {
-        cleaned.push(result.entry);
       }
-    });
-    if (problems.length) {
-      throw new ServiceError(
-        'VALIDATION_FAILED',
-        `Invalid allowed hosts: ${problems.map(p => p.message).join('; ')}`,
-        { details: problems }
-      );
+
+      const cleaned = [];
+      const problems = [];
+      allowedHosts.forEach((value, index) => {
+        const result = normalizeAllowedHostEntry(value);
+        if (result.error) {
+          problems.push({
+            path: ['allowedHosts', index],
+            code: 'INVALID_HOST',
+            message: `${JSON.stringify(value)} ${result.error}`
+          });
+        } else if (!cleaned.includes(result.entry)) {
+          cleaned.push(result.entry);
+        }
+      });
+      if (problems.length) {
+        throw new ServiceError(
+          'VALIDATION_FAILED',
+          `Invalid allowed hosts: ${problems.map(p => p.message).join('; ')}`,
+          { details: problems }
+        );
+      }
+
+      // The stored file, not the cache: the cache holds env overrides and
+      // decrypted secrets, which must not be written back.
+      const stored = await configStore.readJsonStrict(PLATFORM_FILE);
+      if (!stored) throw new Error('Unable to read config/platform.json');
+      stored.shortLinks = { ...stored.shortLinks, allowedHosts: cleaned };
+      await configStore.writeJson(PLATFORM_FILE, stored);
+      await configCache.refreshCacheEntry(PLATFORM_FILE);
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'shortLinks.allowedHosts',
+        summary: `Short links may lead to: ${cleaned.join(', ') || '(paths on this server only)'}`
+      });
+      logger.info('Short link allowed hosts saved', {
+        component: 'AdminShortLinks',
+        allowedHosts: cleaned
+      });
+
+      res.json(await settingsPayload());
     }
-
-    // The stored file, not the cache: the cache holds env overrides and
-    // decrypted secrets, which must not be written back.
-    const stored = await configStore.readJsonStrict(PLATFORM_FILE);
-    if (!stored) throw new Error('Unable to read config/platform.json');
-    stored.shortLinks = { ...stored.shortLinks, allowedHosts: cleaned };
-    await configStore.writeJson(PLATFORM_FILE, stored);
-    await configCache.refreshCacheEntry(PLATFORM_FILE);
-
-    logAudit({
-      req,
-      action: 'update',
-      resource: 'platform',
-      resourceId: 'shortLinks.allowedHosts',
-      summary: `Short links may lead to: ${cleaned.join(', ') || '(paths on this server only)'}`
-    });
-    logger.info('Short link allowed hosts saved', {
-      component: 'AdminShortLinks',
-      allowedHosts: cleaned
-    });
-
-    res.json(await settingsPayload());
-  });
+  );
 }
