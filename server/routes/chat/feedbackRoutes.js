@@ -98,14 +98,14 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
    *                 type: string
    *                 description: Optional free-text comment
    *                 example: "Very helpful and concise!"
-   *               conversationId:
+   *               runId:
    *                 type: string
-   *                 description: iFinder conversation ID (for iAssistant messages)
-   *                 example: "conv-abc123"
-   *               ifinderMessageId:
-   *                 type: string
-   *                 description: iFinder message ID (for iAssistant messages)
-   *                 example: "msg-xyz789"
+   *                 description: |
+   *                   Run that produced the message. For an iAssistant answer the
+   *                   server resolves the iFinder conversation and message id
+   *                   from the chat and this run and forwards the rating to
+   *                   iFinder; the client sends neither id.
+   *                 example: "chat-0f3c9a"
    *               modelId:
    *                 type: string
    *                 description: ID of the model that generated the response
@@ -147,18 +147,8 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
     validate(feedbackSchema),
     requireAppFeedbackEnabled,
     async (req, res) => {
-      const {
-        messageId,
-        appId,
-        chatId,
-        messageContent,
-        rating,
-        feedback,
-        modelId,
-        conversationId,
-        ifinderMessageId,
-        runId
-      } = req.body;
+      const { messageId, appId, chatId, messageContent, rating, feedback, modelId, runId } =
+        req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
       if (!messageId || !rating || !appId || !chatId) {
@@ -208,17 +198,26 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
         }
       }
 
-      // Check if this is an iAssistant message that should be routed to iFinder
+      // The iAssistant conversation this chat belongs to and the iFinder id of
+      // the rated answer are server facts — the client never sees them. The
+      // durable read, not the cache-only `getState`: with WORKERS>1 in
+      // non-sticky mode the conversation may have been created on another
+      // worker, and a per-model `baseUrl` override would then route this
+      // feedback to the wrong endpoint.
+      const conversationState = await conversationStateManager.loadState(chatId, {
+        ownerId: req.user?.id ?? null
+      });
+      const conversationId = conversationState?.conversationId || null;
+      const ifinderMessageId = conversationStateManager.getResponseMessageId(
+        conversationState,
+        runId
+      );
+
+      // An iAssistant answer is also routed to iFinder
       let ifinderFeedbackSent = false;
       if (conversationId && ifinderMessageId) {
         try {
-          // The durable read, not the cache-only `getState`: with WORKERS>1
-          // in non-sticky mode the conversation may have been created on
-          // another worker, and a per-model `baseUrl` override would then
-          // route this feedback to the wrong endpoint.
-          const state = await conversationStateManager.loadState(chatId, {
-            ownerId: req.user?.id ?? null
-          });
+          const state = conversationState;
           const serviceConfig = iAssistantService.getConfig();
           const baseUrl = state?.baseUrl || serviceConfig?.baseUrl;
 
@@ -292,9 +291,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
         contentSnippet: messageContent ? messageContent.substring(0, 300) : '',
         conversationId,
         ifinderMessageId,
-        baseUrl:
-          (await conversationStateManager.loadState(chatId, { ownerId: req.user?.id ?? null }))
-            ?.baseUrl || iAssistantService.getConfig()?.baseUrl
+        baseUrl: conversationState?.baseUrl || iAssistantService.getConfig()?.baseUrl
       });
       await recordFeedbackUsage({
         user: req.user,

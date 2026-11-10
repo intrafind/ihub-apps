@@ -275,6 +275,13 @@ describe('project picker', () => {
     rerender(<Harness params={params} showChips={false} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  test('is gone once the chat has started, while the chips stay', () => {
+    const params = context({ value: ['prj_handbook'], started: true });
+    render(<Harness params={params} />);
+    expect(screen.queryByTestId('chat-project-picker')).not.toBeInTheDocument();
+    expect(screen.getByTestId('chat-project-chips')).toBeInTheDocument();
+  });
 });
 
 describe('a save that outlives its chat', () => {

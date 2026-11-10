@@ -424,7 +424,10 @@ export async function settleUserTurn({
       // A temporary chat is never listed, the project page included: it
       // runs with the project's knowledge, but its members never see it.
       if (projects.claimContainer && stored && stored.temporary !== true) {
-        await recordChatInProject(projects.claimContainer, chatId, { ownerId });
+        await recordChatInProject(projects.claimContainer, chatId, {
+          ownerId,
+          private: projects.privateContainer === true
+        });
       }
     } else {
       stored = await repository.updateChat(chatId, turnPatch);

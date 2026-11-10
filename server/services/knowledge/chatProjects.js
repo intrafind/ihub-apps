@@ -35,6 +35,8 @@ export const MAX_ATTACHED = MAX_ATTACHED_PROJECTS;
  * @typedef {Object} ProjectPatch
  * @property {string} [claimContainer] - The container this first turn opens
  *   the chat in; refused when the chat has another one or messages by then.
+ * @property {boolean} [privateContainer] - The caller took the container from the
+ *   catalog: the chat is private to its owner, the members never read it.
  * @property {string|null} [expectedContainer] - The container the turn
  *   asserted (`projectId` given and unchanged); refused when it differs by then.
  * @property {string[]} attach - Projects this turn adds to the stored ones.
@@ -142,19 +144,23 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
     // project is knowledge, attached or linked, never a container.
     if (container && project.ownership !== 'user') return false;
     const permissions = permissionsFor(project, req.user, context);
-    // Someone who took the project from the catalog attaches it; a chat of
-    // theirs inside it would be open to its members.
-    return permissions.canUse && (!container || permissions.canHoldChats);
+    // The permissions when the project may be used, `false` when not.
+    return permissions.canUse && (!container || permissions.canHoldChats) ? permissions : false;
   };
 
   let containerId = storedContainer;
   let newContainer = false;
+  // Someone who took the project from the catalog may chat inside it, but is no
+  // member: the chat is private to them, since the members read the chats inside.
+  let privateContainer = false;
   if (requestedContainer && !storedContainer) {
-    if (!(await usable(requestedContainer, { container: true }))) {
+    const permissions = await usable(requestedContainer, { container: true });
+    if (!permissions) {
       return { ok: false, status: 404, code: 'PROJECT_NOT_FOUND', message: 'Project not found' };
     }
     containerId = requestedContainer;
     newContainer = true;
+    privateContainer = permissions.readsAllChats !== true;
   }
   // The cap bounds the persisted union, not one request: every later
   // prompt and knowledge search walks the whole attached list.
@@ -177,7 +183,7 @@ export async function resolveChatProjects({ req, chat, app, projectId, projects 
       changed || containerGiven
         ? projectPatchOf({
             ...(newContainer
-              ? { claimContainer: containerId }
+              ? { claimContainer: containerId, ...(privateContainer ? { privateContainer } : {}) }
               : containerGiven
                 ? { expectedContainer: storedContainer }
                 : {}),
@@ -199,11 +205,16 @@ function projectPatchOf({ attach = [], ...container }) {
  *
  * @param {string} projectId
  * @param {string} chatId
- * @param {{ownerId?: string|null}} [options]
+ * @param {{ownerId?: string|null, private?: boolean}} [options] - `private`: a chat of
+ *   someone from the catalog, listed for its owner only.
  */
-export async function recordChatInProject(projectId, chatId, { ownerId = null } = {}) {
+export async function recordChatInProject(
+  projectId,
+  chatId,
+  { ownerId = null, private: isPrivate = false } = {}
+) {
   try {
-    await getProjectService().attachChat(projectId, chatId, { ownerId });
+    await getProjectService().attachChat(projectId, chatId, { ownerId, private: isPrivate });
   } catch (error) {
     logger.warn('Could not record a chat in its project', {
       component: 'chatProjects',

@@ -78,6 +78,7 @@ import {
 } from '../../../shared/hooks/useChats';
 import { ensureTokenizer, estimateTokensSync } from '../../../shared/utils/tokenEstimatorClient.js';
 import ChatInput from '../../chat/components/ChatInput';
+import FloatingComposer from '../../chat/components/FloatingComposer';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import CompareModeView from '../../chat/components/CompareModeView';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
@@ -2826,6 +2827,9 @@ function AppChat({
           value: attachedProjectIds,
           onChange: setAttachedProjectIds,
           disabled: processing || hydrating,
+          // The project picker is only offered until the first message: after
+          // that the chat's projects can only be reviewed (chips).
+          started: messages.length > 0,
           attached: attachedProjects
         };
 
@@ -3410,7 +3414,7 @@ function AppChat({
                   /* Standard layout for normal chat and starter prompts */
                   <>
                     {/* Mobile layout: content scrollable, input at bottom */}
-                    <div className="flex flex-col h-full md:hidden">
+                    <div className="relative flex flex-col h-full md:hidden">
                       <div className="flex-1 overflow-hidden flex flex-col">
                         <ChatMessageList
                           scheduleEnabledTools={effectiveEnabledTools}
@@ -3443,11 +3447,12 @@ function AppChat({
                           linkPath={appPagePath}
                         />
                       </div>
-                      <div className="shrink-0 px-4 pt-2">{renderChatInput('mobile')}</div>
+                      {/* Floats over the transcript, which scrolls behind it. */}
+                      <FloatingComposer>{renderChatInput('mobile')}</FloatingComposer>
                     </div>
 
-                    {/* Desktop layout: normal flex column */}
-                    <div className="hidden md:flex md:flex-col md:h-full">
+                    {/* Desktop layout: the transcript fills the column, the composer floats over it */}
+                    <div className="relative hidden md:flex md:flex-col md:h-full">
                       <ChatMessageList
                         scheduleEnabledTools={effectiveEnabledTools}
                         scheduleIntegrationScopes={integrationScopes}
@@ -3480,7 +3485,7 @@ function AppChat({
                       />
 
                       {/* The composer shares the messages' reading column. */}
-                      <div className="w-full max-w-3xl mx-auto">{renderChatInput('desktop')}</div>
+                      <FloatingComposer>{renderChatInput('desktop')}</FloatingComposer>
                     </div>
                   </>
                 )}

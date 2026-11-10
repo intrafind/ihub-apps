@@ -424,3 +424,66 @@ describe('conversation state: turns on different workers', () => {
     });
   });
 });
+
+describe('conversation state: the answer behind each run', () => {
+  it('remembers the iFinder response id per run, so an older answer keeps its own', async () => {
+    // Feedback is addressed to the answer that was rated, not to the latest
+    // one — and the client never sends the id, so the server has to hold it.
+    await withManager(async ({ manager }) => {
+      manager.setState(CHAT_ID, { conversationId: 'conv-1' });
+      manager.updateParentId(CHAT_ID, 'resp-1', { runId: 'run-1' });
+      manager.updateParentId(CHAT_ID, 'resp-2', { runId: 'run-2' });
+      await manager.flush();
+
+      const state = await manager.loadState(CHAT_ID);
+      assert.equal(manager.getResponseMessageId(state, 'run-1'), 'resp-1');
+      assert.equal(manager.getResponseMessageId(state, 'run-2'), 'resp-2');
+      assert.equal(state.lastParentId, 'resp-2');
+      assert.equal(manager.getResponseMessageId(state, 'run-unknown'), null);
+      assert.equal(manager.getResponseMessageId(state, null), null);
+      assert.equal(manager.getResponseMessageId(null, 'run-1'), null);
+    });
+  });
+
+  it('survives a restart and reaches a worker that never saw the chat', async () => {
+    const first = await openManager();
+    try {
+      first.manager.setState(CHAT_ID, { conversationId: 'conv-1' });
+      first.manager.updateParentId(CHAT_ID, 'resp-1', { runId: 'run-1' });
+      await first.manager.flush();
+    } finally {
+      first.manager.stop();
+      await first.provider.shutdown();
+    }
+    const second = await openManager({ baseDir: first.baseDir });
+    try {
+      const state = await second.manager.loadState(CHAT_ID);
+      assert.equal(second.manager.getResponseMessageId(state, 'run-1'), 'resp-1');
+    } finally {
+      second.manager.stop();
+      await second.provider.shutdown();
+      await fs.rm(first.baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps a bounded number of runs, dropping the oldest', async () => {
+    await withManager(async ({ manager }) => {
+      manager.setState(CHAT_ID, { conversationId: 'conv-1' });
+      for (let i = 1; i <= 120; i += 1) {
+        manager.updateParentId(CHAT_ID, `resp-${i}`, { runId: `run-${i}` });
+      }
+      const state = manager.getState(CHAT_ID);
+      assert.equal(Object.keys(state.responses).length, 100);
+      assert.equal(manager.getResponseMessageId(state, 'run-1'), null);
+      assert.equal(manager.getResponseMessageId(state, 'run-120'), 'resp-120');
+    });
+  });
+
+  it('records nothing against a run when none is given', async () => {
+    await withManager(async ({ manager }) => {
+      manager.setState(CHAT_ID, { conversationId: 'conv-1' });
+      manager.updateParentId(CHAT_ID, 'resp-1');
+      assert.equal(manager.getState(CHAT_ID).responses, undefined);
+    });
+  });
+});
