@@ -5,6 +5,7 @@ import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { responseEtag } from '../../utils/etag.js';
 import { assertValidId, isValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
@@ -342,7 +343,7 @@ export default function registerAdminProvidersRoutes(app) {
       return maskedProvider;
     });
 
-    res.setHeader('ETag', providersEtag);
+    res.setHeader('ETag', responseEtag(providersEtag));
     res.json({ items: maskedProviders });
   });
 
@@ -606,7 +607,7 @@ export default function registerAdminProvidersRoutes(app) {
       maskedProvider.apiKeySet = false;
     }
 
-    res.setHeader('ETag', providersEtag);
+    res.setHeader('ETag', responseEtag(providersEtag));
     res.json(maskedProvider);
   });
 

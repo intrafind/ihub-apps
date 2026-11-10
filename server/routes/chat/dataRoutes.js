@@ -5,6 +5,7 @@ import configCache from '../../configCache.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { responseEtag } from '../../utils/etag.js';
 import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures } from '../../featureRegistry.js';
 import { resolveVoiceModeSettings } from '../../../shared/voiceMode.js';
@@ -679,7 +680,7 @@ export default function registerDataRoutes(app) {
       admin: sanitizedAdmin
     };
 
-    res.setHeader('ETag', uiConfigEtag);
+    res.setHeader('ETag', responseEtag(uiConfigEtag));
     res.json(enhancedUiConfig);
   });
 
@@ -734,7 +735,7 @@ export default function registerDataRoutes(app) {
       throw new ServiceError('INTERNAL_ERROR', 'Failed to load mimetypes configuration');
     }
 
-    res.setHeader('ETag', mimetypesEtag);
+    res.setHeader('ETag', responseEtag(mimetypesEtag));
     res.json(mimetypesConfig);
   });
 

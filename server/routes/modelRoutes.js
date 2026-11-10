@@ -9,6 +9,7 @@ import {
 } from '../utils/authorization.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { responseEtag } from '../utils/etag.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { assertValidId } from '../utils/pathSecurity.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
@@ -157,7 +158,9 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
 
     // Discriminate the ETag by type so the chat and transcription lists don't
     // collide in the shared conditional-request cache.
-    const typedEtag = userSpecificEtag ? `${userSpecificEtag}-${requestedType}` : null;
+    const typedEtag = userSpecificEtag
+      ? responseEtag(`${userSpecificEtag}-${requestedType}`)
+      : null;
 
     // Handle conditional requests with ETag
     if (typedEtag) {

@@ -94,6 +94,20 @@ describe('GET /api/models?type=', () => {
     assert.equal(again.headers.etag, both.headers.etag);
   });
 
+  test('an ETag from before the { items } body is not answered 304', async () => {
+    // The ETag the route sent while it answered a bare array: the config hash
+    // and the type. A browser that cached that array revalidates with it after
+    // the upgrade; a 304 would hand the client the array, and the start page
+    // showed "No models available".
+    const app = buildApp();
+    const stale = await request(app).get('/api/models').set('If-None-Match', 'models-etag-chat');
+    assert.equal(stale.status, 200);
+    assert.deepEqual(ids(stale), ['gemini-flash']);
+    // The current ETag still revalidates.
+    const fresh = await request(app).get('/api/models').set('If-None-Match', stale.headers.etag);
+    assert.equal(fresh.status, 304);
+  });
+
   test('an unknown type in the list is a 400', async () => {
     const res = await request(buildApp()).get('/api/models?type=chat,video');
     assert.equal(res.status, 400);
