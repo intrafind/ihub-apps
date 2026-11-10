@@ -32,10 +32,24 @@ function trimSlashes(text) {
  * @returns {string}
  */
 export function normalizePrefix(prefix) {
-  const raw = String(prefix || '').trim();
+  let raw = String(prefix || '').trim();
+  // A full address is its path.
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      raw = new URL(raw).pathname;
+    } catch {
+      return '';
+    }
+  }
   const cut = raw.search(/[?#]/);
   const text = trimSlashes(cut === -1 ? raw : raw.slice(0, cut));
-  return text ? `/${text}/` : '';
+  if (!text) return '';
+  try {
+    // As the URL parser writes a path (`/über/` is `/%C3%BCber/`), which is what a URL's path is compared with.
+    return new URL(`/${text}/`, 'http://prefix.invalid').pathname;
+  } catch {
+    return `/${text}/`;
+  }
 }
 
 /** A host name for comparison: lower case, without a leading `www.`. */

@@ -38,6 +38,14 @@ jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
   reloadIntegrationCatalog: jest.fn(),
   testInstalledIntegration: jest.fn()
 }));
+const mockWebsites = { fetchWebsiteCorpusDomains: jest.fn() };
+jest.mock('../../../client/src/api/websiteCorpusAdminApi', () => ({
+  fetchWebsiteCorpusDomains: (...args) => mockWebsites.fetchWebsiteCorpusDomains(...args),
+  addWebsiteCorpusDomain: jest.fn(),
+  approveWebsiteCorpusDomain: jest.fn(),
+  declineWebsiteCorpusDomain: jest.fn(),
+  removeWebsiteCorpusDomain: jest.fn()
+}));
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchAdminApps: jest.fn().mockResolvedValue([]),
   fetchAdminGroups: jest.fn().mockResolvedValue({ groups: {} }),
@@ -176,6 +184,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockApi.dialogProps = null;
   mockApi.fetchIntegrationRequests.mockResolvedValue(QUEUE);
+  mockWebsites.fetchWebsiteCorpusDomains.mockResolvedValue({
+    items: [],
+    nextCursor: null,
+    openCount: 0
+  });
   mockApi.approveIntegrationRequest.mockResolvedValue({ ...QUEUE.requests[0], status: 'approved' });
   mockApi.declineIntegrationRequest.mockResolvedValue({ request: {}, alsoDeclined: 0 });
   mockApi.showHiddenIntegration.mockResolvedValue(undefined);
@@ -217,6 +230,30 @@ describe('Requests tab', () => {
     expect(screen.getByText('Closed requests (1)')).toBeInTheDocument();
     expect(screen.getAllByTestId('closed-request')[0]).toHaveTextContent('Not licensed');
     expect(screen.queryByText(/MISSING:/)).toBeNull();
+  });
+
+  test('counts the open requests for internal websites on the tab too, as the sidebar badge does', async () => {
+    mockWebsites.fetchWebsiteCorpusDomains.mockResolvedValue({
+      items: [
+        {
+          id: 'wd_1',
+          host: 'wiki.corp',
+          status: 'requested',
+          requesters: [
+            { userId: 'u1', name: 'Alice', reason: 'sizing', at: '2026-11-01T10:00:00Z' }
+          ],
+          createdAt: '2026-11-01T10:00:00Z',
+          updatedAt: '2026-11-01T10:00:00Z'
+        }
+      ],
+      nextCursor: null,
+      openCount: 1
+    });
+    renderPage();
+    const tab = await screen.findByRole('tab', { name: /Requests/ });
+    // 2 requests for integrations and 1 for a website, though no Website Corpus is installed.
+    await waitFor(() => expect(tab).toHaveTextContent('3'));
+    expect(await screen.findByText('wiki.corp')).toBeInTheDocument();
   });
 
   test('Approve approves and opens the install dialog for the definition', async () => {

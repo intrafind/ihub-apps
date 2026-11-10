@@ -69,6 +69,9 @@ const axisLabel = text => String(text).replace(/"/g, "'");
  * @param {{method: string, note: string}} input.tokenizer - How tokens were counted
  * @returns {string} Markdown
  */
+/** Most URLs printed for one group of exact duplicates. */
+const MAX_URLS_PER_GROUP = 5;
+
 export function renderReport({ name, analysis, nearDuplicates, meta, tokenizer }) {
   const { rows, sections, totals, core, newsFound, exactDuplicates } = analysis;
   const out = [];
@@ -199,7 +202,12 @@ export function renderReport({ name, analysis, nearDuplicates, meta, tokenizer }
           : '.')
     );
     for (const group of exactDuplicates.slice(0, 10)) {
-      w(`- ${group.urls.map(link).join(' = ')} (${n(group.extraTokens)} extra tokens)`);
+      const shown = group.urls.slice(0, MAX_URLS_PER_GROUP).map(link).join(' = ');
+      const more =
+        group.urls.length > MAX_URLS_PER_GROUP
+          ? ` = and ${n(group.urls.length - MAX_URLS_PER_GROUP)} more`
+          : '';
+      w(`- ${shown}${more} (${n(group.extraTokens)} extra tokens)`);
     }
     w('');
     w(

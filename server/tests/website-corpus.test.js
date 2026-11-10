@@ -21,6 +21,7 @@ import {
 import { sweepWebsiteCorpora } from '../services/websiteCorpus/corpusRetention.js';
 import {
   normalizePrefix,
+  underPrefix,
   sectionCounts,
   sectionOf,
   onSite,
@@ -34,6 +35,7 @@ import {
 } from '../services/websiteCorpus/stats.js';
 import { renderReport } from '../services/websiteCorpus/report.js';
 import {
+  CORPUS_NAMESPACE,
   CorpusStore,
   MAX_CORPORA_PER_USER,
   RETENTION_DAYS
@@ -233,6 +235,17 @@ describe('hostile input stays linear', () => {
 });
 
 describe('urls', () => {
+  it('writes a prefix the way a URL path is written, so a non-ASCII scope matches', () => {
+    assert.equal(normalizePrefix('/über-uns/'), '/%C3%BCber-uns/');
+    assert.equal(normalizePrefix('https://a.test/de/über?x=1#y'), '/de/%C3%BCber/');
+    assert.equal(normalizePrefix('/a b/'), '/a%20b/');
+    assert.equal(normalizePrefix('https://a.test/'), '');
+    const prefix = normalizePrefix('/über-uns/');
+    assert.equal(underPrefix('https://a.test/über-uns/team', prefix), true);
+    assert.equal(underPrefix('https://a.test/produkte', prefix), false);
+    assert.equal(sectionOf('https://a.test/über-uns/team/x', prefix), 'team');
+  });
+
   it('normalises the prefix and names sections', () => {
     assert.equal(normalizePrefix('de'), '/de/');
     assert.equal(normalizePrefix('/de'), '/de/');
@@ -284,6 +297,87 @@ describe('urls', () => {
     });
     assert.ok(fetched <= 2, `read ${fetched} files of 40 MB`);
     assert.ok(result.sitemapsRead.length <= 2);
+  });
+});
+
+describe('exact duplicates', () => {
+  const countTokens = text => Math.ceil(text.length / 4);
+
+  it('does not group pages without text (a client-rendered site has hundreds)', async () => {
+    const pages = [
+      ...Array.from({ length: 50 }, (_v, i) => ({ url: `https://a.test/p${i}`, text: '' })),
+      { url: 'https://a.test/x1', text: words(20) },
+      { url: 'https://a.test/x2', text: words(20) }
+    ];
+    const result = await analyseCorpus(pages, { countTokens });
+    assert.equal(result.exactDuplicates.length, 1);
+    assert.equal(result.exactDuplicates[0].urls.length, 2);
+  });
+
+  it('prints a few URLs of a large group and counts the rest', async () => {
+    const pages = Array.from({ length: 40 }, (_v, i) => ({
+      url: `https://a.test/same${i}`,
+      text: words(30)
+    }));
+    const analysis = await analyseCorpus(pages, { countTokens });
+    const markdown = renderReport({
+      name: 'N',
+      analysis,
+      nearDuplicates: { total: 0, pairs: [], truncated: false, verified: 0 },
+      tokenizer: { method: 'heuristic', note: 'n' },
+      meta: {
+        crawlDate: '2026-11-10',
+        siteUrl: 'https://a.test',
+        prefix: '',
+        dropSelector: '',
+        coverage: {
+          inSitemap: 40,
+          crawled: 40,
+          failed: 0,
+          blockedByRobots: 0,
+          notHtml: 0,
+          notCrawled: 0
+        }
+      }
+    });
+    const line = markdown
+      .split('\n')
+      .find(entry => entry.startsWith('- ') && entry.includes('same0'));
+    assert.ok(line.includes('and 35 more'), line);
+    assert.ok(!line.includes('same6'), 'only the first few are listed');
+  });
+
+  it('says "at least" when the near-duplicate comparison stopped', async () => {
+    const analysis = await analyseCorpus([{ url: 'https://a.test/a', text: words(30) }], {
+      countTokens
+    });
+    const markdown = renderReport({
+      name: 'N',
+      analysis,
+      nearDuplicates: {
+        total: 3000,
+        pairs: [{ similarity: 0.95, urls: ['https://a.test/a', 'https://a.test/b'] }],
+        truncated: true,
+        verified: 3000
+      },
+      tokenizer: { method: 'heuristic', note: 'n' },
+      meta: {
+        crawlDate: '2026-11-10',
+        siteUrl: 'https://a.test',
+        prefix: '',
+        dropSelector: '',
+        coverage: {
+          inSitemap: 1,
+          crawled: 1,
+          failed: 0,
+          blockedByRobots: 0,
+          notHtml: 0,
+          notCrawled: 0
+        }
+      }
+    });
+    assert.ok(markdown.includes('overlap of 0.80 or more): at least 3000.'));
+    assert.ok(markdown.includes('stopped after 3,000 candidate pairs'));
   });
 });
 
@@ -1036,6 +1130,39 @@ describe('internal websites', () => {
     // Joining a request somebody else made costs nothing.
     const joined = await service.requestDomain({ host: 'h0.corp' }, { user: OTHER });
     assert.equal(joined.status, 'requested');
+  });
+});
+
+describe('WebsiteCorpusService: corpora and approvals', () => {
+  it('keeps the oldest corpus when a discovery ends without making one', async () => {
+    const { service, store, facets } = makeService(fakeSite());
+    for (let i = 0; i < MAX_CORPORA_PER_USER; i++) {
+      await store.create(USER.id, { name: `c${i}` }, []);
+    }
+    const count = () => [...facets.docs.values()].filter(doc => doc.ns === CORPUS_NAMESPACE).length;
+    assert.equal(count(), MAX_CORPORA_PER_USER);
+    await assert.rejects(
+      service.discoverSite(
+        { siteUrl: 'https://a.test', prefix: 'de' },
+        { user: USER, maxPages: 1 }
+      ),
+      { code: 'TOO_MANY_PAGES' }
+    );
+    assert.equal(count(), MAX_CORPORA_PER_USER, 'nothing was removed for a refused discovery');
+    await service.discoverSite({ siteUrl: 'https://a.test', prefix: 'de' }, { user: USER });
+    assert.equal(count(), MAX_CORPORA_PER_USER, 'a new corpus replaces the oldest');
+  });
+
+  it('an approval of a host covers its www. twin, as the crawl treats them as one site', async () => {
+    const { service, domains } = makeService(fakeSite());
+    await domains.addApproved({ host: 'intranet.corp', admin: { id: 'a' } });
+    const policy = await service.policyFor({});
+    assert.equal(policy.allowPrivate('intranet.corp', ''), true);
+    assert.equal(policy.allowPrivate('www.intranet.corp', ''), true);
+    assert.equal(policy.allowPrivate('www.intranet.corp', '8443'), false);
+    assert.equal(policy.allowPrivate('other.corp', ''), false);
+    await domains.addApproved({ host: 'www.wiki.corp', admin: { id: 'a' } });
+    assert.equal((await service.policyFor({})).allowPrivate('wiki.corp', ''), true);
   });
 });
 

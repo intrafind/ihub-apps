@@ -25,7 +25,11 @@ import {
 } from '../components/integrations/inboundChannels';
 import IntegrationRequestsPanel from '../components/integrations/IntegrationRequestsPanel';
 import WebsiteCorpusDomainsPanel from '../components/integrations/WebsiteCorpusDomainsPanel';
-import { announceIntegrationRequestCount } from '../hooks/useIntegrationRequestCount';
+import {
+  WEBSITE_CORPUS_DOMAINS_EVENT,
+  announceIntegrationRequestCount
+} from '../hooks/useIntegrationRequestCount';
+import { fetchWebsiteCorpusDomains } from '../../../api/websiteCorpusAdminApi';
 import {
   MigrationConfirmDialog,
   MigrationOutcome
@@ -173,6 +177,14 @@ function AdminIntegrationsPage() {
   // The users' requests: { requests, hidden, openCount }; null while unknown.
   const [requestQueue, setRequestQueue] = useState(null);
   const [requestsFailed, setRequestsFailed] = useState(false);
+  // Open requests for internal websites of the Website Corpus; the panel keeps it current.
+  const [websiteOpen, setWebsiteOpen] = useState(0);
+
+  useEffect(() => {
+    const onWebsites = event => setWebsiteOpen(Number(event.detail?.openCount) || 0);
+    window.addEventListener(WEBSITE_CORPUS_DOMAINS_EVENT, onWebsites);
+    return () => window.removeEventListener(WEBSITE_CORPUS_DOMAINS_EVENT, onWebsites);
+  }, []);
 
   const loadRequests = useCallback(async () => {
     try {
@@ -182,6 +194,13 @@ function AdminIntegrationsPage() {
       announceIntegrationRequestCount(queue?.openCount || 0);
     } catch {
       setRequestsFailed(true);
+    }
+    // Known before the tab is opened, so the tab counts what the sidebar badge counts.
+    try {
+      const websites = await fetchWebsiteCorpusDomains();
+      setWebsiteOpen(Number(websites?.openCount) || 0);
+    } catch {
+      // The queue of integration requests is what the tab is about; a failure here shows in the panel.
     }
   }, []);
 
@@ -502,7 +521,7 @@ function AdminIntegrationsPage() {
     {
       id: 'requests',
       label: t('admin.integrations.requests.tab', 'Requests'),
-      ...(requestQueue ? { count: requestQueue.openCount || 0 } : {})
+      ...(requestQueue ? { count: (requestQueue.openCount || 0) + websiteOpen } : {})
     },
     { id: 'inbound', label: t('admin.integrations.tabs.inbound', 'Inbound') }
   ];
@@ -763,9 +782,9 @@ function AdminIntegrationsPage() {
               </div>
             )
           )}
-          {installed.some(item => item.definition === 'com.intrafind/website-corpus') && (
-            <WebsiteCorpusDomainsPanel />
-          )}
+          {/* Also while requests are open after the integration was removed: they count in the badge. */}
+          {(installed.some(item => item.definition === 'com.intrafind/website-corpus') ||
+            websiteOpen > 0) && <WebsiteCorpusDomainsPanel />}
         </div>
       )}
       {!loading && tab === 'inbound' && (

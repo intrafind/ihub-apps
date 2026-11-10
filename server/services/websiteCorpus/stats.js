@@ -144,9 +144,11 @@ export async function analyseCorpus(
   const newsFound = sections.map(entry => entry.section).filter(name => news.has(name));
   const coreRows = rows.filter(row => !news.has(row.section));
 
-  // Exact duplicates: the same text under different URLs.
+  // Exact duplicates: the same text under different URLs. Pages without text are not copies of
+  // each other (a client-rendered site has hundreds of them), they are pages without text.
   const byText = new Map();
   for (const page of pages) {
+    if (!page.text.trim()) continue;
     if (!byText.has(page.text)) byText.set(page.text, []);
     byText.get(page.text).push(page.url);
   }

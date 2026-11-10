@@ -197,6 +197,19 @@ describe('WebsiteCorpusDomainsPanel', () => {
     await waitFor(() => expect(screen.getByLabelText('Host')).toHaveValue(''));
   });
 
+  test('keeps the typed host in the form when the server refuses it', async () => {
+    await renderPanel();
+    mockApi.addWebsiteCorpusDomain.mockRejectedValueOnce({
+      response: { data: { detail: 'A wildcard needs a domain below it' } }
+    });
+    fireEvent.change(screen.getByLabelText('Host'), { target: { value: '*.corp' } });
+    fireEvent.change(screen.getByLabelText('Note (optional)'), { target: { value: 'dept' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Allow host' }));
+    expect(await screen.findByText('A wildcard needs a domain below it')).toBeInTheDocument();
+    expect(screen.getByLabelText('Host')).toHaveValue('*.corp');
+    expect(screen.getByLabelText('Note (optional)')).toHaveValue('dept');
+  });
+
   test("shows the server's message when a change fails, in the live region", async () => {
     await renderPanel();
     mockApi.approveWebsiteCorpusDomain.mockRejectedValueOnce({
@@ -235,6 +248,8 @@ describe('WebsiteCorpusDomainsPanel', () => {
     const untranslated = [];
     for (const key of keys) {
       const german = mockI18n.getFixedT('de')(key);
+      // A missing key answers with the marker of parseMissingKeyHandler, not with the key itself.
+      expect(german).not.toMatch(/^MISSING:/);
       expect(german).not.toBe(key);
       if (german === mockI18n.getFixedT('en')(key)) untranslated.push(german);
     }

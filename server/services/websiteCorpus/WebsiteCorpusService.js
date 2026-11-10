@@ -35,7 +35,7 @@ import { DomainError, DomainStore, normalizeHost, splitHost } from './DomainStor
 import { renderReport } from './report.js';
 import { collectSiteUrls } from './sitemap.js';
 import { DEFAULT_NEWS_SECTIONS, analyseCorpus, findNearDuplicates } from './stats.js';
-import { nonDefaultPort, normalizePrefix, sectionCounts, siteKeyOf } from './urls.js';
+import { hostKey, nonDefaultPort, normalizePrefix, sectionCounts, siteKeyOf } from './urls.js';
 
 /** Defaults and limits. An installation may lower or raise `maxPages` within the cap. */
 export const DEFAULT_MAX_PAGES = 3000;
@@ -159,8 +159,12 @@ export class WebsiteCorpusService {
   async policyFor({ allowPrivateAddresses = false } = {}) {
     const approved = await this.domains.approvedHosts(this.now()).catch(() => []);
     return {
+      // The crawl treats `www.x` and `x` as one site, so an approval of either covers both.
       allowPrivate: (hostname, port) =>
-        allowPrivateAddresses === true || DomainStore.covers(approved, hostname, port)
+        allowPrivateAddresses === true ||
+        [hostname, hostKey(hostname), `www.${hostKey(hostname)}`].some(name =>
+          DomainStore.covers(approved, name, port)
+        )
     };
   }
 
@@ -280,7 +284,6 @@ export class WebsiteCorpusService {
     const policy = await this.policyFor({ allowPrivateAddresses });
     const verdict = await this.hostCheck(site, policy);
     if (!verdict.ok) throw await this.refusalFor(site, verdict);
-    await this.store.prune(ownerId, this.now());
 
     const robotsText = await this.fetchRobots(site.origin, { policy });
     const rules = parseRobotsTxt(robotsText);
@@ -319,6 +322,9 @@ export class WebsiteCorpusService {
     }
 
     const blockedByRobots = found.urls.filter(url => !robotsAllows(url, rules)).length;
+    // Room is made only now: a discovery that ends without a corpus (a scope that is too wide,
+    // no pages found) must not cost the user one they still use.
+    await this.store.prune(ownerId, this.now());
     const corpus = await this.store.create(
       ownerId,
       {

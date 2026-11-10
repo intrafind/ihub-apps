@@ -74,7 +74,7 @@ export default function WebsiteCorpusDomainsPanel() {
     load();
   }, [load]);
 
-  /** Run one change, then reload; the outcome goes to the live region. */
+  /** Run one change, then reload; the outcome goes to the live region. Whether the change was made. */
   const run = async (id, action, success) => {
     setBusy(id);
     setMessage(null);
@@ -82,8 +82,10 @@ export default function WebsiteCorpusDomainsPanel() {
       await action();
       setMessage({ tone: 'ok', text: success });
       await load();
+      return true;
     } catch (error) {
       setMessage({ tone: 'error', text: getAdminApiErrorMessage(error) });
+      return false;
     } finally {
       setBusy(null);
     }
@@ -100,13 +102,16 @@ export default function WebsiteCorpusDomainsPanel() {
     event.preventDefault();
     const name = host.trim();
     if (!name) return;
-    await run(
+    const added = await run(
       'add',
       () => addWebsiteCorpusDomain(name, { note: hostNote.trim() || undefined }),
       t('admin.websiteCorpusDomains.added', '{{host}} is allowed now.', { host: name })
     );
-    setHost('');
-    setHostNote('');
+    // A host the server refused stays in the field, so it can be corrected.
+    if (added) {
+      setHost('');
+      setHostNote('');
+    }
   };
 
   const requesters = entry =>
