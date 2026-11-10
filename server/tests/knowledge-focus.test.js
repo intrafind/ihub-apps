@@ -396,6 +396,53 @@ describe('the planner injects the sections that answer the question', () => {
   });
 });
 
+describe('a file downloaded from a website (#3536) is read for the question wherever the answer is', () => {
+  const model = { contextWindow: 8000 };
+  const settings = { loadAllMaxTokens: 50000 };
+  const ctx = { language: 'en' };
+
+  /** A "200-page PDF": far past the 50 000 characters a live page read keeps. */
+  function bigDocument() {
+    let text = '# Annual report\n\n';
+    for (let i = 1; i <= 40; i++) text += `## Section ${i}\n\n${filler(i)}\n\n`;
+    text += '## Warranty\n\nThe warranty lasts 36 months and covers the quasar module.\n';
+    return text;
+  }
+
+  it('the answer in the last section reaches the prompt and knowledge_read', async () => {
+    const text = bigDocument();
+    assert.ok(text.length > 100000);
+    assert.ok(text.indexOf('quasar') > 50000, 'the answer is past the live-read cap');
+    const file = textItem('itm_report', 'Report.pdf', text, {
+      kind: 'web-file',
+      ref: { url: 'https://example.com/report.pdf' }
+    });
+    const project = projectOf([file]);
+
+    const plan = await planKnowledgeScope([{ project, mode: 'auto', origin: 'app' }], {
+      model,
+      settings,
+      ctx,
+      question: 'how long is the quasar warranty'
+    });
+    const [planned] = plan.projects;
+    assert.equal(planned.mode, 'searched');
+    const [entry] = planned.injected;
+    assert.equal(entry.excerpt, true);
+    assert.deepEqual(entry.sections, ['warranty']);
+    assert.ok(entry.text.includes('The warranty lasts 36 months'));
+
+    const read = await new LocalKnowledgeProvider().read(
+      project,
+      ctx,
+      { itemId: 'itm_report' },
+      { focus: 'how long is the quasar warranty' }
+    );
+    assert.equal(read.retrieval.mode, 'focus');
+    assert.ok(read.text.includes('The warranty lasts 36 months'));
+  });
+});
+
 describe('the hard limit keeps the sections that answer the question', () => {
   const ctx = { language: 'en' };
   // A 4 000-token window: the hard limit is 3 000 tokens, the manual is far over it.
