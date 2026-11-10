@@ -113,15 +113,12 @@ function bodyLevels() {
 /**
  * Geometry of the built-in master, in EMU.
  */
-function geometry(size, logo, framed = false) {
+function geometry(size, logo) {
   const { cx: W, cy: H } = size;
   const margin = 0.5 * EMU_PER_INCH;
-  // A slide frame (`slideFrame.js`) draws strips along the top and left edge
-  // and the logo bottom right: the content keeps clear of them.
-  const left = framed ? 0.9 * EMU_PER_INCH : margin;
   const logoHeight = 0.42 * EMU_PER_INCH;
   const logoWidth = logo ? Math.min(logoHeight / logo.ratio, 2.2 * EMU_PER_INCH) : 0;
-  const titleTop = (framed ? 0.62 : 0.32) * EMU_PER_INCH;
+  const titleTop = 0.32 * EMU_PER_INCH;
   const titleHeight = 0.9 * EMU_PER_INCH;
   const bodyTop = titleTop + titleHeight + 0.18 * EMU_PER_INCH;
   const footerHeight = 0.32 * EMU_PER_INCH;
@@ -130,7 +127,6 @@ function geometry(size, logo, framed = false) {
     W,
     H,
     margin,
-    framed,
     logo: logo
       ? {
           x: W - margin - logoWidth,
@@ -140,21 +136,20 @@ function geometry(size, logo, framed = false) {
         }
       : null,
     title: {
-      x: left,
+      x: margin,
       y: titleTop,
-      cx: W - left - margin - (logo ? logoWidth + 0.25 * EMU_PER_INCH : 0),
+      cx: W - 2 * margin - (logo ? logoWidth + 0.25 * EMU_PER_INCH : 0),
       cy: titleHeight
     },
     body: {
-      x: left,
+      x: margin,
       y: bodyTop,
-      cx: W - left - margin,
+      cx: W - 2 * margin,
       cy: footerTop - bodyTop - 0.1 * EMU_PER_INCH
     },
-    footer: { x: left, y: footerTop, cx: W * 0.55, cy: footerHeight },
+    footer: { x: margin, y: footerTop, cx: W * 0.55, cy: footerHeight },
     slideNumber: {
-      // Framed: left of the frame's logo (1" wide, 0.25" from the edge).
-      x: W - (framed ? 1.5 * EMU_PER_INCH : margin) - 1.2 * EMU_PER_INCH,
+      x: W - margin - 1.2 * EMU_PER_INCH,
       y: footerTop,
       cx: 1.2 * EMU_PER_INCH,
       cy: footerHeight
@@ -164,9 +159,7 @@ function geometry(size, logo, framed = false) {
 
 function masterXml(g, layoutCount) {
   const shapes = [
-    ...(g.framed
-      ? []
-      : [rectShape(10, 'Accent bar', { x: 0, y: 0, cx: g.W, cy: 0.07 * EMU_PER_INCH }, 'accent1')]),
+    rectShape(10, 'Accent bar', { x: 0, y: 0, cx: g.W, cy: 0.07 * EMU_PER_INCH }, 'accent1'),
     placeholder({
       id: 2,
       name: 'Title Placeholder 1',
@@ -265,41 +258,22 @@ function layouts(g, logo, primary) {
       })
     );
   }
-  // Framed: a light section slide (the frame's logo stays readable) with an
-  // accent bar; otherwise a full-colour slide.
-  const sectionX = (g.framed ? 1.25 : 1.0) * inch;
-  const sectionColors = g.framed ? ['accent1', null] : [onPrimary, onPrimary];
   const section = [
-    ...(g.framed
-      ? [
-          rectShape(
-            10,
-            'Accent bar',
-            { x: 0.9 * inch, y: g.H * 0.36, cx: 0.09 * inch, cy: 2.3 * inch },
-            'accent1'
-          )
-        ]
-      : []),
     placeholder({
       id: 2,
       name: 'Title 1',
       ph: 'type="title"',
-      rect: { x: sectionX, y: g.H * 0.36, cx: g.W - sectionX - 1.0 * inch, cy: 1.3 * inch },
+      rect: { x: 1.0 * inch, y: g.H * 0.36, cx: g.W - 2 * inch, cy: 1.3 * inch },
       anchor: 'b',
-      lstStyle: titleRun(4000, sectionColors[0])
+      lstStyle: titleRun(4000, onPrimary)
     }),
     placeholder({
       id: 3,
       name: 'Text Placeholder 2',
       ph: 'type="body" idx="1"',
-      rect: {
-        x: sectionX,
-        y: g.H * 0.36 + 1.4 * inch,
-        cx: g.W - sectionX - 1.0 * inch,
-        cy: 1.0 * inch
-      },
+      rect: { x: 1.0 * inch, y: g.H * 0.36 + 1.4 * inch, cx: g.W - 2 * inch, cy: 1.0 * inch },
       anchor: 't',
-      lstStyle: plain(2000, sectionColors[1])
+      lstStyle: plain(2000, onPrimary)
     })
   ];
   const half = (g.body.cx - 0.4 * inch) / 2;
@@ -309,7 +283,7 @@ function layouts(g, logo, primary) {
       type: 'secHead',
       name: 'Section Header',
       shapes: section,
-      background: g.framed ? undefined : 'accent1',
+      background: 'accent1',
       hideMaster: true
     },
     {
@@ -402,9 +376,6 @@ export const THEME_TYPE = TYPES.theme;
  * @param {string} [brand.bodyFont] - Office font name.
  * @param {{ data: Uint8Array, extension: string, width: number, height: number }} [brand.logo]
  * @param {'16:9'|'4:3'} [brand.aspectRatio]
- * @param {boolean} [brand.framed] - A slide frame is drawn over the slides: keep the
- *   content clear of the top and left edge and the bottom-right corner, and
- *   leave out the master's own accent bar.
  * @returns {Promise<Buffer>} A `.pptx` package without slides.
  */
 export async function buildBaseTemplate(brand = {}) {
@@ -421,7 +392,7 @@ export async function buildBaseTemplate(brand = {}) {
     brand.logo?.data && brand.logo.width > 0 && brand.logo.height > 0
       ? { ...brand.logo, ratio: brand.logo.height / brand.logo.width }
       : null;
-  const g = geometry(size, logo, brand.framed === true);
+  const g = geometry(size, logo);
   const layoutList = layouts(g, logo, primary);
   const zip = new JSZip();
   const logoTarget = logo ? `../media/logo.${logo.extension === 'png' ? 'png' : 'jpeg'}` : null;

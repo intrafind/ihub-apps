@@ -3,8 +3,8 @@ name: pptx
 description: Create PowerPoint presentations (.pptx) on demand — pitch decks, status updates, board and project reviews, trainings, workshop agendas, results summaries — on the company's slide template, with bullet slides, KPI metric cards, tables, native editable charts, pictures, two-column comparisons, section slides and speaker notes. Use whenever the user asks for slides, a deck, a presentation or a PowerPoint file. Do not activate only to summarize or answer questions about an uploaded .pptx (its extracted text is already in the conversation).
 metadata:
   author: IntraFind
-  version: '1.2'
-allowed-tools: create_pptx frame_pptx
+  version: '1.1'
+allowed-tools: create_pptx
 ---
 
 # Creating presentations
@@ -29,14 +29,6 @@ If the app uses a **document template**, its slide design is applied automatical
 - Do not set colours or fonts, and do not describe the design in the slides.
 - Do not add the company name or a confidentiality note to every slide: the template's footer has it.
 - If `create_pptx` offers a `template` parameter, use `default` unless the user asks for a specific template.
-
-## Putting the company frame on an existing deck
-
-Some company templates have a **slide frame**: a cover (background picture, logo, title, date) and a frame on every other slide (strips along the edges, logo). When the user uploads a `.pptx` and wants **that deck itself** in the company design, keeping its pictures, charts and layout, call `frame_pptx` with the id of the uploaded file (the `id` of its `<content>` tag, only when `can_use_as_template="true"`). The deck's content is not rebuilt: its first slide becomes the cover (its title and subtitle become the cover title and date; override them with `coverTitle`, `coverDate`, `coverFooter`, or pass `cover: false` when the first slide is not a title slide), and every slide gets the frame.
-
-- Use `frame_pptx` to **move a deck into the company design**; use `create_pptx` to **write a new deck** or to rewrite a deck's text.
-- The frame goes on top of the slides as they are: if the deck was made with other margins, tell the user to check that nothing sits under the strips or the logo bottom right.
-- If `frame_pptx` says no slide frame is set up, tell the user once; offer to rebuild the deck with `create_pptx` instead.
 
 ## Workflow
 

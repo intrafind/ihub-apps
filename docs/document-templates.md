@@ -17,7 +17,6 @@ Admins manage templates under **Admin → Customization → Document templates**
 | **Letterhead** (PDF) | PDF | Printed under every page: first page, and following pages |
 | **Word template** (`.dotx`/`.docx`) | Word | Styles, headers, footers, page setup, theme |
 | **PowerPoint template** (`.potx`/`.pptx`) | PowerPoint | Slide masters and layouts, theme, logos, backgrounds |
-| **Slide frame** (cover picture, top and left strip) | PowerPoint | A cover and a frame put on every presentation, also on decks users upload ([details](#slide-frame)) |
 
 Each part is optional. A template with only colours and a logo already gives every format a consistent look; adding the company's Word and PowerPoint templates makes generated files indistinguishable from hand-made ones.
 
@@ -64,25 +63,6 @@ Presentations are always built by **filling a template**: your PowerPoint templa
 - **Speaker notes** use the template's notes master; a template without one gets a plain one.
 - Without a PowerPoint template, choose the **slide format** (16:9 or 4:3).
 
-### Slide frame
-
-A PowerPoint template carries the corporate design in its master. A **slide frame** is the other way to get it: pictures that iHub puts on a finished deck, without rebuilding its content. It is for designs made of a cover photo, edge strips and a logo (for example a mosaic frame), and it is the only way to put the design on a deck **a user uploaded** and keep its pictures, charts and layout.
-
-| Picture | Where it goes |
-|---|---|
-| **Cover picture** | Full-bleed behind the first slide, cropped (not stretched) to the slide's proportions |
-| **Top strip** | Along the top edge of every other slide, full width, in the proportions of the picture |
-| **Left strip** | Along the left edge below the top strip, in the proportions of the picture |
-| **Logo** (the brand logo) | Bottom right of every other slide, 1 inch wide; on the cover, in a white panel top left and small in the footer strip |
-
-- **The cover** replaces what the first slide showed with: the picture, a white info panel top left (logo, title, date) and a white footer strip bottom right (footer text, small logo). The title and the date are the first slide's own title and subtitle, or its first two text shapes. **Cover footer** sets the strip's text (`{title}`, `{date}` and `{company}` are filled in; default: title and date). The cover is the first slide of a new deck only when that is a `title` slide.
-- **The other slides** keep every shape they have; the strips and the logo are added on top.
-- The text of the cover uses the brand's text colour and heading font. All sizes are proportions of the slide, so the frame fits 16:9 and 4:3.
-- **With a new deck** (`create_pptx`), the frame is applied after the slides are built. With iHub's built-in slide design, the master then leaves out its own accent bar and logo and keeps its text clear of the strips and the logo; the section slide is light. With your own PowerPoint template, use one without a logo or frame of its own, otherwise both show.
-- **With an uploaded deck**, the `frame_pptx` tool of the `pptx` skill puts the frame on it and hands the result back; see [Chat files](chat-files.md#using-a-file-in-the-document-skills). Check that nothing of the deck sits under the strips or the logo.
-
-Set it up under **Admin → Document templates → PowerPoint → Slide frame**: upload the pictures, switch **Use the slide frame** on, and save. Pictures are PNG or JPEG (the cover up to 8 MB, the strips up to 2 MB); a frame without any picture is not applied.
-
 ## Excel
 
 Workbooks from the `xlsx` skill take the brand colours and font of the template for header rows, totals and accents; the logo, letterhead and Word/PowerPoint files do not apply. Without a template the model can pass a brand colour, accent colour and font.
@@ -108,7 +88,7 @@ Templates live in `contents/document-templates/<id>/`: `template.json` and the f
 | `GET /api/admin/document-templates` | Every template |
 | `POST /api/admin/document-templates` | Create one (`id`, `name`, …) |
 | `GET/PUT/DELETE /api/admin/document-templates/:id` | Read (with what its Office templates hold), save the settings, delete. A save keeps the stored files: files are only added or removed through the file endpoints |
-| `POST/DELETE /api/admin/document-templates/:id/files/:slot` | Upload (multipart `file`) or remove a file. Slots: `logo`, `font` (with `family` and `face`), `letterhead`, `letterheadFollowing`, `wordTemplate`, `powerpointTemplate`, `frameCover`, `frameTop`, `frameLeft` |
+| `POST/DELETE /api/admin/document-templates/:id/files/:slot` | Upload (multipart `file`) or remove a file. Slots: `logo`, `font` (with `family` and `face`), `letterhead`, `letterheadFollowing`, `wordTemplate`, `powerpointTemplate` |
 | `POST /api/admin/document-templates/:id/sample/:format` | A sample `pdf`, `png`, `docx` or `pptx` |
 | `GET /api/document-templates` | Enabled templates for the export dialog (signed-in users); with `appId`, also the template that app pins |
 
@@ -148,14 +128,7 @@ Template ids use `a-z`, `0-9` and `-`. `default`, `professional`, `minimal` and 
     "template": "powerpoint-template.potx",
     "footer": "{company}",
     "slideNumbers": true,
-    "layouts": { "content": "Titel und Inhalt" },
-    "frame": {
-      "enabled": true,
-      "coverBackground": "frame-cover.jpeg",
-      "stripTop": "frame-top.png",
-      "stripLeft": "frame-left.png",
-      "coverFooter": "{title} · {date}"
-    }
+    "layouts": { "content": "Titel und Inhalt" }
   }
 }
 ```

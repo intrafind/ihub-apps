@@ -298,8 +298,6 @@ export default function AdminDocumentTemplateEditPage() {
 
   const name = getLocalizedContent(draft.name, i18n.language) || draft.id;
   const filesDisabled = isNew;
-  const frame = draft.pptx.frame || {};
-  const updateFrame = (key, value) => update('pptx', 'frame', { ...frame, [key]: value });
   const pptxInfo = files.powerpointTemplate;
   const wordInfo = files.wordTemplate;
   const fonts = fontChoices(draft);
@@ -977,65 +975,6 @@ export default function AdminDocumentTemplateEditPage() {
                     {t('admin.documentTemplates.edit.slideNumbers', 'Slide numbers')}
                   </label>
                 </div>
-              </div>
-
-              <div className="space-y-3 border-t border-gray-200 dark:border-gray-700 pt-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                    {t('admin.documentTemplates.edit.slideFrame', 'Slide frame')}
-                  </h3>
-                  <p className={HELP_CLASS}>
-                    {t(
-                      'admin.documentTemplates.edit.slideFrameHelp',
-                      'A cover and a frame put on every presentation: the first slide of a new deck becomes the cover (background picture, logo, title, date), every other slide gets a strip along the top and left edge and the logo bottom right. It also frames decks users upload (tool frame_pptx). Use it with the built-in slide design, or with a PowerPoint template that has no logo or frame of its own. The logo is the brand logo above.'
-                    )}
-                  </p>
-                </div>
-                <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-200">
-                  <input
-                    type="checkbox"
-                    className={CHECKBOX_CLASS}
-                    checked={Boolean(frame.enabled)}
-                    onChange={event => updateFrame('enabled', event.target.checked)}
-                  />
-                  {t('admin.documentTemplates.edit.slideFrameEnabled', 'Use the slide frame')}
-                </label>
-                <div className="grid gap-3 sm:grid-cols-3">
-                  {[
-                    ['frameCover', 'coverBackground', 'frameCoverHelp'],
-                    ['frameTop', 'stripTop', 'frameStripHelp'],
-                    ['frameLeft', 'stripLeft', 'frameStripHelp']
-                  ].map(([slot, key, help]) => (
-                    <TemplateFileSlot
-                      key={slot}
-                      label={t(`admin.documentTemplates.files.${slot}`, slot)}
-                      help={t(`admin.documentTemplates.files.${help}`, '')}
-                      accept=".png,.jpg,.jpeg,image/png,image/jpeg"
-                      fileName={frame[key]}
-                      busy={busySlot === slot}
-                      disabled={filesDisabled}
-                      onUpload={file => upload(slot, file)}
-                      onRemove={() => remove(slot)}
-                    />
-                  ))}
-                </div>
-                <Field
-                  label={t('admin.documentTemplates.edit.coverFooter', 'Cover footer')}
-                  help={t(
-                    'admin.documentTemplates.edit.coverFooterHelp',
-                    "Text in the cover's footer strip. {title}, {date} and {company} are filled in. Empty: title and date."
-                  )}
-                >
-                  {id => (
-                    <input
-                      id={id}
-                      className={INPUT_CLASS}
-                      value={frame.coverFooter ?? ''}
-                      placeholder="{title} · {date}"
-                      onChange={event => updateFrame('coverFooter', event.target.value)}
-                    />
-                  )}
-                </Field>
               </div>
             </Section>
 

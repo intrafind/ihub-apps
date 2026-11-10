@@ -7,52 +7,6 @@
  * `pptxTools.js` and is loaded when the tool runs.
  */
 
-export const FRAME_PPTX_TOOL = {
-  id: 'frame_pptx',
-  outputKind: 'presentation',
-  name: { en: 'Apply presentation frame', de: 'Präsentationsrahmen anwenden' },
-  description: {
-    en: 'Put the company\'s slide frame on a PowerPoint deck the user uploaded, and give it back as a download: the first slide becomes the cover (background picture, logo, title, date), every other slide gets the frame (strips along the edges, logo). The deck\'s own content (text, pictures, charts, tables, notes) is kept as it is. Pass the id of the uploaded .pptx (the id attribute of its <content> tag, only when can_use_as_template="true"). Use it to move an existing deck into the corporate design; use create_pptx to write a new deck. Only works when the document template has a slide frame.',
-    de: 'Legt den Folienrahmen des Unternehmens auf eine hochgeladene PowerPoint-Datei und stellt sie als Download bereit: Die erste Folie wird zur Titelfolie (Hintergrundbild, Logo, Titel, Datum), alle anderen erhalten den Rahmen (Streifen an den Rändern, Logo). Der Inhalt der Datei (Text, Bilder, Diagramme, Tabellen, Notizen) bleibt unverändert. Die ID der hochgeladenen .pptx übergeben (das id-Attribut ihres <content>-Tags, nur bei can_use_as_template="true"). Zum Überführen einer vorhandenen Präsentation ins Unternehmensdesign; für neue Präsentationen create_pptx verwenden. Funktioniert nur, wenn die Dokumentvorlage einen Folienrahmen hat.'
-  },
-  usesDocumentTemplate: true,
-  brandParameters: [],
-  parameters: {
-    type: 'object',
-    properties: {
-      fileId: {
-        type: 'string',
-        description:
-          'Id of the .pptx the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true").'
-      },
-      filename: {
-        type: 'string',
-        description: 'Download file name without extension, e.g. "q3-board-review-branded".'
-      },
-      cover: {
-        type: 'boolean',
-        description:
-          'Make the first slide the cover (default true). Pass false when the first slide is a content slide.'
-      },
-      coverTitle: {
-        type: 'string',
-        description: 'Cover title. Default: the title of the first slide.'
-      },
-      coverDate: {
-        type: 'string',
-        description:
-          'Cover date or subtitle, one short line. Default: the subtitle of the first slide.'
-      },
-      coverFooter: {
-        type: 'string',
-        description:
-          'Text of the cover\'s footer strip. Default: the template\'s, else "title · date".'
-      }
-    },
-    required: ['fileId']
-  }
-};
-
 export const CREATE_PPTX_TOOL = {
   id: 'create_pptx',
   outputKind: 'presentation',

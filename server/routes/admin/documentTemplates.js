@@ -7,11 +7,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
-import {
-  ASSET_SLOTS,
-  FRAME_SLOT_KEYS,
-  referencedAssets
-} from '../../validators/documentTemplateSchema.js';
+import { ASSET_SLOTS, referencedAssets } from '../../validators/documentTemplateSchema.js';
 import {
   deleteTemplate,
   getTemplate,
@@ -97,7 +93,6 @@ function assetInSlot(template, slot, { family, face } = {}) {
   if (slot === 'letterheadFollowing') return template.pdf.letterheadFollowing;
   if (slot === 'wordTemplate') return template.docx.template;
   if (slot === 'powerpointTemplate') return template.pptx.template;
-  if (FRAME_SLOT_KEYS[slot]) return template.pptx.frame?.[FRAME_SLOT_KEYS[slot]];
   if (slot === 'font') {
     const font = template.fonts.find(f => f.family.toLowerCase() === String(family).toLowerCase());
     return font?.[face || 'normal'];
@@ -256,8 +251,8 @@ export default function registerAdminDocumentTemplatesRoutes(app) {
       res.setHeader('Content-Type', ASSET_TYPES[extension] || 'application/octet-stream');
       res.setHeader('X-Content-Type-Options', 'nosniff');
       res.setHeader('Cache-Control', 'no-store');
-      // Only the pictures (logo, frame) are shown in the page; every other file downloads.
-      if (req.params.slot !== 'logo' && !FRAME_SLOT_KEYS[req.params.slot]) {
+      // Only the logo is shown in the page; every other file downloads.
+      if (req.params.slot !== 'logo') {
         res.setHeader('Content-Disposition', buildContentDisposition(name));
       }
       res.send(data);

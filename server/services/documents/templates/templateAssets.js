@@ -63,19 +63,19 @@ function imageInfo(buffer) {
   return null;
 }
 
-function checkLogo(buffer, extension, label = 'logo') {
+function checkLogo(buffer, extension) {
   const info = imageInfo(buffer);
-  if (!info) throw new TemplateAssetError(`The ${label} must be a PNG or JPEG image.`);
+  if (!info) throw new TemplateAssetError('The logo must be a PNG or JPEG image.');
   const declared = extension === 'png' ? 'png' : 'jpeg';
   if (info.type !== declared) {
-    throw new TemplateAssetError(`The ${label} file does not match its extension.`);
+    throw new TemplateAssetError('The logo file does not match its extension.');
   }
   if (!(info.width > 0 && info.height > 0)) {
-    throw new TemplateAssetError(`The size of the ${label} image could not be read.`);
+    throw new TemplateAssetError('The size of the logo image could not be read.');
   }
   if (info.width > MAX_LOGO_PIXELS || info.height > MAX_LOGO_PIXELS) {
     throw new TemplateAssetError(
-      `The ${label} is too large (at most ${MAX_LOGO_PIXELS} pixels per side).`
+      `The logo is too large (at most ${MAX_LOGO_PIXELS} pixels per side).`
     );
   }
   return { width: info.width, height: info.height, type: info.type };
@@ -206,11 +206,6 @@ export async function checkTemplateAsset(slot, buffer, extension) {
   switch (slot) {
     case 'logo':
       return checkLogo(buffer, extension);
-    case 'frameCover':
-      return checkLogo(buffer, extension, 'cover picture');
-    case 'frameTop':
-    case 'frameLeft':
-      return checkLogo(buffer, extension, 'frame strip');
     case 'font':
       return checkFont(buffer);
     case 'letterhead':

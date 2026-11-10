@@ -48,30 +48,7 @@ export const ASSET_SLOTS = Object.freeze({
     baseName: 'powerpoint-template',
     maxBytes: 50 * 1024 * 1024
   },
-  font: { extensions: ['ttf', 'otf'], baseName: 'font', maxBytes: 15 * 1024 * 1024 },
-  // The slide frame's pictures (`pptx.frame`).
-  frameCover: {
-    extensions: ['png', 'jpg', 'jpeg'],
-    baseName: 'frame-cover',
-    maxBytes: 8 * 1024 * 1024
-  },
-  frameTop: {
-    extensions: ['png', 'jpg', 'jpeg'],
-    baseName: 'frame-top',
-    maxBytes: 2 * 1024 * 1024
-  },
-  frameLeft: {
-    extensions: ['png', 'jpg', 'jpeg'],
-    baseName: 'frame-left',
-    maxBytes: 2 * 1024 * 1024
-  }
-});
-
-/** The slide frame's picture slots, and the setting each one fills. */
-export const FRAME_SLOT_KEYS = Object.freeze({
-  frameCover: 'coverBackground',
-  frameTop: 'stripTop',
-  frameLeft: 'stripLeft'
+  font: { extensions: ['ttf', 'otf'], baseName: 'font', maxBytes: 15 * 1024 * 1024 }
 });
 
 /** Slide layouts the PowerPoint engine places content on. */
@@ -156,25 +133,9 @@ const docxSchema = z
   })
   .strict();
 
-/**
- * The slide frame: a cover and a frame put on every presentation (see
- * `services/documents/pptx/slideFrame.js`). The pictures are uploaded files;
- * the logo is the brand's.
- */
-const frameSchema = z
-  .object({
-    enabled: z.boolean().optional().default(false),
-    coverBackground: assetName.optional(),
-    stripTop: assetName.optional(),
-    stripLeft: assetName.optional(),
-    coverFooter: z.string().max(200).optional()
-  })
-  .strict();
-
 const pptxSchema = z
   .object({
     template: assetName.optional(),
-    frame: frameSchema.optional(),
     aspectRatio: z.enum(['16:9', '4:3']).optional(),
     footer: z.string().max(200).optional(),
     slideNumbers: z.boolean().optional(),
@@ -216,11 +177,6 @@ export const documentTemplateSchema = z
       ['letterheadFollowing', ['pdf', 'letterheadFollowing'], template.pdf?.letterheadFollowing],
       ['wordTemplate', ['docx', 'template'], template.docx?.template],
       ['powerpointTemplate', ['pptx', 'template'], template.pptx?.template],
-      ...Object.entries(FRAME_SLOT_KEYS).map(([slot, key]) => [
-        slot,
-        ['pptx', 'frame', key],
-        template.pptx?.frame?.[key]
-      ]),
       ...template.fonts.flatMap((font, index) =>
         FONT_FACES.map(face => ['font', ['fonts', index, face], font[face]])
       )
@@ -258,8 +214,7 @@ export function referencedAssets(template) {
     template.pdf?.letterhead,
     template.pdf?.letterheadFollowing,
     template.docx?.template,
-    template.pptx?.template,
-    ...Object.values(FRAME_SLOT_KEYS).map(key => template.pptx?.frame?.[key])
+    template.pptx?.template
   ];
   for (const font of template.fonts || []) {
     for (const face of FONT_FACES) names.push(font[face]);

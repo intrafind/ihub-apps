@@ -25,10 +25,6 @@ const RENDERERS = {
     const { renderPptx } = await import('./pptx/renderPptx.js');
     return renderPptx(spec, assets);
   },
-  pptxFrame: async ({ spec, assets }) => {
-    const { renderPptxFrame } = await import('./pptx/renderPptx.js');
-    return renderPptxFrame(spec, assets);
-  },
   xlsx: async ({ spec, assets }) => {
     const { renderXlsx } = await import('./xlsx/renderXlsx.js');
     return renderXlsx(spec, assets);

@@ -195,14 +195,10 @@ export function applyTemplateToPptxSpec(spec, bundle) {
       },
       footer: pptx.footer !== undefined ? withCompany(pptx.footer, template) : spec.footer,
       slideNumbers: pick(pptx.slideNumbers, spec.slideNumbers),
-      layouts: pptx.layouts,
-      // Cover and frame (`pptx/slideFrame.js`); `{title}` and `{date}` in the
-      // cover footer are filled from the cover slide.
-      frame: frameSettings(pptx.frame, assets.frame, template)
+      layouts: pptx.layouts
     },
     assets: {
       powerpointTemplate: assets.powerpointTemplate?.data,
-      frame: frameAssets(pptx.frame, assets.frame),
       logo:
         logo && assets.logo
           ? {
@@ -214,34 +210,6 @@ export function applyTemplateToPptxSpec(spec, bundle) {
           : undefined
     }
   };
-}
-
-/** The frame settings for the render, or undefined without a usable frame. */
-export function frameSettings(frame, files, template) {
-  if (!frame?.enabled || !Object.keys(files || {}).length) return undefined;
-  return {
-    enabled: true,
-    coverFooter:
-      frame.coverFooter !== undefined ? withCompany(frame.coverFooter, template) : undefined
-  };
-}
-
-/** The frame's pictures as the render wants them. */
-export function frameAssets(frame, files) {
-  if (!frame?.enabled) return undefined;
-  const out = {};
-  for (const [key, file] of Object.entries(files || {})) {
-    const info = file?.data ? imageInfo(Buffer.from(file.data)) : null;
-    if (info) {
-      out[key] = {
-        data: file.data,
-        extension: info.type === 'png' ? 'png' : 'jpeg',
-        width: info.width,
-        height: info.height
-      };
-    }
-  }
-  return Object.keys(out).length ? out : undefined;
 }
 
 /**
