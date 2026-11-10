@@ -1,5 +1,11 @@
 # Fixes — Unreleased
 
+## Attaching More Files No Longer Duplicates the Ones Already Attached
+
+Selecting files in the file dialog, confirming, and then opening the dialog again to add more attached
+the first files twice: 5 files plus 2 more gave 12 attachments instead of 7. Only the newly selected
+files are added now. Files picked from cloud storage stay attached next to local files.
+
 ## Rating a Chat Answer Works Again
 
 Sending a star rating or comment under an answer failed with "Some of the entered data is not valid"
