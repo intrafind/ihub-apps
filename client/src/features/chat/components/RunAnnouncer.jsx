@@ -30,8 +30,10 @@ const REFILL_DELAY_MS = 50;
  *
  * @param {Object} props
  * @param {Array<Object>} props.messages - the displayed messages of the chat list
+ * @param {string} [props.label] - said before each announcement ("Model A: Creating web
+ *   artifact"), where several chats are visible at once
  */
-function RunAnnouncer({ messages }) {
+function RunAnnouncer({ messages, label }) {
   const { t } = useTranslation();
   const [text, setText] = useState('');
   const runRef = useRef({
@@ -70,7 +72,7 @@ function RunAnnouncer({ messages }) {
       current.queue = next.queue;
       if (next.announcement) {
         current.spokeAt = now;
-        speak(next.announcement.text);
+        speak(label ? `${label}: ${next.announcement.text}` : next.announcement.text);
       }
       const wait = next.announcement && next.queue.length ? ANNOUNCE_MIN_GAP_MS : next.waitMs;
       if (wait !== null && wait !== undefined) later('drain', wait + 1, drain);
@@ -88,7 +90,7 @@ function RunAnnouncer({ messages }) {
       else clearTimeout(timers.wake);
     };
     derive();
-  }, [messages, t]);
+  }, [messages, t, label]);
 
   useEffect(() => {
     const { timers } = runRef.current;

@@ -177,6 +177,34 @@ for (const [label, provider, originalFormat] of [
     assert.equal(atFinish[0].tool_calls.length, 1);
   });
 
+  test(`${label}: a server that sends another id with a later fragment does not rename the call`, async () => {
+    // The row the chat announced carries the first id; the finished call, and so
+    // `tool/started`, must carry the same one or the chat shows two rows.
+    const half = Math.floor(ARGS.length / 2);
+    const chunks = await feed(provider, [
+      openaiDelta([{ index: 0, id: 'first', function: { name: 'create_file', arguments: '' } }]),
+      openaiDelta([{ index: 0, id: 'second', function: { arguments: ARGS.slice(0, half) } }]),
+      openaiDelta([{ index: 0, id: 'third', function: { arguments: ARGS.slice(half) } }]),
+      { choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }
+    ]);
+    assert.deepEqual(
+      chunks.slice(0, 3).map(c => c.toolCallProgress[0].id),
+      ['first', 'first', 'first']
+    );
+    assert.equal(chunks[3].tool_calls[0].id, 'first');
+  });
+
+  test(`${label}: an id that arrives after the name is taken when it first shows up`, async () => {
+    const chunks = await feed(provider, [
+      openaiDelta([{ index: 0, function: { name: 'create_file', arguments: '' } }]),
+      openaiDelta([{ index: 0, id: 'late', function: { arguments: '{}' } }]),
+      { choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }
+    ]);
+    assert.equal(chunks[0].toolCallProgress[0].id, undefined);
+    assert.equal(chunks[1].toolCallProgress[0].id, 'late');
+    assert.equal(chunks[2].tool_calls[0].id, 'late');
+  });
+
   test(`${label}: an empty placeholder fragment reports nothing`, async () => {
     const chunks = await feed(provider, [
       openaiDelta([{ index: 0, id: 'a', function: { name: 'create_file', arguments: '' } }]),

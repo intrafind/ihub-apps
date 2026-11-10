@@ -47,6 +47,8 @@
  * @module shared/run/toolActivity
  */
 
+import { ARGS_OUTCOMES, FAILED_ARGS_OUTCOMES } from './argProgress.js';
+
 /**
  * Tool ids with their own chat UI. `activate_skill` is shown as a `skill` row
  * built from its `skill.activation` frame, which also covers a skill the user
@@ -256,9 +258,6 @@ function mergeSkillRows(toolRows, skills) {
   return rows;
 }
 
-/** Outcomes of `args.ended` that make the row a failed one, and the `errorCode` each carries. */
-const FAILED_OUTCOMES = new Set(['dropped', 'invalid', 'truncated']);
-
 /** Whether an interaction of the run waits for the user to decide about this call. */
 function hasPendingApproval(run, callId) {
   return Object.values(run.interactions || {}).some(
@@ -277,9 +276,9 @@ function hasPendingApproval(run, callId) {
 function statusOf(run, tool, stream, finished) {
   if (tool) return tool.status === 'running' && finished ? 'stopped' : tool.status;
   const outcome = stream.ended?.outcome;
-  if (FAILED_OUTCOMES.has(outcome)) return 'error';
-  if (outcome === 'aborted') return 'stopped';
-  if (outcome === 'ready' && hasPendingApproval(run, stream.callId)) return 'awaiting';
+  if (FAILED_ARGS_OUTCOMES.has(outcome)) return 'error';
+  if (outcome === ARGS_OUTCOMES.ABORTED) return 'stopped';
+  if (outcome === ARGS_OUTCOMES.READY && hasPendingApproval(run, stream.callId)) return 'awaiting';
   return finished ? 'stopped' : 'preparing';
 }
 
@@ -305,9 +304,9 @@ function streamFields(stream, status) {
     // The arguments were complete when the stream ended; with the call not
     // started yet, the row is `ready`. A call stopped after that was not run,
     // one stopped before it was not finished.
-    argsComplete: outcome === 'ready',
-    ready: status === 'preparing' && outcome === 'ready',
-    errorCode: FAILED_OUTCOMES.has(outcome) ? outcome : null
+    argsComplete: outcome === ARGS_OUTCOMES.READY,
+    ready: status === 'preparing' && outcome === ARGS_OUTCOMES.READY,
+    errorCode: FAILED_ARGS_OUTCOMES.has(outcome) ? outcome : null
   };
 }
 

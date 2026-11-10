@@ -279,12 +279,14 @@ function MessageLog({
  * page, embed, Office pane) gets both.
  *
  * @param {Object} props - see `MessageLog`; `messages` is also what the announcer follows
+ * @param {string} [props.announceLabel] - said before each announcement, for a
+ *   list that is shown beside others (compare mode), so a screen reader says which one
  */
-function ChatMessageList(props) {
+function ChatMessageList({ announceLabel, ...props }) {
   return (
     <>
       <MessageLog {...props} />
-      <RunAnnouncer messages={props.messages} />
+      <RunAnnouncer messages={props.messages} label={announceLabel} />
     </>
   );
 }

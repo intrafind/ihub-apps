@@ -28,6 +28,7 @@ import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
 import { isActivityLineBusy } from '../activityHeadline.js';
+import { settleActivity } from '../settleActivity.js';
 import { useGracedActivity } from '../hooks/useGracedActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
@@ -168,7 +169,24 @@ function ChatMessage({
   const isError = message.error === true;
   // What the turn is doing (searches, files being written, "Waiting for the
   // model…"), without the rows still in their grace period (#3534).
-  const toolActivity = useGracedActivity(message.toolActivity);
+  // A turn the user stopped (or that failed in transport) never delivers the
+  // frames that end its rows, and a decided approval leaves its row behind:
+  // settle both before the grace period is applied.
+  const stoppedHere =
+    !message.loading &&
+    (message.cancelled === true ||
+      message.error === true ||
+      INTERRUPTED_FINISH_REASONS.has(message.finishReason));
+  const approvalDecided = Boolean(message.toolApproval?.decision);
+  const settledActivity = useMemo(
+    () =>
+      settleActivity(message.toolActivity, {
+        interrupted: stoppedHere,
+        decided: approvalDecided
+      }),
+    [message.toolActivity, stoppedHere, approvalDecided]
+  );
+  const toolActivity = useGracedActivity(settledActivity);
   // Its headline shows a spinner or a label, so the three-dot loader below
   // stands down: two loaders on one message are one too many.
   const activityLineBusy = isActivityLineBusy(toolActivity, message.loading);

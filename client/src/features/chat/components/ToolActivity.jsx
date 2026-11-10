@@ -5,7 +5,6 @@ import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { hostnameOf } from '../../../../../shared/run/groundingSources.js';
-import { IDLE_LABEL_AFTER_MS } from '../activityConstants.js';
 import {
   awaitingApprovalLabel,
   createdLabel,
@@ -59,7 +58,8 @@ function ToolActivity({ activity, loading = false }) {
   const [expanded, setExpanded] = useState(null);
 
   const items = activity?.items || [];
-  const idle = activity?.idle || null;
+  // The silence of a model call belongs to a turn that is still going.
+  const idle = loading ? activity?.idle || null : null;
   const anyActive = items.some(item => isActiveItem(item)) || Boolean(idle);
   // The clock only runs while something is going on.
   const now = useNow(anyActive);
@@ -105,7 +105,6 @@ function ToolActivity({ activity, loading = false }) {
             lead
             elapsedMs={idle.elapsedMs}
             receivedAt={idle.receivedAt}
-            showClockAfterMs={IDLE_LABEL_AFTER_MS}
             className="shrink-0 whitespace-nowrap text-gray-500 dark:text-gray-400"
           />
         )}
@@ -158,7 +157,6 @@ function IdleLine({ idle }) {
         lead
         elapsedMs={idle.elapsedMs}
         receivedAt={idle.receivedAt}
-        showClockAfterMs={IDLE_LABEL_AFTER_MS}
         className="whitespace-nowrap text-gray-500 dark:text-gray-400"
       />
     </div>
@@ -400,8 +398,9 @@ function ToolLabel({ item }) {
       </span>
     );
   }
-  if (item.titled) {
-    // A titled action reads on its own ("Search people"); the id stays in the tooltip.
+  if (item.titled || item.started === false) {
+    // A titled action reads on its own ("Search people"), and so does a call that
+    // never started: "Ran my_tool" would be wrong for it. The id stays in the tooltip.
     return (
       <span className="text-gray-800 dark:text-gray-200" title={item.toolId}>
         {item.name}
