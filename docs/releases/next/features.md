@@ -1496,3 +1496,21 @@ and every other place the name appears.
 - Use `$t(product.name)` in your own overrides instead of typing the name.
 
 See [Localization](../../localization.md).
+
+## Claude Code Plugin Marketplaces as Registries
+
+A registry can now point at a Claude Code plugin marketplace — a `marketplace.json` such as
+Anthropic's [knowledge-work-plugins](https://github.com/anthropics/knowledge-work-plugins) or
+[claude-plugins-official](https://github.com/anthropics/claude-plugins-official). Every `SKILL.md`
+a plugin ships appears in **Admin → Marketplace** as a skill and installs like any other skill.
+Marketplaces whose plugins live in other GitHub repositories (`github`, `url` and `git-subdir`
+sources) no longer fail to load.
+
+- Add the registry under **Admin → Marketplace → Manage Registries** with the raw URL of the
+  `marketplace.json`.
+- Only skills are imported; a plugin's commands, agents, hooks and MCP servers are not.
+- Plugins from other repositories need one GitHub API call each. GitHub allows 60 calls an hour
+  without a token, so give such a registry a bearer token (a GitHub token without scopes is
+  enough). Plugins that could not be read are listed in the server log.
+
+See [Marketplace → Claude Code plugin marketplaces](../../marketplace.md#claude-code-plugin-marketplaces).
