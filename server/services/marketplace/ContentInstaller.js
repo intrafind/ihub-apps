@@ -303,8 +303,12 @@ export async function fetchItemContent(registryId, type, name, { version } = {})
   const itemUrl = registryService.resolveItemUrl(item, registry);
   if (!itemUrl) throw new Error(`Cannot resolve URL for item '${type}:${name}'`);
 
-  // Build auth headers from the (already decrypted) registry config
-  const authHeaders = authHeadersFor(registry);
+  // Build auth headers from the (already decrypted) registry config. They go only to the host the
+  // registry itself is on (or the GitHub pair for a GitHub registry): an item URL elsewhere, such
+  // as a plugin skill on raw.githubusercontent.com listed by a registry on another host, gets none.
+  const authHeaders = sharesCredentialScope(itemUrl, [registry.source])
+    ? authHeadersFor(registry)
+    : {};
 
   // The item's manifest is fetched like any other marketplace file: the
   // registry's own host as it is, any other host only on a public address.
@@ -636,9 +640,10 @@ function unwrapGitHubContent(text) {
 async function buildSkillContent(item, itemUrl, skillMd, authHeaders, registry) {
   let companions = item.source?.companions;
 
-  // Fallback: discover companions at install time if cache is stale (no companions field)
+  // Fallback: discover companions at install time if cache is stale (no companions field). An
+  // empty list is an answer, not a stale cache: the catalog found no (text) companion files.
   if (
-    (!companions || companions.length === 0) &&
+    !Array.isArray(companions) &&
     item.source?.type === 'url' &&
     item.source.url?.endsWith('/SKILL.md')
   ) {

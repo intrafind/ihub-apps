@@ -260,23 +260,28 @@ export function findSkillDirs(plugin, root, skillDirs) {
     }
   };
 
-  // One skill at the plugin root.
-  add(root);
-  // The default folder.
-  addChildren(joinPath(root, 'skills'));
-  // Paths the plugin names: a skill folder, or a folder of skill folders.
+  // Paths the plugin names: a skill folder, or a folder of skill folders. A plugin that names
+  // its skills gets exactly those: several plugins may share one root and each list a subset
+  // (`anthropics/skills`), so the default folder would give each of them every skill.
   const custom = Array.isArray(plugin?.skills)
     ? plugin.skills
     : typeof plugin?.skills === 'string'
       ? [plugin.skills]
       : [];
-  for (const entry of custom) {
-    const relative = cleanRepoPath(entry);
-    if (relative === null) continue;
-    const base = joinPath(root, relative);
-    add(base);
-    addChildren(base);
+  if (custom.length > 0) {
+    for (const entry of custom) {
+      const relative = cleanRepoPath(entry);
+      if (relative === null) continue;
+      const base = joinPath(root, relative);
+      if (skillDirs.has(base)) add(base);
+      else addChildren(base);
+    }
+    return found;
   }
+
+  // Otherwise: one skill at the plugin root, and the default folder.
+  add(root);
+  addChildren(joinPath(root, 'skills'));
   return found;
 }
 

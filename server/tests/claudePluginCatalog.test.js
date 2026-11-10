@@ -216,6 +216,29 @@ describe('findSkillDirs / findCompanions', () => {
     ]);
   });
 
+  test('a plugin that names its skills gets exactly those, not the default folder', () => {
+    // `anthropics/skills`: two plugins share the root `./`, each lists a subset.
+    const { skillDirs: dirs } = indexTree([
+      blob('skills/xlsx/SKILL.md'),
+      blob('skills/pdf/SKILL.md'),
+      blob('skills/brand/SKILL.md'),
+      blob('skills/pdf/nested/SKILL.md')
+    ]);
+    expect(findSkillDirs({ skills: ['./skills/xlsx', './skills/pdf'] }, '', dirs)).toEqual([
+      'skills/xlsx',
+      'skills/pdf'
+    ]);
+    expect(findSkillDirs({ skills: ['./skills/brand'] }, '', dirs)).toEqual(['skills/brand']);
+    // A named folder of skill folders still lists its children.
+    expect(findSkillDirs({ skills: './skills' }, '', dirs)).toEqual([
+      'skills/brand',
+      'skills/pdf',
+      'skills/xlsx'
+    ]);
+    // Without `skills`: the default folder.
+    expect(findSkillDirs({}, '', dirs)).toEqual(['skills/brand', 'skills/pdf', 'skills/xlsx']);
+  });
+
   test('binary files are not companions', () => {
     const { skillDirs: dirs, blobs: files } = indexTree(
       TREES['anthropics/knowledge-work-plugins@main']

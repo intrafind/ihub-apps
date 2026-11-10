@@ -235,10 +235,12 @@ servers of a plugin have no iHub counterpart and are not imported.
 | `{ "source": "git-subdir", "url": …, "path": "p" }` | the folder `p` of that repository |
 
 The `sha` (else `ref`) of a source decides the revision the skill files are fetched at; without
-either, the default branch is used. A plugin's `skills` paths (relative to the plugin) are honored
-next to the standard `skills/<name>/SKILL.md` folders. Sources of another kind (`npm`, `command`, a
-git host other than GitHub) cannot be read, and neither can a relative source (`"./plugins/x"`) of a
-marketplace that is not served from GitHub; such plugins are left out and named in the server log.
+either, the default branch is used. A plugin that lists `skills` paths (relative to the plugin) gets
+exactly those skills, so several plugins can share one repository and each list a subset; without a
+list, the standard `skills/<name>/SKILL.md` folders and a `SKILL.md` at the plugin root are used.
+Sources of another kind (`npm`, `command`, a git host other than GitHub) cannot be read, and neither
+can a relative source (`"./plugins/x"`) of a marketplace that is not served from GitHub; such
+plugins are left out and named in the server log.
 
 The skills of a plugin are listed with the plugin's description. A plugin without a `version`
 uses the first seven characters of its commit as the version, so a new commit shows as an update.
@@ -250,7 +252,9 @@ authentication to **Bearer** with a GitHub token (no scopes needed for public re
 refresh that hits the limit keeps what it has read and logs the plugins it skipped. The token is
 sent to the GitHub API only when the registry's own URL is on GitHub (`raw.githubusercontent.com`,
 `github.com`); a marketplace served from another host is read without it, so a token does not lift
-the limit there.
+the limit there. The same holds when a skill is installed: the registry's credentials are sent only
+to the registry's own host (and the GitHub hosts for a registry on GitHub), never to another host
+that an item points at.
 
 ### Versions, channel and pins
 
