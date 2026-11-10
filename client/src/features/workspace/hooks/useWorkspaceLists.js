@@ -48,14 +48,15 @@ export default function useWorkspaceLists({ artifacts, uploaded, messages, enabl
           // sees it end: ask once more when its files are not listed yet.
           const listed = new Set(list.map(item => item.runId).filter(Boolean));
           if (attempt === 0 && expected.some(runId => !listed.has(runId))) {
-            retry = setTimeout(() => load(1), RELIST_DELAY_MS);
+            retry = setTimeout(() => void load(1), RELIST_DELAY_MS);
           }
           setGenerated({ status: 'ready', items: list });
         })
         .catch(() => {
           if (active) setGenerated({ status: 'error', items: [] });
         });
-    load(0);
+    // `load` ends in its own catch: nothing is left to await here.
+    void load(0);
     return () => {
       active = false;
       if (retry) clearTimeout(retry);
