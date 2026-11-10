@@ -549,16 +549,17 @@ async function copyNotes(ctx, notesPath, slidePath) {
     destination,
     await readRels(ctx.source.zip, notesPath)
   );
-  rels.push({
-    id: nextRelId(rels),
-    type: REL_TYPES.notesMaster,
-    target: relativeTarget(destination, ctx.notesMaster)
-  });
-  rels.push({
-    id: nextRelId(rels),
-    type: REL_TYPES.slide,
-    target: relativeTarget(destination, slidePath)
-  });
+  // Both ids are chosen before either entry is added, so they cannot be the same.
+  const masterId = nextRelId(rels);
+  const slideId = nextRelId([...rels, { id: masterId }]);
+  rels.push(
+    {
+      id: masterId,
+      type: REL_TYPES.notesMaster,
+      target: relativeTarget(destination, ctx.notesMaster)
+    },
+    { id: slideId, type: REL_TYPES.slide, target: relativeTarget(destination, slidePath) }
+  );
   writeRels(ctx.target.zip, destination, rels);
   return destination;
 }
@@ -584,15 +585,13 @@ async function mapSlideRelationship(ctx, entry, newPath, rel) {
 
 async function slideEntries(source) {
   const list = firstChild(source.presentation.documentElement, 'sldIdLst');
-  const entries = [];
-  for (const slideId of childElements(list, 'sldId')) {
-    const relId = slideId.getAttributeNS(NS.r, 'id') || slideId.getAttribute('r:id');
-    const rel = source.presRels.find(r => r.id === relId);
-    if (!rel) continue;
-    const path = resolveTarget(PRESENTATION, rel.target);
-    entries.push({ path, rels: await readRels(source.zip, path) });
-  }
-  return entries;
+  const paths = childElements(list, 'sldId')
+    .map(slideId => slideId.getAttributeNS(NS.r, 'id') || slideId.getAttribute('r:id'))
+    .map(relId => source.presRels.find(r => r.id === relId))
+    .filter(Boolean)
+    .map(rel => resolveTarget(PRESENTATION, rel.target));
+  // Reading is independent per slide; the importing that follows is not (see `copyPart`).
+  return Promise.all(paths.map(async path => ({ path, rels: await readRels(source.zip, path) })));
 }
 
 async function restyleEntry(ctx, entry, index) {

@@ -144,6 +144,9 @@ export async function runRestylePptx(params) {
       template: applied.templateId,
       durationMs: Date.now() - started
     });
+    const target = applied.templateId
+      ? `onto the "${applied.templateId}" document template`
+      : "onto iHub's built-in slide design";
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
@@ -158,7 +161,7 @@ export async function runRestylePptx(params) {
       files: [file],
       ...(applied.templateId ? { template: applied.templateId } : {}),
       ...(warnings.length ? { warnings } : {}),
-      message: `Moved "${uploaded.name}" (${meta.slides} slide${meta.slides === 1 ? '' : 's'}) ${applied.templateId ? `onto the "${applied.templateId}" document template` : "onto iHub's built-in slide design"} and created "${file.name}". Pictures, charts, tables and speaker notes were kept; slide backgrounds and the old master were dropped. The user sees a download card for it in the chat — do not add a link.`
+      message: `Moved "${uploaded.name}" (${meta.slides} slide${meta.slides === 1 ? '' : 's'}) ${target} and created "${file.name}". Pictures, charts, tables and speaker notes were kept; slide backgrounds and the old master were dropped. The user sees a download card for it in the chat — do not add a link.`
     };
   } catch (error) {
     return toolFailure(error, 'The presentation could not be restyled.');
