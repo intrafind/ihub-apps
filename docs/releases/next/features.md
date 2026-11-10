@@ -1381,6 +1381,4 @@ word for word, ranked with the keyword search iHub already uses; no extra model 
   provider's prompt cache misses on those turns, and such a turn can use up to half of
   the projects budget on excerpts. Lower `projects.loadAllMaxTokens` in the platform settings to
   spend less.
-- A `contents/tools/read_url.json` edited by an admin replaces the shipped tool definition and does
-  not show `focus` to the model until it is updated.
 - Search results with page excerpts (`extractContent`) are unchanged.

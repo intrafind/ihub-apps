@@ -793,7 +793,6 @@ The result also carries `focus` (the question as used) and `excerpted: true`; `t
 - **No section matches:** the result is the first window of the page followed by the outline (`excerpted: false`), never an empty answer.
 - **Sources:** the sections the model was given appear as the passages of the page's source in the sources panel (private, like every page the reader opens). They have no numbered markers: a citation points to the page.
 - **Counts as one page read** for `maxPageReads`. PDFs, the 400,000 character cap, caching and bot-protection results behave as before.
-- An administrator-edited `contents/tools/read_url.json` replaces the shipped definition and does not show `focus` to the model until it is brought up to date.
 
 Search results with `extractContent` still return the first `contentMaxLength` characters of each page; they do not take a `focus`.
 
