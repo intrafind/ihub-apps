@@ -432,17 +432,22 @@ A **knowledge mode** says how one project reaches the model. There are five:
 | Mode (value)           | In the prompt                                                                                                                                      | Knowledge tools | For                                                                                          |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------- |
 | **Automatic** (`auto`) | Everything if it fits the budget; otherwise the pinned documents plus the best sections for the question                                           | yes             | most projects (the default)                                                                  |
-| **Full context** (`context`) | Everything, up to the hard limit of 75 % of the context window; what is cut stays reachable with `knowledge_read`                            | yes             | small sets that must be read whole: a contract, a policy, a specification                    |
-| **Relevant sections** (`relevant`) | The pinned documents plus the best sections for the question across all documents, up to the budget, word for word. Works for iFinder smart collections, which cannot be loaded in full | yes | large projects; models that call tools poorly; saves a tool round trip |
-| **Search** (`tools`)   | The pinned documents only; the rest through `knowledge_search`                                                                                     | yes             | large libraries; agents and workflows that search on purpose                                 |
-| **Pinned only** (`pinned`) | The pinned documents only                                                                                                                      | **no**: the other documents are not reachable | one curated subset of a large project for a given chat or app |
+| **Read everything** (`context`) | Everything, up to the hard limit of 75 % of the context window; what is cut stays reachable with `knowledge_read`                            | yes             | small sets that must be read whole: a contract, a policy, a specification                    |
+| **Best passages** (`relevant`) | The pinned documents plus the best sections for the question across all documents, up to the budget, word for word. Works for iFinder smart collections, which cannot be loaded in full | yes | large projects; models that call tools poorly; saves a tool round trip |
+| **Look things up** (`tools`) | The pinned documents only; the rest through `knowledge_search`                                                                                     | yes             | large libraries; agents and workflows that search on purpose                                 |
+| **Pinned documents only** (`pinned`) | The pinned documents only                                                                                                                      | **no**: the other documents are not reachable | one curated subset of a large project for a given chat or app |
 
 The mode is chosen at four levels; the first that is set wins:
 
-1. **The chat.** The project chip in the chat input (and the project chat header) has a mode
-   switch for this chat. It applies to the chat's own project and the projects attached to it, is
-   stored with the chat and sent with its first message (`knowledgeMode`), or changed afterwards
-   with `PATCH /api/chats/:chatId` (`{ "knowledgeMode": "pinned" }`, `null` clears it).
+1. **The chat.** The **Project knowledge** row in the chat's **+** menu sets the mode for this chat.
+   It offers _Project default_, Automatic, Read everything and Pinned documents only; Best passages
+   and Look things up describe how retrieval works rather than what a user wants, so they are set on
+   the project and on links only (a mode the chat already has is still shown). The row appears only
+   when the chat has a project and the platform allows more than one of those modes. An override
+   shows as a chip beside the project chip; clicking it gives the decision back to the project. It
+   applies to the chat's own project and the projects attached to it, is stored with the chat and
+   sent with its first message (`knowledgeMode`), or changed afterwards with
+   `PATCH /api/chats/:chatId` (`{ "knowledgeMode": "pinned" }`, `null` clears it).
 2. **The link** of an app, workflow or agent, set by an administrator. A link without a `mode`
    passes to the next level.
 3. **The project's default** (`knowledgeMode`): the owner and editors set it on the project page

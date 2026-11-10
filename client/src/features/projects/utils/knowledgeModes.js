@@ -9,13 +9,45 @@
  * @module features/projects/utils/knowledgeModes
  */
 
+import { isKnowledgeMode } from '../../../../../shared/knowledgeModes.js';
+
 const LABELS = {
   auto: 'Automatic',
-  context: 'Full context',
-  relevant: 'Relevant sections',
-  tools: 'Search',
-  pinned: 'Pinned only'
+  context: 'Read everything',
+  relevant: 'Best passages',
+  tools: 'Look things up',
+  pinned: 'Pinned documents only'
 };
+
+// One line each, for a narrow menu; the long descriptions are for the settings pages.
+const SHORT_DESCRIPTIONS = {
+  auto: 'Everything if it fits, otherwise the best parts.',
+  context: "All documents, up to the model's limit. Good for a contract.",
+  relevant: 'Pinned documents plus the best passages for your question.',
+  tools: 'Pinned documents; the model looks up the rest.',
+  pinned: 'Only pinned documents. Nothing else is available.'
+};
+
+/**
+ * The modes a chat's picker offers. `relevant` and `tools` describe how
+ * retrieval works rather than what a user wants, so they stay on the project
+ * page and the admin link editor.
+ */
+export const CHAT_KNOWLEDGE_MODES = Object.freeze(['auto', 'context', 'pinned']);
+
+/**
+ * The modes the chat's picker lists: the ones it offers that the platform
+ * allows, plus the mode the chat already has, so a value set elsewhere is shown
+ * and can be left again, not silently replaced.
+ *
+ * @param {string[]} allowed - `useProjectsAvailability().knowledgeModes`
+ * @param {string} [current] - The chat's own mode, '' for none.
+ * @returns {string[]}
+ */
+export function chatKnowledgeModes(allowed, current = '') {
+  const offered = CHAT_KNOWLEDGE_MODES.filter(mode => allowed.includes(mode));
+  return isKnowledgeMode(current) && !offered.includes(current) ? [...offered, current] : offered;
+}
 
 const DESCRIPTIONS = {
   auto: 'Everything when it fits, otherwise the pinned documents and the best sections for the question. The model can search the rest.',
@@ -38,6 +70,17 @@ const DESCRIPTIONS = {
  */
 export function knowledgeModeLabel(t, mode) {
   return t(`projects.knowledgeMode.modes.${mode}.label`, LABELS[mode] || mode);
+}
+
+/**
+ * What a knowledge mode does, in a line short enough for a menu.
+ *
+ * @param {Function} t - i18next `t`.
+ * @param {string} mode
+ * @returns {string}
+ */
+export function knowledgeModeShortDescription(t, mode) {
+  return t(`projects.knowledgeMode.modes.${mode}.short`, SHORT_DESCRIPTIONS[mode] || '');
 }
 
 /**

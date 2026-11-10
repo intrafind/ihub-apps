@@ -1382,17 +1382,18 @@ How a project reaches the model used to be fixed: chats and attached projects al
 
 - **Automatic** (the default): everything when it fits, otherwise the pinned documents plus the best
   sections for the question.
-- **Full context:** everything, up to 75 % of the model's context window. For a contract, a policy or
+- **Read everything** (`context`): everything, up to 75 % of the model's context window. For a contract, a policy or
   a specification that must be read whole.
-- **Relevant sections:** the pinned documents plus the best sections for the question from all
+- **Best passages** (`relevant`): the pinned documents plus the best sections for the question from all
   documents, word for word. For large projects and models that call tools poorly; it works for iFinder
   smart collections, too, and saves a tool round trip.
-- **Search:** the pinned documents only; the model searches the rest.
-- **Pinned only:** the pinned documents only, and the model cannot reach the others, because no
+- **Look things up** (`tools`): the pinned documents only; the model searches the rest.
+- **Pinned documents only** (`pinned`): the pinned documents only, and the model cannot reach the others, because no
   knowledge tool is offered for the project.
 
-Where to set it, the first that is set wins: the **mode switch beside the project chip in the chat
-input** (this chat only, stored with it), the mode on the **link** of an app or workflow, then the
+Where to set it, the first that is set wins: **Project knowledge in the chat's "+" menu** (this chat
+only, stored with it; it offers Automatic, Read everything and Pinned documents only, and a small chip
+beside the project chip shows an override and takes it back in one click), the mode on the **link** of an app or workflow, then the
 **project's own default** (**Knowledge mode** on the project page; for admin projects in the project
 editor). A link without a mode now uses the project's default; links that say `auto` keep
 saying it. In **Admin → Projects → Project settings**, "Knowledge modes users may choose" lets you
@@ -1402,7 +1403,7 @@ set keep their mode.
 - **Not for AI:** an item can be marked "Not for AI" in the project's "For the AI" column, next to
   Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
   model, listed or searched.
-- **Models without tools** cannot call `knowledge_search`. For them Search reads as Relevant sections,
+- **Models without tools** cannot call `knowledge_search`. For them Look things up reads as Best passages,
   so unpinned documents are not silently out of reach.
 - **The answer badge** names the mode a project was used in and says when it was replaced.
 

@@ -8684,24 +8684,41 @@
       "modes": {
         "auto": {
           "label": "Automatisch",
+          "short": "Alles, wenn es passt, sonst die besten Teile.",
           "description": "Alles, wenn es passt, sonst die angehefteten Dokumente und die besten Abschnitte zur Frage. Den Rest kann das Modell durchsuchen."
         },
         "context": {
-          "label": "Voller Kontext",
+          "label": "Alles lesen",
+          "short": "Alle Dokumente, bis zur Grenze des Modells. Gut für einen Vertrag.",
           "description": "Alles, bis zur Grenze des Modells. Für kleine Bestände, die vollständig gelesen werden müssen: ein Vertrag, eine Richtlinie, eine Spezifikation."
         },
         "relevant": {
-          "label": "Relevante Abschnitte",
+          "label": "Beste Textstellen",
+          "short": "Angeheftete Dokumente plus die besten Textstellen zur Frage.",
           "description": "Die angehefteten Dokumente und die besten Abschnitte zur Frage aus allen Dokumenten. Spart einen Werkzeugaufruf; für große Projekte und Modelle, die Werkzeuge schlecht aufrufen."
         },
         "tools": {
-          "label": "Suche",
+          "label": "Bei Bedarf nachschlagen",
+          "short": "Angeheftete Dokumente; den Rest schlägt das Modell nach.",
           "description": "Nur die angehefteten Dokumente; den Rest durchsucht das Modell. Für große Bibliotheken und Agenten, die gezielt suchen."
         },
         "pinned": {
-          "label": "Nur Angeheftetes",
+          "label": "Nur angeheftete Dokumente",
+          "short": "Nur angeheftete Dokumente. Sonst ist nichts verfügbar.",
           "description": "Nur die angehefteten Dokumente; die übrigen kann das Modell nicht erreichen. Eine kuratierte Auswahl aus einem großen Projekt."
         }
+      },
+      "menu": {
+        "section": "Projekt",
+        "title": "Projektwissen",
+        "override": "Für diesen Chat überschreiben",
+        "inheritDescription": "Jedes Projekt entscheidet selbst.",
+        "allProjects": "Gilt für alle Projekte in diesem Chat."
+      },
+      "chat": {
+        "chipLabel": "Projektwissen: {{mode}}. Klicken, um den Projektstandard zu verwenden.",
+        "chipTitle": "Projektwissen für diesen Chat: {{mode}}. Klicken, um den Projektstandard zu verwenden.",
+        "announce": "Projektwissen: {{mode}}"
       }
     },
     "addItem": {
@@ -9657,7 +9674,7 @@
     "VOICES_UNSUPPORTED": "Der Anbieter dieses Modells verwaltet keine Stimmen.",
     "INVALID_AUDIO": "Die Audiodatei fehlt oder ist ungültig.",
     "UNSUPPORTED_TTS_PROVIDER": "Der Text-to-Speech-Anbieter wird nicht unterstützt.",
-    "NO_AUDIO": "Das Modell hat ohne Audio geantwortet.",
+    "NO_AUDIO": "Der Sprachdienst hat kein Audio geliefert.",
     "ANSWER_IN_PROGRESS": "Die Interaktion wird gerade beantwortet.",
     "ANSWER_IN_CHAT": "Beantworten Sie diese Freigabe im zugehörigen Chat.",
     "APPROVER_REQUIRED": "Zum Beantworten dieser Interaktion ist ein Freigebender erforderlich.",
@@ -9761,7 +9778,6 @@
     "INVALID_LANGUAGE": "Die Sprache ist ungültig.",
     "INVALID_VOICE": "Die Stimme ist für dieses Modell ungültig.",
     "NO_SPEAKABLE_TEXT": "In diesem Text gibt es nichts zum Vorlesen.",
-    "NO_AUDIO": "Der Sprachdienst hat kein Audio geliefert.",
     "TTS_NOT_CONFIGURED": "Vorlesen ist auf dieser Installation nicht eingerichtet.",
     "MODEL_DISABLED": "Dieses Modell ist ausgeschaltet.",
     "INTEGRATION_SCOPE_NOT_ALLOWED": "Sie dürfen dieses Suchprofil nicht verwenden.",

@@ -6,8 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useMyProjects, useProjectsAvailability } from '../hooks/useProjects';
 import { projectDisplayName } from '../utils/projectView';
-import KnowledgeModeSelect from './KnowledgeModeSelect';
-import { knowledgeModeDescription } from '../utils/knowledgeModes';
+import { knowledgeModeLabel } from '../utils/knowledgeModes';
 
 const CHIP =
   'inline-flex items-center gap-1 rounded-full border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs max-w-[12rem]';
@@ -15,8 +14,9 @@ const CHIP =
 /**
  * The projects of the open chat, as chips beside the chat input: the one it
  * runs in (a link to the project; it cannot be taken away — the chat was
- * started there), and the ones it draws on (each removable). Also shows a
- * failed change (it stays visible after the project picker has closed). Renders
+ * started there), and the ones it draws on (each removable), and the knowledge
+ * mode of the chat when it overrides the project's (#3538; chosen in the "+"
+ * menu, taken back here). Also shows a failed change (it stays visible after the project picker has closed). Renders
  * nothing when the chat has no project and nothing went wrong.
  *
  * @param {Object} props
@@ -26,7 +26,7 @@ const CHIP =
  */
 function ChatProjectChips({ projectContext }) {
   const { t, i18n } = useTranslation();
-  const { userProjectsEnabled, knowledgeModes } = useProjectsAvailability();
+  const { userProjectsEnabled } = useProjectsAvailability();
   const { projects } = useMyProjects();
   const {
     containerProjectId = null,
@@ -37,6 +37,7 @@ function ChatProjectChips({ projectContext }) {
   } = projectContext || {};
   const { toggle, saving, error } = attached || {};
   const modeError = knowledgeMode?.error || null;
+  const overrideMode = knowledgeMode?.value || '';
   if (!userProjectsEnabled || (!containerProjectId && value.length === 0 && !error && !modeError)) {
     return null;
   }
@@ -88,22 +89,44 @@ function ChatProjectChips({ projectContext }) {
           </button>
         </span>
       ))}
-      {/* How the chat reaches the knowledge of its projects (#3538). */}
-      {knowledgeMode && (containerProjectId || value.length > 0) && (
-        <KnowledgeModeSelect
-          id="chat-knowledge-mode"
-          value={knowledgeMode.value || ''}
-          modes={knowledgeModes}
+      {/* The mode is chosen in the "+" menu ("Project knowledge"). Only an override
+          is shown here, so it stays visible and can be taken back in one click. */}
+      {knowledgeMode && overrideMode && (containerProjectId || value.length > 0) && (
+        <button
+          type="button"
+          onClick={() => knowledgeMode.set('')}
           disabled={disabled || knowledgeMode.saving}
-          onChange={knowledgeMode.set}
-          emptyLabel={t('projects.knowledgeMode.projectDefault', 'Project default')}
-          ariaLabel={t('projects.knowledgeMode.chatLabel', 'Knowledge mode of this chat')}
-          className="rounded-full border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-800 text-purple-700 dark:text-purple-300 text-xs px-2 py-1 max-w-[12rem]"
-        />
+          aria-label={t(
+            'projects.knowledgeMode.chat.chipLabel',
+            'Project knowledge: {{mode}}. Click to use the project default.',
+            { mode: knowledgeModeLabel(t, overrideMode) }
+          )}
+          title={t(
+            'projects.knowledgeMode.chat.chipTitle',
+            'Project knowledge for this chat: {{mode}}. Click to use the project default.',
+            { mode: knowledgeModeLabel(t, overrideMode) }
+          )}
+          data-testid="chat-knowledge-mode-chip"
+          className={`group ${CHIP} px-2 py-1 hover:bg-purple-100 dark:hover:bg-purple-800/60 disabled:opacity-50`}
+        >
+          <Icon name="book-open" size="xs" aria-hidden="true" />
+          <span className="truncate">{knowledgeModeLabel(t, overrideMode)}</span>
+          <Icon
+            name="x"
+            size="xs"
+            className="opacity-60 group-hover:opacity-100"
+            aria-hidden="true"
+          />
+        </button>
       )}
+      {/* Announces a change made in the menu, which has closed by then. */}
       {knowledgeMode && (
-        <span className="sr-only">
-          {knowledgeModeDescription(t, knowledgeMode.value || 'auto')}
+        <span className="sr-only" aria-live="polite">
+          {t('projects.knowledgeMode.chat.announce', 'Project knowledge: {{mode}}', {
+            mode: overrideMode
+              ? knowledgeModeLabel(t, overrideMode)
+              : t('projects.knowledgeMode.projectDefault', 'Project default')
+          })}
         </span>
       )}
       {(error || modeError) && (

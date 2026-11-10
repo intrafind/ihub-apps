@@ -16,6 +16,9 @@ import IntegrationPicker, {
 } from '../../integrations/picker/IntegrationPicker';
 import { isRowOn, scopeMapOf } from '../../integrations/picker/pickerState';
 import { saveIntegrationDefault } from '../../integrations/picker/useIntegrationDefaults';
+import ProjectKnowledgeSection, {
+  projectKnowledgeMatches
+} from '../../projects/components/ProjectKnowledgeSection';
 
 /**
  * The "+" menu of the chat input. Its main part is the integrations picker
@@ -72,7 +75,10 @@ function ChatInputActionsMenu({
   // `integrationScopes` is `useIntegrationScopes().integrations`; a row with a
   // scope shows it and opens a submenu to change it.
   integrationScopes = null,
-  onIntegrationScopeChange = null
+  onIntegrationScopeChange = null,
+  // How the chat reaches its projects' knowledge (`useProjectKnowledgeMenu`);
+  // null when the chat has no project or there is nothing to choose.
+  projectKnowledge = null
 }) {
   const { t } = useTranslation();
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
@@ -137,6 +143,7 @@ function ChatInputActionsMenu({
   );
   const hasScopes = scopeIntegrations.length > 0 && onIntegrationScopeChange !== null;
   const hasImageGeneration = model?.supportsImageGeneration === true;
+  const hasProjectKnowledge = projectKnowledge !== null;
 
   // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
   // providers are rendered separately so they must remain available even when
@@ -154,7 +161,12 @@ function ChatInputActionsMenu({
   const hasHostContextToggles = hostContextToggles.length > 0;
   // What the picker shows on every screen size.
   const hasPicker =
-    hasTools || hasWebsearch || hasScopes || hasCloudProviders || hasImageGeneration;
+    hasTools ||
+    hasWebsearch ||
+    hasScopes ||
+    hasCloudProviders ||
+    hasImageGeneration ||
+    hasProjectKnowledge;
   const hasActions = hasPicker || hasHostContextToggles || quickActionCount > 0;
 
   if (!hasActions) return null;
@@ -428,6 +440,12 @@ function ChatInputActionsMenu({
                         onChange: onWebsearchEnabledChange
                       }
                     : null
+                }
+                projectSection={
+                  hasProjectKnowledge &&
+                  projectKnowledgeMatches(t, query, projectKnowledge.value) ? (
+                    <ProjectKnowledgeSection menu={projectKnowledge} onPicked={done} />
+                  ) : null
                 }
                 scopeIntegrations={hasScopes ? scopeIntegrations : []}
                 onScopeChange={hasScopes ? onIntegrationScopeChange : null}

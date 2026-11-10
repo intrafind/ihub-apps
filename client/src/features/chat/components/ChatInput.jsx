@@ -17,6 +17,7 @@ import {
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import ChatProjectChips from '../../projects/components/ChatProjectChips';
+import { useProjectKnowledgeMenu } from '../../projects/hooks/useProjectKnowledgeMenu';
 import ChatProjectPicker, { useOfferedProjects } from '../../projects/components/ChatProjectPicker';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
@@ -556,6 +557,7 @@ function ChatInput({
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
   const offeredProjects = useOfferedProjects(projectContext);
+  const projectKnowledge = useProjectKnowledgeMenu(projectContext);
   const visibleScopes =
     onIntegrationScopeChange && Array.isArray(integrationScopes)
       ? integrationScopes.filter(
@@ -571,7 +573,8 @@ function ChatInput({
     websearchAvailable ||
     visibleScopes.length > 0 ||
     hasCloudProviders ||
-    model?.supportsImageGeneration === true;
+    model?.supportsImageGeneration === true ||
+    projectKnowledge !== null;
   // The host's "Include …" toggles (browser extension) give the menu a section
   // of its own, so it is no longer a single action there either; counted here
   // too, or neither side would show the one quick action on a desktop.
@@ -1022,6 +1025,7 @@ function ChatInput({
               onHostContextFlagChange={onHostContextFlagChange}
               integrationScopes={integrationScopes}
               onIntegrationScopeChange={onIntegrationScopeChange}
+              projectKnowledge={projectKnowledge}
             />
 
             {/* The projects of the chat: picked in the project picker, shown as chips. */}
