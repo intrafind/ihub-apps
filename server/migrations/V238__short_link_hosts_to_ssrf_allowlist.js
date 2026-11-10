@@ -92,7 +92,7 @@ export async function up(ctx) {
   }
 
   if (added > 0) {
-    platform.ssrf = { ...(platform.ssrf || {}), allowedHosts: ssrfHosts };
+    platform.ssrf = { ...platform.ssrf, allowedHosts: ssrfHosts };
   }
   if (platform.shortLinks && typeof platform.shortLinks === 'object') {
     delete platform.shortLinks.allowedHosts;

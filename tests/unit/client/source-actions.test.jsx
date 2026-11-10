@@ -7,7 +7,7 @@ import {
   openSource,
   resolveSourceFilename,
   sourceActionsOf,
-  withReadableProblem
+  readProblemBody
 } from '../../../client/src/features/chat/sources/sourceActions';
 import { fetchIntegrationFileContent } from '../../../client/src/api/endpoints/integrationFiles';
 import { resolveCitations } from '../../../shared/sources/index.js';
@@ -417,18 +417,18 @@ describe('"Add to email" in the Outlook task pane', () => {
   });
 });
 
-describe('withReadableProblem', () => {
+describe('readProblemBody', () => {
   test('leaves a binary error body alone', async () => {
     const body = new Blob(['%PDF'], { type: 'application/pdf' });
     const error = { response: { status: 502, data: body } };
-    expect(await withReadableProblem(error)).toBe(error);
+    await readProblemBody(error);
     expect(error.response.data).toBe(body);
   });
 
   test('keeps a body that only claims to be JSON', async () => {
     const body = new Blob(['<html>'], { type: 'application/json' });
     const error = { response: { status: 502, data: body } };
-    await withReadableProblem(error);
+    await readProblemBody(error);
     expect(error.response.data).toBe(body);
   });
 });

@@ -39,7 +39,7 @@ import {
  * @typedef {{ ok: true }
  *   | { ok: false, reason: 'unavailable'|'blocked'|'failed'|'notComposing'|'tooLarge',
  *       error?: Error, message?: string }} SourceActionResult
- *   `error` is the failed request, its problem body readable (`withReadableProblem`);
+ *   `error` is the failed request, its problem body readable (`readProblemBody`);
  *   `message` is what Outlook said when it refused an attachment.
  *
  * @module features/chat/sources/sourceActions
@@ -244,27 +244,26 @@ function blobToText(blob) {
 }
 
 /**
- * A failed content request with the server's answer readable. A request for a
- * Blob gets its error body as a Blob too, so the problem the server sent
+ * Make a failed content request's answer readable. A request for a Blob gets
+ * its error body as a Blob too, so the problem the server sent
  * (`application/problem+json`: `code`, `detail`) would be lost and every
  * failure would read the same; it is parsed into `error.response.data`, where
- * `apiErrorMessage` reads it.
+ * `apiErrorMessage` reads it. Anything else is left as it is.
  *
  * @param {unknown} error
- * @returns {Promise<unknown>} the same error
+ * @returns {Promise<void>}
  */
-export async function withReadableProblem(error) {
+export async function readProblemBody(error) {
   const response = error?.response;
   const data = response?.data;
   if (typeof Blob === 'undefined' || !(data instanceof Blob) || !/json/i.test(data.type || '')) {
-    return error;
+    return;
   }
   try {
     response.data = JSON.parse(await blobToText(data));
   } catch {
     // Not JSON after all: the status still tells something.
   }
-  return error;
 }
 
 /**
@@ -283,7 +282,8 @@ export async function downloadSource(source) {
       ? { ok: true }
       : { ok: false, reason: 'failed' };
   } catch (error) {
-    return { ok: false, reason: 'failed', error: await withReadableProblem(error) };
+    await readProblemBody(error);
+    return { ok: false, reason: 'failed', error };
   }
 }
 
@@ -342,6 +342,7 @@ export async function attachSourceToMail(source) {
     });
     return result.ok ? { ok: true, filename } : result;
   } catch (error) {
-    return { ok: false, reason: 'failed', error: await withReadableProblem(error) };
+    await readProblemBody(error);
+    return { ok: false, reason: 'failed', error };
   }
 }
