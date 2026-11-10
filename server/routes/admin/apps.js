@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { responseEtag } from '../../utils/etag.js';
 import { assertValidId, assertValidIds } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
@@ -299,7 +300,7 @@ export default function registerAdminAppsRoutes(app) {
    */
   app.get(buildServerPath('/api/admin/apps'), contentAdminAuth, async (req, res) => {
     const { data: apps, etag: appsEtag } = configCache.getApps(true);
-    res.setHeader('ETag', appsEtag);
+    res.setHeader('ETag', responseEtag(appsEtag));
     res.json({ items: apps });
   });
 
@@ -353,7 +354,7 @@ export default function registerAdminAppsRoutes(app) {
   app.get(buildServerPath('/api/admin/apps/templates'), contentAdminAuth, async (req, res) => {
     const { data: apps, etag: appsEtag } = configCache.getApps(true);
     const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
-    res.setHeader('ETag', appsEtag);
+    res.setHeader('ETag', responseEtag(appsEtag));
     res.json({ items: templates });
   });
 

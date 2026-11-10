@@ -49,3 +49,30 @@ export function etagForIds(baseEtag, ids, prefix = '') {
   const sorted = [...ids].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
   return etagWithSuffix(baseEtag, `${prefix}${shortHash(JSON.stringify(sorted))}`);
 }
+
+/**
+ * Revision of the response bodies behind the ETags that routes set from a
+ * config hash (see {@link responseEtag}). Bump it whenever such a route
+ * changes the shape of what it answers while the config behind it stays the
+ * same.
+ */
+export const RESPONSE_SHAPE_REVISION = 2;
+
+/**
+ * The ETag a route sends for a body built from cached config, when the ETag
+ * comes from the config's hash rather than from the body itself.
+ *
+ * Such an ETag outlives a change to the body's shape: after an upgrade that
+ * turned `GET /api/models` from a bare array into `{ items }`, the browser
+ * still sent the old ETag, the server answered 304, and the browser served
+ * the array it had cached — the client read `items` from it and showed "No
+ * models available". The revision makes the ETag differ whenever the shape
+ * does, so the first request after such an upgrade gets the new body.
+ *
+ * @param {string|null|undefined} etag - The config-derived ETag
+ * @returns {string|null|undefined} The ETag to send; empty values pass through
+ */
+export function responseEtag(etag) {
+  if (!etag) return etag;
+  return etagWithSuffix(etag, `r${RESPONSE_SHAPE_REVISION}`);
+}

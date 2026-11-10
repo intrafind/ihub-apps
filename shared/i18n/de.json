@@ -2396,7 +2396,7 @@
       },
       "ssrf": {
         "title": "SSRF-Allowlist",
-        "description": "Erlaubt ausgehende HTTP-Aufrufe (OpenAPI-Tools, MCP-Server, Web-Tools) zu absichtlich internen Diensten, auch wenn deren Hostname zu einer privaten IP auflöst.",
+        "description": "Erlaubt ausgehende HTTP-Aufrufe (OpenAPI-Tools, MCP-Server, Web-Tools) zu absichtlich internen Diensten, auch wenn deren Hostname zu einer privaten IP auflöst. Auch Kurzlinks dürfen nur auf Websites verweisen, deren Host auf dieser Liste steht.",
         "addHost": "Host hinzufügen",
         "removeHost": "Entfernen",
         "hostPlaceholder": "*.intrafind.io, api.internal.company.com",
@@ -3705,6 +3705,10 @@
         "noSources": "keine"
       },
       "groups": {
+        "clients": {
+          "title": "Clients",
+          "description": "Wo Benutzer iHub außerhalb der Web-App nutzen: in Outlook, im Browser, in Nextcloud und in Microsoft 365 Copilot. Jeder Client wird auf seiner eigenen Seite eingerichtet."
+        },
         "peopleDirectories": {
           "title": "Personenverzeichnisse",
           "description": "LDAP- und Entra-ID-Verzeichnisse, in denen das Modell Personen nachschlägt."
@@ -5958,6 +5962,15 @@
       }
     },
     "translateField": "Übersetzen",
+    "shortlinks": {
+      "saveError": "Der Kurzlink konnte nicht gespeichert werden.",
+      "app": "App",
+      "appSearch": "Apps durchsuchen...",
+      "noApp": "Keine App ausgewählt",
+      "urlHint": "Ein Pfad auf diesem Server (/apps/chat) funktioniert immer. Ein Link zu einer anderen Website funktioniert nur, wenn ihr Host auf der SSRF-Allowlist steht.",
+      "ssrfNotice": "Kurzlinks zu anderen Websites funktionieren nur für Hosts auf der SSRF-Allowlist; Links zu anderen Hosts antworten mit „Nicht gefunden“.",
+      "ssrfLink": "Admin → Sicherheit → SSRF-Allowlist"
+    },
     "toolApproval": {
       "mode": {
         "never": "Nie fragen",
@@ -7683,14 +7696,14 @@
     "resultsCount_other": "{{count}} Ergebnisse",
     "queries": "Suchen",
     "cited": "In dieser Antwort zitiert",
-    "noneCited": "Die Antwort zitiert keine der Quellen direkt.",
-    "noneCitedInScope": "Die Antwort zitiert keine der hier gefundenen Quellen.",
+    "read": "Für diese Antwort gelesen",
     "foundIn": "Gefunden in {{scope}}",
     "searchedIn": "Gesucht in {{scope}}",
     "asked": "Gefragt: {{scope}}",
     "scopeFilter": "Nach Fundort der Quellen filtern",
     "scopeFilterAll": "Alle",
     "considered": "Ebenfalls berücksichtigt",
+    "consideredOnly": "Berücksichtigt",
     "showInPanel": "Quelle {{n}} in der Quellenansicht anzeigen",
     "showMoreCited_one": "{{count}} weitere anzeigen",
     "showMoreCited_other": "{{count}} weitere anzeigen",
@@ -9194,6 +9207,7 @@
     "FILES_NOT_SHARED": "Der Besitzer hat die angehängten Dateien nicht freigegeben.",
     "ORIGINAL_NOT_SHARED": "Der Besitzer hat den Text dieser Datei freigegeben, nicht das Original.",
     "ORIGINAL_DISCARDED": "Die Originaldatei ist nicht mehr verfügbar.",
+    "SHORT_LINK_HOST_NOT_ALLOWED": "Kurzlinks dürfen nicht auf diese Website verweisen. Ein Administrator kann ihren Host auf der SSRF-Allowlist unter Admin → Sicherheit → SSRF-Allowlist freigeben.",
     "SCHEDULED_TASKS_UNAVAILABLE": "Geplante Aufgaben sind auf dieser Installation nicht verfügbar.",
     "INTERACTIVE_USER_REQUIRED": "Geplante Aufgaben erfordern eine angemeldete Person, kein Token und keinen Agenten.",
     "PERMISSION_DENIED": "Sie dürfen geplante Aufgaben nicht verwenden.",

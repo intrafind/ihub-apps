@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import { makeAdminApiCall, fetchAdminApps } from '../../../api/adminApi';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import ResourceSelector from '../components/ResourceSelector';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
@@ -12,8 +15,20 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 function AdminShortLinkEditPage() {
   const { code } = useParams();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const isNew = code === 'new';
+
+  // The apps a link can open, for the app search box.
+  const [apps, setApps] = useState([]);
+  useEffect(() => {
+    let active = true;
+    fetchAdminApps()
+      .then(items => active && setApps(Array.isArray(items) ? items : []))
+      .catch(() => active && setApps([]));
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const defaultLink = {
     code: '',
@@ -33,6 +48,19 @@ function AdminShortLinkEditPage() {
   const [error, setError] = useState(null);
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, link);
+
+  // The app search box offers every app by its name in the current language;
+  // an app id that is no longer configured stays visible so it can be replaced.
+  const appResources = useMemo(() => {
+    const resources = apps.map(app => ({
+      id: app.id,
+      name: getLocalizedContent(app.name, i18n.language) || app.id
+    }));
+    if (link.appId && !resources.some(r => r.id === link.appId)) {
+      resources.push({ id: link.appId, name: link.appId });
+    }
+    return resources;
+  }, [apps, i18n.language, link.appId]);
 
   useEffect(() => {
     if (!isNew) {
@@ -87,7 +115,15 @@ function AdminShortLinkEditPage() {
       markSaved();
       navigate('/admin/shortlinks');
     } catch (err) {
-      setError(getAdminApiErrorMessage(err));
+      // A refused host comes back as SHORT_LINK_HOST_NOT_ALLOWED: the message names
+      // the host and where an administrator allows it.
+      setError(
+        apiErrorMessage(
+          err,
+          t,
+          t('admin.shortlinks.saveError', 'The short link could not be saved.')
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -116,7 +152,11 @@ function AdminShortLinkEditPage() {
             ? t('admin.shortlinks.new', 'Create Short Link')
             : t('admin.shortlinks.edit', 'Edit Short Link')}
         </h1>
-        {error && <div className="text-red-600 dark:text-red-400">{error}</div>}
+        {error && (
+          <div role="alert" className="text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSave} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -130,17 +170,16 @@ function AdminShortLinkEditPage() {
               className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-600"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-              {t('admin.shortlinks.appId', 'App ID')}
-            </label>
-            <input
-              type="text"
-              value={link.appId}
-              onChange={e => handleChange('appId', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            />
-          </div>
+          <ResourceSelector
+            label={t('admin.shortlinks.app', 'App')}
+            resources={appResources}
+            selectedResources={link.appId ? [link.appId] : []}
+            // One app: the one picked last replaces the previous one.
+            onSelectionChange={ids => handleChange('appId', ids[ids.length - 1] || '')}
+            allowWildcard={false}
+            placeholder={t('admin.shortlinks.appSearch', 'Search apps...')}
+            emptyMessage={t('admin.shortlinks.noApp', 'No app selected')}
+          />
           {/* The owner is whoever created the link; the server sets it. */}
           {!isNew && (
             <div>
@@ -175,8 +214,21 @@ function AdminShortLinkEditPage() {
               type="text"
               value={link.url || ''}
               onChange={e => handleChange('url', e.target.value)}
+              aria-describedby="shortlink-url-hint"
               className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
+            <p id="shortlink-url-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.shortlinks.urlHint',
+                'A path on this server (/apps/chat) always works. A link to another website works only when its host is on the SSRF allowlist.'
+              )}{' '}
+              <Link
+                to="/admin/security#settings-section-ssrf"
+                className="text-indigo-600 dark:text-indigo-400 underline"
+              >
+                {t('admin.shortlinks.ssrfLink', 'Admin → Security → SSRF Allowlist')}
+              </Link>
+            </p>
           </div>
           <div className="flex items-center">
             <input

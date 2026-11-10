@@ -7,8 +7,9 @@
  *  - hovering or focusing a badge highlights its passage and its card, a click
  *    or tap (or Enter on a badge without a link) opens the sources panel on
  *    that card and pins the highlight (StreamingMarkdown, sourcesStore);
- *  - the panel lists what the answer cites and what it only considered, with
- *    one card design for pages and documents (AnswerSources);
+ *  - the panel lists what the answer cites (or, when it cites nothing, what
+ *    was read for it) and what it only considered, with one card design for
+ *    pages and documents, and no list without sources (AnswerSources);
  *  - a reopened chat restores the sources (transformStoredMessage);
  *  - the model picker marks the models web search works with.
  */
@@ -21,7 +22,8 @@ import {
 } from '../../../client/src/utils/sourceCitationTransformer';
 import StreamingMarkdown from '../../../client/src/features/chat/components/StreamingMarkdown';
 import AnswerSources, {
-  CitedSources
+  CitedSources,
+  ReadSources
 } from '../../../client/src/features/chat/components/AnswerSources';
 import ModelSelector from '../../../client/src/features/chat/components/ModelSelector';
 import {
@@ -571,6 +573,107 @@ describe('AnswerSources', () => {
     const { container } = render(
       <AnswerSources messageKey="m" sources={empty} citations={resolveCitations('', empty)} />
     );
+    expect(container).toBeEmptyDOMElement();
+  });
+});
+
+describe('an answer that cites none of its sources', () => {
+  // A web search that read two of its results; the model wrote no links.
+  const weather = {
+    id: 'url:weather.example/berlin',
+    provider: 'web',
+    kind: 'page',
+    url: 'https://weather.example/berlin',
+    title: 'Berlin weather',
+    read: { ok: true, words: 240 },
+    private: false
+  };
+  const news = {
+    id: 'url:news.example/berlin-today',
+    provider: 'web',
+    kind: 'page',
+    url: 'https://news.example/berlin-today',
+    title: 'Berlin today',
+    read: { ok: true },
+    private: false
+  };
+  const blocked = {
+    id: 'url:blocked.example',
+    provider: 'web',
+    kind: 'page',
+    url: 'https://blocked.example/',
+    title: 'Blocked page',
+    read: { ok: false },
+    private: false
+  };
+  const searched = { queries: ['berlin weather'], items: [weather, news, blocked, yc] };
+  const uncited = 'It is sunny and 24 degrees, and the outdoor pools open this weekend.';
+
+  const openPanel = (set = searched, content = uncited) => {
+    render(
+      <AnswerSources messageKey="msg-1" sources={set} citations={resolveCitations(content, set)} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
+    return screen.getByRole('dialog', { name: 'Sources' });
+  };
+  const sectionTitles = dialog =>
+    [...dialog.querySelectorAll('section h3')].map(heading => heading.textContent);
+
+  test('the panel shows no empty "Cited in this answer", but what was read for it', () => {
+    const dialog = openPanel();
+    expect(sectionTitles(dialog)).toEqual(['Read for this answer (2)', 'Also considered (2)']);
+    expect(within(dialog).queryByText('Cited in this answer')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/cites none/)).not.toBeInTheDocument();
+    const [read, considered] = dialog.querySelectorAll('section');
+    expect(within(read).getByText('Berlin weather')).toBeInTheDocument();
+    expect(within(read).getByText('Berlin today')).toBeInTheDocument();
+    expect(within(considered).getByText('Blocked page')).toBeInTheDocument();
+    expect(within(considered).getByText('Langdock | Y Combinator')).toBeInTheDocument();
+    // The entry counts every result, read or not.
+    expect(screen.getByRole('button', { name: 'sources.resultsCount:4' })).toBeInTheDocument();
+  });
+
+  test('nothing cited and nothing read: one list of what was found, no empty section', () => {
+    const dialog = openPanel({ queries: ['langdock'], items: [langdock, yc] });
+    expect(sectionTitles(dialog)).toEqual(['Considered (2)']);
+  });
+
+  test('an answer that cites a page keeps its cited list; what was read stays with the rest', () => {
+    const dialog = openPanel(searched, `Sunny [1](${weather.url}).`);
+    expect(sectionTitles(dialog)).toEqual(['Cited in this answer (1)', 'Also considered (3)']);
+  });
+
+  test('a scope without a cited source shows no empty cited list', () => {
+    const inContracts = {
+      ...contract,
+      ref: { id: 'sp-7f3a9c11', scope: 'contracts' },
+      scopeName: 'Contracts'
+    };
+    const inHr = { ...minutes, ref: { id: 'fs-1234abcd', scope: 'hr' }, scopeName: 'HR policies' };
+    const dialog = openPanel(
+      { queries: [], items: [inContracts, inHr] },
+      'Notice <cite type="r">1</cite>.'
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: /HR policies/ }));
+    expect(sectionTitles(dialog)).toEqual(['Considered (1)']);
+  });
+
+  test('at the end of the answer, the pages read are listed with their links, unnumbered', () => {
+    const view = resolveCitations(uncited, searched);
+    render(<ReadSources messageKey="msg-1" sources={view.read} />);
+    const list = screen.getByRole('list', { name: 'Read for this answer' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByRole('link')).toHaveAttribute('href', weather.url);
+    expect(within(rows[0]).getByText('weather.example')).toBeInTheDocument();
+    expect(within(rows[1]).getByRole('link')).toHaveAttribute('href', news.url);
+    // No citation numbers: the answer has no badges that point at them.
+    expect(within(list).queryByRole('button', { name: /source \d/ })).not.toBeInTheDocument();
+    expect(within(list).queryByText('Blocked page')).not.toBeInTheDocument();
+  });
+
+  test('nothing read, no list', () => {
+    const { container } = render(<ReadSources messageKey="m" sources={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

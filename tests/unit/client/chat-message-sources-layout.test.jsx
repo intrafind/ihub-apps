@@ -247,3 +247,59 @@ describe('a list of sources the model wrote at the end (#3522)', () => {
     expect(screen.getByTestId('content').textContent).toBe(message.content);
   });
 });
+
+describe('an answer that cites none of its sources', () => {
+  // The search read two of its results; the model wrote no links.
+  const page = (host, title, read) => ({
+    id: `url:${host}`,
+    provider: 'web',
+    kind: 'page',
+    url: `https://${host}/`,
+    title,
+    ...(read ? { read } : {}),
+    private: false
+  });
+  const searched = {
+    queries: ['berlin weather'],
+    items: [
+      page('weather.example', 'Berlin weather', { ok: true }),
+      page('news.example', 'Berlin today', { ok: true }),
+      page('blocked.example', 'Blocked page', { ok: false })
+    ]
+  };
+  const uncited = 'It is sunny and 24 degrees, and the outdoor pools open this weekend.';
+
+  test('lists the pages read for it where the cited list would be, never an empty cited list', () => {
+    renderMessage({ ...webSearch, content: uncited, sources: searched });
+    expect(screen.queryByRole('list', { name: 'Cited in this answer' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Cited in this answer')).not.toBeInTheDocument();
+    const read = screen.getByRole('list', { name: 'Read for this answer' });
+    expect(
+      within(read)
+        .getAllByRole('link')
+        .map(link => link.getAttribute('href'))
+    ).toEqual(['https://weather.example/', 'https://news.example/']);
+    expect(within(read).queryByText('Blocked page')).not.toBeInTheDocument();
+    // In the cited list's place: after the answer, before the entry and the badge.
+    expect(follows(screen.getByTestId('content'), read)).toBe(true);
+    expect(follows(read, entryOf())).toBe(true);
+    expect(entryOf().parentElement).toHaveClass('mt-2');
+  });
+
+  test('with nothing read either, there is no list at all, only the entry and the badge', () => {
+    const found = {
+      queries: ['berlin weather'],
+      items: [page('weather.example', 'Berlin weather'), page('news.example', 'Berlin today')]
+    };
+    renderMessage({ ...webSearch, content: uncited, sources: found });
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cited in this answer')).not.toBeInTheDocument();
+    expect(entryOf()).toBeInTheDocument();
+    expect(screen.getByText('chatMessage.answerSource.websearch')).toBeInTheDocument();
+  });
+
+  test('nothing is listed while the answer streams', () => {
+    renderMessage({ ...webSearch, content: uncited, sources: searched, loading: true });
+    expect(screen.queryByRole('list', { name: 'Read for this answer' })).not.toBeInTheDocument();
+  });
+});

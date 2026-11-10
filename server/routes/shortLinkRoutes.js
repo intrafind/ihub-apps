@@ -11,19 +11,35 @@ import {
   isLinkExpired,
   canManageLink
 } from '../shortLinkManager.js';
+import rateLimit from 'express-rate-limit';
 import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { isAdmin } from '../utils/authorization.js';
-import { isAllowedShortLinkTarget } from '../utils/shortLinkTarget.js';
+import { shortLinkTargetRefusal } from '../utils/shortLinkTarget.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
-/** Hosts an absolute short link target may name (`platform.shortLinks.allowedHosts`). */
+/**
+ * Hosts an absolute short link target may name: the SSRF allowlist
+ * (`platform.ssrf.allowedHosts`, Admin → Security → SSRF Allowlist).
+ */
 function allowedHosts() {
-  return configCache.getPlatform()?.shortLinks?.allowedHosts || [];
+  return configCache.getPlatform()?.ssrf?.allowedHosts || [];
 }
+
+/**
+ * Bounds the public `/s/:code` redirect, which is not under `/api` and so
+ * outside the platform's API limiters. Generous: a team behind one address
+ * opening a shared link must not hit it.
+ */
+const redirectLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 export default function registerShortLinkRoutes(app) {
   // Links belong to the signed-in user who creates them; only they and admins
@@ -121,36 +137,44 @@ export default function registerShortLinkRoutes(app) {
     }
   );
 
-  app.get(buildServerPath('/s/:code'), requireFeature('shortLinks'), async (req, res) => {
-    try {
-      const link = await getLink(req.params.code);
-      if (!link) return res.status(404).send('Not found');
-      if (isLinkExpired(link)) {
-        return res.status(410).send('This short link has expired');
-      }
-      // Checked on every redirect, not only on save: links stored before the
-      // check existed, or before an admin narrowed the allowlist, are covered.
-      if (!isAllowedShortLinkTarget(link.url, allowedHosts())) {
-        logger.warn('Short link target not allowed; not redirecting', {
-          component: 'ShortLinkRoutes',
-          code: link.code
-        });
-        return res.status(404).send('Not found');
-      }
-      // Counting the visit must not stand between the user and the link.
+  app.get(
+    buildServerPath('/s/:code'),
+    redirectLimiter,
+    requireFeature('shortLinks'),
+    async (req, res) => {
       try {
-        await recordUsage(link.code);
+        const link = await getLink(req.params.code);
+        if (!link) return res.status(404).send('Not found');
+        if (isLinkExpired(link)) {
+          return res.status(410).send('This short link has expired');
+        }
+        // Checked on every redirect, not only on save: links stored before the
+        // check existed, or before an admin narrowed the allowlist, are covered.
+        const refusal = shortLinkTargetRefusal(link.url, allowedHosts());
+        if (refusal) {
+          logger.warn('Short link target not allowed; not redirecting', {
+            component: 'ShortLinkRoutes',
+            code: link.code,
+            // An administrator allows a host in Admin → Short Links → Allowed external hosts.
+            ...(refusal.host ? { host: refusal.host } : {})
+          });
+          return res.status(404).send('Not found');
+        }
+        // Counting the visit must not stand between the user and the link.
+        try {
+          await recordUsage(link.code);
+        } catch (error) {
+          logger.warn('Could not record short link usage', {
+            component: 'ShortLinkRoutes',
+            code: link.code,
+            error: error.message
+          });
+        }
+        res.redirect(link.url);
       } catch (error) {
-        logger.warn('Could not record short link usage', {
-          component: 'ShortLinkRoutes',
-          code: link.code,
-          error: error.message
-        });
+        logger.error('Error redirecting short link', { component: 'ShortLinkRoutes', error });
+        res.status(500).send('Error');
       }
-      res.redirect(link.url);
-    } catch (error) {
-      logger.error('Error redirecting short link', { component: 'ShortLinkRoutes', error });
-      res.status(500).send('Error');
     }
-  });
+  );
 }

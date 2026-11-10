@@ -22,7 +22,7 @@ import CustomResponseRenderer from '../../../shared/components/CustomResponseRen
 import ClarificationCard from './ClarificationCard';
 import ApprovalCard from './ApprovalCard';
 import GeneratedImage from './GeneratedImage';
-import AnswerSources, { CitedSources, hasAnswerResults } from './AnswerSources';
+import AnswerSources, { CitedSources, ReadSources, hasAnswerResults } from './AnswerSources';
 import { findTrailingSourceList, resolveCitations } from '../../../../../shared/sources/index.js';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
@@ -192,18 +192,21 @@ function ChatMessage({
   );
   // The footer at the answer's end (#3521): the cited list, then one row with
   // the entry to everything found and the badge saying what the answer is
-  // based on. Only once the answer is complete.
+  // based on. Only once the answer is complete. An answer that cites nothing
+  // lists what was read for it in the cited list's place.
   const finished = !message.loading;
   const hasCited = Boolean(citationView?.cited.length);
+  const hasRead = Boolean(citationView?.read?.length);
+  const hasList = hasCited || hasRead;
   const hasResults = hasAnswerResults(citationView);
   const showAnswerSourceBadge =
     !isUser &&
     !isError &&
     finished &&
     Boolean(message.answerSource || message.workflowResult || message.knowledgeScope);
-  const showSourcesBlock = !isUser && finished && (hasCited || hasResults);
+  const showSourcesBlock = !isUser && finished && (hasList || hasResults);
   const showFooterRow = !isUser && finished && (hasResults || showAnswerSourceBadge);
-  const footerRowClass = hasCited
+  const footerRowClass = hasList
     ? 'mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5'
     : 'flex flex-wrap items-center gap-x-2 gap-y-1.5';
   const citations = useMemo(
@@ -1114,6 +1117,9 @@ function ChatMessage({
           >
             {showSourcesBlock && hasCited && (
               <CitedSources messageKey={messageKey} sources={citationView.cited} />
+            )}
+            {showSourcesBlock && hasRead && (
+              <ReadSources messageKey={messageKey} sources={citationView.read} />
             )}
             <div className={showFooterRow ? footerRowClass : undefined}>
               {citationView && (

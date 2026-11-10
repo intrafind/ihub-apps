@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { responseEtag } from '../../utils/etag.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import llmClient, { usageToOpenAI, isLLMError } from '../../services/loop/LLMClient.js';
@@ -458,7 +459,8 @@ export default function registerAdminPromptsRoutes(app) {
       res.setHeader('Cache-Control', 'private, no-store');
       return res.json(result);
     }
-    const { data: prompts, etag } = configCache.getPrompts(true);
+    const { data: prompts, etag: promptsEtag } = configCache.getPrompts(true);
+    const etag = responseEtag(promptsEtag);
     if (!prompts) {
       throw new ServiceError('INTERNAL_ERROR', 'Failed to load prompts configuration');
     }

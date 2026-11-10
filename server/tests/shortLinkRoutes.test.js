@@ -56,7 +56,7 @@ beforeAll(() => {
   configCache.cache.set('config/platform.json', {
     data: {
       anonymousAuth: { enabled: true, defaultGroups: ['anonymous'] },
-      shortLinks: { allowedHosts: ['docs.example.com'] }
+      ssrf: { allowedHosts: ['docs.example.com'] }
     }
   });
   configCache.cache.set('config/groups.json', { data: GROUPS });
@@ -231,8 +231,45 @@ describe('short link targets', () => {
       url: 'https://elsewhere.example/'
     });
     expect(put.status).toBe(400);
-    expect(put.body.code).toBe('BAD_REQUEST');
-    expect(put.body.detail).toMatch(/allowed host/);
+    expect(put.body.code).toBe('SHORT_LINK_HOST_NOT_ALLOWED');
+    expect(put.body.details).toEqual({ host: 'elsewhere.example' });
+  });
+
+  test('a refused host is named, with where an administrator allows it', async () => {
+    const app = buildApp();
+    const res = await create(app, 'admin', { url: 'https://www.qwant.com/' });
+    expect(res.status).toBe(400);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body).toMatchObject({
+      code: 'SHORT_LINK_HOST_NOT_ALLOWED',
+      details: { host: 'www.qwant.com' }
+    });
+    expect(res.body.detail).toContain('www.qwant.com');
+    expect(res.body.detail).toContain('Admin → Security → SSRF Allowlist');
+
+    // Allowing a host would not help these, so they are not blamed on one.
+    for (const url of ['ftp://www.qwant.com/', 'https://u:p@www.qwant.com/']) {
+      const other = await create(app, 'admin', { url });
+      expect([url, other.status, other.body.code]).toEqual([url, 400, 'BAD_REQUEST']);
+      expect(other.body.details).toBeUndefined();
+    }
+  });
+
+  test('a host on the SSRF allowlist may be a short link target, at once', async () => {
+    const app = buildApp();
+    const platform = configCache.cache.get('config/platform.json');
+    configCache.cache.set('config/platform.json', {
+      data: { ...platform.data, ssrf: { allowedHosts: ['www.qwant.com'] } }
+    });
+    try {
+      const { status, body: link } = await create(app, 'admin', { url: 'https://www.qwant.com/' });
+      expect(status).toBe(200);
+      const res = await request(app).get(`/s/${link.code}`);
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe('https://www.qwant.com/');
+    } finally {
+      configCache.cache.set('config/platform.json', platform);
+    }
   });
 
   test('answers an unknown code with NOT_FOUND, a missing target with BAD_REQUEST and a taken code with CONFLICT', async () => {
@@ -274,13 +311,13 @@ describe('short link targets', () => {
     expect(res.headers.location).toBeUndefined();
   });
 
-  test('wildcard and regex entries in the allowlist apply on save and on redirect', async () => {
+  test('wildcard entries of the SSRF allowlist apply on save and on redirect', async () => {
     const app = buildApp();
     const platform = configCache.cache.get('config/platform.json');
     configCache.cache.set('config/platform.json', {
       data: {
         ...platform.data,
-        shortLinks: { allowedHosts: ['*.intrafind.io', '/[a-z]+\\.example\\.org/'] }
+        ssrf: { allowedHosts: ['*.intrafind.io', '.example.org'] }
       }
     });
     try {
@@ -291,7 +328,7 @@ describe('short link targets', () => {
         expect(res.status).toBe(302);
         expect(res.headers.location).toBe(url);
       }
-      for (const url of ['https://intrafind.io/', 'https://wiki.example.org.example.net/']) {
+      for (const url of ['https://intrafind.io/', 'https://example.org/']) {
         const res = await create(app, 'alice', { url });
         expect([url, res.status]).toEqual([url, 400]);
       }
@@ -307,7 +344,7 @@ describe('short link targets', () => {
 
     const platform = configCache.cache.get('config/platform.json');
     configCache.cache.set('config/platform.json', {
-      data: { ...platform.data, shortLinks: { allowedHosts: [] } }
+      data: { ...platform.data, ssrf: { allowedHosts: [] } }
     });
     try {
       expect((await request(app).get(`/s/${link.code}`)).status).toBe(404);

@@ -358,29 +358,21 @@ Defaults for PDF exports. PDFs are rendered on the server (see [PDF Generation &
 - **templates** (object) – Names and descriptions of the available templates
 
 ### **shortLinks**
-Where short links (feature `shortLinks`) may redirect.
+A short link (feature `shortLinks`) may redirect to a path on this server (`/apps/chat`) or to an
+absolute `http`/`https` URL whose host is on the SSRF allowlist (`ssrf.allowedHosts`, **Admin →
+Security → SSRF Allowlist**). There is no separate list for short links. The list is checked when
+a link is saved and again on every redirect, so removing a host stops its links from redirecting.
+Entries match as they do for the SSRF guard: `docs.example.com` is exactly this host, and
+`*.example.com` or `.example.com` is any subdomain but not `example.com` itself.
 
-```json
-{
-  "shortLinks": {
-    "allowedHosts": ["docs.example.com", "*.intrafind.io", ".local", "/(docs|wiki)\\.example\\.org/"]
-  }
-}
-```
+Saving a link to a host that is not on the list fails with the error code
+`SHORT_LINK_HOST_NOT_ALLOWED` (the host is in `details.host`), and the message says where an
+administrator allows it. Opening such a link answers "Not found" and logs the host. The public
+redirect `/s/:code` is rate limited to 300 requests per minute per address.
 
-- **allowedHosts** (array) – Hosts a short link may redirect to with an absolute `http`/`https`
-  URL. Paths on this server (`/apps/chat`) are always allowed. Default: `[]` (paths on this server
-  only). The list is checked when a link is saved and again on every redirect, so removing a host
-  stops its links from redirecting. Each entry is one of:
-  - `docs.example.com` – exactly this host (case-insensitive).
-  - `*.intrafind.io` or `.intrafind.io` – any subdomain (`docs.intrafind.io`,
-    `a.b.intrafind.io`), but not `intrafind.io` itself; add the bare domain as its own entry if
-    needed. `.local` allows every `*.local` host. Same rules as `ssrf.allowedHosts`.
-  - `/…/` – a regular expression the whole hostname must match. It is anchored at both ends, so
-    `/intrafind\.io/` matches `intrafind.io` only. Hostnames are compared in lower case, and
-    internationalised names in their `xn--` form. Patterns longer than 194 characters and
-    patterns with nested quantifiers are rejected; an entry that is not a usable pattern matches
-    nothing and is logged as a warning.
+Up to 5.6, short links had their own list, `shortLinks.allowedHosts`. Migration V238 moves its
+entries, and the hosts of all stored, unexpired short links, to `ssrf.allowedHosts` and removes the
+old key; `/regex/` entries and IPv6 addresses cannot be expressed there and are logged as skipped.
 
 Short links belong to the signed-in user who creates them. Only that user and administrators can
 list, change or delete them; links saved before links had owners can be managed by administrators

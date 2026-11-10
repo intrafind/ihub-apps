@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { ZipArchive } from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { responseEtag } from '../../utils/etag.js';
 import { assertValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { requireFeature } from '../../featureRegistry.js';
 import configCache from '../../configCache.js';
@@ -172,7 +173,8 @@ export default function registerAdminSkillsRoutes(app) {
     adminAuth,
     requireFeature('skills'),
     async (req, res) => {
-      const { data: skills, etag } = configCache.getSkills();
+      const { data: skills, etag: skillsEtag } = configCache.getSkills();
+      const etag = responseEtag(skillsEtag);
 
       if (etag) {
         const clientEtag = req.headers['if-none-match'];

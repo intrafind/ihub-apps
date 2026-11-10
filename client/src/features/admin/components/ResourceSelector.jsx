@@ -117,6 +117,7 @@ function ResourceSelector({
               >
                 {resource.name}
                 <button
+                  type="button"
                   onClick={() => handleResourceRemove(resource.id)}
                   className="ml-2 text-current hover:text-red-600 dark:hover:text-red-400"
                 >
@@ -156,6 +157,7 @@ function ResourceSelector({
               {filteredResources.length > 0 ? (
                 filteredResources.map(resource => (
                   <button
+                    type="button"
                     key={resource.id}
                     onClick={() => handleResourceAdd(resource.id)}
                     className="w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-hidden"
