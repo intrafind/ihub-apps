@@ -8817,6 +8817,8 @@
       "unnamed": "Projekt"
     },
     "chats": {
+      "attachedEmpty": "Noch keiner Ihrer Chats nutzt dieses Projekt.",
+      "attachedHint": "Ihre Chats, die dieses Projekt nutzen. Chats anderer Nutzer werden nicht angezeigt.",
       "byMe": "von Ihnen",
       "byOther": "von {{name}} (nur lesen)",
       "empty": "Noch keine Chats in diesem Projekt.",

@@ -34,6 +34,7 @@ import { logAudit } from '../services/AuditLogService.js';
 import { auditPublished } from '../services/projects/projectAudit.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { resolvePrincipal } from '../services/loop/runIdentity.js';
+import runLog from '../services/loop/RunLog.js';
 import { resolveShares } from './promptRoutes.js';
 import { getProjectRepository, isUserProjectId } from '../services/projects/ProjectRepository.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
@@ -1114,7 +1115,7 @@ export default function registerProjectRoutes(app) {
    * @swagger
    * /api/projects/{projectId}/chats:
    *   get:
-   *     summary: The chats inside a project
+   *     summary: The chats inside a project, or for a project that holds none (from the catalog, from the administrators), the caller's own chats that have it attached
    *     tags: [Projects]
    *     parameters:
    *       - in: query
@@ -1140,6 +1141,32 @@ export default function registerProjectRoutes(app) {
     async (req, res) => {
       const chats = getChatRepository();
       if (!chats.isAvailable()) return res.json({ items: [], nextCursor: null, total: 0 });
+      // A project that holds no chats (from the catalog, from the administrators, a
+      // smart collection) is attached to chats instead: the caller's own chats that
+      // use it, never anyone else's.
+      if (req.projectPermissions.canHoldChats === false) {
+        const principal = await resolvePrincipal(req.user, { mode: runLog.identityMode() });
+        const attached = await chats.listChatsAttachingProject(principal.id, req.project.id);
+        const limit = Math.min(
+          CHATS_PAGE_MAX,
+          Math.max(1, Number.parseInt(req.query.limit, 10) || CHATS_PAGE_DEFAULT)
+        );
+        const start = Math.max(0, Number.parseInt(req.query.cursor, 10) || 0);
+        return res.json({
+          items: attached.slice(start, start + limit).map(chat => ({
+            id: chat.id,
+            title: chat.title || '',
+            appId: chat.appId || null,
+            createdAt: chat.createdAt,
+            lastMessageAt: chat.lastMessageAt || chat.updatedAt || chat.createdAt,
+            messageCount: chat.messageCount || 0,
+            status: chat.status || 'active',
+            owner: { id: String(req.user.id), name: chat.ownerName || '', mine: true }
+          })),
+          nextCursor: start + limit < attached.length ? String(start + limit) : null,
+          total: attached.length
+        });
+      }
       // Someone who took the project from the catalog sees their own chats
       // only; the members' chats stay among the members.
       const filter = !req.projectPermissions.readsAllChats

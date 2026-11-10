@@ -849,7 +849,8 @@ everyone else uses it:
   projects** (and take it away with **Remove from my projects**). It shows **From the catalog** for them. They read its documents
   and instructions, link its documents and attach it to their chats, but never hold a chat inside
   it: **New chat** on its page starts a chat with the project attached, and a chat cannot be moved
-  into it. So the members do not see their chats, and they do not see the members' chats.
+  into it. So the members do not see their chats, and they do not see the members' chats. The
+  project's page lists your own chats that have it attached, and only those.
 
 Owners and editors publish a project with **Publish to the catalog** on the project page, after a
 confirmation, and take it out with **Take out of the catalog**. Publishing needs the `projectSharing` permission;
@@ -887,6 +888,10 @@ A chat started from the project page runs inside the project: it answers with th
 instructions and documents (in the chat's [knowledge mode](#knowledge-modes): `auto` unless the chat or the project says otherwise), next to whatever the app itself links. A chat belongs to
 a project from its first message on: it is started from the project page. A chip beside the message
 box and the chat history show which project a chat belongs to. Only user projects hold chats.
+
+A project from the catalog (or an admin project made available to everyone) holds no chats, but
+its page lists **your own chats that have it attached**, newest first. Chats of other users are never
+shown there, and there is no **All chats / My chats** switch.
 
 Every member may open the chats in a project; chats of other members are read-only. Only kept
 chats are listed: a temporary chat (incognito, or every chat while the Chat History feature is off,

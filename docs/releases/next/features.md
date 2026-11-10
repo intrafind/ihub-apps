@@ -1503,3 +1503,19 @@ and every other place the name appears.
 - Use `$t(product.name)` in your own overrides instead of typing the name.
 
 See [Localization](../../localization.md).
+
+## Projects From the Catalog Show the Chats That Use Them
+
+A project you added from the catalog, or one the administrators made available to everyone, never
+holds chats: yours only attach it. Its page had no chat list at all, so there was no way to see which
+chats used it. It now has a **Chats** card with your chats that have the project attached, newest
+first, a page at a time.
+
+- **Only your own chats.** Other users' chats are never listed, however many people use the project.
+  Temporary (incognito) chats are not listed either.
+- **Same card, no filter.** The card looks like the one of your own projects, without the **All
+  chats / My chats** switch, since there is nothing else to show.
+- **API:** `GET /api/projects/{projectId}/chats` answers, for such a project, with the caller's own
+  chats that have it attached, whatever `filter` says.
+
+See [Projects → Chats in a project](../../projects.md#chats-in-a-project).
