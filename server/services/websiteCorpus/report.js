@@ -192,7 +192,7 @@ export function renderReport({ name, analysis, nearDuplicates, meta, tokenizer }
 
   w('## Duplicates');
   w('');
-  if (!exactDuplicates.length && !nearDuplicates.total) {
+  if (!exactDuplicates.length && !nearDuplicates.total && !nearDuplicates.truncated) {
     w('No exact duplicate pages and no near-duplicate pages were found.');
   } else {
     w(
@@ -216,7 +216,7 @@ export function renderReport({ name, analysis, nearDuplicates, meta, tokenizer }
         'Line-level dedup does not remove these, because their lines differ slightly.' +
         (nearDuplicates.truncated
           ? ` The comparison stopped after ${n(nearDuplicates.verified)} candidate pairs, ` +
-            'so this site has more near-duplicates than were counted.'
+            'so this site may have more near-duplicates than were counted.'
           : '')
     );
     for (const pair of nearDuplicates.pairs.slice(0, 10)) {

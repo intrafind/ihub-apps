@@ -24,6 +24,7 @@
  */
 import { estimateTokens, tokenizerInfo } from '../../../../../../../shared/tokenEstimator.js';
 import { getCorpusStore, CorpusError } from '../../../../../websiteCorpus/CorpusStore.js';
+import { LockTimeoutError } from '../../../../../../storage/errors.js';
 import { DomainError, getDomainStore } from '../../../../../websiteCorpus/DomainStore.js';
 import {
   DEFAULT_MAX_PAGES,
@@ -183,6 +184,14 @@ async function guarded(call) {
       error?.code === 'INVALID_SELECTOR'
     ) {
       return { error: true, code: error.code, message: error.message };
+    }
+    if (error instanceof LockTimeoutError) {
+      return {
+        error: true,
+        code: 'CORPUS_BUSY',
+        message:
+          'Another call is still working on this corpus. Wait a moment for it to finish, then call again.'
+      };
     }
     throw error;
   }

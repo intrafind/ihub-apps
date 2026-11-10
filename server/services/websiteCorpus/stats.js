@@ -119,7 +119,7 @@ export async function analyseCorpus(
       tokensDedup: deduped === page.text ? tokens : countTokens(deduped),
       thin: chars < THIN_CHARS
     });
-    if (index % 25 === 24) await yieldToEventLoop();
+    if (index % 5 === 4) await yieldToEventLoop();
   }
 
   const sum = (list, key) => list.reduce((total, row) => total + row[key], 0);
@@ -247,7 +247,7 @@ export async function findNearDuplicates(pages) {
   const signatures = [];
   for (const [index, page] of eligible.entries()) {
     signatures.push(signatureOf(shingleHashes(page.text)));
-    if (index % 25 === 24) await yieldToEventLoop();
+    if (index % 5 === 4) await yieldToEventLoop();
   }
   const pairs = [];
   // The outer page's shingle set is built once for all its pairs; the inner pages' sets are

@@ -447,7 +447,6 @@ export class WebsiteCorpusService {
         }
       }
       if (restart || selector !== corpus.dropSelector) {
-        await this.store.removePages(corpus.id);
         corpus = {
           ...corpus,
           dropSelector: selector,
@@ -460,6 +459,10 @@ export class WebsiteCorpusService {
           failures: [],
           batches: 0
         };
+        // The reset is stored first: a crash between the two steps leaves pages that the next
+        // crawl overwrites, not a corpus whose counters disagree with its pages.
+        corpus = await this.store.save(corpus);
+        await this.store.removePages(corpus.id);
       }
 
       const urls = await this.store.urls(corpus.id);

@@ -347,6 +347,35 @@ describe('exact duplicates', () => {
     assert.ok(!line.includes('same6'), 'only the first few are listed');
   });
 
+  it('still says the comparison stopped when it found no pair at all', async () => {
+    const analysis = await analyseCorpus([{ url: 'https://a.test/a', text: words(30) }], {
+      countTokens
+    });
+    const markdown = renderReport({
+      name: 'N',
+      analysis,
+      nearDuplicates: { total: 0, pairs: [], truncated: true, verified: 3000 },
+      tokenizer: { method: 'heuristic', note: 'n' },
+      meta: {
+        crawlDate: '2026-11-10',
+        siteUrl: 'https://a.test',
+        prefix: '',
+        dropSelector: '',
+        coverage: {
+          inSitemap: 1,
+          crawled: 1,
+          failed: 0,
+          blockedByRobots: 0,
+          notHtml: 0,
+          notCrawled: 0
+        }
+      }
+    });
+    assert.ok(!markdown.includes('no near-duplicate pages were found'));
+    assert.ok(markdown.includes('at least 0'));
+    assert.ok(markdown.includes('may have more near-duplicates'));
+  });
+
   it('says "at least" when the near-duplicate comparison stopped', async () => {
     const analysis = await analyseCorpus([{ url: 'https://a.test/a', text: words(30) }], {
       countTokens
