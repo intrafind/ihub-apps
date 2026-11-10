@@ -335,7 +335,10 @@ function focusedWindow(doc, focus, maxLength, { outline: withOutline = true } = 
     budgetChars: maxLength,
     withOffsets: true,
     hint: withOutline ? FOCUS_HINT : undefined,
-    compact: !withOutline
+    compact: !withOutline,
+    // A page a search extracts is read once among many: it does not displace the
+    // indexes of the documents the model reads.
+    cacheIndex: withOutline
   });
   if (selected.retrieval.mode === 'focus') {
     return { content: selected.content, matched: true, passages: selected.passages || [] };

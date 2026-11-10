@@ -142,11 +142,16 @@ function asSource(item, fields = {}) {
 
 /**
  * What a focused page read reported beside its result: the passages the model
- * was given. They merge into the page's own source by URL.
+ * was given. They merge into the page's own source by URL. A page the reader was
+ * asked for is private, as everything it reads; a page a search extracted carries
+ * the privacy of that search's hits (an own engine's are public), so the merge
+ * does not turn a public hit private.
  */
-function reportedWebItems(reader, reported) {
-  if (!reader || !Array.isArray(reported)) return [];
-  return reported.filter(item => item?.provider === 'web');
+function reportedWebItems(reader, reported, hitPrivacy) {
+  if (!Array.isArray(reported)) return [];
+  return reported
+    .filter(item => item?.provider === 'web')
+    .map(item => (reader ? item : { ...item, ...hitPrivacy }));
 }
 
 export const webSourceProducer = {
@@ -215,7 +220,7 @@ export const webSourceProducer = {
         );
       }
     }
-    items.push(...reportedWebItems(reader, reported));
+    items.push(...reportedWebItems(reader, reported, hitPrivacy));
     return { items, queries };
   }
 };

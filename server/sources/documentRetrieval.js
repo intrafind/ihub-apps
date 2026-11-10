@@ -602,15 +602,21 @@ function partId(section, part, partCount) {
  * The first place at or after `from` where `line` starts a line (only spaces
  * or tabs before it): `## Pricing details` is not found inside
  * `### Pricing details`, nor inside a longer line that merely contains it.
+ * Walks the line starts forward, so a page of one huge line or of endless
+ * repeats of the same text costs one pass, not one scan per candidate.
  *
  * @returns {number} The index, or -1
  */
 function indexOfLine(text, line, from) {
-  let at = text.indexOf(line, from);
-  while (at !== -1) {
-    const lineStart = text.lastIndexOf('\n', at - 1) + 1;
-    if (/^[ \t]*$/.test(text.slice(lineStart, at))) return at;
-    at = text.indexOf(line, at + 1);
+  // The line that holds `from` starts at or before it.
+  let lineStart = from > 0 ? text.lastIndexOf('\n', from - 1) + 1 : 0;
+  while (lineStart <= text.length) {
+    let at = lineStart;
+    while (text[at] === ' ' || text[at] === '\t') at++;
+    if (at >= from && text.startsWith(line, at)) return at;
+    const newline = text.indexOf('\n', lineStart);
+    if (newline === -1) return -1;
+    lineStart = newline + 1;
   }
   return -1;
 }
@@ -620,7 +626,8 @@ function indexOfLine(text, line, from) {
  * from, in characters: the first line of the part, searched forward from the
  * end of the previous one. Best effort: the splitter normalizes line breaks
  * and drops `<!-- Source: -->` markers, so a part that cannot be located is
- * `null`; the offsets that are found never run backwards.
+ * `null`; the offsets that are found never run backwards. A part starts at a line
+ * start; only a continuation of a line longer than a part may start inside one.
  *
  * @param {ReturnType<typeof getDocumentIndex>} index
  * @param {string} text - The text the index was built from
@@ -631,7 +638,10 @@ export function partOffsets(index, text) {
   let cursor = 0;
   for (const part of index.parts) {
     const firstLine = part.text.split('\n', 1)[0].slice(0, 200);
-    const at = firstLine ? indexOfLine(text, firstLine, cursor) : -1;
+    let at = firstLine ? indexOfLine(text, firstLine, cursor) : -1;
+    // A continuation of a line longer than a part starts inside that line, not at a
+    // line start: its first characters are searched for as they are.
+    if (at === -1 && firstLine && part.part > 1) at = text.indexOf(firstLine, cursor);
     if (at === -1) {
       offsets.push(null);
       continue;
@@ -835,7 +845,7 @@ function rankedGroups(index, ranked, budgetChars, measure, offsets, { fitFirst =
     const size = measure(rendered) + 2;
     if (used + size > budgetChars) {
       // Remembered, not cut yet: a lower-ranked group may still fit whole.
-      if (!oversize) oversize = { partIndex, rendered };
+      if (!oversize) oversize = { partIndex };
       continue;
     }
     members.forEach(i => included.add(i));
@@ -844,24 +854,38 @@ function rankedGroups(index, ranked, budgetChars, measure, offsets, { fitFirst =
   }
   // Nothing fits whole: keep the start of the best group, verbatim, rather than nothing.
   if (fitFirst && !groups.length && oversize) {
-    const cut = cutToFit(oversize.rendered, budgetChars, measure);
-    if (cut) groups.push({ members: [oversize.partIndex], rendered: cut });
+    const cut = cutToFit(renderPart(index, oversize.partIndex, offsets), budgetChars, measure);
+    if (cut) {
+      groups.push({ members: [oversize.partIndex], rendered: cut.rendered, shown: cut.shown });
+    }
   }
   return groups;
 }
 
+/** The passages of the groups of a result, for the sources panel: what the model saw of each. */
+function passagesOfGroups(index, groups, offsets) {
+  return groups.flatMap(group =>
+    group.members.map(partIndex => {
+      const passage = passageOf(index, partIndex, offsets);
+      return group.shown === undefined ? passage : { ...passage, text: group.shown };
+    })
+  );
+}
+
 /**
- * The start of a rendered group, closed with a marker, within `budgetChars`.
- * @returns {string|null} Null when the budget is too small to hold anything useful
+ * The start of a rendered part, closed with a marker, within `budgetChars`.
+ * @returns {{rendered: string, shown: string}|null} The cut part and the text of the
+ *   part it still holds; null when the budget is too small to hold anything useful
  */
 function cutToFit(rendered, budgetChars, measure) {
   if (budgetChars < 100) return null;
   const close = '\n[…]\n</section>';
+  const opening = rendered.slice(0, rendered.indexOf('>\n') + 2);
   let cut = rendered.slice(0, Math.max(0, budgetChars - 40));
   while (cut && measure(cut + close) + 2 > budgetChars) {
     cut = cut.slice(0, Math.floor(cut.length * 0.9));
   }
-  return cut ? cut + close : null;
+  return cut ? { rendered: cut + close, shown: cut.slice(opening.length) } : null;
 }
 
 function searchResult(index, name, query, budgetChars, measure = lengthOf) {
@@ -883,7 +907,7 @@ function searchResult(index, name, query, budgetChars, measure = lengthOf) {
   return {
     text: `${header}\n\n${groups.map(g => g.rendered).join('\n\n')}`,
     sections: groups.flatMap(g => g.members.map(i => idOfPart(index, i))),
-    passages: groups.flatMap(g => g.members.map(i => passageOf(index, i, null)))
+    passages: passagesOfGroups(index, groups, null)
   };
 }
 
@@ -928,7 +952,7 @@ function focusResult(index, name, focus, budgetChars, measure, { offsets, hint, 
   return {
     text: `${header}\n\n${groups.map(g => g.rendered).join('\n\n')}${outlineBlock}`,
     sections: groups.flatMap(g => g.members.map(i => idOfPart(index, i))),
-    passages: groups.flatMap(g => g.members.map(i => passageOf(index, i, offsets)))
+    passages: passagesOfGroups(index, groups, offsets)
   };
 }
 
@@ -996,6 +1020,8 @@ function sectionResult(index, name, ref, budgetChars, measure = lengthOf) {
  * @param {boolean} [options.withOffsets] - Name each focused section's start in
  *   `content` (character offset), for a caller that pages the text by offset
  * @param {string} [options.hint] - What a focused result tells the model to do next
+ * @param {boolean} [options.cacheIndex=true] - Whether the text's index is kept for the
+ *   next call; off for a text that is read once
  * @param {boolean} [options.compact] - A focused result without outline and with a
  *   one-line header, for a caller that returns many small excerpts
  * @param {string} [options.name] - Source name, used in the result's notes
@@ -1024,7 +1050,11 @@ export function selectContent(content, options = {}) {
     return { content: text, retrieval: { mode: 'full' } };
   }
 
-  const index = getDocumentIndex(text);
+  // `cacheIndex: false` for a text read once, such as one of many pages a search
+  // returns: indexing it must not push the indexes of the documents being read out
+  // of the cache.
+  const index =
+    options.cacheIndex === false ? indexDocuments([{ id: null, text }]) : getDocumentIndex(text);
   let mode;
   let result;
   if (section) {

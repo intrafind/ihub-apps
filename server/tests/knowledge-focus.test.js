@@ -138,6 +138,76 @@ describe('selectContent with a focus', () => {
     assert.ok(text.slice(offsets[at]).startsWith('## Pricing details\n\nThe enterprise'));
   });
 
+  it('offsets of a page of one endless, repetitive line cost one pass, not one per candidate', () => {
+    // Every part starts with the same 200 characters: each is a candidate for every other.
+    const unit = 'lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor ';
+    const text = unit.repeat(Math.ceil(400000 / unit.length));
+    const index = getDocumentIndex(text);
+    const started = performance.now();
+    const offsets = partOffsets(index, text);
+    const took = performance.now() - started;
+    assert.ok(offsets.length > 50);
+    assert.ok(took < 500, `${Math.round(took)} ms for ${index.parts.length} parts`);
+  });
+
+  it('a part that continues a line longer than a part still gets its offset', () => {
+    // One 30 000-character line without a break, never repeating: five parts of it.
+    let seed = 7;
+    const word = () => {
+      seed = (seed * 48271) % 2147483647;
+      return `w${seed.toString(36)}`;
+    };
+    let text = '';
+    while (text.length < 30000) text += `${word()} `;
+    const index = getDocumentIndex(text);
+    const offsets = partOffsets(index, text);
+    assert.ok(index.parts.length >= 4);
+    index.parts.forEach((part, i) => {
+      assert.ok(Number.isInteger(offsets[i]), `part ${i + 1} of ${index.parts.length}`);
+      assert.ok(text.slice(offsets[i]).startsWith(part.text.slice(0, 100)));
+    });
+    assert.deepEqual(
+      offsets,
+      [...offsets].sort((a, b) => a - b)
+    );
+  });
+
+  it('a text read once does not displace the indexes of the documents being read', () => {
+    const page = n =>
+      `# Page ${n}\n\n` +
+      Array.from({ length: 12 }, (_, i) => `## Part ${i}\n\n${filler(n * 100 + i)}`).join('\n\n');
+    // A document the model is reading: its index is cached after the first call.
+    const reading = page(0);
+    const kept = getDocumentIndex(reading);
+    const options = { focus: 'lorem ipsum', budgetChars: 3000, compact: true, cacheIndex: false };
+    // Far more pages than the cache holds, as a search over many results reads them.
+    for (let n = 1; n <= 12; n++) selectContent(page(n), options);
+    assert.equal(getDocumentIndex(reading), kept, 'the document is still indexed');
+
+    // Without the option a read is cached, as before: the next call reuses the index.
+    const other = page(99);
+    selectContent(other, { focus: 'lorem ipsum', budgetChars: 3000 });
+    const cached = getDocumentIndex(other);
+    selectContent(other, { focus: 'dolor', budgetChars: 3000 });
+    assert.equal(getDocumentIndex(other), cached);
+  });
+
+  it('the passage of a cut section is what the model saw of it', () => {
+    const text =
+      '# Manual\n\n## Price quasar\n\n' + 'price quasar price quasar price quasar. '.repeat(120);
+    const result = selectContent(text, {
+      focus: 'price quasar',
+      budgetChars: 1500,
+      compact: true,
+      name: 'Manual'
+    });
+    const [passage] = result.passages;
+    const whole = text.slice(text.indexOf('## Price quasar'));
+    assert.ok(passage.text.length > 100 && passage.text.length < whole.length / 2);
+    assert.ok(whole.startsWith(passage.text), 'a verbatim start of the section');
+    assert.ok(result.content.includes(passage.text), 'exactly what the model was given');
+  });
+
   it('an empty focus is no focus', () => {
     const base = selectContent(MANUAL, { budgetChars: 10000, name: 'Manual' });
     const empty = selectContent(MANUAL, { focus: '   ', budgetChars: 10000, name: 'Manual' });
@@ -675,6 +745,39 @@ describe('the sources panel shows the passages of a focused page read', () => {
     assert.equal(frame.items[0].read.ok, true);
     assert.equal(frame.items[0].read.truncated, true);
     assert.equal(frame.items[0].private, true);
+  });
+
+  it('passages of a page a search extracted merge into that hit, public for an own engine', () => {
+    const result = {
+      results: [{ title: 'Manual', url: 'https://docs.example.com/manual' }],
+      extractedContent: [
+        { title: 'Manual', url: 'https://docs.example.com/manual', contentExtracted: true }
+      ]
+    };
+    const frame = extractToolSources({
+      toolId: 'braveSearch',
+      toolDef: { script: 'braveSearch.js' },
+      args: { query: 'enterprise plan price' },
+      result,
+      reported
+    });
+    assert.equal(frame.items.length, 1, 'one source for the page');
+    assert.deepEqual(
+      frame.items[0].passages.map(passage => passage.text),
+      ['Pricing details ## Pricing details The plan costs 4711 euros.']
+    );
+    assert.equal(frame.items[0].private, false, 'an own engine found it on the open web');
+    assert.equal(frame.items[0].read.ok, true);
+
+    const other = extractToolSources({
+      toolId: 'braveSearch',
+      toolDef: { script: 'somethingElse.js' },
+      args: { query: 'enterprise plan price' },
+      result,
+      reported
+    });
+    assert.equal(other.items[0].private, true, 'a search tool of unknown origin stays private');
+    assert.equal(other.items[0].passages.length, 1);
   });
 
   it('a read without reported passages is what it was', () => {
