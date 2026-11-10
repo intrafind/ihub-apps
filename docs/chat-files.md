@@ -168,6 +168,7 @@ The model sees `id="…"` and `can_use_as_template="true"` on the file's `<conte
 - `create_docx({ templateFileId, templateMode })`: `styles_only` (default when the file has no
   `{{content}}` marker), `fill_placeholders`, `append`.
 - `create_pptx({ templateFileId, templateMode })`: `styles_only` (default) or `append`.
+- `restyle_pptx({ fileId })`: moves the uploaded deck onto the document template's master and layouts and keeps its content ([details](document-templates.md#uploaded-presentations)); the result is a new file.
 - `create_pdf({ templateFileId, fillFormFields, flattenForm })`: fills the form fields in place;
   without `fillFormFields` the new document is printed on the file as letterhead.
 - `create_xlsx({ sourceFileId })`: keeps the workbook and replaces or adds the sheets given.

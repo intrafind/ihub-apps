@@ -238,7 +238,7 @@ function splitHorizontally(rect, share, gap) {
 }
 
 /** The content area of a layout, falling back to the content layout's. */
-function contentArea(layout, chosen, slideSize) {
+export function contentArea(layout, chosen, slideSize) {
   const own = contentPlaceholders(layout)[0]?.rect;
   if (own) return own;
   const fallback = contentPlaceholders(chosen.content)[0]?.rect;
@@ -641,7 +641,7 @@ function notesSlideXml(notes, lang) {
   return `${XML_HEAD}<p:notes ${PML_NAMESPACES}><p:cSld><p:spTree>${GROUP_PROPS}<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr><p:nvPr><p:ph type="sldImg"/></p:nvPr></p:nvSpPr><p:spPr/></p:sp><p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/>${paragraphs || '<a:p><a:endParaRPr lang="en-US"/></a:p>'}</p:txBody></p:sp></p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>`;
 }
 
-function uniquePath(zip, pattern) {
+export function uniquePath(zip, pattern) {
   for (let n = 1; ; n += 1) {
     const path = pattern.replace('{n}', String(n));
     if (!zip.file(path)) return path;
@@ -649,7 +649,7 @@ function uniquePath(zip, pattern) {
 }
 
 /** Remove the slides a template file came with (and what lists them). */
-async function removeTemplateSlides(template) {
+export async function removeTemplateSlides(template) {
   const { zip, presentation } = template;
   const root = presentation.documentElement;
   const list = firstChild(root, 'sldIdLst');
@@ -682,7 +682,7 @@ async function removeTemplateSlides(template) {
 }
 
 /** Insert an element into `p:presentation` at its schema position. */
-function insertPresentationChild(root, element, after) {
+export function insertPresentationChild(root, element, after) {
   let anchor = null;
   for (const name of after) {
     const found = childElements(root, name).at(-1);
@@ -690,6 +690,35 @@ function insertPresentationChild(root, element, after) {
   }
   if (anchor) root.insertBefore(element, anchor.nextSibling);
   else root.insertBefore(element, root.firstChild);
+}
+
+/**
+ * The template's notes master; a template without one gets a plain one.
+ *
+ * @param {Object} template - From `loadPresentationTemplate`.
+ * @param {import('../ooxml/opcPackage.js').ContentTypes} types
+ * @returns {string} The notes master's part path.
+ */
+export function ensureNotesMaster(template, types) {
+  if (template.notesMaster) return template.notesMaster;
+  const { zip } = template;
+  const themePath = uniquePath(zip, 'ppt/theme/theme{n}.xml');
+  const notesMaster = addNotesMaster(zip, { themePath });
+  types.setOverride(notesMaster, NOTES_MASTER_TYPE);
+  types.setOverride(themePath, THEME_TYPE);
+  const relId = nextRelId(template.presRels);
+  template.presRels.push({
+    id: relId,
+    type: REL_TYPES.notesMaster,
+    target: relativeTarget(PRESENTATION, notesMaster)
+  });
+  const list = template.presentation.createElementNS(NS.p, 'p:notesMasterIdLst');
+  const entry = template.presentation.createElementNS(NS.p, 'p:notesMasterId');
+  entry.setAttributeNS(NS.r, 'r:id', relId);
+  list.appendChild(entry);
+  insertPresentationChild(template.presentation.documentElement, list, ['sldMasterIdLst']);
+  template.notesMaster = notesMaster;
+  return notesMaster;
 }
 
 /**
@@ -778,25 +807,10 @@ export async function buildPptx(
   });
 
   // Speaker notes need a notes master.
-  let notesMaster = template.notesMaster;
   const presRoot = template.presentation.documentElement;
-  if (!notesMaster && builders.some((_, i) => slides[i].notes)) {
-    const themePath = uniquePath(zip, 'ppt/theme/theme{n}.xml');
-    notesMaster = addNotesMaster(zip, { themePath });
-    types.setOverride(notesMaster, NOTES_MASTER_TYPE);
-    types.setOverride(themePath, THEME_TYPE);
-    const relId = nextRelId(template.presRels);
-    template.presRels.push({
-      id: relId,
-      type: REL_TYPES.notesMaster,
-      target: relativeTarget(PRESENTATION, notesMaster)
-    });
-    const list = template.presentation.createElementNS(NS.p, 'p:notesMasterIdLst');
-    const entry = template.presentation.createElementNS(NS.p, 'p:notesMasterId');
-    entry.setAttributeNS(NS.r, 'r:id', relId);
-    list.appendChild(entry);
-    insertPresentationChild(presRoot, list, ['sldMasterIdLst']);
-  }
+  const notesMaster = builders.some((_, i) => slides[i].notes)
+    ? ensureNotesMaster(template, types)
+    : template.notesMaster;
 
   const existingList = keepTemplateSlides ? firstChild(presRoot, 'sldIdLst') : null;
   const slideList = existingList || template.presentation.createElementNS(NS.p, 'p:sldIdLst');

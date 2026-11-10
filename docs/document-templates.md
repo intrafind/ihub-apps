@@ -62,6 +62,20 @@ Presentations are always built by **filling a template**: your PowerPoint templa
 - **Footer and slide numbers:** set them in the template (**Slide footer**, **Slide numbers**). They appear on every slide but the title slide, where the layout has a footer or slide number placeholder.
 - **Speaker notes** use the template's notes master; a template without one gets a plain one.
 - Without a PowerPoint template, choose the **slide format** (16:9 or 4:3).
+- **The whole design belongs in the template.** A cover photo, edge strips, logos, a footer bar, background pictures and a coloured title slide are shapes and backgrounds of the master and its layouts (`Titelfolie`, `Titel und Inhalt`, …); every deck built on the template gets them, and nothing else has to be set up in iHub.
+
+### Uploaded presentations
+
+A user can upload a `.pptx` made elsewhere and ask for it in the company design. The `restyle_pptx` tool of the `pptx` skill moves the deck onto the template's master and layouts (or, without a PowerPoint template, onto iHub's built-in design made from the brand) and keeps its content:
+
+- **Layout.** Each slide gets the template's layout for its kind (title, section, content, two content, title only, blank), judged from the layout it had.
+- **Titles, subtitles, footers and slide numbers** take the template's placeholders, so their positions, fonts and colours are the template's. The template's footer text and slide numbers are added where the slide has none (not on the title slide).
+- **Text alone on a slide** takes the template's content placeholder.
+- **Everything else** (pictures, charts, tables, text boxes, groups, and text next to them) keeps its arrangement: the shapes are scaled together, by one factor, into the template's content area. Decks of another size (4:3 to 16:9) are fitted the same way. Text shrinks with a shape that shrinks.
+- **Kept:** pictures, charts with their data, tables, speaker notes, links, transitions. **Dropped:** slide backgrounds and the old master, layouts and theme.
+- **Colours** the deck took from its old theme (accent colours, text and background colours) follow the template's theme, also inside charts. A colour or font a shape sets itself stays as it is.
+
+It is a move onto a new master, not a redesign: slides with several pictures or tight arrangements can need a look afterwards, and the tool reports a slide whose content had to shrink below half its size. To rewrite a deck instead (new titles, fewer words), use `create_pptx`: the deck is rebuilt from its text, and its pictures are not carried over.
 
 ## Excel
 

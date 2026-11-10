@@ -1,5 +1,27 @@
 # Features — Unreleased
 
+## Uploaded Presentations Move Into the Company Design
+
+A user uploads a PowerPoint deck made elsewhere and asks for it in the company design. The `pptx`
+skill has a new tool, `restyle_pptx`, that puts the deck on the **document template's slide master
+and layouts** and gives it back as a download, instead of rebuilding it from its text.
+
+- **Content is kept.** Pictures, charts with their data, tables and speaker notes come along.
+- **The template decides the look.** Each slide gets the template's layout for its kind; titles,
+  footers and slide numbers take its positions, fonts and colours; text alone on a slide uses its
+  content area. Pictures, charts, tables and other shapes keep their arrangement and are scaled into
+  the content area, also when the deck has another size (4:3 to 16:9).
+- **Colours follow the theme.** Colours the deck took from its old theme, in slides and charts, become
+  the template's. Slide backgrounds and the old master are dropped.
+- **Works with any template.** Upload the company's PowerPoint template under **Admin → Document
+  templates**: a cover photo, edge strips, logos and a footer bar in its master reach every slide. Without
+  a PowerPoint template, iHub's built-in design made from the brand is used.
+- **A move, not a redesign.** A colour or font a shape sets itself stays, and slides with several
+  pictures can need a look afterwards; the tool reports slides whose content had to shrink a lot. To
+  rewrite a deck, `create_pptx` still rebuilds it from its text.
+
+See [Document templates → Uploaded presentations](../../document-templates.md#uploaded-presentations).
+
 ## Chats Get a Short Title After the First Answer
 
 Chats in the history were named after the first words of your first message, so a list of chats
