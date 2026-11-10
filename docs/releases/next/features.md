@@ -1,5 +1,12 @@
 # Features — Unreleased
 
+## The Chat Scrolls Behind the Message Box
+
+In a chat, the message box no longer sits on a band of its own below the conversation. The
+messages run the full height of the chat and scroll visibly behind the box, as the document does
+in the full-screen workspace. Only the box itself stays solid, so what you type remains readable.
+The last message can still be scrolled clear of the box.
+
 ## Chats Get a Short Title After the First Answer
 
 Chats in the history were named after the first words of your first message, so a list of chats
