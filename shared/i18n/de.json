@@ -9297,8 +9297,8 @@
     }
   },
   "integrationPicker": {
-    "search": "Integrationen durchsuchen",
-    "searchPlaceholder": "Integrationen durchsuchen…",
+    "search": "Suchen",
+    "searchPlaceholder": "Suchen…",
     "attach": "Anhängen",
     "upload": "Datei hochladen",
     "imageGeneration": "Bildgenerierung",

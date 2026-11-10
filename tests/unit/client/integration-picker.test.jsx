@@ -242,13 +242,13 @@ describe('the "+" menu as the integrations picker', () => {
 
   it('filters by the search', () => {
     openMenu();
-    fireEvent.change(screen.getByPlaceholderText('Search integrations…'), {
+    fireEvent.change(screen.getByPlaceholderText('Search…'), {
       target: { value: 'enaio' }
     });
     const menu = screen.getByRole('menu');
     expect(within(menu).getByRole('menuitemcheckbox', { name: /enaio/ })).toBeInTheDocument();
     expect(within(menu).queryByRole('menuitemcheckbox', { name: /iFinder/ })).toBeNull();
-    fireEvent.change(screen.getByPlaceholderText('Search integrations…'), {
+    fireEvent.change(screen.getByPlaceholderText('Search…'), {
       target: { value: 'nothing like it' }
     });
     expect(
@@ -271,7 +271,7 @@ describe('the "+" menu as the integrations picker', () => {
 
   it('closes on Escape in the search field and gives focus back to "+"', () => {
     openMenu();
-    const search = screen.getByPlaceholderText('Search integrations…');
+    const search = screen.getByPlaceholderText('Search…');
     search.focus();
     fireEvent.keyDown(search, { key: 'Escape' });
     expect(screen.queryByRole('menu')).toBeNull();

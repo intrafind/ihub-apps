@@ -448,8 +448,9 @@ The mode is chosen at four levels; the first that is set wins:
    applies to the chat's own project and the projects attached to it, is stored with the chat and
    sent with its first message (`knowledgeMode`), or changed afterwards with
    `PATCH /api/chats/:chatId` (`{ "knowledgeMode": "pinned" }`, `null` clears it).
-2. **The link** of an app, workflow or agent, set by an administrator. A link without a `mode`
-   passes to the next level.
+2. **The link** of an app, workflow or agent, set by an administrator. This is a recommendation:
+   a user's choice for the chat (level 1) wins over it. A link without a `mode` passes to the next
+   level.
 3. **The project's default** (`knowledgeMode`): the owner and editors set it on the project page
    (**Knowledge mode**), administrators in **Admin → Projects → edit → Name and description**.
 4. **Automatic.**

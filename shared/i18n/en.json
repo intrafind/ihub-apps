@@ -9298,8 +9298,8 @@
     }
   },
   "integrationPicker": {
-    "search": "Search integrations",
-    "searchPlaceholder": "Search integrations…",
+    "search": "Search",
+    "searchPlaceholder": "Search…",
     "attach": "Attach",
     "upload": "Upload file",
     "imageGeneration": "Image generation",

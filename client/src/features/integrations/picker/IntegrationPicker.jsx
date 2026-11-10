@@ -50,7 +50,7 @@ export function IntegrationPickerSearch({ value, onChange, onArrowDown, onClose,
   return (
     <div className="border-b border-gray-200 p-2 dark:border-gray-700">
       <label className="relative block">
-        <span className="sr-only">{t('integrationPicker.search', 'Search integrations')}</span>
+        <span className="sr-only">{t('integrationPicker.search', 'Search')}</span>
         <Icon
           name="search"
           size="sm"
@@ -72,7 +72,7 @@ export function IntegrationPickerSearch({ value, onChange, onArrowDown, onClose,
               onClose();
             }
           }}
-          placeholder={t('integrationPicker.searchPlaceholder', 'Search integrations…')}
+          placeholder={t('integrationPicker.searchPlaceholder', 'Search…')}
           className="w-full rounded-md border border-gray-300 bg-white py-1.5 pl-8 pr-2 text-sm text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
         />
       </label>
