@@ -25,7 +25,12 @@ import {
   sectionOf,
   onSite
 } from '../services/websiteCorpus/urls.js';
-import { analyseCorpus, findNearDuplicates, windowFit } from '../services/websiteCorpus/stats.js';
+import {
+  MAX_NEAR_DUP_VERIFICATIONS,
+  analyseCorpus,
+  findNearDuplicates,
+  windowFit
+} from '../services/websiteCorpus/stats.js';
 import { renderReport } from '../services/websiteCorpus/report.js';
 import {
   CorpusStore,
@@ -1210,13 +1215,29 @@ describe('review findings', () => {
 
   it('confirms many near-duplicate pages by building each shingle set once', async () => {
     const base = Array.from({ length: 400 }, (_v, i) => `satz${i}`).join(' ');
-    const pages = Array.from({ length: 80 }, (_v, i) => ({
+    const pages = Array.from({ length: 70 }, (_v, i) => ({
       url: `https://a.test/p${i}`,
       text: `${base} eigener Satz Nummer ${i}`
     }));
     const started = Date.now();
     const result = await findNearDuplicates(pages);
-    assert.equal(result.total, (80 * 79) / 2);
+    assert.equal(result.total, (70 * 69) / 2);
+    assert.equal(result.truncated, false);
     assert.ok(Date.now() - started < 5000, 'took too long');
+  });
+
+  it('stops confirming after a budget on a site of near-identical pages, and says so', async () => {
+    const base = Array.from({ length: 400 }, (_v, i) => `satz${i}`).join(' ');
+    const pages = Array.from({ length: 300 }, (_v, i) => ({
+      url: `https://a.test/p${i}`,
+      text: `${base} eigener Satz Nummer ${i}`
+    }));
+    const started = Date.now();
+    const result = await findNearDuplicates(pages);
+    assert.equal(result.truncated, true);
+    assert.equal(result.verified, MAX_NEAR_DUP_VERIFICATIONS);
+    assert.equal(result.total, MAX_NEAR_DUP_VERIFICATIONS);
+    assert.ok(result.pairs.length <= 25);
+    assert.ok(Date.now() - started < 15000, 'took too long');
   });
 });

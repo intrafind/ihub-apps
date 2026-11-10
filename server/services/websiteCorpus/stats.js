@@ -48,8 +48,14 @@ const CANDIDATE_ESTIMATE = 0.6;
 const NEAR_DUP_MAX_WORDS = 5000;
 /** Most near-duplicate pairs reported. */
 const MAX_NEAR_DUP_PAIRS = 25;
-/** Most shingle sets held at once while candidate pairs are confirmed. */
+/** Most shingle sets of the inner pages held at once while candidate pairs are confirmed. */
 const SHINGLE_CACHE_SIZE = 200;
+/**
+ * Most candidate pairs confirmed on the real shingle sets. A site of near-identical
+ * pages has every pair as a candidate (300 such pages are 44,850 pairs, about a
+ * minute of work); the comparison stops here and the result says so.
+ */
+export const MAX_NEAR_DUP_VERIFICATIONS = 3000;
 
 const yieldToEventLoop = () => new Promise(resolve => setImmediate(resolve));
 
@@ -224,12 +230,15 @@ function jaccard(a, b) {
  * of 300 characters or more with different text.
  *
  * A MinHash signature per page selects the candidate pairs, and each candidate
- * is then confirmed on the real shingle sets, so the pairs reported are exact
- * and the all-pairs comparison stays cheap enough for a few thousand pages.
+ * is then confirmed on the real shingle sets, so the pairs reported are exact.
+ * At most `MAX_NEAR_DUP_VERIFICATIONS` candidates are confirmed; a site that
+ * is mostly near-identical pages reaches that, and `truncated` is then true:
+ * the pairs found are real, but there may be more.
  *
  * @param {Array<{url: string, text: string}>} pages
- * @returns {Promise<{total: number, pairs: Array<{similarity: number, urls: [string, string]}>}>}
- *   The number of pairs found, and the most similar ones (at most 25), most similar first
+ * @returns {Promise<{total: number, pairs: Array<{similarity: number, urls: [string, string]}>, truncated: boolean, verified: number}>}
+ *   The number of pairs found, the most similar ones (at most 25, most similar first),
+ *   whether the comparison stopped early, and how many candidate pairs were confirmed
  */
 export async function findNearDuplicates(pages) {
   const eligible = pages.filter(page => page.text.length >= NEAR_DUP_MIN_CHARS);
@@ -239,27 +248,35 @@ export async function findNearDuplicates(pages) {
     if (index % 25 === 24) await yieldToEventLoop();
   }
   const pairs = [];
-  // A page's shingle set is built once, however many candidate pairs it is in; the cache is
-  // dropped when it grows large, so a template-heavy site cannot hold every set at once.
-  const shingleSets = new Map();
-  const setOf = index => {
-    let set = shingleSets.get(index);
+  // The outer page's shingle set is built once for all its pairs; the inner pages' sets are
+  // kept in a small cache, the oldest dropped first, so a template-heavy site cannot hold
+  // every set at once.
+  const inner = new Map();
+  const innerSet = index => {
+    let set = inner.get(index);
     if (!set) {
-      if (shingleSets.size >= SHINGLE_CACHE_SIZE) shingleSets.clear();
+      if (inner.size >= SHINGLE_CACHE_SIZE) inner.delete(inner.keys().next().value);
       set = shingleHashes(eligible[index].text);
-      shingleSets.set(index, set);
+      inner.set(index, set);
     }
     return set;
   };
   let verified = 0;
-  for (let i = 0; i < eligible.length; i++) {
+  let truncated = false;
+  outer: for (let i = 0; i < eligible.length; i++) {
+    let outerSet = null;
     for (let j = i + 1; j < eligible.length; j++) {
       let equal = 0;
       for (let k = 0; k < SIGNATURE_SIZE; k++)
         if (signatures[i][k] === signatures[j][k]) equal += 1;
       if (equal / SIGNATURE_SIZE < CANDIDATE_ESTIMATE) continue;
       if (eligible[i].text === eligible[j].text) continue;
-      const similarity = jaccard(setOf(i), setOf(j));
+      if (verified >= MAX_NEAR_DUP_VERIFICATIONS) {
+        truncated = true;
+        break outer;
+      }
+      outerSet ??= shingleHashes(eligible[i].text);
+      const similarity = jaccard(outerSet, innerSet(j));
       if (++verified % 50 === 0) await yieldToEventLoop();
       if (similarity >= NEAR_DUP_THRESHOLD) {
         pairs.push({
@@ -271,5 +288,10 @@ export async function findNearDuplicates(pages) {
     if (i % 10 === 9) await yieldToEventLoop();
   }
   pairs.sort((a, b) => b.similarity - a.similarity);
-  return { total: pairs.length, pairs: pairs.slice(0, MAX_NEAR_DUP_PAIRS) };
+  return {
+    total: pairs.length,
+    pairs: pairs.slice(0, MAX_NEAR_DUP_PAIRS),
+    truncated,
+    verified
+  };
 }

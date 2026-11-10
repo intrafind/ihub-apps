@@ -62,7 +62,7 @@ const axisLabel = text => String(text).replace(/"/g, "'");
  * @param {Object} input
  * @param {string} input.name - The site's name, for the title
  * @param {Object} input.analysis - Result of `analyseCorpus`
- * @param {{total: number, pairs: Array<{similarity: number, urls: string[]}>}} input.nearDuplicates
+ * @param {{total: number, pairs: Array<{similarity: number, urls: string[]}>, truncated?: boolean, verified?: number}} input.nearDuplicates
  * @param {Object} input.meta - Where the corpus came from: `crawlDate`, `siteUrl`,
  *   `prefix`, `dropSelector`, `coverage` (`inSitemap`, `crawled`, `failed`,
  *   `blockedByRobots`, `notHtml`, `notCrawled`)
@@ -203,8 +203,13 @@ export function renderReport({ name, analysis, nearDuplicates, meta, tokenizer }
     }
     w('');
     w(
-      `Near-duplicate page pairs (word 5-gram overlap of 0.80 or more): ${nearDuplicates.total}. ` +
-        'Line-level dedup does not remove these, because their lines differ slightly.'
+      `Near-duplicate page pairs (word 5-gram overlap of 0.80 or more): ` +
+        `${nearDuplicates.truncated ? 'at least ' : ''}${nearDuplicates.total}. ` +
+        'Line-level dedup does not remove these, because their lines differ slightly.' +
+        (nearDuplicates.truncated
+          ? ` The comparison stopped after ${n(nearDuplicates.verified)} candidate pairs, ` +
+            'so this site has more near-duplicates than were counted.'
+          : '')
     );
     for (const pair of nearDuplicates.pairs.slice(0, 10)) {
       w(`- ${pair.similarity.toFixed(2)}: ${pair.urls.map(link).join(' and ')}`);
