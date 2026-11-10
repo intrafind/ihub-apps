@@ -632,7 +632,8 @@ function renderPart(index, partIndex, offsets = null) {
     `id="${escapeAttribute(partId(section, part, partCount))}"`,
     `path="${escapeAttribute([...section.path, section.title].join(' › '))}"`
   ];
-  if (Number.isInteger(offsets?.[partIndex])) attributes.push(`offset="${offsets[partIndex]}"`);
+  const offset = offsets?.[partIndex];
+  if (Number.isInteger(offset)) attributes.push(`offset="${offset}"`);
   if (partCount > 1) attributes.push(`part="${part}/${partCount}"`);
   if (section.file) attributes.push(`file="${escapeAttribute(section.file)}"`);
   return `<section ${attributes.join(' ')}>\n${text}\n</section>`;
@@ -766,11 +767,12 @@ function subtreeEnd(index, start) {
 function passageOf(index, partIndex, offsets) {
   const { sectionIndex, text } = index.parts[partIndex];
   const section = index.sections[sectionIndex];
+  const offset = offsets?.[partIndex];
   return {
     id: idOfPart(index, partIndex),
     path: [...section.path, section.title].join(' › '),
     text,
-    ...(Number.isInteger(offsets?.[partIndex]) ? { offset: offsets[partIndex] } : {})
+    ...(Number.isInteger(offset) ? { offset } : {})
   };
 }
 
