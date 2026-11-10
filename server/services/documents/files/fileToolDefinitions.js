@@ -9,6 +9,7 @@
 
 export const CREATE_FILE_TOOL = {
   id: 'create_file',
+  outputKind: 'file',
   name: { en: 'Create file', de: 'Datei erstellen' },
   description: {
     en: 'Create a text file — source code (JavaScript, TypeScript, Python, Java, SQL, shell, CSS, …), JSON, YAML, CSV, Markdown or plain text — and give it to the user as a download. The extension of "name" decides the file type; a path such as "src/index.ts" keeps its folders when the files are packed into a ZIP. Call it once per file. The user sees a download card in the chat, so do not paste the content again or add a link — name the file instead. Activate the "files" skill first for guidance.',
@@ -38,6 +39,7 @@ export const CREATE_FILE_TOOL = {
 
 export const CREATE_ZIP_TOOL = {
   id: 'create_zip',
+  outputKind: 'archive',
   name: { en: 'Create ZIP archive', de: 'ZIP-Archiv erstellen' },
   description: {
     en: 'Pack files into one ZIP archive and give it to the user as a download. The archive can hold new files ("files": name with folders, and text content) and files already created in this chat ("include": their names or ids, or "includeAll": true for every file created in this chat). Use it when the user asks for a project, several files, or "everything" as a ZIP. Folders in the names are kept. The user sees a download card in the chat — name the archive in your answer instead of adding a link.',

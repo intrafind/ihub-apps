@@ -144,6 +144,22 @@ describe('tools of system skills', () => {
     assert.ok(tools.every(t => t.isSystemSkillTool));
   });
 
+  it('say what the creators produce, and the preview produces nothing', () => {
+    const kinds = Object.fromEntries(
+      systemSkillToolsFor(skills).map(t => [t.id, t.outputKind ?? null])
+    );
+    assert.deepEqual(kinds, {
+      create_docx: 'document',
+      create_file: 'file',
+      create_pdf: 'pdf',
+      create_pptx: 'presentation',
+      create_web_artifact: 'webArtifact',
+      create_xlsx: 'workbook',
+      create_zip: 'archive',
+      preview_pdf: null
+    });
+  });
+
   it('leave out the page preview for a model that cannot see images', () => {
     const ids = systemSkillToolsFor(skills, { model: { supportsImages: false } }).map(t => t.id);
     assert.ok(!ids.includes('preview_pdf'));

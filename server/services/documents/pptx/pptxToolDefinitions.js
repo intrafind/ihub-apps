@@ -9,6 +9,7 @@
 
 export const CREATE_PPTX_TOOL = {
   id: 'create_pptx',
+  outputKind: 'presentation',
   name: { en: 'Create presentation', de: 'Präsentation erstellen' },
   description: {
     en: 'Create a PowerPoint presentation (.pptx) on the server, on the company\'s slide template, and give it to the user as a download. Pass the slides as a JSON array in "slides"; each slide has a layout ("title", "section", "content", "two-column", "title-only", "blank"), a "title" and content: "text" (Markdown bullets), "table", "chart" (native, editable) or "image", plus optional speaker "notes". Example: [{"layout":"title","title":"Q3 Review","subtitle":"Board meeting"},{"title":"Highlights","text":"- Revenue +12 %\\n- 40 new customers"},{"title":"Revenue","chart":{"type":"column","categories":["Q1","Q2"],"series":[{"name":"2026","values":[1.2,1.4]}]}}]. The user sees a download card in the chat, so do not paste a link. Activate the "pptx" skill first for the full slide grammar and design rules.',

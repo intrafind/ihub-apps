@@ -184,7 +184,10 @@ function addToolSideChannels(extras, run) {
   // tools it called. Like the search summary, it stays with the finished
   // answer as provenance.
   const toolActivity = buildToolActivity(run);
-  if (toolActivity) extras.toolActivity = toolActivity;
+  // Said outright when there is none: a message keeps the fields a projection
+  // leaves out, and the activity of a live turn can go away again (the idle
+  // line "Waiting for the model…" ends before any row exists).
+  extras.toolActivity = toolActivity ?? undefined;
   // Interactive MCP App views the turn's tools rendered.
   const mcpApps = buildMcpAppViews(run);
   if (mcpApps) extras.mcpApps = mcpApps;

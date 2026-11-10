@@ -27,6 +27,8 @@ import { findTrailingSourceList, resolveCitations } from '../../../../../shared/
 import SearchStatusIndicator from './SearchStatusIndicator';
 import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
+import { isActivityLineBusy } from '../activityHeadline.js';
+import { useGracedActivity } from '../hooks/useGracedActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
@@ -164,6 +166,12 @@ function ChatMessage({
 
   const isUser = message.role === 'user';
   const isError = message.error === true;
+  // What the turn is doing (searches, files being written, "Waiting for the
+  // model…"), without the rows still in their grace period (#3534).
+  const toolActivity = useGracedActivity(message.toolActivity);
+  // Its headline shows a spinner or a label, so the three-dot loader below
+  // stands down: two loaders on one message are one too many.
+  const activityLineBusy = isActivityLineBusy(toolActivity, message.loading);
 
   // Everything the answer found and which of it the answer cites — shared by
   // the inline citation badges and the sources panel under the answer.
@@ -760,16 +768,17 @@ function ChatMessage({
             <SearchSummary summary={message.searchSummary} />
             {/* The generic three-dot pulse is the fallback indicator only.
                 SearchStatusIndicator animates its own dots and names the phase
-                it is in, so showing both put two loaders on one message. */}
-            {!hasSearchStatus && (
+                it is in, and the activity headline has its own spinner, so
+                showing either with these put two loaders on one message. */}
+            {!hasSearchStatus && !activityLineBusy && (
               <div className="flex mt-2">
-                <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
+                <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"></span>
                 <span
-                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
                   style={{ animationDelay: '0.2s' }}
                 ></span>
                 <span
-                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+                  className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
                   style={{ animationDelay: '0.4s' }}
                 ></span>
               </div>
@@ -781,13 +790,13 @@ function ChatMessage({
       return (
         <div className="flex items-center">
           <span>{contentToRender}</span>
-          <span className="ml-2 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
+          <span className="ml-2 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"></span>
           <span
-            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
             style={{ animationDelay: '0.2s' }}
           ></span>
           <span
-            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"
+            className="ml-1 inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse motion-reduce:animate-none"
             style={{ animationDelay: '0.4s' }}
           ></span>
         </div>
@@ -1020,8 +1029,8 @@ function ChatMessage({
         )}
         {/* Searches, sources and other tool calls behind the answer. Above it,
             like the thoughts, so it stays put while the answer streams. */}
-        {!isUser && message.toolActivity && (
-          <ToolActivity activity={message.toolActivity} loading={!!message.loading} />
+        {!isUser && toolActivity && (
+          <ToolActivity activity={toolActivity} loading={!!message.loading} />
         )}
         {/* Interactive MCP App views the answer's tool calls rendered. */}
         {!isUser && message.mcpApps?.length > 0 && (

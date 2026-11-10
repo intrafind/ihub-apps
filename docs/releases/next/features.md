@@ -1331,14 +1331,6 @@ directly, instead of searching blindly first.
 - The list stops at 50 documents per project; the model is told how many more there are and how to
   list them all.
 
-## Chat: A Tool Call Shows Up While the Model Is Still Writing It
-
-The activity list now shows a tool call ("Create interactive web artifact", "Search the web") as
-soon as the model starts writing it, not only when it runs. A long call, like a whole web page, used
-to leave the chat with nothing but a spinner for a minute or more; now the row appears straight
-away and counts up how many characters the model has written so far ("31K characters written").
-A call the user stops before it is written disappears from the list.
-
 ## Projects: Files Linked From Websites Are Stored Like Uploads, With a Refresh Schedule
 
 A web address that serves a document — PDF, Word, PowerPoint, Excel, OpenDocument or any other
@@ -1371,3 +1363,33 @@ live links.
 The short link editor offers the app as a search box, as other admin pages do: type part of an
 app's name and pick it, instead of typing its ID. The **Redirect URL** field says that a link to
 another website needs its host on the SSRF allowlist, with a link to it.
+
+## Chat: Progress While the Model Writes a Document, File or Web Artifact
+
+A web artifact, document, presentation, Excel workbook, PDF, file or ZIP archive is written by the
+model in one piece before anything is created, which can take a minute or two. The chat used to show
+only a spinner for that time, so a working answer looked frozen and people pressed Stop. It now says
+what is happening.
+
+- **A row within about a second:** "Creating web artifact…" (or document, presentation, Excel
+  workbook, PDF, file, ZIP archive), with the size written so far and a clock, for example
+  "12 KB written · 0:41". There is no percentage: the final size is not known in advance.
+- **A second call is its own row**, marked "No. 2", so a second wait is explained instead of looking
+  like the first one starting over.
+- **Every model, every provider:** after 3 seconds without visible output the headline reads
+  "Waiting for the model… 0:12", or "Thinking… 0:07" while the model reasons and the provider sends
+  its reasoning. The line says that a request is pending; it cannot tell a busy model from a stuck
+  one.
+- **A call that does not finish says so:** a call that is stopped, cut off by the model's output
+  limit, refused or waiting for approval shows its own state, for example "Stopped", "Incomplete" or
+  "Waiting for approval", instead of a spinning row.
+- **Screen readers** are told the start and the end, each at most once; the changing numbers are
+  not read out. With reduced motion the spinner is replaced by a still icon.
+- **Which models show the row:** OpenAI-compatible servers and vLLM whose tool-call parser streams
+  the call, Anthropic, OpenAI Responses and Amazon Bedrock. Google and Mistral send a tool call
+  whole, and some vLLM parsers hold it back until it is complete; those models get the waiting line
+  only.
+
+For integrators: SSE v2 gains three `tool/progress` phases, `args`, `args.ended` and
+`model.waiting`. They are additive, `tool/started` is unchanged and nothing is added to saved chats.
+See [SSE v2](../../sse-v2.md) and [Accessibility](../../accessibility.md).

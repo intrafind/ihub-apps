@@ -17,7 +17,8 @@
  *              tool batches), hallucinated-tool envelopes, ledger events,
  *              caller-executed toolsets (degenerate run contract)
  *   seams      pre-step / pre-tool / post-tool / step-end hooks (+ chunk,
- *              hallucination, circuit-breaker, compaction notifications)
+ *              stream-end, hallucination, circuit-breaker, compaction
+ *              notifications)
  *
  * @module services/loop/AgentLoop
  */
@@ -32,7 +33,7 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { addUsage, normalizeUsage } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
-import { toolDisplayOf } from '../../utils/toolDisplay.js';
+import { startedDisplayOf } from '../../utils/toolDisplay.js';
 import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
 import { runToolCallScope } from '../sources/toolCallScope.js';
 import {
@@ -154,7 +155,17 @@ export class AgentLoop {
       opts.resolveNativeWebSearchFallbackTools || defaultResolveNativeWebSearchFallbackTools;
   }
 
-  /** Register a seam `{ name, preStep, preTool, liftResult, postTool, stepEnd, onChunk, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`. */
+  /**
+   * Register a seam `{ name, preStep, preTool, liftResult, postTool, stepEnd,
+   * onChunk, streamEnd, onHallucinated, onCircuitBroken, onCompaction, onAnswer }`.
+   *
+   * `streamEnd(ctx, { outcome, result? })` closes every model call that `preStep`
+   * opened, however it ended: `outcome` is `completed` (with the accumulated
+   * `result`), `error` (the provider failed) or `aborted` (Stop, or the run's
+   * deadline). It runs before `stepEnd` and before any tool of the step, and
+   * on the paths that never reach `stepEnd` (the loop returns from its `catch`
+   * on an error or an abort). A throw from the hook is logged, never raised.
+   */
   use(seam) {
     if (seam) this._seams.push(seam);
     return this;
@@ -250,6 +261,11 @@ export class AgentLoop {
       policies,
       messages: [...request.messages],
       stream: null,
+      // The tools the model is offered in the model call under way (empty
+      // while none are), and the lookup of the one a call name refers to. A
+      // seam that sees a call as it streams (`onChunk`) resolves the name here.
+      offeredTools: [],
+      resolveTool: name => matchTool(name, ctx.offeredTools),
       iteration: 0,
       disabledTools: new Set(),
       knowledgeSources: new Set(),
@@ -467,25 +483,33 @@ export class AgentLoop {
           });
         }
 
-        await runHooks(seams, 'preStep', ctx);
-
-        const availableTools = tools.filter(t => !ctx.disabledTools.has(t.id));
-        const offeredTools = availableTools.length > 0 && !forceFinish ? availableTools : undefined;
-
-        // "Call a tool first": forced through the provider where the model
-        // takes it, as a one-off instruction after the conversation where it
-        // does not. Never kept in the transcript.
-        const choicePlan = planToolChoice({
-          choice: policies.tools.choice,
-          offeredTools,
-          iteration,
-          priorToolUse,
-          model,
-          forcedRejected: forcedToolUseRejected
-        });
-
+        // `streamEnd` closes this model call whichever way it ends, so it
+        // wraps everything from `preStep` on: a seam that armed something in
+        // `preStep` is told even when a later hook, the request or the stream
+        // fails.
         let result;
+        let streamOutcome = 'error';
+        let choicePlan = null;
         try {
+          await runHooks(seams, 'preStep', ctx);
+
+          const availableTools = tools.filter(t => !ctx.disabledTools.has(t.id));
+          const offeredTools =
+            availableTools.length > 0 && !forceFinish ? availableTools : undefined;
+          ctx.offeredTools = offeredTools || [];
+
+          // "Call a tool first": forced through the provider where the model
+          // takes it, as a one-off instruction after the conversation where it
+          // does not. Never kept in the transcript.
+          choicePlan = planToolChoice({
+            choice: policies.tools.choice,
+            offeredTools,
+            iteration,
+            priorToolUse,
+            model,
+            forcedRejected: forcedToolUseRejected
+          });
+
           const stream = await this.llmClient.execute({
             model,
             messages: choicePlan.nudge
@@ -534,11 +558,13 @@ export class AgentLoop {
             }
           }
           result = stream.result();
+          streamOutcome = 'completed';
         } catch (err) {
+          streamOutcome = isAbortError(err) || signal?.aborted ? 'aborted' : 'error';
           // The provider turned down the forced call (the newest Claude models
           // do, as does extended thinking): remember it for this model and
           // retry the same round, which now asks in words instead.
-          if (choicePlan.force && !isAbortError(err) && isToolChoiceRejection(err)) {
+          if (choicePlan?.force && !isAbortError(err) && isToolChoiceRejection(err)) {
             forcedToolUseRejected = true;
             markForcedToolUseUnavailable(model.id, { reason: err.message });
             this.logger.warn('Provider rejected a forced tool call — asking for one in words', {
@@ -587,6 +613,27 @@ export class AgentLoop {
             }
           }
           throw err;
+        } finally {
+          const endInfo =
+            streamOutcome === 'completed'
+              ? { outcome: streamOutcome, result }
+              : { outcome: streamOutcome };
+          // One seam at a time: a display hook must never replace the failure it
+          // is reporting, nor stop the seams after it from learning that the call
+          // ended (`chatToolSeam` stops its waiting timer here).
+          for (const seam of seams) {
+            if (typeof seam?.streamEnd !== 'function') continue;
+            try {
+              await seam.streamEnd(ctx, endInfo);
+            } catch (hookErr) {
+              this.logger.warn('streamEnd seam failed', {
+                component: COMPONENT,
+                runId,
+                seam: seam?.name,
+                error: hookErr?.message
+              });
+            }
+          }
         }
 
         // ── consume the step result ─────────────────────────────────────
@@ -967,7 +1014,7 @@ export class AgentLoop {
     const started = Date.now();
     const messages = [];
     const info = { call, toolDef, toolId, name, args, argsRepaired, iteration, groupIndex };
-    const display = toolDisplayOf(toolDef);
+    const display = startedDisplayOf(toolDef);
 
     if (ctx.signal?.aborted) throw abortError('Agent loop aborted (cancelled or timed out)');
 

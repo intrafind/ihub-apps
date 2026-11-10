@@ -650,8 +650,6 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
   assertWellFormed(frames, { runId: summary.runId });
   assert.deepEqual(types(frames), [
     RUN_STARTED,
-    // The streamed call announced while its arguments are written (chatChannel).
-    TOOL_PROGRESS,
     STEP_COMPLETED,
     TOOL_STARTED,
     TOOL_COMPLETED,
@@ -977,8 +975,6 @@ test('clarification: ask_user raises interaction/raised, closes the tool, pauses
   assertWellFormed(frames, { runId: summary.runId });
   assert.deepEqual(types(frames), [
     RUN_STARTED,
-    // The streamed call announced while its arguments are written (chatChannel).
-    TOOL_PROGRESS,
     STEP_COMPLETED,
     TOOL_STARTED,
     INTERACTION_RAISED,
@@ -1212,8 +1208,6 @@ test('passthrough: tool text streams as step/delta, closes with tool/completed{a
   assertWellFormed(frames, { runId: summary.runId });
   assert.deepEqual(types(frames), [
     RUN_STARTED,
-    // The streamed call announced while its arguments are written (chatChannel).
-    TOOL_PROGRESS,
     STEP_COMPLETED,
     TOOL_STARTED,
     STEP_DELTA,

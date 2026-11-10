@@ -387,48 +387,201 @@ describe('runReducer — streamed reasoning', () => {
   });
 });
 
-describe('runReducer — a tool call still being written', () => {
-  const started = env(1, 'run-p', 'run/started', { kind: 'chat', refs: { chatId: 'c' } });
-  const preparing = (seq, callId) =>
-    env(seq, 'run-p', 'tool/progress', {
-      step: 2,
-      callId,
-      phase: 'tool.preparing',
-      data: { toolId: 'create_web_artifact', name: 'create_web_artifact', title: 'Create artifact' }
-    });
+describe('runReducer — tool calls whose arguments are still streaming (#3534)', () => {
+  const start = [
+    env(1, 'chat-1', 'stream/connected', { runId: 'chat-1', lastSeq: 0, protocol: 2 }),
+    env(2, 'run-t', 'run/started', { kind: 'chat', refs: { chatId: 'chat-1' } })
+  ];
+  /** A frame as the server sends it: the frame fields beside `phase`, the payload under `data`. */
+  const progress = (seq, phase, frame, data, runId = 'run-t') =>
+    env(seq, runId, 'tool/progress', { phase, step: 1, ...frame, data });
+  const args = (seq, callId, data) =>
+    progress(
+      seq,
+      'args',
+      { callId, toolId: 'create_web_artifact' },
+      { name: 'create_web_artifact', outputKind: 'webArtifact', ...data },
+      'run-t'
+    );
+  const ended = (seq, callId, data) =>
+    progress(seq, 'args.ended', { callId, toolId: 'create_web_artifact' }, data);
+  const waiting = (seq, data) => progress(seq, 'model.waiting', {}, data);
   const toolStarted = (seq, callId) =>
-    env(seq, 'run-p', 'tool/started', {
-      step: 2,
+    env(seq, 'run-t', 'tool/started', {
+      step: 1,
       callId,
       toolId: 'create_web_artifact',
       name: 'create_web_artifact',
-      args: { filename: 'a.html' }
+      args: {},
+      execution: 'server'
     });
+  const runOf = frames => getRun(fold([...start, ...frames]), 'run-t');
 
-  it('shows a running row at once, replaced in place by the call', () => {
-    let run = getRun(fold([started, preparing(2, 'c1')]), 'run-p');
-    expect(run.tools).toHaveLength(1);
-    expect(run.tools[0]).toMatchObject({
-      status: 'running',
-      preparing: true,
-      title: 'Create artifact'
+  test('keeps one entry per call, updated in place, and none of the frames in run.progress', () => {
+    const run = runOf([
+      args(3, 'c1', { argBytes: 100, elapsedMs: 10, title: 'Create web artifact' }),
+      args(4, 'c1', { argBytes: 5000, elapsedMs: 1010 }),
+      args(5, 'c1', { argBytes: 9000, elapsedMs: 2010 })
+    ]);
+    expect(run.argOrder).toEqual(['c1']);
+    expect(Object.keys(run.argStreams)).toEqual(['c1']);
+    expect(run.argStreams.c1).toMatchObject({
+      callId: 'c1',
+      toolId: 'create_web_artifact',
+      name: 'create_web_artifact',
+      // The display fields of the first frame stay when later frames omit them.
+      title: 'Create web artifact',
+      outputKind: 'webArtifact',
+      argBytes: 9000,
+      elapsedMs: 2010,
+      ended: null
     });
-    expect(run.progress).toHaveLength(0);
-
-    run = getRun(fold([started, preparing(2, 'c1'), toolStarted(3, 'c1')]), 'run-p');
-    expect(run.tools).toHaveLength(1);
-    expect(run.tools[0].preparing).toBeUndefined();
-    expect(run.tools[0].args).toEqual({ filename: 'a.html' });
-    expect(run.tools[0].startedAt).toBe(ts(2));
+    expect(run.progress).toEqual([]);
+    expect(run.tools).toEqual([]);
   });
 
-  it('replaces the row even when the call runs under another id', () => {
-    const run = getRun(fold([started, preparing(2, '0'), toolStarted(3, 'gen-1')]), 'run-p');
-    expect(run.tools.map(t => t.callId)).toEqual(['gen-1']);
+  test('other tool/progress phases are still appended to run.progress', () => {
+    const run = runOf([
+      progress(3, 'fetch.loading', { toolId: 'read_url' }, { url: 'https://example.com' }),
+      args(4, 'c1', { argBytes: 100, elapsedMs: 10 })
+    ]);
+    expect(run.progress.map(entry => entry.phase)).toEqual(['fetch.loading']);
   });
 
-  it('drops a call that never finished when the run ends', () => {
-    const ended = env(3, 'run-p', 'run/ended', { status: 'aborted' });
-    expect(getRun(fold([started, preparing(2, 'c1'), ended]), 'run-p').tools).toEqual([]);
+  test('a call keeps its position when its tool/started arrives, and its id', () => {
+    const run = runOf([
+      args(3, 'c1', { argBytes: 100, elapsedMs: 10 }),
+      args(4, 'c2', { argBytes: 50, elapsedMs: 5 }),
+      ended(5, 'c1', { outcome: 'ready', argBytes: 200, elapsedMs: 20 }),
+      toolStarted(6, 'c1')
+    ]);
+    // The entries are not touched by tool/started (no replace-and-append):
+    expect(run.argOrder).toEqual(['c1', 'c2']);
+    expect(run.argStreams.c1.firstSeen).toBe(0);
+    expect(run.argStreams.c2.firstSeen).toBe(1);
+    // and the tool record carries the same call id.
+    expect(run.tools.map(tool => tool.callId)).toEqual(['c1']);
+  });
+
+  test('remembers how many calls had started when it first appeared', () => {
+    const run = runOf([
+      toolStarted(3, 'c0'),
+      args(4, 'c1', { argBytes: 100, elapsedMs: 10 }),
+      args(5, 'c1', { argBytes: 200, elapsedMs: 1010 })
+    ]);
+    expect(run.argStreams.c1.afterTools).toBe(1);
+  });
+
+  test('argBytes never decreases, whatever order the frames arrive in', () => {
+    const run = runOf([
+      args(3, 'c1', { argBytes: 9000, elapsedMs: 2010 }),
+      args(4, 'c1', { argBytes: 4000, elapsedMs: 1010 })
+    ]);
+    expect(run.argStreams.c1).toMatchObject({ argBytes: 9000, elapsedMs: 2010 });
+  });
+
+  test('records when the size last grew, not when the last frame came', () => {
+    const run = runOf([
+      args(3, 'c1', { argBytes: 4000, elapsedMs: 1000 }),
+      args(4, 'c1', { argBytes: 6000, elapsedMs: 2000 }),
+      args(5, 'c1', { argBytes: 6000, elapsedMs: 3000 })
+    ]);
+    expect(run.argStreams.c1).toMatchObject({ elapsedMs: 3000, grewAtMs: 2000 });
+  });
+
+  test('stamps the arrival of a frame with the envelope clock when it has one', () => {
+    const first = { ...args(3, 'c1', { argBytes: 100, elapsedMs: 10 }), receivedAt: 5000 };
+    const second = { ...args(4, 'c1', { argBytes: 200, elapsedMs: 1010 }), receivedAt: 6000 };
+    const run = runOf([first, second]);
+    expect(run.argStreams.c1).toMatchObject({ firstReceivedAt: 5000, receivedAt: 6000 });
+  });
+
+  test('args.ended closes a call once, with its outcome and the final size', () => {
+    const run = runOf([
+      args(3, 'c1', { argBytes: 100, elapsedMs: 10 }),
+      ended(4, 'c1', { outcome: 'truncated', argBytes: 300, elapsedMs: 2000 }),
+      // A second close, or a straggling progress frame, changes nothing.
+      ended(5, 'c1', { outcome: 'ready', argBytes: 999, elapsedMs: 9000 }),
+      args(6, 'c1', { argBytes: 5000, elapsedMs: 9000 })
+    ]);
+    expect(run.argStreams.c1).toMatchObject({
+      argBytes: 300,
+      elapsedMs: 2000,
+      ended: { outcome: 'truncated', argBytes: 300, elapsedMs: 2000 }
+    });
+    expect(run.progress).toEqual([]);
+  });
+
+  test('an unknown outcome is read as ready, a close for an unknown call is dropped', () => {
+    const run = runOf([
+      args(3, 'c1', { argBytes: 100, elapsedMs: 10 }),
+      ended(4, 'c1', { outcome: 'surprise', argBytes: 100, elapsedMs: 10 }),
+      ended(5, 'ghost', { outcome: 'dropped', argBytes: 1, elapsedMs: 1 })
+    ]);
+    expect(run.argStreams.c1.ended.outcome).toBe('ready');
+    expect(run.argStreams.ghost).toBeUndefined();
+  });
+
+  test('a frame without a call id is ignored', () => {
+    const run = runOf([progress(3, 'args', { toolId: 'x' }, { argBytes: 1, elapsedMs: 1 })]);
+    expect(run.argStreams).toEqual({});
+    expect(run.progress).toEqual([]);
+  });
+
+  test('every run has its own entries: a new run starts empty', () => {
+    const state = fold([
+      ...start,
+      args(3, 'c1', { argBytes: 100, elapsedMs: 10 }),
+      waiting(4, { elapsedMs: 3000 }),
+      env(5, 'run-t', 'run/ended', { status: 'completed' }),
+      env(6, 'run-u', 'run/started', { kind: 'chat', refs: { chatId: 'chat-1' } })
+    ]);
+    expect(getRun(state, 'run-u').argStreams).toEqual({});
+    expect(getRun(state, 'run-u').argOrder).toEqual([]);
+    expect(getRun(state, 'run-u').waiting).toBeNull();
+  });
+
+  describe('model.waiting', () => {
+    test('sets the waiting line from the server frame, with the reasoning flag it sent', () => {
+      const run = runOf([waiting(3, { elapsedMs: 3000 })]);
+      expect(run.waiting).toMatchObject({ elapsedMs: 3000, reasoning: false, step: 1 });
+      expect(run.progress).toEqual([]);
+      const thinking = runOf([waiting(3, { elapsedMs: 7000, reasoning: true })]);
+      expect(thinking.waiting).toMatchObject({ elapsedMs: 7000, reasoning: true });
+    });
+
+    test('a newer frame replaces the older one (one line, not a list)', () => {
+      const run = runOf([waiting(3, { elapsedMs: 3000 }), waiting(4, { elapsedMs: 4000 })]);
+      expect(run.waiting.elapsedMs).toBe(4000);
+    });
+
+    test.each([
+      ['answer text', env(4, 'run-t', 'step/delta', { step: 1, kind: 'text', content: 'Hi' })],
+      ['an image', env(4, 'run-t', 'step/delta', { step: 1, kind: 'image', image: { id: 'i1' } })],
+      ['a tool row', toolStarted(4, 'c1')],
+      ['an announced call', args(4, 'c1', { argBytes: 1, elapsedMs: 1 })],
+      ['the end of the run', env(4, 'run-t', 'run/ended', { status: 'completed' })]
+    ])('is cleared by %s', (_name, frame) => {
+      const run = runOf([waiting(3, { elapsedMs: 3000 }), frame]);
+      expect(run.waiting).toBeNull();
+    });
+
+    test('is cleared by the first reasoning token, but kept when the server says it is reasoning', () => {
+      const thought = env(4, 'run-t', 'step/delta', { step: 1, kind: 'thinking', content: 'hm' });
+      expect(runOf([waiting(3, { elapsedMs: 3000 }), thought]).waiting).toBeNull();
+      // The "Thinking" line stays up while the thoughts stream, instead of
+      // flickering with every token.
+      expect(
+        runOf([waiting(3, { elapsedMs: 3000, reasoning: true }), thought]).waiting
+      ).not.toBeNull();
+    });
+
+    test('a straggler after the run ended is dropped', () => {
+      const run = runOf([
+        env(3, 'run-t', 'run/ended', { status: 'completed' }),
+        waiting(4, { elapsedMs: 9000 })
+      ]);
+      expect(run.waiting).toBeNull();
+    });
   });
 });

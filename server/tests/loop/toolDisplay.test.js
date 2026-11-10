@@ -7,7 +7,15 @@
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { activityKindOf, activityScopeOf, toolDisplayOf } from '../../utils/toolDisplay.js';
+import {
+  OUTPUT_KINDS,
+  activityKindOf,
+  activityScopeOf,
+  outputKindOf,
+  startedDisplayOf,
+  toolDisplayOf
+} from '../../utils/toolDisplay.js';
+import { SYSTEM_SKILL_TOOL_IDS, systemSkillToolsFor } from '../../services/systemSkillTools.js';
 
 test('an integration action reads as its title and installation label', () => {
   assert.deepEqual(
@@ -104,4 +112,68 @@ test('the scope: the documents of the organisation or the web', () => {
   assert.equal(activityScopeOf('companySearch', 'ifinder'), 'documents');
   assert.equal(activityScopeOf('braveSearch', 'websearch'), 'web');
   assert.equal(activityScopeOf('read_url', null), 'web');
+});
+
+// ── what a creator tool produces ────────────────────────────────────────────
+
+/** The tools the system skills bring, as an app offers them to the model. */
+const creatorTools = systemSkillToolsFor(
+  [{ name: 'all', isSystem: true, providedTools: [...SYSTEM_SKILL_TOOL_IDS] }],
+  { language: 'en' }
+);
+
+test('the built-in creators say what they produce; the server decides, not the id', () => {
+  const kinds = Object.fromEntries(creatorTools.map(tool => [tool.id, outputKindOf(tool)]));
+  assert.deepEqual(kinds, {
+    create_pdf: 'pdf',
+    preview_pdf: undefined,
+    create_docx: 'document',
+    create_pptx: 'presentation',
+    create_xlsx: 'workbook',
+    create_web_artifact: 'webArtifact',
+    create_file: 'file',
+    create_zip: 'archive'
+  });
+  for (const kind of Object.values(kinds).filter(Boolean)) assert.ok(OUTPUT_KINDS.includes(kind));
+  assert.equal(
+    new Set(Object.values(kinds).filter(Boolean)).size,
+    7,
+    'seven creators, seven kinds'
+  );
+});
+
+test('only a system-skill tool can claim an output kind', () => {
+  assert.equal(outputKindOf(null), undefined);
+  assert.equal(outputKindOf({ id: 'create_pdf' }), undefined, 'the id says nothing');
+  assert.equal(
+    outputKindOf({ id: 'x', outputKind: 'pdf' }),
+    undefined,
+    'an admin tool cannot claim one'
+  );
+  assert.equal(
+    outputKindOf({ id: 'mcp__x', outputKind: 'pdf', _mcp: { serverId: 'x' } }),
+    undefined
+  );
+  assert.equal(
+    outputKindOf({ id: 'x', isSystemSkillTool: true, outputKind: 'spaceship' }),
+    undefined
+  );
+  assert.equal(outputKindOf({ id: 'x', isSystemSkillTool: true, outputKind: 'pdf' }), 'pdf');
+});
+
+test('toolDisplayOf carries the kind; the display of tool/started and the ledger does not', () => {
+  const webArtifact = creatorTools.find(tool => tool.id === 'create_web_artifact');
+  assert.deepEqual(toolDisplayOf(webArtifact), {
+    title: 'Create interactive web artifact',
+    activityKind: 'tool',
+    outputKind: 'webArtifact'
+  });
+  assert.deepEqual(startedDisplayOf(webArtifact), {
+    title: 'Create interactive web artifact',
+    activityKind: 'tool'
+  });
+  // A tool without a kind is the same in both.
+  const preview = creatorTools.find(tool => tool.id === 'preview_pdf');
+  assert.deepEqual(startedDisplayOf(preview), toolDisplayOf(preview));
+  assert.deepEqual(startedDisplayOf(null), {});
 });
