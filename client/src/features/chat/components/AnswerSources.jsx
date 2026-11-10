@@ -41,6 +41,7 @@ import {
   sourceScopesOf
 } from '../sources/sourcesView';
 import ItemProvenance from '../../projects/components/ItemProvenance';
+import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 
 // Loaded on demand: the preview pulls in pdf.js, which is a deliberately
 // on-demand bundle chunk. Importing it statically here would put pdf.js in
@@ -409,6 +410,8 @@ function SourcesPanel({ messageKey, sources, cited, considered, focus, highlight
   const closeRef = useRef(null);
   // The scope the lists are narrowed to (`ref.scope`), or null for all of them.
   const [scopeFilter, setScopeFilter] = useState(null);
+  // The chat's workspace pane, where a preview opens beside the answer.
+  const workspace = useArtifactViewer();
   // { type: 'preview'|'details'|'app', source, passages?, initialPassageIndex? }
   const [dialog, setDialog] = useState(null);
   const dialogRef = useRef(null);
@@ -468,7 +471,14 @@ function SourcesPanel({ messageKey, sources, cited, considered, focus, highlight
       setError(null);
       setNotice(null);
       if (action === 'preview') {
-        setDialog({ type: 'preview', source, ...selectPreviewPassages(source.passages, passage) });
+        const focus = selectPreviewPassages(source.passages, passage);
+        // Next to the chat the source opens in the workspace pane, read-only;
+        // where there is no split (narrow, embedded) the preview dialog stays.
+        if (workspace?.sourcesInPane && workspace.openSource(source, focus)) {
+          closeSources();
+          return;
+        }
+        setDialog({ type: 'preview', source, ...focus });
         return;
       }
       if (action === 'details' || action === 'openInApp') {
@@ -492,7 +502,7 @@ function SourcesPanel({ messageKey, sources, cited, considered, focus, highlight
         );
       }
     },
-    [t]
+    [t, workspace]
   );
 
   const closeDialog = useCallback(() => setDialog(null), []);
