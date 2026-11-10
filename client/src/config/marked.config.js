@@ -139,6 +139,57 @@ export const linkDestinationTooltip = (href, text) => {
     : shown;
 };
 
+/**
+ * Whether `href` leaves iHub: an http(s) URL whose origin differs from the page's. Relative links,
+ * fragments and other schemes (`mailto:`, `tel:`) stay in place.
+ *
+ * @param {string} href
+ * @returns {boolean}
+ */
+export const isExternalHref = href => {
+  if (typeof window === 'undefined' || typeof href !== 'string' || !href) return false;
+  try {
+    const url = new URL(href, window.location.href);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    return url.origin !== window.location.origin;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Pin where each link opens, after DOMPurify has run its attribute checks: a link to another
+ * origin always opens in a new tab and never gets the opener, whatever the (model-written) HTML
+ * asked for; every other link stays in the current tab.
+ */
+const pinLinkTargets = node => {
+  if (node.tagName !== 'A') return;
+  if (isExternalHref(node.getAttribute('href'))) {
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
+  } else {
+    node.removeAttribute('target');
+  }
+};
+
+/**
+ * `DOMPurify.sanitize` that keeps `target` (DOMPurify drops it by default, which would silently
+ * turn every external link into a same-tab navigation away from the chat) and then decides it
+ * itself via {@link pinLinkTargets}. The hook lives only for this synchronous call, so other
+ * DOMPurify users are unaffected.
+ */
+const sanitizeHtml = (html, sanitizeOptions = {}) => {
+  DOMPurify.addHook('afterSanitizeAttributes', pinLinkTargets);
+  try {
+    return DOMPurify.sanitize(html, {
+      ...sanitizeOptions,
+      ADD_ATTR: [...(sanitizeOptions?.ADD_ATTR || []), 'target']
+    });
+  } finally {
+    DOMPurify.removeHook('afterSanitizeAttributes', pinLinkTargets);
+  }
+};
+
 const createRenderer = t => {
   const renderer = new Renderer();
 
@@ -237,16 +288,7 @@ const createRenderer = t => {
     actualHref = actualHref || '';
     text = text || actualHref; // Fallback to href if text is missing
 
-    const currentDomain = typeof window !== 'undefined' ? window.location.hostname : '';
-    let isExternal = false;
-    try {
-      const url = new URL(actualHref, window.location.href);
-      if (url.hostname !== currentDomain) {
-        isExternal = true;
-      }
-    } catch {
-      // If URL parsing fails, assume it's a relative path or invalid
-    }
+    const isExternal = isExternalHref(actualHref);
     const targetAttr = isExternal ? ' target="_blank" rel="noopener noreferrer"' : '';
     // A link without a title of its own gets its destination as the tooltip,
     // so a reader hovering "Quarterly report" sees where it would take them
@@ -324,10 +366,10 @@ export const renderMarkdown = (markdown, options = {}) => {
     mermaidIdScope = new Map();
     const html = marked.parse(source);
     const transformedHtml = typeof transformHtml === 'function' ? transformHtml(html) : html;
-    return DOMPurify.sanitize(transformedHtml, sanitizeOptions);
+    return sanitizeHtml(transformedHtml, sanitizeOptions);
   } catch (error) {
     console.error('Error rendering markdown:', error);
-    return DOMPurify.sanitize(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions);
+    return sanitizeHtml(`<pre>${escapeHtml(source)}</pre>`, sanitizeOptions);
   }
 };
 
@@ -347,10 +389,10 @@ export const renderInlineMarkdown = (markdown, options = {}) => {
 
   try {
     const marked = getMarkedInstance(t);
-    return DOMPurify.sanitize(marked.parseInline(source), sanitizeOptions);
+    return sanitizeHtml(marked.parseInline(source), sanitizeOptions);
   } catch (error) {
     console.error('Error rendering inline markdown:', error);
-    return DOMPurify.sanitize(escapeHtml(source), sanitizeOptions);
+    return sanitizeHtml(escapeHtml(source), sanitizeOptions);
   }
 };
 

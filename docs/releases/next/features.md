@@ -1,5 +1,12 @@
 # Features — Unreleased
 
+## The Chat Scrolls Behind the Message Box
+
+In a chat, the message box no longer sits on a band of its own below the conversation. The
+messages run the full height of the chat and scroll visibly behind the box, as the document does
+in the full-screen workspace. Only the box itself stays solid, so what you type remains readable.
+The last message can still be scrolled clear of the box.
+
 ## Chats Get a Short Title After the First Answer
 
 Chats in the history were named after the first words of your first message, so a list of chats
@@ -1514,3 +1521,27 @@ sources) no longer fail to load.
   enough). Plugins that could not be read are listed in the server log.
 
 See [Marketplace → Claude Code plugin marketplaces](../../marketplace.md#claude-code-plugin-marketplaces).
+
+## Chat Inside a Project From the Catalog, Privately
+
+A project you added from the catalog used to hold no chats: **New chat** started a chat outside it
+with the project attached, and its page showed no chats at all. Now the chat runs **inside** the
+project, like a chat in your own project, and the page lists your chats.
+
+- **Private to you.** The project's owner, its editors and its other members cannot read a chat you
+  start in it, and you cannot read theirs. A full administrator keeps the read access for compliance,
+  as for every chat. Chats of the members stay open to the members, as before.
+- **The Chats card.** It shows your own chats in the project and the chats that have it attached,
+  newest first, a page at a time, without the **All chats / My chats** switch. A project the
+  administrators made available to everyone still holds no chats: its card lists your chats that have
+  it attached.
+- **The project's instructions apply** to the chat, and the app you start with is the project's default
+  app, as in your own projects.
+- **If the project goes away.** When its owner deletes it, your chats are kept outside it. When it is
+  taken out of the catalog, your chats stay in your history and answer without the project.
+- **API:** `GET /api/projects/{projectId}/chats` lists the caller's own chats for someone who took the
+  project from the catalog, whatever `filter` says. A project's `permissions.canHoldChats` is now `true`
+  for them; `permissions.readsAllChats` stays `false`. A chat records that it is private
+  (`projectPrivate`) when it opens in such a project.
+
+See [Projects → Chats in a project](../../projects.md#chats-in-a-project).

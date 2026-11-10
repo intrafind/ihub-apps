@@ -8818,6 +8818,9 @@
       "unnamed": "Project"
     },
     "chats": {
+      "attachedEmpty": "None of your chats uses this project yet.",
+      "privateHint": "Your chats with this project. Only you can read them: the project’s members cannot, and you do not see theirs.",
+      "attachedHint": "Your chats that use this project. Other users’ chats are not shown.",
       "byMe": "by you",
       "byOther": "by {{name}} (read-only)",
       "empty": "No chats in this project yet.",
@@ -9152,6 +9155,7 @@
       "placeholder": "New chat in {{name}}",
       "hint": "The app gets the project’s instructions and documents.",
       "app": "App",
+      "hintPrivate": "The app gets the project’s instructions and documents. Only you can read this chat: the project’s members cannot.",
       "hintAttached": "This chat runs outside the project and uses its documents. The project’s instructions apply to its members’ chats inside it."
     },
     "appSelect": {
@@ -9165,7 +9169,7 @@
     },
     "catalog": {
       "title": "Catalog",
-      "addedHint": "You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat with the project attached. Your chats stay yours: its members do not see them.",
+      "addedHint": "You added this project from the catalog; its owner and editors keep it up to date. New chat starts a chat in the project. Your chats stay yours: its members do not see them.",
       "notAddedHint": "This project is in the catalog. Add it to your projects to find it in your list and in chats.",
       "publishedHint": "Published on {{date}}. Everyone signed in can find it in the catalog and use it.",
       "unpublishedHint": "Publish the project so that everyone signed in can find it in the catalog and add it.",

@@ -31,11 +31,19 @@ function formatWhen(value, language) {
  * caller's (`filter=mine`); each links into its app, read-only for the chats
  * of other members. Starting a chat is the composer above this card.
  *
+ * Someone who took the project from the catalog sees their own chats only
+ * (`scope` `private`: the ones they started in it, which its members cannot
+ * read, and the ones that attach it); a project that holds no chats (from the
+ * administrators) lists the chats that attach it (`scope` `attached`). The server
+ * sends nobody else's, so there is no filter to offer.
+ *
  * @param {Object} props
  * @param {Object} props.project
+ * @param {'members'|'private'|'attached'} [props.scope='members'] - Whose chats the card lists
  * @returns {JSX.Element}
  */
-function ProjectChatsSection({ project }) {
+function ProjectChatsSection({ project, scope = 'members' }) {
+  const ownOnly = scope !== 'members';
   const { t, i18n } = useTranslation();
   const language = i18n.language;
   const { apps } = useApps();
@@ -90,31 +98,46 @@ function ProjectChatsSection({ project }) {
         >
           {t('projects.chats.title', 'Chats')}
         </h2>
-        <div
-          className="flex gap-1"
-          role="group"
-          aria-label={t('projects.chats.filterLabel', 'Show')}
-        >
-          {PROJECT_CHAT_FILTERS.map(id => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={filter === id}
-              onClick={() => {
-                setFilter(id);
-                setPage(1);
-              }}
-              className={`px-2.5 py-1 text-xs rounded-md ${
-                filter === id
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
-            >
-              {filterLabels[id]}
-            </button>
-          ))}
-        </div>
+        {!ownOnly && (
+          <div
+            className="flex gap-1"
+            role="group"
+            aria-label={t('projects.chats.filterLabel', 'Show')}
+          >
+            {PROJECT_CHAT_FILTERS.map(id => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={filter === id}
+                onClick={() => {
+                  setFilter(id);
+                  setPage(1);
+                }}
+                className={`px-2.5 py-1 text-xs rounded-md ${
+                  filter === id
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                {filterLabels[id]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+      {ownOnly && (
+        <p className="-mt-1 mb-3 text-xs text-gray-500 dark:text-gray-400">
+          {scope === 'private'
+            ? t(
+                'projects.chats.privateHint',
+                'Your chats with this project. Only you can read them: the project’s members cannot, and you do not see theirs.'
+              )
+            : t(
+                'projects.chats.attachedHint',
+                'Your chats that use this project. Other users’ chats are not shown.'
+              )}
+        </p>
+      )}
 
       {state.error && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
@@ -125,7 +148,9 @@ function ProjectChatsSection({ project }) {
         <p className="text-sm text-gray-500">{t('common.loading', 'Loading…')}</p>
       ) : state.chats.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {t('projects.chats.empty', 'No chats in this project yet.')}
+          {ownOnly
+            ? t('projects.chats.attachedEmpty', 'None of your chats uses this project yet.')
+            : t('projects.chats.empty', 'No chats in this project yet.')}
         </p>
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -142,11 +167,13 @@ function ProjectChatsSection({ project }) {
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {[
                     appName(chat.appId),
-                    chat.owner?.mine
-                      ? t('projects.chats.byMe', 'by you')
-                      : t('projects.chats.byOther', 'by {{name}} (read-only)', {
-                          name: chat.owner?.name || t('projects.chats.someone', 'another member')
-                        }),
+                    ownOnly
+                      ? null
+                      : chat.owner?.mine
+                        ? t('projects.chats.byMe', 'by you')
+                        : t('projects.chats.byOther', 'by {{name}} (read-only)', {
+                            name: chat.owner?.name || t('projects.chats.someone', 'another member')
+                          }),
                     formatWhen(chat.lastMessageAt, language)
                   ]
                     .filter(Boolean)

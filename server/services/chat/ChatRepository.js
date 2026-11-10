@@ -1168,6 +1168,29 @@ export class ChatRepository {
   }
 
   /**
+   * An owner's kept chats that use a project, newest activity first: the ones
+   * that have it attached (`attachedProjectIds`) and, with `inside`, the ones that
+   * run inside it (`projectId`). What the page of a project lists for someone who
+   * reads only their own chats there (from the catalog). Only the owner's own chats
+   * are walked, so nobody else's conversation can come up here.
+   *
+   * @param {string} ownerId - Owning principal id.
+   * @param {string} projectId - The project.
+   * @param {{inside?: boolean}} [options] - Include the chats that run inside it.
+   * @returns {Promise<Object[]>} The owner's chats that use the project.
+   */
+  async listChatsUsingProject(ownerId, projectId, { inside = false } = {}) {
+    if (!this.isAvailable() || !ownerId || !projectId) return [];
+    return (await this._loadOwnerChats(ownerId))
+      .filter(
+        chat =>
+          (inside && chat.projectId === projectId) ||
+          (Array.isArray(chat.attachedProjectIds) && chat.attachedProjectIds.includes(projectId))
+      )
+      .sort(compareChatsDesc);
+  }
+
+  /**
    * How many stored chat documents an owner has — temporary chats included,
    * unlike {@link listChats} — bounded at `MAX_OWNER_CHATS`.
    *
@@ -1384,6 +1407,8 @@ export class ChatRepository {
    *   never moves to another project's members by a race.
    * - `expectedContainer` (null for "in no project") refuses the patch when
    *   the chat's container changed since the turn read it.
+   * - `privateContainer` marks the chat private (`projectPrivate`) when it claims
+   *   the container: the project's members never read it.
    * - `attach` is added to the attached ids stored by now, never replacing
    *   them, and the union is capped at `maxAttached`.
    *
@@ -1398,7 +1423,13 @@ export class ChatRepository {
    */
   updateChatProjects(chatId, projects, patch = {}) {
     if (!this._usable(chatId, 'updateChatProjects')) return { chat: null, conflict: false };
-    const { claimContainer = null, expectedContainer, attach = [], maxAttached } = projects || {};
+    const {
+      claimContainer = null,
+      expectedContainer,
+      attach = [],
+      maxAttached,
+      privateContainer = false
+    } = projects || {};
     const limit = Number.isInteger(maxAttached) && maxAttached >= 0 ? maxAttached : Infinity;
     return this._withChatLock(chatId, async () => {
       const { chat: existing, etag } = await this._loadChat(chatId);
@@ -1421,6 +1452,11 @@ export class ChatRepository {
         applyChatPatch(existing, {
           ...patch,
           ...(projectId !== current ? { projectId } : {}),
+          // Fixed when the container is claimed: the chat of someone who took the
+          // project from the catalog is read by its owner only (`chatAccess`).
+          ...(claimContainer && projectId !== current && privateContainer
+            ? { projectPrivate: true }
+            : {}),
           ...(attachedChanged ? { attachedProjectIds: attached } : {})
         }),
         etag
@@ -1506,6 +1542,8 @@ export class ChatRepository {
       const chat = await this._writeChat(
         applyChatPatch(existing, {
           projectId: nextProjectId || null,
+          // A chat outside every project is nobody's but its owner's anyway.
+          ...(!nextProjectId && existing.projectPrivate ? { projectPrivate: null } : {}),
           ...(stripped ? { attachedProjectIds: attached } : {})
         }),
         etag
@@ -1521,6 +1559,7 @@ export class ChatRepository {
         await this._writeChat(
           applyChatPatch(chat, {
             projectId: expectedProjectId || null,
+            ...(existing.projectPrivate ? { projectPrivate: true } : {}),
             ...(stripped ? { attachedProjectIds: storedAttached } : {})
           }),
           current

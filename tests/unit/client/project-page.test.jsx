@@ -784,7 +784,7 @@ describe('ProjectPage – the catalog', () => {
           canDelete: false,
           canTransfer: false,
           readsAllChats: false,
-          canHoldChats: false,
+          canHoldChats: true,
           isOwner: false,
           readOnly: false
         }
@@ -795,8 +795,19 @@ describe('ProjectPage – the catalog', () => {
 
     expect(await screen.findByText('From the catalog')).toBeInTheDocument();
     expect(screen.getByText('Published')).toBeInTheDocument();
-    // No chat runs inside it for them: theirs attach the project.
-    expect(screen.queryByRole('heading', { name: 'Chats' })).toBeNull();
+    // Chats run inside it for them, privately: the composer starts one in the project, and the
+    // card lists their own chats only, without the all/mine switch.
+    const composer = screen.getByTestId('project-chat-composer');
+    expect(within(composer).getByText(/Only you can read this chat/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Chats' })).toBeInTheDocument();
+    expect(await screen.findByText('Notice period')).toBeInTheDocument();
+    expect(screen.getByText(/Only you can read them/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'All chats' })).toBeNull();
+    expect(screen.queryByText(/by you/)).toBeNull();
+    expect(mockApi.fetchProjectChats).toHaveBeenCalledWith(
+      'prj_a',
+      expect.objectContaining({ filter: 'all' })
+    );
     expect(screen.queryByRole('button', { name: 'Publish to the catalog' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Add to my projects' }));
     await waitFor(() => expect(mockApi.addCatalogProject).toHaveBeenCalledWith('prj_a'));
@@ -830,9 +841,9 @@ describe('ProjectPage – the catalog', () => {
     renderPage();
 
     expect(await screen.findByText(/the administrators keep it up to date/)).toBeInTheDocument();
-    // A chat with it attached starts here; none runs inside it.
+    // A chat with it attached starts here; none runs inside it, and the chats that use it are listed.
     expect(screen.getByTestId('project-chat-composer')).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Chats' })).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Chats' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Remove from my projects' }));
     await waitFor(() => expect(mockApi.removeCatalogProject).toHaveBeenCalledWith('policies'));
   });

@@ -531,3 +531,13 @@ again), and a reopened chat shows the same figure.
 An answer could stay completely blank, so the chat looked stuck after the question. This happens
 when a reasoning model finishes its turn right after thinking and writes no answer. The answer now
 reads "The model returned no answer." with a Retry button that asks the question again.
+
+## Links to Other Sites Always Open in a New Tab
+
+A link in rendered Markdown that points outside iHub — in a chat answer, a shared chat, a source or
+project text, an uploaded file or an artifact preview — could replace iHub in the current tab
+instead of opening a new one. Only live chat answers handled this reliably.
+
+- Links to another host or port open in a new tab and cannot reach the iHub window.
+- Links within iHub, anchors (`#section`) and `mailto:` links stay in the current tab.
+- The same holds for links an answer writes as raw HTML.
