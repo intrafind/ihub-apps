@@ -496,11 +496,11 @@ export default async function webContentExtractor({
     const focusQuery = normalizeFocus(focus);
     // An explicit offset is the model paging through the page; a page that fits
     // is returned whole. Only the first read of a long page is focused.
-    if (focusQuery && !(offset > 0) && doc.text.length > maxLength) {
+    if (focusQuery && offset <= 0 && doc.text.length > maxLength) {
       const focused = focusedWindow(doc, focusQuery, maxLength);
       const note = [
         focused.matched
-          ? 'This is a selection of the page, not the whole page: the sections that best match the focus, then an outline.'
+          ? 'This is a selection of the page, not the whole page: the sections that best match the focus, then an outline. There is no nextOffset: to read on, call again with the offset (@) of an outline entry.'
           : `No section of the page matches the focus; this is the start of the page and an outline of the rest. ${FOCUS_HINT}`,
         readerNote(doc, { offset: 0, totalLength: doc.text.length, truncated: false })
       ]

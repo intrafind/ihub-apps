@@ -120,6 +120,19 @@ describe('selectContent with a focus', () => {
     });
   });
 
+  it('an offset points at the start of a line, not into a longer line', () => {
+    // The fenced `### Pricing details` is no heading, but contains `## Pricing details`.
+    const text =
+      '# Guide\n\n```\n### Pricing details\n```\n\n' +
+      '## Pricing details\n\nThe enterprise plan costs 4711 euros per seat.\n';
+    const index = getDocumentIndex(text);
+    const offsets = partOffsets(index, text);
+    const at = index.parts.findIndex(part => part.text.startsWith('## Pricing details'));
+    assert.ok(at > 0, 'the fixture has a Pricing details section');
+    assert.equal(offsets[at], text.lastIndexOf('## Pricing details'));
+    assert.ok(text.slice(offsets[at]).startsWith('## Pricing details\n\nThe enterprise'));
+  });
+
   it('an empty focus is no focus', () => {
     const base = selectContent(MANUAL, { budgetChars: 10000, name: 'Manual' });
     const empty = selectContent(MANUAL, { focus: '   ', budgetChars: 10000, name: 'Manual' });

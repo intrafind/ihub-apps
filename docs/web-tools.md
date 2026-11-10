@@ -793,12 +793,12 @@ A page is read from its start, so on a long page the section that answers the qu
 2. The sections are ranked with BM25, the keyword ranking the knowledge tools already use (`server/sources/documentRetrieval.js`). There is no model call, no embedding and no extra request: the page comes through the same guarded fetch and page cache as without `focus`.
 3. The best sections are returned **verbatim**, best match first, each as `<section id path offset>` with its heading path and the character offset where it starts in the page. After them comes an outline of the whole page, with the offset of every section (`@1234`). The whole `content`, outline included, stays within `maxLength`.
 
-The result also carries `focus` (the question as used) and `excerpted: true`; `truncated` is `true` and a `note` says the content is a selection. To read around a section, call `read_url` again with its `offset` (without `focus`); to look for something else, call it again with another `focus`.
+The result also carries `focus` (the question as used) and `excerpted: true`; `truncated` is `true` and a `note` says the content is a selection. There is no `nextOffset` on such a result: the offsets of the outline entries (and of the returned sections) are how to read on. To read around a section, call `read_url` again with its `offset` (without `focus`); to look for something else, call it again with another `focus`.
 
 - **Unchanged without `focus`**, with an empty `focus`, for a page that fits in `maxLength`, and whenever `offset` is set: the result is exactly what it was.
 - **No section matches:** the result is the first window of the page followed by the outline (`excerpted: false`), never an empty answer.
 - **Sources:** the sections the model was given appear as the passages of the page's source in the sources panel (private, like every page the reader opens). They have no numbered markers: a citation points to the page.
-- **Counts as one page read** for `maxPageReads`. PDFs, the 400,000 character cap, caching and bot-protection results behave as before.
+- **Counts as one page read** for `maxPageReads`. PDFs, the 400,000-character cap, caching and bot-protection results behave as before.
 
 Search results with `extractContent` still return the first `contentMaxLength` characters of each page; they do not take a `focus`.
 

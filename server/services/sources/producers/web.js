@@ -140,6 +140,15 @@ function asSource(item, fields = {}) {
   };
 }
 
+/**
+ * What a focused page read reported beside its result: the passages the model
+ * was given. They merge into the page's own source by URL.
+ */
+function reportedWebItems(reader, reported) {
+  if (!reader || !Array.isArray(reported)) return [];
+  return reported.filter(item => item?.provider === 'web');
+}
+
 export const webSourceProducer = {
   id: 'web',
 
@@ -206,11 +215,7 @@ export const webSourceProducer = {
         );
       }
     }
-    // What a focused page read reported beside its result: the passages the model
-    // was given. They merge into the page's own source by URL.
-    if (reader && Array.isArray(reported)) {
-      items.push(...reported.filter(item => item?.provider === 'web'));
-    }
+    items.push(...reportedWebItems(reader, reported));
     return { items, queries };
   }
 };

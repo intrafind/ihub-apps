@@ -599,6 +599,23 @@ function partId(section, part, partCount) {
 }
 
 /**
+ * The first place at or after `from` where `line` starts a line (only spaces
+ * or tabs before it): `## Pricing details` is not found inside
+ * `### Pricing details`, nor inside a longer line that merely contains it.
+ *
+ * @returns {number} The index, or -1
+ */
+function indexOfLine(text, line, from) {
+  let at = text.indexOf(line, from);
+  while (at !== -1) {
+    const lineStart = text.lastIndexOf('\n', at - 1) + 1;
+    if (/^[ \t]*$/.test(text.slice(lineStart, at))) return at;
+    at = text.indexOf(line, at + 1);
+  }
+  return -1;
+}
+
+/**
  * Where each part of a one-document index starts in the text it was built
  * from, in characters: the first line of the part, searched forward from the
  * end of the previous one. Best effort: the splitter normalizes line breaks
@@ -614,7 +631,7 @@ export function partOffsets(index, text) {
   let cursor = 0;
   for (const part of index.parts) {
     const firstLine = part.text.split('\n', 1)[0].slice(0, 200);
-    const at = firstLine ? text.indexOf(firstLine, cursor) : -1;
+    const at = firstLine ? indexOfLine(text, firstLine, cursor) : -1;
     if (at === -1) {
       offsets.push(null);
       continue;
