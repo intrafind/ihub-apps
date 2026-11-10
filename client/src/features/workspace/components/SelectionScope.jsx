@@ -215,7 +215,11 @@ export default function SelectionScope({
         </div>
       )}
       {active && selection && coarse && (
-        <div className="sticky bottom-2 z-20 flex justify-center px-2 pb-2">
+        <div
+          className="sticky bottom-2 z-20 flex justify-center px-2 pb-2"
+          // Above the dock, which floats over the bottom of the pane.
+          style={dockClearance ? { bottom: dockClearance + 8 } : undefined}
+        >
           <button
             type="button"
             onClick={() => quote('ask')}
