@@ -3690,6 +3690,35 @@
       "marketplaceInstallFailed": "{{name}} konnte nicht aus {{registry}} installiert werden: {{error}}",
       "marketplaceOff": "Der Katalog listet auch die Integrationen des Marktplatzes (gehostete MCP-Server wie GitHub, Linear oder Stripe), wenn die Funktion Marktplatz unter Admin → Funktionen eingeschaltet ist."
     },
+    "websiteCorpusDomains": {
+      "title": "Interne Websites für den Website-Korpus",
+      "description": "Der Server lehnt Adressen im Firmennetz ab. Nutzer, deren Crawl abgelehnt wurde, können den Host hier anfragen. Eine Freigabe erlaubt nur dem Website-Korpus den Zugriff auf diesen Host; andere Werkzeuge behalten die Regel „nur öffentliche Adressen“. Loopback-, Link-Local- und Cloud-Metadaten-Adressen können nie freigegeben werden.",
+      "loadFailed": "Die internen Websites konnten nicht geladen werden.",
+      "openTitle": "Offene Anfragen ({{count}})",
+      "none": "Keine offenen Anfragen.",
+      "requestedBy": "Angefragt von {{names}} am {{date}}",
+      "noteLabel": "Hinweis an die Anfragenden (optional)",
+      "approved": "{{host}} ist freigegeben.",
+      "declined": "{{host}} ist abgelehnt.",
+      "approveNamed": "{{host}} freigeben",
+      "declineNamed": "{{host}} ablehnen",
+      "decidedTitle": "Freigegeben und abgelehnt ({{count}})",
+      "noneDecided": "Noch keine Hosts.",
+      "status": {
+        "approved": "Freigegeben",
+        "declined": "Abgelehnt"
+      },
+      "decidedBy": "{{name}} am {{date}}",
+      "withdrawNamed": "Freigabe für {{host}} zurückziehen",
+      "removeNamed": "{{host}} entfernen",
+      "removed": "{{host}} ist entfernt.",
+      "addTitle": "Einen Host ohne Anfrage freigeben",
+      "hostLabel": "Host",
+      "hostHelp": "Ein Hostname oder eine Adresse, oder ein Platzhalter wie *.corp.example für alle Hosts unterhalb einer Domain.",
+      "addNoteLabel": "Hinweis (optional)",
+      "add": "Host freigeben",
+      "added": "{{host}} ist jetzt freigegeben."
+    },
     "integrations": {
       "backToIntegrations": "Zurück zu Integrationen",
       "cards": {
@@ -4580,7 +4609,7 @@
       },
       "requests": {
         "tab": "Anfragen",
-        "sidebarBadge": "{{count}} offene Integrationsanfragen",
+        "sidebarBadge": "{{count}} offene Anfragen (Integrationen und Websites)",
         "loadFailed": "Die Anfragen konnten nicht geladen werden.",
         "openTitle": "Offene Anfragen ({{count}})",
         "description": "Diese Katalog-Integrationen haben Benutzer angefragt. Genehmigen öffnet den Installationsassistenten; eine Anfrage schließt sich selbst, sobald die Integration installiert ist und die Gruppen der anfragenden Person sie nutzen dürfen.",

@@ -1526,6 +1526,35 @@ and every other place the name appears.
 
 See [Localization](../../localization.md).
 
+## Website Corpus: Measure How Many Tokens a Website Holds
+
+The new **Website Corpus** integration tells you how much text a website really has, in tokens,
+and whether all of it fits into one context window. That decides whether "put the whole site into
+the prompt" is a realistic alternative to retrieval.
+
+- Five tools: find a site's pages from its sitemap, outline a few pages to spot boilerplate, crawl
+  the pages in resumable batches, show the kept text of a page, and report the size.
+- The report gives tokens per section, how many 128k, 256k and 1M windows the corpus fills (all
+  pages, after removing repeated lines, and without blog and news sections), the largest pages,
+  duplicates, how much of the sitemap was crawled, and the method.
+- Only pages of the site itself are fetched, with the SSRF guard and the proxy settings, within
+  the site's `robots.txt`, a few requests per second. A crawl belongs to the user who started it and
+  is removed after 14 days.
+- Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
+  `website-corpus-sizer` skill from the marketplace guides users through it.
+- Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
+  user whose crawl was refused can ask an admin to allow the host, and the admin approves or
+  declines under **Admin → Integrations → Requests** (the sidebar counts open requests). An approval
+  covers only the Website Corpus and a host's web ports (80 and 443; another port is approved as
+  `host:port`). The setting **Allow company-internal websites** lets every crawl
+  reach the company network instead. Loopback, link-local and cloud metadata addresses stay blocked
+  in both cases.
+- Tokens are counted with the shared token estimator. The server does not ship `gpt-tokenizer`, so
+  without it the estimator counts one token per four characters; the report says which method it
+  used.
+
+See [Website Corpus](../../website-corpus.md).
+
 ## Chat Inside a Project From the Catalog, Privately
 
 A project you added from the catalog used to hold no chats: **New chat** started a chat outside it

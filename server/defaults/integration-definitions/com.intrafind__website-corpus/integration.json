@@ -1,0 +1,190 @@
+{
+  "id": "com.intrafind/website-corpus",
+  "version": "1.0.0",
+  "compatibility": {
+    "ihub": ">=5.6.4"
+  },
+  "releases": [
+    {
+      "version": "1.0.0",
+      "date": "2026-11-10",
+      "summary": {
+        "en": "First version: measure how many tokens a website holds and whether it fits into one context window, from its sitemap.",
+        "de": "Erste Version: messen, wie viele Tokens eine Website enthält und ob sie in ein Kontextfenster passt, ausgehend von ihrer Sitemap."
+      },
+      "notes": {
+        "features": "releases/1.0.0/features.md"
+      }
+    }
+  ],
+  "name": {
+    "en": "Website Corpus",
+    "de": "Website-Korpus"
+  },
+  "description": {
+    "en": "Measure how many tokens a website holds and whether all of it fits into one context window. Reads the sitemap, crawls the pages politely and keeps their main text, and reports tokens per section, duplicates and the number of 128k, 256k and 1M windows.",
+    "de": "Messen, wie viele Tokens eine Website enthält und ob sie vollständig in ein Kontextfenster passt. Liest die Sitemap, lädt die Seiten rücksichtsvoll und behält ihren Haupttext, und berichtet Tokens je Bereich, Duplikate und die Zahl der 128k-, 256k- und 1M-Fenster."
+  },
+  "publisher": {
+    "name": "IntraFind Software AG",
+    "verification": "intrafind"
+  },
+  "categories": ["web", "analysis"],
+  "docsUrl": "https://github.com/intrafind/ihub-apps/blob/main/docs/website-corpus.md",
+  "builtIn": true,
+  "singleton": {
+    "instanceId": "website-corpus"
+  },
+  "protocol": {
+    "type": "native",
+    "module": "websiteCorpus"
+  },
+  "auth": {
+    "modes": ["none"]
+  },
+  "install": [
+    {
+      "key": "maxPages",
+      "type": "number",
+      "title": {
+        "en": "Most pages per corpus",
+        "de": "Höchstzahl Seiten je Korpus"
+      },
+      "description": {
+        "en": "A site whose sitemap lists more pages in the chosen scope is refused; users narrow the scope with a path prefix. Each page costs one request to the site.",
+        "de": "Eine Website, deren Sitemap im gewählten Bereich mehr Seiten nennt, wird abgelehnt; Nutzer grenzen den Bereich mit einem Pfadpräfix ein. Jede Seite kostet eine Anfrage an die Website."
+      },
+      "default": 3000,
+      "min": 100,
+      "max": 10000
+    },
+    {
+      "key": "allowPrivateAddresses",
+      "type": "boolean",
+      "title": {
+        "en": "Allow company-internal websites",
+        "de": "Interne Websites im Firmennetz erlauben"
+      },
+      "description": {
+        "en": "Off (default): the server refuses private and internal addresses, as everywhere else in iHub, and a user whose crawl was refused can ask an admin to allow that host (Admin → Integrations → Requests). On: every user of this integration can have the server read internal websites of the company network (10.x.x.x, 172.16-31.x.x, 192.168.x.x, shared address space, IPv6 unique-local). This includes iHub's own host (by a non-loopback address or service name), neighbouring containers, cluster control planes and every port of them. Loopback, link-local and cloud metadata addresses stay blocked either way. Turn it on only where every user of the integration may see what the server can reach inside the network.",
+        "de": "Aus (Standard): der Server lehnt private und interne Adressen ab, wie überall in iHub, und wer abgelehnt wurde, kann einen Admin bitten, den Host freizugeben (Admin → Integrationen → Anfragen). An: jede Person, die diese Integration nutzt, kann den Server interne Websites des Firmennetzes lesen lassen (10.x.x.x, 172.16-31.x.x, 192.168.x.x, Shared Address Space, IPv6 Unique-Local). Das schließt den Rechner von iHub selbst (über eine Nicht-Loopback-Adresse oder einen Dienstnamen), benachbarte Container, Cluster-Steuerungsebenen und alle Ports davon ein. Loopback, Link-Local und Cloud-Metadaten-Adressen bleiben in beiden Fällen gesperrt. Nur einschalten, wenn alle Nutzer der Integration sehen dürfen, was der Server im Netz erreicht."
+      },
+      "default": false
+    }
+  ],
+  "capabilities": ["tools"],
+  "actions": [
+    {
+      "name": "discover_site",
+      "toolId": "website_corpus_discover",
+      "title": {
+        "en": "Find a site's pages",
+        "de": "Seiten einer Website finden"
+      },
+      "description": {
+        "en": "Read a website's sitemaps and start a corpus: how many pages, in which sections. Returns a corpusId for the other steps.",
+        "de": "Die Sitemaps einer Website lesen und einen Korpus anlegen: wie viele Seiten, in welchen Bereichen. Liefert eine corpusId für die anderen Schritte."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "guidance": {
+        "en": "Start here. Ask the user for the site, the scope (for example only /de/) and whether they may crawl it. Show the section counts and compare them with the site before crawling; a sitemap that looks too small means the corpus will have holes.",
+        "de": "Beginne hier. Frage nach der Website, dem Bereich (zum Beispiel nur /de/) und ob die Person sie crawlen darf. Zeige die Zahlen je Bereich und vergleiche sie mit der Website, bevor du crawlst; eine zu kleine Sitemap bedeutet Lücken im Korpus."
+      }
+    },
+    {
+      "name": "outline_pages",
+      "toolId": "website_corpus_outline",
+      "title": {
+        "en": "Outline a few pages",
+        "de": "Aufbau einiger Seiten zeigen"
+      },
+      "description": {
+        "en": "Show the structure of up to three pages of a corpus, with the elements that look like boilerplate marked.",
+        "de": "Den Aufbau von bis zu drei Seiten eines Korpus zeigen, Elemente, die nach Seitenrahmen aussehen, markiert."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "guidance": {
+        "en": "Use it once before the crawl to find breadcrumbs, cookie banners and teaser sliders inside the main content. Pass what to remove as dropSelector to the crawl step.",
+        "de": "Nutze es einmal vor dem Crawl, um Brotkrumen, Cookie-Banner und Teaser-Slider im Hauptinhalt zu finden. Übergib, was entfernt werden soll, als dropSelector an den Crawl-Schritt."
+      }
+    },
+    {
+      "name": "crawl_pages",
+      "toolId": "website_corpus_crawl",
+      "title": {
+        "en": "Crawl the next pages",
+        "de": "Nächste Seiten crawlen"
+      },
+      "description": {
+        "en": "Fetch the next batch of pages of a corpus and keep their main text. Call it again until it reports done.",
+        "de": "Den nächsten Stapel Seiten eines Korpus laden und ihren Haupttext behalten. Erneut aufrufen, bis done gemeldet wird."
+      },
+      "sideEffect": "read",
+      "dataFlow": "external",
+      "guidance": {
+        "en": "Repeat until done is true, and tell the user the progress after each call. Do not change dropSelector in the middle of a crawl.",
+        "de": "Wiederhole, bis done true ist, und nenne der Person nach jedem Aufruf den Fortschritt. Ändere dropSelector nicht mitten im Crawl."
+      }
+    },
+    {
+      "name": "read_page_text",
+      "toolId": "website_corpus_page_text",
+      "title": {
+        "en": "Show a page's kept text",
+        "de": "Behaltenen Text einer Seite zeigen"
+      },
+      "description": {
+        "en": "Show the main text kept for one crawled page, to compare it with the live page.",
+        "de": "Den für eine gecrawlte Seite behaltenen Haupttext zeigen, zum Vergleich mit der Live-Seite."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "guidance": {
+        "en": "Use it for a spot-check of three pages from different sections: is the body text there, and is the boilerplate gone?",
+        "de": "Nutze es für eine Stichprobe von drei Seiten aus verschiedenen Bereichen: Ist der Haupttext da, und ist der Seitenrahmen weg?"
+      }
+    },
+    {
+      "name": "corpus_report",
+      "toolId": "website_corpus_report",
+      "title": {
+        "en": "Report the corpus size",
+        "de": "Korpusgröße berichten"
+      },
+      "description": {
+        "en": "Compute the token counts and lay out the report: tiles, windows, sections, largest pages, duplicates, coverage and method.",
+        "de": "Die Token-Zahlen berechnen und den Bericht aufbereiten: Kennzahlen, Fenster, Bereiche, größte Seiten, Duplikate, Abdeckung und Methode."
+      },
+      "sideEffect": "read",
+      "dataFlow": "internal",
+      "guidance": {
+        "en": "Show the report unchanged, then add the verdict. Every figure comes from the report; never add up or recalculate anything.",
+        "de": "Zeige den Bericht unverändert und ergänze dann das Fazit. Jede Zahl stammt aus dem Bericht; rechne nichts zusammen oder nach."
+      }
+    },
+    {
+      "name": "request_domain",
+      "toolId": "website_corpus_request_domain",
+      "title": {
+        "en": "Ask for an internal website",
+        "de": "Interne Website anfragen"
+      },
+      "description": {
+        "en": "Ask an admin to allow an internal website that the crawl was refused for. Nothing is allowed by asking; an admin decides.",
+        "de": "Einen Admin bitten, eine interne Website freizugeben, für die der Crawl abgelehnt wurde. Fragen allein erlaubt nichts; ein Admin entscheidet."
+      },
+      "sideEffect": "write",
+      "dataFlow": "internal",
+      "guidance": {
+        "en": "Use it only after the discovery answered HOST_NOT_ALLOWED, and only when the user wants the request sent: say which host it is and give a short reason. Then tell the user that an admin has to approve it and that they can start again afterwards.",
+        "de": "Nutze es nur, nachdem die Suche HOST_NOT_ALLOWED gemeldet hat und die Person die Anfrage senden möchte: nenne den Host und gib eine kurze Begründung an. Sage dann, dass ein Admin zustimmen muss und die Person danach neu beginnen kann."
+      }
+    }
+  ],
+  "instructions": {
+    "en": "Use these tools to measure how much text a website has. Work in order: discover the site, outline a few pages, crawl until done, spot-check, then report. Show the user what each step found before the next one. Only crawl a site the user may crawl. If the discovery says the host is a company-internal address (HOST_NOT_ALLOWED), offer to ask an admin to allow it instead of trying again.",
+    "de": "Mit diesen Werkzeugen wird gemessen, wie viel Text eine Website hat. Gehe der Reihe nach vor: Website finden, einige Seiten ansehen, crawlen bis fertig, Stichprobe, dann berichten. Zeige der Person, was jeder Schritt ergeben hat, bevor du den nächsten ausführst. Crawle nur Websites, die die Person crawlen darf. Meldet die Suche, dass der Host eine interne Adresse im Firmennetz ist (HOST_NOT_ALLOWED), biete an, einen Admin um Freigabe zu bitten, statt es erneut zu versuchen."
+  }
+}
