@@ -164,10 +164,11 @@ describe('normalizeAllowedHostEntry', () => {
   });
 
   test('every accepted host entry matches the host it names', () => {
-    for (const [input, url] of [
-      ['bücher.de', 'https://bücher.de/'],
-      ['*.Example.com', 'https://docs.example.com/'],
-      ['[::1]', 'http://[::1]:3000/']
+    // Separate fields, so no target URL is mistaken for an entry (which may be a /regex/).
+    for (const { input, url } of [
+      { input: 'bücher.de', url: 'https://bücher.de/' },
+      { input: '*.Example.com', url: 'https://docs.example.com/' },
+      { input: '[::1]', url: 'http://[::1]:3000/' }
     ]) {
       const { entry } = normalizeAllowedHostEntry(input);
       expect([input, isAllowedShortLinkTarget(url, [entry])]).toEqual([input, true]);
@@ -175,12 +176,12 @@ describe('normalizeAllowedHostEntry', () => {
   });
 
   test('refuses a URL and says which host to enter instead', () => {
-    expect(normalizeAllowedHostEntry('https://www.qwant.com/')).toEqual({
-      error: 'is a URL; enter its host www.qwant.com instead'
+    expect(normalizeAllowedHostEntry('https://intranet/')).toEqual({
+      error: 'is a URL; enter its host intranet instead'
     });
   });
 
-  test.each(['', '   ', 'bad host!', '*.', 'www.qwant.com/path', 'host:8080', '/(.*)+/', 42])(
+  test.each(['', '   ', 'bad host!', '*.', 'intranet/path', 'host:8080', '/(.*)+/', 42])(
     'refuses %j',
     input => {
       expect(normalizeAllowedHostEntry(input)).toHaveProperty('error');
