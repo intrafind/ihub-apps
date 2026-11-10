@@ -139,6 +139,7 @@ describe('tools of system skills', () => {
       ['create_web_artifact', 'web-artifacts'],
       ['create_xlsx', 'xlsx'],
       ['create_zip', 'files'],
+      ['frame_pptx', 'pptx'],
       ['preview_pdf', 'pdf']
     ]);
     assert.ok(tools.every(t => t.isSystemSkillTool));
@@ -156,6 +157,7 @@ describe('tools of system skills', () => {
       create_web_artifact: 'webArtifact',
       create_xlsx: 'workbook',
       create_zip: 'archive',
+      frame_pptx: 'presentation',
       preview_pdf: null
     });
   });

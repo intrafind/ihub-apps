@@ -1,5 +1,24 @@
 # Features — Unreleased
 
+## Slide Frame: the Company Cover and Frame on Every Presentation
+
+A document template can now carry a **slide frame**: a cover picture, a strip along the top and left
+edge, and the logo. iHub puts it on a finished deck instead of relying on a PowerPoint master, which
+suits designs made of a cover photo and a mosaic frame, and it works on decks people upload.
+
+- **Set it up** under **Admin → Document templates → PowerPoint → Slide frame**: upload the cover
+  picture and the two strips (PNG or JPEG), switch **Use the slide frame** on, and optionally set the
+  **cover footer**. The logo is the template's brand logo.
+- **New decks.** `create_pptx` makes the first slide the cover (picture, a white panel with the logo,
+  the title and the date, a footer strip) when it is a title slide, and frames every other slide. With
+  iHub's built-in slide design, the content keeps clear of the strips and the logo.
+- **Uploaded decks.** The `pptx` skill has a new tool, `frame_pptx`: a user uploads a presentation and
+  asks for it in the company design; the deck keeps its pictures, charts, tables and notes, gets the
+  cover and the frame, and comes back as a new file. Nothing is rebuilt from text.
+- **Nothing changes** for templates without a frame, and for decks made with a PowerPoint template.
+
+See [Document templates → Slide frame](../../document-templates.md#slide-frame).
+
 ## Chats Get a Short Title After the First Answer
 
 Chats in the history were named after the first words of your first message, so a list of chats

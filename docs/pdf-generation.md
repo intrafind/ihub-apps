@@ -34,14 +34,14 @@ The shipped system skills:
 |---|---|---|
 | `pdf` | `create_pdf`, `preview_pdf` | Create PDF documents on request |
 | `docx` | `create_docx` | Create editable Word documents on request |
-| `pptx` | `create_pptx` | Create PowerPoint presentations on request |
+| `pptx` | `create_pptx`, `frame_pptx` | Create PowerPoint presentations on request; put the company's slide frame on an uploaded deck |
 | `xlsx` | `create_xlsx` | Create formatted Excel workbooks with live formulas on request |
 | `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (dashboards, calculators, prototypes) and SVG graphics that run in the chat's workspace pane |
 | `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
 
 ### Skill access checks
 
-System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `create_xlsx`, `create_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `frame_pptx`, `create_xlsx`, `create_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
 
 ### Document templates and the tools
 
@@ -133,6 +133,10 @@ Enable it like the `pdf` skill: add `docx` to the app's skills.
 - Limits: 60 slides, 30 table rows and 12 columns per slide, 12 chart series with 60 categories, 15 MB of images.
 
 There is no slide preview for the model: rendering slides would need Office or LibreOffice on the server.
+
+### `frame_pptx`: the company frame on an uploaded deck
+
+When the document template has a [slide frame](document-templates.md#slide-frame), `frame_pptx` puts it on a `.pptx` the user uploaded and hands the result back as a download. The deck is not rebuilt: its first slide becomes the cover (its title and subtitle become the cover title and date), every slide gets the strips and the logo, and its text, pictures, charts, tables and notes stay as they are. Parameters: `fileId` (the id of the uploaded file), `filename`, `cover` (`false` when the first slide is no title slide), `coverTitle`, `coverDate`, `coverFooter`, and `template` where the model may choose one. It fails with a clear message when the template has no frame. Use `create_pptx` to write a new deck, `frame_pptx` to move an existing one into the company design.
 
 ## The `xlsx` skill
 

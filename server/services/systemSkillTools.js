@@ -5,7 +5,7 @@ import { getLocalizedString } from '../utils/localize.js';
 import { CREATE_DOCX_TOOL } from './documents/docx/docxToolDefinitions.js';
 import { CREATE_FILE_TOOL, CREATE_ZIP_TOOL } from './documents/files/fileToolDefinitions.js';
 import { CREATE_PDF_TOOL, PREVIEW_PDF_TOOL } from './documents/pdf/pdfToolDefinitions.js';
-import { CREATE_PPTX_TOOL } from './documents/pptx/pptxToolDefinitions.js';
+import { CREATE_PPTX_TOOL, FRAME_PPTX_TOOL } from './documents/pptx/pptxToolDefinitions.js';
 import { CREATE_WEB_ARTIFACT_TOOL } from './documents/webArtifacts/webArtifactToolDefinitions.js';
 import { CREATE_XLSX_TOOL } from './documents/xlsx/xlsxToolDefinitions.js';
 
@@ -45,6 +45,10 @@ const REGISTRY = new Map([
   [
     CREATE_PPTX_TOOL.id,
     { definition: CREATE_PPTX_TOOL, run: async params => (await pptxTools()).runCreatePptx(params) }
+  ],
+  [
+    FRAME_PPTX_TOOL.id,
+    { definition: FRAME_PPTX_TOOL, run: async params => (await pptxTools()).runFramePptx(params) }
   ],
   [
     CREATE_XLSX_TOOL.id,

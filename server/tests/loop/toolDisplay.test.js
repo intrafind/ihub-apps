@@ -129,6 +129,7 @@ test('the built-in creators say what they produce; the server decides, not the i
     preview_pdf: undefined,
     create_docx: 'document',
     create_pptx: 'presentation',
+    frame_pptx: 'presentation',
     create_xlsx: 'workbook',
     create_web_artifact: 'webArtifact',
     create_file: 'file',

@@ -98,6 +98,81 @@ export async function createPptx(spec, { app, template, templateFile = null } = 
 }
 
 /**
+ * `frame_pptx`: put the document template's slide frame on a presentation the
+ * user uploaded and hand it to the chat. The deck's content is not rebuilt.
+ *
+ * @param {Object} params - Tool arguments plus the trusted context (`user`,
+ *   `chatId`, `appConfig`).
+ * @returns {Promise<Object>}
+ */
+export async function runFramePptx(params) {
+  try {
+    const uploaded = await loadUploadedFileOriginal({
+      fileId: params.fileId,
+      mimeTypes: [PPTX_FILE_MIME],
+      user: params.user,
+      chatId: params.chatId,
+      parameter: 'fileId'
+    });
+    const bundle = await templateBundleFor({
+      format: 'pptx',
+      app: params.appConfig,
+      requested: params.template
+    });
+    const applied = bundle ? applyTemplateToPptxSpec({ slides: [], brand: {} }, bundle) : null;
+    if (!applied?.spec.frame?.enabled || !applied.assets?.frame) {
+      throw new DocumentGenerationError(
+        'No slide frame is set up: the document template for this app has none (an administrator adds it under Admin → Customization → Document templates → PowerPoint → Slide frame). Tell the user, or build a new deck with create_pptx instead.',
+        'invalid'
+      );
+    }
+    const started = Date.now();
+    const { buffer, meta, warnings } = await renderInWorker('pptxFrame', {
+      spec: {
+        brand: {
+          textColor: applied.spec.brand.textColor,
+          headingFont: applied.spec.brand.headingFont
+        },
+        options: {
+          cover: params.cover !== false,
+          title: optionalString(params.coverTitle, 300),
+          date: optionalString(params.coverDate, 300),
+          footer: optionalString(params.coverFooter, 300) ?? applied.spec.frame.coverFooter
+        }
+      },
+      assets: { deck: uploaded.buffer, frame: applied.assets.frame, logo: applied.assets.logo }
+    });
+    logger.info('Presentation frame applied', {
+      component: 'PptxService',
+      slides: meta.slides,
+      bytes: buffer.length,
+      template: applied.templateId,
+      durationMs: Date.now() - started
+    });
+    const name = params.filename || uploaded.name.replace(/\.pptx$/i, '');
+    const file = holdGeneratedFile({
+      user: params.user,
+      chatId: params.chatId,
+      data: buffer,
+      mimeType: PPTX_MIME,
+      name,
+      meta: { slides: meta.slides }
+    });
+    return {
+      success: true,
+      file,
+      files: [file],
+      template: applied.templateId,
+      cover: meta.cover,
+      ...(warnings.length ? { warnings } : {}),
+      message: `Put the "${applied.templateId}" slide frame on "${uploaded.name}" (${meta.slides} slide${meta.slides === 1 ? '' : 's'}${meta.cover ? ', the first one as the cover' : ''}) and created "${file.name}". The deck's content was kept as it is. The user sees a download card for it in the chat — do not add a link.`
+    };
+  } catch (error) {
+    return toolFailure(error, 'The slide frame could not be applied.');
+  }
+}
+
+/**
  * `create_pptx`: build the presentation and hand it to the chat.
  *
  * @param {Object} params - Tool arguments plus the trusted context (`user`,

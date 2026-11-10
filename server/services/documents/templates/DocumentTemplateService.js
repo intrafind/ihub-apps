@@ -12,6 +12,7 @@ import {
   ASSET_NAME_PATTERN,
   ASSET_SLOTS,
   FONT_FACES,
+  FRAME_SLOT_KEYS,
   TEMPLATE_ID_PATTERN,
   documentTemplateSchema,
   referencedAssets
@@ -320,6 +321,13 @@ export async function loadTemplateBundle(idOrTemplate, format) {
       template.pptx.template,
       'powerpointTemplate'
     );
+    if (template.pptx.frame?.enabled) {
+      assets.frame = {};
+      for (const [slot, key] of Object.entries(FRAME_SLOT_KEYS)) {
+        const file = await optionalAsset(template, template.pptx.frame[key], slot);
+        if (file) assets.frame[key] = file;
+      }
+    }
   }
   return { template, assets };
 }
@@ -374,6 +382,14 @@ function withStoredFiles(template, stored) {
   set('pdf', 'letterheadFollowing', stored?.pdf?.letterheadFollowing);
   set('docx', 'template', stored?.docx?.template);
   set('pptx', 'template', stored?.pptx?.template);
+  // The frame's pictures are files too; its other settings come with the save.
+  if (next.pptx.frame || stored?.pptx?.frame) {
+    next.pptx.frame = { ...(next.pptx.frame || {}) };
+    for (const key of Object.values(FRAME_SLOT_KEYS)) {
+      if (stored?.pptx?.frame?.[key]) next.pptx.frame[key] = stored.pptx.frame[key];
+      else delete next.pptx.frame[key];
+    }
+  }
   next.fonts = stored?.fonts ? structuredClone(stored.fonts) : [];
   return next;
 }
@@ -528,6 +544,9 @@ export async function saveTemplateAsset(id, { slot, data, originalName, family, 
       else if (slot === 'letterheadFollowing') next.pdf.letterheadFollowing = name;
       else if (slot === 'wordTemplate') next.docx.template = name;
       else if (slot === 'powerpointTemplate') next.pptx.template = name;
+      else if (FRAME_SLOT_KEYS[slot]) {
+        next.pptx.frame = { ...(next.pptx.frame || {}), [FRAME_SLOT_KEYS[slot]]: name };
+      }
     }
     const template = validate(next, id);
     await atomicWriteFile(assetPath(id, name), data, null);
@@ -573,6 +592,8 @@ export async function removeTemplateAsset(id, { slot, family, face }) {
     else if (slot === 'powerpointTemplate') {
       delete next.pptx.template;
       delete next.pptx.layouts;
+    } else if (FRAME_SLOT_KEYS[slot]) {
+      if (next.pptx.frame) delete next.pptx.frame[FRAME_SLOT_KEYS[slot]];
     } else throw new DocumentTemplateError(`Unknown template file slot "${slot}".`);
     const template = validate(next, id);
     await atomicWriteJSON(configPath(id), template);
