@@ -46,6 +46,7 @@ import { modelSupportsWebSearch } from '../webSearch';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { composerLineLimits } from '../utils/composerLines';
 import { submitShortcutLabel } from '../utils/submitShortcut';
+import { entryKey } from '../utils/chatFileUpload';
 import ComposerQuote from '../../workspace/components/ComposerQuote';
 import './ChatInput.css';
 
@@ -609,12 +610,20 @@ function ChatInput({
     [selectedFile, onFileSelect, cloudStorageProvider]
   );
 
-  // Handler for local file selection - preserves cloud-sourced files
+  // Handler for local file selection - preserves cloud-sourced files.
+  // The uploader hands back every local file it holds (the earlier picks plus the new ones),
+  // and local files carry `source: 'local'` too, so only the cloud-sourced ones the
+  // uploader does not already return are kept; keeping the local ones would add them twice.
   const handleLocalFileSelect = useCallback(
     localFiles => {
       const files = Array.isArray(selectedFile) ? selectedFile : selectedFile ? [selectedFile] : [];
-      const cloudFiles = files.filter(f => f.source);
-      const localFilesArray = Array.isArray(localFiles) ? localFiles : [localFiles];
+      const localFilesArray = (Array.isArray(localFiles) ? localFiles : [localFiles]).filter(
+        Boolean
+      );
+      const returned = new Set(localFilesArray.map(entryKey));
+      const cloudFiles = files.filter(
+        f => f.source && f.source !== 'local' && !returned.has(entryKey(f))
+      );
       const merged = [...cloudFiles, ...localFilesArray];
       onFileSelect(merged.length === 0 ? null : merged.length === 1 ? merged[0] : merged);
     },

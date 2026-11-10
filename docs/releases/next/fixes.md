@@ -1,5 +1,11 @@
 # Fixes — Unreleased
 
+## Attaching More Files No Longer Duplicates the Ones Already Attached
+
+Selecting files in the file dialog, confirming, and then opening the dialog again to add more attached
+the first files twice: 5 files plus 2 more gave 12 attachments instead of 7. Only the newly selected
+files are added now. Files picked from cloud storage stay attached next to local files.
+
 ## Share Is Always Offered When You Open a File From the Chat
 
 Opening a generated picture or a file from the answer that has just produced it showed the viewer
