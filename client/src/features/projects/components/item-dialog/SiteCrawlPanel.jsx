@@ -34,7 +34,8 @@ function scopeLabel(scope) {
  *
  * @param {Object} props
  * @param {string} props.url - The URL in the field.
- * @param {(url: string, options: {maxPages: number, maxDepth: number, samePath: boolean})
+ * @param {(url: string, options: {maxPages: number, maxDepth: number, samePath: boolean,
+ *   otherHostDocuments: boolean})
  *   => Promise<{ok: boolean, pages?: Array<Object>, truncated?: boolean,
  *   robotsExcluded?: number, scope?: Object, error?: string}>} props.crawlUrl
  * @param {(error: Error) => string} props.errorMessage
@@ -64,6 +65,7 @@ function SiteCrawlPanel({
   const [depth, setDepth] = useState(DEFAULT_DEPTH);
   const [maxPages, setMaxPages] = useState(DEFAULT_MAX_PAGES);
   const [samePath, setSamePath] = useState(true);
+  const [otherHostDocuments, setOtherHostDocuments] = useState(false);
   const [crawl, setCrawl] = useState(null);
   const [filter, setFilter] = useState('');
 
@@ -81,7 +83,12 @@ function SiteCrawlPanel({
     setCrawl({ loading: true, url: start });
     let outcome;
     try {
-      outcome = await crawlUrl(start, { maxPages, maxDepth: depth, samePath });
+      outcome = await crawlUrl(start, {
+        maxPages,
+        maxDepth: depth,
+        samePath,
+        otherHostDocuments
+      });
     } catch (err) {
       outcome = { ok: false, error: errorMessage(err) };
     }
@@ -223,6 +230,15 @@ function SiteCrawlPanel({
               className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
             />
             {t('projects.addItem.crawlSamePath', 'Stay in this part of the website')}
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 pb-2">
+            <input
+              type="checkbox"
+              checked={otherHostDocuments}
+              onChange={e => setOtherHostDocuments(e.target.checked)}
+              className="h-4 w-4 text-indigo-600 border-gray-300 rounded-sm focus:ring-indigo-500"
+            />
+            {t('projects.addItem.crawlOtherHosts', 'Include files on other websites')}
           </label>
           <button
             type="button"

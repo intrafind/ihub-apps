@@ -184,6 +184,8 @@ export class ProjectIngestService {
     /** The jobs running on this worker; two may share an item (a released refresh and its successor). */
     this.active = new Set();
     this.running = 0;
+    /** Background jobs (scheduled refreshes) running now. */
+    this.runningBackground = 0;
   }
 
   get service() {
@@ -232,6 +234,8 @@ export class ProjectIngestService {
       itemId: item.id,
       input,
       user,
+      // A scheduled refresh waits behind every job someone is waiting for.
+      background: input.scheduled === true,
       startedAt: Date.now()
     };
     // Every job goes through the queue, so `ingest.concurrency` bounds the
@@ -251,15 +255,30 @@ export class ProjectIngestService {
     });
   }
 
+  /**
+   * Start queued jobs while slots are free. Jobs someone is waiting for (an
+   * upload, a pick, a refresh by hand) go first, in order; background jobs
+   * (scheduled refreshes) only when none of those waits, and with more than
+   * one slot never in the last one, so an upload always finds a slot within
+   * one job's time however many files a tick queued.
+   */
   _pump() {
     const limit = this.settings().ingest.concurrency;
+    const backgroundLimit = Math.max(1, limit - 1);
     while (this.running < limit && this.queue.length) {
-      const { job, resolve } = this.queue.shift();
+      let index = this.queue.findIndex(entry => !entry.job.background);
+      if (index < 0) {
+        if (this.runningBackground >= backgroundLimit) return;
+        index = 0;
+      }
+      const [{ job, resolve }] = this.queue.splice(index, 1);
       this.running += 1;
+      if (job.background) this.runningBackground += 1;
       void this._run(job)
         .catch(() => null)
         .then(result => {
           this.running -= 1;
+          if (job.background) this.runningBackground -= 1;
           resolve(result);
           this._pump();
         });

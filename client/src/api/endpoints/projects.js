@@ -430,7 +430,9 @@ export const CRAWL_REQUEST_TIMEOUT_MS = 45_000;
  * The pages of a website below a start URL, found by following its links.
  *
  * @param {string} url
- * @param {{maxPages?: number, maxDepth?: number, samePath?: boolean}} [options]
+ * @param {{maxPages?: number, maxDepth?: number, samePath?: boolean,
+ *   otherHostDocuments?: boolean}} [options] - `otherHostDocuments`: also list
+ *   documents on other hosts that the pages link to
  * @returns {Promise<{ok: boolean, pages?: Array<{url: string, title: string, depth: number,
  *   type: 'page'|'document'}>, truncated?: boolean, error?: string}>}
  */

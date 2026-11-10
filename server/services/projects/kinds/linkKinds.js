@@ -65,8 +65,14 @@ export const urlKind = registerItemKind({
   // named by its URL, and records what it is about on its first read.
   async prepare(ref, { name, kindChange = true, user } = {}) {
     if (kindChange) {
-      const { probeWebUrl, unsupportedUrlError } = await import('../webFileDownload.js');
-      const probe = await probeWebUrl(ref.url, { language: user?.language });
+      const { documentFromUrl, probeWebUrl, unsupportedUrlError } =
+        await import('../webFileDownload.js');
+      // An address that cannot be checked now (a timeout, a 429 or 503) and
+      // names a document by its extension is still a file: its download
+      // then fails on the item, which can be retried, instead of leaving a
+      // live link that cannot be turned into a file later.
+      const probe =
+        (await probeWebUrl(ref.url, { language: user?.language })) || documentFromUrl(ref.url);
       if (probe?.type === 'unsupported') throw unsupportedUrlError(probe);
       if (probe?.type === 'file') {
         return {

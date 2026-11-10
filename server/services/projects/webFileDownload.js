@@ -28,6 +28,27 @@ export const DOWNLOAD_THROTTLE_ID = 'project_download';
 const DOWNLOAD_ACCEPT =
   'application/pdf,application/vnd.openxmlformats-officedocument.*,application/vnd.oasis.opendocument.*,text/*;q=0.9,*/*;q=0.8';
 
+/**
+ * Extensions that name a document a project downloads (#3536): listed by the
+ * site crawler, and trusted when an address cannot be checked when it is added.
+ */
+export const DOCUMENT_EXTENSIONS = new Set(['pdf', 'docx', 'pptx', 'xlsx', 'odt', 'ods', 'odp']);
+
+/**
+ * What an address that could not be checked is taken for, from its
+ * extension alone: a document of {@link DOCUMENT_EXTENSIONS}, else nothing.
+ *
+ * @param {string} url
+ * @returns {{type: 'file', contentType: string, name: string, size: null, finalUrl: string}|null}
+ */
+export function documentFromUrl(url) {
+  const name = fileNameOf(null, url);
+  const extension = path.extname(name).slice(1).toLowerCase();
+  if (!DOCUMENT_EXTENSIONS.has(extension)) return null;
+  const contentType = acceptedTypeOf({ name });
+  return contentType ? { type: 'file', contentType, name, size: null, finalUrl: url } : null;
+}
+
 /** Types a URL serves that stay live links (read through the page reader). */
 const PAGE_TYPES = new Set([HTML_MIME, 'application/xhtml+xml']);
 
