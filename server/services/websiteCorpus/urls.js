@@ -9,6 +9,22 @@
  */
 
 /**
+ * A text without the slashes at its start and end. A loop, not a pattern: a
+ * regular expression for trailing slashes backtracks quadratically on a long
+ * run of them, and a URL path comes from the site.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function trimSlashes(text) {
+  let start = 0;
+  let end = text.length;
+  while (start < end && text[start] === '/') start += 1;
+  while (end > start && text[end - 1] === '/') end -= 1;
+  return text.slice(start, end);
+}
+
+/**
  * A scope prefix as the sizer uses it: empty (the whole site) or a path with a
  * leading and a trailing slash (`/de/`).
  *
@@ -16,11 +32,10 @@
  * @returns {string}
  */
 export function normalizePrefix(prefix) {
-  const text = String(prefix || '')
-    .trim()
-    .replace(/[?#].*$/, '');
-  if (!text || text === '/') return '';
-  return `/${text.replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+  const raw = String(prefix || '').trim();
+  const cut = raw.search(/[?#]/);
+  const text = trimSlashes(cut === -1 ? raw : raw.slice(0, cut));
+  return text ? `/${text}/` : '';
 }
 
 /** A host name for comparison: lower case, without a leading `www.`. */
@@ -78,12 +93,7 @@ export function sectionOf(url, prefix = '') {
     return 'home';
   }
   if (prefix && path.startsWith(prefix)) path = path.slice(prefix.length);
-  return (
-    path
-      .replace(/^\/+|\/+$/g, '')
-      .split('/')[0]
-      .toLowerCase() || 'home'
-  );
+  return trimSlashes(path).split('/')[0].toLowerCase() || 'home';
 }
 
 /**

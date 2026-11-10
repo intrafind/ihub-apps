@@ -29,6 +29,32 @@ function decodeEntities(text) {
 }
 
 /**
+ * The text of every `<loc>` element, found with `indexOf`, one pass over the
+ * file. A pattern for `<loc>` with optional whitespace around lazy groups
+ * backtracks quadratically on a hostile file (many spaces and no closing tag),
+ * and a sitemap is input from the site: up to 8 MB of it.
+ *
+ * @param {string} text
+ * @returns {string[]}
+ */
+function locElements(text) {
+  const locs = [];
+  let position = 0;
+  for (;;) {
+    const open = text.indexOf('<loc>', position);
+    if (open === -1) break;
+    const close = text.indexOf('</loc>', open + 5);
+    if (close === -1) break;
+    const inner = text.slice(open + 5, close).trim();
+    const cdata = inner.startsWith('<![CDATA[') && inner.endsWith(']]>');
+    const value = (cdata ? inner.slice(9, -3) : decodeEntities(inner)).trim();
+    if (value) locs.push(value);
+    position = close + 6;
+  }
+  return locs;
+}
+
+/**
  * The kind of a sitemap file and the URLs in its `<loc>` elements.
  *
  * @param {string} xml
@@ -41,14 +67,7 @@ export function parseSitemap(xml) {
     : /<urlset[\s>]/i.test(text)
       ? 'urlset'
       : 'unknown';
-  const locs = [];
-  for (const match of text.matchAll(
-    /<loc>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([^<]*?))\s*<\/loc>/gi
-  )) {
-    const value = (match[1] ?? decodeEntities(match[2] ?? '')).trim();
-    if (value) locs.push(value);
-  }
-  return { kind, locs };
+  return { kind, locs: locElements(text) };
 }
 
 /** The `Sitemap:` lines of a robots.txt. */

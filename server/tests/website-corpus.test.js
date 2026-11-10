@@ -179,6 +179,45 @@ describe('sitemaps', () => {
   });
 });
 
+describe('hostile input stays linear', () => {
+  /** The time `fn` takes; the old patterns needed minutes for what takes milliseconds now. */
+  const took = fn => {
+    const start = Date.now();
+    const result = fn();
+    return { ms: Date.now() - start, result };
+  };
+
+  it('reads a sitemap of 8 MB of spaces after an unclosed <loc> without backtracking', () => {
+    const { ms, result } = took(() => parseSitemap(`<loc>${' '.repeat(8_000_000)}`));
+    assert.deepEqual(result.locs, []);
+    assert.ok(ms < 2000, `took ${ms} ms`);
+  });
+
+  it('reads 8 MB of <loc> openers without a closer in linear time', () => {
+    const { ms, result } = took(() => parseSitemap('<loc>'.repeat(1_600_000)));
+    assert.deepEqual(result.locs, []);
+    assert.ok(ms < 2000, `took ${ms} ms`);
+  });
+
+  it('trims a path of a million slashes in linear time', () => {
+    const path = `https://a.test/${'/'.repeat(1_000_000)}x`;
+    const section = took(() => sectionOf(path));
+    assert.equal(section.result, 'x');
+    assert.ok(section.ms < 2000, `took ${section.ms} ms`);
+    const prefix = took(() => normalizePrefix(`a${'/'.repeat(1_000_000)}x`));
+    assert.equal(prefix.result, `/a${'/'.repeat(1_000_000)}x/`);
+    assert.ok(prefix.ms < 2000, `took ${prefix.ms} ms`);
+  });
+
+  it('still reads loc elements with surrounding whitespace, entities and CDATA', () => {
+    const { locs } = parseSitemap(
+      '<urlset><url><loc>\n  https://a.test/x?a=1&amp;b=2\n</loc></url>' +
+        '<url><loc>  <![CDATA[https://a.test/y]]>  </loc></url><url><loc></loc></url></urlset>'
+    );
+    assert.deepEqual(locs, ['https://a.test/x?a=1&b=2', 'https://a.test/y']);
+  });
+});
+
 describe('urls', () => {
   it('normalises the prefix and names sections', () => {
     assert.equal(normalizePrefix('de'), '/de/');
