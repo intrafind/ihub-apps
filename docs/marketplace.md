@@ -237,8 +237,8 @@ servers of a plugin have no iHub counterpart and are not imported.
 The `sha` (else `ref`) of a source decides the revision the skill files are fetched at; without
 either, the default branch is used. A plugin's `skills` paths (relative to the plugin) are honored
 next to the standard `skills/<name>/SKILL.md` folders. Sources of another kind (`npm`, `command`, a
-git host other than GitHub) and a marketplace that is not served from GitHub cannot be read; such
-plugins are left out and named in the server log.
+git host other than GitHub) cannot be read, and neither can a relative source (`"./plugins/x"`) of a
+marketplace that is not served from GitHub; such plugins are left out and named in the server log.
 
 The skills of a plugin are listed with the plugin's description. A plugin without a `version`
 uses the first seven characters of its commit as the version, so a new commit shows as an update.
@@ -248,7 +248,9 @@ per repository and revision. A marketplace such as the two above has about a hun
 other repositories, more than the 60 calls an hour GitHub allows without a token. Set the registry's
 authentication to **Bearer** with a GitHub token (no scopes needed for public repositories); a
 refresh that hits the limit keeps what it has read and logs the plugins it skipped. The token is
-sent only to GitHub hosts.
+sent to the GitHub API only when the registry's own URL is on GitHub (`raw.githubusercontent.com`,
+`github.com`); a marketplace served from another host is read without it, so a token does not lift
+the limit there.
 
 ### Versions, channel and pins
 

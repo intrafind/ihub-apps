@@ -166,6 +166,23 @@ describe('resolvePluginRoot', () => {
     ).toEqual({ owner: 'o', repo: 'r', ref: 'HEAD', dir: 'p' });
   });
 
+  test('names and refs that would change a URL are refused', () => {
+    const source = extra => ({ source: { source: 'github', repo: 'o/r', ...extra } });
+    for (const ref of ['../../../../user', 'x?y=1', 'a/b', '..', 'a..b', '-x', 'a#b']) {
+      expect(
+        resolvePluginRoot({ source: { source: 'github', repo: 'o/r', ref } }, OWN).skip
+      ).toMatch(/unsafe ref/);
+    }
+    expect(resolvePluginRoot(source({ sha: 'abc123' }), OWN).ref).toBe('abc123');
+    for (const url of [
+      'https://github.com/../r',
+      'https://github.com/o/..',
+      'https://github.com/o/r%3Fx'
+    ]) {
+      expect(resolvePluginRoot({ source: { source: 'url', url } }, OWN).skip).toBeTruthy();
+    }
+  });
+
   test('other source types and hosts are skipped', () => {
     expect(resolvePluginRoot({ source: { source: 'npm', package: 'x' } }, OWN).skip).toMatch(/npm/);
     expect(
@@ -314,6 +331,47 @@ describe('buildPluginSkillItems', () => {
     });
     // Four at a time: the first batch is already in flight, the rest is not asked.
     expect(limited.mock.calls.length).toBeLessThan(12);
+  });
+
+  test('a plugin with malformed tags, keywords or description does not fail the catalog', async () => {
+    const { items } = await run([
+      {
+        name: 'productivity',
+        source: './productivity',
+        tags: 'abc',
+        keywords: 7,
+        description: ['x']
+      }
+    ]);
+    expect(items).toHaveLength(2);
+    expect(items[0].tags).toEqual(['productivity']);
+    expect(items[0].description).toBeUndefined();
+  });
+
+  test('the catalog does not depend on which tree answers first', async () => {
+    // `a-b` (root skill of plugin a-b) and `a` / skill `b` both make the name `a-b`.
+    const trees = {
+      'o/first@HEAD': [blob('SKILL.md')],
+      'o/second@HEAD': [blob('skills/b/SKILL.md')]
+    };
+    const plugs = [
+      { name: 'a-b', source: { source: 'github', repo: 'o/first' } },
+      { name: 'a', source: { source: 'github', repo: 'o/second' } }
+    ];
+    for (const slowFirst of [true, false]) {
+      const items = await buildPluginSkillItems({
+        plugins: plugs,
+        ownRepo: null,
+        fetchTree: async (o, r, ref) => {
+          await new Promise(resolve => setTimeout(resolve, (r === 'first') === slowFirst ? 20 : 0));
+          return trees[`${o}/${r}@${ref}`];
+        },
+        logger: makeLogger()
+      });
+      expect(items.map(i => [i.name, i.source.url])).toEqual([
+        ['a-b', 'https://raw.githubusercontent.com/o/first/HEAD/SKILL.md']
+      ]);
+    }
   });
 
   test("the marketplace's own repository failing is an error", async () => {

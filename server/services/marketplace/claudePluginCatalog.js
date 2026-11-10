@@ -48,6 +48,12 @@ export const TREE_FETCH_CONCURRENCY = 4;
 /** Companion files of one skill that are kept; more are dropped with a warning. */
 export const MAX_COMPANIONS_PER_SKILL = 200;
 
+/** A GitHub owner or repository name; the dot-only names `.` and `..` are excluded separately. */
+const GITHUB_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
+
+/** A commit, tag or branch name that is safe as one URL path segment. */
+const SAFE_REF_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
 /** A skill name is a folder name below `contents/skills/`. */
 const SKILL_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 
@@ -198,9 +204,19 @@ export function resolvePluginRoot(plugin, ownRepo) {
       return { skip: `source type '${source.source}' cannot be read by the server` };
   }
   if (!repo) return { skip: 'the repository is not on GitHub' };
+  // The names and the ref go into API and raw URLs: they must not change the path or the query.
+  for (const name of [repo.owner, repo.repo]) {
+    if (!GITHUB_NAME_PATTERN.test(name) || /^\.+$/.test(name)) {
+      return { skip: 'unsafe repository name' };
+    }
+  }
 
   const ref = [source.sha, source.ref].find(v => typeof v === 'string' && v.trim());
-  return { ...repo, ref: ref ? ref.trim() : 'HEAD', dir };
+  const pinned = ref ? ref.trim() : 'HEAD';
+  if (!SAFE_REF_PATTERN.test(pinned) || pinned.includes('..')) {
+    return { skip: `unsafe ref '${pinned}'` };
+  }
+  return { ...repo, ref: pinned, dir };
 }
 
 /**
@@ -324,13 +340,149 @@ function isRateLimited(error) {
   return /\b(403|429)\b/.test(String(error?.message || ''));
 }
 
+/** A list field of a plugin entry; anything but an array is no list. */
+const listOf = value => (Array.isArray(value) ? value : []);
+
+/**
+ * The plugins grouped by repository and revision, so each tree is read once.
+ * A plugin that cannot be located is added to `skipped`.
+ *
+ * @param {Array<object>} plugins
+ * @param {{ owner: string, repo: string, ref: string }|null} ownRepo
+ * @param {Array<{ plugin: string, reason: string }>} skipped
+ * @returns {Array<{ owner: string, repo: string, ref: string, entries: Array<{ plugin: object, dir: string }> }>}
+ */
+function groupByRepository(plugins, ownRepo, skipped) {
+  const repos = new Map();
+  for (const plugin of plugins) {
+    if (!plugin || typeof plugin.name !== 'string' || !plugin.name) continue;
+    const root = resolvePluginRoot(plugin, ownRepo);
+    if (root.skip) {
+      skipped.push({ plugin: plugin.name, reason: root.skip });
+      continue;
+    }
+    const key = `${root.owner}/${root.repo}@${root.ref}`;
+    if (!repos.has(key)) {
+      repos.set(key, { owner: root.owner, repo: root.repo, ref: root.ref, entries: [] });
+    }
+    repos.get(key).entries.push({ plugin, dir: root.dir });
+  }
+  return [...repos.values()];
+}
+
+/**
+ * Read the tree of every repository, a few at a time. Nothing is built here,
+ * so the order of the catalog does not depend on which call finishes first.
+ * After a rate limit the repositories not yet asked are not asked.
+ *
+ * @param {Array<{ owner: string, repo: string, ref: string }>} repos
+ * @param {Function} fetchTree
+ * @returns {Promise<Array<{ tree?: Array<object>, error?: Error, rateLimited?: boolean }>>}
+ */
+async function fetchTrees(repos, fetchTree) {
+  let rateLimited = false;
+  return mapWithConcurrency(repos, TREE_FETCH_CONCURRENCY, async repo => {
+    if (rateLimited) return { rateLimited: true };
+    try {
+      return { tree: await fetchTree(repo.owner, repo.repo, repo.ref) };
+    } catch (error) {
+      if (isRateLimited(error)) rateLimited = true;
+      return { error };
+    }
+  });
+}
+
+/**
+ * The version of a plugin's skills: the plugin's own, else the commit it is pinned to.
+ *
+ * @param {object} plugin
+ * @returns {string|undefined}
+ */
+function versionOf(plugin) {
+  if (typeof plugin.version === 'string' && plugin.version) return plugin.version;
+  const sha = plugin.source?.sha;
+  return typeof sha === 'string' && sha ? sha.slice(0, 7) : undefined;
+}
+
+/**
+ * The skill items of one plugin, in a tree already read.
+ *
+ * @param {Object} params
+ * @param {object} params.plugin - Entry of `marketplace.json`
+ * @param {string} params.root - Plugin folder in the repository
+ * @param {{ skillDirs: Set<string>, blobs: string[] }} params.index - `indexTree` of the repository
+ * @param {string} params.rawBase - Raw URL of the repository at the plugin's revision
+ * @param {string|undefined} params.defaultAuthor - `owner.name` of the marketplace
+ * @param {Set<string>} params.usedNames - Names already given; the first plugin keeps a name
+ * @param {(message: string, extra: object) => void} params.log
+ * @returns {Array<object>}
+ */
+function pluginItems({ plugin, root, index, rawBase, defaultAuthor, usedNames, log }) {
+  const tags = [...new Set([plugin.name, ...listOf(plugin.tags), ...listOf(plugin.keywords)])];
+  let description;
+  if (typeof plugin.description === 'string') description = { en: plugin.description };
+  else if (
+    plugin.description &&
+    typeof plugin.description === 'object' &&
+    !Array.isArray(plugin.description)
+  ) {
+    description = plugin.description;
+  }
+  const items = [];
+
+  for (const dir of findSkillDirs(plugin, root, index.skillDirs)) {
+    const rootSkill = dir === root;
+    const leaf = dir.split('/').pop() || plugin.name;
+    const name = rootSkill ? plugin.name : `${plugin.name}-${leaf}`;
+    if (!SKILL_NAME_PATTERN.test(name) || usedNames.has(name)) {
+      log('A plugin skill was left out: its name is unusable or taken', {
+        plugin: plugin.name,
+        skillDir: dir,
+        name
+      });
+      continue;
+    }
+    usedNames.add(name);
+
+    const { companions, truncated } = findCompanions(index.blobs, dir, index.skillDirs, {
+      rootSkill
+    });
+    if (truncated) {
+      log(`A plugin skill has more than ${MAX_COMPANIONS_PER_SKILL} files; the rest is left out`, {
+        plugin: plugin.name,
+        skillDir: dir
+      });
+    }
+
+    const ownName = typeof plugin.displayName === 'string' ? plugin.displayName : null;
+    items.push({
+      type: 'skill',
+      name,
+      displayName: { en: rootSkill ? ownName || humanize(plugin.name) : humanize(leaf) },
+      description,
+      version: versionOf(plugin),
+      author: plugin.author?.name || defaultAuthor,
+      category: humanize(plugin.category || plugin.name),
+      tags: tags.filter(tag => typeof tag === 'string' && tag),
+      source: {
+        type: 'url',
+        url: `${rawBase}/${joinPath(dir, 'SKILL.md')}`,
+        companions,
+        rawBase
+      }
+    });
+  }
+  return items;
+}
+
 /**
  * Translate the plugins of a Claude Code marketplace into skill catalog items.
  *
  * A plugin that cannot be read (unsupported source, repository not found,
  * rate limit) is skipped with a log entry; it never fails the catalog. When
  * the marketplace's own repository cannot be read at all, the error is thrown,
- * so *Test Connection* shows it.
+ * so *Test Connection* shows it. The items come in the order of the plugins'
+ * repositories, and a name taken by an earlier plugin is not given again.
  *
  * @param {Object} params
  * @param {Array<object>} params.plugins - `plugins` of `marketplace.json`
@@ -353,125 +505,42 @@ export async function buildPluginSkillItems({
 }) {
   const log = (message, extra) => logger.warn(message, { ...logContext, ...extra });
   const skipped = [];
+  const repos = groupByRepository(plugins, ownRepo, skipped);
+  const results = await fetchTrees(repos, fetchTree);
 
-  /** @type {Map<string, { owner: string, repo: string, ref: string, entries: object[] }>} */
-  const repos = new Map();
-  for (const plugin of plugins) {
-    if (!plugin || typeof plugin.name !== 'string' || !plugin.name) continue;
-    const root = resolvePluginRoot(plugin, ownRepo);
-    if (root.skip) {
-      skipped.push({ plugin: plugin.name, reason: root.skip });
-      continue;
-    }
-    const key = `${root.owner}/${root.repo}@${root.ref}`;
-    if (!repos.has(key)) {
-      repos.set(key, { owner: root.owner, repo: root.repo, ref: root.ref, entries: [] });
-    }
-    repos.get(key).entries.push({ plugin, dir: root.dir });
-  }
-
-  let rateLimited = false;
-  let ownRepoError = null;
   const items = [];
   const usedNames = new Set();
+  let ownRepoError = null;
+  let rateLimited = false;
 
-  await mapWithConcurrency([...repos.values()], TREE_FETCH_CONCURRENCY, async repo => {
-    const isOwn = ownRepo && repo.owner === ownRepo.owner && repo.repo === ownRepo.repo;
-    if (rateLimited) {
-      for (const { plugin } of repo.entries) {
-        skipped.push({ plugin: plugin.name, reason: 'GitHub API rate limit reached' });
+  repos.forEach((repo, i) => {
+    const { tree, error, rateLimited: notAsked } = results[i];
+    if (!tree) {
+      const reason = notAsked
+        ? 'GitHub API rate limit reached'
+        : `could not read ${repo.owner}/${repo.repo}: ${error.message}`;
+      rateLimited ||= Boolean(notAsked) || isRateLimited(error);
+      if (error && ownRepo?.owner === repo.owner && ownRepo?.repo === repo.repo) {
+        ownRepoError ||= error;
       }
+      for (const { plugin } of repo.entries) skipped.push({ plugin: plugin.name, reason });
       return;
     }
 
-    let tree;
-    try {
-      tree = await fetchTree(repo.owner, repo.repo, repo.ref);
-    } catch (error) {
-      if (isRateLimited(error)) rateLimited = true;
-      if (isOwn && !ownRepoError) ownRepoError = error;
-      for (const { plugin } of repo.entries) {
-        skipped.push({
-          plugin: plugin.name,
-          reason: `could not read ${repo.owner}/${repo.repo}: ${error.message}`
-        });
-      }
-      return;
-    }
-
-    const { skillDirs, blobs } = indexTree(tree);
+    const index = indexTree(tree);
     const rawBase = `https://raw.githubusercontent.com/${repo.owner}/${repo.repo}/${repo.ref}`;
-
-    for (const { plugin, dir: root } of repo.entries) {
-      const dirs = findSkillDirs(plugin, root, skillDirs);
-      const sha =
-        typeof plugin.source === 'object' && typeof plugin.source?.sha === 'string'
-          ? plugin.source.sha
-          : null;
-      const category = humanize(plugin.category || plugin.name);
-      const tags = [
-        ...new Set(
-          [plugin.name, ...(plugin.tags || []), ...(plugin.keywords || [])].filter(
-            tag => typeof tag === 'string' && tag
-          )
-        )
-      ];
-
-      for (const dir of dirs) {
-        const rootSkill = dir === root;
-        const leaf = dir.split('/').pop() || plugin.name;
-        const name = rootSkill ? plugin.name : `${plugin.name}-${leaf}`;
-        if (!SKILL_NAME_PATTERN.test(name) || usedNames.has(name)) {
-          log('A plugin skill was left out: its name is unusable or taken', {
-            plugin: plugin.name,
-            skillDir: dir,
-            name
-          });
-          continue;
-        }
-        usedNames.add(name);
-
-        const { companions, truncated } = findCompanions(blobs, dir, skillDirs, { rootSkill });
-        if (truncated) {
-          log(
-            `A plugin skill has more than ${MAX_COMPANIONS_PER_SKILL} files; the rest is left out`,
-            {
-              plugin: plugin.name,
-              skillDir: dir
-            }
-          );
-        }
-
-        const description =
-          typeof plugin.description === 'string'
-            ? { en: plugin.description }
-            : plugin.description || undefined;
-        const version =
-          typeof plugin.version === 'string' && plugin.version
-            ? plugin.version
-            : sha
-              ? sha.slice(0, 7)
-              : undefined;
-
-        items.push({
-          type: 'skill',
-          name,
-          displayName: {
-            en: rootSkill ? plugin.displayName || humanize(plugin.name) : humanize(leaf)
-          },
-          description,
-          version,
-          author: plugin.author?.name || owner?.name,
-          category,
-          tags,
-          source: {
-            type: 'url',
-            url: `${rawBase}/${joinPath(dir, 'SKILL.md')}`,
-            companions,
-            rawBase
-          }
-        });
-      }
+    for (const { plugin, dir } of repo.entries) {
+      items.push(
+        ...pluginItems({
+          plugin,
+          root: dir,
+          index,
+          rawBase,
+          defaultAuthor: owner?.name,
+          usedNames,
+          log
+        })
+      );
     }
   });
 
