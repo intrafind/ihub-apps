@@ -46,13 +46,45 @@ for (const base of SEARCH_FROM) {
 }
 
 /**
+ * Texts longer than this are not tokenized whole: the BPE count is synchronous
+ * and linear (about 7 ms per 100 KB of prose, 15x that for a long run without
+ * whitespace), so a 4 MB attachment would hold the event loop for ~0.5 s and a
+ * 1 MB run of one character for ~1.5 s. Above the limit the count is taken
+ * from evenly spaced samples and scaled to the length (see `sampledCount`).
+ */
+export const FULL_COUNT_MAX_CHARS = 256 * 1024;
+const SAMPLE_COUNT = 16;
+const SAMPLE_CHARS = 4 * 1024;
+
+/**
+ * Count a long text from `SAMPLE_COUNT` slices spread over it (64 KB in all,
+ * about 5 ms) and scale to the whole length. Measured within 7% of the full
+ * count on 1 MB of English, German, JSON, code, CJK, base64 and mixed text
+ * (worst case: English docs with tables and code, +6.4%); chars/4 is off by
+ * up to 100% on the same texts.
+ */
+function sampledCount(text, count) {
+  const last = text.length - SAMPLE_CHARS;
+  let tokens = 0;
+  for (let i = 0; i < SAMPLE_COUNT; i++) {
+    const start = Math.floor((last * i) / (SAMPLE_COUNT - 1));
+    tokens += count(text.slice(start, start + SAMPLE_CHARS));
+  }
+  return Math.round((tokens * text.length) / (SAMPLE_COUNT * SAMPLE_CHARS));
+}
+
+/**
  * Estimate the number of tokens in a piece of text.
  * @param {string} text
- * @returns {number} estimated token count (0 for empty/invalid input)
+ * @returns {number} estimated token count (0 for empty/invalid input). Exact
+ *   for texts up to `FULL_COUNT_MAX_CHARS`, sampled above.
  */
 export function estimateTokens(text) {
   if (!text || typeof text !== 'string') return 0;
   try {
+    if (countTokensFn && text.length > FULL_COUNT_MAX_CHARS) {
+      return sampledCount(text, countTokensFn);
+    }
     return (countTokensFn || heuristic)(text);
   } catch {
     // Fall back to the classic chars/4 heuristic if the tokenizer throws

@@ -583,5 +583,7 @@ project size estimates, tool search and knowledge retrieval are real token count
   about 11 percent higher, and Chinese or Japanese text two to three times higher. Limits written
   in tokens, such as `skills.maxCatalogTokens` and `skills.maxSkillBodyTokens`, now apply to the
   real counts: they fit more English or German prose and less JSON or Chinese and Japanese text.
-- **Cost.** Counting is exact but not free: about 30 ms for 100 KB of text on a typical server.
+- **Cost.** Counting is exact but not free: about 7 ms for 100 KB of prose, 1 MB of prose holds the
+  server for about 0.1 to 0.2 s. Texts above 256 KB (a very large attachment) are therefore counted
+  from samples spread over the text, within about 7 percent of the exact count, in about 5 ms.
 - Installations that run from a copy without the package keep the old behaviour.

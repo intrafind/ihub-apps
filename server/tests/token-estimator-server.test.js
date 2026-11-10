@@ -9,7 +9,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { estimateTokens } from '../../shared/tokenEstimator.js';
+import { estimateTokens, FULL_COUNT_MAX_CHARS } from '../../shared/tokenEstimator.js';
 
 describe('server token estimate', () => {
   it('depends on gpt-tokenizer and finds it from shared/', () => {
@@ -23,5 +23,20 @@ describe('server token estimate', () => {
   it('counts empty and invalid input as zero', () => {
     assert.equal(estimateTokens(''), 0);
     assert.equal(estimateTokens(undefined), 0);
+  });
+
+  it('counts long texts from samples, within a few percent and without blocking', () => {
+    const prose = 'Die Plattform durchsucht Dokumente im Unternehmen und beantwortet Fragen. ';
+    const text = prose.repeat(Math.ceil((FULL_COUNT_MAX_CHARS * 2) / prose.length));
+    const exact =
+      estimateTokens(text.slice(0, FULL_COUNT_MAX_CHARS)) * (text.length / FULL_COUNT_MAX_CHARS);
+    const started = performance.now();
+    const sampled = estimateTokens(text);
+    const ms = performance.now() - started;
+    assert.ok(Math.abs(sampled - exact) / exact < 0.05, `sampled ${sampled} vs ~${exact}`);
+    assert.ok(ms < 100, `sampled count took ${ms} ms`);
+    // A run without whitespace is the slow case of the exact count (~1.4 s per MB).
+    const run = estimateTokens('a'.repeat(4 * 1024 * 1024));
+    assert.ok(run > 0);
   });
 });
