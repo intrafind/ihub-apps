@@ -8516,7 +8516,8 @@
       "linkPublishedDetail": "Published for everyone",
       "linkFromAppsDetail": "Comes with one of your apps",
       "nothingToAdd": "This kind of item is not available here.",
-      "ifinderProfile": "Search in"
+      "ifinderProfile": "Search in",
+      "crawlOtherHosts": "Include files on other websites"
     },
     "chatBar": {
       "inProject": "In project: {{name}}",

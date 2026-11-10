@@ -8490,7 +8490,8 @@
       "linkPublishedDetail": "Für alle veröffentlicht",
       "linkFromAppsDetail": "Gehört zu einer Ihrer Apps",
       "nothingToAdd": "Diese Art von Eintrag ist hier nicht verfügbar.",
-      "ifinderProfile": "Suchen in"
+      "ifinderProfile": "Suchen in",
+      "crawlOtherHosts": "Dateien auf anderen Websites einbeziehen"
     },
     "chatBar": {
       "inProject": "Im Projekt: {{name}}",

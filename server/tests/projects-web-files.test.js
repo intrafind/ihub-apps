@@ -41,7 +41,13 @@ import {
   shutdownProjects
 } from '../services/projects/bootstrap.js';
 import { evictItemText, getItemText } from '../services/knowledge/ItemTextService.js';
-import { downloadWebFile, fileNameOf, probeWebUrl } from '../services/projects/webFileDownload.js';
+import {
+  documentFromUrl,
+  downloadWebFile,
+  fileNameOf,
+  probeWebUrl
+} from '../services/projects/webFileDownload.js';
+import { ProjectIngestService } from '../services/projects/ProjectIngestService.js';
 import {
   DEFAULT_REFRESH_TTL_SECONDS,
   NEVER_LINK_CACHE_SECONDS,
@@ -53,7 +59,7 @@ import {
 } from '../services/projects/refreshTtl.js';
 import { projectSettings } from '../services/projects/projectSettings.js';
 import { serializeItem } from '../services/projects/projectView.js';
-import { isDocumentResponse, linkTypeOf } from '../services/projects/siteCrawler.js';
+import { crawlSite, isDocumentResponse, linkTypeOf } from '../services/projects/siteCrawler.js';
 import { createSourceManager } from '../sources/index.js';
 import * as migration from '../migrations/V237__project_refresh_ttl.js';
 import { buildDocx, p as docxP } from './helpers/docxFile.js';
@@ -433,6 +439,31 @@ describe('web files in a project', () => {
     }
   });
 
+  it('adds a document address it cannot check now as a file, which a retry downloads', async () => {
+    files.set('/later/report.pdf', { status: 503, body: Buffer.from('busy'), headers: {} });
+    const project = await newProject('Unreachable');
+    const { item } = await addUrl(project, `${base}/later/report.pdf`);
+    assert.equal(item.kind, 'web-file', 'the extension decides when the check fails');
+    const failed = await settled(project.id, item.id);
+    assert.equal(failed.status, 'failed');
+    // The site is back: a retry (a refresh) downloads it.
+    serve('/later/report.pdf', await makePdf('Back online.'), {
+      'content-type': 'application/pdf'
+    });
+    const { item: ready } = await service.refreshItem(project.id, item.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.equal(ready.status, 'ready');
+    assert.match((await getItemText({ id: project.id }, ready, { user: ADA })).text, /Back online/);
+    // A page address that cannot be checked stays a link, as before.
+    files.set('/later/page', { status: 503, body: Buffer.from('busy'), headers: {} });
+    const { item: page } = await addUrl(project, `${base}/later/page`);
+    assert.equal(page.kind, 'url');
+    assert.equal(documentFromUrl('https://x.example/a/notes.docx').name, 'notes.docx');
+    assert.equal(documentFromUrl('https://x.example/a/old.doc'), null);
+  });
+
   it('keeps an HTML page a live link and refuses a type nothing reads', async () => {
     serve(
       '/page',
@@ -694,6 +725,43 @@ describe('web files in a project', () => {
   });
 });
 
+describe('ingest queue', () => {
+  it('starts a job someone waits for before scheduled refreshes, and keeps a slot for it', async () => {
+    const ingest = new ProjectIngestService({
+      service: {},
+      platform: () => ({ projects: { ingest: { concurrency: 2 } } })
+    });
+    const started = [];
+    const gates = new Map();
+    ingest._run = job =>
+      new Promise(resolve => {
+        started.push(job.itemId);
+        gates.set(job.itemId, resolve);
+      });
+    const enqueue = (itemId, scheduled) =>
+      ingest.start({ id: 'p' }, { id: itemId }, { scheduled, fetch: () => null }, { wait: false });
+    await enqueue('bg1', true);
+    await enqueue('bg2', true);
+    await enqueue('bg3', true);
+    // Two slots: one background job runs, the last slot stays free.
+    assert.deepEqual(started, ['bg1']);
+    await enqueue('upload', false);
+    assert.deepEqual(started, ['bg1', 'upload'], 'the upload starts at once');
+    gates.get('upload')();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(started, ['bg1', 'upload'], 'still one background job at a time');
+    gates.get('bg1')();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(started, ['bg1', 'upload', 'bg2']);
+    // A waiting user job jumps every queued background job.
+    await enqueue('pick', false);
+    gates.get('bg2')();
+    await new Promise(resolve => setImmediate(resolve));
+    // Both slots are free: the pick first, then the last background job.
+    assert.deepEqual(started.slice(3), ['pick', 'bg3']);
+  });
+});
+
 describe('site crawler documents', () => {
   it('lists Office and OpenDocument links like PDFs, legacy Office not at all', () => {
     for (const ext of ['pdf', 'docx', 'pptx', 'xlsx', 'odt', 'ods', 'odp']) {
@@ -709,6 +777,56 @@ describe('site crawler documents', () => {
     assert.equal(isDocumentResponse('text/html', 'https://example.com/get'), false);
     assert.equal(isDocumentResponse('application/json', 'https://example.com/api'), false);
     assert.equal(isDocumentResponse('image/png', 'https://example.com/p'), false);
+  });
+});
+
+describe('crawler: documents on other hosts', () => {
+  const html = links =>
+    `<html><head><title>Start</title></head><body>${links
+      .map(href => `<a href="${href}">x</a>`)
+      .join('')}</body></html>`;
+  const site = {
+    'https://www.example.com/docs/': html([
+      'guide',
+      'https://cdn.example.net/files/handbook.pdf',
+      'https://cdn.example.net/files/deck.pptx',
+      'https://cdn.example.net/files/page',
+      'https://other.example.org/blog/'
+    ]),
+    'https://www.example.com/docs/guide': html([])
+  };
+  const fetched = [];
+  const deps = {
+    fetchPage: async url => {
+      fetched.push(url);
+      if (!site[url]) throw new Error('HTTP 404');
+      return { finalUrl: url, contentType: 'text/html', html: site[url] };
+    },
+    fetchRobots: async () => 'User-agent: *\nDisallow: /files/'
+  };
+
+  it("lists them only when asked, never crawls them, and never lists other hosts' pages", async () => {
+    const plain = await crawlSite({ url: 'https://www.example.com/docs/', maxDepth: 1 }, deps);
+    assert.ok(!plain.pages.some(entry => entry.url.includes('cdn.example.net')));
+    fetched.length = 0;
+    const wide = await crawlSite(
+      { url: 'https://www.example.com/docs/', maxDepth: 1, otherHostDocuments: true },
+      deps
+    );
+    const listed = wide.pages.map(entry => [entry.url, entry.type]);
+    assert.deepEqual(
+      listed.filter(([url]) => url.includes('cdn.example.net')),
+      [
+        ['https://cdn.example.net/files/handbook.pdf', 'document'],
+        ['https://cdn.example.net/files/deck.pptx', 'document']
+      ],
+      "documents only, and the start site's robots.txt is not applied to another host"
+    );
+    assert.ok(!listed.some(([url]) => url.includes('other.example.org')));
+    assert.ok(
+      !fetched.some(url => !url.startsWith('https://www.example.com/')),
+      'nothing else is fetched'
+    );
   });
 });
 
