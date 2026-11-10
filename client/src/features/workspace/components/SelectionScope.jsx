@@ -48,6 +48,9 @@ function selectionIn(root) {
  * @param {{ kind: string, id: string, name: string }} props.source - What the text is from.
  * @param {boolean} [props.allowEdit] - Offer "Edit with AI" (artifacts; never sources/uploads).
  * @param {number} [props.bottomPadding] - Space kept free for the composer dock.
+ * @param {number} [props.dockClearance] - For content that fills the pane and scrolls behind the
+ *   dock (an artifact): no space is taken, but `--workspace-dock-clearance` tells the scrollable
+ *   inside how far its last lines must clear the dock.
  * @param {string} [props.className]
  * @param {string} [props.innerClassName]
  * @param {string} [props.testId]
@@ -59,6 +62,7 @@ export default function SelectionScope({
   source,
   allowEdit = false,
   bottomPadding = 0,
+  dockClearance = 0,
   className = '',
   innerClassName = '',
   testId,
@@ -160,7 +164,14 @@ export default function SelectionScope({
       ref={rootRef}
       className={`relative ${className}`}
       data-testid={testId}
-      style={bottomPadding ? { paddingBottom: bottomPadding } : undefined}
+      style={
+        bottomPadding || dockClearance
+          ? {
+              ...(bottomPadding ? { paddingBottom: bottomPadding } : null),
+              ...(dockClearance ? { '--workspace-dock-clearance': `${dockClearance}px` } : null)
+            }
+          : undefined
+      }
     >
       {innerClassName ? <div className={innerClassName}>{children}</div> : children}
       {active && selection && !coarse && (
@@ -204,7 +215,11 @@ export default function SelectionScope({
         </div>
       )}
       {active && selection && coarse && (
-        <div className="sticky bottom-2 z-20 flex justify-center px-2 pb-2">
+        <div
+          className="sticky bottom-2 z-20 flex justify-center px-2 pb-2"
+          // Above the dock, which floats over the bottom of the pane.
+          style={dockClearance ? { bottom: dockClearance + 8 } : undefined}
+        >
           <button
             type="button"
             onClick={() => quote('ask')}
