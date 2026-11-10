@@ -620,7 +620,7 @@ function ChatInput({
       const localFilesArray = (Array.isArray(localFiles) ? localFiles : [localFiles]).filter(
         Boolean
       );
-      const returned = new Set(localFilesArray.map(entryKey));
+      const returned = new Set(localFilesArray.map(file => entryKey(file)));
       const cloudFiles = files.filter(
         f => f.source && f.source !== 'local' && !returned.has(entryKey(f))
       );
