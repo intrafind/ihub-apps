@@ -95,6 +95,26 @@ export function previewTypeOf(artifact) {
   return 'none';
 }
 
+/** Badge in the header per preview type. */
+const BADGES = {
+  markdown: 'MD',
+  html: 'HTML',
+  svg: 'SVG',
+  csv: 'CSV',
+  json: 'JSON',
+  ipynb: 'IPYNB',
+  pdf: 'PDF',
+  image: 'IMG'
+};
+
+/** The type badge of an artifact: a short label from its type, else its extension. */
+export function artifactBadge(artifact) {
+  const type = previewTypeOf(artifact);
+  if (BADGES[type]) return BADGES[type];
+  const match = /\.([a-z0-9]{1,5})$/i.exec(artifactDisplayName(artifact));
+  return match ? match[1].toUpperCase() : null;
+}
+
 /** Whether an artifact is text the user can copy. */
 export function isTextArtifact(artifact) {
   return ['markdown', 'json', 'code', 'html', 'svg', 'csv', 'ipynb'].includes(

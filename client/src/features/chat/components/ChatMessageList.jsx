@@ -201,15 +201,23 @@ function MessageLog({
   return (
     <div
       ref={observeContainer}
-      className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg"
+      className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
       role="log"
       aria-live="polite"
       aria-label={t('chat.messageList', 'Chat messages')}
+      // F6 cycles sidebar → chat log → composer → workspace pane.
+      data-f6-region="chatlog"
+      tabIndex={-1}
     >
       {displayedMessages.map((message, index) => (
         // One reading column, about 70 characters per line, centred; the
         // composer uses the same width (AppChat).
-        <div key={message.id} data-message-role={message.role} className="w-full max-w-3xl mx-auto">
+        <div
+          key={message.id}
+          data-message-role={message.role}
+          data-message-id={message.id}
+          className="w-full max-w-3xl mx-auto rounded-lg motion-safe:transition-colors"
+        >
           <div
             className={`flex ${showAvatars ? 'gap-3' : 'gap-1'} ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
           >

@@ -97,7 +97,7 @@ describe('MessageAttachments: structure', () => {
       />
     );
     expect(screen.getByRole('button', { name: /Contract\.pdf/ })).toHaveAccessibleDescription(
-      'Opens in the Files panel'
+      'Opens in the workspace'
     );
   });
 
@@ -343,12 +343,12 @@ describe('MessageAttachments: what a screen reader is told', () => {
     expect(tile).toHaveTextContent('Image sent to the model as 640×480');
   });
 
-  test('"Opens in the Files panel" is there only when some card can open', () => {
+  test('"Opens in the workspace" is there only when some card can open', () => {
     const views = viewsOf([stored('f1', 'Contract.pdf')]);
     const { rerender } = render(<MessageAttachments attachments={views} />);
-    expect(screen.queryByText('Opens in the Files panel')).not.toBeInTheDocument();
+    expect(screen.queryByText('Opens in the workspace')).not.toBeInTheDocument();
     rerender(<MessageAttachments attachments={views} onOpenFile={() => {}} />);
-    expect(screen.getByText('Opens in the Files panel')).toBeInTheDocument();
+    expect(screen.getByText('Opens in the workspace')).toBeInTheDocument();
     // a stored file that is not shared with this viewer cannot open either
     rerender(
       <MessageAttachments
@@ -356,7 +356,7 @@ describe('MessageAttachments: what a screen reader is told', () => {
         onOpenFile={() => {}}
       />
     );
-    expect(screen.queryByText('Opens in the Files panel')).not.toBeInTheDocument();
+    expect(screen.queryByText('Opens in the workspace')).not.toBeInTheDocument();
   });
 });
 

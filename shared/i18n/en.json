@@ -6180,6 +6180,7 @@
     "resend": "Resend",
     "attachmentsLabel": "Attachments",
     "attachments": {
+      "opensInWorkspace": "Opens in the workspace",
       "images": "Images",
       "opensInFiles": "Opens in the Files panel",
       "moreFiles_one": "+{{count}} more file",
@@ -9109,6 +9110,7 @@
     "pageNotFound": "This file could not be found."
   },
   "chatFiles": {
+    "deleted": "{{name}} deleted.",
     "attached": "Attached {{name}} to your email.",
     "attachTooLarge": "The file is too large to attach to an email.",
     "attachFailed": "The file could not be attached to your email.",
@@ -9508,5 +9510,70 @@
     "COPILOT_REFERENCE_ID_MISSING": "The Copilot agent has no reference ID yet.",
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "The Copilot agent needs a public HTTPS address.",
     "INTEGRATION_AUTH_REQUIRED": "Connect your account to use this integration."
+  },
+  "workspace": {
+    "backTo": "Back to {{name}}",
+    "backToChat": "Back to chat",
+    "browserFullScreen": "Browser full screen",
+    "exitBrowserFullScreen": "Exit browser full screen",
+    "clearSelection": "Clear",
+    "close": "Close workspace",
+    "code": "Code",
+    "preview": "Preview",
+    "viewMode": "View",
+    "copyAsMarkdown": "Copy as Markdown",
+    "copyMenu": "More copy and download options",
+    "downloadOriginal": "Download original",
+    "downloadZip": "Download .zip",
+    "emptyFiles": "No files yet. Files the assistant creates or you upload appear here.",
+    "emptySources": "No sources yet. Documents an answer cites appear here.",
+    "fullScreen": "Full screen",
+    "exitFullScreen": "Exit full screen",
+    "itemGone": "This file is no longer available in this chat.",
+    "moreActions": "More actions",
+    "openFailed": "The link could not be opened.",
+    "openInSourceSystem": "Open in source system",
+    "passagePosition": "Passage {{current}}/{{total}}",
+    "passages": "Passages",
+    "previewFailed": "Couldn't load preview",
+    "quoted": "Quoted in the message box",
+    "regionLabel": "Workspace: {{title}}",
+    "resize": "Resize workspace",
+    "selectedCount": "{{count}} selected",
+    "showAnswer": "Show answer {{number}} in the chat",
+    "sidebarCollapsed": "Sidebar collapsed to make room",
+    "skipToWorkspace": "Skip to workspace",
+    "sourceBadge": "Source",
+    "sourceNoPreview": "There is no preview of this source. Open it in its system.",
+    "sourcesListLabel": "Sources cited in this chat",
+    "switchFile": "Switch file",
+    "switchFileHint": ", switch file",
+    "tabSources": "Sources",
+    "widthPercent": "Workspace {{percent}} percent",
+    "zoom": "Zoom",
+    "dock": {
+      "answering": "Answering…",
+      "collapse": "Collapse chat",
+      "hint": "Ask a question or ask for a change. The chat keeps going.",
+      "latest": "Latest answer:",
+      "openChat": "Open chat",
+      "placeholder": "Ask to change this document…"
+    },
+    "quote": {
+      "artifactRef": " (artifact id: {{id}})",
+      "askFrom": "About {{name}}",
+      "askLead": "About this passage of \"{{name}}\"{{ref}}:",
+      "editFrom": "Edit in {{name}}",
+      "editLead": "Edit this passage of \"{{name}}\"{{ref}} and give me the whole document again as a new file:",
+      "editNote": "The assistant writes a new file with the change. The original stays as it is.",
+      "remove": "Remove quote"
+    },
+    "selection": {
+      "ask": "Ask about",
+      "askTouch": "Ask about selection",
+      "edit": "Edit with AI",
+      "editHint": "The assistant writes a new file with the change. The original stays as it is.",
+      "label": "Selection actions"
+    }
   }
 }

@@ -9,6 +9,7 @@ import { saveBlobAs } from '../../../utils/externalNavigation';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
 import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
 import {
+  artifactBadge,
   blobOfBase64,
   fileLookOf,
   formatBytes,
@@ -55,7 +56,9 @@ function GeneratedFileCard({ file, chatId }) {
   };
 
   const look = fileLookOf(file);
+  const typeLabel = artifactBadge(file);
   const details = [
+    typeLabel,
     file.pages
       ? t('chatMessage.generatedFiles.pages', '{{count}} pages', { count: file.pages })
       : null,
@@ -69,22 +72,26 @@ function GeneratedFileCard({ file, chatId }) {
   ]
     .filter(Boolean)
     .join(' · ');
+  // Open in the workspace pane right now: the card shows it (aria-current).
+  const active = openable && Boolean(viewer?.activeId) && viewer.activeId === file.id;
+  const canDownload = canFetch && state !== 'missing';
 
   const info = (
     <>
-      <div
+      <span
         className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-md ${look.className}`}
+        aria-hidden="true"
       >
         <Icon name={look.icon} size="md" />
-      </div>
-      <div className="min-w-0 flex-1 text-left">
-        <div
-          className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
+      </span>
+      <span className="min-w-0 flex-1 text-left">
+        <span
+          className="block text-sm font-medium text-gray-900 dark:text-gray-100 truncate"
           title={file.name}
         >
           {file.name}
-        </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400">
+        </span>
+        <span className="block text-xs text-gray-500 dark:text-gray-400 truncate">
           {state === 'missing' || !canFetch
             ? file.unavailable && file.unavailable !== 'expired'
               ? t('chatMessage.generatedFiles.notKept', 'This file was not kept with the chat')
@@ -92,15 +99,28 @@ function GeneratedFileCard({ file, chatId }) {
             : state === 'error'
               ? t('chatMessage.generatedFiles.failed', 'Download failed. Please try again.')
               : details}
-        </div>
-      </div>
+        </span>
+      </span>
     </>
   );
 
+  // The quick actions: revealed on hover and focus where the card opens (the
+  // card itself is the main action); always shown on touch screens and where
+  // Download is the only thing a card can do.
+  const reveal = openable
+    ? 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100'
+    : '';
+  const ACTION =
+    'inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-600 dark:text-gray-300 hover:bg-indigo-50 hover:text-indigo-700 dark:hover:bg-indigo-900/30 dark:hover:text-indigo-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:opacity-60';
+
   return (
     <div
-      className={`group flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 max-w-md ${
-        openable ? 'hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-xs' : ''
+      data-testid="generated-file-card"
+      data-active={active ? 'true' : undefined}
+      className={`group relative flex items-center rounded-lg border max-w-md motion-safe:transition-colors ${
+        active
+          ? 'border-indigo-500 ring-1 ring-indigo-500/30 bg-indigo-50/40 dark:bg-indigo-900/20'
+          : `border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 ${openable ? 'hover:border-indigo-300 dark:hover:border-indigo-600 hover:shadow-xs' : ''}`
       }`}
     >
       {openable ? (
@@ -108,49 +128,58 @@ function GeneratedFileCard({ file, chatId }) {
           type="button"
           onClick={() => viewer.openArtifact(file)}
           data-testid="generated-file-open"
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+          aria-current={active ? 'true' : undefined}
+          className={`flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            shareable || canDownload ? 'pr-20' : ''
+          }`}
         >
           {info}
-          <span className="flex-shrink-0 inline-flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
-            {t('chatMessage.generatedFiles.open', 'Open')}
-            <Icon name="chevron-right" size="xs" />
-          </span>
+          <span className="sr-only">{t('chatMessage.generatedFiles.open', 'Open')}</span>
+          <Icon
+            name="chevron-right"
+            size="sm"
+            className="flex-shrink-0 text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-300"
+          />
         </button>
       ) : (
-        info
+        <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2">{info}</div>
       )}
-      {shareable && (
-        <button
-          type="button"
-          onClick={() => viewer.shareArtifact(file)}
-          data-testid="generated-file-share"
-          className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
-          aria-label={t('chatMessage.generatedFiles.shareNamed', 'Share {{name}}', {
-            name: file.name
-          })}
-        >
-          <Icon name="share" size="sm" />
-          {t('chatMessage.generatedFiles.share', 'Share')}
-        </button>
-      )}
-      {canFetch && state !== 'missing' && (
-        <button
-          type="button"
-          onClick={download}
-          disabled={state === 'loading'}
-          className="flex-shrink-0 inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 disabled:opacity-60"
-          aria-label={t('chatMessage.generatedFiles.downloadNamed', 'Download {{name}}', {
-            name: file.name
-          })}
-        >
-          <Icon
-            name={state === 'loading' ? 'refresh' : 'download'}
-            size="sm"
-            className={state === 'loading' ? 'animate-spin' : ''}
-          />
-          {t('chatMessage.generatedFiles.download', 'Download')}
-        </button>
-      )}
+      <div
+        className={`flex flex-shrink-0 items-center gap-0.5 ${openable ? 'absolute right-8 top-1/2 -translate-y-1/2' : 'pr-2'} ${reveal}`}
+      >
+        {shareable && (
+          <button
+            type="button"
+            onClick={() => viewer.shareArtifact(file)}
+            data-testid="generated-file-share"
+            className={ACTION}
+            aria-label={t('chatMessage.generatedFiles.shareNamed', 'Share {{name}}', {
+              name: file.name
+            })}
+            title={t('chatMessage.generatedFiles.share', 'Share')}
+          >
+            <Icon name="share" size="sm" />
+          </button>
+        )}
+        {canDownload && (
+          <button
+            type="button"
+            onClick={download}
+            disabled={state === 'loading'}
+            className={ACTION}
+            aria-label={t('chatMessage.generatedFiles.downloadNamed', 'Download {{name}}', {
+              name: file.name
+            })}
+            title={t('chatMessage.generatedFiles.download', 'Download')}
+          >
+            <Icon
+              name={state === 'loading' ? 'refresh' : 'download'}
+              size="sm"
+              className={state === 'loading' ? 'animate-spin' : ''}
+            />
+          </button>
+        )}
+      </div>
     </div>
   );
 }

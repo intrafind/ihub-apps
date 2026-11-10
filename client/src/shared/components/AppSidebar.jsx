@@ -39,6 +39,11 @@ import {
   useScheduledTasksAvailable
 } from '../../features/tasks/hooks/useScheduledTasks';
 import { useProjectsAvailability } from '../../features/projects/hooks/useProjects';
+import {
+  SIDEBAR_SESSION_KEY,
+  WORKSPACE_PANE_EVENT,
+  shouldAutoCollapseSidebar
+} from '../../features/workspace/utils/workspaceState';
 
 const SIDEBAR_COLLAPSED_KEY = 'ihub_sidebar_collapsed';
 const FAVORITE_APPS_KEY = 'ihub_favorite_apps';
@@ -251,9 +256,55 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
     }
   };
 
+  // The workspace pane folds the sidebar to its rail below 1280px when it opens
+  // (once per tab session) and unfolds it when it closes. A fold the pane made
+  // is not saved, and an expand by the user always wins.
+  const autoCollapsedRef = useRef(false);
+  const userExpandedRef = useRef(false);
+  const collapsedRef = useRef(collapsed);
+  collapsedRef.current = collapsed;
+  useEffect(() => {
+    const onPane = event => {
+      const detail = event.detail || {};
+      if (detail.open) {
+        let already = false;
+        try {
+          already = sessionStorage.getItem(SIDEBAR_SESSION_KEY) === 'true';
+        } catch {
+          already = false;
+        }
+        if (
+          !shouldAutoCollapseSidebar({
+            viewportWidth: window.innerWidth,
+            collapsed: collapsedRef.current,
+            alreadyThisSession: already,
+            userExpanded: userExpandedRef.current
+          })
+        ) {
+          return;
+        }
+        try {
+          sessionStorage.setItem(SIDEBAR_SESSION_KEY, 'true');
+        } catch {
+          // Without storage it may fold again in this tab: harmless.
+        }
+        autoCollapsedRef.current = true;
+        setCollapsed(true);
+        detail.onCollapsed?.();
+      } else if (autoCollapsedRef.current) {
+        autoCollapsedRef.current = false;
+        setCollapsed(false);
+      }
+    };
+    window.addEventListener(WORKSPACE_PANE_EVENT, onPane);
+    return () => window.removeEventListener(WORKSPACE_PANE_EVENT, onPane);
+  }, []);
+
   const toggleCollapsed = useCallback(() => {
     refocusAfterToggle.current = true;
+    autoCollapsedRef.current = false;
     setCollapsed(prev => {
+      if (prev) userExpandedRef.current = true;
       persistCollapsed(!prev);
       return !prev;
     });
@@ -555,6 +606,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
   // ---- Collapsed rail (desktop only) ----
   const rail = (
     <aside
+      data-f6-region="sidebar"
       className="hidden md:flex w-18 flex-none flex-col items-center gap-1.5 bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 py-4"
       aria-label={sidebarLabel}
     >
@@ -591,6 +643,8 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           title={searchLabel}
           aria-label={searchLabel}
           onClick={() => {
+            autoCollapsedRef.current = false;
+            userExpandedRef.current = true;
             setCollapsed(false);
             persistCollapsed(false);
             setSearchOpen(true);
@@ -1110,6 +1164,7 @@ export default function AppSidebar({ mobileOpen = false, onMobileClose = () => {
           rail
         ) : (
           <aside
+            data-f6-region="sidebar"
             className="hidden md:flex w-71 flex-none flex-col bg-gray-50 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700"
             aria-label={sidebarLabel}
           >

@@ -46,6 +46,7 @@ import { modelSupportsWebSearch } from '../webSearch';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { composerLineLimits } from '../utils/composerLines';
 import { submitShortcutLabel } from '../utils/submitShortcut';
+import ComposerQuote from '../../workspace/components/ComposerQuote';
 import './ChatInput.css';
 
 /**
@@ -145,6 +146,10 @@ function ChatInput({
   // menu. Omitted where the chat takes no projects (embedded, start page,
   // canvas, office).
   projectContext = null,
+  // A passage quoted from the workspace pane (`{ mode, text, source: { name } }`),
+  // shown above the text and sent with it; `onRemoveQuote` drops it.
+  quote = null,
+  onRemoveQuote = null,
   // Model selection props
   models = [],
   selectedModel = null,
@@ -878,12 +883,15 @@ function ChatInput({
           ref={formRef}
           onSubmit={handleSubmit}
           autoComplete="off"
+          // F6 cycles sidebar → chat log → composer → workspace pane.
+          data-f6-region="composer"
           className={`flex flex-col border rounded-2xl bg-white dark:bg-gray-800 shadow-xs focus-within:ring-2 mb-1 ${
             ephemeral
               ? 'border-violet-400 dark:border-violet-500 focus-within:ring-violet-500 focus-within:border-violet-500'
               : 'border-gray-300 dark:border-gray-600 focus-within:ring-indigo-500 focus-within:border-indigo-500'
           }`}
         >
+          {quote && <ComposerQuote quote={quote} onRemove={onRemoveQuote} />}
           {/* Top line: User input */}
           <div className="relative flex-1">
             <textarea

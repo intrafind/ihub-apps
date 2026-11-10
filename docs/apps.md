@@ -1156,7 +1156,7 @@ The `skills` array specifies which skill identifiers are available for an app. S
 "documentTemplate": "acme"
 ```
 
-**Interactive pages and graphics:** the system skill `web-artifacts` lets the model create a self-contained interactive HTML page or a standalone SVG. The Artifacts panel shows it in a sandboxed preview with no network access; the corporate colours and font reach the page as the CSS variables `--brand-primary`, `--brand-accent` and `--brand-font`.
+**Interactive pages and graphics:** the system skill `web-artifacts` lets the model create a self-contained interactive HTML page or a standalone SVG. The chat's workspace pane shows it in a sandboxed preview with no network access; the corporate colours and font reach the page as the CSS variables `--brand-primary`, `--brand-accent` and `--brand-font`.
 
 A skill is only ever loaded for an app that sets `skillSettings.enabled: true`. A global skill is loaded then when three things hold: it is installed, it is listed in the app's `skills`, and the user's groups grant it (`permissions.skills` in `groups.json`). [User skills](skills.md#user-skills) are the user's own and shared skills; an app with skills enabled offers them unless `skillSettings.allowPersonal` is `false`. This applies to every way a skill gets loaded: the model calling `activate_skill` or `read_skill_resource`, the user picking skills with `/` (sent as `requestedSkills`), and agents. An empty `permissions.skills` grants no skills. Agent runs check skills against the agent's service-account groups and the skills listed on the agent profile.
 

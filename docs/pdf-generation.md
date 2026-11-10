@@ -36,7 +36,7 @@ The shipped system skills:
 | `docx` | `create_docx` | Create editable Word documents on request |
 | `pptx` | `create_pptx` | Create PowerPoint presentations on request |
 | `xlsx` | `create_xlsx` | Create formatted Excel workbooks with live formulas on request |
-| `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (dashboards, calculators, prototypes) and SVG graphics that run in the chat's Artifacts panel |
+| `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (dashboards, calculators, prototypes) and SVG graphics that run in the chat's workspace pane |
 | `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
 
 ### Skill access checks
@@ -147,7 +147,7 @@ Use the `files` skill for a plain `.csv` instead. Enable it like the other skill
 
 ## The `web-artifacts` skill
 
-`create_web_artifact` creates a single-file interactive page (`format: "html"`, the default) or a standalone vector graphic (`format: "svg"`) — a dashboard, calculator, simulator, clickable prototype, canvas visualization or diagram. The user gets a download card, and the file opens in the chat's [Artifacts panel](artifacts.md#the-artifacts-panel) with a **Preview | Code** toggle: HTML runs in a sandboxed frame, SVG renders as a picture. The server still stores and serves both as `text/plain` (see [Artifacts](artifacts.md#kinds)), so a downloaded file is never executed by iHub itself. Enable it by adding `web-artifacts` to the app's skills.
+`create_web_artifact` creates a single-file interactive page (`format: "html"`, the default) or a standalone vector graphic (`format: "svg"`) — a dashboard, calculator, simulator, clickable prototype, canvas visualization or diagram. The user gets a download card, and the file opens in the chat's [workspace pane](artifacts.md#the-workspace-pane) with a **Preview | Code** toggle: HTML runs in a sandboxed frame, SVG renders as a picture. The server still stores and serves both as `text/plain` (see [Artifacts](artifacts.md#kinds)), so a downloaded file is never executed by iHub itself. Enable it by adding `web-artifacts` to the app's skills.
 
 ## The `files` skill
 
@@ -183,7 +183,7 @@ A file the model created takes the path a generated picture takes. There is no d
   - 25 MB per file.
   - Storing follows the artifact settings (`platform.artifacts`: `maxBytes`, default 10 MB, and `maxPerBatch`). A file over the cap is still downloadable while the answer is on screen; its stored card says it was not kept.
 - **Preview:** `preview_pdf` reads the PDF from the server's memory. That works for PDFs created in the same chat within the last hour.
-- **Artifacts panel:** every file of the chat is also listed in the chat's [Artifacts panel](artifacts.md#the-artifacts-panel), with a preview, and can be downloaded alone or together with others as one ZIP.
+- **Files index:** every file of the chat is also listed in the chat's [workspace pane](artifacts.md#the-workspace-pane), with a preview, and can be downloaded alone or together with others as one ZIP.
 - **Types:** PDF, Word (`.docx`), PowerPoint (`.pptx`), Excel (`.xlsx`), HTML and SVG from `create_web_artifact`, text files from `create_file` and ZIP archives from `create_zip`. The card shows the page or slide count while the answer is on screen. A text file is saved under the last part of its name (`src/index.js` → `index.js`).
 - **Many files in one turn:** `maxPerBatch` (default 8) also caps how many generated files one answer stores. For a project, the `files` skill tells the model to use one `create_zip` call instead of one `create_file` call per file.
 

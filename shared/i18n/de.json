@@ -598,6 +598,7 @@
     "resend": "Erneut senden",
     "attachmentsLabel": "Anhänge",
     "attachments": {
+      "opensInWorkspace": "Öffnet sich im Arbeitsbereich",
       "images": "Bilder",
       "opensInFiles": "Öffnet sich im Dateien-Bereich",
       "moreFiles_one": "+{{count}} weitere Datei",
@@ -9083,6 +9084,7 @@
     "pageNotFound": "Diese Datei wurde nicht gefunden."
   },
   "chatFiles": {
+    "deleted": "{{name}} wurde gelöscht.",
     "attached": "{{name}} wurde an Ihre E-Mail angehängt.",
     "attachTooLarge": "Die Datei ist zu groß, um an eine E-Mail angehängt zu werden.",
     "attachFailed": "Die Datei konnte nicht an Ihre E-Mail angehängt werden.",
@@ -9482,5 +9484,70 @@
     "COPILOT_REFERENCE_ID_MISSING": "Für den Copilot-Agenten ist noch keine Referenz-ID eingetragen.",
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "Der Copilot-Agent benötigt eine öffentliche HTTPS-Adresse.",
     "INTEGRATION_AUTH_REQUIRED": "Verbinden Sie Ihr Konto, um diese Integration zu nutzen."
+  },
+  "workspace": {
+    "backTo": "Zurück zu {{name}}",
+    "backToChat": "Zurück zum Chat",
+    "browserFullScreen": "Browser-Vollbild",
+    "exitBrowserFullScreen": "Browser-Vollbild beenden",
+    "clearSelection": "Auswahl aufheben",
+    "close": "Arbeitsbereich schließen",
+    "code": "Code",
+    "preview": "Vorschau",
+    "viewMode": "Ansicht",
+    "copyAsMarkdown": "Als Markdown kopieren",
+    "copyMenu": "Weitere Kopier- und Download-Optionen",
+    "downloadOriginal": "Original herunterladen",
+    "downloadZip": ".zip herunterladen",
+    "emptyFiles": "Noch keine Dateien. Dateien, die der Assistent erstellt oder die Sie hochladen, erscheinen hier.",
+    "emptySources": "Noch keine Quellen. Dokumente, die eine Antwort zitiert, erscheinen hier.",
+    "fullScreen": "Vollbild",
+    "exitFullScreen": "Vollbild beenden",
+    "itemGone": "Diese Datei ist in diesem Chat nicht mehr verfügbar.",
+    "moreActions": "Weitere Aktionen",
+    "openFailed": "Der Link konnte nicht geöffnet werden.",
+    "openInSourceSystem": "Im Quellsystem öffnen",
+    "passagePosition": "Textstelle {{current}} von {{total}}",
+    "passages": "Textstellen",
+    "previewFailed": "Vorschau konnte nicht geladen werden",
+    "quoted": "Ins Eingabefeld übernommen",
+    "regionLabel": "Arbeitsbereich: {{title}}",
+    "resize": "Arbeitsbereich in der Breite ändern",
+    "selectedCount": "{{count}} ausgewählt",
+    "showAnswer": "Antwort {{number}} im Chat anzeigen",
+    "sidebarCollapsed": "Seitenleiste eingeklappt, um Platz zu schaffen",
+    "skipToWorkspace": "Zum Arbeitsbereich springen",
+    "sourceBadge": "Quelle",
+    "sourceNoPreview": "Für diese Quelle gibt es keine Vorschau. Öffnen Sie sie im Quellsystem.",
+    "sourcesListLabel": "In diesem Chat zitierte Quellen",
+    "switchFile": "Datei wechseln",
+    "switchFileHint": ", Datei wechseln",
+    "tabSources": "Quellen",
+    "widthPercent": "Arbeitsbereich {{percent}} Prozent",
+    "zoom": "Zoom",
+    "dock": {
+      "answering": "Antwortet…",
+      "collapse": "Chat einklappen",
+      "hint": "Stellen Sie eine Frage oder bitten Sie um eine Änderung. Der Chat läuft weiter.",
+      "latest": "Letzte Antwort:",
+      "openChat": "Chat öffnen",
+      "placeholder": "Änderung an diesem Dokument anfragen…"
+    },
+    "quote": {
+      "artifactRef": " (Artefakt-ID: {{id}})",
+      "askFrom": "Zu {{name}}",
+      "askLead": "Zu dieser Textstelle aus „{{name}}“{{ref}}:",
+      "editFrom": "Bearbeiten in {{name}}",
+      "editLead": "Bearbeite diese Textstelle aus „{{name}}“{{ref}} und gib mir das ganze Dokument als neue Datei zurück:",
+      "editNote": "Der Assistent erstellt eine neue Datei mit der Änderung. Das Original bleibt unverändert.",
+      "remove": "Zitat entfernen"
+    },
+    "selection": {
+      "ask": "Fragen zu",
+      "askTouch": "Zur Auswahl fragen",
+      "edit": "Mit KI bearbeiten",
+      "editHint": "Der Assistent erstellt eine neue Datei mit der Änderung. Das Original bleibt unverändert.",
+      "label": "Aktionen zur Auswahl"
+    }
   }
 }

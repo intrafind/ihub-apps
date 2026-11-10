@@ -39,15 +39,16 @@ optionally the original. Scopes:
   a document the server stored (the characters or page images it read, shortened, text only): the
   server keeps those numbers on the file's descriptor. A message stored before that shows no line
   rather than a guess. A picture is kept by the server too (see [Pictures](#pictures)), so after
-  a reload an image shows its thumbnail again, and its card opens the picture in the Files drawer,
-  as a document's card does; a picture sent in the current session is shown from memory and opens
-  from the next reload on. A stored document opens in the Files drawer with a click or Enter.
+  a reload an image shows its thumbnail again, and its card opens the picture in the
+  [workspace pane](artifacts.md#the-workspace-pane), as a document's card does; a picture sent in
+  the current session is shown from memory and opens from the next reload on. A stored document
+  opens in the pane with a click or Enter, and its card is highlighted while it is open there.
   Audio is not stored: it is a card without a player. More than four cards fold into **+N more
   files** (more than three on a narrow screen). In a shared chat a card follows the share: a file
   the owner did not share is marked as such and does not open.
 - **In the Outlook task pane and the browser extension.** The cards open their file in the same
-  Files drawer, which on the narrow pane is a full-pane sheet over the chat with its own close
-  button. While a mail is being written, **Attach to email** is offered there too.
+  workspace pane, which there is always a full-screen sheet over the chat with **Back to chat**.
+  While a mail is being written, **Attach to email** is a visible button of its header.
 - **Which files a model takes.** Images are offered only when the selected model has vision, audio
   only when it takes audio (or is a transcription model); documents are offered to every model
   but a transcription one. An image attached before the model was switched to one without vision
@@ -55,13 +56,16 @@ optionally the original. Scopes:
   selected model cannot take it, the uploader says so ("… is not supported by the selected model.
   Please choose a different model"); when the app itself does not offer the type, it answers with the
   list of formats it does accept.
-- **Files drawer.** The chat header's button opens the **Files** drawer with two tabs, **Uploaded**
-  (what the user and the add-ins put into the chat, including e-mails, meetings and pages) and
-  **Generated** (see [Artifacts](artifacts.md#the-artifacts-panel)). Each uploaded file shows its type,
-  size, pages and storage state (original saved, original removed, text only), a preview of the text
-  the assistant reads, and the actions **Download original**, **Download text** and **Delete file**. A
-  file card above a message opens the file in the drawer. In the Outlook task pane, while a mail is
-  being written, **Attach to email** attaches the file to it.
+- **Files in the workspace pane.** The chat header's **Files** button (or Ctrl/Cmd+.) opens the
+  Files index of the [workspace pane](artifacts.md#the-workspace-pane) next to the chat, with the tabs
+  **Generated**, **Uploaded** (what the user and the add-ins put into the chat, including e-mails,
+  meetings and pages) and **Sources**. Each uploaded file shows its type, size, pages and storage
+  state (original saved, original removed, text only); a click opens its detail: a preview of the
+  text the assistant reads, **Download original** in the header, and **Download text** and **Delete
+  file** in its ⋯ menu. A file card above a message opens the file's detail directly; its back
+  link leads to the list. While a mail is being written in the Outlook task pane, **Attach to
+  email** attaches the file to it (in ⋯ elsewhere). Text selected in an uploaded file can be quoted
+  into the composer with **Ask about**.
 - **Export.** The JSON and JSONL export of a chat carry a message's text and, for a message with
   files, a short list per file (id, kind, name, type and size; no size once only the text is kept).
   They never carry the contents of a file, the images or the audio, which a message sent in the

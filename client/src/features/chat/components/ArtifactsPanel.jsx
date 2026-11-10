@@ -1,78 +1,20 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
+import { GHOST_BUTTON, PRIMARY_BUTTON } from '../../../shared/utils/buttonTokens';
 import { saveBlobAs } from '../../../utils/externalNavigation';
-import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
-import ArtifactPreview from './ArtifactPreview';
-import UploadedFilesTab from './UploadedFilesTab';
-import { attachmentIdsOf } from '../messageAttachments/attachmentViews';
+import PaneHeader from '../../workspace/components/PaneHeader';
+import { answerIndex, revealMessage } from '../../workspace/utils/workspaceItems';
+import { artifactDisplayName, fileLookOf, formatBytes, zipErrorCode } from '../utils/artifactFiles';
 import {
-  artifactDisplayName,
-  fileLookOf,
-  formatBytes,
-  isTextArtifact,
-  previewTypeOf,
-  saveName,
-  zipErrorCode
-} from '../utils/artifactFiles';
-
-/**
- * Which answer of the conversation produced each artifact, and which finished
- * answers produced any.
- *
- * Keyed by `runId`: a stored descriptor carries the run that made it, and so
- * does every answer, live or reloaded. An artifact id alone would not do: a
- * live answer knows its files only by the ids they had before they were
- * stored. Artifact ids a stored message names are kept as a fallback for a
- * descriptor without a run.
- *
- * @param {Object[]} messages
- * @returns {{ byRun: Map<string, number>, byId: Map<string, number>, producedRuns: string[] }}
- */
-function answerIndex(messages) {
-  const byRun = new Map();
-  const byId = new Map();
-  const producedRuns = [];
-  let answer = 0;
-  for (const message of messages || []) {
-    if (message?.role !== 'assistant' || message.isGreeting) continue;
-    answer += 1;
-    if (message.runId && !byRun.has(message.runId)) byRun.set(message.runId, answer);
-    for (const artifact of message.artifacts || []) {
-      if (artifact?.id && !byId.has(artifact.id)) byId.set(artifact.id, answer);
-    }
-    const produced =
-      message.artifacts?.length > 0 ||
-      message.generatedFiles?.length > 0 ||
-      message.images?.length > 0;
-    if (produced && message.runId && !message.loading) producedRuns.push(message.runId);
-  }
-  return { byRun, byId, producedRuns };
-}
-
-/**
- * Ids of the files the questions of a conversation name: when this changes, the
- * list of uploaded files is read again (a file was attached, edited away or
- * regenerated with other files).
- *
- * @param {Object[]} messages
- * @returns {string}
- */
-function uploadedKeyOf(messages) {
-  const ids = [];
-  for (const message of messages || []) {
-    if (message?.role !== 'user') continue;
-    ids.push(...attachmentIdsOf(message));
-  }
-  return ids.join(',');
-}
-
-/** How long to wait before asking once more for an answer's files the list lacks. */
-const RELIST_DELAY_MS = 1500;
+  questionOfFiles,
+  uploadedFileBadge,
+  uploadedFileLook,
+  uploadedStorageState
+} from '../utils/uploadedFiles';
 
 function formatDate(value, language) {
   if (!value) return '';
@@ -86,220 +28,132 @@ function formatDate(value, language) {
   }
 }
 
-const BUTTON =
-  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium min-h-[2.25rem] disabled:opacity-50 disabled:cursor-not-allowed';
-const SECONDARY = `${BUTTON} border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700`;
-const PRIMARY = `${BUTTON} bg-indigo-600 text-white hover:bg-indigo-700`;
+const ROW =
+  'flex h-14 min-w-0 items-center gap-2 border-l-2 px-3 hover:bg-gray-50 dark:hover:bg-gray-800/60';
+const rowClass = active =>
+  `${ROW} ${active ? 'border-indigo-600 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-900/30' : 'border-transparent'}`;
+const ROW_BUTTON =
+  'flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-md text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500';
+
+/** The type tile of a row. */
+function Tile({ look }) {
+  return (
+    <span
+      className={`flex h-8 w-8 flex-none items-center justify-center rounded-md ${look.className}`}
+      aria-hidden="true"
+    >
+      <Icon name={look.icon} size="sm" />
+    </span>
+  );
+}
+
+/** "Answer 3": scrolls the chat to that answer and highlights it. */
+function AnswerLink({ number, messageId, onReveal }) {
+  const { t } = useTranslation();
+  if (!number) return null;
+  return (
+    <button
+      type="button"
+      onClick={() => (onReveal ? onReveal(messageId) : revealMessage(messageId))}
+      disabled={!messageId}
+      className="flex-none rounded px-1 text-xs font-medium text-indigo-700 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:text-gray-500 disabled:no-underline dark:text-indigo-300"
+      aria-label={t('workspace.showAnswer', 'Show answer {{number}} in the chat', { number })}
+    >
+      {t('chatArtifacts.fromAnswer', 'Answer {{number}}', { number })}
+    </button>
+  );
+}
+
+function Empty({ children, testId }) {
+  return (
+    <div
+      className="flex flex-col items-center gap-2 px-6 py-10 text-center text-sm text-gray-600 dark:text-gray-300"
+      data-testid={testId}
+    >
+      <Icon name="archive-box" size="lg" className="text-gray-400" />
+      <p className="max-w-xs">{children}</p>
+    </div>
+  );
+}
 
 /**
- * Everything a chat produced, in a drawer: generated pictures, documents,
- * code and archives. Each can be previewed, downloaded and — text — copied;
- * several, or all, download as one ZIP the server builds.
+ * The Files index of the workspace pane (concept §7): the root of the pane's
+ * list → detail stack, in place of the old Files drawer. Three tabs —
+ * Generated, Uploaded, Sources — of one list each; a click on a row opens its
+ * detail in the pane, the checkbox of a generated file selects it without
+ * navigating, and the selection (or everything) downloads as one ZIP the
+ * server builds.
  *
- * The panel does not know whose chat it is: the page hands it a `source`,
- * the owner's chat routes or a share's, so a shared chat gets the same panel
+ * The index does not know whose chat it is: the host hands it the lists it
+ * read (the owner's routes, or a share's), so a shared chat gets the same view
  * with exactly the files its snapshot named.
  *
  * @param {Object} props
- * @param {boolean} props.isOpen
- * @param {() => void} props.onClose
- * @param {Object} props.source
- * @param {() => Promise<{ items: Object[] }>} props.source.list - The descriptors.
- * @param {(id: string) => Promise<Blob>} props.source.fetchBlob - One artifact's bytes.
- * @param {(ids?: string[]) => Promise<Blob>} props.source.zip - Several (or all) as a ZIP.
- * @param {string} [props.zipName] - Download name of an archive, without `.zip`.
- * @param {Object[]} [props.messages] - The conversation, to say which answer made a file.
- *   A change in the artifacts it names lists the files again, so a file an
- *   answer adds while the panel is open shows up.
- * @param {Object} [props.uploadedSource] - The files uploaded to the chat. With it the
- *   panel is the chat's Files drawer with two tabs, **Uploaded (N)** and
- *   **Generated (M)**; without it, the Artifacts panel it always was.
- * @param {() => Promise<{ items: Object[] }>} props.uploadedSource.list
- * @param {(id: string) => Promise<{ file: Object }>} props.uploadedSource.fetchText
- * @param {(id: string) => Promise<Blob>} props.uploadedSource.fetchBlob
- * @param {(id: string) => Promise<unknown>} [props.uploadedSource.remove] - Absent on a shared chat.
- * @param {'none'|'extracted_text'|'original'} [props.uploadedAccess] - On a shared chat: what the owner shared.
- * @param {'uploaded'|'generated'} [props.initialTab] - Tab to open first (default: Uploaded
- *   when there are no generated files).
- * @param {string|null} [props.initialFileId] - Uploaded file to show first (a clicked chip).
- * @param {string|null} [props.initialArtifactId] - Generated file to preview first.
- * @param {{ available: boolean, attach: Function }|null} [props.mailAttach] - "Attach to email"
- *   (Outlook task pane, composing).
- * @param {() => void} [props.onUploadedChanged] - A file was deleted.
- * @param {(artifact: Object) => void} [props.onShare] - Adds a Share button to the preview of a
- *   generated file (a link to that file alone). Absent where sharing is not on offer.
+ * @param {Object} props.chrome - What the pane gives every view (close, expand, heading).
+ * @param {'generated'|'uploaded'|'sources'|null} props.tab - Shown tab; null picks the first with items.
+ * @param {(tab: string) => void} props.onTab
+ * @param {{ status: string, items: Object[] }} props.generated
+ * @param {{ status: string, items: Object[] }|null} props.uploaded - Null: no Uploaded tab.
+ * @param {Array<{ source: Object, answer: number, messageId: string|null }>} props.sources
+ * @param {Object[]} [props.messages]
+ * @param {string|null} [props.activeId] - The item last open in the pane.
+ * @param {(item: Object) => void} props.onOpenArtifact
+ * @param {(item: Object) => void} [props.onOpenFile]
+ * @param {(entry: Object) => void} [props.onOpenSource]
+ * @param {((ids?: string[]) => Promise<Blob>)|null} [props.zip]
+ * @param {string} [props.zipName]
+ * @param {'none'|'extracted_text'|'original'|null} [props.uploadedAccess] - Shared chat only.
  */
 export default function ArtifactsPanel({
-  isOpen,
-  onClose,
-  source,
-  zipName = 'artifacts',
+  chrome,
+  tab,
+  onTab,
+  generated,
+  uploaded = null,
+  sources = [],
   messages,
-  uploadedSource = null,
-  uploadedAccess = null,
-  initialTab = null,
-  initialFileId = null,
-  initialArtifactId = null,
-  mailAttach = null,
-  onUploadedChanged = null,
-  onShare = null
+  activeId = null,
+  onOpenArtifact,
+  onOpenFile = null,
+  onOpenSource = null,
+  zip = null,
+  zipName = 'artifacts',
+  uploadedAccess = null
 }) {
   const { t, i18n } = useTranslation();
-  const headingId = useId();
-  const containerRef = useRef(null);
-  const closeRef = useRef(null);
+  const baseId = useId();
   const selectAllRef = useRef(null);
-  const blobsRef = useRef(new Map());
-  const [items, setItems] = useState([]);
-  const [status, setStatus] = useState('loading');
   const [selected, setSelected] = useState(() => new Set());
-  const [previewId, setPreviewId] = useState(initialArtifactId);
-  const [busy, setBusy] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
-  const [tab, setTab] = useState(initialTab);
-  // Opens a file in the immersive viewer, where the page has one.
-  const viewer = useArtifactViewer();
-  const [uploaded, setUploaded] = useState({ status: 'loading', items: [] });
-  const [uploadedReload, setUploadedReload] = useState(0);
-  const uploadedKey = useMemo(() => uploadedKeyOf(messages), [messages]);
-
-  // The element that opened the panel, which gets focus back when it closes.
-  const openerRef = useRef(typeof document === 'undefined' ? null : document.activeElement);
-
-  // Tab stays inside the panel. Focus in and back out is handled below: the
-  // hook's own return runs in a microtask on every cleanup, so a development
-  // double-run of the effects would end with focus outside the dialog.
-  useFocusTrap(containerRef, { isActive: isOpen, returnFocusOnDeactivate: false });
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const opener = openerRef.current;
-    // After the trap's own move, and after a restore a re-run queued.
-    const frame = requestAnimationFrame(() => closeRef.current?.focus());
-    return () => {
-      cancelAnimationFrame(frame);
-      queueMicrotask(() => {
-        if (opener?.isConnected && typeof opener.focus === 'function') opener.focus();
-      });
-    };
-  }, [isOpen]);
-
   const answers = useMemo(() => answerIndex(messages), [messages]);
-  // Changes when an answer that produced a picture or a file has finished,
-  // so a file made while the panel is open shows up in it.
-  const listKey = answers.producedRuns.join(',');
-
-  // A new source is a different chat: nothing cached applies to it.
-  useEffect(() => {
-    blobsRef.current = new Map();
-  }, [source]);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    let active = true;
-    let retry = null;
-    const expected = listKey ? listKey.split(',') : [];
-    // A refresh keeps the list on screen while it asks again.
-    setStatus(previous => (previous === 'ready' ? previous : 'loading'));
-    const load = attempt =>
-      source
-        .list()
-        .then(result => {
-          if (!active) return;
-          const list = Array.isArray(result?.items) ? result.items : [];
-          // An answer that just finished is stored a moment after the client
-          // sees it end: ask once more when its files are not listed yet.
-          const listed = new Set(list.map(item => item.runId).filter(Boolean));
-          if (attempt === 0 && expected.some(runId => !listed.has(runId))) {
-            retry = setTimeout(() => load(1), RELIST_DELAY_MS);
-          }
-          setItems(list);
-          setSelected(previous => new Set([...previous].filter(id => list.some(i => i.id === id))));
-          setPreviewId(previous =>
-            list.some(item => item.id === previous) ? previous : list[0]?.id || null
-          );
-          setStatus('ready');
-        })
-        .catch(() => {
-          if (active) setStatus('error');
-        });
-    load(0);
-    return () => {
-      active = false;
-      if (retry) clearTimeout(retry);
-    };
-  }, [isOpen, source, listKey]);
-
-  // The uploaded files: read when the panel opens and again when the
-  // conversation names other files or one was deleted here.
-  useEffect(() => {
-    if (!isOpen || !uploadedSource) return undefined;
-    let active = true;
-    uploadedSource
-      .list()
-      .then(result => {
-        if (active) {
-          setUploaded({
-            status: 'ready',
-            items: Array.isArray(result?.items) ? result.items : []
-          });
-        }
-      })
-      .catch(error => {
-        if (!active) return;
-        // A chat the server does not have yet has no files.
-        const missing = error?.status === 404 || error?.response?.status === 404;
-        setUploaded(missing ? { status: 'ready', items: [] } : { status: 'error', items: [] });
-      });
-    return () => {
-      active = false;
-    };
-  }, [isOpen, uploadedSource, uploadedKey, uploadedReload]);
-
-  // Escape closes the panel, wherever focus is inside it.
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const onKeyDown = event => {
-      if (event.key === 'Escape') {
-        event.stopPropagation();
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isOpen, onClose]);
-
-  const getBlob = useCallback(
-    id => {
-      if (!blobsRef.current.has(id)) {
-        const pending = source.fetchBlob(id);
-        // A failed read is not cached: the next attempt asks again.
-        pending.catch(() => blobsRef.current.delete(id));
-        blobsRef.current.set(id, pending);
-      }
-      return blobsRef.current.get(id);
-    },
-    [source]
+  const questions = useMemo(
+    () => questionOfFiles(uploaded?.items || [], messages),
+    [uploaded?.items, messages]
   );
 
-  const preview = items.find(item => item.id === previewId) || null;
-  const allSelected = items.length > 0 && selected.size === items.length;
+  const items = generated.items;
+  const tabs = [
+    ['generated', t('chatFiles.tabGenerated', 'Generated'), items.length],
+    ...(uploaded
+      ? [['uploaded', t('chatFiles.tabUploaded', 'Uploaded'), uploaded.items.length]]
+      : []),
+    ...(onOpenSource ? [['sources', t('workspace.tabSources', 'Sources'), sources.length]] : [])
+  ];
+  const firstWithItems = tabs.find(([, , count]) => count > 0)?.[0] || 'generated';
+  const activeTab = tabs.some(([id]) => id === tab) ? tab : firstWithItems;
 
+  // Selected files that are gone from the list are no longer selected.
+  useEffect(() => {
+    setSelected(previous => new Set([...previous].filter(id => items.some(i => i.id === id))));
+  }, [items]);
+
+  const allSelected = items.length > 0 && selected.size === items.length;
   useEffect(() => {
     if (selectAllRef.current) {
       selectAllRef.current.indeterminate = selected.size > 0 && !allSelected;
     }
   }, [selected, allSelected]);
-
-  if (!isOpen) return null;
-
-  // Without a source for uploaded files this is the plain Artifacts panel. With
-  // one, the tab the caller named, else Uploaded unless something was generated.
-  const hasTabs = Boolean(uploadedSource);
-  const activeTab = !hasTabs
-    ? 'generated'
-    : tab || (items.length === 0 && uploaded.items.length > 0 ? 'uploaded' : 'generated');
-  const showGenerated = activeTab === 'generated';
 
   const toggle = id =>
     setSelected(previous => {
@@ -308,189 +162,85 @@ export default function ArtifactsPanel({
       else next.add(id);
       return next;
     });
-
   const toggleAll = () =>
     setSelected(allSelected ? new Set() : new Set(items.map(item => item.id)));
 
-  const download = async artifact => {
-    setBusy('download');
-    setNotice(null);
-    try {
-      const blob = await getBlob(artifact.id);
-      if (!saveBlobAs(blob, saveName(artifactDisplayName(artifact)))) throw new Error('save');
-    } catch {
-      setNotice({
-        tone: 'error',
-        text: t('chatArtifacts.downloadFailed', 'The download failed. Please try again.')
-      });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const copy = async artifact => {
-    setBusy('copy');
-    setNotice(null);
-    try {
-      const text = await (await getBlob(artifact.id)).text();
-      await navigator.clipboard.writeText(text);
-      setNotice({ tone: 'info', text: t('chatArtifacts.copied', 'Copied to the clipboard.') });
-    } catch {
-      setNotice({
-        tone: 'error',
-        text: t('chatArtifacts.copyFailed', 'The content could not be copied.')
-      });
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const attachGenerated = async artifact => {
-    setBusy('attach');
-    setNotice(null);
-    try {
-      const result = await mailAttach.attach({
-        file: { name: saveName(artifactDisplayName(artifact)), bytes: artifact.bytes },
-        fetchBlob: () => getBlob(artifact.id)
-      });
-      setNotice(
-        result.ok
-          ? {
-              tone: 'info',
-              text: t('chatFiles.attached', 'Attached {{name}} to your email.', {
-                name: result.filename
-              })
-            }
-          : {
-              tone: 'error',
-              text:
-                result.reason === 'tooLarge'
-                  ? t('chatFiles.attachTooLarge', 'The file is too large to attach to an email.')
-                  : t('chatFiles.attachFailed', 'The file could not be attached to your email.')
-            }
-      );
-    } finally {
-      setBusy(null);
-    }
+  const say = (tone, text) => {
+    setNotice({ tone, text });
+    chrome?.announce?.(text);
   };
 
   const downloadZip = async ids => {
-    setBusy(ids ? 'zip-selected' : 'zip-all');
-    setNotice({
-      tone: 'info',
-      text: t('chatArtifacts.zipPreparing', 'Preparing the ZIP archive…')
-    });
+    setBusy(true);
+    say('info', t('chatArtifacts.zipPreparing', 'Preparing the ZIP archive…'));
     try {
-      const blob = await source.zip(ids);
+      const blob = await zip(ids);
       if (!saveBlobAs(blob, `${zipName}.zip`)) throw new Error('save');
       setNotice(null);
     } catch (error) {
       const code = await zipErrorCode(error);
-      setNotice({
-        tone: 'error',
-        text:
-          code === 'too-many-files'
+      say(
+        'error',
+        code === 'too-many-files'
+          ? t('chatArtifacts.zipTooMany', 'Too many files for one ZIP archive. Select fewer files.')
+          : code === 'too-large'
             ? t(
-                'chatArtifacts.zipTooMany',
-                'Too many files for one ZIP archive. Select fewer files.'
+                'chatArtifacts.zipTooLarge',
+                'The files are too large for one ZIP archive. Select fewer files.'
               )
-            : code === 'too-large'
-              ? t(
-                  'chatArtifacts.zipTooLarge',
-                  'The files are too large for one ZIP archive. Select fewer files.'
-                )
-              : t(
-                  'chatArtifacts.zipFailed',
-                  'The ZIP archive could not be created. Please try again.'
-                )
-      });
+            : t(
+                'chatArtifacts.zipFailed',
+                'The ZIP archive could not be created. Please try again.'
+              )
+      );
     } finally {
-      setBusy(null);
+      setBusy(false);
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/40" role="presentation" onClick={onClose} />
-      <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={headingId}
-        data-testid="artifacts-panel"
-        className="relative h-full w-full sm:max-w-4xl bg-white dark:bg-gray-800 shadow-xl flex flex-col"
-      >
-        <header className="flex items-center justify-between gap-3 border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-          <h2 id={headingId} className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {hasTabs ? t('chatFiles.title', 'Files') : t('chatArtifacts.title', 'Artifacts')}
-            {!hasTabs && status === 'ready' && (
-              <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
-                {t('chatArtifacts.count', '{{count}} files', { count: items.length })}
-              </span>
-            )}
-          </h2>
-          <div className="flex items-center gap-1">
-            <button
-              ref={closeRef}
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-              aria-label={t('chatArtifacts.close', 'Close artifacts')}
-            >
-              <Icon name="x" size="md" />
-            </button>
-          </div>
-        </header>
+  const onTabKeyDown = event => {
+    const index = tabs.findIndex(([id]) => id === activeTab);
+    let next = null;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = tabs.length - 1;
+    if (next === null) return;
+    event.preventDefault();
+    onTab(tabs[next][0]);
+    requestAnimationFrame(() => document.getElementById(`${baseId}-tab-${tabs[next][0]}`)?.focus());
+  };
 
-        {hasTabs && (
-          <div
-            role="tablist"
-            aria-label={t('chatFiles.tabsLabel', 'Kinds of files in this chat')}
-            className="flex gap-1 border-b border-gray-200 dark:border-gray-700 px-4"
-          >
-            {[
-              ['uploaded', t('chatFiles.tabUploaded', 'Uploaded'), uploaded.items.length],
-              ['generated', t('chatFiles.tabGenerated', 'Generated'), items.length]
-            ].map(([id, label, count]) => (
-              <button
-                key={id}
-                type="button"
-                role="tab"
-                id={`${headingId}-tab-${id}`}
-                aria-selected={activeTab === id}
-                data-testid={`files-tab-${id}`}
-                onClick={() => setTab(id)}
-                className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
-                  activeTab === id
-                    ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-300'
-                    : 'border-transparent text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100'
-                }`}
-              >
-                {label} ({count})
-              </button>
-            ))}
-          </div>
-        )}
+  const loadingLine = text => (
+    <p className="p-4 text-sm text-gray-500 dark:text-gray-400" role="status">
+      {text}
+    </p>
+  );
 
-        {hasTabs && !showGenerated && (
-          <UploadedFilesTab
-            items={uploaded.items}
-            status={uploaded.status}
-            source={uploadedSource}
-            messages={messages}
-            mailAttach={mailAttach}
-            initialFileId={initialFileId}
-            access={uploadedAccess}
-            onChanged={() => {
-              setUploadedReload(value => value + 1);
-              onUploadedChanged?.();
-            }}
-          />
-        )}
-
-        {showGenerated && status === 'ready' && items.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 dark:border-gray-700 px-4 py-2">
-            <label className="inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100 mr-auto min-h-[2.25rem]">
+  let body;
+  if (activeTab === 'generated') {
+    if (generated.status === 'loading' || generated.status === 'idle') {
+      body = loadingLine(t('chatArtifacts.loading', 'Loading the files of this chat…'));
+    } else if (generated.status === 'error') {
+      body = (
+        <p className="p-4 text-sm text-red-700 dark:text-red-400" role="alert">
+          {t('chatArtifacts.loadFailed', 'The files of this chat could not be loaded.')}
+        </p>
+      );
+    } else if (items.length === 0) {
+      body = (
+        <Empty testId="generated-empty">
+          {t(
+            'workspace.emptyFiles',
+            'No files yet. Files the assistant creates or you upload appear here.'
+          )}
+        </Empty>
+      );
+    } else {
+      body = (
+        <>
+          <div className="flex h-10 flex-none items-center gap-2 border-b border-gray-200 px-3 dark:border-gray-700">
+            <label className="mr-auto inline-flex items-center gap-2 text-sm text-gray-800 dark:text-gray-100">
               <input
                 ref={selectAllRef}
                 type="checkbox"
@@ -500,201 +250,283 @@ export default function ArtifactsPanel({
               />
               {t('chatArtifacts.selectAll', 'Select all')}
             </label>
-            <button
-              type="button"
-              className={SECONDARY}
-              disabled={selected.size === 0 || busy !== null}
-              onClick={() => downloadZip(items.filter(i => selected.has(i.id)).map(i => i.id))}
-            >
-              <Icon name="archive-box" size="sm" />
-              {t('chatArtifacts.downloadSelected', 'Download selected (.zip)')}
-              {selected.size > 0 && <span aria-hidden="true">· {selected.size}</span>}
-            </button>
-            <button
-              type="button"
-              className={PRIMARY}
-              disabled={busy !== null}
-              onClick={() => downloadZip(undefined)}
-            >
-              <Icon name="download" size="sm" />
-              {t('chatArtifacts.downloadAll', 'Download all (.zip)')}
-            </button>
-          </div>
-        )}
-
-        <div aria-live="polite" role="status" className="px-4 empty:hidden">
-          {showGenerated && notice && (
-            <p
-              className={`my-2 text-sm ${notice.tone === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}
-            >
-              {notice.text}
-            </p>
-          )}
-        </div>
-
-        {showGenerated && status === 'loading' && (
-          <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
-            {t('chatArtifacts.loading', 'Loading the files of this chat…')}
-          </p>
-        )}
-        {showGenerated && status === 'error' && (
-          <p className="p-4 text-sm text-red-700 dark:text-red-400" role="alert">
-            {t('chatArtifacts.loadFailed', 'The files of this chat could not be loaded.')}
-          </p>
-        )}
-        {showGenerated && status === 'ready' && items.length === 0 && (
-          <p className="p-4 text-sm text-gray-600 dark:text-gray-300">
-            {t(
-              'chatArtifacts.empty',
-              'This chat has no files yet. Files, pictures and documents the assistant creates appear here.'
+            {zip && (
+              <button
+                type="button"
+                className={GHOST_BUTTON}
+                disabled={busy}
+                onClick={() => downloadZip(undefined)}
+                data-testid="files-download-all"
+              >
+                <Icon name="download" size="sm" />
+                {t('chatArtifacts.downloadAll', 'Download all (.zip)')}
+              </button>
             )}
-          </p>
-        )}
-
-        {showGenerated && status === 'ready' && items.length > 0 && (
-          <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
-            <ul
-              className="lg:w-80 flex-none overflow-y-auto max-h-[40vh] lg:max-h-none border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 py-1"
-              aria-label={t('chatArtifacts.listLabel', 'Files of this chat')}
-            >
-              {items.map(item => {
-                const name = artifactDisplayName(item);
-                const look = fileLookOf(item);
-                const answer =
-                  (item.runId && answers.byRun.get(item.runId)) || answers.byId.get(item.id);
-                const current = item.id === previewId;
-                return (
-                  <li
-                    key={item.id}
-                    className={`flex items-center gap-2 px-3 py-1.5 ${current ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(item.id)}
-                      onChange={() => toggle(item.id)}
-                      aria-label={t('chatArtifacts.selectNamed', 'Select {{name}}', { name })}
-                      className="h-4 w-4 flex-none rounded border-gray-400"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setPreviewId(item.id)}
-                      onDoubleClick={viewer ? () => viewer.openArtifact(item, items) : undefined}
-                      aria-current={current ? 'true' : undefined}
-                      className="flex-1 min-w-0 flex items-center gap-2 text-left rounded-md p-1 hover:bg-gray-100 dark:hover:bg-gray-700"
-                    >
-                      <span
-                        className={`flex-none flex items-center justify-center w-8 h-8 rounded-md ${look.className}`}
-                      >
-                        <Icon name={look.icon} size="sm" />
-                      </span>
-                      <span className="min-w-0">
-                        <span
-                          className="block truncate text-sm font-medium text-gray-900 dark:text-gray-100"
-                          title={name}
-                        >
-                          {name}
-                        </span>
-                        <span className="block truncate text-xs text-gray-600 dark:text-gray-300">
-                          {[
-                            formatBytes(item.bytes),
-                            answer
-                              ? t('chatArtifacts.fromAnswer', 'Answer {{number}}', {
-                                  number: answer
-                                })
-                              : null,
-                            formatDate(item.createdAt, i18n.language)
-                          ]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            <section
-              className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4"
-              aria-label={t('chatArtifacts.previewLabel', 'Preview')}
-            >
-              {preview && (
-                <>
-                  <div className="flex flex-wrap items-center gap-2 mb-3">
-                    <h3
-                      className="mr-auto min-w-0 truncate text-base font-semibold text-gray-900 dark:text-gray-100"
-                      title={artifactDisplayName(preview)}
-                    >
-                      {artifactDisplayName(preview)}
-                    </h3>
-                    {isTextArtifact(preview) && (
-                      <button
-                        type="button"
-                        className={SECONDARY}
-                        disabled={busy !== null}
-                        onClick={() => copy(preview)}
-                      >
-                        <Icon name="copy" size="sm" />
-                        {t('chatArtifacts.copy', 'Copy')}
-                      </button>
-                    )}
-                    {mailAttach?.available && (
-                      <button
-                        type="button"
-                        className={SECONDARY}
-                        disabled={busy !== null}
-                        onClick={() => attachGenerated(preview)}
-                        data-testid="generated-attach-to-email"
-                      >
-                        <Icon name="envelope" size="sm" />
-                        {t('chatFiles.attachToEmail', 'Attach to email')}
-                      </button>
-                    )}
-                    {onShare && (
-                      <button
-                        type="button"
-                        className={SECONDARY}
-                        disabled={busy !== null}
-                        onClick={() => onShare(preview)}
-                        data-testid="artifact-share"
-                      >
-                        <Icon name="share" size="sm" />
-                        {t('chatArtifacts.share', 'Share')}
-                      </button>
-                    )}
-                    {viewer && previewTypeOf(preview) !== 'none' && (
-                      <button
-                        type="button"
-                        className={SECONDARY}
-                        onClick={() => viewer.openArtifact(preview, items)}
-                        data-testid="artifact-open"
-                        aria-label={t('chatArtifacts.openNamed', 'Open {{name}}', {
-                          name: artifactDisplayName(preview)
-                        })}
-                      >
-                        <Icon name="arrows-pointing-out" size="sm" />
-                        {t('chatArtifacts.openViewer', 'Open')}
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className={SECONDARY}
-                      disabled={busy !== null}
-                      onClick={() => download(preview)}
-                      aria-label={t('chatArtifacts.downloadNamed', 'Download {{name}}', {
-                        name: artifactDisplayName(preview)
-                      })}
-                    >
-                      <Icon name="download" size="sm" />
-                      {t('chatArtifacts.download', 'Download')}
-                    </button>
-                  </div>
-                  <ArtifactPreview key={preview.id} artifact={preview} getBlob={getBlob} />
-                </>
-              )}
-            </section>
           </div>
-        )}
+          <ul
+            className="min-h-0 flex-1 overflow-y-auto py-1"
+            aria-label={t('chatArtifacts.listLabel', 'Files of this chat')}
+          >
+            {items.map(item => {
+              const name = artifactDisplayName(item);
+              const answer =
+                (item.runId && answers.byRun.get(item.runId)) || answers.byId.get(item.id);
+              const current = item.id === activeId;
+              return (
+                <li key={item.id} className={rowClass(current)} data-testid="files-row">
+                  <input
+                    type="checkbox"
+                    checked={selected.has(item.id)}
+                    onChange={() => toggle(item.id)}
+                    aria-label={t('chatArtifacts.selectNamed', 'Select {{name}}', { name })}
+                    className="h-4 w-4 flex-none rounded border-gray-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onOpenArtifact(item)}
+                    aria-current={current ? 'true' : undefined}
+                    className={ROW_BUTTON}
+                    data-testid="files-row-open"
+                  >
+                    <Tile look={fileLookOf(item)} />
+                    <span className="min-w-0">
+                      <span
+                        className="block truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                        title={name}
+                      >
+                        {name}
+                      </span>
+                      <span className="block truncate text-xs text-gray-600 dark:text-gray-300">
+                        {[formatBytes(item.bytes), formatDate(item.createdAt, i18n.language)]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    </span>
+                  </button>
+                  <AnswerLink
+                    number={answer}
+                    messageId={answers.messageIdOf.get(answer)}
+                    onReveal={chrome?.onRevealMessage}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+          {selected.size > 0 && zip && (
+            <div
+              className="sticky bottom-0 flex flex-none items-center gap-2 border-t border-gray-200 bg-white px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
+              data-testid="files-selection-bar"
+            >
+              <span className="mr-auto text-sm text-gray-700 dark:text-gray-200">
+                {t('workspace.selectedCount', '{{count}} selected', { count: selected.size })}
+              </span>
+              <button
+                type="button"
+                className={PRIMARY_BUTTON}
+                disabled={busy}
+                onClick={() => downloadZip(items.filter(i => selected.has(i.id)).map(i => i.id))}
+              >
+                <Icon name="archive-box" size="sm" />
+                {t('workspace.downloadZip', 'Download .zip')}
+              </button>
+              <button type="button" className={GHOST_BUTTON} onClick={() => setSelected(new Set())}>
+                {t('workspace.clearSelection', 'Clear')}
+              </button>
+            </div>
+          )}
+        </>
+      );
+    }
+  } else if (activeTab === 'uploaded') {
+    if (uploaded.status === 'loading' || uploaded.status === 'idle') {
+      body = loadingLine(t('chatFiles.loading', 'Loading the uploaded files…'));
+    } else if (uploaded.status === 'error') {
+      body = (
+        <p className="p-4 text-sm text-red-700 dark:text-red-400" role="alert">
+          {t('chatFiles.loadFailed', 'The uploaded files could not be loaded.')}
+        </p>
+      );
+    } else if (uploaded.items.length === 0) {
+      body = (
+        <Empty testId="uploaded-empty">
+          {uploadedAccess === 'none'
+            ? t('chatFiles.notShared', 'The owner did not share the files attached to this chat.')
+            : t(
+                'chatFiles.empty',
+                'No files uploaded to this chat yet. Documents, emails and pages you attach appear here.'
+              )}
+        </Empty>
+      );
+    } else {
+      body = (
+        <ul
+          className="min-h-0 flex-1 overflow-y-auto py-1"
+          aria-label={t('chatFiles.listLabel', 'Files uploaded to this chat')}
+          data-testid="uploaded-files-tab"
+        >
+          {uploaded.items.map(item => {
+            const state = uploadedStorageState(item);
+            const current = item.id === activeId;
+            const question = questions.get(item.id);
+            return (
+              <li key={item.id} className={rowClass(current)} data-testid="files-row">
+                <button
+                  type="button"
+                  onClick={() => onOpenFile?.(item)}
+                  aria-current={current ? 'true' : undefined}
+                  className={ROW_BUTTON}
+                >
+                  <Tile look={uploadedFileLook(item)} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-1.5">
+                      <span
+                        className="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                        title={item.name}
+                      >
+                        {item.name}
+                      </span>
+                      <span
+                        className="flex-none rounded bg-gray-200 px-1 text-[10px] font-semibold text-gray-700 dark:bg-gray-600 dark:text-gray-100"
+                        data-testid="uploaded-badge"
+                      >
+                        {uploadedFileBadge(item)}
+                      </span>
+                    </span>
+                    <span className="block truncate text-xs text-gray-600 dark:text-gray-300">
+                      {[
+                        formatBytes(item.bytes),
+                        Number.isFinite(item.pages)
+                          ? t('chatFiles.pages', '{{count}} pages', { count: item.pages })
+                          : null,
+                        state === 'original'
+                          ? t('chatFiles.stateOriginal', 'Original saved')
+                          : state === 'expired'
+                            ? t('chatFiles.stateExpired', 'Original removed')
+                            : t('chatFiles.stateTextOnly', 'Text only'),
+                        question
+                          ? t('chatFiles.question', 'Question {{number}}', { number: question })
+                          : null
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      );
+    }
+  } else if (sources.length === 0) {
+    body = (
+      <Empty testId="sources-empty">
+        {t('workspace.emptySources', 'No sources yet. Documents an answer cites appear here.')}
+      </Empty>
+    );
+  } else {
+    body = (
+      <ul
+        className="min-h-0 flex-1 overflow-y-auto py-1"
+        aria-label={t('workspace.sourcesListLabel', 'Sources cited in this chat')}
+      >
+        {sources.map(entry => {
+          const { source } = entry;
+          const current = source.id === activeId;
+          return (
+            <li key={source.id} className={rowClass(current)} data-testid="files-row">
+              <button
+                type="button"
+                onClick={() => onOpenSource(entry)}
+                aria-current={current ? 'true' : undefined}
+                className={ROW_BUTTON}
+              >
+                <Tile
+                  look={{
+                    icon: 'book-open',
+                    className: 'bg-amber-50 text-amber-800 dark:bg-amber-900/30 dark:text-amber-200'
+                  }}
+                />
+                <span className="min-w-0">
+                  <span
+                    className="block truncate text-sm font-medium text-gray-900 dark:text-gray-100"
+                    title={source.title}
+                  >
+                    {source.title || source.fileName || source.url}
+                  </span>
+                  <span className="block truncate text-xs text-gray-600 dark:text-gray-300">
+                    {[source.site || source.scopeName, source.type].filter(Boolean).join(' · ')}
+                  </span>
+                </span>
+              </button>
+              <AnswerLink
+                number={entry.answer}
+                messageId={entry.messageId}
+                onReveal={chrome?.onRevealMessage}
+              />
+            </li>
+          );
+        })}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="artifacts-panel">
+      <PaneHeader
+        title={t('chatFiles.title', 'Files')}
+        headingId={chrome?.headingId}
+        headingRef={chrome?.headingRef}
+        expand={chrome?.expand}
+        close={chrome?.close}
+        paneWidth={chrome?.paneWidth}
+        full={chrome?.full}
+      />
+      <div
+        role="tablist"
+        aria-label={t('chatFiles.tabsLabel', 'Kinds of files in this chat')}
+        className="flex flex-none gap-1 border-b border-gray-200 px-3 dark:border-gray-700"
+      >
+        {tabs.map(([id, label, count]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`${baseId}-tab-${id}`}
+            aria-selected={activeTab === id}
+            aria-controls={`${baseId}-panel`}
+            tabIndex={activeTab === id ? 0 : -1}
+            data-testid={`files-tab-${id}`}
+            onClick={() => onTab(id)}
+            onKeyDown={onTabKeyDown}
+            className={`-mb-px inline-flex h-10 items-center gap-1.5 border-b-2 px-3 text-sm font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 ${
+              activeTab === id
+                ? 'border-indigo-600 text-indigo-700 dark:border-indigo-400 dark:text-indigo-300'
+                : 'border-transparent text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'
+            }`}
+          >
+            {label}
+            <span className="rounded-full bg-gray-100 px-1.5 text-xs tabular-nums text-gray-700 dark:bg-gray-700 dark:text-gray-200">
+              {count}
+            </span>
+          </button>
+        ))}
+      </div>
+      {notice && (
+        <p
+          className={`flex-none px-3 py-1.5 text-sm ${notice.tone === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}
+          role={notice.tone === 'error' ? 'alert' : undefined}
+        >
+          {notice.text}
+        </p>
+      )}
+      <div
+        id={`${baseId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${baseId}-tab-${activeTab}`}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        {body}
       </div>
     </div>
   );

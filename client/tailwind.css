@@ -116,3 +116,22 @@
     height: 100dvh;
   }
 }
+
+/*
+ * Workspace pane (concept "Workspace Pane for Artifacts, Files and Sources",
+ * §10): the content fades in as the pane opens. Used behind `motion-safe:`
+ * only, so reduced motion gets no animation at all.
+ */
+@theme {
+  --animate-workspace-in: workspace-in 220ms ease-out;
+  @keyframes workspace-in {
+    from {
+      opacity: 0;
+      transform: translateX(16px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}

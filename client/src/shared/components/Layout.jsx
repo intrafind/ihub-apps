@@ -218,6 +218,8 @@ function Layout() {
           {t('accessibility.skipToContent', 'Skip to main content')}
         </SkipLink>
       )}
+      {/* "Skip to workspace" goes here while the chat's workspace pane is open. */}
+      <span id="workspace-skip-link-slot" className="contents" />
 
       {/* Disclaimer Popup */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (

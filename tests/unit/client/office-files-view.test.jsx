@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The Files view of the Outlook task pane: a card of a message opens its file in the same Files
- * drawer the web app has, a stored picture's thumbnail can be fetched, and "Attach to email" is
+ * The Files view of the Outlook task pane: a card of a message opens its file in the same
+ * workspace pane the web app has (always a sheet here), a stored picture's thumbnail can be fetched, and "Attach to email" is
  * there only in the Outlook host.
  */
 import '@testing-library/jest-dom';
@@ -28,22 +28,40 @@ jest.mock('../../../client/src/features/chat/utils/attachToMail', () => ({
   mailAttachState: () => mockMailAttachState()
 }));
 
-// The drawer has its own suite (chat-files-drawer); here it only has to show what it was handed
-const mockPanelProps = [];
-jest.mock('../../../client/src/features/chat/components/ArtifactsPanel', () => ({
-  __esModule: true,
-  default: props => {
-    mockPanelProps.push(props);
-    return (
-      <div data-testid="files-drawer">
-        <span data-testid="drawer-file">{props.initialFileId}</span>
-        <button type="button" onClick={props.onClose}>
-          close drawer
-        </button>
-      </div>
-    );
-  }
-}));
+jest.mock('../../../client/src/shared/components/Icon', () => () => null);
+
+// The pane has its own suites (artifact-viewer-host, chat-files-drawer); here the host only has
+// to show what it was handed, and open what the controller asks for.
+const mockHostProps = [];
+jest.mock('../../../client/src/features/chat/components/ArtifactViewerHost', () => {
+  const React = require('react');
+  return {
+    __esModule: true,
+    default: function MockHost(props) {
+      mockHostProps.push(props);
+      const [open, setOpen] = React.useState(null);
+      React.useImperativeHandle(props.controllerRef, () => ({
+        openFile: id => setOpen(id),
+        openFiles: () => {},
+        openArtifact: () => {},
+        close: () => setOpen(null)
+      }));
+      return (
+        <>
+          {props.children}
+          {open && (
+            <div data-testid="files-drawer">
+              <span data-testid="drawer-file">{open}</span>
+              <button type="button" onClick={() => setOpen(null)}>
+                close drawer
+              </button>
+            </div>
+          )}
+        </>
+      );
+    }
+  };
+});
 
 const OfficeFilesView =
   require('../../../client/src/features/office/components/chat/OfficeFilesView').default;
@@ -64,10 +82,10 @@ function Card({ fileId = 'file_1' }) {
   );
 }
 
-const lastPanel = () => mockPanelProps[mockPanelProps.length - 1];
+const lastPanel = () => mockHostProps[mockHostProps.length - 1];
 
 beforeEach(() => {
-  mockPanelProps.length = 0;
+  mockHostProps.length = 0;
   mockFetchChatFiles.mockReset().mockResolvedValue({ items: [] });
   mockFetchChatArtifacts.mockReset().mockResolvedValue({ items: [] });
   mockFetchChatFileBlob.mockReset().mockResolvedValue(new Blob(['x']));
@@ -84,7 +102,7 @@ describe('OfficeFilesView', () => {
     expect(screen.queryByTestId('files-drawer')).not.toBeInTheDocument();
   });
 
-  test('a card opens its file in the drawer, on the uploaded files', async () => {
+  test('a card opens its file in the pane, which is a sheet here', async () => {
     render(
       <OfficeFilesView chatId="c1" messages={[{ role: 'user' }]}>
         <Card fileId="file_9" />
@@ -93,7 +111,7 @@ describe('OfficeFilesView', () => {
     fireEvent.click(screen.getByText('open file_9'));
     expect(await screen.findByTestId('files-drawer')).toBeInTheDocument();
     expect(screen.getByTestId('drawer-file')).toHaveTextContent('file_9');
-    expect(lastPanel()).toMatchObject({ isOpen: true, initialTab: 'uploaded' });
+    expect(lastPanel()).toMatchObject({ forceSheet: true, chatId: 'c1' });
     expect(lastPanel().messages).toEqual([{ role: 'user' }]);
   });
 
@@ -117,9 +135,9 @@ describe('OfficeFilesView', () => {
     );
     fireEvent.click(screen.getByText('open file_1'));
     await screen.findByTestId('files-drawer');
-    await expect(lastPanel().uploadedSource.list()).resolves.toEqual({ items: [] });
+    await expect(lastPanel().files.uploaded.list()).resolves.toEqual({ items: [] });
     expect(mockFetchChatFiles).toHaveBeenCalledWith('office-fresh');
-    await lastPanel().source.list();
+    await lastPanel().files.artifacts.list();
     expect(mockFetchChatArtifacts).toHaveBeenCalledWith('office-fresh');
   });
 
@@ -132,7 +150,7 @@ describe('OfficeFilesView', () => {
     );
     fireEvent.click(screen.getByText('open file_1'));
     await screen.findByTestId('files-drawer');
-    await expect(lastPanel().uploadedSource.list()).rejects.toThrow('boom');
+    await expect(lastPanel().files.uploaded.list()).rejects.toThrow('boom');
   });
 
   test('a card can fetch the bytes of a stored picture', async () => {
@@ -169,7 +187,7 @@ describe('OfficeFilesView', () => {
     );
     fireEvent.click(screen.getByText('open file_1'));
     await screen.findByTestId('files-drawer');
-    expect(lastPanel().mailAttach).toBeNull();
+    expect(lastPanel().files.mailAttach).toBeNull();
   });
 
   test('offers "Attach to email" in Outlook, and follows the open item', async () => {
@@ -181,14 +199,14 @@ describe('OfficeFilesView', () => {
     );
     fireEvent.click(screen.getByText('open file_1'));
     await screen.findByTestId('files-drawer');
-    expect(lastPanel().mailAttach).toMatchObject({ supported: true, available: false });
-    expect(typeof lastPanel().mailAttach.attach).toBe('function');
+    expect(lastPanel().files.mailAttach).toMatchObject({ supported: true, available: false });
+    expect(typeof lastPanel().files.mailAttach.attach).toBe('function');
 
     // The user opens a draft
     mockMailAttachState.mockReturnValue({ supported: true, available: true });
     act(() => {
       document.dispatchEvent(new Event('ihub:itemchanged'));
     });
-    await waitFor(() => expect(lastPanel().mailAttach.available).toBe(true));
+    await waitFor(() => expect(lastPanel().files.mailAttach.available).toBe(true));
   });
 });

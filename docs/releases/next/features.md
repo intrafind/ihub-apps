@@ -379,10 +379,11 @@ Files attached to a chat now stay with it: the assistant keeps reading them on f
 reload and on another device, and **Regenerate** and **Edit** no longer lose them. Scheduled tasks
 can carry reference documents and templates of their own.
 
-- **Files drawer:** the chat's side panel has **Uploaded** and **Generated** tabs. Uploaded files
-  show type, size, pages and whether the original is still stored, open as a preview (PDF,
-  picture, CSV, notebook, text, e-mail, meeting or web page) and offer **Download original**,
-  **Download text** and **Delete file**; the Outlook task pane adds **Attach to email**.
+- **Files in the workspace pane:** the chat's Files index has **Generated**, **Uploaded** and
+  **Sources** tabs. Uploaded files show type, size, pages and whether the original is still
+  stored, open as a preview (PDF, picture, CSV, notebook, text, e-mail, meeting or web page) and
+  offer **Download original**, **Download text** and **Delete file**; the Outlook task pane adds
+  **Attach to email**.
 - **What the server keeps** (**Admin → Chat history → Uploaded files**, per app
   `uploads.storageMode`): the file and its text, only the text, or only text extracted in the
   browser. Originals older than the retention period (14 days by default) are removed and their
@@ -450,8 +451,8 @@ or two columns stay ordinary lines. Tagged PDFs still use their structure tree.
 ## Share a Single File as a Link, Optionally Embedded
 
 A generated file — a web page, image, document or code file — can now be shared on its own, like a
-chat, without the conversation it came from. Choose **Share** on the file's card in the chat, in the
-file viewer, or in the Artifacts panel.
+chat, without the conversation it came from. Choose **Share** on the file's card in the chat or in the
+header of the workspace pane.
 
 - **Same audiences and limits as chat links:** specific users, anyone signed in, or anyone with the
   link, each with an expiry, an open limit and **Revoke**. Only that one file opens through the link;
@@ -507,26 +508,41 @@ every turn.
 
 See [Chat Persistence](../../chat-persistence.md#what-earlier-turns-give-the-model).
 
-## Artifacts Open Full Window, from a Click in the Chat
+## Chat: Files and Sources Open in a Workspace Next to the Chat
 
-A generated page, dashboard, picture or document now opens as itself: one slim toolbar and the
-artifact filling the rest of the window, edge to edge.
+Generated files, uploaded files and the sources an answer cites now open in a workspace pane on the
+right of the chat. The chat moves aside instead of being covered, so you can keep asking while the
+document is open.
 
-- **Click to open:** the card of a generated file and a generated picture in a chat message open the
-  viewer. **Download** stays a separate button; Word, Excel and ZIP files, which have no preview,
-  still just download. Works in your chats and in shared chats.
-- **Toolbar:** name with a file menu, previous/next through the chat's artifacts, **Preview | Code**,
-  copy, **Share**, **Export** (HTML, Markdown, PDF), download and browser **Full screen**. On a phone
-  the actions are in the file menu. **Esc** or **×** closes it and focus returns to the card.
-- **Chat beside it:** the **Chat** button splits the window so the conversation stays usable next
-  to the artifact.
-- **Links:** the open artifact is in the address (`?artifact=…`): reload reopens it and Back closes
-  it. **Open in new tab** shows one artifact of your chat on its own page. A shared single file
-  opens in the same full-window layout; add `?embed=1` to drop the toolbar for embedding.
-- **Files panel:** the **Full screen** toggle is replaced by **Open**.
+- **Open, dock, expand:** a click on a file card, on a source's **Preview** or on **Files** in the
+  chat header opens the pane next to the chat. Drag its edge (or use the arrow keys on it) to make
+  it wider or narrower; a double-click resets it. **⤢** makes it full screen, with a small chat box
+  at the bottom to keep asking. Back steps out one level at a time: full screen, docked, closed.
+- **One header for everything:** back to **Files**, the file name (a menu to switch to any other
+  file of the chat), **Preview | Code**, **Copy** with the export formats (HTML, Markdown, PDF),
+  **Download**, **Share**, full screen and close; the rest is under **⋯**.
+- **Files index:** the old Files drawer is the pane's list now, with **Generated**, **Uploaded**
+  and **Sources** tabs, ZIP download of all or of a selection, and **Answer 3** links that jump to
+  the answer that made a file.
+- **Sources:** a cited document opens read-only in the pane, its passages highlighted, with
+  **Passage 2/5** navigation and **Open in source system**.
+- **Ask about a passage:** select text in the pane and choose **Ask about** or **Edit with AI**:
+  the passage is quoted into the chat input. **Edit with AI** produces a new file; the original is
+  not changed.
+- **Cards:** the card of the file that is open in the pane is highlighted; Download and Share appear
+  on hover.
+- **Small screens and add-ins:** below 1024 px wide, in the Outlook add-in and in the browser
+  extension the pane opens as a full-screen sheet with **Back to chat**. Below 1280 px the left
+  sidebar folds to its icons while the pane is open.
+- **Links:** what is open is in the address (`?artifact=…`, `&view=full`): reload reopens it.
+  **Open in new tab** shows one file on its own page; a shared single file opens the same way, and
+  `?embed=1` drops the header for embedding.
+- **Keyboard and screen readers:** **Ctrl+.** (⌘. on a Mac) opens and closes the pane, **F6**
+  moves between sidebar, messages, input and pane, **Esc** closes the innermost layer and never
+  from the chat input, and a "Skip to workspace" link leads to the pane.
 - HTML runs in the same sandboxed frame as before and cannot reach iHub.
 
-See [Artifacts](../../artifacts.md#the-artifact-viewer).
+See [Artifacts](../../artifacts.md#the-workspace-pane).
 
 ## Marketplace: Offline Registry for Installations Without Internet Access
 

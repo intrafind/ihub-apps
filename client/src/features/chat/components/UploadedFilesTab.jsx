@@ -7,22 +7,18 @@ import Icon from '../../../shared/components/Icon';
 import { renderMarkdown } from '../../../config/marked.config';
 import { saveBlobAs } from '../../../utils/externalNavigation';
 import { isOriginalDiscarded } from '../../../api/utils/fileErrors';
+import { DANGER_BUTTON, GHOST_BUTTON, SECONDARY_BUTTON } from '../../../shared/utils/buttonTokens';
+import PaneHeader from '../../workspace/components/PaneHeader';
+import SelectionScope from '../../workspace/components/SelectionScope';
 import ArtifactPreview from './ArtifactPreview';
-import { formatBytes, saveName } from '../utils/artifactFiles';
+import { saveName } from '../utils/artifactFiles';
 import {
   extractedTextFileName,
   parseStructuredText,
-  questionOfFiles,
   uploadedFileBadge,
-  uploadedFileLook,
   uploadedStorageState,
   uploadedViewKind
 } from '../utils/uploadedFiles';
-
-const BUTTON =
-  'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium min-h-[2.25rem] disabled:opacity-50 disabled:cursor-not-allowed';
-const SECONDARY = `${BUTTON} border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700`;
-const DANGER = `${BUTTON} border border-red-300 dark:border-red-700 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/30`;
 
 /** The header table and body of an e-mail, meeting or web page. */
 function StructuredItem({ text, kind }) {
@@ -129,37 +125,37 @@ function UploadedPreview({ file, source, getBlob }) {
 }
 
 /**
- * The "Uploaded" tab of the Files drawer: the files the user (or an add-in)
- * put into the chat. A type badge, size, pages and storage state per file; a
- * preview; "Download original" (the original may be gone: only its text is kept
- * then), "Download text", "Delete file" and, in the Outlook task pane while a mail
- * is being written, "Attach to email".
+ * One uploaded file in the workspace pane: the shared header and its preview.
+ * Uploads are immutable inputs, so the actions are reading ones — download the
+ * original (the original may be gone: only its text is kept then) or the text —
+ * plus Delete and, in the Outlook task pane while a mail is being written,
+ * "Attach to email". Attach sits in ⋯ and is a visible header button on the
+ * Outlook surface; Delete sits in ⋯ and asks once more in the body.
  *
  * @param {Object} props
- * @param {Object[]} props.items - File descriptors.
- * @param {'loading'|'ready'|'error'} props.status
+ * @param {Object|null} props.file - The descriptor, or null: the file is gone.
+ * @param {'loading'|'ready'|'error'|'idle'} props.status - Of the list the file comes from.
  * @param {Object} props.source
- * @param {(id: string) => Promise<{ file: Object }>} props.source.fetchText
+ * @param {(id: string) => Promise<{ text: string }>} props.source.fetchText
  * @param {(id: string) => Promise<Blob>} props.source.fetchBlob
  * @param {(id: string) => Promise<unknown>} [props.source.remove] - Absent: read-only (a shared chat).
- * @param {() => void} [props.onChanged] - After a file was deleted.
+ * @param {() => void} [props.onDeleted] - After the file was deleted.
  * @param {{ available: boolean, attach: (params: Object) => Promise<Object> }|null} [props.mailAttach]
- * @param {Object[]} [props.messages]
- * @param {string|null} [props.initialFileId] - Open this file first.
- * @param {'none'|'extracted_text'|'original'} [props.access] - On a shared chat: what the owner shared.
+ * @param {boolean} [props.attachProminent] - Outlook: "Attach to email" as a visible button.
+ * @param {'none'|'extracted_text'|'original'|null} [props.access] - On a shared chat: what the owner shared.
+ * @param {Object} props.chrome - What the pane gives every detail view.
  */
-export default function UploadedFilesTab({
-  items,
+export default function UploadedFileDetail({
+  file,
   status,
   source,
-  onChanged,
+  onDeleted,
   mailAttach = null,
-  messages,
-  initialFileId = null,
-  access = null
+  attachProminent = false,
+  access = null,
+  chrome
 }) {
   const { t, i18n } = useTranslation();
-  const [selectedId, setSelectedId] = useState(initialFileId);
   const [busy, setBusy] = useState(null);
   const [notice, setNotice] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -168,14 +164,10 @@ export default function UploadedFilesTab({
   useEffect(() => {
     blobsRef.current = new Map();
   }, [source]);
-
-  // A message's card names a file by id. When that file is no longer in the chat (it was deleted)
-  // the drawer says so; it does not open another file in its place.
-  const requested =
-    items.find(item => item.id === selectedId) || items.find(item => item.id === initialFileId);
-  const requestedGone =
-    Boolean(initialFileId) && !requested && (selectedId === initialFileId || selectedId === null);
-  const current = requested || (requestedGone ? null : items[0] || null);
+  useEffect(() => {
+    setConfirmDelete(false);
+    setNotice(null);
+  }, [file?.id]);
 
   const getBlob = useCallback(
     id => {
@@ -189,7 +181,10 @@ export default function UploadedFilesTab({
     [source]
   );
 
-  const questions = useMemo(() => questionOfFiles(items, messages), [items, messages]);
+  const say = (tone, text) => {
+    setNotice({ tone, text });
+    chrome?.announce?.(text);
+  };
 
   const run = async (name, task) => {
     setBusy(name);
@@ -201,307 +196,255 @@ export default function UploadedFilesTab({
     }
   };
 
-  const downloadOriginal = file =>
+  const discardedText = t(
+    'chatFiles.originalDiscarded',
+    'The original file is no longer stored; only its text is kept. You can download the text instead.'
+  );
+
+  const downloadOriginal = () =>
     run('original', async () => {
       try {
         const blob = await getBlob(file.id);
         if (!saveBlobAs(blob, saveName(file.name))) throw new Error('save');
       } catch (error) {
-        setNotice({
-          tone: 'error',
-          text: isOriginalDiscarded(error)
-            ? t(
-                'chatFiles.originalDiscarded',
-                'The original file is no longer stored; only its text is kept. You can download the text instead.'
-              )
+        say(
+          'error',
+          isOriginalDiscarded(error)
+            ? discardedText
             : t('chatArtifacts.downloadFailed', 'The download failed. Please try again.')
-        });
+        );
       }
     });
 
-  const downloadText = file =>
+  const downloadText = () =>
     run('text', async () => {
       try {
         const result = await source.fetchText(file.id);
         const blob = new Blob([result?.text || ''], { type: 'text/plain;charset=utf-8' });
         if (!saveBlobAs(blob, extractedTextFileName(file))) throw new Error('save');
       } catch {
-        setNotice({
-          tone: 'error',
-          text: t('chatArtifacts.downloadFailed', 'The download failed. Please try again.')
-        });
+        say('error', t('chatArtifacts.downloadFailed', 'The download failed. Please try again.'));
       }
     });
 
-  const deleteFile = file =>
+  const copyText = () =>
+    run('copy', async () => {
+      try {
+        const result = await source.fetchText(file.id);
+        await navigator.clipboard.writeText(result?.text || '');
+        say('info', t('chatArtifacts.copied', 'Copied to the clipboard.'));
+      } catch {
+        say('error', t('chatArtifacts.copyFailed', 'The content could not be copied.'));
+      }
+    });
+
+  const deleteFile = () =>
     run('delete', async () => {
       try {
         await source.remove(file.id);
         setConfirmDelete(false);
-        setSelectedId(null);
-        onChanged?.();
+        chrome?.announce?.(t('chatFiles.deleted', '{{name}} deleted.', { name: file.name }));
+        onDeleted?.();
       } catch {
-        setNotice({
-          tone: 'error',
-          text: t('chatFiles.deleteFailed', 'The file could not be deleted. Please try again.')
-        });
+        say(
+          'error',
+          t('chatFiles.deleteFailed', 'The file could not be deleted. Please try again.')
+        );
       }
     });
 
-  const attachToMail = file =>
+  const attachToMail = () =>
     run('attach', async () => {
       const result = await mailAttach.attach({ file, fetchBlob: () => getBlob(file.id) });
-      setNotice(
-        result.ok
-          ? {
-              tone: 'info',
-              text: t('chatFiles.attached', 'Attached {{name}} to your email.', {
-                name: result.filename
-              })
-            }
-          : {
-              tone: 'error',
-              text:
-                result.reason === 'tooLarge'
-                  ? t('chatFiles.attachTooLarge', 'The file is too large to attach to an email.')
-                  : result.reason === 'discarded'
-                    ? t(
-                        'chatFiles.originalDiscarded',
-                        'The original file is no longer stored; only its text is kept. You can download the text instead.'
-                      )
-                    : t('chatFiles.attachFailed', 'The file could not be attached to your email.')
-            }
-      );
+      if (result.ok) {
+        say(
+          'info',
+          t('chatFiles.attached', 'Attached {{name}} to your email.', { name: result.filename })
+        );
+      } else {
+        say(
+          'error',
+          result.reason === 'tooLarge'
+            ? t('chatFiles.attachTooLarge', 'The file is too large to attach to an email.')
+            : result.reason === 'discarded'
+              ? discardedText
+              : t('chatFiles.attachFailed', 'The file could not be attached to your email.')
+        );
+      }
     });
 
-  if (status === 'loading') {
+  if (!file) {
     return (
-      <p className="p-4 text-sm text-gray-500 dark:text-gray-400">
-        {t('chatFiles.loading', 'Loading the uploaded files…')}
-      </p>
-    );
-  }
-  if (status === 'error') {
-    return (
-      <p className="p-4 text-sm text-red-700 dark:text-red-400" role="alert">
-        {t('chatFiles.loadFailed', 'The uploaded files could not be loaded.')}
-      </p>
-    );
-  }
-  if (items.length === 0) {
-    // A card named a file and none is left: say that, not that nothing was ever uploaded
-    if (requestedGone) {
-      return (
-        <output
-          className="block p-4 text-sm text-gray-700 dark:text-gray-200"
-          data-testid="uploaded-file-gone"
-        >
-          {t('chatFiles.fileGone', 'This file is no longer in the chat.')}
-        </output>
-      );
-    }
-    return (
-      <p className="p-4 text-sm text-gray-600 dark:text-gray-300" data-testid="uploaded-empty">
-        {access === 'none'
-          ? t('chatFiles.notShared', 'The owner did not share the files attached to this chat.')
-          : t(
-              'chatFiles.empty',
-              'No files uploaded to this chat yet. Documents, emails and pages you attach appear here.'
-            )}
-      </p>
-    );
-  }
-
-  const storage = current ? uploadedStorageState(current) : null;
-  const canDownloadOriginal = current && access !== 'extracted_text' && storage === 'original';
-
-  return (
-    <div className="flex-1 min-h-0 flex flex-col lg:flex-row" data-testid="uploaded-files-tab">
-      <ul
-        className="lg:w-80 flex-none overflow-y-auto max-h-[40vh] lg:max-h-none border-b lg:border-b-0 lg:border-r border-gray-200 dark:border-gray-700 py-1"
-        aria-label={t('chatFiles.listLabel', 'Files uploaded to this chat')}
-      >
-        {items.map(item => {
-          const look = uploadedFileLook(item);
-          const state = uploadedStorageState(item);
-          const isCurrent = item.id === current?.id;
-          const question = questions.get(item.id);
-          return (
-            <li key={item.id} className={isCurrent ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedId(item.id);
-                  setConfirmDelete(false);
-                  setNotice(null);
-                }}
-                aria-current={isCurrent ? 'true' : undefined}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <span
-                  className={`flex-none flex items-center justify-center w-8 h-8 rounded-md ${look.className}`}
-                >
-                  <Icon name={look.icon} size="sm" />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-1.5">
-                    <span
-                      className="truncate text-sm font-medium text-gray-900 dark:text-gray-100"
-                      title={item.name}
-                    >
-                      {item.name}
-                    </span>
-                    <span
-                      className="flex-none rounded bg-gray-200 dark:bg-gray-600 px-1 text-[10px] font-semibold text-gray-700 dark:text-gray-100"
-                      data-testid="uploaded-badge"
-                    >
-                      {uploadedFileBadge(item)}
-                    </span>
-                  </span>
-                  <span className="block truncate text-xs text-gray-600 dark:text-gray-300">
-                    {[
-                      formatBytes(item.bytes),
-                      Number.isFinite(item.pages)
-                        ? t('chatFiles.pages', '{{count}} pages', { count: item.pages })
-                        : null,
-                      state === 'original'
-                        ? t('chatFiles.stateOriginal', 'Original saved')
-                        : state === 'expired'
-                          ? t('chatFiles.stateExpired', 'Original removed')
-                          : t('chatFiles.stateTextOnly', 'Text only'),
-                      question
-                        ? t('chatFiles.question', 'Question {{number}}', { number: question })
-                        : null
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </span>
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      <section
-        className="flex-1 min-w-0 min-h-0 overflow-y-auto p-4"
-        aria-label={t('chatArtifacts.previewLabel', 'Preview')}
-      >
-        {requestedGone && (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <PaneHeader
+          title={t('chatFiles.title', 'Files')}
+          headingId={chrome?.headingId}
+          headingRef={chrome?.headingRef}
+          back={chrome?.back}
+          expand={chrome?.expand}
+          close={chrome?.close}
+          paneWidth={chrome?.paneWidth}
+          full={chrome?.full}
+        />
+        {status === 'ready' || status === 'error' ? (
           <output
-            className="block text-sm text-gray-700 dark:text-gray-200"
+            className="block p-4 text-sm text-gray-700 dark:text-gray-200"
             data-testid="uploaded-file-gone"
           >
-            {t('chatFiles.fileGone', 'This file is no longer in the chat.')}
+            {status === 'error'
+              ? t('chatFiles.loadFailed', 'The uploaded files could not be loaded.')
+              : t('chatFiles.fileGone', 'This file is no longer in the chat.')}
           </output>
+        ) : (
+          <p className="p-4 text-sm text-gray-500 dark:text-gray-400" role="status">
+            {t('chatFiles.loading', 'Loading the uploaded files…')}
+          </p>
         )}
-        {current && (
-          <>
-            <div className="flex flex-wrap items-center gap-2 mb-3">
-              <h3
-                className="mr-auto min-w-0 break-words text-base font-semibold text-gray-900 dark:text-gray-100"
-                title={current.name}
-              >
-                {current.name}
-              </h3>
-              {mailAttach?.available && storage === 'original' && (
-                <button
-                  type="button"
-                  className={SECONDARY}
-                  disabled={busy !== null}
-                  onClick={() => attachToMail(current)}
-                  data-testid="uploaded-attach-to-email"
-                >
-                  <Icon name="envelope" size="sm" />
-                  {t('chatFiles.attachToEmail', 'Attach to email')}
-                </button>
-              )}
-              {canDownloadOriginal && (
-                <button
-                  type="button"
-                  className={SECONDARY}
-                  disabled={busy !== null}
-                  onClick={() => downloadOriginal(current)}
-                  data-testid="uploaded-download-original"
-                >
-                  <Icon name="download" size="sm" />
-                  {t('chatFiles.downloadOriginal', 'Download original')}
-                </button>
-              )}
-              {current.origin !== 'image' && (
-                <button
-                  type="button"
-                  className={SECONDARY}
-                  disabled={busy !== null}
-                  onClick={() => downloadText(current)}
-                  data-testid="uploaded-download-text"
-                >
-                  <Icon name="document-text" size="sm" />
-                  {t('chatFiles.downloadText', 'Download text')}
-                </button>
-              )}
-              {source.remove &&
-                (confirmDelete ? (
-                  <span className="inline-flex items-center gap-2">
-                    <button
-                      type="button"
-                      className={DANGER}
-                      disabled={busy !== null}
-                      onClick={() => deleteFile(current)}
-                      data-testid="uploaded-delete-confirm"
-                    >
-                      {t('chatFiles.deleteConfirm', 'Delete {{name}}?', { name: current.name })}
-                    </button>
-                    <button
-                      type="button"
-                      className={SECONDARY}
-                      onClick={() => setConfirmDelete(false)}
-                    >
-                      {t('common.cancel', 'Cancel')}
-                    </button>
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className={DANGER}
-                    disabled={busy !== null}
-                    onClick={() => setConfirmDelete(true)}
-                    data-testid="uploaded-delete"
-                  >
-                    <Icon name="trash" size="sm" />
-                    {t('chatFiles.delete', 'Delete file')}
-                  </button>
-                ))}
-            </div>
-            <p className="mb-2 text-xs text-gray-600 dark:text-gray-300">
-              {new Date(current.createdAt).toLocaleString(i18n.language || undefined, {
-                dateStyle: 'short',
-                timeStyle: 'short'
-              })}
-              {current.canUseAsTemplate && (
-                <span className="ml-2" data-testid="uploaded-template-hint">
-                  · {t('chatFiles.templateHint', 'The assistant can use this file as a template.')}
-                </span>
-              )}
-              {current.truncated && (
-                <span className="ml-2">
-                  · {t('chatFiles.truncated', 'Very long: the assistant reads the beginning.')}
-                </span>
-              )}
-            </p>
-            <output aria-live="polite" className="block empty:hidden">
-              {notice && (
-                <p
-                  className={`mb-2 text-sm ${notice.tone === 'error' ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}
-                >
-                  {notice.text}
-                </p>
-              )}
-            </output>
-            <UploadedPreview key={current.id} file={current} source={source} getBlob={getBlob} />
-          </>
-        )}
-      </section>
+      </div>
+    );
+  }
+
+  const storage = uploadedStorageState(file);
+  const canDownloadOriginal = access !== 'extracted_text' && storage === 'original';
+  const hasText = file.origin !== 'image';
+  const canAttach = Boolean(mailAttach?.available) && storage === 'original';
+  const attachAction = {
+    key: 'attach',
+    icon: 'envelope',
+    label: t('chatFiles.attachToEmail', 'Attach to email'),
+    onClick: attachToMail,
+    testId: 'uploaded-attach-to-email'
+  };
+  const kind = uploadedViewKind(file);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="uploaded-file-detail">
+      <PaneHeader
+        title={file.name}
+        badge={uploadedFileBadge(file)}
+        headingId={chrome?.headingId}
+        headingRef={chrome?.headingRef}
+        back={chrome?.back}
+        switcher={chrome?.switcher}
+        copy={hasText ? { onCopy: copyText, menu: [] } : null}
+        download={
+          canDownloadOriginal
+            ? {
+                key: 'original',
+                icon: 'download',
+                label: t('chatFiles.downloadOriginal', 'Download original'),
+                onClick: downloadOriginal,
+                testId: 'uploaded-download-original'
+              }
+            : null
+        }
+        extra={
+          canAttach && attachProminent ? (
+            <button
+              type="button"
+              className={GHOST_BUTTON}
+              disabled={busy !== null}
+              onClick={attachToMail}
+              data-testid="uploaded-attach-to-email"
+            >
+              <Icon name="envelope" size="sm" />
+              {t('chatFiles.attachToEmail', 'Attach to email')}
+            </button>
+          ) : null
+        }
+        expand={chrome?.expand}
+        close={chrome?.close}
+        more={[
+          ...(canAttach && !attachProminent ? [attachAction] : []),
+          ...(hasText
+            ? [
+                {
+                  key: 'text',
+                  icon: 'document-text',
+                  label: t('chatFiles.downloadText', 'Download text'),
+                  onClick: downloadText,
+                  testId: 'uploaded-download-text'
+                }
+              ]
+            : []),
+          ...(chrome?.more || []),
+          ...(source.remove
+            ? [
+                {
+                  key: 'delete',
+                  icon: 'trash',
+                  label: t('chatFiles.delete', 'Delete file'),
+                  onClick: () => setConfirmDelete(true),
+                  danger: true,
+                  testId: 'uploaded-delete'
+                }
+              ]
+            : [])
+        ]}
+        paneWidth={chrome?.paneWidth}
+        full={chrome?.full}
+        notice={notice?.tone === 'info' ? notice.text : null}
+      />
+      {confirmDelete && (
+        <div className="flex flex-none flex-wrap items-center gap-2 border-b border-red-200 bg-red-50 px-3 py-2 dark:border-red-800 dark:bg-red-900/20">
+          <span className="mr-auto text-sm text-red-800 dark:text-red-200">
+            {t('chatFiles.deleteConfirm', 'Delete {{name}}?', { name: file.name })}
+          </span>
+          <button
+            type="button"
+            className={DANGER_BUTTON}
+            disabled={busy !== null}
+            onClick={deleteFile}
+            data-testid="uploaded-delete-confirm"
+          >
+            <Icon name="trash" size="sm" />
+            {t('chatFiles.delete', 'Delete file')}
+          </button>
+          <button
+            type="button"
+            className={SECONDARY_BUTTON}
+            onClick={() => setConfirmDelete(false)}
+          >
+            {t('common.cancel', 'Cancel')}
+          </button>
+        </div>
+      )}
+      {notice?.tone === 'error' && (
+        <p
+          role="alert"
+          className="flex-none bg-red-50 px-3 py-1 text-xs text-red-800 dark:bg-red-900/30 dark:text-red-200"
+        >
+          {notice.text}
+        </p>
+      )}
+      <SelectionScope
+        enabled={kind !== 'image' && kind !== 'pdf'}
+        onQuote={chrome?.onQuote}
+        source={{ kind: 'file', id: file.id, name: file.name }}
+        bottomPadding={chrome?.bottomPadding || 0}
+        className="min-h-0 flex-1 overflow-y-auto p-4"
+        innerClassName={chrome?.full ? 'mx-auto w-full max-w-[52rem]' : ''}
+        testId="uploaded-file-body"
+      >
+        <p className="mb-2 text-xs text-gray-600 dark:text-gray-300">
+          {file.createdAt &&
+            new Date(file.createdAt).toLocaleString(i18n.language || undefined, {
+              dateStyle: 'short',
+              timeStyle: 'short'
+            })}
+          {file.canUseAsTemplate && (
+            <span className="ml-2" data-testid="uploaded-template-hint">
+              · {t('chatFiles.templateHint', 'The assistant can use this file as a template.')}
+            </span>
+          )}
+          {file.truncated && (
+            <span className="ml-2">
+              · {t('chatFiles.truncated', 'Very long: the assistant reads the beginning.')}
+            </span>
+          )}
+        </p>
+        <UploadedPreview key={file.id} file={file} source={source} getBlob={getBlob} />
+      </SelectionScope>
     </div>
   );
 }
