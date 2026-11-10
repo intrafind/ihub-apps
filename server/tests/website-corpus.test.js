@@ -777,6 +777,17 @@ describe('CorpusStore.prune', () => {
 });
 
 describe('tokenizerInfo', () => {
+  it('finds the tokenizer the server depends on, so sizes are real o200k counts', async () => {
+    const { readFileSync } = await import('node:fs');
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.ok(pkg.dependencies['gpt-tokenizer'], 'server/package.json depends on gpt-tokenizer');
+    // Resolved from shared/, which cannot see server/node_modules by itself.
+    assert.equal(tokenizerInfo().method, 'o200k_base');
+    const sample =
+      'Die Plattform durchsucht Dokumente im Unternehmen und beantwortet Fragen zu Prozessen.';
+    assert.notEqual(estimateTokens(sample), Math.ceil(sample.length / 4));
+  });
+
   it('names the method estimateTokens really counts with', () => {
     const sample =
       'Die Plattform durchsucht Dokumente im Unternehmen und beantwortet Fragen zu Prozessen.';

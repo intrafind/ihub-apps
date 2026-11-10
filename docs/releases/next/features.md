@@ -1513,9 +1513,8 @@ the prompt" is a realistic alternative to retrieval.
   is removed after 14 days.
 - Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
   `website-corpus-sizer` skill from the marketplace guides users through it.
-- Tokens are counted with the shared token estimator. The server does not ship `gpt-tokenizer`, so
-  without it the estimator counts one token per four characters; the report says which method it
-  used.
+- Tokens are counted with the server's token estimator (`o200k_base`); the report says which
+  method counted.
 
 See [Website Corpus](../../website-corpus.md).
 

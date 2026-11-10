@@ -14,8 +14,10 @@
  * The server (usageTracker, RequestBuilder) imports this helper. The client
  * uses its own tokenEstimatorClient.js which dynamically imports gpt-tokenizer.
  *
- * The gpt-tokenizer package is loaded lazily so the server can still start
- * even when the package is not installed (falls back to a chars/4 heuristic).
+ * gpt-tokenizer is a dependency of the server (`server/package.json`). It is
+ * still loaded defensively so the server can start even when the package is
+ * missing from a deployment (falls back to a chars/4 heuristic, which
+ * `tokenizerInfo()` reports).
  */
 import { createRequire } from 'node:module';
 
@@ -26,15 +28,22 @@ function heuristic(text) {
 
 let countTokensFn = null;
 
-// Attempt to load gpt-tokenizer synchronously using createRequire.
-// If the package is not installed (e.g. missing from node_modules in a
-// production deployment), we silently fall back to the heuristic.
-try {
-  const require = createRequire(import.meta.url);
-  const mod = require('gpt-tokenizer');
-  countTokensFn = mod.countTokens || mod.default?.countTokens || null;
-} catch {
-  // Package not available — heuristic will be used
+// Attempt to load gpt-tokenizer synchronously using createRequire. The server
+// declares the package, and it lives in the server's node_modules: next to this
+// file's own location Node looks only at the repository (or `dist/`) root, so
+// the server directory is tried as well. A development checkout and the Docker
+// image keep the package under `server/node_modules`, the single-binary build
+// at the root; one of the two finds it. If neither does (e.g. a deployment
+// that left it out), we silently fall back to the heuristic.
+const SEARCH_FROM = [import.meta.url, new URL('../server/package.json', import.meta.url).href];
+for (const base of SEARCH_FROM) {
+  try {
+    const mod = createRequire(base)('gpt-tokenizer');
+    countTokensFn = mod.countTokens || mod.default?.countTokens || null;
+    if (countTokensFn) break;
+  } catch {
+    // Not found from here — try the next place, then the heuristic
+  }
 }
 
 /**
