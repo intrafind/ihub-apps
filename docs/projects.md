@@ -451,8 +451,9 @@ The mode is chosen at four levels; the first that is set wins:
 
 `platform.projects.knowledgeModes` lists the modes users may choose (**Admin → Projects → Project
 settings**, "Knowledge modes users may choose"); all five by default, and `auto` is always offered.
-A chat or project that uses a mode switched off falls back to the next level. The links of apps and
-workflows keep the mode an administrator set, and the admin project editor offers every mode.
+A chat, or a user's own project, that uses a mode switched off falls back to the next level. What an
+administrator set is not narrowed by the list: the links of apps and workflows keep their mode, and
+so does the default mode of an admin project (the admin project editor offers every mode).
 
 **Models without tools** (`supportsTools: "none"`) cannot call `knowledge_search`. For them `tools`
 is read as `relevant`, and an `auto` project that does not fit injects its best sections as it does
@@ -461,7 +462,7 @@ knowledge tool and lists no documents to read from. The answer badge says the mo
 
 **Not for AI.** Next to **Pinned**, an item can be marked **Not for AI** (the item's "For the AI"
 column, `excludedFromAi`). It stays in the project for people (preview, download, sharing) but is
-never injected, listed to the model or searched, and `knowledge_read` cannot open it. Pinned,
+never injected, listed to the model or searched, `knowledge_read` cannot open it, and the MCP project resource (`project://<id>`) leaves it out. Pinned,
 normal and "Not for AI" are one setting: choosing one clears the other. Workflow project nodes work
 on the documents themselves and still see it.
 

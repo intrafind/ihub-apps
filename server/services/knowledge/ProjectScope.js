@@ -33,6 +33,7 @@ import {
   projectSettings
 } from '../projects/projectSettings.js';
 import { resolveKnowledgeMode } from '../../../shared/knowledgeModes.js';
+import { withoutExcludedItems } from '../projects/aiAccess.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 
@@ -172,18 +173,16 @@ export async function resolveProjectScope({
     const permissions = permissionsFor(loadedProject, user, context);
     if (!permissions.canUse) continue;
     // "Not for AI" items stay in the project for people; the model never sees them.
-    const project =
-      forAi && (loadedProject.items || []).some(item => item.excludedFromAi === true)
-        ? {
-            ...loadedProject,
-            items: loadedProject.items.filter(item => item.excludedFromAi !== true)
-          }
-        : loadedProject;
+    const project = forAi ? withoutExcludedItems(loadedProject) : loadedProject;
+    // The platform's list is what users may choose, for their chats and their own
+    // projects. An administrator's choice, on a link or on an admin project, is
+    // not narrowed by it.
     const { mode, source } = resolveKnowledgeMode({
       chat: entry.chat,
       link: entry.mode,
       project: loadedProject.knowledgeMode,
-      allowed: allowedModes
+      allowed: allowedModes,
+      allowedForProject: loadedProject.ownership === 'user'
     });
     scope.push({
       project,

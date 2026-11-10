@@ -28,6 +28,8 @@ import {
 } from '../services/knowledge/KnowledgeScopePlanner.js';
 import { knowledgeToolsFor } from '../services/knowledge/knowledgeTools.js';
 import { list, read, search } from '../tools/knowledge.js';
+import { withoutExcludedItems } from '../services/projects/aiAccess.js';
+import { providerFor } from '../services/knowledge/registry.js';
 import { normalizeProjectLink, projectLinkSchema } from '../validators/projectSchema.js';
 import { relinkList } from '../services/projects/projectRelink.js';
 import { projectSettings } from '../services/projects/projectSettings.js';
@@ -190,6 +192,23 @@ describe('the knowledge modes', () => {
     );
   });
 
+  it("does not narrow an admin project's own mode with the user allow-list", () => {
+    const allowed = ['auto', 'tools'];
+    assert.deepEqual(
+      resolveKnowledgeMode({ project: 'context', allowed, allowedForProject: false }),
+      { mode: 'context', source: 'project' }
+    );
+    assert.deepEqual(resolveKnowledgeMode({ project: 'context', allowed }), {
+      mode: 'auto',
+      source: 'default'
+    });
+    // A chat's pick is the user's, whatever the project is.
+    assert.equal(
+      resolveKnowledgeMode({ chat: 'context', allowed, allowedForProject: false }).mode,
+      'auto'
+    );
+  });
+
   it('resolves chat → link → project default → auto', () => {
     assert.deepEqual(resolveKnowledgeMode({}), { mode: 'auto', source: 'default' });
     assert.deepEqual(resolveKnowledgeMode({ project: 'context' }), {
@@ -324,6 +343,69 @@ describe('which mode a project is used in', () => {
     } finally {
       configCache.setCacheEntry('config/platform.json', platform);
     }
+  });
+});
+
+describe('an admin project', () => {
+  it('keeps the mode an administrator set when the platform switches that mode off for users', async () => {
+    await repo.createAdmin(
+      {
+        id: 'kb-modes',
+        name: { en: 'Knowledge base' },
+        knowledgeMode: 'context',
+        items: [textItem('itm_kb_modes', 'Kb.md', POLICY)]
+      },
+      { actor: ADA }
+    );
+    const reader = { ...ADA, permissions: { apps: new Set(['*']) } };
+    const apps = configCache.getApps()?.data;
+    const platform = configCache.getPlatform();
+    configCache.setCacheEntry('config/apps.json', [
+      { id: 'chat', name: { en: 'Chat' }, enabled: true, projects: ['kb-modes'] }
+    ]);
+    configCache.setCacheEntry('config/platform.json', {
+      ...platform,
+      projects: { ...platform.projects, knowledgeModes: ['auto', 'tools'] }
+    });
+    try {
+      const [entry] = await resolveProjectScope({
+        appConfig: { id: 'chat', projects: ['kb-modes'] },
+        user: reader
+      });
+      assert.deepEqual([entry.mode, entry.modeSource], ['context', 'project']);
+      // The same switch narrows a user's own project.
+      const [own] = await scopeOf({ _projectId: big.id });
+      assert.equal(own.mode, 'auto');
+    } finally {
+      configCache.setCacheEntry('config/apps.json', apps || []);
+      configCache.setCacheEntry('config/platform.json', platform);
+    }
+  });
+});
+
+describe('what a model never gets of a "Not for AI" item', () => {
+  it('is left out by the helper every model-facing path uses, the stored project untouched', () => {
+    const stored = { id: 'p', items: [{ id: 'a' }, { id: 'b', excludedFromAi: true }] };
+    const seen = withoutExcludedItems(stored);
+    assert.deepEqual(
+      seen.items.map(item => item.id),
+      ['a']
+    );
+    assert.equal(stored.items.length, 2);
+    const clean = { id: 'q', items: [{ id: 'a' }] };
+    assert.equal(withoutExcludedItems(clean), clean, 'nothing marked: the same project');
+  });
+
+  it('keeps the item out of what the MCP project resource loads', async () => {
+    // `readProjectContent` loads `withoutExcludedItems(project)` through the provider.
+    const full = await repo.get(big.id);
+    const loaded = await providerFor(full).loadAll(withoutExcludedItems(full), CTX);
+    assert.deepEqual(loaded.docs.map(entry => entry.doc.id).sort(), ['itm_handbook', 'itm_policy']);
+    const everything = await providerFor(full).loadAll(full, CTX);
+    assert.ok(
+      everything.docs.some(entry => entry.doc.id === 'itm_salaries'),
+      'the provider itself does not filter, which is why the callers must'
+    );
   });
 });
 

@@ -5092,7 +5092,7 @@
     "projects": {
       "knowledgeModes": {
         "legend": "Knowledge modes users may choose",
-        "help": "Switch off a mode, for example full context to save cost. A project or chat that uses it falls back to automatic; the links of apps and workflows keep the mode an administrator set."
+        "help": "Switch off a mode, for example full context to save cost. A chat or a user's own project that uses it falls back to automatic; the links of apps and workflows and the mode of an admin project keep what an administrator set."
       },
       "availability": {
         "legend": "Who can use this project?",

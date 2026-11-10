@@ -5449,7 +5449,7 @@
     "projects": {
       "knowledgeModes": {
         "legend": "Wissensmodi, die Nutzende wählen dürfen",
-        "help": "Einen Modus abschalten, etwa vollen Kontext, um Kosten zu sparen. Ein Projekt oder Chat, der ihn nutzt, fällt auf automatisch zurück; die Links von Apps und Workflows behalten den Modus, den eine Administration gesetzt hat."
+        "help": "Einen Modus abschalten, etwa vollen Kontext, um Kosten zu sparen. Ein Chat oder ein eigenes Projekt von Nutzenden, das ihn nutzt, fällt auf automatisch zurück; die Links von Apps und Workflows und der Modus eines Admin-Projekts behalten, was eine Administration gesetzt hat."
       },
       "availability": {
         "legend": "Wer kann dieses Projekt nutzen?",

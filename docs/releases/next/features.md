@@ -1396,7 +1396,8 @@ input** (this chat only, stored with it), the mode on the **link** of an app or 
 **project's own default** (**Knowledge mode** on the project page; for admin projects in the project
 editor). A link without a mode now uses the project's default; links that say `auto` keep
 saying it. In **Admin → Projects → Project settings**, "Knowledge modes users may choose" lets you
-switch a mode off, for example full context to save cost; links an administrator set keep their mode.
+switch a mode off, for example full context to save cost; links and admin projects an administrator
+set keep their mode.
 
 - **Not for AI:** an item can be marked "Not for AI" in the project's "For the AI" column, next to
   Pinned. It stays in the project for people (preview, download, sharing) but is never given to the

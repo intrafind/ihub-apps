@@ -25,8 +25,9 @@
  *  4. {@link DEFAULT_KNOWLEDGE_MODE}.
  *
  * A mode the platform no longer offers (`platform.projects.knowledgeModes`)
- * is passed over at levels 1 and 3, never at level 2: an admin's link is the
- * admin's decision. A link that sets no mode passes to level 3.
+ * is passed over at level 1 and, for a user's own project, at level 3, never at
+ * level 2 or for an admin project: what an administrator chose is the
+ * administrator's decision. A link that sets no mode passes to level 3.
  *
  * @module shared/knowledgeModes
  */
@@ -76,19 +77,27 @@ export function allowedKnowledgeModes(configured) {
  * @param {string|null} [levels.link] - The mode on the app or workflow link, when it set one.
  * @param {string|null} [levels.chat] - The mode chosen for this chat.
  * @param {string|null} [levels.project] - The project's own default.
- * @param {string[]} [levels.allowed] - {@link allowedKnowledgeModes}; chat and project
- *   choices outside it are passed over.
+ * @param {string[]} [levels.allowed] - {@link allowedKnowledgeModes}; a chat's choice,
+ *   and the project's when `allowedForProject`, outside it is passed over.
+ * @param {boolean} [levels.allowedForProject=true] - Whether `allowed` narrows the
+ *   project's own default; false for an admin project, whose mode an administrator set.
  * @returns {{mode: string, source: 'link'|'chat'|'project'|'default'}}
  * @example
  * resolveKnowledgeMode({ chat: 'pinned', link: 'tools' }); // → { mode: 'pinned', source: 'chat' }
  * resolveKnowledgeMode({ link: 'tools', project: 'context' }); // → { mode: 'tools', source: 'link' }
  * resolveKnowledgeMode({ project: 'context' });               // → { mode: 'context', source: 'project' }
  */
-export function resolveKnowledgeMode({ link = null, chat = null, project = null, allowed } = {}) {
+export function resolveKnowledgeMode({
+  link = null,
+  chat = null,
+  project = null,
+  allowed,
+  allowedForProject = true
+} = {}) {
   const offered = Array.isArray(allowed) && allowed.length ? allowed : KNOWLEDGE_MODES;
   if (isKnowledgeMode(chat) && offered.includes(chat)) return { mode: chat, source: 'chat' };
   if (isKnowledgeMode(link)) return { mode: link, source: 'link' };
-  if (isKnowledgeMode(project) && offered.includes(project)) {
+  if (isKnowledgeMode(project) && (!allowedForProject || offered.includes(project))) {
     return { mode: project, source: 'project' };
   }
   return { mode: DEFAULT_KNOWLEDGE_MODE, source: 'default' };
