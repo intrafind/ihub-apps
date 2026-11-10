@@ -21,8 +21,9 @@ export const startSessionSchema = {
   })
 };
 
-// Optional fields are nullish: the client sends `null` (not an absent key) for
-// `conversationId` / `ifinderMessageId` on every non-iAssistant message.
+// Optional fields are nullish: a client may send `null` for a value it does not
+// have. The iFinder conversation and message id are not part of the body — the
+// server resolves them from `chatId` and `runId`.
 export const feedbackSchema = {
   body: z.object({
     messageId: z.string().min(1),
@@ -38,8 +39,6 @@ export const feedbackSchema = {
       }),
     feedback: z.string().nullish(),
     modelId: z.string().nullish(),
-    conversationId: z.string().nullish(),
-    ifinderMessageId: z.string().nullish(),
     /** Run the rated message belongs to — records a `human/event` on its ledger. */
     runId: z.string().nullish()
   })

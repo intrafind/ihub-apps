@@ -11,7 +11,7 @@
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
  * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, integrationAuthRequired, sources,
- * answerSource, finishReason, ifinderMessageId. The hook (`useAppChat`) only decides WHEN to write the
+ * answerSource, finishReason. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
  * @module features/chat/runToMessage
@@ -214,7 +214,6 @@ function addCompletionMetadata(extras, run, finished) {
       extras.finishReason = run.finishReason;
     }
   }
-  if (run.meta?.responseMessageId) extras.ifinderMessageId = run.meta.responseMessageId;
 }
 
 /**

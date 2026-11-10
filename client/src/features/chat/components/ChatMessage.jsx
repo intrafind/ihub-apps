@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { abortCauseText } from '../../../shared/utils/abortCause';
 import { sendMessageFeedback, answerInteraction } from '../../../api';
-import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
@@ -577,10 +576,6 @@ function ChatMessage({
 
       console.log(`Submitting feedback with exact messageId: ${exactMessageId}`);
 
-      // Get conversation ID for iAssistant messages
-      const conversationId = appId ? getConversationId(appId) : null;
-      const ifinderMessageId = message.ifinderMessageId || null;
-
       await sendMessageFeedback({
         messageId: exactMessageId,
         appId,
@@ -589,8 +584,6 @@ function ChatMessage({
         rating: feedbackRating, // Numeric rating (1-5)
         feedback: feedbackText,
         messageContent: message.content.substring(0, 300), // Send a snippet for context
-        conversationId, // Include for iAssistant messages
-        ifinderMessageId, // Include iFinder message ID for routing to iFinder API
         ...(message.runId ? { runId: message.runId } : {}) // Recorded as a human/event on the run
       });
 
