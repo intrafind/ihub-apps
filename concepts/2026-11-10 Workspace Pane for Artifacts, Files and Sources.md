@@ -53,7 +53,7 @@ Replace all three overlays with **one right-hand Workspace pane**. It is part of
 
 - **One pane, three kinds of content. Not one merged list.** One place on screen, one open/close/expand pattern, one URL state and one accessibility implementation. Each content type keeps its own actions:
   - **Artifact:** versioned, with an AI edit target (Phase 2). Full toolbar.
-  - **Uploaded file:** immutable input. Actions: download original or extracted text, delete.
+  - **Uploaded file:** immutable input. Actions: download original or extracted text, delete, and — in Outlook, when the original can be attached — **Attach to email** (today in `UploadedFilesTab.jsx`; it moves to the header's ⋯ menu, and is promoted to a visible header button on the Outlook surface).
   - **Source:** read-only forever. Passage highlights, passage navigation, "Open in source system". We never edit an iFinder document.
 - **Pane stack, at most two levels.**
   - The **root** is the Files index, with tabs Generated / Uploaded / Sources. It replaces the Files drawer.
@@ -70,7 +70,7 @@ Replace all three overlays with **one right-hand Workspace pane**. It is part of
 |---|---|---|
 | **Closed** | ✕, Esc (focus inside the pane), new chat | Chat at full width |
 | **Docked** | Click on a card/chip, the "Files" button, or auto-open of a new artifact (see below) | Flex sibling of the chat; the chat reflows |
-| **Full screen** | ⤢, double-click on the divider, `Ctrl/Cmd+Shift+E` | Pane fills the content area, with a reading column of `max-w-[52rem]` and a floating composer dock (section 6) |
+| **Full screen** | ⤢, `Ctrl/Cmd+Shift+E` | Pane fills the content area, with a reading column of `max-w-[52rem]` and a floating composer dock (section 6) |
 
 - **Never remount the viewer** between docked and full screen. Only the container changes. Scroll position, Preview/Code mode, the selected version and the composer draft are all kept.
 - **URL:** keep `?artifact=<id>`. Add `&view=full` for full screen and `?source=<id>` for sources.
@@ -101,7 +101,7 @@ Today there are three toolbars: the viewer has about 11 icon buttons, the drawer
 
 | Slot | Rule |
 |---|---|
-| Back `‹` | Only when the item was entered from the list or from another item |
+| Back `‹` | Always shown in the detail view. It reads `‹ Files` when the item was opened from the list or from the chat (card, chip), and `‹ <previous item>` when it was opened from another item (§3) |
 | Title | Type chip, name, and type badge (`MD`, `PDF`, `Source`). The name opens the "switch file" menu |
 | Version switcher | Only with 2 or more versions. Up to 4 versions it is a segmented pill; above that, a "v7 of 7 ▾" dropdown with the prompt summary and time per version. 🔗 marks the version a share link points to |
 | Preview / Code | Segmented control. Only for markdown, html, svg, csv, json and ipynb |
@@ -128,6 +128,7 @@ Today there are three toolbars: the viewer has about 11 icon buttons, the drawer
 - **Ask about** puts a **quote block** in the composer and moves focus there. The block is `rounded-md border-l-2 border-indigo-400`, with a two-line excerpt and the source name, and it carries the artifact id, version and excerpt.
 - **Edit with AI** does the same with an "edit" prefix. **In the MVP this honestly produces a new file**, and the text in the UI says so. Real in-place revision comes in Phase 2.
 - This works for all three content types, sources included. It needs no server changes.
+- **Sandboxed HTML/SVG previews:** the pane cannot read a selection inside the `sandbox="allow-scripts"` iframe, and the MVP does **not** weaken the sandbox or inject a selection bridge into model-written markup. For these types the chip works in **Code view** (and on the PDF/markdown/text/code renderers, which render in the pane's own DOM). A postMessage bridge that keeps the sandbox and CSP unchanged can be evaluated later.
 
 ### 6.2 Edit target: the active-artifact chip (Phase 2)
 
@@ -165,7 +166,7 @@ Today there are three toolbars: the viewer has about 11 icon buttons, the drawer
 The product owner's requirement is that "the editor gets a chat interface". In full screen, this is a **floating composer dock**: bottom centre, `max-w-2xl rounded-2xl shadow-xl backdrop-blur`.
 
 - Collapsed, it is one line: "Ask to change this document…" plus the active-artifact chip.
-- Expanded, it shows the latest answer as a snippet and its status ("Updated to v4 · view changes"), announced politely, plus an **"Open chat"** link that returns to the **docked** state.
+- Expanded, it shows the latest answer as a snippet and its status ("Updated to v4 · view changes"), announced politely, plus an **"Open chat"** link that returns to the **docked** state. On surfaces without a docked state (below 1024px, Outlook, extension, mobile, embed) it closes the sheet back to the chat, and the item stays in the URL and on the active card, so one tap reopens it at the same scroll position, version and view mode.
 - The document gets bottom padding equal to the dock's height, so the dock never covers the last lines.
 - Esc collapses the dock before it leaves full screen. The dock is reachable with F6.
 
@@ -218,7 +219,7 @@ Files                                        [✕]
   - F6 / Shift+F6 cycles sidebar → chat log → composer → pane.
   - `Ctrl/Cmd+.` toggles the pane.
   - Esc closes the innermost layer only: menu → selection chip → dock → full screen → pane. It does this only while focus is in the pane. **Esc in the composer never closes the pane.**
-- **Divider:** `role="separator" aria-orientation="vertical" aria-valuenow`. Arrow keys resize, Home/End snap to the limits, and double-click resets the width.
+- **Divider:** `role="separator" aria-orientation="vertical" aria-valuenow`. Arrow keys resize, Home/End snap to the limits, and double-click resets the width to the default. (Double-click is used only for this; full screen is entered with ⤢ or the shortcut.)
 - **One polite live region per pane** announces: "Updating Angebot.md…", "Version 4: 3 sections changed", copied, restored, and width ("Workspace 55 percent"). **Token text is never streamed into a live region.**
 - Run the `a11y-audit` skill and update `tests/e2e/accessibility.spec.js` before release.
 
