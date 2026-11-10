@@ -189,14 +189,15 @@ export function resolvePluginRoot(plugin, ownRepo) {
       break;
     case 'git-subdir': {
       repo = parseGitHubRepo(source.url);
-      dir = cleanRepoPath(source.path);
+      const subdir = cleanRepoPath(source.path);
+      if (subdir === null) return { skip: `unsafe source path '${source.path}'` };
+      dir = subdir;
       break;
     }
     default:
       return { skip: `source type '${source.source}' cannot be read by the server` };
   }
   if (!repo) return { skip: 'the repository is not on GitHub' };
-  if (dir === null) return { skip: `unsafe source path '${source.path}'` };
 
   const ref = [source.sha, source.ref].find(v => typeof v === 'string' && v.trim());
   return { ...repo, ref: ref ? ref.trim() : 'HEAD', dir };
@@ -238,7 +239,7 @@ export function findSkillDirs(plugin, root, skillDirs) {
     if (skillDirs.has(dir) && !found.includes(dir)) found.push(dir);
   };
   const addChildren = base => {
-    for (const dir of [...skillDirs].sort()) {
+    for (const dir of [...skillDirs].sort((a, b) => a.localeCompare(b))) {
       if (dir !== base && parentOf(dir) === base) add(dir);
     }
   };
@@ -291,7 +292,7 @@ export function findCompanions(blobs, skillDir, skillDirs, { rootSkill }) {
     if (rootSkill && !ROOT_SKILL_SUBDIRS.some(sub => relative.startsWith(`${sub}/`))) continue;
     companions.push(relative);
   }
-  companions.sort();
+  companions.sort((a, b) => a.localeCompare(b));
   const truncated = companions.length > MAX_COMPANIONS_PER_SKILL;
   return { companions: companions.slice(0, MAX_COMPANIONS_PER_SKILL), truncated };
 }
