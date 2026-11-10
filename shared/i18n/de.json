@@ -624,6 +624,10 @@
     "downloadOptions": "Download-Optionen",
     "deleteMessage": "Nachricht löschen",
     "knowledgeScope": {
+      "pinnedOne": "nur angeheftete Dokumente",
+      "pinned_one": "{{count}} nur angeheftet",
+      "pinned_other": "{{count}} nur angeheftet",
+      "noTools": "das Modell kann keine Werkzeuge aufrufen",
       "projects_one": "{{count}} Projekt",
       "projects_other": "{{count}} Projekte",
       "loaded_one": "{{count}} vollständig geladen",
@@ -5443,6 +5447,10 @@
       }
     },
     "projects": {
+      "knowledgeModes": {
+        "legend": "Wissensmodi, die Nutzende wählen dürfen",
+        "help": "Einen Modus abschalten, etwa vollen Kontext, um Kosten zu sparen. Ein Projekt oder Chat, der ihn nutzt, fällt auf automatisch zurück; die Links von Apps und Workflows behalten den Modus, den eine Administration gesetzt hat."
+      },
       "availability": {
         "legend": "Wer kann dieses Projekt nutzen?",
         "apps": {
@@ -5544,6 +5552,8 @@
       },
       "scanWarning": "Uploads werden nicht auf Schadsoftware geprüft. Konfigurieren Sie platform.projects.scan, um sie zu prüfen.",
       "fields": {
+        "knowledgeMode": "Wissensmodus",
+        "knowledgeModeHint": "Ein Link an einer App oder einem Workflow kann einen eigenen Modus setzen; Chats nutzen diesen für die Projekte, die Nutzende hinzufügen.",
         "id": "Projekt-ID",
         "idHint": "Wird aus dem Namen gefüllt. Apps und Links verwenden sie, und sie lässt sich nach dem Anlegen nicht ändern.",
         "name": "Name",
@@ -5598,6 +5608,7 @@
         "label": "Projekte",
         "loadError": "Die Projekte konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
         "modes": {
+          "projectDefault": "Projektstandard",
           "auto": "Automatisch",
           "context": "Immer im Prompt",
           "tools": "Nur Such-Tools"
@@ -5614,6 +5625,8 @@
         "noMatches": "Keine Projekte entsprechen Ihrer Suche."
       },
       "tokens": {
+        "relevant": "die angehefteten Dokumente und die besten Abschnitte zur Frage",
+        "pinnedOnly": "nur die angehefteten Dokumente; nichts wird durchsucht",
         "count": "~{{tokens}} Tokens",
         "unknown": "Größe noch nicht bekannt",
         "autoPrompt": "passt ins Prompt-Limit; wird geladen, wenn das Modell und andere verknüpfte Projekte Platz lassen",
@@ -8423,6 +8436,37 @@
     "startScreenHint": "Neu hier?"
   },
   "projects": {
+    "knowledgeMode": {
+      "label": "Wissensmodus",
+      "change": "Wissensmodus ändern",
+      "hint": "Wie Chats und Apps dieses Projekt nutzen, sofern sie keinen anderen Modus wählen.",
+      "automaticDefault": "Automatisch (Standard)",
+      "defaultSuffix": "(Standard)",
+      "projectDefault": "Projektstandard",
+      "chatLabel": "Wissensmodus dieses Chats",
+      "modes": {
+        "auto": {
+          "label": "Automatisch",
+          "description": "Alles, wenn es passt, sonst die angehefteten Dokumente und die besten Abschnitte zur Frage. Den Rest kann das Modell durchsuchen."
+        },
+        "context": {
+          "label": "Voller Kontext",
+          "description": "Alles, bis zur Grenze des Modells. Für kleine Bestände, die vollständig gelesen werden müssen: ein Vertrag, eine Richtlinie, eine Spezifikation."
+        },
+        "relevant": {
+          "label": "Relevante Abschnitte",
+          "description": "Die angehefteten Dokumente und die besten Abschnitte zur Frage aus allen Dokumenten. Spart einen Werkzeugaufruf; für große Projekte und Modelle, die Werkzeuge schlecht aufrufen."
+        },
+        "tools": {
+          "label": "Suche",
+          "description": "Nur die angehefteten Dokumente; den Rest durchsucht das Modell. Für große Bibliotheken und Agenten, die gezielt suchen."
+        },
+        "pinned": {
+          "label": "Nur Angeheftetes",
+          "description": "Nur die angehefteten Dokumente; die übrigen kann das Modell nicht erreichen. Eine kuratierte Auswahl aus einem großen Projekt."
+        }
+      }
+    },
     "addItem": {
       "accepted": "Erlaubt: {{types}}",
       "check": "Prüfen",
@@ -8616,6 +8660,13 @@
       "defaultAppHint": "Neue Chats dieses Projekts starten in dieser App. Beim Start eines Chats kann jeder eine andere App wählen."
     },
     "items": {
+      "aiAccessFor": "Nutzung von {{name}} durch die KI",
+      "aiAccessHint": "Angeheftete Einträge stehen immer im Prompt. Einträge „Nicht für KI“ bleiben für Personen im Projekt, werden dem Modell aber nie gegeben, aufgelistet oder durchsucht.",
+      "aiAccess": {
+        "normal": "Normal",
+        "pinned": "Angeheftet",
+        "excluded": "Nicht für KI"
+      },
       "actions": {
         "preview": "Text ansehen",
         "refresh": "Aktualisieren",
@@ -8629,6 +8680,7 @@
       },
       "add": "Dokumente hinzufügen",
       "columns": {
+        "aiAccess": "Für die KI",
         "kind": "Art",
         "name": "Name",
         "pinned": "Angeheftet",

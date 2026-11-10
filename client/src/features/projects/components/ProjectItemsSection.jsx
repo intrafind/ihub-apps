@@ -301,7 +301,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           estimates={estimate ? estimateByItem : undefined}
           onPreview={setPreviewItem}
           onDocumentAction={documentActions.onDocumentAction}
-          onTogglePinned={isIFinder ? undefined : actions.togglePinned}
+          onSetAiAccess={isIFinder ? undefined : actions.setAiAccess}
           onRefresh={
             isIFinder
               ? undefined

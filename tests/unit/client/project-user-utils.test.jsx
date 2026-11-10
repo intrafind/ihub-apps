@@ -433,7 +433,8 @@ describe('project page rules', () => {
       name: 'Case 2',
       description: 'd',
       instructions: 'Answer in German.',
-      defaultAppId: ''
+      defaultAppId: '',
+      knowledgeMode: ''
     });
     // Only the user's own edit goes out; the other editor's text is kept.
     expect(buildProjectChanges(next.form, next.base)).toEqual({ name: 'Case 2' });

@@ -263,7 +263,8 @@ link the other projects.
 1. Every item of the other projects moves into the kept project.
 2. Apps, workflows (steps, loop bodies and planner task templates included) and agents that linked
    a merged project link the kept project instead. When one list linked several of them, it keeps
-   one link, at the position of the first. The link's mode is the one they shared, or `auto` when
+   one link, at the position of the first. The link's mode is the one they shared, or none (the
+   project's own default applies) when
    they differed, and it may write when any of them could.
 3. With **Delete the emptied projects** (on by default), the merged projects are deleted.
 
@@ -299,12 +300,12 @@ the write flag:
 
 | Field   | Values                          | Default | Meaning                                                                                                |
 | ------- | ------------------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
-| `id`    | A project id                    | —       | The project to link. A bare string is the same as `{ "id": "…", "mode": "auto" }`.                     |
-| `mode`  | `auto`, `context`, `tools`      | `auto`  | `context` always puts the text into the prompt; `tools` leaves it to the knowledge tools; `auto` loads it in full while it fits the budget and searches it otherwise. |
+| `id`    | A project id                    | —       | The project to link. A bare string is a link without a mode of its own.                                |
+| `mode`  | `auto`, `context`, `relevant`, `tools`, `pinned` | the project's own default | How the project reaches the model, see [Knowledge modes](#knowledge-modes). A link without a mode uses the project's default (`auto` unless the project says otherwise); an explicit `auto` does not. |
 | `write` | `true`, `false`                 | `false` | Whether a workflow or agent run may store documents in this admin project (`project-write`).           |
 
 The app editor (**Admin → Apps**, card **Projects**), the workflow editor and the agent editor offer
-a project picker with the mode and the project's size against the budgets. `write` is not
+a project picker with the mode (or **Project default**) and the project's size against the budgets. `write` is not
 editable in the forms yet; set it in the JSON. A step's own `config.projects` replaces the
 workflow's list for that step.
 
@@ -424,6 +425,51 @@ Only content admins can try an admin project; the chat request carries `testProj
 
 ## How the model reaches a project
 
+### Knowledge modes
+
+A **knowledge mode** says how one project reaches the model. There are five:
+
+| Mode (value)           | In the prompt                                                                                                                                      | Knowledge tools | For                                                                                          |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------------------------------------------------- |
+| **Automatic** (`auto`) | Everything if it fits the budget; otherwise the pinned documents plus the best sections for the question                                           | yes             | most projects (the default)                                                                  |
+| **Full context** (`context`) | Everything, up to the hard limit of 75 % of the context window; what is cut stays reachable with `knowledge_read`                            | yes             | small sets that must be read whole: a contract, a policy, a specification                    |
+| **Relevant sections** (`relevant`) | The pinned documents plus the best sections for the question across all documents, up to the budget, word for word. Works for iFinder smart collections, which cannot be loaded in full | yes | large projects; models that call tools poorly; saves a tool round trip |
+| **Search** (`tools`)   | The pinned documents only; the rest through `knowledge_search`                                                                                     | yes             | large libraries; agents and workflows that search on purpose                                 |
+| **Pinned only** (`pinned`) | The pinned documents only                                                                                                                      | **no**: the other documents are not reachable | one curated subset of a large project for a given chat or app |
+
+The mode is chosen at four levels; the first that is set wins:
+
+1. **The chat.** The project chip in the chat input (and the project chat header) has a mode
+   switch for this chat. It applies to the chat's own project and the projects attached to it, is
+   stored with the chat and sent with its first message (`knowledgeMode`), or changed afterwards
+   with `PATCH /api/chats/:chatId` (`{ "knowledgeMode": "pinned" }`, `null` clears it).
+2. **The link** of an app, workflow or agent, set by an administrator. A link without a `mode`
+   passes to the next level.
+3. **The project's default** (`knowledgeMode`): the owner and editors set it on the project page
+   (**Knowledge mode**), administrators in **Admin → Projects → edit → Name and description**.
+4. **Automatic.**
+
+`platform.projects.knowledgeModes` lists the modes users may choose (**Admin → Projects → Project
+settings**, "Knowledge modes users may choose"); all five by default, and `auto` is always offered.
+A chat or project that uses a mode switched off falls back to the next level. The links of apps and
+workflows keep the mode an administrator set, and the admin project editor offers every mode.
+
+**Models without tools** (`supportsTools: "none"`) cannot call `knowledge_search`. For them `tools`
+is read as `relevant`, and an `auto` project that does not fit injects its best sections as it does
+for any model, so unpinned documents are not silently out of reach. The prompt then names no
+knowledge tool and lists no documents to read from. The answer badge says the mode was replaced.
+
+**Not for AI.** Next to **Pinned**, an item can be marked **Not for AI** (the item's "For the AI"
+column, `excludedFromAi`). It stays in the project for people (preview, download, sharing) but is
+never injected, listed to the model or searched, and `knowledge_read` cannot open it. Pinned,
+normal and "Not for AI" are one setting: choosing one clears the other. Workflow project nodes work
+on the documents themselves and still see it.
+
+The server decides the mode; the answer badge (`knowledge/scope`) reports the mode each project was
+used in (`knowledgeMode`), the level that chose it (`modeSource`: `chat`, `link`, `project` or
+`default`), and, when it was replaced, the mode it replaced (`modeFallback`). A `pinned` project is
+reported with `mode: "pinned"`.
+
 ### Load in full or search
 
 For every request the server plans each project in scope, in this order: the chat's own project,
@@ -433,14 +479,18 @@ the app's links, projects attached to the chat, the workflow's links.
   50,000 tokens by default. Projects spend it in that order.
 - `context`: every usable document goes into the prompt.
 - `tools`: only pinned documents go into the prompt; the model searches the rest.
+- `relevant`: the pinned documents plus the sections of the other documents that best match the
+  question (see [Reading with the question in mind](#reading-with-the-question-in-mind)), also when
+  the whole project would fit. The model can still search.
+- `pinned`: only pinned documents go into the prompt; no knowledge tool is offered for the project.
 - `auto`: the whole project goes into the prompt when it fits what is left of the budget;
   otherwise its pinned documents plus the sections of the other documents that best match the
-  question (see [Reading with the question in mind](#reading-with-the-question-in-mind)), and the
-  model searches the rest.
+  question (the same as `relevant`), and the model searches the rest.
 - **Pinned** documents always go into the prompt, in every mode, ahead of the other documents of
   their project, even when they exceed the budget.
 - Nothing injected may exceed **75 % of the model's context window**, whatever the mode. Documents
-  beyond that limit are cut from the prompt and stay reachable through `knowledge_read`; the cut
+  beyond that limit are cut from the prompt and stay reachable through `knowledge_read` (not in
+  `pinned` mode); the cut
   keeps the sections that answer the question when there is one. The limit
   is spent project by project, in the order of the links: a pinned document of a later project is
   cut when the projects before it have used the limit up. Link the project whose pinned documents
@@ -834,7 +884,7 @@ never edit one.
 ![A chat in a project: the answer names the project it was loaded from, and the chip beside the message box shows the project](assets/screenshots/project-chat.png)
 
 A chat started from the project page runs inside the project: it answers with the project's
-instructions and documents (mode `auto`), next to whatever the app itself links. A chat belongs to
+instructions and documents (in the chat's [knowledge mode](#knowledge-modes): `auto` unless the chat or the project says otherwise), next to whatever the app itself links. A chat belongs to
 a project from its first message on: it is started from the project page. A chip beside the message
 box and the chat history show which project a chat belongs to. Only user projects hold chats.
 
@@ -1132,6 +1182,7 @@ would go past it.
 | `sharing.allowCatalog`      | `false`             | Owners and editors may publish projects to the catalog. Off hides published projects again.              |
 | `retentionDays`             | `0`                 | Days without activity after which a user project is deleted; 0 keeps them.                               |
 | `loadAllMaxTokens`          | `50000`             | Upper bound of the load-all budget (also capped at 40 % of the model's context window).                  |
+| `knowledgeModes`            | all five            | The [knowledge modes](#knowledge-modes) users may choose for a project or a chat: a list of `auto`, `context`, `relevant`, `tools`, `pinned`; `auto` is always offered. **Admin → Projects → Project settings**. |
 | `refreshTtl`                | `86400` (1 day)     | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
 | `kinds`                     | `{}`                | Item kinds to switch off, `{ "<kind>": false }`.                                                         |
 | `scan.provider`             | `none`              | `none` (no scan) or `command` (run a scanner on every upload and picked file before extraction).         |
@@ -1288,13 +1339,13 @@ changing it takes a content admin.
 | `POST`   | `/api/projects/_collections`                  | `projects` permission | Add a collection to your projects: `{ collectionId, instructions?, defaultAppId? }`. |
 | `GET`    | `/api/projects/share-targets?q=`              | —         | Users and groups you may share with.                                                             |
 | `GET`    | `/api/projects/:projectId`                    | member    | The project with its items and your `permissions`.                                               |
-| `PATCH`  | `/api/projects/:projectId`                    | editor    | Change `name`, `description`, `instructions`, `defaultAppId` (`null` clears it), `refreshTtl` (seconds or `"never"`, `null` for the installation's). For a smart collection the name and the description are changed in iFinder too; one attached by its `ifc_…` id takes `name` and `description` only. |
+| `PATCH`  | `/api/projects/:projectId`                    | editor    | Change `name`, `description`, `instructions`, `defaultAppId` (`null` clears it), `knowledgeMode` (`null` clears it), `refreshTtl` (seconds or `"never"`, `null` for the installation's). For a smart collection the name and the description are changed in iFinder too; one attached by its `ifc_…` id takes `name` and `description` only. |
 | `POST`   | `/api/projects/:projectId/estimate`           | member    | Tokens of every document and the recommendation (prompt or search).                              |
 | `DELETE` | `/api/projects/:projectId`                    | owner     | Delete the project and its documents. For a smart collection, `?deleteCollection=true` deletes the collection in iFinder too. |
 | `GET`    | `/api/projects/:projectId/items`              | member    | The items.                                                                                       |
 | `POST`   | `/api/projects/:projectId/items`              | editor    | Add an item: multipart field `file` (plus `name`, `pinned`), or JSON `{ kind, ref, name?, pinned? }`, or `{ kind: "upload", text, name }`. Text kinds answer `202` while extracting, link kinds `201`. A smart collection takes `ifinder-document` only (also `{ items: [...] }`). |
 | `GET`    | `/api/projects/:projectId/items/:itemId`      | member    | One item; poll it while it extracts.                                                             |
-| `PATCH`  | `/api/projects/:projectId/items/:itemId`      | editor    | Change `name`, `pinned`, and for a file from a website or a web page `refreshTtl` (seconds or `"never"`, `null` for the project's). Item answers carry `refresh`: the TTL that applies, where it comes from, and for a file `checkedAt` and `nextAt`. |
+| `PATCH`  | `/api/projects/:projectId/items/:itemId`      | editor    | Change `name`, `pinned`, `excludedFromAi` ("Not for AI"; excludes `pinned`), and for a file from a website or a web page `refreshTtl` (seconds or `"never"`, `null` for the project's). Item answers carry `refresh`: the TTL that applies, where it comes from, and for a file `checkedAt` and `nextAt`. |
 | `DELETE` | `/api/projects/:projectId/items/:itemId`      | editor    | Remove the item. From a smart collection: the membership only.                                   |
 | `POST`   | `/api/projects/:projectId/items/:itemId/_refresh` | editor | Take the text of a picked file again, with your account; download a file from a website again (conditionally); drop a web page's cached read. |
 | `PUT`    | `/api/projects/:projectId/items/:itemId/text` | editor    | Replace the text of an uploaded, written or imported document: `{ text }`. Links and picked documents are refused (`INVALID_REF`). |
@@ -1347,7 +1398,7 @@ Content admins, behind the `projects` flag. User projects are reachable by full 
 | `PATCH`  | `/api/admin/projects/:id`                   | Change some settings, `refreshTtl` among them (`null` for the installation's).               |
 | `DELETE` | `/api/admin/projects/:id`                   | Delete; `PROJECT_IN_USE` with the dependencies while something links it.                    |
 | `POST`   | `/api/admin/projects/:id/items`             | Add an item, as in the user API.                                                            |
-| `PATCH`  | `/api/admin/projects/:id/items/:itemId`     | Change `name`, `pinned`, `refreshTtl` (a file from a website or a web page).                |
+| `PATCH`  | `/api/admin/projects/:id/items/:itemId`     | Change `name`, `pinned`, `excludedFromAi`, `refreshTtl` (a file from a website or a web page).                |
 | `DELETE` | `/api/admin/projects/:id/items/:itemId`     | Remove an item.                                                                             |
 | `POST`   | `/api/admin/projects/_move`                 | Move items into another admin project `{ sourceId, targetId, itemIds }`. Answers `{ transferred, failed, source, target }`; an item that cannot go is in `failed` with its code. |
 | `POST`   | `/api/admin/projects/_copy`                 | The same body and answer; the items stay in the source.                                     |

@@ -405,6 +405,7 @@ class RequestBuilder {
     projectId = null,
     integrationScopes = null,
     attachedProjectIds = [],
+    knowledgeMode = null,
     testProjectId = null
   }) {
     try {
@@ -433,7 +434,9 @@ class RequestBuilder {
         app = {
           ...configuredApp,
           ...(projectId ? { _projectId: projectId } : {}),
-          ...(attachedProjectIds?.length ? { _attachedProjectIds: [...attachedProjectIds] } : {})
+          ...(attachedProjectIds?.length ? { _attachedProjectIds: [...attachedProjectIds] } : {}),
+          // The mode the user chose for this chat (#3538); applies to the projects the chat brought.
+          ...(knowledgeMode ? { _knowledgeMode: knowledgeMode } : {})
         };
       }
 

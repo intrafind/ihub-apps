@@ -208,6 +208,7 @@ describe('applyProjectTestScope', () => {
     features: { projects: false, userProjects: false, shortLinks: true },
     _projectId: 'prj_container',
     _attachedProjectIds: ['prj_attached'],
+    _knowledgeMode: 'pinned',
     _workflowProjects: [{ id: 'wf-docs' }],
     apps: ['translator'],
     workflows: ['summarize-report']
@@ -215,7 +216,8 @@ describe('applyProjectTestScope', () => {
 
   it('leaves the project under test as the only one in scope', () => {
     const scoped = applyProjectTestScope(APP, 'handbook');
-    assert.deepEqual(scoped.projects, [{ id: 'handbook', mode: 'auto' }]);
+    assert.deepEqual(scoped.projects, [{ id: 'handbook' }]);
+    assert.equal(scoped._knowledgeMode, undefined, 'the chat’s mode does not reach a test');
     assert.equal(scoped._projectId, undefined);
     assert.equal(scoped._attachedProjectIds, undefined);
     assert.equal(scoped._workflowProjects, undefined);

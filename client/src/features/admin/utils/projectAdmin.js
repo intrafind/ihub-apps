@@ -21,13 +21,17 @@
  */
 
 import { localizedText } from '../../projects/utils/projectItems';
+import { KNOWLEDGE_MODES } from '../../../../../shared/knowledgeModes.js';
 import { slugify } from './modelImport';
 
-/** How a linked project reaches the model. `auto` lets the server decide by size. */
-export const PROJECT_LINK_MODES = Object.freeze(['auto', 'context', 'tools']);
+/**
+ * How a linked project reaches the model (`shared/knowledgeModes.js`). A link
+ * may set none: the project's own default then applies (#3538).
+ */
+export const PROJECT_LINK_MODES = KNOWLEDGE_MODES;
 
-/** The mode a link gets when none is set (and for a bare string id). */
-export const DEFAULT_PROJECT_LINK_MODE = 'auto';
+/** The mode a link gets when none is set (and for a bare string id): none, the project's own. */
+export const DEFAULT_PROJECT_LINK_MODE = '';
 
 /** Prefix of user project ids; admin project ids may not use it. */
 export const USER_PROJECT_ID_PREFIX = 'prj_';
@@ -65,24 +69,25 @@ export function toLocalizedRecord(value) {
 // --- project links ----------------------------------------------------------
 
 /**
- * One project link as an object. A bare string id is a link in `auto` mode
- * without write access; an unknown mode falls back to `auto`.
+ * One project link as an object. A bare string id is a link without a mode of
+ * its own (the project's default applies) and without write access; an unknown
+ * mode is dropped the same way.
  *
  * @param {string|{id: string, mode?: string, write?: boolean}} link
- * @returns {{id: string, mode: 'auto'|'context'|'tools', write: boolean}|null}
- *   `null` for a link without an id.
+ * @returns {{id: string, mode?: string, write: boolean}|null}
+ *   `null` for a link without an id. `mode` is absent when the link sets none.
  */
 export function normalizeProjectLink(link) {
   if (typeof link === 'string') {
     const id = link.trim();
-    return id ? { id, mode: DEFAULT_PROJECT_LINK_MODE, write: false } : null;
+    return id ? { id, write: false } : null;
   }
   if (!link || typeof link !== 'object') return null;
   const id = typeof link.id === 'string' ? link.id.trim() : '';
   if (!id) return null;
   return {
     id,
-    mode: PROJECT_LINK_MODES.includes(link.mode) ? link.mode : DEFAULT_PROJECT_LINK_MODE,
+    ...(PROJECT_LINK_MODES.includes(link.mode) ? { mode: link.mode } : {}),
     write: link.write === true
   };
 }
@@ -92,11 +97,11 @@ export function normalizeProjectLink(link) {
  * (the first link of an id wins).
  *
  * @param {Array<string|Object>|null|undefined} value
- * @returns {Array<{id: string, mode: string, write: boolean}>}
+ * @returns {Array<{id: string, mode?: string, write: boolean}>}
  *
  * @example
  * normalizeProjectLinks(['handbook', { id: 'faq', mode: 'tools' }])
- * // => [{ id: 'handbook', mode: 'auto', write: false },
+ * // => [{ id: 'handbook', write: false },
  * //     { id: 'faq', mode: 'tools', write: false }]
  */
 export function normalizeProjectLinks(value) {
@@ -124,22 +129,24 @@ export function toggleProjectLink(links, projectId) {
   if (current.some(link => link.id === projectId)) {
     return current.filter(link => link.id !== projectId);
   }
-  return [...current, { id: projectId, mode: DEFAULT_PROJECT_LINK_MODE, write: false }];
+  return [...current, { id: projectId, write: false }];
 }
 
 /**
- * Change the mode of one link.
+ * Change the mode of one link. An empty or unknown mode takes the link's own
+ * mode away: the project's default applies again.
  *
  * @param {Array<string|Object>} links
  * @param {string} projectId
- * @param {'auto'|'context'|'tools'} mode
- * @returns {Array<{id: string, mode: string, write: boolean}>}
+ * @param {string} mode - A knowledge mode, or '' for the project's own.
+ * @returns {Array<{id: string, mode?: string, write: boolean}>}
  */
 export function setProjectLinkMode(links, projectId, mode) {
-  const nextMode = PROJECT_LINK_MODES.includes(mode) ? mode : DEFAULT_PROJECT_LINK_MODE;
-  return normalizeProjectLinks(links).map(link =>
-    link.id === projectId ? { ...link, mode: nextMode } : link
-  );
+  return normalizeProjectLinks(links).map(link => {
+    if (link.id !== projectId) return link;
+    const { mode: _previous, ...rest } = link;
+    return PROJECT_LINK_MODES.includes(mode) ? { ...rest, mode } : rest;
+  });
 }
 
 // --- project form -------------------------------------------------------------
@@ -149,7 +156,7 @@ export function setProjectLinkMode(links, projectId, mode) {
  *
  * @returns {{id: string, name: Object, description: Object, instructions: string,
  *   enabled: boolean, published: boolean, category: string, tags: string[],
- *   defaultAppId: string}}
+ *   defaultAppId: string, knowledgeMode: string}}
  */
 export function createEmptyProjectForm() {
   return {
@@ -161,7 +168,9 @@ export function createEmptyProjectForm() {
     published: false,
     category: '',
     tags: [],
-    defaultAppId: ''
+    defaultAppId: '',
+    // How the project reaches the model unless a chat or a link says otherwise (#3538).
+    knowledgeMode: 'auto'
   };
 }
 
@@ -185,7 +194,8 @@ export function projectFormFromProject(project) {
     published: project?.published === true,
     category: project?.category || '',
     tags: Array.isArray(project?.tags) ? [...project.tags] : [],
-    defaultAppId: typeof project?.defaultAppId === 'string' ? project.defaultAppId : ''
+    defaultAppId: typeof project?.defaultAppId === 'string' ? project.defaultAppId : '',
+    knowledgeMode: KNOWLEDGE_MODES.includes(project?.knowledgeMode) ? project.knowledgeMode : 'auto'
   };
 }
 
@@ -300,7 +310,8 @@ export function buildProjectPayload(form) {
     published: form.published === true,
     ...(category ? { category } : {}),
     tags: Array.isArray(form.tags) ? form.tags : [],
-    ...(form.defaultAppId ? { defaultAppId: form.defaultAppId } : {})
+    ...(form.defaultAppId ? { defaultAppId: form.defaultAppId } : {}),
+    knowledgeMode: KNOWLEDGE_MODES.includes(form.knowledgeMode) ? form.knowledgeMode : 'auto'
   };
 }
 

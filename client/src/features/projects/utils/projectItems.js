@@ -817,3 +817,27 @@ export const DOCUMENT_ACTION_KINDS = Object.freeze(['ifinder-document']);
 export function hasDocumentActions(item) {
   return DOCUMENT_ACTION_KINDS.includes(item?.kind) && item?.status !== 'failed';
 }
+
+// --- pinned, normal, "Not for AI" (#3538) ------------------------------------------
+
+/**
+ * The state of an item for the AI: pinned (always in the prompt), "Not for AI"
+ * (never given to the model) or normal.
+ *
+ * @param {{pinned?: boolean, excludedFromAi?: boolean}} item
+ * @returns {'normal'|'pinned'|'excluded'}
+ */
+export function aiAccessOf(item) {
+  if (item?.excludedFromAi === true) return 'excluded';
+  return item?.pinned === true ? 'pinned' : 'normal';
+}
+
+/**
+ * The item update that puts an item in a state.
+ *
+ * @param {'normal'|'pinned'|'excluded'} state
+ * @returns {{pinned: boolean, excludedFromAi: boolean}}
+ */
+export function aiAccessChange(state) {
+  return { pinned: state === 'pinned', excludedFromAi: state === 'excluded' };
+}

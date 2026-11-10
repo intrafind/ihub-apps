@@ -21,6 +21,7 @@
  * @module tools/knowledge
  */
 import { resolveProjectScope } from '../services/knowledge/ProjectScope.js';
+import { KNOWLEDGE_TOOL_MODES } from '../../shared/knowledgeModes.js';
 import { providerFor } from '../services/knowledge/registry.js';
 import { KnowledgeError } from '../services/knowledge/types.js';
 import { projectSource } from '../services/sources/producers/project.js';
@@ -91,9 +92,11 @@ function hitOf({ hit, project }, n) {
 }
 
 async function scopeOf(params) {
-  const scope = await resolveProjectScope({ appConfig: params.appConfig, user: params.user });
-  const searchable = scope.filter(entry => entry.mode !== 'context' || true);
-  return { all: scope, searchable };
+  // A project in `pinned` mode has no tools: its other documents are not reachable.
+  const scope = (
+    await resolveProjectScope({ appConfig: params.appConfig, user: params.user })
+  ).filter(entry => KNOWLEDGE_TOOL_MODES.includes(entry.mode));
+  return { all: scope, searchable: scope };
 }
 
 function pick(scope, projectId) {

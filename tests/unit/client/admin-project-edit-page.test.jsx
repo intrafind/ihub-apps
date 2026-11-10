@@ -221,7 +221,8 @@ describe('AdminProjectEditPage – create', () => {
       instructions: '',
       enabled: true,
       published: false,
-      tags: ['hr', 'policy']
+      tags: ['hr', 'policy'],
+      knowledgeMode: 'auto'
     });
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent('/admin/projects/handbook/edit')

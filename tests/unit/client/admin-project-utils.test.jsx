@@ -30,33 +30,49 @@ import {
 } from '../../../client/src/features/projects/utils/projectItems';
 
 describe('project links', () => {
-  test('bare string ids become auto links without write access', () => {
+  test('bare string ids become links without a mode of their own and without write access', () => {
     expect(normalizeProjectLinks(['handbook', { id: 'faq', mode: 'tools', write: true }])).toEqual([
-      { id: 'handbook', mode: 'auto', write: false },
+      { id: 'handbook', write: false },
       { id: 'faq', mode: 'tools', write: true }
     ]);
   });
 
-  test('drops empty and duplicate links and repairs unknown modes', () => {
+  test('drops empty and duplicate links and drops unknown modes', () => {
     expect(
       normalizeProjectLinks(['', null, { id: 'a', mode: 'everything' }, 'a', { mode: 'context' }])
-    ).toEqual([{ id: 'a', mode: 'auto', write: false }]);
+    ).toEqual([{ id: 'a', write: false }]);
     expect(normalizeProjectLinks(undefined)).toEqual([]);
   });
 
-  test('toggling adds an auto link and removes an existing one', () => {
+  test('toggling adds a link without a mode and removes an existing one', () => {
     const added = toggleProjectLink(['a'], 'b');
     expect(added).toEqual([
-      { id: 'a', mode: 'auto', write: false },
-      { id: 'b', mode: 'auto', write: false }
+      { id: 'a', write: false },
+      { id: 'b', write: false }
     ]);
-    expect(toggleProjectLink(added, 'a')).toEqual([{ id: 'b', mode: 'auto', write: false }]);
+    expect(toggleProjectLink(added, 'a')).toEqual([{ id: 'b', write: false }]);
   });
 
   test('changing the mode keeps the other links and the write flag', () => {
     expect(setProjectLinkMode([{ id: 'a', write: true }, 'b'], 'a', 'context')).toEqual([
       { id: 'a', mode: 'context', write: true },
-      { id: 'b', mode: 'auto', write: false }
+      { id: 'b', write: false }
+    ]);
+  });
+
+  test('the new knowledge modes are links modes, and an empty mode goes back to the default', () => {
+    expect(setProjectLinkMode(['a'], 'a', 'relevant')).toEqual([
+      { id: 'a', mode: 'relevant', write: false }
+    ]);
+    expect(setProjectLinkMode(['a'], 'a', 'pinned')).toEqual([
+      { id: 'a', mode: 'pinned', write: false }
+    ]);
+    // An explicit `auto` stays one: it overrides the project's own default.
+    expect(setProjectLinkMode(['a'], 'a', 'auto')).toEqual([
+      { id: 'a', mode: 'auto', write: false }
+    ]);
+    expect(setProjectLinkMode([{ id: 'a', mode: 'tools' }], 'a', '')).toEqual([
+      { id: 'a', write: false }
     ]);
   });
 });
@@ -100,7 +116,8 @@ describe('project form', () => {
       instructions: 'Answer in German.',
       enabled: false,
       published: false,
-      tags: ['hr']
+      tags: ['hr'],
+      knowledgeMode: 'auto'
     });
   });
 
@@ -116,7 +133,8 @@ describe('project form', () => {
       published: false,
       category: '',
       tags: ['x'],
-      defaultAppId: ''
+      defaultAppId: '',
+      knowledgeMode: 'auto'
     });
   });
 

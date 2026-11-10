@@ -20,6 +20,7 @@
  * @module services/projects/projectSettings
  */
 import { isFeatureEnabled } from '../../featureRegistry.js';
+import { allowedKnowledgeModes } from '../../../shared/knowledgeModes.js';
 import { isIFinderConfigured as iFinderInstalled } from '../integrations/ifinderConfig.js';
 
 // The per-app switches live in shared/ so the browser reads them alike.
@@ -59,6 +60,8 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   }),
   retentionDays: 0,
   loadAllMaxTokens: 50000,
+  // The knowledge modes users may choose for a project or a chat (#3538); absent offers all.
+  knowledgeModes: allowedKnowledgeModes(null),
   // How long a downloaded file or a web page is taken as current (#3536):
   // seconds, or 'never'. A project and an item may set their own.
   refreshTtl: DEFAULT_REFRESH_TTL_SECONDS,
@@ -97,7 +100,7 @@ function readPositive(value, fallback) {
  * @returns {{tierPolicy: string, defaultAppId: string, limits: {maxFiles: number, maxFileBytes: number,
  *   maxProjectBytes: number, maxProjectsPerUser: number}, sharing: {allowUsers: boolean,
  *   allowGroups: boolean, allowEveryone: boolean, allowCatalog: boolean}, retentionDays: number,
- *   loadAllMaxTokens: number, refreshTtl: number|'never', kinds: Object<string, boolean>, encryption: {keyProvider: string},
+ *   loadAllMaxTokens: number, knowledgeModes: string[], refreshTtl: number|'never', kinds: Object<string, boolean>, encryption: {keyProvider: string},
  *   scan: {provider: string, command: string, timeoutMs: number, onError: string},
  *   ingest: {concurrency: number, staleAfterMinutes: number}}}
  */
@@ -135,6 +138,7 @@ export function projectSettings(platformConfig) {
     },
     retentionDays: Math.max(0, Math.floor(readNumber(block.retentionDays, defaults.retentionDays))),
     loadAllMaxTokens: readPositive(block.loadAllMaxTokens, defaults.loadAllMaxTokens),
+    knowledgeModes: allowedKnowledgeModes(block.knowledgeModes),
     refreshTtl: normalizeRefreshTtl(block.refreshTtl) ?? defaults.refreshTtl,
     kinds:
       block.kinds && typeof block.kinds === 'object' && !Array.isArray(block.kinds)
@@ -260,6 +264,7 @@ export function projectsClientConfig(
     limits: settings.limits,
     sharing: settings.sharing,
     retentionDays: settings.retentionDays,
+    knowledgeModes: settings.knowledgeModes,
     refreshTtl: settings.refreshTtl
   };
 }

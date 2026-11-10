@@ -493,9 +493,14 @@ describe('ProjectPage – owner', () => {
     mockApi.deleteProject.mockResolvedValue();
     renderPage();
 
-    fireEvent.click(await screen.findByLabelText('Pin Lease.pdf'));
+    fireEvent.change(await screen.findByLabelText('Use of Lease.pdf by the AI'), {
+      target: { value: 'pinned' }
+    });
     await waitFor(() =>
-      expect(mockApi.updateProjectItem).toHaveBeenCalledWith('prj_a', 'itm_ready', { pinned: true })
+      expect(mockApi.updateProjectItem).toHaveBeenCalledWith('prj_a', 'itm_ready', {
+        pinned: true,
+        excludedFromAi: false
+      })
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Delete project' }));

@@ -345,9 +345,10 @@ export class ProjectService {
           'category',
           'tags',
           'defaultAppId',
+          'knowledgeMode',
           'refreshTtl'
         ]
-      : ['name', 'description', 'instructions', 'defaultAppId', 'refreshTtl'];
+      : ['name', 'description', 'instructions', 'defaultAppId', 'knowledgeMode', 'refreshTtl'];
     try {
       return await this.repository.mutate(
         projectId,
@@ -563,6 +564,7 @@ export class ProjectService {
       ref,
       storage: kind.storage.ihub,
       pinned: input.pinned === true,
+      ...(input.excludedFromAi === true && input.pinned !== true ? { excludedFromAi: true } : {}),
       status: isText ? 'pending' : 'ready',
       error: null,
       provenance: {
@@ -885,7 +887,7 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {{name?: string, pinned?: boolean, ref?: Object}} patch
+   * @param {{name?: string, pinned?: boolean, excludedFromAi?: boolean, ref?: Object}} patch
    * @param {{user: Object, authorize?: Function}} options
    * @returns {Promise<{project: Object, item: Object}|null>}
    */
@@ -908,9 +910,25 @@ export class ProjectService {
             item.name = patch.name;
             changed = true;
           }
+          // Pinned, normal and "Not for AI" are three states of one setting: choosing
+          // one leaves the others. Both set at once is refused.
+          if (patch.pinned === true && patch.excludedFromAi === true) {
+            throw new ProjectError('INVALID_REF', 'An item cannot be pinned and not for AI');
+          }
           if (patch.pinned !== undefined && patch.pinned !== item.pinned) {
             item.pinned = patch.pinned;
+            if (patch.pinned && item.excludedFromAi) delete item.excludedFromAi;
             changed = true;
+          }
+          if (patch.excludedFromAi !== undefined) {
+            if (patch.excludedFromAi && !item.excludedFromAi) {
+              item.excludedFromAi = true;
+              item.pinned = false;
+              changed = true;
+            } else if (!patch.excludedFromAi && item.excludedFromAi) {
+              delete item.excludedFromAi;
+              changed = true;
+            }
           }
           if (patch.refreshTtl !== undefined) {
             if (!takesRefreshTtl(item)) {
@@ -1614,6 +1632,7 @@ function buildItem(kind, ref, input, { user, origin, run = null, prepared = null
     ref,
     storage: kind.storage.ihub,
     pinned: input.pinned === true,
+    ...(input.excludedFromAi === true && input.pinned !== true ? { excludedFromAi: true } : {}),
     status: link ? 'ready' : 'pending',
     error: null,
     provenance: {

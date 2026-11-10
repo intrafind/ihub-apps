@@ -227,7 +227,9 @@ export async function resolveNodeProject({ executor, node, state, context }) {
   if (link && !link.write && workflowLink?.write) link = { ...link, write: true };
   const scope = await resolveProjectScope({
     appConfig: { projects: link ? [link] : [{ id: projectId, mode: 'auto' }] },
-    user: context.user
+    user: context.user,
+    // The node works on the documents, not through the model: "Not for AI" does not apply.
+    forAi: false
   });
   const entry = scope.find(candidate => candidate.project.id === projectId);
   if (!entry)

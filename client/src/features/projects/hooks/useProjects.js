@@ -9,6 +9,7 @@ import { fetchProject, fetchProjectList, fetchProjectsConfig } from '../../../ap
 import { projectErrorMessage } from '../utils/projectErrors';
 import { createViewerStore } from './projectStore';
 import { usePolledProject } from './usePolledProject';
+import { allowedKnowledgeModes } from '../../../../../shared/knowledgeModes.js';
 
 /**
  * Hooks of the user projects UI (#1036). Every part of it is gated the same
@@ -54,7 +55,7 @@ function useViewer() {
  * Whether projects are available to the current viewer.
  *
  * @returns {{loading: boolean, projectsEnabled: boolean, userProjectsEnabled: boolean,
- *   userId: string|null}}
+ *   knowledgeModes: string[], userId: string|null}}
  */
 export function useProjectsAvailability() {
   const { platformConfig, isLoading } = usePlatformConfig() || {};
@@ -65,6 +66,8 @@ export function useProjectsAvailability() {
     loading: isLoading === true || viewer.loading,
     projectsEnabled,
     userProjectsEnabled: projectsEnabled && block.userProjects === true,
+    // The knowledge modes users may choose (#3538); all of them until the platform says.
+    knowledgeModes: allowedKnowledgeModes(block.knowledgeModes),
     userId: viewer.userId
   };
 }

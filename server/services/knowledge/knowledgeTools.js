@@ -17,6 +17,9 @@
  * request's scope again on every call, so the model cannot reach a project
  * the request did not bring.
  *
+ * A project in `pinned` mode is left out of the scope the tools see: it has no
+ * tools, and a request whose projects are all pinned is offered none.
+ *
  * A project loaded in full (`mode: 'context'`, or one the planner loads
  * because it fits) still allows a search, which is harmless — and the planner
  * may have to cut such a project at the hard limit, when `knowledge_read` is
@@ -29,6 +32,7 @@ import { isProjectsConfigured } from '../projects/projectSettings.js';
 import { readShippedToolDefinitions, runShippedTool } from '../tools/shippedToolDefinitions.js';
 import { localizeTools, platformDefaultLanguage } from '../../utils/toolLocalization.js';
 import { describeScope, resolveProjectScope } from './ProjectScope.js';
+import { KNOWLEDGE_TOOL_MODES } from '../../../shared/knowledgeModes.js';
 
 /** The shipped tool file the knowledge tools are defined in. */
 export const KNOWLEDGE_TOOL_FILE_ID = 'knowledge';
@@ -97,7 +101,11 @@ export function hasProjectScope(app) {
 export async function knowledgeToolsFor({ app, user, language = null }) {
   if (!isProjectsFeatureOn() || !hasProjectScope(app) || !user) return [];
   const lang = language || platformDefaultLanguage();
-  const scope = await resolveProjectScope({ appConfig: app, user });
+  // A project in `pinned` mode has no tools; when no project of the request has
+  // them the model is not offered the tools at all.
+  const scope = (await resolveProjectScope({ appConfig: app, user })).filter(entry =>
+    KNOWLEDGE_TOOL_MODES.includes(entry.mode)
+  );
   if (!scope.length) return [];
   const scopeText = describeScope(
     scope.map(entry => ({ ...entry, effective: entry.mode === 'context' ? 'loaded' : 'searched' })),

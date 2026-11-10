@@ -5090,6 +5090,10 @@
       }
     },
     "projects": {
+      "knowledgeModes": {
+        "legend": "Knowledge modes users may choose",
+        "help": "Switch off a mode, for example full context to save cost. A project or chat that uses it falls back to automatic; the links of apps and workflows keep the mode an administrator set."
+      },
       "availability": {
         "legend": "Who can use this project?",
         "apps": {
@@ -5191,6 +5195,8 @@
       },
       "scanWarning": "Uploads are not scanned for malware. Configure platform.projects.scan to scan them.",
       "fields": {
+        "knowledgeMode": "Knowledge mode",
+        "knowledgeModeHint": "A link on an app or workflow can set its own mode; chats use this one for the projects users add.",
         "id": "Project ID",
         "idHint": "Filled in from the name. Apps and links use it, and it cannot be changed after creation.",
         "name": "Name",
@@ -5245,6 +5251,7 @@
         "label": "Projects",
         "loadError": "Failed to load the projects. Please try again.",
         "modes": {
+          "projectDefault": "Project default",
           "auto": "Auto",
           "context": "Always in the prompt",
           "tools": "Search tools only"
@@ -5261,6 +5268,8 @@
         "noMatches": "No projects match your search."
       },
       "tokens": {
+        "relevant": "the pinned documents and the best sections for the question",
+        "pinnedOnly": "only the pinned documents; nothing is searched",
         "count": "~{{tokens}} tokens",
         "unknown": "Size not known yet",
         "autoPrompt": "fits the prompt limit; loaded if the model and other linked projects leave room",
@@ -6206,6 +6215,10 @@
     "downloadOptions": "Download Options",
     "deleteMessage": "Delete message",
     "knowledgeScope": {
+      "pinnedOne": "pinned documents only",
+      "pinned_one": "{{count}} pinned only",
+      "pinned_other": "{{count}} pinned only",
+      "noTools": "the model cannot call tools",
       "projects_one": "{{count}} project",
       "projects_other": "{{count}} projects",
       "loaded_one": "{{count}} loaded in full",
@@ -8449,6 +8462,37 @@
     "startScreenHint": "New here?"
   },
   "projects": {
+    "knowledgeMode": {
+      "label": "Knowledge mode",
+      "change": "Change knowledge mode",
+      "hint": "How chats and apps use this project unless they choose otherwise.",
+      "automaticDefault": "Automatic (default)",
+      "defaultSuffix": "(default)",
+      "projectDefault": "Project default",
+      "chatLabel": "Knowledge mode of this chat",
+      "modes": {
+        "auto": {
+          "label": "Automatic",
+          "description": "Everything when it fits, otherwise the pinned documents and the best sections for the question. The model can search the rest."
+        },
+        "context": {
+          "label": "Full context",
+          "description": "Everything, up to the limit of the model. For small sets that must be read whole: a contract, a policy, a specification."
+        },
+        "relevant": {
+          "label": "Relevant sections",
+          "description": "The pinned documents and the best sections for the question from all documents. Saves a tool round trip; for large projects and models that call tools poorly."
+        },
+        "tools": {
+          "label": "Search",
+          "description": "The pinned documents only; the model searches the rest. For large libraries and agents that search on purpose."
+        },
+        "pinned": {
+          "label": "Pinned only",
+          "description": "The pinned documents only, and the model cannot reach the others. A curated subset of a large project."
+        }
+      }
+    },
     "addItem": {
       "accepted": "Accepted: {{types}}",
       "check": "Check",
@@ -8642,6 +8686,13 @@
       "defaultAppHint": "New chats of this project start in this app. Anyone can still pick another app when they start a chat."
     },
     "items": {
+      "aiAccessFor": "Use of {{name}} by the AI",
+      "aiAccessHint": "Pinned items are always in the prompt. \"Not for AI\" items stay in the project for people but are never given to the model, listed or searched.",
+      "aiAccess": {
+        "normal": "Normal",
+        "pinned": "Pinned",
+        "excluded": "Not for AI"
+      },
       "actions": {
         "preview": "Preview text",
         "refresh": "Refresh",
@@ -8655,6 +8706,7 @@
       },
       "add": "Add documents",
       "columns": {
+        "aiAccess": "For the AI",
         "kind": "Kind",
         "name": "Name",
         "pinned": "Pinned",

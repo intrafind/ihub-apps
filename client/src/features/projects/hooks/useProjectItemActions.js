@@ -10,6 +10,7 @@ import {
   updateProjectItemText
 } from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
+import { aiAccessChange } from '../utils/projectItems';
 import { removeItemsInTurn, withoutItems } from '../utils/removeItems';
 
 /**
@@ -39,7 +40,7 @@ export function replaceItem(project, item) {
  * @param {(updater: Function) => void} options.setProject - From `useProject`.
  * @param {() => Promise<Object|null>} options.reload - From `useProject`.
  * @returns {{busyItemId: string|null, error: string|null, clearError: () => void,
- *   togglePinned: (item: Object) => Promise<void>, refresh: (item: Object) => Promise<void>,
+ *   setAiAccess: (item: Object, state: string) => Promise<void>, refresh: (item: Object) => Promise<void>,
  *   rename: (item: Object, name: string) => Promise<boolean>,
  *   update: (item: Object, changes: {name?: string, ref?: Object}) => Promise<Object|undefined>,
  *   editText: (item: Object, text: string) => Promise<Object|undefined>,
@@ -68,11 +69,17 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     [t]
   );
 
-  const togglePinned = useCallback(
-    item =>
+  const setAiAccess = useCallback(
+    (item, state) =>
       run(item, async () => {
-        const updated = await updateProjectItem(projectId, item.id, { pinned: !item.pinned });
-        setProject(prev => replaceItem(prev, updated || { ...item, pinned: !item.pinned }));
+        const change = aiAccessChange(state);
+        const updated = await updateProjectItem(projectId, item.id, change);
+        setProject(prev =>
+          replaceItem(
+            prev,
+            updated || { ...item, ...change, excludedFromAi: change.excludedFromAi }
+          )
+        );
       }),
     [projectId, run, setProject]
   );
@@ -209,7 +216,7 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     busyItemId,
     error,
     clearError: () => setError(null),
-    togglePinned,
+    setAiAccess,
     refresh,
     rename,
     setRefreshTtl,

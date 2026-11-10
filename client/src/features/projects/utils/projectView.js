@@ -21,6 +21,7 @@
  */
 
 import { appAllowsUserProjects } from '../../../../../shared/appProjects.js';
+import { isKnowledgeMode } from '../../../../../shared/knowledgeModes.js';
 import { localizedText } from './projectItems';
 
 /** Prefix of user project ids (`prj_` + 22 url-safe characters). */
@@ -249,14 +250,17 @@ export function countProjectGroups(projects) {
  * a chat of the project starts in; an empty string means none is set.
  *
  * @param {Object|null} project
- * @returns {{name: string, description: string, instructions: string, defaultAppId: string}}
+ * @returns {{name: string, description: string, instructions: string, defaultAppId: string,
+ *   knowledgeMode: string}}
  */
 export function projectFormFrom(project) {
   return {
     name: typeof project?.name === 'string' ? project.name : '',
     description: typeof project?.description === 'string' ? project.description : '',
     instructions: typeof project?.instructions === 'string' ? project.instructions : '',
-    defaultAppId: typeof project?.defaultAppId === 'string' ? project.defaultAppId : ''
+    defaultAppId: typeof project?.defaultAppId === 'string' ? project.defaultAppId : '',
+    // How the project reaches the model (#3538); '' is the default, `auto`.
+    knowledgeMode: isKnowledgeMode(project?.knowledgeMode) ? project.knowledgeMode : ''
   };
 }
 
@@ -298,6 +302,7 @@ export function buildCreateProjectBody(form, { tier = 'ihub' } = {}) {
     ...(description ? { description } : {}),
     ...(instructions.trim() ? { instructions } : {}),
     ...(form.defaultAppId ? { defaultAppId: form.defaultAppId } : {}),
+    ...(isKnowledgeMode(form.knowledgeMode) ? { knowledgeMode: form.knowledgeMode } : {}),
     ...(tier === 'ifinder' ? { tier } : {})
   };
 }
@@ -321,6 +326,9 @@ export function buildProjectChanges(form, project) {
   if ((form.instructions || '') !== before.instructions) changes.instructions = form.instructions;
   if ((form.defaultAppId || '') !== before.defaultAppId) {
     changes.defaultAppId = form.defaultAppId || null;
+  }
+  if ((form.knowledgeMode || '') !== before.knowledgeMode) {
+    changes.knowledgeMode = isKnowledgeMode(form.knowledgeMode) ? form.knowledgeMode : null;
   }
   return Object.keys(changes).length > 0 ? changes : null;
 }

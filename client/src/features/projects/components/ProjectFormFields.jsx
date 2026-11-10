@@ -8,6 +8,9 @@ import {
   MAX_PROJECT_NAME_LENGTH
 } from '../utils/projectView';
 import ProjectAppSelect from './ProjectAppSelect';
+import KnowledgeModeSelect from './KnowledgeModeSelect';
+import { useProjectsAvailability } from '../hooks/useProjects';
+import { knowledgeModeDescription } from '../utils/knowledgeModes';
 import { HINT_CLASS, INPUT_CLASS, LABEL_CLASS } from './item-dialog/dialogStyles';
 
 /**
@@ -41,6 +44,7 @@ function fieldError(t, field, code) {
  * @param {string} [props.idPrefix='project'] - Prefix of the input ids.
  * @param {boolean} [props.disabled=false]
  * @param {boolean} [props.showDefaultApp=false]
+ * @param {boolean} [props.showKnowledgeMode=false] - The knowledge mode of the project (#3538).
  * @param {boolean} [props.hideInstructions=false] - Leave the instructions out.
  * @param {string[]} [props.lockedFields] - Fields shown but not editable, with
  *   `lockedHint` below them (the name and description of a smart collection where
@@ -55,11 +59,13 @@ function ProjectFormFields({
   idPrefix = 'project',
   disabled = false,
   showDefaultApp = false,
+  showKnowledgeMode = false,
   hideInstructions = false,
   lockedFields = [],
   lockedHint = ''
 }) {
   const { t } = useTranslation();
+  const { knowledgeModes } = useProjectsAvailability();
   const fields = [
     { field: 'name', label: t('projects.form.name', 'Name'), rows: 0 },
     { field: 'description', label: t('projects.form.description', 'Description'), rows: 2 },
@@ -122,6 +128,28 @@ function ProjectFormFields({
             {t(
               'projects.form.defaultAppHint',
               'New chats of this project start in this app. Anyone can still pick another app when they start a chat.'
+            )}
+          </p>
+        </div>
+      )}
+      {showKnowledgeMode && (
+        <div>
+          <label htmlFor={`${idPrefix}-knowledgeMode`} className={LABEL_CLASS}>
+            {t('projects.knowledgeMode.label', 'Knowledge mode')}
+          </label>
+          <KnowledgeModeSelect
+            id={`${idPrefix}-knowledgeMode`}
+            value={form.knowledgeMode || ''}
+            modes={knowledgeModes}
+            disabled={disabled}
+            emptyLabel={t('projects.knowledgeMode.automaticDefault', 'Automatic (default)')}
+            onChange={value => onChange('knowledgeMode', value)}
+          />
+          <p className={HINT_CLASS}>
+            {knowledgeModeDescription(t, form.knowledgeMode || 'auto')}{' '}
+            {t(
+              'projects.knowledgeMode.hint',
+              'How chats and apps use this project unless they choose otherwise.'
             )}
           </p>
         </div>

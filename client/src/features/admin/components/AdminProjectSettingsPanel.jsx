@@ -28,7 +28,8 @@ import {
 import {
   ProjectCategoryTagsFields,
   ProjectDefaultAppField,
-  ProjectInstructionsField
+  ProjectInstructionsField,
+  ProjectKnowledgeModeField
 } from './AdminProjectSettingsForm';
 import ProjectAvailability, {
   ProjectAvailabilityBadge,
@@ -142,6 +143,10 @@ function AdminProjectSettingsDialog({ project, section, onClose, onSaved }) {
               <ProjectDefaultAppField
                 value={form.defaultAppId}
                 onChange={value => update('defaultAppId', value)}
+              />
+              <ProjectKnowledgeModeField
+                value={form.knowledgeMode}
+                onChange={value => update('knowledgeMode', value)}
               />
             </>
           )}

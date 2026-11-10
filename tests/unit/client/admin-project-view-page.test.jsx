@@ -192,7 +192,7 @@ describe('AdminProjectViewPage', () => {
     );
     // Read-only: no way to remove or pin from here.
     expect(screen.queryByRole('button', { name: 'Remove item' })).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Pin https://www.intrafind.com')).toBeDisabled();
+    expect(screen.getByLabelText('Use of https://www.intrafind.com by the AI')).toBeDisabled();
   });
 
   test('estimates the tokens and recommends per project and per item', async () => {

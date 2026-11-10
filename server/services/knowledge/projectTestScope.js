@@ -128,6 +128,7 @@ export async function resolveProjectTestScope({ user, testProjectId, repository 
 const OMITTED_FIELDS = [
   '_projectId',
   '_attachedProjectIds',
+  '_knowledgeMode',
   '_workflowProjects',
   'apps',
   'workflows'
@@ -150,7 +151,8 @@ export function applyProjectTestScope(app, projectId) {
   for (const field of OMITTED_FIELDS) delete scoped[field];
   return {
     ...scoped,
-    projects: [{ id: projectId, mode: 'auto' }],
+    // No mode of its own: the project is tested in the mode its own default sets.
+    projects: [{ id: projectId }],
     features: { ...app.features, projects: true }
   };
 }
