@@ -49,10 +49,12 @@ function isShort(text) {
  */
 export function focusQueryFromMessages(messages) {
   if (!Array.isArray(messages)) return null;
-  const typed = messages.map(userText).filter(Boolean);
-  const latest = typed.at(-1);
+  const users = messages.filter(message => message?.role === 'user');
+  // The latest message itself: one without text (a file-only submit) has no
+  // question, whatever the user asked before.
+  const latest = userText(users.at(-1));
   if (!latest) return null;
-  const previous = typed.length > 1 ? typed.at(-2) : '';
+  const previous = users.slice(0, -1).map(userText).filter(Boolean).at(-1) || '';
   const query = isShort(latest) && previous ? `${latest} ${previous}` : latest;
   return normalizeFocus(query) || null;
 }

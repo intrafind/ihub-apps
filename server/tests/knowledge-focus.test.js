@@ -10,7 +10,12 @@
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { partOffsets, getDocumentIndex, selectContent } from '../sources/documentRetrieval.js';
+import {
+  partOffsets,
+  getDocumentIndex,
+  searchDocument,
+  selectContent
+} from '../sources/documentRetrieval.js';
 import {
   focusQueryFromMessages,
   MAX_FOCUS_CHARS,
@@ -187,6 +192,46 @@ describe('selectContent with a focus', () => {
     assert.ok(Number.isInteger(result.passages[0].offset));
   });
 
+  it('keeps a smaller section that fits whole over the cut start of a larger one', () => {
+    // The long chapter outranks the answer (title and repeated terms) but does not fit.
+    const text =
+      '# Manual\n\n## Price quasar\n\n' +
+      'price quasar price quasar price quasar. '.repeat(120) +
+      '\n\n## Details\n\nThe price of the quasar module is 4711 euros.\n';
+    const index = getDocumentIndex(text);
+    const ranked = searchDocument(index, 'price quasar');
+    assert.equal(
+      index.sections[index.parts[ranked[0].partIndex].sectionIndex].title,
+      'Price quasar',
+      'precondition: the long chapter ranks first'
+    );
+    const result = selectContent(text, {
+      focus: 'price quasar',
+      budgetChars: 1500,
+      compact: true,
+      name: 'Manual'
+    });
+    assert.equal(result.retrieval.mode, 'focus');
+    assert.ok(result.content.length <= 1500);
+    assert.ok(result.content.includes('The price of the quasar module is 4711 euros.'));
+    assert.deepEqual(result.retrieval.sections, ['details']);
+    assert.ok(!result.content.includes('[…]'), 'nothing was cut');
+  });
+
+  it('cuts the best section only when no section fits at all', () => {
+    const text =
+      '# Manual\n\n## Price quasar\n\n' + 'price quasar price quasar price quasar. '.repeat(120);
+    const result = selectContent(text, {
+      focus: 'price quasar',
+      budgetChars: 1500,
+      compact: true,
+      name: 'Manual'
+    });
+    assert.equal(result.retrieval.mode, 'focus');
+    assert.ok(result.content.length <= 1500);
+    assert.match(result.content, /\[…\]\n<\/section>$/);
+  });
+
   it('stays within a small budget by keeping the start of the best section', () => {
     const result = selectContent(MANUAL, { focus: 'lorem ipsum chapter', budgetChars: 600 });
     assert.equal(result.retrieval.mode, 'focus');
@@ -214,6 +259,24 @@ describe('the question of a turn', () => {
       { role: 'user', content: 'and in euros?' }
     ]);
     assert.equal(query, 'and in euros? What does the enterprise plan cost per seat and year?');
+  });
+
+  it('a latest message without text has no question, whatever was asked before', () => {
+    assert.equal(
+      focusQueryFromMessages([
+        { role: 'user', content: 'What does the warranty of the quasar module cover?' },
+        { role: 'assistant', content: 'It covers parts and labour.' },
+        { role: 'user', content: '' }
+      ]),
+      null
+    );
+    assert.equal(
+      focusQueryFromMessages([
+        { role: 'user', content: 'What does the warranty of the quasar module cover?' },
+        { role: 'user', content: '   ' }
+      ]),
+      null
+    );
   });
 
   it('is null when there is nothing to search for', () => {

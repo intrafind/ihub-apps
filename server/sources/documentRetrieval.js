@@ -797,14 +797,15 @@ function passageOf(index, partIndex, offsets) {
  * The best-matching groups of parts for a ranked result, best first, within a
  * budget. A short hit (mostly a heading) brings its subsections along.
  *
- * @param {{fitFirst?: boolean}} [options] - `fitFirst`: when even the best group is
- *   over the budget, return a verbatim start of it instead of nothing
+ * @param {{fitFirst?: boolean}} [options] - `fitFirst`: when no group fits whole, return
+ *   a verbatim start of the best one instead of nothing
  */
 function rankedGroups(index, ranked, budgetChars, measure, offsets, { fitFirst = false } = {}) {
   const best = ranked[0].score;
   const included = new Set();
   const groups = [];
   let used = 0;
+  let oversize = null;
   for (const { partIndex, score } of ranked) {
     if (groups.length >= MAX_SEARCH_RESULTS || score < best * MIN_RELATIVE_SCORE) break;
     if (included.has(partIndex)) continue;
@@ -830,25 +831,37 @@ function rankedGroups(index, ranked, budgetChars, measure, offsets, { fitFirst =
       }
     }
 
-    let rendered = members.map(i => renderPart(index, i, offsets)).join('\n\n') + note;
+    const rendered = members.map(i => renderPart(index, i, offsets)).join('\n\n') + note;
     const size = measure(rendered) + 2;
     if (used + size > budgetChars) {
-      if (!fitFirst || groups.length || budgetChars - used < 100) continue;
-      // The best group alone does not fit: keep its start, verbatim.
-      let cut = rendered.slice(0, Math.max(0, budgetChars - used - 40));
-      while (cut && measure(`${cut}\n[…]\n</section>`) + 2 > budgetChars - used) {
-        cut = cut.slice(0, Math.floor(cut.length * 0.9));
-      }
-      if (!cut) continue;
-      rendered = `${cut}\n[…]\n</section>`;
-      groups.push({ members: [partIndex], rendered });
-      break;
+      // Remembered, not cut yet: a lower-ranked group may still fit whole.
+      if (!oversize) oversize = { partIndex, rendered };
+      continue;
     }
     members.forEach(i => included.add(i));
     groups.push({ members, rendered });
     used += size;
   }
+  // Nothing fits whole: keep the start of the best group, verbatim, rather than nothing.
+  if (fitFirst && !groups.length && oversize) {
+    const cut = cutToFit(oversize.rendered, budgetChars, measure);
+    if (cut) groups.push({ members: [oversize.partIndex], rendered: cut });
+  }
   return groups;
+}
+
+/**
+ * The start of a rendered group, closed with a marker, within `budgetChars`.
+ * @returns {string|null} Null when the budget is too small to hold anything useful
+ */
+function cutToFit(rendered, budgetChars, measure) {
+  if (budgetChars < 100) return null;
+  const close = '\n[…]\n</section>';
+  let cut = rendered.slice(0, Math.max(0, budgetChars - 40));
+  while (cut && measure(cut + close) + 2 > budgetChars) {
+    cut = cut.slice(0, Math.floor(cut.length * 0.9));
+  }
+  return cut ? cut + close : null;
 }
 
 function searchResult(index, name, query, budgetChars, measure = lengthOf) {
