@@ -385,7 +385,7 @@ function ClarificationCard({
                     : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700'
                 }
               `}
-              aria-label={t('clarification.skip', 'Skip this question')}
+              aria-label={t('clarification.skipQuestion', 'Skip this question')}
             >
               {t('clarification.skip', 'Skip')}
             </button>
@@ -407,7 +407,7 @@ function ClarificationCard({
                 : 'bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600'
             }
           `}
-          aria-label={t('clarification.submit', 'Submit answer')}
+          aria-label={t('clarification.submitAnswer', 'Submit answer')}
         >
           {isSubmitting ? (
             <>

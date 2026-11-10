@@ -52,6 +52,15 @@ function Layout() {
   const tagline = uiConfig?.header?.tagline
     ? resolveTranslationRefs(getLocalizedContent(uiConfig.header.tagline, currentLanguage), t)
     : null;
+  // The footer text may refer to a translation key (`$t(footer.legal)`), which takes the year.
+  const footerYear = { year: new Date().getFullYear() };
+  const footerText = uiConfig?.footer?.text
+    ? resolveTranslationRefs(
+        getLocalizedContent(uiConfig.footer.text, currentLanguage),
+        t,
+        footerYear
+      )
+    : t('footer.copyright', '© {{year}} iHub Apps', footerYear);
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarMobileOpen, setSidebarMobileOpen] = useState(false);
@@ -164,13 +173,7 @@ function Layout() {
     uiConfig?.footer?.enabled !== false && showFooter && !isAppPage ? (
       <footer className="flex-none border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-6 py-2.5 text-xs text-gray-500 dark:text-gray-400">
-          <span className="truncate">
-            {uiConfig?.footer?.text
-              ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-              : t('footer.copyright', '© {{year}} iHub Apps', {
-                  year: new Date().getFullYear()
-                })}
-          </span>
+          <span className="truncate">{footerText}</span>
           {uiConfig?.footer?.links && (
             <nav
               aria-label={t('footer.navigation', 'Footer navigation')}
@@ -445,13 +448,7 @@ function Layout() {
               <div className="container mx-auto px-4">
                 <div className="flex flex-col md:flex-row justify-between items-center">
                   <div className="mb-4 md:mb-0">
-                    <p>
-                      {uiConfig?.footer?.text
-                        ? getLocalizedContent(uiConfig.footer.text, currentLanguage)
-                        : t('footer.copyright', '© {{year}} iHub Apps', {
-                            year: new Date().getFullYear()
-                          })}
-                    </p>
+                    <p>{footerText}</p>
                   </div>
                   <nav
                     aria-label={t('footer.navigation', 'Footer navigation')}

@@ -73,7 +73,7 @@ function ProjectInputField({
               )}
           {error && (
             <button type="button" onClick={() => reload()} className="ml-1 underline">
-              {t('common.retry', 'Try again')}
+              {t('common.tryAgain', 'Try again')}
             </button>
           )}
         </p>

@@ -43,10 +43,16 @@ name changes everywhere:
 Use the same reference in your own overrides (`"Welcome to $t(product.name)"`) instead of
 spelling the name out. A key can refer to any other key the same way.
 
-The header tagline ("by IntraFind") is `product.tagline`. The shipped `header.tagline` in
-`contents/config/ui.json` points at it as `$t(product.tagline)`; text you type into that field
-instead, or an empty value, takes its place. `$t(key)` also works in other header and footer text
-that the client resolves, but only the tagline is resolved today.
+The header tagline ("by IntraFind") is `product.tagline`, and the footer line ("© 2026 IntraFind
+Software AG. All rights reserved.") is `footer.legal`, which takes the current year as `{{year}}`.
+The shipped `header.tagline` and `footer.text` in `contents/config/ui.json` point at them as
+`$t(product.tagline)` and `$t(footer.legal)`; text you type into those fields instead, or an empty
+value, takes their place. The client resolves `$t(key)` in these two fields only.
+
+Every text the end-user frontend asks for by key exists in the built-in English and German files, so
+it can be overridden. A unit test (`tests/unit/client/translation-keys-exist.test.jsx`) fails when
+a `t('some.key', …)` call uses a key that is not there. The admin area, the login gate (its own
+table) and keys built at run time are not covered.
 
 ## Merge Behaviour
 

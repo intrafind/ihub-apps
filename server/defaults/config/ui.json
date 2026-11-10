@@ -65,8 +65,8 @@
   },
   "footer": {
     "text": {
-      "en": "© 2025 IntraFind Software AG. All rights reserved.",
-      "de": "© 2025 IntraFind Software AG. Alle Rechte vorbehalten."
+      "en": "$t(footer.legal)",
+      "de": "$t(footer.legal)"
     },
     "links": [
       {

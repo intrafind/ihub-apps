@@ -179,7 +179,9 @@ function InputValueRenderer({ value, t }) {
           >
             {isExpanded
               ? t('common.showLess', 'Show less')
-              : t('common.showMore', `Show ${value.length - LONG_STRING_THRESHOLD} more`)}
+              : t('workflows.showMoreChars', 'Show {{count}} more', {
+                  count: value.length - LONG_STRING_THRESHOLD
+                })}
           </button>
         </div>
       );
@@ -1088,7 +1090,7 @@ function WorkflowExecutionPage() {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {state.status === 'cancelled'
                   ? t('workflows.partialOutput', 'Partial Output (before cancellation)')
-                  : t('workflows.output', 'Workflow Output')}
+                  : t('workflows.outputTitle', 'Workflow Output')}
               </h3>
               <button
                 onClick={() =>

@@ -8,7 +8,8 @@
   },
   "footer": {
     "navigation": "Fußzeilen-Navigation",
-    "copyright": "© {{year}} $t(product.name)"
+    "copyright": "© {{year}} $t(product.name)",
+    "legal": "© {{year}} IntraFind Software AG. Alle Rechte vorbehalten."
   },
   "attachedFiles": {
     "removeAll": "Alle entfernen",
@@ -157,7 +158,23 @@
     "enabled": "Aktiviert",
     "disabled": "Deaktiviert",
     "saving": "Speichern…",
-    "moreActions": "Weitere Aktionen"
+    "moreActions": "Weitere Aktionen",
+    "untitledFile": "Dokument {{index}}",
+    "ok": "OK",
+    "retry": "Erneut versuchen",
+    "showLess": "Weniger anzeigen",
+    "hideParameters": "Parameter ausblenden",
+    "showParameters": "Parameter anzeigen",
+    "confirm": "Bestätigen",
+    "clearSelection": "Zurücksetzen",
+    "refresh": "Aktualisieren",
+    "collapse": "Zuklappen",
+    "expand": "Aufklappen",
+    "empty": "leer",
+    "expandArray": "Liste aufklappen ({{count}} Einträge)",
+    "expandObject": "Objekt aufklappen ({{count}} Felder)",
+    "details": "Details",
+    "tryAgain": "Erneut versuchen"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -219,6 +236,16 @@
         "internal": "Intern",
         "external": "Extern"
       }
+    },
+    "sourcePassage": {
+      "more": "mehr",
+      "less": "weniger"
+    },
+    "input": {
+      "contextSection": "Nachrichtenkontext"
+    },
+    "modelSelector": {
+      "noModels": "Keine Modelle verfügbar"
     }
   },
   "websearch": {
@@ -341,7 +368,9 @@
         "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
       },
       "nextcloudSelection": {
-        "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt."
+        "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt.",
+        "title_one": "{{count}} Datei in Nextcloud ausgewählt",
+        "title_other": "{{count}} Dateien in Nextcloud ausgewählt"
       },
       "noApps": "Keine Anwendungen gefunden",
       "loading": "Laden…",
@@ -357,7 +386,13 @@
         "chat": "Chat",
         "redirect": "Extern",
         "iframe": "Eingebettet"
-      }
+      },
+      "sort": {
+        "relevance": "Relevanz",
+        "nameAsc": "Name A–Z",
+        "nameDesc": "Name Z–A"
+      },
+      "noFavorites": "Noch keine Favoriten-Apps"
     },
     "sort": {
       "label": "Sortieren nach",
@@ -450,7 +485,17 @@
           "jsonl": "JSON-Zeilen-Format"
         },
         "companyTemplates": "Unternehmensvorlagen",
-        "templatePinned": "Diese App exportiert in der Vorlage „{{name}}“."
+        "templatePinned": "Diese App exportiert in der Vorlage „{{name}}“.",
+        "template": "Vorlage",
+        "templateDefault": "Standard",
+        "templateProfessional": "Professionell",
+        "templateMinimal": "Minimal",
+        "watermarkText": "Wasserzeichentext",
+        "watermarkPosition": "Position",
+        "bottomRight": "Unten rechts",
+        "bottomLeft": "Unten links",
+        "bottomCenter": "Unten mittig",
+        "watermarkOpacity": "Deckkraft"
       },
       "copyToClipboard": "In die Zwischenablage kopieren",
       "showThoughts": "Denkanalyse anzeigen",
@@ -482,7 +527,18 @@
         "collapse": "Eingabeparameter ausblenden",
         "pin": "Anheften: Eingabeparameter geöffnet lassen",
         "unpin": "Lösen: Eingabeparameter nach jeder Nachricht ausblenden"
-      }
+      },
+      "errorTitle": "Fehler",
+      "clearCache": "Cache leeren und neu laden",
+      "canvas": "Canvas",
+      "share": "Teilen",
+      "canvasMode": "Canvas-Modus",
+      "answerQuestionAbove": "Bitte beantworten Sie die Frage oben, um fortzufahren",
+      "optionalMessagePlaceholder": "Hier eingeben (optional)..."
+    },
+    "appCanvas": {
+      "errorTitle": "Fehler",
+      "backToChat": "Zurück zum Chat"
     }
   },
   "models": {
@@ -543,7 +599,16 @@
     "tryAgain": "Erneut versuchen",
     "backToHome": "Zurück zur Startseite",
     "malformedSseData": "Das Modell hat ungültige Daten gesendet, die nicht verarbeitet werden konnten. Dies kann auf ein Modellkonfigurationsproblem hinweisen. Bitte versuchen Sie es erneut oder kontaktieren Sie Ihren Administrator, wenn das Problem weiterhin besteht.",
-    "sseParsingError": "Fehler beim Verarbeiten der Serverantwort: {{error}}. Das Modell hat möglicherweise fehlerhafte Daten gesendet. Bitte versuchen Sie ein anderes Modell oder kontaktieren Sie den Support."
+    "sseParsingError": "Fehler beim Verarbeiten der Serverantwort: {{error}}. Das Modell hat möglicherweise fehlerhafte Daten gesendet. Bitte versuchen Sie ein anderes Modell oder kontaktieren Sie den Support.",
+    "failedToLoadApp": "Die App-Daten konnten nicht geladen werden. Bitte versuchen Sie es später erneut.",
+    "loadingFailed": "Die Apps konnten nicht geladen werden. Bitte versuchen Sie es später erneut.",
+    "promptsLoadingFailed": "Die Prompts konnten nicht geladen werden",
+    "noAppsAvailable": "Der Server liefert keine Apps",
+    "checkServer": "Prüfen Sie, ob der Server läuft und die Daten korrekt zurückgibt.",
+    "sendMessageFailed": "Die Nachricht konnte nicht gesendet werden.",
+    "feedbackSubmission": "Das Feedback konnte nicht gesendet werden. Bitte versuchen Sie es erneut.",
+    "clarificationFailed": "Die Antwort auf die Rückfrage konnte nicht gesendet werden.",
+    "fetchApps": "Die Apps konnten nicht geladen werden"
   },
   "network": {
     "offline": {
@@ -590,7 +655,12 @@
     "thinkingLevelMinimal": "Minimal",
     "thinkingLevelLow": "Niedrig",
     "thinkingLevelMedium": "Mittel",
-    "thinkingLevelHigh": "Hoch"
+    "thinkingLevelHigh": "Hoch",
+    "settingsDisabled": "Die Einstellungen sind für diese App deaktiviert.",
+    "includeChatHistory": "Chatverlauf in Anfragen einbeziehen",
+    "thinkingSettings": "Denk-Einstellungen",
+    "enableThinking": "Denkmodus aktivieren",
+    "showThoughts": "Denkprozess anzeigen"
   },
   "chatMessage": {
     "user": "Du",
@@ -697,7 +767,8 @@
     "readAloudResume": "Fortsetzen",
     "readAloudStop": "Vorlesen beenden",
     "readAloudError": "Vorlesen fehlgeschlagen: {{error}}",
-    "openImage": "Bild {{number}} öffnen"
+    "openImage": "Bild {{number}} öffnen",
+    "generatingResponse": "Antwort wird erstellt..."
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -721,7 +792,31 @@
     "fileProcessingError": "Fehler beim Verarbeiten der Datei. Bitte versuchen Sie es erneut.",
     "documentTooLarge": "„{{fileName}}“ ist groß (~{{estimatedTokens}} geschätzte Token) und überschreitet möglicherweise das Kontextfenster des Modells von {{tokenLimit}} Token. Die Anfrage könnte fehlschlagen. Erwägen Sie ein kürzeres Dokument oder wählen Sie ein Modell mit größerem Kontextfenster.",
     "documentTooLargeCombined": "Die {{fileCount}} angehängten Dokumente sind zusammen groß (~{{estimatedTokens}} geschätzte Token insgesamt) und überschreiten möglicherweise das Kontextfenster des Modells von {{tokenLimit}} Token. Die Anfrage könnte fehlschlagen. Entfernen Sie einige Dokumente oder wählen Sie ein Modell mit größerem Kontextfenster.",
-    "documentTooLargeFileItem": "{{fileName}}: ~{{estimatedTokens}} Token"
+    "documentTooLargeFileItem": "{{fileName}}: ~{{estimatedTokens}} Token",
+    "rendererError": "Renderer-Fehler",
+    "noComponentFound": "Kein Renderer gefunden",
+    "fileUploadDisabled": "Datei-Upload ist für diese App deaktiviert.",
+    "forbidden": {
+      "title": "Zugriff verweigert",
+      "message": "Der Zugriff auf diese Ressource ist nicht erlaubt.",
+      "goBack": "Zurück"
+    },
+    "notFound": {
+      "title": "Seite nicht gefunden",
+      "message": "Die gesuchte Seite wurde nicht gefunden.",
+      "returnHome": "Zur Startseite"
+    },
+    "serverError": {
+      "title": "Serverfehler",
+      "message": "Auf unserer Seite ist etwas schiefgelaufen.",
+      "subtitle": "Bitte versuchen Sie es später erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "unauthorized": {
+      "title": "Nicht autorisiert",
+      "message": "Sie haben keine Berechtigung für diese Seite.",
+      "goBack": "Zurück"
+    }
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
@@ -852,14 +947,31 @@
       "copyOptions": "Kopieroptionen",
       "downloadText": "als Text",
       "downloadMarkdown": "als Markdown",
-      "downloadHTML": "als HTML"
+      "downloadHTML": "als HTML",
+      "downloadOptions": "Download-Optionen",
+      "printPDF": "Als PDF drucken",
+      "title": "Dokument exportieren",
+      "export": "Exportieren"
     },
     "insertIntoDocument": "In Dokument einfügen",
     "voiceInput": {
       "tooltipManual": "In Editor diktieren (Strg+M) - manuell",
       "tooltipAutomatic": "In Editor diktieren (Strg+M) - automatisch",
       "ariaLabel": "Text in Editor diktieren"
-    }
+    },
+    "promptWithSelection": "Was möchten Sie mit dem ausgewählten Text tun?",
+    "promptPlaceholder": "Bitten Sie die KI, Ihnen bei Ihrem Dokument zu helfen...",
+    "confirmReplaceTitle": "Ersetzen des Inhalts bestätigen",
+    "confirmReplaceMessage": "Ihr Dokument enthält bereits Inhalt. Was möchten Sie mit dem neuen Inhalt tun?",
+    "currentContent": "Aktuelles Dokument",
+    "emptyDocument": "Leeres Dokument",
+    "newContent": "Neuer Inhalt",
+    "appendContent": "Inhalt anhängen",
+    "replaceContent": "Inhalt ersetzen",
+    "aiProcessing": "Die KI arbeitet...",
+    "placeholder": "Beginnen Sie zu schreiben oder erstellen Sie Ihr Dokument mit dem KI-Assistenten...",
+    "confirmClear": "Möchten Sie das Dokument und den Chatverlauf wirklich löschen?",
+    "confirmReplaceWithNewContentTitle": "Inhalt aus dem Chat"
   },
   "admin": {
     "chatHistory": {
@@ -6326,7 +6438,8 @@
     "size": "Größe",
     "modified": "Geändert",
     "googleDrive": {},
-    "nextcloud": {}
+    "nextcloud": {},
+    "virtualFile": "Cloud-Dokument"
   },
   "components": {
     "uploader": {
@@ -6355,7 +6468,9 @@
       "detail": {
         "page": "Seite {{current}} von {{total}}",
         "slide": "Folie {{current}} von {{total}}"
-      }
+      },
+      "dropZoneActive": "Ablagebereich aktiv. Loslassen, um Dateien hochzuladen.",
+      "dropFileHere": "Datei hier ablegen"
     },
     "statusDot": {
       "ok": "In Ordnung",
@@ -6370,7 +6485,8 @@
     "commentPlaceholder": "Erzähle uns mehr über deine Bewertung (optional)",
     "rated": "Bewertet",
     "sendFeedback": "Feedback senden",
-    "thankYou": "Danke für dein Feedback!"
+    "thankYou": "Danke für dein Feedback!",
+    "sending": "Wird gesendet..."
   },
   "auth": {
     "logout": "Abmelden",
@@ -6380,8 +6496,10 @@
       "signOut": "Abmelden",
       "signIn": "Anmelden",
       "closeLogin": "Anmeldedialog schließen",
-      "usage": "Nutzung"
-    }
+      "usage": "Nutzung",
+      "integrations": "Integrationen"
+    },
+    "userMenu": "Benutzermenü"
   },
   "widget": {
     "fallback": {
@@ -6739,7 +6857,12 @@
       "button": "Mit Ergebnissen chatten",
       "title": "Mit der Workflow-Ausgabe in einer App weiterchatten",
       "contextMessage": "Hier sind die Ergebnisse des Workflows „{{name}}“:",
-      "failed": "Der Chat konnte nicht gestartet werden. Bitte versuchen Sie es erneut."
+      "failed": "Der Chat konnte nicht gestartet werden. Bitte versuchen Sie es erneut.",
+      "selectApp": "App auswählen",
+      "selectAppDescription": "Wählen Sie eine App, um mit dem Ergebnis des Workflows weiterzuchatten",
+      "searchApps": "Apps durchsuchen...",
+      "noApps": "Keine Apps verfügbar",
+      "noMatchingApps": "Keine App passt zu Ihrer Suche"
     },
     "newWorkflow": "Neuer Workflow",
     "modelUsed": "Modell",
@@ -6792,7 +6915,19 @@
       "showRawJson": "Rohdaten anzeigen",
       "hideRawJson": "Rohdaten ausblenden",
       "longValueShowMore": "Vollständigen Wert anzeigen",
-      "longValueShowLess": "Weniger anzeigen"
+      "longValueShowLess": "Weniger anzeigen",
+      "relevantData": "Relevante Daten",
+      "submitError": "Die Antwort konnte nicht gesendet werden",
+      "title": "Aktion erforderlich",
+      "selectOption": "Option auswählen",
+      "yourAnswer": "Ihre Antwort",
+      "otherAnswer": "Sonstiges (eigene Antwort eingeben)",
+      "answerPlaceholder": "Antwort eingeben",
+      "additionalInfo": "Zusätzliche Informationen",
+      "submitting": "Wird gesendet...",
+      "submit": "Antwort senden",
+      "skip": "Diese Frage überspringen",
+      "expiresAt": "Läuft ab"
     },
     "startModal": {
       "aboutTitle": "Über diesen Workflow",
@@ -6807,7 +6942,19 @@
         "loadError": "Ihre Projekte konnten nicht geladen werden.",
         "unavailable": "Projekte sind hier für Sie nicht verfügbar. Geben Sie eine Projekt-ID ein.",
         "notListed": "{{id}} (nicht in Ihren Projekten)"
-      }
+      },
+      "title": "Workflow starten",
+      "model": "Modell",
+      "loadingModels": "Modelle werden geladen...",
+      "defaultModel": "Standard des Workflows verwenden",
+      "modelHelp": "Wählen Sie das KI-Modell, das dieser Workflow verwenden soll",
+      "inputFields": "Eingabe",
+      "message": "Nachricht (optional)",
+      "messagePlaceholder": "Geben Sie Ihre Nachricht ein oder lassen Sie das Feld leer, um mit den Standardwerten zu starten...",
+      "advanced": "Erweitert: Roh-JSON",
+      "advancedHelp": "JSON-Daten direkt bearbeiten. Änderungen hier überschreiben die Formularfelder.",
+      "starting": "Wird gestartet...",
+      "start": "Workflow starten"
     },
     "emptyState": {
       "available": {
@@ -7029,7 +7176,86 @@
           "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
         }
       }
-    }
+    },
+    "checkpointAwaiting": "Wartet auf Ihre Eingabe",
+    "join": "Beitreten",
+    "view": "Anzeigen",
+    "progress": {
+      "parameters": "Parameter",
+      "error": "Fehler",
+      "errors": "Fehler",
+      "outputVariable": "Ausgabevariable",
+      "decisionResult": "Entscheidungsergebnis",
+      "humanResponse": "Antwort der Person",
+      "rawOutput": "Ausgabe",
+      "title": "Ausführungsfortschritt",
+      "collapseAll": "Alle zuklappen",
+      "expandAll": "Alle aufklappen",
+      "iterations": "Iterationen",
+      "plannedTasks": "Geplante Aufgaben",
+      "tasks": "Aufgaben",
+      "noNodes": "Wartet auf den Start..."
+    },
+    "startError": "Der Workflow konnte nicht gestartet werden",
+    "noDescription": "Keine Beschreibung vorhanden.",
+    "card": {
+      "edit": "Workflow bearbeiten"
+    },
+    "start": "Workflow starten",
+    "filter": {
+      "all": "Alle",
+      "running": "Läuft",
+      "paused": "Pausiert",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen"
+    },
+    "loadingExecutions": "Ausführungen werden geladen...",
+    "fileCount": "{{count}} Datei(en)",
+    "loadingExecution": "Ausführung wird geladen...",
+    "executionNotFound": {
+      "title": "Ausführung nicht gefunden",
+      "description": "Diese Ausführung wurde nicht gefunden."
+    },
+    "backToWorkflows": "Zurück zu den Workflows",
+    "output": {
+      "copyToClipboard": "In die Zwischenablage kopieren",
+      "copied": "Kopiert",
+      "copy": "Kopieren",
+      "viewFullscreen": "Bericht im Vollbild anzeigen",
+      "view": "Anzeigen",
+      "showFull": "Gesamten Inhalt anzeigen",
+      "showLess": "Weniger anzeigen",
+      "chars": "Zeichen",
+      "additionalData": "Zusätzliche Daten",
+      "field": "Feld",
+      "fields": "Felder"
+    },
+    "startedAt": "Gestartet",
+    "completedAt": "Abgeschlossen",
+    "executionId": "Ausführung",
+    "editWorkflow": "Workflow bearbeiten",
+    "exportState": "Ausführungsstatus zur Fehlersuche exportieren",
+    "export": "Exportieren",
+    "cancel": "Abbrechen",
+    "status": "Status",
+    "nodesExecuted": "Ausgeführt",
+    "active": "Aktiv",
+    "failed": "Fehlgeschlagen",
+    "metrics": "Kennzahlen",
+    "totalDuration": "Dauer",
+    "totalTokens": "Tokens gesamt",
+    "inputTokens": "Eingabe",
+    "outputTokens": "Ausgabe",
+    "approvedSuccess": "Workflow genehmigt!",
+    "completedSuccess": "Workflow erfolgreich abgeschlossen!",
+    "rejectedMessage": "Der Workflow wurde abgelehnt",
+    "cancelledMessage": "Der Workflow wurde abgebrochen",
+    "failedMessage": "Der Workflow ist fehlgeschlagen",
+    "outputTitle": "Workflow-Ausgabe",
+    "showMoreChars": "{{count}} weitere anzeigen",
+    "downloadAllJson": "Gesamte Ausgabe als JSON herunterladen",
+    "downloadJson": "JSON herunterladen",
+    "loading": "Workflows werden geladen..."
   },
   "documentTitle": {
     "admin": "Admin",
@@ -7186,7 +7412,14 @@
     },
     "finish": {
       "addModels": "Modelle hinzufügen",
-      "addModelsDesc": "Noch ist kein Modell eingerichtet. Wählen Sie die Modelle von {{provider}} aus, die iHub nutzen soll."
+      "addModelsDesc": "Noch ist kein Modell eingerichtet. Wählen Sie die Modelle von {{provider}} aus, die iHub nutzen soll.",
+      "createApp": "Erste App erstellen",
+      "createAppDesc": "Einen eigenen KI-Assistenten mit System-Prompt aufbauen",
+      "inviteUsers": "Benutzer einladen",
+      "inviteUsersDesc": "Festlegen, wer auf die Plattform zugreifen darf",
+      "configureSso": "SSO einrichten",
+      "configureSsoDesc": "OIDC-, LDAP- oder NTLM-Anmeldung einrichten",
+      "skipToApps": "Überspringen – zu den Apps"
     }
   },
   "apps": {
@@ -7436,7 +7669,8 @@
     "scheduled": "Geplant",
     "inProject": "Im Projekt {{name}}",
     "sharedFile": "Datei",
-    "untitledFile": "Datei ohne Titel"
+    "untitledFile": "Datei ohne Titel",
+    "noResultsSoFar": "Unter den bisher geladenen Chats passt keiner zu Ihrer Suche"
   },
   "transcription": {
     "record": "Audio für das ausgewählte Modell aufnehmen",
@@ -9605,5 +9839,45 @@
       "editHint": "Der Assistent erstellt eine neue Datei mit der Änderung. Das Original bleibt unverändert.",
       "label": "Aktionen zur Auswahl"
     }
+  },
+  "clarification": {
+    "skipped": "Übersprungen",
+    "typeYourAnswer": "Antwort eingeben...",
+    "fileUploadPlaceholder": "Datei-Upload ist noch nicht verfügbar",
+    "skip": "Überspringen",
+    "skipQuestion": "Diese Frage überspringen",
+    "submit": "Senden",
+    "submitAnswer": "Antwort senden",
+    "submitting": "Wird gesendet...",
+    "keyboardHint": "Zum Senden Strg+Eingabe drücken",
+    "other": "Sonstiges",
+    "selectOptions": "Optionen auswählen",
+    "enterCustomValue": "Antwort eingeben...",
+    "customAnswer": "Eigene Antwort",
+    "selectOption": "Option auswählen",
+    "itemsSelected": "{{count}} Einträge ausgewählt",
+    "searchOptions": "Optionen durchsuchen...",
+    "noOptionsFound": "Keine Optionen gefunden",
+    "selectedCount": "{{count}} ausgewählt",
+    "validation": {
+      "minValue": "Der Wert muss mindestens {{min}} betragen",
+      "maxValue": "Der Wert darf höchstens {{max}} betragen",
+      "dateRange": "Das Startdatum muss vor dem Enddatum liegen"
+    },
+    "textPlaceholder": "Antwort eingeben...",
+    "numberPlaceholder": "Zahl eingeben...",
+    "numberRange": "Bereich: {{min}} – {{max}}",
+    "numberMin": "Minimum: {{min}}",
+    "numberMax": "Maximum: {{max}}",
+    "datePlaceholder": "Datum auswählen",
+    "startDate": "Startdatum",
+    "endDate": "Enddatum"
+  },
+  "upload": {
+    "fileTypeNotSupported": "Dateityp wird nicht unterstützt",
+    "fileTooLarge": "Die Datei überschreitet das Größenlimit ({{limit}} MB)"
+  },
+  "smartSearch": {
+    "placeholder": "Apps durchsuchen..."
   }
 }

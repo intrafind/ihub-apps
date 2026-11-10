@@ -10,6 +10,7 @@
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
 import de from '../../../shared/i18n/de.json';
+import ui from '../../../server/defaults/config/ui.json';
 import { resolveTranslationRefs } from '../../../client/src/utils/translationRefs';
 
 const LOCALES = { en, de };
@@ -92,7 +93,44 @@ describe('resolveTranslationRefs', () => {
     expect(resolveTranslationRefs(undefined, t)).toBeUndefined();
   });
 
+  it('passes the values for the placeholders of the referenced text', () => {
+    const withYear = (key, options) =>
+      key === 'footer.legal' ? `© ${options.year} Acme` : options.defaultValue;
+    expect(resolveTranslationRefs('$t(footer.legal)', withYear, { year: 2026 })).toBe(
+      '© 2026 Acme'
+    );
+  });
+
   it('turns a reference to a missing key into an empty string', () => {
     expect(resolveTranslationRefs('$t(no.such.key)', t)).toBe('');
+  });
+});
+
+describe('shipped ui.json', () => {
+  const shipped = ['header.tagline', 'footer.text'].map(path => ({
+    path,
+    value: path.split('.').reduce((node, part) => node[part], ui)
+  }));
+
+  it.each(shipped)('refers to translations that exist: $path', ({ value }) => {
+    for (const [language, text] of Object.entries(value)) {
+      const locale = LOCALES[language];
+      const refs = [...text.matchAll(/\$t\(([^()\s]+)\)/g)].map(match => match[1]);
+      expect(refs.length).toBeGreaterThan(0);
+      for (const ref of refs) expect(typeof valueAt(locale, ref)).toBe('string');
+    }
+  });
+
+  it('shows the year in the footer text', async () => {
+    const instance = i18next.createInstance();
+    await instance.init({
+      lng: 'en',
+      resources: { en: { translation: en } },
+      interpolation: { escapeValue: false }
+    });
+    const resolved = resolveTranslationRefs(ui.footer.text.en, instance.t.bind(instance), {
+      year: 2031
+    });
+    expect(resolved).toBe('© 2031 IntraFind Software AG. All rights reserved.');
   });
 });

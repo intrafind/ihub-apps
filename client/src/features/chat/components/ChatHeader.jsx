@@ -87,7 +87,7 @@ function ChatHeader({
             <button
               onClick={handleBack}
               className="mr-2 bg-gray-200 hover:bg-gray-300 text-gray-800 p-1.5 rounded-full flex items-center justify-center h-8 w-8 sm:mr-3 sm:p-2 sm:h-10 sm:w-10"
-              title={t('pages.appChat.backToApps')}
+              title={t('common.backToAppsList', 'Back to apps list')}
               aria-label={t('common.backToAppsList', 'Back to apps list')}
             >
               <Icon name="arrowLeft" size="sm" />
