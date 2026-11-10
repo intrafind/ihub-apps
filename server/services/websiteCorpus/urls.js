@@ -45,22 +45,43 @@ export function hostKey(hostname) {
     .replace(/^www\./, '');
 }
 
+const DEFAULT_PORTS = new Set(['', '80', '443']);
+
+/** A URL's port when it is not a default one (`''` for 80, 443 and none). */
+export function nonDefaultPort(port) {
+  const text = String(port ?? '');
+  return DEFAULT_PORTS.has(text) ? '' : text;
+}
+
 /**
- * Whether a URL is on the corpus' site: an http(s) URL on the site's host (a
- * leading `www.` does not count). A sitemap may list other hosts; a corpus
- * never fetches from them, which keeps a crafted sitemap from sending the
- * server to arbitrary addresses.
+ * What identifies a site: its host (as `hostKey`) and a port that is not 80 or
+ * 443. `http` and `https` of one host are one site (a site redirects from the
+ * one to the other), another port is another service.
+ *
+ * @param {URL} url
+ * @returns {string}
+ */
+export function siteKeyOf(url) {
+  const port = nonDefaultPort(url.port);
+  return `${hostKey(url.hostname)}${port ? `:${port}` : ''}`;
+}
+
+/**
+ * Whether a URL is on the corpus' site: an http(s) URL on the site's host and
+ * port (a leading `www.` does not count, http and https are the same site). A
+ * sitemap may list other hosts or ports; a corpus never fetches from them, which
+ * keeps a crafted sitemap from sending the server to arbitrary addresses.
  *
  * @param {string} url
- * @param {string} siteHost - A host name, as `hostKey` takes it
+ * @param {string} siteKey - From {@link siteKeyOf}; a bare host name means its default ports
  * @returns {boolean}
  */
-export function onSite(url, siteHost) {
+export function onSite(url, siteKey) {
   try {
     const parsed = new URL(url);
     return (
       (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-      hostKey(parsed.hostname) === hostKey(siteHost)
+      siteKeyOf(parsed) === hostKey(siteKey)
     );
   } catch {
     return false;

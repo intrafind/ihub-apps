@@ -1523,7 +1523,8 @@ the prompt" is a realistic alternative to retrieval.
 - Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
   user whose crawl was refused can ask an admin to allow the host, and the admin approves or
   declines under **Admin → Integrations → Requests** (the sidebar counts open requests). An approval
-  covers only the Website Corpus. The setting **Allow company-internal websites** lets every crawl
+  covers only the Website Corpus and a host's web ports (80 and 443; another port is approved as
+  `host:port`). The setting **Allow company-internal websites** lets every crawl
   reach the company network instead. Loopback, link-local and cloud metadata addresses stay blocked
   in both cases.
 - Tokens are counted with the server's token estimator (`o200k_base`); the report says which

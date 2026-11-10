@@ -80,8 +80,9 @@ of text, and about 130 ms for 400 KB, which is the longest page a corpus keeps.
   skipped only for hosts on `ssl.domainWhitelist`. A host listed platform-wide in
   `ssrf.allowedHosts` or `ssl.domainWhitelist` can be sized too; for the rest see
   [Internal websites](#internal-websites).
-- Only pages on the site's own host are fetched. A sitemap or a redirect that points elsewhere is
-  not followed into the corpus.
+- Only pages on the site's own host and port are fetched (http and https of one host count as one
+  site; a port other than 80 and 443 is another site). A sitemap or a page that lists another host
+  or port is ignored, and a redirect that leads there is not followed: nothing is sent to it.
 - The site's `robots.txt` is honored (`User-agent: *` rules). Pages it forbids are counted as
   blocked and never fetched.
 - Requests to sites are throttled across all workers: two at a time, 400 ms apart.
@@ -105,8 +106,9 @@ company-internal address and offers `website_corpus_request_domain`. The user se
 a short reason; an admin decides under **Admin → Integrations → Requests → Internal websites for the
 Website Corpus** (the admin sidebar counts open requests next to Integrations):
 
-- **Approve** lets the Website Corpus reach that host, for every user, within about 30 seconds on
-  every worker. **Decline** keeps it refused and shows the note to the user who asks again. An
+- **Approve** lets the Website Corpus reach that host's web ports (80 and 443), for every user,
+  within about 30 seconds on every worker. A site on another port is approved as `host:port`
+  (`intranet.corp:8443`), which covers that port only. **Decline** keeps it refused and shows the note to the user who asks again. An
   approval can be withdrawn and a decline reversed at any time.
 - One host is one request, however many users ask. A user can have 10 open requests.
 - An admin can also **allow a host without a request**, with a wildcard such as `*.corp.example`
@@ -116,16 +118,20 @@ Website Corpus** (the admin sidebar counts open requests next to Integrations):
 **Allow all internal websites (a setting).** **Allow company-internal websites** on the installation
 lets every crawl of every user of this integration reach the company network, with no request. Turn it
 on only where all those users may see what the server can read inside the network: the crawl keeps
-the text of every page it fetches, and the user can read it back.
+the text of every page it fetches, and the user can read it back. The setting is not limited to
+the office network or to web ports: it includes the machine iHub runs on (by its non-loopback
+address or service name), neighbouring containers, cluster control planes and any port of them.
 
 **What is never allowed.** Whatever is approved or switched on, the server does not fetch loopback
 (`127.0.0.0/8`, `::1`, `localhost`), link-local addresses (`169.254.0.0/16`, `fe80::/10`), reserved
 ranges, or the cloud metadata services (`169.254.169.254` on AWS, Azure and GCP, `fd00:ec2::254`,
-Alibaba's `100.100.100.200`). What an approval or the setting allows is the company network:
+Alibaba's `100.100.100.200`, Azure's `168.63.129.16`, `192.0.0.0/24`). What an approval or the setting allows is the company network:
 `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` and IPv6 `fc00::/7`. The address is
 still resolved and pinned for the connection, and every redirect hop is checked again, so an
-approved host cannot send the crawler on to another internal one. Only the site's own host is
-fetched in any case.
+approved host cannot send the crawler on to another internal one. Only the site's own host and
+port is fetched in any case. Behind a proxy, an internal host is fetched only when
+`proxy.noProxy` lists it (the proxy would resolve the name itself, so the address check could not
+hold); otherwise it is refused.
 
 **API.** `GET /api/admin/website-corpus/domains` lists the requests (`{ items, nextCursor,
 openCount }`, open ones first), `POST` on the same path allows a host (`201`), `POST …/{id}/_approve`
@@ -150,7 +156,7 @@ namespace, one document per host, until an admin removes them.
 | Pages per crawl call               | 30 by default, 60 at most; a call stops starting pages after 22 seconds |
 | Corpora per user                   | 5                                                |
 | Retention                          | 14 days                                          |
-| Near-duplicate pairs listed        | 25 (the report gives the total)                  |
+| Near-duplicate pairs listed        | 25 (the report gives the total; counting stops after 3,000 candidate pairs, and the report then says "at least") |
 | Requests for websites                | 10 open per user, 20 requesters shown per host; at most 500 approved hosts are honoured |
 
 ## Code

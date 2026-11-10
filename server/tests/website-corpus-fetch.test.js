@@ -110,24 +110,57 @@ describe('website corpus fetch', () => {
   });
 
   test('revalidates every redirect hop: a redirect to a private address is refused', async () => {
+    const { fetchWebPage } = await import('../tools/webContentExtractor.js');
     throttledFetchMock.mockResolvedValueOnce(
       response({ status: 302, location: 'http://169.254.169.254/x' })
     );
-    await expect(
-      fetchSitePage('http://93.184.216.34/start', { siteHost: '93.184.216.34' })
-    ).rejects.toMatchObject({
+    await expect(fetchWebPage('http://93.184.216.34/start')).rejects.toMatchObject({
       message: expect.stringContaining('private/internal IP addresses')
     });
     expect(throttledFetchMock).toHaveBeenCalledTimes(1);
   });
 
-  test('does not keep a page a redirect moved to another site', async () => {
+  test('does not follow a redirect to another site: nothing is sent there', async () => {
     throttledFetchMock
       .mockResolvedValueOnce(response({ status: 301, location: 'http://93.184.216.40/landing' }))
       .mockResolvedValueOnce(response({ body: '<main>fremd</main>' }));
     const page = await fetchSitePage('http://93.184.216.34/start', { siteHost: '93.184.216.34' });
     expect(page.offSite).toBe(true);
     expect(page.html).toBeNull();
+    expect(throttledFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not follow a redirect to another port of the same host', async () => {
+    throttledFetchMock.mockResolvedValueOnce(
+      response({ status: 302, location: 'http://93.184.216.34:8500/v1/kv/?recurse' })
+    );
+    const page = await fetchSitePage('http://93.184.216.34/start', { siteHost: '93.184.216.34' });
+    expect(page.offSite).toBe(true);
+    expect(throttledFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test('a robots.txt or sitemap that redirects off the site is no robots.txt: nothing is sent there', async () => {
+    const { fetchSitemapText } = await import('../services/websiteCorpus/fetch.js');
+    throttledFetchMock.mockResolvedValue(
+      response({ status: 302, location: 'http://93.184.216.40:8080/admin' })
+    );
+    expect(await fetchRobotsText('http://93.184.216.34')).toBeNull();
+    expect(await fetchSitemapText('http://93.184.216.34/sitemap.xml')).toBeNull();
+    expect(throttledFetchMock).toHaveBeenCalledTimes(2);
+    expect(throttledFetchMock.mock.calls.map(call => call[1])).toEqual([
+      'http://93.184.216.34/robots.txt',
+      'http://93.184.216.34/sitemap.xml'
+    ]);
+  });
+
+  test('a sitemap redirect on the same site is followed', async () => {
+    const { fetchSitemapText } = await import('../services/websiteCorpus/fetch.js');
+    throttledFetchMock
+      .mockResolvedValueOnce(
+        response({ status: 301, location: 'https://93.184.216.34/sitemap.xml' })
+      )
+      .mockResolvedValueOnce(response({ type: 'application/xml', body: '<urlset></urlset>' }));
+    expect(await fetchSitemapText('http://93.184.216.34/sitemap.xml')).toBe('<urlset></urlset>');
   });
 
   test('keeps a redirect that stays on the site', async () => {
@@ -188,11 +221,12 @@ describe('website corpus fetch', () => {
     });
 
     test('asks the policy for every hop: a redirect to another internal host is refused', async () => {
+      const { fetchWebPage } = await import('../tools/webContentExtractor.js');
       throttledFetchMock.mockResolvedValueOnce(
         response({ status: 302, location: 'http://10.9.9.9/x' })
       );
       await expect(
-        fetchSitePage('http://10.1.2.3/', { siteHost: '10.1.2.3', policy: only('10.1.2.3') })
+        fetchWebPage('http://10.1.2.3/', { policy: only('10.1.2.3') })
       ).rejects.toMatchObject({
         message: expect.stringContaining('private/internal IP addresses')
       });
@@ -200,14 +234,12 @@ describe('website corpus fetch', () => {
     });
 
     test('a redirect from an allowed host to the metadata service is refused, even for a policy that allows all', async () => {
+      const { fetchWebPage } = await import('../tools/webContentExtractor.js');
       throttledFetchMock.mockResolvedValueOnce(
         response({ status: 302, location: 'http://169.254.169.254/latest/meta-data/' })
       );
       await expect(
-        fetchSitePage('http://10.1.2.3/', {
-          siteHost: '10.1.2.3',
-          policy: { allowPrivate: () => true }
-        })
+        fetchWebPage('http://10.1.2.3/', { policy: { allowPrivate: () => true } })
       ).rejects.toMatchObject({
         message: expect.stringContaining('private/internal IP addresses')
       });
@@ -219,6 +251,43 @@ describe('website corpus fetch', () => {
       ).rejects.toMatchObject({
         message: expect.stringContaining('private/internal IP addresses')
       });
+    });
+
+    test('the policy is asked with the port too, so an approval can mean web ports only', async () => {
+      const seen = [];
+      const policy = {
+        allowPrivate: (hostname, port) => {
+          seen.push([hostname, port]);
+          return port === '';
+        }
+      };
+      throttledFetchMock.mockResolvedValueOnce(response());
+      await fetchSitePage('http://10.1.2.3/', { siteHost: '10.1.2.3', policy });
+      await expect(
+        fetchSitePage('http://10.1.2.3:2375/containers/json', { siteHost: '10.1.2.3:2375', policy })
+      ).rejects.toMatchObject({
+        message: expect.stringContaining('private/internal IP addresses')
+      });
+      expect(seen).toEqual([
+        ['10.1.2.3', ''],
+        ['10.1.2.3', '2375']
+      ]);
+    });
+
+    test('refuses an internal host that would be fetched through a proxy', async () => {
+      platform = {
+        ssl: { domainWhitelist: [] },
+        proxy: { enabled: true, http: 'http://proxy.test:3128', https: 'http://proxy.test:3128' }
+      };
+      await expect(
+        fetchSitePage('http://10.1.2.3/', { siteHost: '10.1.2.3', policy: only('10.1.2.3') })
+      ).rejects.toMatchObject({ message: expect.stringContaining('proxy.noProxy') });
+      expect(throttledFetchMock).not.toHaveBeenCalled();
+      // The public rule through a proxy is unchanged.
+      throttledFetchMock.mockResolvedValueOnce(response());
+      expect(
+        (await fetchSitePage('http://93.184.216.34/', { siteHost: '93.184.216.34' })).status
+      ).toBe(200);
     });
 
     test('the host check answers the way the fetch will', async () => {

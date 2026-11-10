@@ -22,7 +22,11 @@ import {
   selectContent
 } from '../sources/documentRetrieval.js';
 import logger from '../utils/logger.js';
-import { enhanceFetchOptions, isSsrfTrustedHost } from '../utils/httpConfig.js';
+import {
+  describeProxyRouting,
+  enhanceFetchOptions,
+  isSsrfTrustedHost
+} from '../utils/httpConfig.js';
 import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
 import {
   ACCESS_DENIED_CODE,
@@ -65,7 +69,7 @@ function createError(message, code) {
  * one host over to another.
  *
  * @param {URL} parsedUrl - The URL for this hop
- * @param {{allowPrivate?: (hostname: string) => boolean}} [policy]
+ * @param {{allowPrivate?: (hostname: string, port: string) => boolean}} [policy]
  * @returns {Promise<{addresses: string[], allowPrivate: boolean}|null>} Validated
  *   addresses to pin the connection to, or null when the whitelist bypass applies
  *   (no DNS resolution/pinning is performed in that case)
@@ -74,7 +78,18 @@ async function assertHopIsSafe(parsedUrl, policy = null) {
   if (isSsrfTrustedHost(parsedUrl.hostname)) {
     return null;
   }
-  const allowPrivate = Boolean(policy?.allowPrivate?.(parsedUrl.hostname));
+  const allowPrivate = Boolean(
+    policy?.allowPrivate?.(parsedUrl.hostname.replace(/^\[|\]$/g, ''), parsedUrl.port)
+  );
+  if (allowPrivate && describeProxyRouting(parsedUrl.href).decision === 'proxied') {
+    // Through a proxy the proxy resolves the name, so the address checked here is not the
+    // one connected to, and a company-internal address cannot be told from loopback.
+    throw createError(
+      'Access to a company-internal host through a proxy is not allowed: add the host to ' +
+        'proxy.noProxy so it is fetched directly',
+      'SSRF_BLOCKED'
+    );
+  }
   const result = await assertPublicTarget(parsedUrl, { allowPrivate });
   if (!result.ok) {
     throw createError(
@@ -105,7 +120,8 @@ async function fetchPage(
     signal,
     throttleId = 'read_url',
     headers = null,
-    policy = null
+    policy = null,
+    stayOn = null
   }
 ) {
   let hopUrl = validUrl;
@@ -175,6 +191,10 @@ async function fetchPage(
       if (!['http:', 'https:'].includes(nextUrl.protocol)) {
         throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
       }
+      if (stayOn && !stayOn(nextUrl)) {
+        // Refused before any request goes to it; the caller drops this redirect response.
+        return { response, finalUrl: nextUrl, redirectRefused: true };
+      }
       hopUrl = nextUrl;
       continue;
     }
@@ -201,12 +221,18 @@ async function fetchPage(
  *   chat's page reads behind it
  * @param {Object<string, string>} [options.headers] - Extra request headers
  *   (`Accept`, `If-None-Match`, `If-Modified-Since`), sent on every hop
- * @param {{allowPrivate?: (hostname: string) => boolean}} [options.policy] - Lets
+ * @param {{allowPrivate?: (hostname: string, port: string) => boolean}} [options.policy] - Lets
  *   this call reach company-internal addresses of the hosts it names; the
- *   default is the public-addresses-only rule
- * @returns {Promise<{response: Object, finalUrl: URL}>}
+ *   default is the public-addresses-only rule. Not applied through a proxy
+ * @param {(url: URL) => boolean} [options.stayOn] - Asked before a redirect is
+ *   followed; when it says no, nothing is sent to the target and the result is the
+ *   redirect response with `redirectRefused: true` and `finalUrl` the refused target
+ * @returns {Promise<{response: Object, finalUrl: URL, redirectRefused?: boolean}>}
  */
-export async function fetchWebPage(url, { language, signal, throttleId, headers, policy } = {}) {
+export async function fetchWebPage(
+  url,
+  { language, signal, throttleId, headers, policy, stayOn } = {}
+) {
   const validUrl = new URL(url);
   if (!['http:', 'https:'].includes(validUrl.protocol)) {
     throw createError('Only HTTP and HTTPS URLs are supported', 'UNSUPPORTED_PROTOCOL');
@@ -218,7 +244,8 @@ export async function fetchWebPage(url, { language, signal, throttleId, headers,
     signal,
     throttleId,
     headers: sanitizeHeaders(headers),
-    policy: policy && typeof policy.allowPrivate === 'function' ? policy : null
+    policy: policy && typeof policy.allowPrivate === 'function' ? policy : null,
+    stayOn: typeof stayOn === 'function' ? stayOn : null
   });
 }
 

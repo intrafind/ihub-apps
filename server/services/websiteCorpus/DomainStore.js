@@ -21,6 +21,7 @@ import crypto from 'node:crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { isDomainWhitelisted } from '../../utils/httpConfig.js';
+import { nonDefaultPort } from './urls.js';
 
 export const DOMAINS_NAMESPACE = RUNTIME_NAMESPACES.websiteCorpusDomains;
 
@@ -63,10 +64,27 @@ export function domainIdFor(host) {
 
 export const isDomainId = value => typeof value === 'string' && /^wd_[a-f0-9]{32}$/.test(value);
 
+const HOST_NAME = /^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$/;
+const IPV6_LITERAL = /^[0-9a-f:.]+$/;
+
 /**
- * A host as it is stored: a lower-case host name or IP address, without scheme,
- * port or path. A full URL is reduced to its host. `*.example.corp` is accepted
- * only with `allowWildcard` (an admin's entry, never a user's request).
+ * Split a stored host into its name and its port (`''` for none). An IPv6 literal
+ * has no port.
+ *
+ * @param {string} host - `name` or `name:port`
+ * @returns {{name: string, port: string}}
+ */
+export function splitHost(host) {
+  const match = /^([^:]+):(\d{1,5})$/.exec(host);
+  return match ? { name: match[1], port: match[2] } : { name: host, port: '' };
+}
+
+/**
+ * A host as it is stored: a lower-case host name or IP address, with a port only
+ * when it is not 80 or 443, without scheme or path. A full http(s) URL is
+ * reduced to its host. `*.example.corp` is accepted only with `allowWildcard`
+ * (an admin's entry, never a user's request). Only letters, digits, `.`, `-` and
+ * `_` are accepted, so what is stored is what was checked.
  *
  * @param {string} input
  * @param {{allowWildcard?: boolean}} [options]
@@ -81,19 +99,30 @@ export function normalizeHost(input, { allowWildcard = false } = {}) {
   if (text.startsWith('*.')) {
     if (!allowWildcard) throw fail('Ask for one host, not a pattern such as *.example.corp');
     const rest = normalizeHost(text.slice(2));
-    if (!rest.includes('.'))
+    if (!splitHost(rest).name.includes('.'))
       throw fail('A wildcard needs a domain below it, such as *.example.corp');
     return `*.${rest}`;
   }
-  let hostname;
+  let url;
   try {
-    hostname = new URL(text.includes('://') ? text : `https://${text}`).hostname;
+    url = new URL(text.includes('://') ? text : `https://${text}`);
   } catch {
     throw fail(`"${text.slice(0, 80)}" is not a valid host name`);
   }
-  hostname = hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (!hostname || hostname.length > MAX_HOST_CHARS) throw fail('The host name is not valid');
-  return hostname;
+  if (url.protocol !== 'https:' && url.protocol !== 'http:')
+    throw fail('Give a host name, or an http(s) address');
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const isIpv6 = hostname.includes(':');
+  const valid = isIpv6
+    ? IPV6_LITERAL.test(hostname)
+    : HOST_NAME.test(hostname) && !hostname.includes('..');
+  if (!valid || hostname.length > MAX_HOST_CHARS) {
+    throw fail(
+      `"${text.slice(0, 80)}" is not a valid host name: use letters, digits, dots and hyphens`
+    );
+  }
+  const port = isIpv6 ? '' : nonDefaultPort(url.port);
+  return port ? `${hostname}:${port}` : hostname;
 }
 
 function cleanText(value, max, what) {
@@ -115,6 +144,7 @@ export class DomainStore {
     this.documents = documents;
     this.locks = locks;
     this.approvedCache = null;
+    this.generation = 0;
   }
 
   isAvailable() {
@@ -139,10 +169,19 @@ export class DomainStore {
     return doc?.data || null;
   }
 
-  async _write(entry) {
+  /** The approved hosts are read again: the list changed, here and (after the cache time) elsewhere. */
+  _changed() {
+    this.generation += 1;
     this.approvedCache = null;
+  }
+
+  async _write(entry) {
     const body = { ...entry, updatedAt: new Date().toISOString() };
-    await this.documents.put(DOMAINS_NAMESPACE, entry.id, body, { ownerId: entry.ownerId });
+    try {
+      await this.documents.put(DOMAINS_NAMESPACE, entry.id, body, { ownerId: entry.ownerId });
+    } finally {
+      this._changed();
+    }
     return body;
   }
 
@@ -185,30 +224,53 @@ export class DomainStore {
         ].slice(-MAX_REQUESTERS_PER_HOST);
         return { entry: await this._write({ ...existing, requesters }), created: false };
       }
-      const list = await this.documents.list(DOMAINS_NAMESPACE, { ownerId: user.id, limit: 200 });
-      const open = (list.items || []).filter(
-        doc => doc.data?.status === DOMAIN_STATUSES.REQUESTED && doc.data.ownerId === user.id
-      ).length;
-      if (open >= MAX_OPEN_REQUESTS_PER_USER) {
-        throw new DomainError(
-          'TOO_MANY_REQUESTS',
-          `You already have ${open} open requests for websites. Wait for an admin to decide on some of them.`
-        );
-      }
-      const entry = {
-        id,
-        host: name,
-        status: DOMAIN_STATUSES.REQUESTED,
-        source: 'request',
-        ownerId: user.id,
-        requesters: [{ userId: user.id, name: personOf(user).name, reason: why, at: now }],
-        createdAt: now,
-        decidedBy: null,
-        decidedAt: null,
-        note: null
-      };
-      return { entry: await this._write(entry), created: true };
+      // One lock per user, so parallel requests for different hosts cannot all pass the limit.
+      const userKey = `u_${crypto.createHash('sha256').update(String(user.id)).digest('hex').slice(0, 24)}`;
+      return this._locked(userKey, async () => {
+        const open = await this._openRequestsOf(user.id);
+        if (open >= MAX_OPEN_REQUESTS_PER_USER) {
+          throw new DomainError(
+            'TOO_MANY_REQUESTS',
+            `You already have ${open} open requests for websites. Wait for an admin to decide on some of them.`
+          );
+        }
+        return this._create({ id, name, user, why, now });
+      });
     });
+  }
+
+  async _openRequestsOf(userId) {
+    let open = 0;
+    let cursor = null;
+    do {
+      const page = await this.documents.list(DOMAINS_NAMESPACE, {
+        ownerId: userId,
+        limit: 200,
+        ...(cursor ? { cursor } : {})
+      });
+      for (const doc of page.items || []) {
+        if (doc.data?.status === DOMAIN_STATUSES.REQUESTED && doc.data.ownerId === userId)
+          open += 1;
+      }
+      cursor = page.nextCursor || null;
+    } while (cursor);
+    return open;
+  }
+
+  async _create({ id, name, user, why, now }) {
+    const entry = {
+      id,
+      host: name,
+      status: DOMAIN_STATUSES.REQUESTED,
+      source: 'request',
+      ownerId: user.id,
+      requesters: [{ userId: user.id, name: personOf(user).name, reason: why, at: now }],
+      createdAt: now,
+      decidedBy: null,
+      decidedAt: null,
+      note: null
+    };
+    return { entry: await this._write(entry), created: true };
   }
 
   /**
@@ -270,8 +332,13 @@ export class DomainStore {
   async remove(id) {
     this._require();
     if (!isDomainId(id)) return false;
-    this.approvedCache = null;
-    return this._locked(id, () => this.documents.delete(DOMAINS_NAMESPACE, id));
+    return this._locked(id, async () => {
+      try {
+        return await this.documents.delete(DOMAINS_NAMESPACE, id);
+      } finally {
+        this._changed();
+      }
+    });
   }
 
   /**
@@ -300,8 +367,19 @@ export class DomainStore {
 
   /** How many requests wait for a decision. */
   async openCount() {
-    const { items } = await this.list({ limit: 200 });
-    return items.filter(entry => entry.status === DOMAIN_STATUSES.REQUESTED).length;
+    let open = 0;
+    let cursor = null;
+    do {
+      const page = await this.documents.list(DOMAINS_NAMESPACE, {
+        limit: 200,
+        ...(cursor ? { cursor } : {})
+      });
+      for (const doc of page.items || []) {
+        if (doc.data?.status === DOMAIN_STATUSES.REQUESTED) open += 1;
+      }
+      cursor = page.nextCursor || null;
+    } while (cursor);
+    return open;
   }
 
   /**
@@ -315,6 +393,7 @@ export class DomainStore {
     if (this.approvedCache && now - this.approvedCache.at < APPROVED_TTL_MS) {
       return this.approvedCache.hosts;
     }
+    const generation = this.generation;
     const hosts = [];
     let cursor = null;
     do {
@@ -327,13 +406,28 @@ export class DomainStore {
       }
       cursor = page.nextCursor || null;
     } while (cursor && hosts.length < MAX_DOMAINS);
-    this.approvedCache = { at: now, hosts };
+    if (generation === this.generation) this.approvedCache = { at: now, hosts };
     return hosts;
   }
 
-  /** Whether an approved host or pattern covers `hostname`, given a list from {@link approvedHosts}. */
-  static covers(hosts, hostname) {
-    return isDomainWhitelisted(hostname, hosts);
+  /**
+   * Whether an approved host or pattern covers `hostname` on `port`, given a list
+   * from {@link approvedHosts}. An approval names a host and, unless it ends in a
+   * port, means its ports 80 and 443 only: a service on another port of the same
+   * machine is not the website that was approved.
+   *
+   * @param {string[]} hosts
+   * @param {string} hostname - Without brackets
+   * @param {string} [port] - The URL's port; empty for the scheme's default
+   */
+  static covers(hosts, hostname, port = '') {
+    const wanted = nonDefaultPort(port);
+    const patterns = [];
+    for (const host of hosts) {
+      const entry = splitHost(host);
+      if (entry.port === wanted) patterns.push(entry.name);
+    }
+    return isDomainWhitelisted(hostname, patterns);
   }
 }
 

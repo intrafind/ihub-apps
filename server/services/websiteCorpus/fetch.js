@@ -20,7 +20,7 @@ import { isSsrfTrustedHost } from '../../utils/httpConfig.js';
 import { assertPublicTarget } from '../../utils/ssrfGuard.js';
 import { decodeHtml, readBoundedBytes } from '../projects/siteCrawler.js';
 import { registerThrottleHints } from '../../requestThrottler.js';
-import { onSite } from './urls.js';
+import { onSite, siteKeyOf } from './urls.js';
 
 /** The throttle queue of every request of the sizer, and its limits. */
 export const CORPUS_THROTTLE_ID = 'website_corpus';
@@ -55,8 +55,8 @@ function dropBody(body) {
  *
  * @param {string} url
  * @param {Object} options
- * @param {string} options.siteHost - The corpus' host; a redirect to another site is refused
- * @param {{allowPrivate?: (hostname: string) => boolean}} [options.policy] - Which hosts may be company-internal addresses
+ * @param {string} options.siteHost - The corpus' site (host, and a port other than 80 and 443); a redirect to another site is refused before it is followed
+ * @param {{allowPrivate?: (hostname: string, port: string) => boolean}} [options.policy] - Which hosts may be company-internal addresses
  * @param {AbortSignal} [options.signal]
  * @returns {Promise<{status: number, finalUrl: string, contentType: string, html: string|null, truncated: boolean, offSite: boolean}>}
  */
@@ -64,7 +64,8 @@ export async function fetchSitePage(url, { siteHost, signal, policy } = {}) {
   const { response, finalUrl } = await fetchWebPage(url, {
     signal,
     throttleId: CORPUS_THROTTLE_ID,
-    policy
+    policy,
+    stayOn: next => onSite(next.href, siteHost)
   });
   const contentType = response.headers.get('content-type') || '';
   const base = { status: response.status, finalUrl: finalUrl.href, contentType };
@@ -85,15 +86,21 @@ export async function fetchSitePage(url, { siteHost, signal, policy } = {}) {
   };
 }
 
-/** A text file of the site (robots.txt, a sitemap), unzipped if it is gzip; `null` when it cannot be read. */
+/**
+ * A text file of the site (robots.txt, a sitemap), unzipped if it is gzip; `null`
+ * when it cannot be read, and when a redirect leads off the site (the file's own
+ * host and port): nothing is sent there.
+ */
 async function fetchSiteText(url, { maxBytes, signal, policy }) {
   try {
-    const { response } = await fetchWebPage(url, {
+    const siteKey = siteKeyOf(new URL(url));
+    const { response, finalUrl, redirectRefused } = await fetchWebPage(url, {
       signal,
       throttleId: CORPUS_THROTTLE_ID,
-      policy
+      policy,
+      stayOn: next => onSite(next.href, siteKey)
     });
-    if (!response.ok) {
+    if (redirectRefused || !onSite(finalUrl.href, siteKey) || !response.ok) {
       dropBody(response.body);
       return null;
     }
@@ -125,12 +132,14 @@ export const fetchSitemapText = (url, { signal, policy } = {}) =>
  * pages found".
  *
  * @param {URL} url - Any URL on the host
- * @param {{allowPrivate?: (hostname: string) => boolean}} [policy]
+ * @param {{allowPrivate?: (hostname: string, port: string) => boolean}} [policy]
  * @returns {Promise<{ok: boolean, reason?: string, code?: string}>}
  */
 export async function checkHostReachable(url, policy = null) {
   if (isSsrfTrustedHost(url.hostname)) return { ok: true };
-  const allowPrivate = Boolean(policy?.allowPrivate?.(url.hostname));
+  const allowPrivate = Boolean(
+    policy?.allowPrivate?.(url.hostname.replace(/^\[|\]$/g, ''), url.port)
+  );
   const { ok, reason, code } = await assertPublicTarget(url, { allowPrivate });
   return ok ? { ok: true } : { ok: false, reason, code };
 }

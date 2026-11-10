@@ -23,7 +23,8 @@ import {
   normalizePrefix,
   sectionCounts,
   sectionOf,
-  onSite
+  onSite,
+  siteKeyOf
 } from '../services/websiteCorpus/urls.js';
 import {
   MAX_NEAR_DUP_VERIFICATIONS,
@@ -255,6 +256,34 @@ describe('urls', () => {
     assert.equal(onSite('https://www.a.test/x', 'a.test'), true);
     assert.equal(onSite('https://b.test/x', 'a.test'), false);
     assert.equal(onSite('ftp://a.test/x', 'a.test'), false);
+  });
+
+  it('treats another port as another site, and http and https as one', () => {
+    assert.equal(onSite('http://a.test/x', 'a.test'), true);
+    assert.equal(onSite('https://a.test:443/x', 'a.test'), true);
+    assert.equal(onSite('http://a.test:80/x', 'a.test'), true);
+    assert.equal(onSite('http://a.test:8500/v1/kv/', 'a.test'), false);
+    assert.equal(onSite('http://a.test:2375/containers/json', 'a.test'), false);
+    assert.equal(onSite('http://a.test:8080/x', 'a.test:8080'), true);
+    assert.equal(onSite('https://a.test:8080/x', 'a.test:8080'), true);
+    assert.equal(onSite('http://a.test/x', 'a.test:8080'), false);
+    assert.equal(siteKeyOf(new URL('https://www.A.test:8443/')), 'a.test:8443');
+    assert.equal(siteKeyOf(new URL('http://a.test:80/')), 'a.test');
+  });
+
+  it('does not read sitemap files without end once the budget of all files is spent', async () => {
+    const big = `<urlset>${'<url><loc>https://a.test/p</loc></url>'.repeat(5)}${' '.repeat(40 * 1024 * 1024)}</urlset>`;
+    let fetched = 0;
+    const result = await collectSiteUrls({
+      siteUrl: 'https://a.test/',
+      sitemapUrls: Array.from({ length: 10 }, (_v, i) => `https://a.test/s${i}.xml`),
+      fetchText: async () => {
+        fetched += 1;
+        return big;
+      }
+    });
+    assert.ok(fetched <= 2, `read ${fetched} files of 40 MB`);
+    assert.ok(result.sitemapsRead.length <= 2);
   });
 });
 
@@ -1018,7 +1047,10 @@ describe('DomainStore', () => {
   };
 
   it('reduces input to a host, and accepts a wildcard only from an admin', () => {
-    assert.equal(normalizeHost('https://Wiki.Corp:8443/a?b=1'), 'wiki.corp');
+    assert.equal(normalizeHost('https://Wiki.Corp/a?b=1'), 'wiki.corp');
+    assert.equal(normalizeHost('https://Wiki.Corp:8443/a?b=1'), 'wiki.corp:8443');
+    assert.equal(normalizeHost('http://wiki.corp:80/'), 'wiki.corp');
+    assert.equal(normalizeHost('wiki.corp:443'), 'wiki.corp');
     assert.equal(normalizeHost('wiki.corp'), 'wiki.corp');
     assert.equal(normalizeHost('10.1.2.3'), '10.1.2.3');
     assert.equal(normalizeHost('*.Corp.Example', { allowWildcard: true }), '*.corp.example');
@@ -1026,6 +1058,93 @@ describe('DomainStore', () => {
     assert.throws(() => normalizeHost('*.com', { allowWildcard: true }), { code: 'INVALID_HOST' });
     assert.throws(() => normalizeHost(''), { code: 'INVALID_HOST' });
     assert.throws(() => normalizeHost('a'.repeat(600)), { code: 'INVALID_HOST' });
+  });
+
+  it('stores only what it checked: no patterns, escapes, odd schemes or leading dots', () => {
+    for (const hostile of [
+      'https://*.com',
+      'https://*.corp.example',
+      'https://%2a.corp.example',
+      'https://.corp.example',
+      'foo://0xa.1',
+      'foo://a%00b',
+      'https://a%00b',
+      'ftp://wiki.corp',
+      'wiki..corp',
+      'wiki corp',
+      '-wiki.corp.',
+      'wiki.corp/../x?y#z=*'
+    ]) {
+      if (hostile === 'wiki.corp/../x?y#z=*') {
+        assert.equal(normalizeHost(hostile), 'wiki.corp', 'a path is dropped');
+        continue;
+      }
+      assert.throws(() => normalizeHost(hostile), { code: 'INVALID_HOST' }, hostile);
+      assert.throws(() => normalizeHost(hostile, { allowWildcard: true }), {
+        code: 'INVALID_HOST'
+      });
+    }
+  });
+
+  it('an approval covers the web ports of a host, and another port only when it names it', () => {
+    const hosts = ['wiki.corp', 'tools.corp:8443', '*.apps.corp', '*.dev.corp:8080', 'fd00::5'];
+    assert.equal(DomainStore.covers(hosts, 'wiki.corp'), true);
+    assert.equal(DomainStore.covers(hosts, 'wiki.corp', '443'), true);
+    assert.equal(DomainStore.covers(hosts, 'wiki.corp', '80'), true);
+    assert.equal(DomainStore.covers(hosts, 'wiki.corp', '8500'), false);
+    assert.equal(DomainStore.covers(hosts, 'wiki.corp', '2375'), false);
+    assert.equal(DomainStore.covers(hosts, 'tools.corp', '8443'), true);
+    assert.equal(DomainStore.covers(hosts, 'tools.corp'), false);
+    assert.equal(DomainStore.covers(hosts, 'tools.corp', '8444'), false);
+    assert.equal(DomainStore.covers(hosts, 'x.apps.corp'), true);
+    assert.equal(DomainStore.covers(hosts, 'x.apps.corp', '8080'), false);
+    assert.equal(DomainStore.covers(hosts, 'x.dev.corp', '8080'), true);
+    assert.equal(DomainStore.covers(hosts, 'x.dev.corp'), false);
+    assert.equal(DomainStore.covers(hosts, 'fd00::5'), true);
+  });
+
+  it('keeps a user within the open-request limit when requests arrive at once', async () => {
+    const facets = memoryFacets();
+    const chains = new Map();
+    facets.locks = {
+      withLock: (key, fn) => {
+        const run = (chains.get(key) || Promise.resolve()).then(fn);
+        chains.set(
+          key,
+          run.catch(() => {})
+        );
+        return run;
+      }
+    };
+    const store = new DomainStore(facets);
+    const results = await Promise.allSettled(
+      Array.from({ length: MAX_OPEN_REQUESTS_PER_USER + 8 }, (_v, i) =>
+        store.request({ host: `h${i}.corp`, user: USER })
+      )
+    );
+    assert.equal(results.filter(r => r.status === 'fulfilled').length, MAX_OPEN_REQUESTS_PER_USER);
+    assert.equal(await store.openCount(), MAX_OPEN_REQUESTS_PER_USER);
+  });
+
+  it('a withdrawn approval is gone at once, also for a read that was under way', async () => {
+    const { store, facets } = make();
+    const entry = await store.addApproved({ host: 'wiki.corp', admin: ADMIN });
+    const list = facets.documents.list;
+    let release;
+    const gate = new Promise(resolve => {
+      release = resolve;
+    });
+    facets.documents.list = async (...args) => {
+      const page = await list(...args);
+      await gate; // the read has the old list in hand while the approval is withdrawn
+      return page;
+    };
+    const reading = store.approvedHosts();
+    await store.remove(entry.id);
+    facets.documents.list = list;
+    release();
+    assert.deepEqual(await reading, ['wiki.corp'], 'that read saw the list before the removal');
+    assert.deepEqual(await store.approvedHosts(), [], 'and did not keep it');
   });
 
   it('keeps one document per host and decides for everyone who asked', async () => {

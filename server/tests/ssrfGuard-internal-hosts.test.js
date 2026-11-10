@@ -88,11 +88,8 @@ describe('isAlwaysBlockedIP / isBlockedIP', () => {
     }
     assert.equal(isAlwaysBlockedIP(''), true);
     assert.equal(isAlwaysBlockedIP(undefined), true);
-    assert.equal(
-      isAlwaysBlockedIP('fe80::zz'),
-      false,
-      'not an address at all: the callers resolve names first'
-    );
+    assert.equal(isAlwaysBlockedIP('fe80::zz'), true, 'not an address at all');
+    assert.equal(isAlwaysBlockedIP('not-an-ip'), true);
   });
 });
 
@@ -169,5 +166,31 @@ describe('createPinnedLookup with allowPrivate', () => {
       code: 'ENOTFOUND'
     });
     await assert.rejects(lookup(['127.0.0.1'], { allowPrivate: true }), { code: 'ENOTFOUND' });
+  });
+});
+
+describe('more addresses that are never reachable', () => {
+  const never = [
+    '168.63.129.16', // Azure WireServer
+    '192.0.0.192',
+    '192.0.0.8',
+    'fec0::1', // site-local
+    '2001:0:4136:e378:8000:63bf:3fff:fdd2', // Teredo
+    '2002:a9fe:a9fe::1', // 6to4 of 169.254.169.254
+    '2002:7f00:1::1', // 6to4 of 127.0.0.1
+    '::ffff:0:a9fe:a9fe', // IPv4-translated metadata address
+    '64:ff9b:1::1' // local-use NAT64
+  ];
+  it('keeps them blocked with and without the internal-address option', () => {
+    for (const ip of never) {
+      assert.equal(isAlwaysBlockedIP(ip), true, ip);
+      assert.equal(isBlockedIP(ip, { allowPrivate: true }), true, ip);
+      assert.equal(isBlockedIP(ip), true, ip);
+    }
+  });
+  it('still allows the company network and public 6to4 / documentation neighbours', () => {
+    for (const ip of ['10.1.2.3', '192.0.2.1', '192.168.0.9', '2002:5db8:d822::1']) {
+      assert.equal(isBlockedIP(ip, { allowPrivate: true }), false, ip);
+    }
   });
 });

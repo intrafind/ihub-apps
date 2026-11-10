@@ -31,11 +31,11 @@ import {
   fetchSitePage
 } from './fetch.js';
 import { UNRESOLVED_HOST } from '../../utils/ssrfGuard.js';
-import { DomainError, DomainStore, normalizeHost } from './DomainStore.js';
+import { DomainError, DomainStore, normalizeHost, splitHost } from './DomainStore.js';
 import { renderReport } from './report.js';
 import { collectSiteUrls } from './sitemap.js';
 import { DEFAULT_NEWS_SECTIONS, analyseCorpus, findNearDuplicates } from './stats.js';
-import { hostKey, normalizePrefix, sectionCounts } from './urls.js';
+import { nonDefaultPort, normalizePrefix, sectionCounts, siteKeyOf } from './urls.js';
 
 /** Defaults and limits. An installation may lower or raise `maxPages` within the cap. */
 export const DEFAULT_MAX_PAGES = 3000;
@@ -154,13 +154,13 @@ export class WebsiteCorpusService {
    * never reachable either way.
    *
    * @param {{allowPrivateAddresses?: boolean}} context
-   * @returns {Promise<{allowPrivate: (hostname: string) => boolean}>}
+   * @returns {Promise<{allowPrivate: (hostname: string, port: string) => boolean}>}
    */
   async policyFor({ allowPrivateAddresses = false } = {}) {
     const approved = await this.domains.approvedHosts(this.now()).catch(() => []);
     return {
-      allowPrivate: hostname =>
-        allowPrivateAddresses === true || DomainStore.covers(approved, hostname)
+      allowPrivate: (hostname, port) =>
+        allowPrivateAddresses === true || DomainStore.covers(approved, hostname, port)
     };
   }
 
@@ -169,7 +169,10 @@ export class WebsiteCorpusService {
    * about it: ask for it to be allowed, when an approval would help.
    */
   async refusalFor(site, verdict) {
-    const host = site.hostname;
+    const bare = site.hostname.replace(/^\[|\]$/g, '');
+    const port = nonDefaultPort(site.port);
+    // As an approval names it: the host, and its port when that is not 80 or 443.
+    const host = port && !bare.includes(':') ? `${bare}:${port}` : bare;
     if (verdict.code === UNRESOLVED_HOST) {
       return new WebsiteCorpusError(
         'HOST_NOT_RESOLVED',
@@ -216,7 +219,15 @@ export class WebsiteCorpusService {
       if (error instanceof DomainError) throw new WebsiteCorpusError(error.code, error.message);
       throw error;
     }
-    const site = new URL(`https://${name.includes(':') ? `[${name}]` : name}`);
+    const { name: hostName, port } = splitHost(name);
+    let site;
+    try {
+      site = new URL(
+        `https://${hostName.includes(':') ? `[${hostName}]` : hostName}${port ? `:${port}` : ''}`
+      );
+    } catch {
+      throw new WebsiteCorpusError('INVALID_HOST', `"${name}" is not a valid host name`);
+    }
     const verdict = await this.hostCheck(site, await this.policyFor(context));
     if (verdict.ok) {
       return {
@@ -313,7 +324,7 @@ export class WebsiteCorpusService {
       {
         name: String(name || site.hostname).slice(0, MAX_NAME_CHARS),
         siteUrl: site.origin,
-        host: hostKey(site.hostname),
+        host: siteKeyOf(site),
         prefix: scope,
         dropSelector: '',
         rules,

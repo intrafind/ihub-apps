@@ -17,10 +17,16 @@
  * @module services/websiteCorpus/sitemap
  */
 import { linkTypeOf, normalizeCrawlUrl } from '../projects/siteCrawler.js';
-import { hostKey, onSite, underPrefix } from './urls.js';
+import { onSite, siteKeyOf, underPrefix } from './urls.js';
 
 /** Most sitemap files read for one site, and most URLs kept. */
 export const MAX_SITEMAP_FILES = 60;
+
+/** Most characters of sitemap files read for one site, all files together. */
+export const MAX_SITEMAP_TOTAL_CHARS = 64 * 1024 * 1024;
+
+/** Most `<loc>` values read from one sitemap index (the protocol allows 50,000). */
+const MAX_INDEX_LOCS = 50_000;
 
 /** Most raw `<loc>` values kept before the scope filter: 60 files of 8 MB must not fill the memory. */
 export const MAX_RAW_LOCS = 500_000;
@@ -38,12 +44,13 @@ function decodeEntities(text) {
  * and a sitemap is input from the site: up to 8 MB of it.
  *
  * @param {string} text
+ * @param {number} limit - Stop after this many
  * @returns {string[]}
  */
-function locElements(text) {
+function locElements(text, limit) {
   const locs = [];
   let position = 0;
-  for (;;) {
+  while (locs.length < limit) {
     const open = text.indexOf('<loc>', position);
     if (open === -1) break;
     const close = text.indexOf('</loc>', open + 5);
@@ -61,16 +68,17 @@ function locElements(text) {
  * The kind of a sitemap file and the URLs in its `<loc>` elements.
  *
  * @param {string} xml
+ * @param {{limit?: number}} [options] - Most `<loc>` values read
  * @returns {{kind: 'index'|'urlset'|'unknown', locs: string[]}}
  */
-export function parseSitemap(xml) {
+export function parseSitemap(xml, { limit = MAX_RAW_LOCS } = {}) {
   const text = String(xml || '');
   const kind = /<sitemapindex[\s>]/i.test(text)
     ? 'index'
     : /<urlset[\s>]/i.test(text)
       ? 'urlset'
       : 'unknown';
-  return { kind, locs: locElements(text) };
+  return { kind, locs: locElements(text, limit) };
 }
 
 /** The `Sitemap:` lines of a robots.txt. */
@@ -108,12 +116,13 @@ export async function collectSiteUrls({
   maxUrls = 20_000
 }) {
   const site = new URL(siteUrl);
-  const siteHost = hostKey(site.hostname);
+  const siteHost = siteKeyOf(site);
   const queue = [];
   const seenFiles = new Set();
   const sitemapsRead = [];
   const failed = [];
   const found = [];
+  let totalChars = 0;
 
   const enqueue = url => {
     const normalized = normalizeCrawlUrl(url, site);
@@ -127,7 +136,12 @@ export async function collectSiteUrls({
   for (const url of explicit ? sitemapUrls : sitemapsFromRobots(robotsText)) enqueue(url);
 
   const drain = async () => {
-    while (queue.length && sitemapsRead.length + failed.length < MAX_SITEMAP_FILES) {
+    while (
+      queue.length &&
+      sitemapsRead.length + failed.length < MAX_SITEMAP_FILES &&
+      totalChars < MAX_SITEMAP_TOTAL_CHARS &&
+      found.length < MAX_RAW_LOCS
+    ) {
       const url = queue.shift();
       // A sitemap on another host is not fetched either.
       if (!onSite(url, siteHost)) {
@@ -140,7 +154,11 @@ export async function collectSiteUrls({
         continue;
       }
       sitemapsRead.push(url);
-      const { kind, locs } = parseSitemap(text);
+      totalChars += text.length;
+      const { kind, locs } = parseSitemap(text, {
+        limit: Math.max(MAX_INDEX_LOCS, MAX_RAW_LOCS - found.length)
+      });
+      if (kind === 'index' && locs.length > MAX_INDEX_LOCS) locs.length = MAX_INDEX_LOCS;
       if (kind === 'index') locs.forEach(enqueue);
       else {
         // A loop, not push(...locs): a few hundred thousand arguments overflow the stack.
@@ -166,7 +184,9 @@ export async function collectSiteUrls({
   const skipped = { offSite: 0, outsideScope: 0, notPages: 0, overLimit: 0 };
   const urls = [];
   const seen = new Set();
+  let handled = 0;
   for (const raw of found) {
+    if (++handled % 20_000 === 0) await new Promise(resolve => setImmediate(resolve));
     const url = normalizeCrawlUrl(raw, site);
     if (!url || seen.has(url)) continue;
     seen.add(url);
