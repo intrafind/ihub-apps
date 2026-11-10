@@ -46,7 +46,7 @@ export function normalizePrefix(prefix) {
   if (!text) return '';
   try {
     // As the URL parser writes a path (`/über/` is `/%C3%BCber/`), which is what a URL's path is compared with.
-    return new URL(`/${text}/`, 'http://prefix.invalid').pathname;
+    return new URL(`/${text}/`, 'https://prefix.invalid').pathname;
   } catch {
     return `/${text}/`;
   }
