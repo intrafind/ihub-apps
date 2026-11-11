@@ -72,10 +72,11 @@ that people were told, not a legal opinion: the wording is yours.
 - **Enforcement.** One middleware answers `428` with `code: AI_ACKNOWLEDGEMENT_REQUIRED`
   (`application/problem+json`) before any side effect on: the chat message
   (`POST /api/apps/{appId}/chat/{chatId}`), starting a workflow (`POST /api/workflows/{id}/execute`) and its
-  chat step (`POST /api/workflows/executions/{executionId}/chat/{appId}`), and starting an agent run
-  (`POST /api/agents/profiles/{profileId}/runs`). The web app asks first, so a 428 only shows up for a stale
+  chat step (`POST /api/workflows/executions/{executionId}/chat/{appId}`), restarting a workflow execution (`POST /api/workflows/executions/{executionId}/_restart`), and starting
+  or resuming an agent run (`POST /api/agents/profiles/{profileId}/runs`, `POST /api/agents/runs/{runId}/_resume`). The web app asks first, so a 428 only shows up for a stale
   tab or after **Request again**; it then re-opens the dialog and sends the message once more.
-- **Exempt.** OAuth clients, personal API keys, delegated tokens, agents, the inference API (`/v1`,
+- **Exempt.** OAuth clients, personal API keys, delegated tokens (so people who use iHub through the Office
+  add-in or another OAuth-signed-in client are **not** asked yet: those surfaces have no dialog), agents, the inference API (`/v1`,
   `/api/inference/v1`), MCP and A2A: nobody can click a dialog there. Utility calls (the magic prompt),
   scheduled tasks and webhooks are not gated either.
 - **Anonymous visitors.** A guest has no `users.json` record. The confirmation is a signed, HttpOnly cookie

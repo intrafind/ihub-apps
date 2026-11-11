@@ -167,6 +167,27 @@ describe('service rules', () => {
     expect(service.statusOfUser(user, { requiredVersion: 1 })).toBe('acknowledged');
   });
 
+  test('an entry from before resetAt does not count, even if it came back', () => {
+    const user = {
+      aiAcknowledgements: [{ version: 1, acknowledgedAt: '2026-01-01T00:00:00.000Z' }]
+    };
+    const base = { requiredVersion: 1 };
+    expect(service.isAcknowledged(user, { ...base, resetAt: null })).toBe(true);
+    expect(service.isAcknowledged(user, { ...base, resetAt: '2026-02-01T00:00:00.000Z' })).toBe(
+      false
+    );
+    expect(service.isAcknowledged(user, { ...base, resetAt: '2025-12-01T00:00:00.000Z' })).toBe(
+      true
+    );
+    // A fresh confirmation after the reset counts again.
+    const again = {
+      aiAcknowledgements: [{ version: 1, acknowledgedAt: '2026-03-01T00:00:00.000Z' }]
+    };
+    expect(service.isAcknowledged(again, { ...base, resetAt: '2026-02-01T00:00:00.000Z' })).toBe(
+      true
+    );
+  });
+
   test('hash is stable, prefixed and differs per text', () => {
     const a = service.textHash('hello');
     expect(a).toBe(service.textHash('hello'));

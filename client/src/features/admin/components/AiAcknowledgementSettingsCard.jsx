@@ -182,18 +182,19 @@ function AiAcknowledgementSettingsCard() {
           </div>
         </>
       )}
-      {(message || admin.message) && (
+      {[message, admin.message].filter(Boolean).map((banner, index) => (
         <p
+          key={`${index}-${banner.text}`}
           role="status"
           className={`text-sm mt-4 ${
-            (message || admin.message).type === 'success'
+            banner.type === 'success'
               ? 'text-green-700 dark:text-green-300'
               : 'text-red-700 dark:text-red-300'
           }`}
         >
-          {(message || admin.message).text}
+          {banner.text}
         </p>
-      )}
+      ))}
       <ConfirmDialog
         isOpen={!!dialogProps}
         title={dialogProps?.title ?? ''}
