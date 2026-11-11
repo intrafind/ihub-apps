@@ -116,6 +116,12 @@ export function AiAcknowledgementProvider({ children }) {
     [settle]
   );
 
+  // The feature was switched off, or this user confirmed elsewhere, while the dialog was open:
+  // nothing is left to ask, and the waiting sends must not stay blocked.
+  useEffect(() => {
+    if (open && state && (!state.enabled || state.acknowledged)) closeDialog(true);
+  }, [open, state, closeDialog]);
+
   // Another tab confirmed: take it over silently and let the waiting sender go on.
   useEffect(() => {
     if (typeof BroadcastChannel === 'undefined') return undefined;

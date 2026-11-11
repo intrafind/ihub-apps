@@ -166,7 +166,17 @@ export default function AppCanvas() {
   // Chat message management. The canvas chat is stored like any chat, as a
   // temporary one: it belongs to the document being edited, not the history.
   // The tab remembers which chat it is, so a reload fetches it back.
-  const canvasChat = useAppChat({ appId, chatId: chatId.current, ephemeral: true });
+  const canvasChat = useAppChat({
+    appId,
+    chatId: chatId.current,
+    ephemeral: true,
+    // The server refused the turn until the AI-use notice is confirmed and the user declined:
+    // the prompt goes back into the input instead of being lost.
+    onSendRefused: args => {
+      const text = args?.displayMessage?.meta?.rawContent ?? args?.apiMessage?.content;
+      if (typeof text === 'string' && text) setInputValue(text);
+    }
+  });
   const {
     messages,
     processing,
