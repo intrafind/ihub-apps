@@ -82,9 +82,9 @@ beforeEach(async () => {
 const routes = [
   ['get', '/api/admin/watermark-keys'],
   ['post', '/api/admin/watermark-keys'],
-  ['post', '/api/admin/watermark-keys/wm-2026-1/_activate'],
-  ['post', '/api/admin/watermark-keys/wm-2026-1/_reveal'],
-  ['delete', '/api/admin/watermark-keys/wm-2026-1']
+  ['post', '/api/admin/watermark-keys/wm-ihub-inst_x-2026-1/_activate'],
+  ['post', '/api/admin/watermark-keys/wm-ihub-inst_x-2026-1/_reveal'],
+  ['delete', '/api/admin/watermark-keys/wm-ihub-inst_x-2026-1']
 ];
 
 describe('watermark key routes: authorization', () => {
@@ -101,10 +101,12 @@ describe('watermark key routes', () => {
       label: 'Q4'
     });
     expect(res.status).toBe(201);
-    expect(res.headers.location).toMatch(/\/api\/admin\/watermark-keys\/wm-2026-1$/);
+    expect(res.body.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-1$/);
+    expect(res.headers.location).toMatch(
+      new RegExp(`/api/admin/watermark-keys/${res.body.keyId}$`)
+    );
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.body).toMatchObject({
-      keyId: 'wm-2026-1',
       status: 'active',
       key: '9007199254740991',
       label: 'Q4'
@@ -121,7 +123,8 @@ describe('watermark key routes', () => {
     const first = await admin(request(app).post('/api/admin/watermark-keys')).send({});
     expect(first.body.source).toBe('generated');
     const second = await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    expect(second.body.keyId).toBe('wm-2026-2');
+    expect(second.body.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-2$/);
+    const del = id => admin(request(app).delete(`/api/admin/watermark-keys/${id}`));
     const dup = await admin(request(app).post('/api/admin/watermark-keys')).send({
       key: first.body.key
     });
@@ -132,51 +135,49 @@ describe('watermark key routes', () => {
     });
     expect(bad.status).toBe(400);
     expect(bad.body.code).toBe('WATERMARK_KEY_INVALID');
-    expect((await admin(request(app).delete('/api/admin/watermark-keys/wm-2026-2'))).status).toBe(
-      409
-    );
-    expect((await admin(request(app).delete('/api/admin/watermark-keys/wm-2026-1'))).status).toBe(
-      204
-    );
-    expect((await admin(request(app).delete('/api/admin/watermark-keys/wm-2026-1'))).status).toBe(
-      404
-    );
+    expect((await del(second.body.keyId)).status).toBe(409);
+    expect((await del(first.body.keyId)).status).toBe(204);
+    expect((await del(first.body.keyId)).status).toBe(404);
   });
 
   test('activate swaps the active key', async () => {
+    const first = await admin(request(app).post('/api/admin/watermark-keys')).send({});
     await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    const res = await admin(request(app).post('/api/admin/watermark-keys/wm-2026-1/_activate'));
+    const res = await admin(
+      request(app).post(`/api/admin/watermark-keys/${first.body.keyId}/_activate`)
+    );
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ keyId: 'wm-2026-1', status: 'active' });
+    expect(res.body).toMatchObject({ keyId: first.body.keyId, status: 'active' });
   });
 
   test('activate is audited with from/to ids only, answers 404 for an unknown key and is a quiet no-op when already active', async () => {
     const first = await admin(request(app).post('/api/admin/watermark-keys')).send({});
     const second = await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const firstId = first.body.keyId;
+    const secondId = second.body.keyId;
     state.entries.length = 0;
-    const res = await admin(request(app).post('/api/admin/watermark-keys/wm-2026-1/_activate'));
+    const res = await admin(request(app).post(`/api/admin/watermark-keys/${firstId}/_activate`));
     expect(res.status).toBe(200);
     expect(res.body.key).toBeUndefined();
     expect(state.entries).toHaveLength(1);
     expect(state.entries[0]).toMatchObject({
       action: 'update',
       resource: 'watermarkKey',
-      resourceId: 'wm-2026-1',
-      details: { from: 'wm-2026-2', to: 'wm-2026-1' }
+      resourceId: firstId,
+      details: { from: secondId, to: firstId }
     });
     const audited = JSON.stringify(state.entries);
     expect(audited).not.toContain(first.body.key);
     expect(audited).not.toContain(second.body.key);
 
     state.entries.length = 0;
-    const again = await admin(request(app).post('/api/admin/watermark-keys/wm-2026-1/_activate'));
+    const again = await admin(request(app).post(`/api/admin/watermark-keys/${firstId}/_activate`));
     expect(again.status).toBe(200);
     expect(again.body.status).toBe('active');
     expect(state.entries).toHaveLength(0);
 
     const missing = await admin(
-      request(app).post('/api/admin/watermark-keys/wm-2026-99/_activate')
+      request(app).post(`/api/admin/watermark-keys/${firstId.replace(/-\d+$/, '')}-99/_activate`)
     );
     expect(missing.status).toBe(404);
   });
@@ -184,7 +185,9 @@ describe('watermark key routes', () => {
   test('reveal writes the audit entry and returns the key with no-store', async () => {
     const created = await admin(request(app).post('/api/admin/watermark-keys')).send({});
     state.entries.length = 0;
-    const res = await admin(request(app).post('/api/admin/watermark-keys/wm-2026-1/_reveal'));
+    const res = await admin(
+      request(app).post(`/api/admin/watermark-keys/${created.body.keyId}/_reveal`)
+    );
     expect(res.status).toBe(200);
     expect(res.body.key).toBe(created.body.key);
     expect(res.headers['cache-control']).toBe('no-store');
@@ -192,14 +195,16 @@ describe('watermark key routes', () => {
     expect(state.entries[0]).toMatchObject({
       action: 'read',
       resource: 'watermarkKey',
-      resourceId: 'wm-2026-1'
+      resourceId: created.body.keyId
     });
   });
 
   test('reveal fails closed when the audit write fails', async () => {
     const created = await admin(request(app).post('/api/admin/watermark-keys')).send({});
     state.auditReturns = false;
-    const res = await admin(request(app).post('/api/admin/watermark-keys/wm-2026-1/_reveal'));
+    const res = await admin(
+      request(app).post(`/api/admin/watermark-keys/${created.body.keyId}/_reveal`)
+    );
     expect(res.status).toBe(503);
     expect(res.body.code).toBe('WATERMARK_AUDIT_UNAVAILABLE');
     expect(JSON.stringify(res.body)).not.toContain(created.body.key);
@@ -210,12 +215,12 @@ describe('watermark key routes', () => {
       key: '777000111222'
     });
     const b = await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    await admin(request(app).post('/api/admin/watermark-keys/wm-2026-1/_activate'));
-    await admin(request(app).post('/api/admin/watermark-keys/wm-2026-1/_reveal'));
+    await admin(request(app).post(`/api/admin/watermark-keys/${a.body.keyId}/_activate`));
+    await admin(request(app).post(`/api/admin/watermark-keys/${a.body.keyId}/_reveal`));
     const dup = await admin(request(app).post('/api/admin/watermark-keys')).send({
       key: '777000111222'
     });
-    await admin(request(app).delete('/api/admin/watermark-keys/wm-2026-2'));
+    await admin(request(app).delete(`/api/admin/watermark-keys/${b.body.keyId}`));
     expect(state.entries.map(e => `${e.action}:${e.result || 'success'}`)).toEqual([
       'create:success',
       'create:success',
