@@ -1843,20 +1843,34 @@ The wording of the legal notes is a draft for legal review, not legal advice.
 
 See [EU AI Act](../../ai-act.md#switching-the-features-off).
 
-## Kicker and Lead on Slides, and a Footer Strip on the Title Slide
+## Text Slots on Slides: the Model Knows What the Template Offers
 
-Presentations from the `pptx` skill can now carry the two small texts that make a strategy deck
-read well: a **kicker**, a short label above the slide title ("VISION 2027"), and a **lead**, one
-sentence under it that gives the context. The model sets them with the new `kicker` and `lead`
-fields of a content, two-column or title-only slide.
+Presentations from the `pptx` skill can now fill the small texts that make a strategy deck read
+well: a **kicker**, a short label above the slide title ("VISION 2027"), and a **lead**, one
+sentence under it that gives the context. They are two examples of **text slots**: text
+placeholders of a slide layout besides its title and content. A company declares the slots its
+template has, and the model is told which exist, where each one sits and how much text fits.
 
-- **The template draws them.** Add two text placeholders to a slide layout of the company's
-  PowerPoint template and name them `Kicker` and `Lead` (in the Selection Pane). Slides with a
-  kicker or a lead use such a layout; all other slides keep the layout they had. A template without
-  them keeps working: the kicker is left out and the lead becomes the first paragraph of the text.
-- **Title slide strip.** A title layout can name its footer placeholder's text, for example the
-  company name, and the model can replace it per deck with the `footer` field of the title slide
-  ("Strategy 2027 · November 2026"). The deck's footer text still appears on the other slides only.
+- **Declare slots per template.** Under **Admin → Document templates → PowerPoint → Text slots**
+  give each slot an id, the name of its placeholder in the layouts, a description for the model and
+  what to do in a layout without it. This works with any template, any language and up to twelve
+  slots, for example the presenter on a title slide. A placeholder named `Kicker` or `Lead` is a slot
+  without any setup.
+- **Read from the template file.** The editor lists small, named text placeholders it finds in the
+  uploaded PowerPoint file and adds one as a slot with a click, with an id and the instruction the
+  template author typed into the placeholder.
+- **A guide for the template's authors.** The new [PowerPoint Template Guide](../../powerpoint-template-guide.md)
+  explains how the template should be built — layouts, placeholders, theme, text slots — with a
+  brief admins can hand to marketing, in English and German.
+- **The model sees the template.** The description of `create_pptx` lists the slots with their
+  position (above or below the title …) and how many characters fit, and what each slide type has:
+  title, subtitle, content areas, slots. The model passes the text in the slide field `slots`.
+- **The right layout.** A slide that fills slots uses the layout of its kind that has most of them;
+  all other slides keep their layout. A template without a slot keeps working: the text is left
+  out, or becomes the first paragraph of the slide, as the slot says.
+- **Title slide strip.** A title layout's footer placeholder can hold the company name; the model
+  can replace it per deck with the `footer` field of the title slide ("Strategy 2027 · November
+  2026").
 - **KPI cards follow the company colours.** The KPI cards are now light neutral cards with a rule
   across the top in the template's first coloured accent, instead of a tint of accent 1. A template
   whose accent 1 is grey no longer produces grey cards.

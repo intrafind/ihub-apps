@@ -78,6 +78,7 @@ export async function createPptx(spec, { app, template, templateFile = null } = 
     applied.spec = {
       ...applied.spec,
       layouts: undefined,
+      slotConfig: undefined,
       templateMode: templateFile.mode === 'append' ? 'append' : 'styles_only'
     };
     applied.templateId = null;
@@ -126,6 +127,7 @@ export async function runRestylePptx(params) {
       spec: {
         brand: applied.spec.brand,
         layouts: applied.spec.layouts,
+        slotConfig: applied.spec.slotConfig,
         footer: applied.spec.footer,
         slideNumbers: applied.spec.slideNumbers,
         title: uploaded.name.replace(/\.pptx$/i, ''),

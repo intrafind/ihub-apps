@@ -63,6 +63,7 @@
     - [Tool Approval](tool-approval.md)
     - [Document and File Generation (PDF, Word, PowerPoint, Code, ZIP) & System Skills](pdf-generation.md)
     - [Document Templates (Corporate Design)](document-templates.md)
+    - [PowerPoint Template Guide (how to build the template)](powerpoint-template-guide.md)
     - [Structured Output](structured-output.md)
     - [Tools (Legacy)](tools.md)
     - [Compare Mode](compare-mode.md)

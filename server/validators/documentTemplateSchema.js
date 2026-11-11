@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
+import { MAX_SLOTS, SLOT_ID_PATTERN } from '../services/documents/pptx/slotIds.js';
 import { HEX_COLOR_PATTERN, LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 
 /**
@@ -133,12 +134,47 @@ const docxSchema = z
   })
   .strict();
 
+/**
+ * A text placeholder of the PowerPoint template's layouts that slides can fill
+ * besides their title and content: a label above the title, an introduction
+ * under it, the presenter on a title slide. The model is told which slots a
+ * template has, where they are and how much text fits.
+ */
+const slotSchema = z
+  .object({
+    /** Name of the placeholder in the layouts (the Selection Pane's name). */
+    placeholder: z.string().trim().min(1).max(200),
+    /** What to put in it, for the model. */
+    description: z
+      .record(z.string().regex(LANGUAGE_CODE_PATTERN, 'Invalid language code'), z.string().max(200))
+      .optional(),
+    /** What happens to the text when a slide's layout has no such placeholder. */
+    ifMissing: z.enum(['drop', 'text']).optional()
+  })
+  .strict();
+
 const pptxSchema = z
   .object({
     template: assetName.optional(),
     aspectRatio: z.enum(['16:9', '4:3']).optional(),
     footer: z.string().max(200).optional(),
     slideNumbers: z.boolean().optional(),
+    slots: z
+      .record(
+        z.string().regex(SLOT_ID_PATTERN, 'Slot ids use letters and digits, like "kicker"'),
+        slotSchema
+      )
+      .refine(slots => Object.keys(slots).length <= MAX_SLOTS, {
+        message: `At most ${MAX_SLOTS} slots`
+      })
+      .refine(
+        slots => {
+          const names = Object.values(slots).map(slot => slot.placeholder.trim().toLowerCase());
+          return new Set(names).size === names.length;
+        },
+        { message: 'Each slot needs a placeholder of its own' }
+      )
+      .optional(),
     layouts: z
       .object(Object.fromEntries(SLIDE_LAYOUT_KINDS.map(kind => [kind, z.string().max(200)])))
       .partial()

@@ -113,7 +113,8 @@ function withTemplates(definition, templates, language) {
       parameters: definition.parameters
     };
   }
-  const description = getLocalizedString(definition.description, language);
+  const guide = definition.templateGuide ? templates.guides?.[definition.templateGuide] : '';
+  const description = `${getLocalizedString(definition.description, language)}${guide ? `\n\n${guide}` : ''}`;
   const note = key => getLocalizedString(TEMPLATE_NOTES[key], language);
   if (templates.pinned) {
     const properties = { ...definition.parameters.properties };
@@ -167,7 +168,7 @@ export function isSystemSkillTool(toolId) {
  *   are left out for a model that cannot see images.
  * @param {Object} [options.templates] - The document templates for this app:
  *   `{ pinned: { id, name } | null, choices: [{ id, name, description }],
- *   defaultName }` (see `documents/templates/DocumentTemplateService.js`).
+ *   defaultName, guides }` (see `documents/templates/DocumentTemplateService.js`).
  * @returns {Array<Object>}
  */
 export function systemSkillToolsFor(

@@ -12,6 +12,11 @@ export const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 export const FONT_FACES = ['normal', 'bold', 'italics', 'bolditalics'];
 export const SLIDE_KINDS = ['title', 'section', 'content', 'twoColumn', 'titleOnly', 'blank'];
 export const BUILT_IN_FONTS = ['sans', 'serif', 'mono'];
+/** The id of a text slot of a slide layout (as the server checks it). */
+export const SLOT_ID_PATTERN = /^[a-z][a-zA-Z0-9]{0,31}$/;
+/** What the server accepts of the text slots of a template. */
+export const MAX_SLOTS = 12;
+export const MAX_SLOT_PLACEHOLDER_CHARS = 200;
 
 /** A new, empty template. */
 export function emptyTemplate() {
@@ -127,6 +132,35 @@ export function validateTemplate(draft, t) {
     if (value && !HEX_COLOR.test(value)) {
       errors[key] = t('admin.documentTemplates.errors.color', 'Use a hex colour like #e30613.');
     }
+  }
+  const slots = Object.entries(draft.pptx?.slots || {});
+  if (slots.length > MAX_SLOTS) {
+    errors.slots = t('admin.documentTemplates.errors.slotCount', 'At most {{max}} slots.', {
+      max: MAX_SLOTS
+    });
+  }
+  const seen = new Set();
+  for (const [id, slot] of slots) {
+    const placeholder = String(slot?.placeholder || '').trim();
+    if (!placeholder) {
+      errors[`slot:${id}`] = t(
+        'admin.documentTemplates.errors.slotPlaceholder',
+        'Name the placeholder for the slot "{{id}}".',
+        { id }
+      );
+    } else if (placeholder.length > MAX_SLOT_PLACEHOLDER_CHARS) {
+      errors[`slot:${id}`] = t(
+        'admin.documentTemplates.errors.slotPlaceholderLength',
+        'The placeholder name is too long (at most {{max}} characters).',
+        { max: MAX_SLOT_PLACEHOLDER_CHARS }
+      );
+    } else if (seen.has(placeholder.toLowerCase())) {
+      errors[`slot:${id}`] = t(
+        'admin.documentTemplates.errors.slotDuplicate',
+        'Another slot already uses this placeholder.'
+      );
+    }
+    seen.add(placeholder.toLowerCase());
   }
   return errors;
 }

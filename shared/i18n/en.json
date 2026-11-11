@@ -5730,6 +5730,41 @@
           "twoColumn": "Two columns",
           "titleOnly": "Title only",
           "blank": "Blank"
+        },
+        "slots": {
+          "title": "Text slots",
+          "help": "Text placeholders of your layouts that slides can fill besides title and content, for example a label above the title. The model is told which slots exist, where they sit and how much text fits. A placeholder named \"Kicker\" or \"Lead\" is a slot without any setup here.",
+          "foundIn": "found in: {{layouts}}",
+          "placeholder": "Placeholder in the layouts",
+          "placeholderHelp": "The placeholder's name in PowerPoint (View → Selection Pane), without regard to case.",
+          "ifMissing": "In a layout without it",
+          "drop": "Leave the text out",
+          "text": "First paragraph of the slide text",
+          "description": "What to put in it ({{language}})",
+          "descriptionHelp": "The model reads this to know what belongs in the slot.",
+          "notFound": "No layout has a placeholder with this name yet. Save, then upload the template or check the name.",
+          "remove": "Remove slot",
+          "newId": "New slot id",
+          "add": "Add slot",
+          "newIdHelp": "Letters and digits, starting with a letter, such as \"presenter\" or \"chapter\".",
+          "suggestionsTitle": "Found in your template",
+          "suggestionsHelp": "Small text placeholders with a name of their own. Add the ones slides should be able to fill.",
+          "suggestionDetail": "{{position}}, about {{chars}} characters, in: {{layouts}}",
+          "addSuggestion": "Add as slot",
+          "positions": {
+            "above-title": "above the title",
+            "below-title": "below the title",
+            "top-left": "top left",
+            "top-centre": "top centre",
+            "top-right": "top right",
+            "middle-left": "middle left",
+            "middle-centre": "middle",
+            "middle-right": "middle right",
+            "bottom-left": "bottom left",
+            "bottom-centre": "bottom centre",
+            "bottom-right": "bottom right"
+          },
+          "limit": "At most {{max}} slots."
         }
       },
       "preview": {
@@ -5762,7 +5797,11 @@
         "id": "Use 1–64 lower-case letters, digits and \"-\", starting with a letter or digit.",
         "reservedId": "This id is reserved; choose another one.",
         "name": "Give the template a name.",
-        "color": "Use a hex colour like #e30613."
+        "color": "Use a hex colour like #e30613.",
+        "slotPlaceholder": "Name the placeholder for the slot \"{{id}}\".",
+        "slotCount": "At most {{max}} slots.",
+        "slotPlaceholderLength": "The placeholder name is too long (at most {{max}} characters).",
+        "slotDuplicate": "Another slot already uses this placeholder."
       }
     },
     "integrationReleases": {

@@ -6159,6 +6159,41 @@
           "twoColumn": "Zwei Spalten",
           "titleOnly": "Nur Titel",
           "blank": "Leer"
+        },
+        "slots": {
+          "title": "Textfelder",
+          "help": "Textplatzhalter Ihrer Layouts, die Folien neben Titel und Inhalt füllen können, zum Beispiel ein Label über dem Titel. Das Modell erfährt, welche Felder es gibt, wo sie sitzen und wie viel Text passt. Ein Platzhalter mit dem Namen \"Kicker\" oder \"Lead\" ist ohne weitere Einrichtung ein Feld.",
+          "foundIn": "gefunden in: {{layouts}}",
+          "placeholder": "Platzhalter in den Layouts",
+          "placeholderHelp": "Der Name des Platzhalters in PowerPoint (Ansicht → Auswahlbereich), ohne Beachtung der Groß-/Kleinschreibung.",
+          "ifMissing": "In einem Layout ohne dieses Feld",
+          "drop": "Text weglassen",
+          "text": "Erster Absatz des Folientextes",
+          "description": "Was hineingehört ({{language}})",
+          "descriptionHelp": "Das Modell liest dies, um zu wissen, was in das Feld gehört.",
+          "notFound": "Noch kein Layout hat einen Platzhalter mit diesem Namen. Speichern und die Vorlage hochladen oder den Namen prüfen.",
+          "remove": "Feld entfernen",
+          "newId": "ID des neuen Feldes",
+          "add": "Feld hinzufügen",
+          "newIdHelp": "Buchstaben und Ziffern, beginnend mit einem Buchstaben, etwa \"presenter\" oder \"chapter\".",
+          "suggestionsTitle": "In Ihrer Vorlage gefunden",
+          "suggestionsHelp": "Kleine Textplatzhalter mit eigenem Namen. Fügen Sie die hinzu, die Folien füllen können sollen.",
+          "suggestionDetail": "{{position}}, etwa {{chars}} Zeichen, in: {{layouts}}",
+          "addSuggestion": "Als Feld hinzufügen",
+          "positions": {
+            "above-title": "über dem Titel",
+            "below-title": "unter dem Titel",
+            "top-left": "oben links",
+            "top-centre": "oben mittig",
+            "top-right": "oben rechts",
+            "middle-left": "Mitte links",
+            "middle-centre": "Mitte",
+            "middle-right": "Mitte rechts",
+            "bottom-left": "unten links",
+            "bottom-centre": "unten mittig",
+            "bottom-right": "unten rechts"
+          },
+          "limit": "Höchstens {{max}} Felder."
         }
       },
       "preview": {
@@ -6191,7 +6226,11 @@
         "id": "1–64 Kleinbuchstaben, Ziffern und „-“, beginnend mit einem Buchstaben oder einer Ziffer.",
         "reservedId": "Diese ID ist reserviert; bitte eine andere wählen.",
         "name": "Geben Sie der Vorlage einen Namen.",
-        "color": "Hexadezimale Farbe wie #e30613 verwenden."
+        "color": "Hexadezimale Farbe wie #e30613 verwenden.",
+        "slotPlaceholder": "Platzhalter für das Feld \"{{id}}\" angeben.",
+        "slotCount": "Höchstens {{max}} Felder.",
+        "slotPlaceholderLength": "Der Platzhaltername ist zu lang (höchstens {{max}} Zeichen).",
+        "slotDuplicate": "Ein anderes Feld verwendet diesen Platzhalter schon."
       }
     },
     "integrationReleases": {
