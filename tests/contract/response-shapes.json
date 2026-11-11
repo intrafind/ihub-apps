@@ -1016,8 +1016,7 @@
       "provenance": {
         "media": {
           "maxVerifyBytes": "number",
-          "readC2pa": "boolean",
-          "recordTts": "boolean"
+          "readC2pa": "boolean"
         },
         "retentionDays": "number",
         "storeRecords": "boolean",

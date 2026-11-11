@@ -571,7 +571,6 @@ export const platformConfigSchema = z
         media: z
           .object({
             maxVerifyBytes: z.number().int().min(1024).prefault(52428800),
-            recordTts: z.boolean().prefault(true),
             readC2pa: z.boolean().prefault(true)
           })
           .passthrough()

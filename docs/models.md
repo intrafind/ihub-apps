@@ -74,7 +74,7 @@ provenance object every output carries (see [Provenance Records](provenance.md))
 | `text.detectorUrl`, `text.detectorCredentialRef`, `text.tokenizer`, `text.algorithm`, `text.prf`, `text.contextWidth` | `ihub` only: the detector service, the `bearer` credential id for it, the tokenizer it loads, and the vLLM settings it must match. Left out of the public model list. |
 | `text.statementRef` | A document name or URL of the written statement. Kept as a reference only, never opened, and left out of the public model list. |
 
-Image and audio models declare what the provider embeds, the same way, under `image` and `audio`:
+Image-generating models declare what the provider embeds under `image`, the same way:
 
 ```json
 { "contentMarking": { "image": { "by": "provider", "scheme": "synthid", "statementRef": "Provider DPA, annex 3" } } }
@@ -82,15 +82,15 @@ Image and audio models declare what the provider embeds, the same way, under `im
 
 | Field | Notes |
 | --- | --- |
-| `image.by`, `audio.by` | `none` (default) or `provider`. iHub applies no image or audio mark of its own, so `ihub` is rejected here. Set `provider` only on the provider's written statement: iHub cannot detect SynthID and reports `declared` on your word. |
-| `image.scheme`, `audio.scheme` | Free label, up to 100 characters (`synthid`, `c2pa`). |
-| `image.statementRef`, `audio.statementRef` | Reference to the written statement. Kept as a reference only. |
+| `image.by` | `none` (default) or `provider`. iHub applies no image mark of its own, so `ihub` is rejected here. Set `provider` only on the provider's written statement: iHub cannot detect SynthID and reports `declared` on your word. |
+| `image.scheme` | Free label, up to 100 characters (`synthid`, `c2pa`). |
+| `image.statementRef` | Reference to the written statement. Kept as a reference only. |
 
-`image` applies to a model with `supportsImageGeneration`, `audio` to a `tts` model. The value appears as
-`provider_marking.declared` in the record of each generated image or speech response; see
-[Provenance Records](provenance.md#images-and-audio-provider-marks-3328). No model is preset: a Google image
-or TTS model counts as `none` until you declare it. The model editor has no fields for `image` and `audio`
-yet; set them in the model's JSON file.
+`image` applies to a model with `supportsImageGeneration`; **Admin → Models** shows an *Image marking* section
+for such a model, and choosing *Not marked* removes the member. The value appears as
+`provider_marking.declared` in the record of each generated image; see
+[Provenance Records](provenance.md#images-provider-marks-3328). No model is preset: a Google image model counts
+as `none` until you declare it. Read aloud (text-to-speech) has no marking and no record.
 
 A model without the block counts as `none`. **Admin → Models** shows "Not marked" in the *Output marking*
 column as a hint and has an *Output marking* section in the editor. There is no gate: a model that is not

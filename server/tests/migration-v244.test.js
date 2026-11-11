@@ -38,13 +38,13 @@ test('runs only when there is a platform.json', async () => {
 test('writes the media block and keeps what an admin set', async () => {
   const ctx = context({
     'config/platform.json': {
-      provenance: { retentionDays: 30, media: { recordTts: false } }
+      provenance: { retentionDays: 30, media: { readC2pa: false } }
     }
   });
   await up(ctx);
   assert.deepEqual(ctx.written['config/platform.json'].provenance, {
     retentionDays: 30,
-    media: { recordTts: false, maxVerifyBytes: 52428800, readC2pa: true }
+    media: { readC2pa: false, maxVerifyBytes: 52428800 }
   });
 });
 
@@ -63,7 +63,6 @@ test('the shipped platform defaults carry the same media block', async () => {
   );
   assert.deepEqual(defaults.provenance.media, {
     maxVerifyBytes: 52428800,
-    recordTts: true,
     readC2pa: true
   });
 });

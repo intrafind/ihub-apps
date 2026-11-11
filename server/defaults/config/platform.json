@@ -448,7 +448,6 @@
     },
     "media": {
       "maxVerifyBytes": 52428800,
-      "recordTts": true,
       "readC2pa": true
     }
   },

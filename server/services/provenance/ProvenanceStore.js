@@ -56,9 +56,8 @@ export const ALLOWED_RECORD_KEYS = Object.freeze([
   'created_at',
   'kind',
   'content_hash',
-  // Media records (#3328): what the provider embedded, and the audio container.
-  'provider_marking',
-  'container'
+  // Media records (#3328): what the provider embedded.
+  'provider_marking'
 ]);
 
 function createdAtMs(record) {

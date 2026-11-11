@@ -93,23 +93,22 @@ describe('http provenance helpers', () => {
   });
 });
 
-describe('model contentMarking for images and audio (#3328)', () => {
-  it('accepts a declared provider mark per kind', () => {
+describe('model contentMarking for images (#3328)', () => {
+  it('accepts a declared provider mark for images', () => {
     const result = modelConfigSchema.safeParse({
       ...base,
       contentMarking: {
-        image: { by: 'provider', scheme: 'synthid', statementRef: 'DPA-annex-3' },
-        audio: { by: 'none' }
+        image: { by: 'provider', scheme: 'synthid', statementRef: 'DPA-annex-3' }
       }
     });
     assert.equal(result.success, true);
   });
 
-  it('refuses an iHub mark on media (iHub applies none) and unknown members', () => {
+  it('refuses an iHub mark on images (iHub applies none) and unknown members', () => {
     for (const contentMarking of [
       { image: { by: 'ihub', scheme: 'vllm-gumbel' } },
-      { audio: { by: 'provider', unknown: true } },
-      { video: { by: 'none' } }
+      { image: { by: 'provider', unknown: true } },
+      { audio: { by: 'none' } }
     ]) {
       assert.equal(modelConfigSchema.safeParse({ ...base, contentMarking }).success, false);
     }

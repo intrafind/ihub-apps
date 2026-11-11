@@ -146,9 +146,8 @@ const markingSchema = z
     }
   });
 
-// Image and audio marking (#3328): what the provider embeds, as the operator
-// declares it. iHub applies no image or audio mark of its own, so `ihub` is not
-// offered here; `scheme` is free text (e.g. "synthid", "c2pa") and
+// Image marking (#3328): what the provider embeds, as the operator declares
+// it. iHub applies no image mark of its own, so `ihub` is not offered here; `scheme` is free text (e.g. "synthid", "c2pa") and
 // `statementRef` points at the operator's written statement (CoP 4.2).
 const mediaMarkingSchema = z
   .object({
@@ -161,8 +160,7 @@ const mediaMarkingSchema = z
 const contentMarkingSchema = z
   .object({
     text: markingSchema.optional(),
-    image: mediaMarkingSchema.optional(),
-    audio: mediaMarkingSchema.optional()
+    image: mediaMarkingSchema.optional()
   })
   .strict();
 
@@ -394,8 +392,8 @@ const baseModelConfigSchema = z
     // (EU AI Act Art. 50(2)). `provider` is the operator's written statement that
     // the provider marks the output (`statementRef` is a free reference, never
     // fetched); `none` is the default. `ihub` (iHub's own text watermark) is
-    // reserved for the watermarking feature and needs a `scheme`. `image` and
-    // `audio` (#3328) declare what the provider embeds; iHub adds no mark there.
+    // reserved for the watermarking feature and needs a `scheme`. `image` (#3328)
+    // declares what the provider embeds; iHub adds no mark there.
     contentMarking: contentMarkingSchema.optional(),
     supportsImageGeneration: z.boolean().optional().prefault(false),
     imageGeneration: imageGenerationSchema.optional(),

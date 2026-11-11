@@ -11,7 +11,13 @@
 import { jest, describe, test, expect, beforeAll, afterAll } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
-import { makePcm, makePng, makeWav, readSignedJpeg } from './helpers/mediaFixtures.js';
+import {
+  makePcm,
+  makePng,
+  makeWav,
+  makeWavWithC2pa,
+  readSignedJpeg
+} from './helpers/mediaFixtures.js';
 
 const platform = {
   provenance: { verify: { access: 'authenticated' }, media: { maxVerifyBytes: 200000 } },
@@ -38,7 +44,6 @@ const { readC2pa } = await import('../services/provenance/c2paReader.js');
 let storage;
 let app;
 const generated = makePng([], 42);
-const pcm = makePcm(1, 24000, 3);
 const signed = readSignedJpeg();
 
 async function store(kind, bytes, extra = {}) {
@@ -49,7 +54,7 @@ async function store(kind, bytes, extra = {}) {
     byteLength: bytes.length,
     mimeType: kind === 'image' ? 'image/png' : 'audio/L16;rate=24000',
     model: { id: extra.modelId || 'img-model' },
-    modelConfig: { contentMarking: { [kind]: { by: 'provider', scheme: 'synthid' } } },
+    modelConfig: { contentMarking: { image: { by: 'provider', scheme: 'synthid' } } },
     c2pa: kind === 'image' ? await readC2pa(bytes) : null,
     installationId: 'inst_test',
     version: '1.0.0'
@@ -61,7 +66,6 @@ async function store(kind, bytes, extra = {}) {
 beforeAll(async () => {
   storage = await startTestStorage({ prefix: 'ihub-provenance-media-' });
   await store('image', generated, { outputId: '01JCIMAGE00000000000000001' });
-  await store('audio', pcm, { outputId: '01JCAUDIO00000000000000002', modelId: 'tts-model' });
   app = express();
   app.use(express.json({ limit: '2mb' }));
   registerProvenanceRoutes(app);
@@ -126,14 +130,18 @@ describe('POST /api/provenance/_verify with a file', () => {
     expect(res.body.caveats).toEqual(['trust-not-evaluated', 'absence-is-not-proof']);
   });
 
-  test('raw PCM and the same PCM wrapped in a WAV header both match the TTS record', async () => {
-    const wav = makeWav(pcm);
-    const wrapped = await upload(wav, 'clip.wav');
-    expect(wrapped.status).toBe(200);
-    expect(wrapped.body).toMatchObject({ found: true, kind: 'audio' });
-    expect(wrapped.body.records[0].output_id).toBe('01JCAUDIO00000000000000002');
-    expect(wrapped.body.contentHash.payloadValue).toBe(hashBytes(pcm));
-    expect(wrapped.body.c2pa.status).toBeDefined();
+  test('an audio file gets its C2PA read and never a hash hit', async () => {
+    const res = await upload(makeWavWithC2pa(), 'clip.wav');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      found: false,
+      kind: 'audio',
+      contentHash: { mimeType: 'audio/wav' }
+    });
+    expect(res.body.c2pa).toMatchObject({ present: true, trust: 'not-evaluated' });
+    expect(res.body.records).toBeUndefined();
+    const plain = await upload(makeWav(makePcm(0.1)), 'plain.wav');
+    expect(plain.body.c2pa).toMatchObject({ present: false });
   });
 
   test('spoofed Content-Type does not help: the bytes decide', async () => {
