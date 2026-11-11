@@ -57,3 +57,34 @@ These settle conflicts and open questions so each session can start without wait
 - Add the SPDX header to every new source file.
 - Commit, push your branch, and open a **draft PR whose base is the previous branch of the stack** (not `main`). Use the PR template if the repo has one.
 - When the PR is open, message the coordinating session (id in the session prompt) with the branch name, PR URL, the migration number you took, and any deviation from the brief. The next session starts from your branch, so do not rebase or force-push it afterwards without telling the coordinator.
+
+## Follow-ups added after the first review of the stack
+
+The owner reviewed the six PRs and asked for two follow-ups. They extend the stack.
+
+| # | Work | Branch | Base | PR |
+| --- | --- | --- | --- | --- |
+| 7 | Provenance settings form and "Make active" for watermark keys | `claude/ai-act-admin-settings-and-activate` | 6 | #3597 |
+| 8 | Acknowledgement in the client integrations (Office/Outlook pane, browser extension, Nextcloud, Teams, embeds) | `claude/ai-act-integrations-acknowledgement` | 7 | next |
+
+Step 7 found that the `aiDisclosure` and `aiAcknowledgement` platform settings already have admin forms under Admin → Advanced (`AiNoticeSettingsCard`, `AiAcknowledgementSettingsCard`). Nothing is missing there.
+
+### Step 8: what the analysis found
+
+Documents: `integrations-acknowledgement.md` (PM + engineering) and `integrations-acknowledgement-ux-ui.md` (UX + UI).
+
+- The step 2 PR said the Office, extension and Teams embeds "get no dialog and show an error on a 428". That was incomplete: Office, the browser extension and Nextcloud authenticate with delegated OAuth tokens that carry a `clientId`, and `isMachinePrincipal` exempts those. They **never get a 428**. The gap is that these users are never asked, so no acknowledgement is recorded for them.
+- Teams and `?embed=true` iframes are human principals that mount the full web app, so they already have the dialog (verify on a real host).
+- The Outlook pane, the Outlook pop-out and the extension side panel share one root, `OfficeApp`. One provider mount covers all three.
+
+### Decisions taken for step 8 (open questions in the analysis)
+
+These were decided by the coordinating session on the owner's request ("we have to build it into our client integrations as well"). They are reversible; the PR description must name them.
+
+1. **OQ1:** gate the three first-party delegated clients (identified by the `officeIntegration`, `browserExtension` and `nextcloudEmbed` `oauthClientId`s) as human principals. No migration. Other OAuth clients, personal API keys, MCP, A2A and the inference API stay exempt.
+2. **OQ2:** accept that users who only use a Copilot-style agent and never reach a first-party UI are not asked.
+3. **OQ3:** guests in cross-site anonymous embeds (cookies are dropped, `SameSite=lax`): client-side fallback "open iHub in its own tab"; no partitioned cookies.
+4. **OQ4:** record the client kind on the acknowledgement entry if it is a small additive change; otherwise leave it out and say so.
+5. UX questions: the pane menu entry "AI-use notice" is the review-later path; no auto-send after Confirm when the context (item, tab URL, selection) changed, the draft is kept with a status message; shared copy for Word, Excel and PowerPoint panes once they exist; a first-time Teams user may see the legacy `DisclaimerPopup` before the new dialog.
+
+**Ship order inside the branch:** the server gating of the three clients must not land before the Office wiring, or those users would be blocked with no dialog. Keep both in one branch, and commit the client wiring first.
