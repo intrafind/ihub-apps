@@ -1014,6 +1014,11 @@
         "tierPolicy": "string"
       },
       "provenance": {
+        "media": {
+          "maxVerifyBytes": "number",
+          "readC2pa": "boolean",
+          "recordTts": "boolean"
+        },
         "retentionDays": "number",
         "storeRecords": "boolean",
         "verify": {
