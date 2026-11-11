@@ -3,7 +3,7 @@ name: pptx
 description: Create PowerPoint presentations (.pptx) on demand — pitch decks, status updates, board and project reviews, trainings, workshop agendas, results summaries — on the company's slide template, with bullet slides, KPI metric cards, tables, native editable charts, pictures, two-column comparisons, section slides and speaker notes. Use whenever the user asks for slides, a deck, a presentation or a PowerPoint file. Do not activate only to summarize or answer questions about an uploaded .pptx (its extracted text is already in the conversation).
 metadata:
   author: IntraFind
-  version: '1.3'
+  version: '1.4'
 allowed-tools: create_pptx restyle_pptx
 ---
 
@@ -51,23 +51,22 @@ If `create_pptx` returns `warnings`, read them: a table was cut, text was shrunk
 
 Pass `slides` as JSON text: an array of slide objects.
 
-| Field           | Use                                                                                                                     |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `layout`        | `title` (opening slide), `section` (divider between parts), `content` (default), `two-column`, `title-only`, `blank`    |
-| `title`         | The slide title: the takeaway, at most about 8 words                                                                    |
-| `kicker`        | Optional short label above the title (max. 80 characters), e.g. the chapter: `VISION 2027`                              |
-| `lead`          | Optional one-sentence introduction under the title (max. 300 characters): the context for what follows                  |
-| `subtitle`      | Title and section slides: subtitle, date, presenter                                                                     |
-| `footer`        | Title slide only: the text of the footer strip, e.g. `Strategy 2027 · November 2026` (the template's own text if unset) |
-| `text`          | Markdown: bullets (`- `), sub-bullets (two spaces + `- `), numbered steps (`1. `), short paragraphs, `**bold**`         |
-| `metrics`       | 1–4 KPI callout cards: `[{ "value": "+18 %", "label": "Revenue YoY", "note": "vs. +11 % plan" }]`                       |
-| `table`         | `{ "header": ["Region", "Revenue (k€)"], "rows": [["EMEA", "1,200"]], "align": ["left", "right"] }`                     |
-| `chart`         | `{ "type": "column", "categories": ["Q1", "Q2"], "series": [{ "name": "2026", "values": [1.2, 1.4] }] }`                |
-| `image`         | `{ "data": "data:image/png;base64,…", "caption": "…" }`                                                                 |
-| `left`, `right` | `two-column` slides: each `{ "heading": "…", "text": "…" }`, or `metrics`, `table`, `chart` or `image`                  |
-| `notes`         | Speaker notes: what the presenter says; details that do not fit on the slide                                            |
+| Field           | Use                                                                                                                                                                                                                                                                                 |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layout`        | `title` (opening slide), `section` (divider between parts), `content` (default), `two-column`, `title-only`, `blank`                                                                                                                                                                |
+| `title`         | The slide title: the takeaway, at most about 8 words                                                                                                                                                                                                                                |
+| `slots`         | Optional text slots of the company template besides title and content, an object of text by slot id: `{ "kicker": "VISION 2027", "lead": "One sentence of context." }`. The tool description lists the ids the template has, where each sits and how much text fits: use only those |
+| `subtitle`      | Title and section slides: subtitle, date, presenter                                                                                                                                                                                                                                 |
+| `footer`        | Title slide only: the text of the footer strip, e.g. `Strategy 2027 · November 2026` (the template's own text if unset)                                                                                                                                                             |
+| `text`          | Markdown: bullets (`- `), sub-bullets (two spaces + `- `), numbered steps (`1. `), short paragraphs, `**bold**`                                                                                                                                                                     |
+| `metrics`       | 1–4 KPI callout cards: `[{ "value": "+18 %", "label": "Revenue YoY", "note": "vs. +11 % plan" }]`                                                                                                                                                                                   |
+| `table`         | `{ "header": ["Region", "Revenue (k€)"], "rows": [["EMEA", "1,200"]], "align": ["left", "right"] }`                                                                                                                                                                                 |
+| `chart`         | `{ "type": "column", "categories": ["Q1", "Q2"], "series": [{ "name": "2026", "values": [1.2, 1.4] }] }`                                                                                                                                                                            |
+| `image`         | `{ "data": "data:image/png;base64,…", "caption": "…" }`                                                                                                                                                                                                                             |
+| `left`, `right` | `two-column` slides: each `{ "heading": "…", "text": "…" }`, or `metrics`, `table`, `chart` or `image`                                                                                                                                                                              |
+| `notes`         | Speaker notes: what the presenter says; details that do not fit on the slide                                                                                                                                                                                                        |
 
-- `kicker` and `lead` apply to content, two-column and title-only slides. If the company template has no place for them, the kicker is left out and the lead becomes the first paragraph of the text, so put nothing essential in the kicker.
+- `slots` fill what the company template's slide types offer (see the tool description). A slot the slide's layout does not have is left out, or becomes the first paragraph of the text, as the template says: put nothing essential in a slot that is only decoration.
 - A slide with `text` and a `table`, `chart` or `image` shows the text on the left and the visual on the right.
 - A slide with `metrics` alone shows large KPI callout cards across the slide; `metrics` combined with `text`, `chart` or `table` places a KPI ribbon across the top and the content below.
 

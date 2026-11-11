@@ -22,12 +22,14 @@ import {
  * its placeholders, else from its name; an admin can name the layout for a
  * kind in the document template (`pptx.layouts`).
  *
- * A layout can also carry two small text placeholders next to its title: a
- * **kicker** (a short label above the title) and a **lead** (a sentence below
- * it). They are ordinary body placeholders told apart by their name in the
- * layout (`Kicker`/`Eyebrow`, `Lead`), so they do not count as content areas.
- * A layout with them serves slides that have a kicker or a lead; the plain
- * layout of the same kind serves all others.
+ * A layout can also carry **text slots**: small text placeholders next to its
+ * title that a slide fills besides its title and content — a label above the
+ * title (`kicker`), an introduction under it (`lead`), the presenter on a title
+ * slide. A slot is an ordinary body placeholder that the document template
+ * names in `pptx.slots` (by the placeholder's name in the layout), or that
+ * follows a naming convention (`Kicker`/`Eyebrow`, `Lead`/`Einleitung`). Slots
+ * are not content areas. The layout of a slide with slots is the one of its
+ * kind that has the most of them.
  */
 
 const PRESENTATION = 'ppt/presentation.xml';
@@ -36,11 +38,32 @@ const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 /** Placeholder types that hold a slide's main content. */
 const CONTENT_TYPES = new Set(['obj', 'body', 'tbl', 'chart', 'pic', 'dgm', 'media', 'clipArt']);
 
-/** Names (in the layout) of the text placeholders that hold a slide's kicker and lead. */
-const TEXT_ROLE_NAMES = [
-  ['kicker', /kicker|eyebrow/i],
-  ['lead', /\blead\b|einleitung|teaser/i]
-];
+/**
+ * Slots a template gets without declaring them, found by the placeholder's
+ * name in the layout, with what happens to their text when a layout has no
+ * such placeholder (`drop`, or `text`: it becomes a paragraph of the slide).
+ */
+export const CONVENTIONAL_SLOTS = Object.freeze({
+  kicker: {
+    pattern: /kicker|eyebrow/i,
+    ifMissing: 'drop',
+    description: {
+      en: 'A short label above the slide title, for example the chapter or topic.',
+      de: 'Ein kurzes Label über dem Folientitel, zum Beispiel Kapitel oder Thema.'
+    }
+  },
+  lead: {
+    pattern: /\blead\b|einleitung|teaser/i,
+    ifMissing: 'text',
+    description: {
+      en: 'One sentence under the title that gives the context of the slide.',
+      de: 'Ein Satz unter dem Titel, der den Zusammenhang der Folie beschreibt.'
+    }
+  }
+});
+
+/** Placeholder types a slot can be (a text placeholder). */
+const SLOT_PLACEHOLDER_TYPES = new Set(['body', 'obj', 'tx']);
 
 const KIND_BY_TYPE = {
   title: 'title',
@@ -90,19 +113,50 @@ function levelSize(listStyle, level = 1) {
   return Number.isFinite(size) && size > 0 ? size : undefined;
 }
 
-/** The role (`kicker`, `lead`) a body placeholder has by its name, or undefined. */
-function textRoleOf(type, name) {
-  if (type !== 'body') return undefined;
-  return TEXT_ROLE_NAMES.find(([, pattern]) => pattern.test(name))?.[0];
+/**
+ * The slots to look for in a template: the ones the document template
+ * declares (placeholder name, compared without case), and the conventional
+ * ones unless the template declares a slot of that id itself.
+ *
+ * @param {Object<string, { placeholder: string }>} [declared] - `pptx.slots`.
+ * @returns {Array<{ id: string, explicit: boolean, matches: (name: string) => boolean }>}
+ */
+function slotMatchers(declared = {}) {
+  const matchers = Object.entries(declared || {}).map(([id, slot]) => {
+    const wanted = String(slot.placeholder || '')
+      .trim()
+      .toLowerCase();
+    return {
+      id,
+      explicit: true,
+      matches: name => wanted !== '' && name.trim().toLowerCase() === wanted
+    };
+  });
+  for (const [id, { pattern }] of Object.entries(CONVENTIONAL_SLOTS)) {
+    if (declared?.[id]) continue;
+    matchers.push({ id, explicit: false, matches: name => pattern.test(name) });
+  }
+  return matchers;
+}
+
+/** The slot a placeholder is, by its name, or undefined. */
+function slotOf(type, name, matchers) {
+  for (const matcher of matchers) {
+    // A conventional name only counts on a body placeholder; a declared one on any text placeholder.
+    const typeFits = matcher.explicit ? SLOT_PLACEHOLDER_TYPES.has(type) : type === 'body';
+    if (typeFits && matcher.matches(name)) return matcher.id;
+  }
+  return undefined;
 }
 
 /**
  * The placeholders of a master or layout.
  *
  * @param {Document} doc
- * @returns {Array<{ type: string, idx?: string, name: string, role?: string, text: string, rect: Object|null, size?: number, orient?: string }>}
+ * @param {Array} [matchers] - From {@link slotMatchers}.
+ * @returns {Array<{ type: string, idx?: string, name: string, slot?: string, text: string, rect: Object|null, size?: number, orient?: string }>}
  */
-function placeholdersOf(doc) {
+function placeholdersOf(doc, matchers = []) {
   const tree = firstChild(firstChild(doc.documentElement, 'cSld'), 'spTree');
   const out = [];
   for (const sp of descendants(tree, 'sp')) {
@@ -115,7 +169,7 @@ function placeholdersOf(doc) {
       idx: attr(ph, 'idx'),
       orient: attr(ph, 'orient'),
       name,
-      role: textRoleOf(type, name),
+      slot: slotOf(type, name, matchers),
       // The text the layout shows in it: a footer placeholder can carry a default.
       text: descendants(firstChild(sp, 'txBody'), 't')
         .map(t => t.textContent)
@@ -177,10 +231,14 @@ function titleSize(masterDoc) {
  * Open and read a template.
  *
  * @param {Buffer|Uint8Array} buffer
+ * @param {Object} [options]
+ * @param {Object<string, { placeholder: string }>} [options.slots] - The slots the
+ *   document template declares (`pptx.slots`).
  * @returns {Promise<Object>} `{ zip, slideSize, masters, layouts, slideIds,
  *   notesMaster }` — the package is ready to be filled.
  */
-export async function loadPresentationTemplate(buffer) {
+export async function loadPresentationTemplate(buffer, { slots } = {}) {
+  const matchers = slotMatchers(slots);
   const zip = await openPackage(buffer);
   const presentation = await readXmlPart(zip, PRESENTATION);
   if (!presentation) throw new Error('The file has no presentation part.');
@@ -205,7 +263,7 @@ export async function loadPresentationTemplate(buffer) {
     const themeRel = rels.find(r => r.type === REL_TYPES.theme);
     const master = {
       path,
-      placeholders: placeholdersOf(doc),
+      placeholders: placeholdersOf(doc, matchers),
       theme: themeRel
         ? themeOf(await readXmlPart(zip, resolveTarget(path, themeRel.target)))
         : themeOf(null),
@@ -220,7 +278,7 @@ export async function loadPresentationTemplate(buffer) {
       const layoutPath = resolveTarget(path, rel.target);
       const layoutDoc = await readXmlPart(zip, layoutPath);
       if (!layoutDoc) continue;
-      const placeholders = placeholdersOf(layoutDoc).map(ph => {
+      const placeholders = placeholdersOf(layoutDoc, matchers).map(ph => {
         const inherited = masterPlaceholderFor(master, ph);
         return {
           ...ph,
@@ -251,22 +309,22 @@ export async function loadPresentationTemplate(buffer) {
 }
 
 function contentPlaceholders(layout) {
-  return layout.placeholders.filter(ph => CONTENT_TYPES.has(ph.type) && ph.rect && !ph.role);
+  return layout.placeholders.filter(ph => CONTENT_TYPES.has(ph.type) && ph.rect && !ph.slot);
 }
 
-/** The layout's placeholder for a slide's kicker (a label above the title), or null. */
-function kickerPlaceholder(layout) {
-  return layout.placeholders.find(ph => ph.role === 'kicker' && ph.rect) || null;
+/** The ids of the text slots a layout has. */
+export function layoutSlotIds(layout) {
+  return [...new Set(layout.placeholders.filter(ph => ph.slot && ph.rect).map(ph => ph.slot))];
 }
 
-/** The layout's placeholder for a slide's lead (a sentence below the title), or null. */
-function leadPlaceholder(layout) {
-  return layout.placeholders.find(ph => ph.role === 'lead' && ph.rect) || null;
+/** The layout's placeholder for a slot, or null. */
+export function slotPlaceholder(layout, id) {
+  return layout.placeholders.find(ph => ph.slot === id && ph.rect) || null;
 }
 
-/** Whether a layout has a kicker or a lead placeholder. */
+/** Whether a layout has any text slot. */
 export function hasTextSlots(layout) {
-  return Boolean(kickerPlaceholder(layout) || leadPlaceholder(layout));
+  return layoutSlotIds(layout).length > 0;
 }
 
 function titlePlaceholder(layout) {
@@ -346,34 +404,128 @@ export function chooseLayouts(layouts, overrides = {}) {
 }
 
 /**
- * The layouts for slides with a kicker or a lead: for each kind that can have
- * them, the first layout of that kind with such a placeholder.
+ * The layout for a slide that fills text slots: of the layouts of its kind,
+ * the one that has the most of the slots, then the fewest others. The layout
+ * chosen for the kind (`base`) wins a tie, and stays when no layout has any.
  *
  * @param {Array} layouts - From {@link loadPresentationTemplate}.
- * @returns {Object<string, Object>} Kind (`content`, `twoColumn`, `titleOnly`) → layout; kinds the template does not serve are absent.
+ * @param {string} kind - The slide's kind.
+ * @param {Object} base - The layout chosen for the kind.
+ * @param {string[]} slotIds - The slots the slide fills.
+ * @returns {Object} A layout.
  */
-export function chooseTextSlotLayouts(layouts) {
-  const chosen = {};
-  for (const layout of layouts) {
-    if (!hasTextSlots(layout)) continue;
-    const kind = layoutKind(layout);
-    if (kind && ['content', 'twoColumn', 'titleOnly'].includes(kind)) chosen[kind] ||= layout;
+export function chooseLayoutForSlots(layouts, kind, base, slotIds) {
+  if (!slotIds.length) return base;
+  const candidates = [base, ...layouts.filter(l => l !== base && layoutKind(l) === kind)];
+  let best = null;
+  for (const layout of candidates) {
+    const ids = layoutSlotIds(layout);
+    const covered = slotIds.filter(id => ids.includes(id)).length;
+    const extra = ids.length - covered;
+    if (!best || covered > best.covered || (covered === best.covered && extra < best.extra)) {
+      best = { layout, covered, extra };
+    }
   }
-  return chosen;
+  return best.covered > 0 ? best.layout : base;
 }
 
-export { contentPlaceholders, kickerPlaceholder, leadPlaceholder, titlePlaceholder };
+export { contentPlaceholders, titlePlaceholder };
+
+/** Where a placeholder is, in words a model understands: relative to the title, else on a 3 × 3 grid. */
+function positionOf(rect, title, size) {
+  if (title && rect !== title) {
+    if (rect.y + rect.cy <= title.y + title.cy / 2) return 'above-title';
+    if (rect.y >= title.y + title.cy * 0.75 && rect.y + rect.cy / 2 < size.cy * 0.4) {
+      return 'below-title';
+    }
+  }
+  const cx = rect.x + rect.cx / 2;
+  const cy = rect.y + rect.cy / 2;
+  const vertical = cy < size.cy / 3 ? 'top' : cy > (size.cy * 2) / 3 ? 'bottom' : 'middle';
+  const horizontal = cx < size.cx / 3 ? 'left' : cx > (size.cx * 2) / 3 ? 'right' : 'centre';
+  return `${vertical}-${horizontal}`;
+}
 
 /**
- * What a PowerPoint template offers, for the admin page: its layouts and the
- * one chosen for each kind of slide.
+ * How much text fits a box, as an estimate: lines of the font size and
+ * characters per line (bold and capital text is wider than average).
+ */
+function capacityOf(rect, hundredths) {
+  const points = (hundredths || 1800) / 100;
+  const lines = Math.max(1, Math.floor(rect.cy / (points * 1.2 * 12700)));
+  const perLine = Math.max(1, Math.floor(rect.cx / (points * 0.55 * 12700)));
+  return { lines, chars: Math.floor((lines * perLine) / 5) * 5 };
+}
+
+const FOOTER_ROLES = { ftr: 'footer', dt: 'date', sldNum: 'slideNumber' };
+
+/** The placeholders of a layout, described for the admin page and for the model. */
+function describeLayout(layout, template) {
+  const master = layout.master || template.masters[0];
+  const title = titlePlaceholder(layout)?.rect || null;
+  const inches = value => Math.round((value / 914400) * 100) / 100;
+  return layout.placeholders
+    .filter(ph => ph.rect)
+    .map(ph => {
+      let role = FOOTER_ROLES[ph.type] || 'other';
+      if (ph.type === 'title' || ph.type === 'ctrTitle') role = 'title';
+      else if (ph.type === 'subTitle') role = 'subtitle';
+      else if (ph.slot) role = 'slot';
+      else if (CONTENT_TYPES.has(ph.type)) role = 'content';
+      const textual = role === 'slot' || role === 'content' || role === 'subtitle';
+      return {
+        role,
+        ...(ph.slot ? { slot: ph.slot } : {}),
+        name: ph.name,
+        type: ph.type,
+        ...(ph.text && role === 'footer' ? { text: ph.text } : {}),
+        position: positionOf(ph.rect, title, template.slideSize),
+        width: inches(ph.rect.cx),
+        height: inches(ph.rect.cy),
+        ...(textual
+          ? { capacity: capacityOf(ph.rect, ph.size || (master?.bodySizes || [])[0]) }
+          : {})
+      };
+    });
+}
+
+/** The slots of a template: the declared ones and the ones layouts have by convention. */
+function summarizeSlots(layouts, declared = {}) {
+  const found = new Map();
+  for (const layout of layouts) {
+    for (const id of layoutSlotIds(layout)) {
+      const entry = found.get(id) || [];
+      entry.push({ name: layout.name, kind: layoutKind(layout) });
+      found.set(id, entry);
+    }
+  }
+  const ids = new Set([...Object.keys(declared || {}), ...found.keys()]);
+  return [...ids].map(id => {
+    const config = declared?.[id];
+    const conventional = CONVENTIONAL_SLOTS[id];
+    return {
+      id,
+      source: config ? 'config' : 'convention',
+      placeholder: config?.placeholder || null,
+      description: config?.description || conventional?.description || {},
+      ifMissing: config?.ifMissing || conventional?.ifMissing || 'drop',
+      layouts: found.get(id) || []
+    };
+  });
+}
+
+/**
+ * What a PowerPoint template offers, for the admin page and for the model:
+ * its layouts, the one chosen for each kind of slide, and its text slots.
  *
  * @param {Buffer} buffer
  * @param {Object} [overrides]
+ * @param {Object} [options]
+ * @param {Object} [options.slots] - The slots the document template declares (`pptx.slots`).
  * @returns {Promise<Object>}
  */
-export async function analyzePowerpointTemplate(buffer, overrides) {
-  const template = await loadPresentationTemplate(buffer);
+export async function analyzePowerpointTemplate(buffer, overrides, { slots } = {}) {
+  const template = await loadPresentationTemplate(buffer, { slots });
   const chosen = chooseLayouts(template.layouts, overrides);
   const ratio = template.slideSize.cx / template.slideSize.cy;
   const theme = template.masters[0]?.theme || { colors: {}, fonts: {} };
@@ -391,18 +543,14 @@ export async function analyzePowerpointTemplate(buffer, overrides) {
     layouts: template.layouts.map(layout => ({
       name: layout.name,
       type: layout.type,
-      placeholders: layout.placeholders.map(ph => ph.type)
+      kind: layoutKind(layout),
+      placeholders: layout.placeholders.map(ph => ph.type),
+      elements: describeLayout(layout, template)
     })),
     mapping: Object.fromEntries(
       Object.entries(chosen).map(([kind, layout]) => [kind, layout.name])
     ),
-    // The layouts that serve slides with a kicker or a lead (none: the template has no such placeholders).
-    textSlotLayouts: Object.fromEntries(
-      Object.entries(chooseTextSlotLayouts(template.layouts)).map(([kind, layout]) => [
-        kind,
-        layout.name
-      ])
-    ),
+    slots: summarizeSlots(template.layouts, slots),
     theme: { colors: theme.colors, fonts: theme.fonts },
     hasNotesMaster: Boolean(template.notesMaster)
   };

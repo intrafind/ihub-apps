@@ -12,6 +12,7 @@ import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import AdminLoadError from '../components/AdminLoadError';
 import AdminPageSkeleton from '../components/AdminPageSkeleton';
 import TemplateFileSlot from '../components/document-templates/TemplateFileSlot';
+import TemplateSlots from '../components/document-templates/TemplateSlots';
 import {
   CALLOUT_CLASS,
   CHECKBOX_CLASS,
@@ -927,6 +928,14 @@ export default function AdminDocumentTemplateEditPage() {
                     ))}
                   </div>
                 </div>
+              )}
+              {pptxInfo?.layouts && (
+                <TemplateSlots
+                  slots={draft.pptx.slots}
+                  info={pptxInfo}
+                  errors={errors}
+                  onChange={slots => update('pptx', 'slots', slots)}
+                />
               )}
               <div className="grid gap-4 sm:grid-cols-3">
                 <Field

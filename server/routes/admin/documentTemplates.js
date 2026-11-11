@@ -112,7 +112,8 @@ async function describeFiles(template) {
         await import('../../services/documents/pptx/pptxTemplate.js');
       out.powerpointTemplate = await analyzePowerpointTemplate(
         await readTemplateAsset(template.id, template.pptx.template),
-        template.pptx.layouts
+        template.pptx.layouts,
+        { slots: template.pptx.slots }
       );
     } catch (error) {
       out.powerpointTemplate = { error: error.message };

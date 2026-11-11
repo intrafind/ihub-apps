@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { Lexer } from 'marked';
 import {
   ContentTypes,
   IMAGE_CONTENT_TYPES,
@@ -26,18 +27,20 @@ import { checkImageDataUri, imagePixelSize, LIMITS } from '../pdf/validators.js'
 import { addNotesMaster, NOTES_MASTER_TYPE, THEME_TYPE } from './baseTemplate.js';
 import { renderCharts, sanitizeChart } from './charts.js';
 import {
+  CONVENTIONAL_SLOTS,
+  chooseLayoutForSlots,
   chooseLayouts,
-  chooseTextSlotLayouts,
   contentPlaceholders,
-  hasTextSlots,
-  kickerPlaceholder,
-  leadPlaceholder,
+  layoutSlotIds,
   loadPresentationTemplate,
+  slotPlaceholder,
   titlePlaceholder
 } from './pptxTemplate.js';
+import { MAX_SLOTS, SLOT_ID_PATTERN } from './slotIds.js';
 import {
   EMU_PER_INCH,
   GROUP_PROPS,
+  inlineRuns,
   PML_NAMESPACES,
   XML_HEAD,
   markdownToSlideText,
@@ -64,10 +67,10 @@ import {
  * @property {string} [layout] - `title`, `section`, `content`, `two-column`,
  *   `title-only`, `blank`.
  * @property {string} [title]
- * @property {string} [kicker] - A short label above the title (content, two-column and
- *   title-only slides), for templates whose layouts have a kicker placeholder.
- * @property {string} [lead] - One sentence under the title; without a lead placeholder
- *   in the template it becomes the first paragraph of the text.
+ * @property {Object<string, string>} [slots] - Text by slot id (`kicker`, `lead` …) for the
+ *   text slots the template's layouts have besides title and content. A slot the layout of
+ *   the slide does not have is left out, or becomes the first paragraph of the text, as the
+ *   slot's `ifMissing` says.
  * @property {string} [footer] - Text of the footer strip of a title slide (and, on other
  *   slides, in place of the deck's footer).
  * @property {string} [subtitle] - Title and section slides.
@@ -94,8 +97,7 @@ export const DECK_LIMITS = Object.freeze({
   maxTableColumns: 12,
   maxCellChars: 300,
   maxTitleChars: 300,
-  maxKickerChars: 80,
-  maxLeadChars: 300,
+  maxSlotChars: 300,
   maxTextChars: 8000
 });
 
@@ -183,6 +185,18 @@ function sanitizeMetrics(metrics) {
   return items.length ? items : null;
 }
 
+/** Text by slot id: valid ids with text, at most {@link MAX_SLOTS}. */
+function sanitizeSlots(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const [id, raw] of Object.entries(value).slice(0, MAX_SLOTS)) {
+    if (!SLOT_ID_PATTERN.test(id) || typeof raw !== 'string') continue;
+    const clean = raw.replace(INVALID_XML_CHARS, '').trim().slice(0, DECK_LIMITS.maxSlotChars);
+    if (clean) out[id] = clean;
+  }
+  return out;
+}
+
 function sanitizeBlock(block, ctx, slideNumber) {
   if (!block || typeof block !== 'object') return null;
   return {
@@ -230,8 +244,7 @@ export function sanitizeSlides(slides, ctx) {
     return {
       kind,
       title: text(source.title, DECK_LIMITS.maxTitleChars),
-      kicker: text(source.kicker, DECK_LIMITS.maxKickerChars),
-      lead: text(source.lead, DECK_LIMITS.maxLeadChars),
+      slots: sanitizeSlots(source.slots),
       footer: text(source.footer, 200),
       subtitle: text(source.subtitle, 500),
       ...content,
@@ -297,7 +310,7 @@ function fitImage(pixels, rect) {
  * @param {number} slideNumber
  * @param {Object} [options]
  * @param {boolean} [options.compact] - A box without insets, list indents and
- *   paragraph spacing (the kicker and lead of a slide), so none is assumed.
+ *   paragraph spacing (a text slot of a slide), so none is assumed.
  */
 function autofit(paragraphs, rect, sizes, ctx, slideNumber, { compact = false } = {}) {
   if (!rect) return '<a:normAutofit/>';
@@ -589,41 +602,59 @@ function plainParagraphs(value) {
   return value ? [{ runs: [{ text: value }] }] : [];
 }
 
-/** Kinds of slide that can have a kicker and a lead. */
-const TEXT_SLOT_KINDS = new Set(['content', 'twoColumn', 'titleOnly']);
-
 /**
- * The layout of a slide: the layout of its kind, or — for a slide with a kicker
- * or a lead — the template's layout of that kind that has the placeholders for
- * them, when there is one.
+ * The layout of a slide: the layout of its kind, or — for a slide that fills
+ * text slots — the template's layout of that kind that has most of them.
  */
 function layoutFor(slide, ctx) {
   const base = ctx.layouts[slide.kind] || ctx.layouts.content;
-  const wantsText = slide.kicker || slide.lead;
-  if (!wantsText || !TEXT_SLOT_KINDS.has(slide.kind) || hasTextSlots(base)) return base;
-  return ctx.textSlotLayouts[slide.kind] || base;
+  return chooseLayoutForSlots(ctx.allLayouts, slide.kind, base, Object.keys(slide.slots));
 }
 
 /**
- * A lead the layout has no placeholder for becomes the first paragraph of the
- * slide's text (the left column of a two-column slide); a title-only slide has
- * no text to put it in.
+ * The text of slots the layout has no placeholder for, where the slot says so
+ * (`ifMissing: 'text'`): the first paragraph of the slide's text (of the left
+ * column of a two-column slide), or the subtitle of a title or section slide.
+ * A title-only or blank slide has no text to put it in.
  */
-function leadAsText(slide) {
-  if (slide.kind === 'titleOnly') return slide;
-  const join = value => [slide.lead, value].filter(Boolean).join('\n\n');
+function withSlotText(slide, texts) {
+  if (!texts.length) return slide;
+  const join = value => [...texts, value].filter(Boolean).join('\n\n');
   if (slide.kind === 'twoColumn' && slide.left) {
     return { ...slide, left: { ...slide.left, text: join(slide.left.text) } };
   }
-  return { ...slide, text: join(slide.text) };
+  if (slide.kind === 'content' || slide.kind === 'twoColumn') {
+    return { ...slide, text: join(slide.text) };
+  }
+  if ((slide.kind === 'title' || slide.kind === 'section') && !slide.subtitle) {
+    return { ...slide, subtitle: texts.join(' ') };
+  }
+  return slide;
+}
+
+/** Slot text as inline Markdown (bold, links), on one line. */
+function slotParagraphs(value) {
+  const line = value.replace(/\s*\n\s*/g, ' ');
+  return [{ runs: inlineRuns(new Lexer({ gfm: true }).inlineTokens(line)) }];
 }
 
 function buildSlide(source, number, ctx, spec) {
   const layout = layoutFor(source, ctx);
-  const kickerPh = kickerPlaceholder(layout);
-  const leadPh = leadPlaceholder(layout);
-  const slide =
-    source.lead && !leadPh && TEXT_SLOT_KINDS.has(source.kind) ? leadAsText(source) : source;
+  // Slots the layout has go into their placeholders; the others follow the slot's rule.
+  const filled = [];
+  const fallback = [];
+  for (const [id, value] of Object.entries(source.slots)) {
+    if (!ctx.slotIds.has(id)) {
+      ctx.warnings.push(
+        `Slide ${number}: the template has no slot "${id}"; its text was left out. Slots: ${[...ctx.slotIds].join(', ')}.`
+      );
+      continue;
+    }
+    const ph = slotPlaceholder(layout, id);
+    if (ph) filled.push({ id, ph, value });
+    else if (ctx.slotRules[id] === 'text') fallback.push(value);
+  }
+  const slide = withSlotText(source, fallback);
   const builder = new SlideBuilder({ number, layout, ctx });
   const title = titlePlaceholder(layout);
   const contents = contentPlaceholders(layout).sort((a, b) => a.rect.x - b.rect.x);
@@ -650,28 +681,18 @@ function buildSlide(source, number, ctx, spec) {
     }
   }
 
-  if (slide.kicker && kickerPh) {
-    builder.placeholder(kickerPh, plainParagraphs(slide.kicker), {
+  for (const { id, ph, value } of filled) {
+    builder.placeholder(ph, slotParagraphs(value), {
       bullets: false,
-      sizes: [kickerPh.size || 1200],
-      name: 'Kicker',
-      compact: true
-    });
-  }
-  if (slide.lead && leadPh) {
-    builder.placeholder(leadPh, markdownToSlideText(slide.lead).paragraphs, {
-      bullets: false,
-      sizes: [leadPh.size || ctx.bodySizes(leadPh)[0]],
-      name: 'Lead',
+      sizes: [ph.size || ctx.bodySizes(ph)[0]],
+      name: ph.name || id,
       compact: true
     });
   }
 
   if (slide.kind === 'title' || slide.kind === 'section') {
     const subtitle =
-      slide.subtitle ||
-      slide.lead ||
-      (slide.text && !slide.table && !slide.chart ? slide.text : '');
+      slide.subtitle || (slide.text && !slide.table && !slide.chart ? slide.text : '');
     if (subtitle && subtitlePh) {
       const { paragraphs } = markdownToSlideText(subtitle);
       builder.placeholder(subtitlePh, paragraphs, {
@@ -822,6 +843,25 @@ export function ensureNotesMaster(template, types) {
 }
 
 /**
+ * What a template's slots are: their ids (declared ones, the ones its layouts
+ * have, and the conventional `kicker` and `lead`) and what happens to a slot's
+ * text when the slide's layout has no placeholder for it.
+ */
+function slotRulesOf(layouts, declared = {}) {
+  const slotRules = {};
+  for (const [id, conventional] of Object.entries(CONVENTIONAL_SLOTS)) {
+    slotRules[id] = conventional.ifMissing;
+  }
+  for (const [id, slot] of Object.entries(declared || {})) {
+    slotRules[id] = slot.ifMissing || CONVENTIONAL_SLOTS[id]?.ifMissing || 'drop';
+  }
+  for (const layout of layouts) {
+    for (const id of layoutSlotIds(layout)) slotRules[id] ||= 'drop';
+  }
+  return { slotRules, slotIds: new Set(Object.keys(slotRules)) };
+}
+
+/**
  * Build the presentation.
  *
  * @param {Object} spec - `title`, `author`, `language`, `slides`, `footer`,
@@ -829,6 +869,7 @@ export function ensureNotesMaster(template, types) {
  * @param {Object} options
  * @param {Buffer} options.template - The template package (`.pptx`/`.potx`).
  * @param {Object} [options.layouts] - Layout names by kind (admin's choice).
+ * @param {Object} [options.slots] - The slots the document template declares (`pptx.slots`).
  * @param {boolean} [options.keepTemplateSlides] - Keep the slides the template
  *   file already has and add the new ones after them (`append`); by default
  *   they are removed and only the master and layouts are used.
@@ -836,11 +877,11 @@ export function ensureNotesMaster(template, types) {
  */
 export async function buildPptx(
   spec,
-  { template: templateBuffer, layouts: overrides, keepTemplateSlides = false } = {}
+  { template: templateBuffer, layouts: overrides, keepTemplateSlides = false, slots } = {}
 ) {
   const warnings = [];
   const slides = sanitizeSlides(spec.slides, { warnings, imageBytes: 0 });
-  const template = await loadPresentationTemplate(templateBuffer);
+  const template = await loadPresentationTemplate(templateBuffer, { slots });
   const { zip } = template;
   const types = await ContentTypes.read(zip);
   types.setOverride(PRESENTATION, PRESENTATION_TYPE);
@@ -865,7 +906,8 @@ export async function buildPptx(
     accent: theme.colors.accent1 || '1E3A8A',
     themeColors: theme.colors,
     layouts: chooseLayouts(template.layouts, overrides),
-    textSlotLayouts: chooseTextSlotLayouts(template.layouts),
+    allLayouts: template.layouts,
+    ...slotRulesOf(template.layouts, slots),
     bodySizes: ph => {
       const sizes = master?.bodySizes || [2000, 1800, 1600];
       return ph?.size ? [ph.size, ...sizes.slice(1)] : sizes;

@@ -12,6 +12,8 @@ export const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 export const FONT_FACES = ['normal', 'bold', 'italics', 'bolditalics'];
 export const SLIDE_KINDS = ['title', 'section', 'content', 'twoColumn', 'titleOnly', 'blank'];
 export const BUILT_IN_FONTS = ['sans', 'serif', 'mono'];
+/** The id of a text slot of a slide layout (as the server checks it). */
+export const SLOT_ID_PATTERN = /^[a-z][a-zA-Z0-9]{0,31}$/;
 
 /** A new, empty template. */
 export function emptyTemplate() {
@@ -126,6 +128,15 @@ export function validateTemplate(draft, t) {
     const value = draft.brand?.[key];
     if (value && !HEX_COLOR.test(value)) {
       errors[key] = t('admin.documentTemplates.errors.color', 'Use a hex colour like #e30613.');
+    }
+  }
+  for (const [id, slot] of Object.entries(draft.pptx?.slots || {})) {
+    if (!slot?.placeholder?.trim()) {
+      errors[`slot:${id}`] = t(
+        'admin.documentTemplates.errors.slotPlaceholder',
+        'Name the placeholder for the slot "{{id}}".',
+        { id }
+      );
     }
   }
   return errors;

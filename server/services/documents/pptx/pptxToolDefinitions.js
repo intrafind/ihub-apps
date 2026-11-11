@@ -37,6 +37,8 @@ export const RESTYLE_PPTX_TOOL = {
 export const CREATE_PPTX_TOOL = {
   id: 'create_pptx',
   outputKind: 'presentation',
+  // The company template's text slots and what each slide type has are added to the description.
+  templateGuide: 'pptx',
   name: { en: 'Create presentation', de: 'Präsentation erstellen' },
   description: {
     en: 'Create a PowerPoint presentation (.pptx) on the server, on the company\'s slide template, and give it to the user as a download. Pass the slides as a JSON array in "slides"; each slide has a layout ("title", "section", "content", "two-column", "title-only", "blank"), a "title" and content: "text" (Markdown bullets), "table", "chart" (native, editable) or "image", plus optional speaker "notes". Example: [{"layout":"title","title":"Q3 Review","subtitle":"Board meeting"},{"title":"Highlights","text":"- Revenue +12 %\\n- 40 new customers"},{"title":"Revenue","chart":{"type":"column","categories":["Q1","Q2"],"series":[{"name":"2026","values":[1.2,1.4]}]}}]. The user sees a download card in the chat, so do not paste a link. Activate the "pptx" skill first for the full slide grammar and design rules.',
@@ -63,7 +65,7 @@ export const CREATE_PPTX_TOOL = {
       slides: {
         type: 'string',
         description:
-          'JSON array of slides (at most 60). Slide fields: layout, title, kicker (a short label above the title, e.g. "VISION 2027"), lead (one sentence under the title), subtitle (title and section slides), footer (the strip text of a title slide, e.g. "Strategy 2027 · November 2026"), text (Markdown: bullets "- ", numbered "1. ", **bold**), metrics (1–4 KPI callout cards: [{"value":"+18 %","label":"Revenue YoY","note":"vs. +11 % plan"}]), table {"header":[…],"rows":[[…]],"align":["left","right"]}, chart {"type":"column|bar|line|pie|doughnut|area","categories":[…],"series":[{"name":…,"values":[…]}],"stacked":false,"showValues":true,"numberFormat":"#,##0"}, image {"data":"data:image/png;base64,…","caption":…}, left/right for two-column slides (each {"heading","text","metrics","table","chart","image"}), notes (speaker notes). Text plus a table, chart or image on one slide are placed side by side; metrics plus text/visual place KPI cards across the top.'
+          'JSON array of slides (at most 60). Slide fields: layout, title, subtitle (title and section slides), slots (text by slot id for the text slots the company template has besides title and content, e.g. {"kicker":"VISION 2027","lead":"One sentence of context."}; use only the slot ids listed in the tool description), footer (the strip text of a title slide, e.g. "Strategy 2027 · November 2026"), text (Markdown: bullets "- ", numbered "1. ", **bold**), metrics (1–4 KPI callout cards: [{"value":"+18 %","label":"Revenue YoY","note":"vs. +11 % plan"}]), table {"header":[…],"rows":[[…]],"align":["left","right"]}, chart {"type":"column|bar|line|pie|doughnut|area","categories":[…],"series":[{"name":…,"values":[…]}],"stacked":false,"showValues":true,"numberFormat":"#,##0"}, image {"data":"data:image/png;base64,…","caption":…}, left/right for two-column slides (each {"heading","text","metrics","table","chart","image"}), notes (speaker notes). Text plus a table, chart or image on one slide are placed side by side; metrics plus text/visual place KPI cards across the top.'
       },
       footer: {
         type: 'string',

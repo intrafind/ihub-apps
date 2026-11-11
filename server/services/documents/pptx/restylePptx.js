@@ -241,7 +241,7 @@ function bindFixedRoles(shapes, layout) {
       bound =
         take(p => p.type === 'subTitle', shape) ||
         take(
-          p => !p.role && TEXT_PLACEHOLDER_TYPES.has(p.type === 'obj' ? undefined : p.type),
+          p => !p.slot && TEXT_PLACEHOLDER_TYPES.has(p.type === 'obj' ? undefined : p.type),
           shape
         );
     } else if (shape.role === 'footer') {
@@ -706,6 +706,7 @@ function registerSlides(target, paths) {
  *   master, layouts and theme. Its own sample slides are dropped.
  * @param {Object} [options]
  * @param {Object} [options.layouts] - Layout names by kind (`pptx.layouts` of the document template).
+ * @param {Object} [options.slots] - The text slots the template declares (`pptx.slots`); they are not content areas.
  * @param {string} [options.footer] - Footer text for slides that have none.
  * @param {boolean} [options.slideNumbers] - Slide numbers for slides that have none.
  * @param {string} [options.title] - Document title (default: kept empty).
@@ -715,7 +716,7 @@ function registerSlides(target, paths) {
  */
 export async function restylePptx(sourceBuffer, templateBuffer, options = {}) {
   const source = await loadPresentationTemplate(sourceBuffer);
-  const target = await loadPresentationTemplate(templateBuffer);
+  const target = await loadPresentationTemplate(templateBuffer, { slots: options.slots });
   await removeTemplateSlides(target);
   const types = await ContentTypes.read(target.zip);
   // A .potx template names its main part a template; the result is a presentation.

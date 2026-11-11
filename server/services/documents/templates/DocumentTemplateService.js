@@ -203,22 +203,90 @@ export async function templateChoices(language = 'en') {
   }));
 }
 
+/** The slide guides built so far, by what they depend on (template settings, file, language). */
+const guideCache = new Map();
+const GUIDE_CACHE_ENTRIES = 50;
+
+/**
+ * What the model is told about a template's slides: the text slots its
+ * PowerPoint layouts have, where they are and how much text fits (see
+ * `pptx/slideGuide.js`). Empty without a PowerPoint template.
+ *
+ * @param {Object} template - A template from {@link getTemplate}.
+ * @param {Object} [options]
+ * @param {string} [options.language]
+ * @param {boolean} [options.others] - Other templates can be chosen too.
+ * @returns {Promise<string>}
+ */
+export async function slideGuideFor(template, { language = 'en', others = false } = {}) {
+  const name = template?.pptx?.template;
+  if (!name) return '';
+  let stat;
+  try {
+    stat = await fs.stat(assetPath(template.id, name));
+  } catch {
+    return '';
+  }
+  const key = JSON.stringify([
+    template.id,
+    name,
+    stat.mtimeMs,
+    stat.size,
+    template.pptx.layouts || null,
+    template.pptx.slots || null,
+    language,
+    others
+  ]);
+  if (guideCache.has(key)) return guideCache.get(key);
+  let guide = '';
+  try {
+    const [{ analyzePowerpointTemplate }, { buildSlideGuide }] = await Promise.all([
+      import('../pptx/pptxTemplate.js'),
+      import('../pptx/slideGuide.js')
+    ]);
+    const analysis = await analyzePowerpointTemplate(
+      await readAsset(template.id, name),
+      template.pptx.layouts,
+      { slots: template.pptx.slots }
+    );
+    guide = buildSlideGuide(analysis, { language, others });
+  } catch (error) {
+    logger.warn('The slides of a document template could not be described', {
+      component: COMPONENT,
+      templateId: template.id,
+      error: error.message
+    });
+  }
+  if (guideCache.size >= GUIDE_CACHE_ENTRIES) guideCache.delete(guideCache.keys().next().value);
+  guideCache.set(key, guide);
+  return guide;
+}
+
 /**
  * The document templates as the tools of the document skills see them in
- * an app: the one the app pins, or the choices.
+ * an app: the one the app pins, or the choices, and what the model is told
+ * about the slides of the template that applies (the pinned one, else the
+ * default one).
  *
  * @param {Object} params
  * @param {Object} [params.app]
  * @param {string} [params.language]
- * @returns {Promise<{ pinned: { id: string, name: string } | null, choices: Array<Object>, defaultName: string|null }>}
+ * @returns {Promise<{ pinned: { id: string, name: string } | null, choices: Array<Object>, defaultName: string|null, guides: { pptx: string } }>}
  */
 export async function documentTemplateContext({ app, language = 'en' } = {}) {
   const choices = await templateChoices(language);
   const pinned = app?.documentTemplate ? choices.find(c => c.id === app.documentTemplate) : null;
+  const applying = pinned || choices.find(c => c.default) || null;
+  const template = applying ? await getTemplate(applying.id) : null;
   return {
     pinned: pinned ? { id: pinned.id, name: pinned.name } : null,
     choices,
-    defaultName: choices.find(c => c.default)?.name || null
+    defaultName: choices.find(c => c.default)?.name || null,
+    guides: {
+      pptx: template
+        ? await slideGuideFor(template, { language, others: !pinned && choices.length > 1 })
+        : ''
+    }
   };
 }
 

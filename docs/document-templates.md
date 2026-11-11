@@ -60,8 +60,13 @@ Presentations are always built by **filling a template**: your PowerPoint templa
 - **Tables, charts and pictures** are placed in the layout's content area. Tables use the template's accent colour; charts are native, editable PowerPoint charts in the theme's accent colours and body font.
 - **Sample slides** in the template file are not copied. Neither are custom shows and sections that refer to them.
 - **Footer and slide numbers:** set them in the template (**Slide footer**, **Slide numbers**). They appear on every slide but the title slide, where the layout has a footer or slide number placeholder.
-- **Kicker and lead:** a slide can have a short label above its title (`kicker`, e.g. `VISION 2027`) and one sentence under it (`lead`). They go into two text placeholders of a layout, found by their **name** in the layout (Selection Pane): a placeholder named `Kicker` (or `Eyebrow`) and one named `Lead` (or `Einleitung`). Slides that have a kicker or a lead use the first content, two-content or title-only layout with such a placeholder; every other slide keeps the layout chosen for its kind. Give the placeholders their own font size, colour and no bullet in the layout, and leave room for them between the title and the content area. A template without these placeholders is fine: the kicker is left out, and the lead becomes the first paragraph of the slide's text (not on title-only slides).
+- **Text slots:** besides its title and content, a slide can fill **text slots** of its layout: a short label above the title (`kicker`), one sentence under it (`lead`), the presenter on a title slide. A slot is a text placeholder of a layout that the document template names. The model is told which slots the template has, where each one is (above or below the title, bottom left …) and how much text fits, and passes the text in the slide field `slots`: `{ "kicker": "VISION 2027", "lead": "One sentence of context." }`.
+  - **Declaring slots:** in the editor (**PowerPoint → Text slots**) or `pptx.slots` of `template.json`, give each slot an id, the **name of its placeholder** in the layouts (PowerPoint's Selection Pane; compared without regard to case, in any language), what to put in it (shown to the model, per language) and what to do in a layout without it. Any text placeholder can be a slot, also on a title or section layout.
+  - **Without declaring:** a body placeholder named `Kicker` or `Eyebrow` is the slot `kicker`, one named `Lead`, `Einleitung` or `Teaser` is `lead`.
+  - **Layout choice:** a slide that fills slots uses the layout of its kind that has most of them, then the fewest others; slides without slots keep the layout chosen for their kind. Slots are no content areas. Give the placeholders their own font size, colour and no bullet in the layout, and leave room for them between the title and the content area.
+  - **Without a slot in the layout:** the text is left out (`ifMissing: "drop"`, the default, and for `kicker`) or becomes the first paragraph of the slide's text (`"text"`, the default for `lead`; on a title or section slide the subtitle; not on title-only and blank slides). A slot id the template does not have is ignored and reported in the tool's `warnings`.
 - **Title slide strip:** a title layout whose footer placeholder holds text (for example the company name) shows that text on every title slide, or the title slide's own `footer`, such as `Strategy 2027 · November 2026`. A placeholder with a white fill hides a static text of the layout underneath it. The footer text set in the template applies to the other slides only.
+- **What the model knows:** the description of `create_pptx` lists the slots of the template that applies (the app's, else the default one) with where they are and how much fits, and what each slide type (`layout`) has: title, subtitle, content areas, slots, the footer strip. It is built from the uploaded PowerPoint file, so it follows the template when it changes.
 - **KPI cards** (`metrics`) are light neutral cards (the theme's `lt2`) with the theme's dark text colour (`dk2`) and a rule across the top in the first accent colour that is not a grey, so a theme whose accent 1 is grey still gets colourful cards.
 - **Speaker notes** use the template's notes master; a template without one gets a plain one.
 - Without a PowerPoint template, choose the **slide format** (16:9 or 4:3).
@@ -145,7 +150,15 @@ Template ids use `a-z`, `0-9` and `-`. `default`, `professional`, `minimal` and 
     "template": "powerpoint-template.potx",
     "footer": "{company}",
     "slideNumbers": true,
-    "layouts": { "content": "Titel und Inhalt" }
+    "layouts": { "content": "Titel und Inhalt" },
+    "slots": {
+      "kicker": {
+        "placeholder": "Kicker",
+        "description": { "en": "Chapter or topic, in capitals", "de": "Kapitel oder Thema" },
+        "ifMissing": "drop"
+      },
+      "presenter": { "placeholder": "Referent", "description": { "en": "Name of the speaker" } }
+    }
   }
 }
 ```

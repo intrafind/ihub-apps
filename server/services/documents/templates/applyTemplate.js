@@ -195,7 +195,8 @@ export function applyTemplateToPptxSpec(spec, bundle) {
       },
       footer: pptx.footer !== undefined ? withCompany(pptx.footer, template) : spec.footer,
       slideNumbers: pick(pptx.slideNumbers, spec.slideNumbers),
-      layouts: pptx.layouts
+      layouts: pptx.layouts,
+      slotConfig: pptx.slots
     },
     assets: {
       powerpointTemplate: assets.powerpointTemplate?.data,
