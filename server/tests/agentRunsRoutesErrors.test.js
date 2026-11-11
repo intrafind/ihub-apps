@@ -34,7 +34,8 @@ jest.unstable_mockModule('../utils/sseChannel.js', () => ({
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getAgentProfiles: () => ({ data: state.profiles }),
-    getPlatform: () => ({})
+    // The error shape is under test, not the AI-use acknowledgement guard (428).
+    getPlatform: () => ({ aiAcknowledgement: { enabled: false } })
   }
 }));
 jest.unstable_mockModule('../services/workflow/index.js', () => ({
