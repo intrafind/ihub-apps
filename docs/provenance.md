@@ -61,13 +61,14 @@ the hash of the final step's text, so a user who copied only the final answer st
 
 | Channel | Where |
 | --- | --- |
-| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens model, time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (stopped, or stored before this feature) shows no button. |
+| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens model, time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) shows no button; a stopped answer that had already written text does show it. |
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |
 | MCP | `_meta.provenance` on an app or workflow `tools/call` result. |
 | A2A | `metadata.provenance` on the Task and on the response artifact. |
 
-An output without text, and an error, carries none. Scheduled tasks, the Slack/Teams/Office integrations and
-workflow runs started in the web app do not get a record yet.
+An output without text, and an error, carries none. Everything that runs through the chat engine is recorded:
+web chat, scheduled tasks, apps called by tools, the inference API, MCP and A2A. Workflow runs and the
+Slack and Teams integrations do not go through it and get no record yet.
 
 ## Looking an output up
 

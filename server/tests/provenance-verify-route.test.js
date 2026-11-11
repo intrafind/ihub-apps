@@ -11,27 +11,41 @@ import { jest, describe, test, expect, beforeAll, afterAll } from '@jest/globals
 import express from 'express';
 import request from 'supertest';
 
-const platform = { provenance: { verify: { access: 'authenticated' } }, rateLimit: {} };
+// Anonymous access on, as in the shipped defaults: the case `authRequired` lets through.
+const platform = {
+  anonymousAuth: { enabled: true },
+  provenance: { verify: { access: 'authenticated' } },
+  rateLimit: {}
+};
 
 jest.unstable_mockModule('../configCache.js', () => ({
   default: { getPlatform: () => platform }
 }));
-const { ServiceError } = await import('../utils/ServiceError.js');
-// Signed-in callers carry `x-test-user`; everyone else is turned away, as
-// `authRequired` does on a platform without anonymous access.
-jest.unstable_mockModule('../middleware/authRequired.js', () => ({
-  authRequired: (req, res, next) =>
-    req.headers['x-test-user']
-      ? next()
-      : next(new ServiceError('AUTH_REQUIRED', 'Authentication required'))
-}));
-
 const { startTestStorage } = await import('./helpers/testStorage.js');
 const { default: registerProvenanceRoutes, MAX_VERIFY_TEXT_BYTES } =
   await import('../routes/provenanceRoutes.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { recordTextOutput } = await import('../services/provenance/turnProvenance.js');
 const { hashText } = await import('../services/provenance/records.js');
+
+/**
+ * The real `authenticatedOnly` runs here, not a stand-in: the shipped default has
+ * `anonymousAuth` on, where `authRequired` would let a guest through. A signed-in
+ * caller carries `x-test-user`; everyone else is the anonymous principal the auth
+ * chain gives a guest.
+ */
+function buildApp() {
+  const server = express();
+  server.use(express.json({ limit: '2mb' }));
+  server.use((req, _res, next) => {
+    const id = req.headers['x-test-user'];
+    req.user = id ? { id } : { id: 'anonymous', groups: ['anonymous'] };
+    next();
+  });
+  registerProvenanceRoutes(server);
+  server.use(errorHandler);
+  return server;
+}
 
 let storage;
 let app;
@@ -45,10 +59,7 @@ beforeAll(async () => {
     modelConfig: { contentMarking: { text: { by: 'none' } } }
   });
   outputId = p.output_id;
-  app = express();
-  app.use(express.json({ limit: '2mb' }));
-  registerProvenanceRoutes(app);
-  app.use(errorHandler);
+  app = buildApp();
 });
 
 afterAll(async () => {
@@ -112,9 +123,10 @@ describe('POST /api/provenance/_verify', () => {
     expect(res.body.code).toBe('PAYLOAD_TOO_LARGE');
   });
 
-  test('is authenticated by default and public on request', async () => {
+  test('is closed to guests by default, even with anonymous access on, and public on request', async () => {
     const denied = await request(app).post('/api/provenance/_verify').send({ text: 'a' });
     expect(denied.status).toBe(401);
+    expect(denied.body.code).toBe('AUTH_REQUIRED');
     platform.provenance.verify.access = 'public';
     try {
       const open = await request(app).post('/api/provenance/_verify').send({ text: 'a' });
@@ -134,10 +146,7 @@ describe('privacy and abuse limits', () => {
 
   test('has its own limiter that answers 429 with Retry-After', async () => {
     platform.rateLimit = { provenanceVerifyApi: { limit: 2, windowMs: 60000 } };
-    const limited = express();
-    limited.use(express.json());
-    registerProvenanceRoutes(limited);
-    limited.use(errorHandler);
+    const limited = buildApp();
     const call = () =>
       request(limited).post('/api/provenance/_verify').set('x-test-user', 'u').send({ text: 'q' });
     expect((await call()).status).toBe(200);

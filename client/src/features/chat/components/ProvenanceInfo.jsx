@@ -39,8 +39,8 @@ function Row({ label, children }) {
  * "AI generated" information under an answer (EU AI Act Art. 50(2)): which model
  * produced it, when, and the hash of its text, from the provenance object the
  * server attached (`run/ended.provenance`, or the stored message's). Nothing is
- * inferred here. An answer without the object (a stopped turn, one stored before
- * provenance existed) shows no button.
+ * inferred here. An answer without the object (one with no text, or stored before
+ * provenance existed) shows no button; a stopped answer that had written text does.
  *
  * @param {Object} props
  * @param {Object} props.provenance - The server's provenance object
