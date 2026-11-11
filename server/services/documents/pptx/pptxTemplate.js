@@ -21,6 +21,13 @@ import {
  * type (`title`, `secHead`, `obj`, `twoObj`, `titleOnly`, `blank`), else from
  * its placeholders, else from its name; an admin can name the layout for a
  * kind in the document template (`pptx.layouts`).
+ *
+ * A layout can also carry two small text placeholders next to its title: a
+ * **kicker** (a short label above the title) and a **lead** (a sentence below
+ * it). They are ordinary body placeholders told apart by their name in the
+ * layout (`Kicker`/`Eyebrow`, `Lead`), so they do not count as content areas.
+ * A layout with them serves slides that have a kicker or a lead; the plain
+ * layout of the same kind serves all others.
  */
 
 const PRESENTATION = 'ppt/presentation.xml';
@@ -28,6 +35,12 @@ const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationship
 
 /** Placeholder types that hold a slide's main content. */
 const CONTENT_TYPES = new Set(['obj', 'body', 'tbl', 'chart', 'pic', 'dgm', 'media', 'clipArt']);
+
+/** Names (in the layout) of the text placeholders that hold a slide's kicker and lead. */
+const TEXT_ROLE_NAMES = [
+  ['kicker', /kicker|eyebrow/i],
+  ['lead', /\blead\b|einleitung|teaser/i]
+];
 
 const KIND_BY_TYPE = {
   title: 'title',
@@ -77,11 +90,17 @@ function levelSize(listStyle, level = 1) {
   return Number.isFinite(size) && size > 0 ? size : undefined;
 }
 
+/** The role (`kicker`, `lead`) a body placeholder has by its name, or undefined. */
+function textRoleOf(type, name) {
+  if (type !== 'body') return undefined;
+  return TEXT_ROLE_NAMES.find(([, pattern]) => pattern.test(name))?.[0];
+}
+
 /**
  * The placeholders of a master or layout.
  *
  * @param {Document} doc
- * @returns {Array<{ type: string, idx?: string, name: string, rect: Object|null, size?: number, orient?: string }>}
+ * @returns {Array<{ type: string, idx?: string, name: string, role?: string, text: string, rect: Object|null, size?: number, orient?: string }>}
  */
 function placeholdersOf(doc) {
   const tree = firstChild(firstChild(doc.documentElement, 'cSld'), 'spTree');
@@ -89,11 +108,19 @@ function placeholdersOf(doc) {
   for (const sp of descendants(tree, 'sp')) {
     const ph = descendants(firstChild(sp, 'nvSpPr'), 'ph')[0];
     if (!ph) continue;
+    const type = attr(ph, 'type') || 'obj';
+    const name = attr(descendants(firstChild(sp, 'nvSpPr'), 'cNvPr')[0], 'name') || '';
     out.push({
-      type: attr(ph, 'type') || 'obj',
+      type,
       idx: attr(ph, 'idx'),
       orient: attr(ph, 'orient'),
-      name: attr(descendants(firstChild(sp, 'nvSpPr'), 'cNvPr')[0], 'name') || '',
+      name,
+      role: textRoleOf(type, name),
+      // The text the layout shows in it: a footer placeholder can carry a default.
+      text: descendants(firstChild(sp, 'txBody'), 't')
+        .map(t => t.textContent)
+        .join('')
+        .trim(),
       rect: rectOf(firstChild(sp, 'spPr')),
       size: levelSize(firstChild(firstChild(sp, 'txBody'), 'lstStyle'))
     });
@@ -224,7 +251,22 @@ export async function loadPresentationTemplate(buffer) {
 }
 
 function contentPlaceholders(layout) {
-  return layout.placeholders.filter(ph => CONTENT_TYPES.has(ph.type) && ph.rect);
+  return layout.placeholders.filter(ph => CONTENT_TYPES.has(ph.type) && ph.rect && !ph.role);
+}
+
+/** The layout's placeholder for a slide's kicker (a label above the title), or null. */
+function kickerPlaceholder(layout) {
+  return layout.placeholders.find(ph => ph.role === 'kicker' && ph.rect) || null;
+}
+
+/** The layout's placeholder for a slide's lead (a sentence below the title), or null. */
+function leadPlaceholder(layout) {
+  return layout.placeholders.find(ph => ph.role === 'lead' && ph.rect) || null;
+}
+
+/** Whether a layout has a kicker or a lead placeholder. */
+export function hasTextSlots(layout) {
+  return Boolean(kickerPlaceholder(layout) || leadPlaceholder(layout));
 }
 
 function titlePlaceholder(layout) {
@@ -275,11 +317,18 @@ export function chooseLayouts(layouts, overrides = {}) {
     const layout = layouts.find(l => l.name.toLowerCase() === String(name).toLowerCase());
     if (layout) chosen[kind] = layout;
   }
-  const candidates = kind => [
-    ...layouts.filter(l => KIND_BY_TYPE[l.type] === kind),
-    ...layouts.filter(l => KIND_BY_TYPE[l.type] === undefined && kindFromPlaceholders(l) === kind),
-    ...layouts.filter(l => kindFromName(l) === kind)
-  ];
+  // A layout with a kicker or lead placeholder is for the slides that have one:
+  // the plain layouts of a kind come first.
+  const candidates = kind => {
+    const all = [
+      ...layouts.filter(l => KIND_BY_TYPE[l.type] === kind),
+      ...layouts.filter(
+        l => KIND_BY_TYPE[l.type] === undefined && kindFromPlaceholders(l) === kind
+      ),
+      ...layouts.filter(l => kindFromName(l) === kind)
+    ];
+    return [...all.filter(l => !hasTextSlots(l)), ...all.filter(hasTextSlots)];
+  };
   for (const kind of ['title', 'section', 'content', 'twoColumn', 'titleOnly', 'blank']) {
     if (chosen[kind]) continue;
     const [first] = candidates(kind).filter(
@@ -296,7 +345,24 @@ export function chooseLayouts(layouts, overrides = {}) {
   return chosen;
 }
 
-export { contentPlaceholders, titlePlaceholder };
+/**
+ * The layouts for slides with a kicker or a lead: for each kind that can have
+ * them, the first layout of that kind with such a placeholder.
+ *
+ * @param {Array} layouts - From {@link loadPresentationTemplate}.
+ * @returns {Object<string, Object>} Kind (`content`, `twoColumn`, `titleOnly`) → layout; kinds the template does not serve are absent.
+ */
+export function chooseTextSlotLayouts(layouts) {
+  const chosen = {};
+  for (const layout of layouts) {
+    if (!hasTextSlots(layout)) continue;
+    const kind = layoutKind(layout);
+    if (kind && ['content', 'twoColumn', 'titleOnly'].includes(kind)) chosen[kind] ||= layout;
+  }
+  return chosen;
+}
+
+export { contentPlaceholders, kickerPlaceholder, leadPlaceholder, titlePlaceholder };
 
 /**
  * What a PowerPoint template offers, for the admin page: its layouts and the
@@ -329,6 +395,13 @@ export async function analyzePowerpointTemplate(buffer, overrides) {
     })),
     mapping: Object.fromEntries(
       Object.entries(chosen).map(([kind, layout]) => [kind, layout.name])
+    ),
+    // The layouts that serve slides with a kicker or a lead (none: the template has no such placeholders).
+    textSlotLayouts: Object.fromEntries(
+      Object.entries(chooseTextSlotLayouts(template.layouts)).map(([kind, layout]) => [
+        kind,
+        layout.name
+      ])
     ),
     theme: { colors: theme.colors, fonts: theme.fonts },
     hasNotesMaster: Boolean(template.notesMaster)

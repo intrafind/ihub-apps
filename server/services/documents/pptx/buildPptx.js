@@ -27,7 +27,11 @@ import { addNotesMaster, NOTES_MASTER_TYPE, THEME_TYPE } from './baseTemplate.js
 import { renderCharts, sanitizeChart } from './charts.js';
 import {
   chooseLayouts,
+  chooseTextSlotLayouts,
   contentPlaceholders,
+  hasTextSlots,
+  kickerPlaceholder,
+  leadPlaceholder,
   loadPresentationTemplate,
   titlePlaceholder
 } from './pptxTemplate.js';
@@ -60,6 +64,12 @@ import {
  * @property {string} [layout] - `title`, `section`, `content`, `two-column`,
  *   `title-only`, `blank`.
  * @property {string} [title]
+ * @property {string} [kicker] - A short label above the title (content, two-column and
+ *   title-only slides), for templates whose layouts have a kicker placeholder.
+ * @property {string} [lead] - One sentence under the title; without a lead placeholder
+ *   in the template it becomes the first paragraph of the text.
+ * @property {string} [footer] - Text of the footer strip of a title slide (and, on other
+ *   slides, in place of the deck's footer).
  * @property {string} [subtitle] - Title and section slides.
  * @property {string} [text] - Markdown: paragraphs, bullet and numbered lists.
  * @property {Object} [table] - `{ header: string[], rows: string[][], align?: string[] }`.
@@ -84,6 +94,8 @@ export const DECK_LIMITS = Object.freeze({
   maxTableColumns: 12,
   maxCellChars: 300,
   maxTitleChars: 300,
+  maxKickerChars: 80,
+  maxLeadChars: 300,
   maxTextChars: 8000
 });
 
@@ -218,6 +230,9 @@ export function sanitizeSlides(slides, ctx) {
     return {
       kind,
       title: text(source.title, DECK_LIMITS.maxTitleChars),
+      kicker: text(source.kicker, DECK_LIMITS.maxKickerChars),
+      lead: text(source.lead, DECK_LIMITS.maxLeadChars),
+      footer: text(source.footer, 200),
       subtitle: text(source.subtitle, 500),
       ...content,
       left,
@@ -274,20 +289,30 @@ function fitImage(pixels, rect) {
 /**
  * `a:bodyPr` autofit for text that may not fit its box: an estimate of the
  * lines it needs, and the font scale PowerPoint would apply.
+ *
+ * @param {Array} paragraphs
+ * @param {Object|null} rect
+ * @param {number[]} sizes - Font size per level (hundredths of a point).
+ * @param {Object} ctx
+ * @param {number} slideNumber
+ * @param {Object} [options]
+ * @param {boolean} [options.compact] - A box without insets, list indents and
+ *   paragraph spacing (the kicker and lead of a slide), so none is assumed.
  */
-function autofit(paragraphs, rect, sizes, ctx, slideNumber) {
+function autofit(paragraphs, rect, sizes, ctx, slideNumber, { compact = false } = {}) {
   if (!rect) return '<a:normAutofit/>';
-  const width = rect.cx - 0.2 * EMU_PER_INCH;
+  const pad = compact ? 0 : 0.1 * EMU_PER_INCH;
+  const width = rect.cx - 2 * pad;
   let height = 0;
   for (const paragraph of paragraphs) {
     const size = (sizes[Math.min(paragraph.level || 0, sizes.length - 1)] || 2000) / 100;
     const chars = paragraph.runs.reduce((n, r) => n + r.text.length, 0) || 1;
-    const indent = (paragraph.level || 0) * 0.4 * EMU_PER_INCH + 0.3 * EMU_PER_INCH;
+    const indent = compact ? 0 : (paragraph.level || 0) * 0.4 * EMU_PER_INCH + 0.3 * EMU_PER_INCH;
     const charWidth = size * 0.5 * 12700;
     const lines = Math.max(1, Math.ceil((chars * charWidth) / Math.max(1, width - indent)));
-    height += lines * size * 1.2 * 12700 + size * 0.5 * 12700;
+    height += lines * size * 1.2 * 12700 + (compact ? 0 : size * 0.5 * 12700);
   }
-  const available = rect.cy - 0.1 * EMU_PER_INCH;
+  const available = rect.cy - pad;
   if (height <= available) return '<a:normAutofit/>';
   const scale = Math.max(0.4, available / height);
   const fontScale = Math.max(40000, Math.floor((scale * 100000) / 2500) * 2500);
@@ -363,19 +388,22 @@ class SlideBuilder {
     return paragraphsXml(paragraphs, { lang: this.ctx.lang, linkId: this.linkId, ...options });
   }
 
-  placeholder(ph, paragraphs, { rect, bullets = true, sizes } = {}) {
+  placeholder(ph, paragraphs, { rect, bullets = true, sizes, name, compact = false } = {}) {
     const box = rect || ph.rect;
     const bodyPr = autofit(
       paragraphs,
       box,
       sizes || (bullets ? this.ctx.bodySizes(ph) : [this.ctx.titleSize(ph)]),
       this.ctx,
-      this.number
+      this.number,
+      { compact }
     );
     this.shapes.push(
       placeholderShape({
         id: this.id(),
-        name: `${ph.type === 'title' || ph.type === 'ctrTitle' ? 'Title' : 'Content'} ${this.nextId}`,
+        name:
+          name ||
+          `${ph.type === 'title' || ph.type === 'ctrTitle' ? 'Title' : 'Content'} ${this.nextId}`,
         ph,
         body: this.textXml(paragraphs, { bullets }),
         rect,
@@ -461,7 +489,7 @@ class SlideBuilder {
         rect,
         metrics,
         lang: this.ctx.lang,
-        accent: this.ctx.accent
+        colors: this.ctx.themeColors
       })
     );
   }
@@ -512,6 +540,25 @@ class SlideBuilder {
     else if (visual === 'image') this.picture(block.image, visualRect);
   }
 
+  /**
+   * The footer strip of a title slide. Only a layout whose footer placeholder is
+   * meant for it takes part: the deck's footer text is for the other slides, so
+   * the strip shows the slide's own `footer`, else the text the layout has in it.
+   */
+  titleStrip(text) {
+    const strip = this.layout.placeholders.find(ph => ph.type === 'ftr' && ph.rect);
+    const value = text || strip?.text;
+    if (!strip || !value) return;
+    this.shapes.push(
+      placeholderShape({
+        id: this.id(),
+        name: 'Footer',
+        ph: strip,
+        body: this.textXml([{ runs: [{ text: value }] }], { bullets: false })
+      })
+    );
+  }
+
   footer(spec) {
     const footer = this.layout.placeholders.find(ph => ph.type === 'ftr');
     if (footer && spec.footer) {
@@ -542,8 +589,41 @@ function plainParagraphs(value) {
   return value ? [{ runs: [{ text: value }] }] : [];
 }
 
-function buildSlide(slide, number, ctx, spec) {
-  const layout = ctx.layouts[slide.kind] || ctx.layouts.content;
+/** Kinds of slide that can have a kicker and a lead. */
+const TEXT_SLOT_KINDS = new Set(['content', 'twoColumn', 'titleOnly']);
+
+/**
+ * The layout of a slide: the layout of its kind, or — for a slide with a kicker
+ * or a lead — the template's layout of that kind that has the placeholders for
+ * them, when there is one.
+ */
+function layoutFor(slide, ctx) {
+  const base = ctx.layouts[slide.kind] || ctx.layouts.content;
+  const wantsText = slide.kicker || slide.lead;
+  if (!wantsText || !TEXT_SLOT_KINDS.has(slide.kind) || hasTextSlots(base)) return base;
+  return ctx.textSlotLayouts[slide.kind] || base;
+}
+
+/**
+ * A lead the layout has no placeholder for becomes the first paragraph of the
+ * slide's text (the left column of a two-column slide); a title-only slide has
+ * no text to put it in.
+ */
+function leadAsText(slide) {
+  if (slide.kind === 'titleOnly') return slide;
+  const join = value => [slide.lead, value].filter(Boolean).join('\n\n');
+  if (slide.kind === 'twoColumn' && slide.left) {
+    return { ...slide, left: { ...slide.left, text: join(slide.left.text) } };
+  }
+  return { ...slide, text: join(slide.text) };
+}
+
+function buildSlide(source, number, ctx, spec) {
+  const layout = layoutFor(source, ctx);
+  const kickerPh = kickerPlaceholder(layout);
+  const leadPh = leadPlaceholder(layout);
+  const slide =
+    source.lead && !leadPh && TEXT_SLOT_KINDS.has(source.kind) ? leadAsText(source) : source;
   const builder = new SlideBuilder({ number, layout, ctx });
   const title = titlePlaceholder(layout);
   const contents = contentPlaceholders(layout).sort((a, b) => a.rect.x - b.rect.x);
@@ -570,9 +650,28 @@ function buildSlide(slide, number, ctx, spec) {
     }
   }
 
+  if (slide.kicker && kickerPh) {
+    builder.placeholder(kickerPh, plainParagraphs(slide.kicker), {
+      bullets: false,
+      sizes: [kickerPh.size || 1200],
+      name: 'Kicker',
+      compact: true
+    });
+  }
+  if (slide.lead && leadPh) {
+    builder.placeholder(leadPh, markdownToSlideText(slide.lead).paragraphs, {
+      bullets: false,
+      sizes: [leadPh.size || ctx.bodySizes(leadPh)[0]],
+      name: 'Lead',
+      compact: true
+    });
+  }
+
   if (slide.kind === 'title' || slide.kind === 'section') {
     const subtitle =
-      slide.subtitle || (slide.text && !slide.table && !slide.chart ? slide.text : '');
+      slide.subtitle ||
+      slide.lead ||
+      (slide.text && !slide.table && !slide.chart ? slide.text : '');
     if (subtitle && subtitlePh) {
       const { paragraphs } = markdownToSlideText(subtitle);
       builder.placeholder(subtitlePh, paragraphs, {
@@ -625,7 +724,8 @@ function buildSlide(slide, number, ctx, spec) {
     builder.block(slide, area, { ph });
   }
 
-  if (slide.kind !== 'title') builder.footer(spec);
+  if (slide.kind === 'title') builder.titleStrip(slide.footer);
+  else builder.footer({ ...spec, footer: slide.footer || spec.footer });
   return builder;
 }
 
@@ -763,7 +863,9 @@ export async function buildPptx(
     charts: [],
     slideSize: template.slideSize,
     accent: theme.colors.accent1 || '1E3A8A',
+    themeColors: theme.colors,
     layouts: chooseLayouts(template.layouts, overrides),
+    textSlotLayouts: chooseTextSlotLayouts(template.layouts),
     bodySizes: ph => {
       const sizes = master?.bodySizes || [2000, 1800, 1600];
       return ph?.size ? [ph.size, ...sizes.slice(1)] : sizes;

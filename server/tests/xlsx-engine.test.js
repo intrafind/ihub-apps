@@ -29,11 +29,7 @@ import {
   clearHeldGeneratedFiles,
   heldGeneratedFile
 } from '../services/documents/generatedFiles.js';
-import {
-  EMU_PER_INCH,
-  metricCardFillLuminance,
-  metricCards
-} from '../services/documents/pptx/pptxXml.js';
+import { EMU_PER_INCH, metricCardStyle, metricCards } from '../services/documents/pptx/pptxXml.js';
 import {
   injectBrandTokens,
   inspectWebArtifact,
@@ -273,62 +269,81 @@ describe('Excel workbook engine (xlsx)', () => {
 });
 
 describe('PPTX KPI metric cards', () => {
-  it('renders 1–4 side-by-side DrawingML KPI callout cards with accent1 scheme colors', () => {
+  const INTRAFIND = {
+    dk2: '58585A',
+    lt2: 'F2F2F2',
+    accent1: '58585A',
+    accent2: 'AB0D19',
+    accent3: '328F42',
+    accent5: '008EB7'
+  };
+  const render = (colors, metrics) => {
     let id = 10;
-    const shapes = metricCards({
+    return metricCards({
       nextId: () => (id += 1),
       rect: { x: 0, y: 0, cx: 10 * EMU_PER_INCH, cy: 2 * EMU_PER_INCH },
-      metrics: [
-        { value: '€3.05M', label: 'Q3 Revenue', note: '+12 % YoY' },
-        { value: '98.4 %', label: 'Net Retention', note: '+1.2 pp' }
-      ],
-      lang: 'en-US'
+      metrics: metrics || [{ value: '42', label: 'Answers', note: 'since May' }],
+      lang: 'en-US',
+      colors
     });
+  };
+
+  it('renders 1–4 side-by-side cards, each a group of a light card and a rule on top', () => {
+    const shapes = render(INTRAFIND, [
+      { value: '€3.05M', label: 'Q3 Revenue', note: '+12 % YoY' },
+      { value: '98.4 %', label: 'Net Retention', note: '+1.2 pp' }
+    ]);
     assert.equal(shapes.length, 2);
+    for (const xml of shapes) {
+      assert.match(xml, /^<p:grpSp>/);
+      assert.equal(xml.match(/<p:sp>/g).length, 2);
+    }
     assert.match(shapes[0], /€3\.05M/);
     assert.match(shapes[0], /Q3 Revenue/);
     assert.match(shapes[0], /\+12 % YoY/);
-    assert.match(shapes[0], /<a:schemeClr val="accent1"\/>/);
+    assert.match(shapes[0], /<a:srgbClr val="F2F2F2"\/>/);
   });
 
-  it('sets the value in dark text when accent1 is too light to read on the card', () => {
-    const render = accent => {
-      let id = 10;
-      return metricCards({
-        nextId: () => (id += 1),
-        rect: { x: 0, y: 0, cx: 10 * EMU_PER_INCH, cy: 2 * EMU_PER_INCH },
-        metrics: [{ value: '42', label: 'Answers', note: 'since May' }],
-        lang: 'en-US',
-        accent
-      })[0];
-    };
-    const valueColor = xml =>
-      /sz="\d+" b="1" dirty="0"><a:solidFill><a:(?:schemeClr|srgbClr) val="(\w+)"/.exec(xml)[1];
-    assert.equal(valueColor(render('FFFFFF')), '0F172A');
-    assert.equal(valueColor(render('F5F5F5')), '0F172A');
-    assert.equal(valueColor(render('1E3A8A')), 'accent1');
-  });
-
-  it('never takes the label or note colour from the template tx1 (it can map to white)', () => {
-    let id = 10;
-    const [xml] = metricCards({
-      nextId: () => (id += 1),
-      rect: { x: 0, y: 0, cx: 10 * EMU_PER_INCH, cy: 2 * EMU_PER_INCH },
-      metrics: [{ value: '42', label: 'Answers', note: 'since May' }],
-      lang: 'en-US',
-      accent: '1E3A8A'
+  it('uses the first coloured accent for the rule and the value when accent 1 is grey', () => {
+    const [xml] = render(INTRAFIND);
+    assert.match(xml, /Metric rule[^]*<a:schemeClr val="accent2"\/>/);
+    assert.doesNotMatch(xml, /schemeClr val="accent1"/);
+    assert.deepEqual(metricCardStyle(INTRAFIND), {
+      fill: 'F2F2F2',
+      text: '58585A',
+      accent: 'accent2',
+      valueFill: '<a:schemeClr val="accent2"/>'
     });
-    assert.doesNotMatch(xml, /schemeClr val="tx1"/);
-    assert.match(xml, /<a:srgbClr val="0F172A"\/>.*Answers/);
   });
 
-  it('computes the card fill the way DrawingML tints it (HSL lightness × 0.1 + 0.9)', () => {
-    // A black accent tints to a light grey (L = 0.9 → luminance ≈ 0.79), not to white.
-    assert.ok(Math.abs(metricCardFillLuminance('000000') - 0.79) < 0.01);
-    // A saturated blue stays a little darker than a yellow of the same tint.
-    assert.ok(metricCardFillLuminance('0000FF') < metricCardFillLuminance('FFFF00'));
-    assert.ok(metricCardFillLuminance('FFFFFF') > 0.99);
-    assert.equal(metricCardFillLuminance('not-a-color'), 0.9);
+  it('keeps accent 1 when it is a real colour, and falls back to it when all accents are grey', () => {
+    assert.equal(metricCardStyle({ ...INTRAFIND, accent1: '1E3A8A' }).accent, 'accent1');
+    assert.equal(
+      metricCardStyle({ dk2: '444444', lt2: 'EEEEEE', accent1: '777777', accent2: '999999' })
+        .accent,
+      'accent1'
+    );
+  });
+
+  it('sets the value in the text colour when the highlight colour is too light to read', () => {
+    const style = metricCardStyle({ ...INTRAFIND, accent2: 'F5D000', accent3: 'F5D000' });
+    assert.equal(style.accent, 'accent2');
+    assert.equal(style.valueFill, '<a:srgbClr val="58585A"/>');
+  });
+
+  it('never takes card, label or note colours from tx1/bg1 (a template can map them to white)', () => {
+    const [xml] = render(INTRAFIND);
+    assert.doesNotMatch(xml, /schemeClr val="(tx1|tx2|bg1|bg2)"/);
+    assert.match(xml, /<a:srgbClr val="58585A"\/>[^]*Answers/);
+  });
+
+  it('replaces a theme colour that would be unreadable or dark with a light neutral card', () => {
+    // A dark lt2 and a text colour that is too close to the card: neutral fallbacks.
+    const style = metricCardStyle({ dk2: 'EEEEEE', lt2: '202020', accent2: 'AB0D19' });
+    assert.equal(style.fill, 'F2F2F2');
+    assert.equal(style.text, '262626');
+    assert.deepEqual(metricCardStyle(undefined).fill, 'F2F2F2');
+    assert.equal(metricCardStyle({ dk2: 'not-a-colour' }).text, '262626');
   });
 });
 
