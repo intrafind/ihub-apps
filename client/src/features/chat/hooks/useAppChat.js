@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
-import { sendAppChatMessage } from '../../../api';
+import { sendAppChatMessage, checkAppChatStatus } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
 import { debugLog } from '../../../utils/debugLog';
@@ -117,7 +117,7 @@ function useAppChat({
   const acknowledgement = useAiAcknowledgement();
   // The last send, to roll back and retry once when the server answers 428.
   const lastSendRef = useRef(null);
-  const sendMessageRef = useRef(null);
+  const initEventSourceRef = useRef(null);
   const onSendRefusedRef = useRef(onSendRefused);
   onSendRefusedRef.current = onSendRefused;
   // Use the chatId directly instead of storing it in a ref
@@ -341,8 +341,8 @@ function useAppChat({
    */
   const sendPendingMessage = useCallback(async () => {
     if (!pendingMessageDataRef.current) return;
+    const { appId, chatId, messages, params } = pendingMessageDataRef.current;
     try {
-      const { appId, chatId, messages, params } = pendingMessageDataRef.current;
       await sendAppChatMessage(
         appId,
         chatId,
@@ -353,26 +353,54 @@ function useAppChat({
       // The server has the turn — the chat is in the store from here on.
       onMessageAcceptedRef.current?.(chatId);
     } catch (error) {
-      if (error?.code === 'AI_ACKNOWLEDGEMENT_REQUIRED' && acknowledgement && lastSendRef.current) {
-        // Not an error to show: take the optimistic turn back, ask the user to
-        // confirm the AI-use notice, then send the same message once more.
-        const { args, userMessageId, retried } = lastSendRef.current;
+      // The POST is answered when the turn ends, so a turn longer than the
+      // request timeout (axios, the ingress's proxy-read-timeout) loses the
+      // reply, not the turn: the server keeps running it and the open stream
+      // still carries every frame. Keep listening instead of reporting a failure.
+      const lostReply = error?.isTimeout || error?.status === 502 || error?.status === 504;
+      if (lostReply && !isCancellingRef.current) {
+        const status = await checkAppChatStatus(appId, chatId).catch(() => null);
+        if (status?.processing) {
+          pendingMessageDataRef.current = null;
+          onMessageAcceptedRef.current?.(chatId);
+          return;
+        }
+      }
+      const pendingSend = pendingMessageDataRef.current;
+      if (
+        error?.code === 'AI_ACKNOWLEDGEMENT_REQUIRED' &&
+        acknowledgement &&
+        pendingSend &&
+        !pendingSend.acknowledgementRetried
+      ) {
+        // Not an error to show: ask the user to confirm the AI-use notice, then send
+        // the very same prepared request once more. The prepared request, not
+        // arguments rebuilt from it, so what a first attempt consumed (the stored-history
+        // fork of an edit or regenerate) is still on it, and a clarification answer or
+        // a tool approval is retried as itself.
+        const own = lastSendRef.current?.pending === pendingSend ? lastSendRef.current : null;
+        const placeholderId = lastMessageIdRef.current;
+        const originChatId = pendingSend.chatId;
         detachEventSourceRef.current?.();
         setProcessing(false);
-        pendingMessageDataRef.current = null;
-        if (userMessageId) removeMessage(userMessageId);
-        if (lastMessageIdRef.current) removeMessage(lastMessageIdRef.current);
-        if (!retried) {
-          void acknowledgement.handleAcknowledgementRequired().then(ok => {
-            if (ok) {
-              sendMessageRef.current?.(args, { retried: true });
-            } else {
-              onSendRefusedRef.current?.(args);
-            }
-          });
-        } else {
-          onSendRefusedRef.current?.(args);
-        }
+        void acknowledgement.handleAcknowledgementRequired().then(ok => {
+          if (ok && currentChatIdRef.current === originChatId) {
+            pendingSend.acknowledgementRetried = true;
+            pendingMessageDataRef.current = pendingSend;
+            setProcessing(true);
+            initEventSourceRef.current?.(
+              buildApiUrl(`apps/${pendingSend.appId}/chat/${pendingSend.chatId}`)
+            );
+            return;
+          }
+          // Declined, or the user moved to another chat meanwhile: take the turn back.
+          pendingMessageDataRef.current = null;
+          if (own) {
+            removeMessage(own.userMessageId);
+            if (placeholderId) removeMessage(placeholderId);
+            if (ok === false) onSendRefusedRef.current?.(own.args);
+          }
+        });
         return;
       }
       if (lastMessageIdRef.current && !isCancellingRef.current) {
@@ -681,6 +709,7 @@ function useAppChat({
 
   // Store the detach function in a ref for access in callbacks
   detachEventSourceRef.current = detachEventSource;
+  initEventSourceRef.current = initEventSource;
 
   /**
    * Send a chat message and start streaming the response.
@@ -693,7 +722,7 @@ function useAppChat({
    * @param {string[]} [requestedSkills] - Skills to pre-activate for this turn (slash command)
    */
   const sendMessage = useCallback(
-    (args, { retried = false } = {}) => {
+    args => {
       const {
         displayMessage,
         apiMessage,
@@ -735,7 +764,6 @@ function useAppChat({
           audioData: apiMessage.audioData
         });
         addAssistantMessage(exchangeId);
-        lastSendRef.current = { args, userMessageId, retried };
 
         // Documents the server already stores (pre-uploaded from the composer,
         // or kept from an earlier turn) travel as ids; the rest inline.
@@ -771,6 +799,8 @@ function useAppChat({
           }
         };
 
+        lastSendRef.current = { args, userMessageId, pending: pendingMessageDataRef.current };
+
         initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
       } catch (err) {
         console.error('Error sending message:', err);
@@ -796,8 +826,6 @@ function useAppChat({
       chatId
     ]
   );
-
-  sendMessageRef.current = sendMessage;
 
   /**
    * Prepare content for resending a previous message.

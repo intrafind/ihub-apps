@@ -30,8 +30,6 @@ import { EtagMismatchError } from '../../storage/errors.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { isHexHash, toStoredRecord } from './records.js';
 
-const COMPONENT = 'ProvenanceStore';
-
 export const PROVENANCE_RECORDS_NAMESPACE = RUNTIME_NAMESPACES.provenanceRecords;
 export const PROVENANCE_META_NAMESPACE = RUNTIME_NAMESPACES.provenanceMeta;
 

@@ -73,4 +73,29 @@ test('the default client applies the guardrail without any opt-in', async () => 
   const { LLMClient } = await import('../../services/loop/LLMClient.js');
   const client = new LLMClient({ quota: null, usage: null, debugDumps: false });
   assert.equal(typeof client.guardrail, 'function');
+  assert.equal(client.guardrail([question], MODELS.openai)[0].content, AI_DISCLOSURE_RULE);
+});
+
+test("the default client uses the admin's global rule text, read on every call", async () => {
+  const { LLMClient } = await import('../../services/loop/LLMClient.js');
+  const { default: configCache } = await import('../../configCache.js');
+  const client = new LLMClient({ quota: null, usage: null, debugDumps: false });
+  const before = configCache.getPlatform();
+  try {
+    configCache.setCacheEntry('config/platform.json', {
+      aiDisclosure: { guardrail: { text: 'Always say you are an AI.' } }
+    });
+    assert.equal(
+      client.guardrail([persona, question], MODELS.openai)[0].content,
+      `${persona.content}\n\nAlways say you are an AI.`
+    );
+    configCache.setCacheEntry('config/platform.json', {
+      aiDisclosure: { guardrail: { text: '' } }
+    });
+    assert.ok(
+      client.guardrail([persona, question], MODELS.openai)[0].content.endsWith(AI_DISCLOSURE_RULE)
+    );
+  } finally {
+    configCache.setCacheEntry('config/platform.json', before || {});
+  }
 });

@@ -21,9 +21,15 @@ Every call to a text model carries this rule as the last text of the system prom
 - **All channels.** It is added in `LLMClient.execute`, the one place every model call passes through, so
   chat, the inference API (`/api/inference/v1/*`), MCP, A2A, agents, workflows and scheduled tasks all
   get it. See [LLM Client](llm-client.md#ai-disclosure-guardrail).
-- **Not overridable.** There is no app setting, platform setting, request field or environment variable
-  that switches it off. An app prompt or a client-supplied `system` message cannot remove it: the rule is
-  appended after them.
+- **Wording is global, the rule is not optional.** An admin can reword it for the whole platform in
+  `aiDisclosure.guardrail.text` (`platform.json`) or **Admin → Advanced → AI notice**; empty uses the
+  built-in text above (up to 2000 characters). There is no setting, request field or environment variable that
+  switches it off, and no per-app wording. An app prompt or a client-supplied `system` message cannot remove it:
+  the rule is appended after them. A reworded rule still has to say that the assistant is an AI and never
+  claims to be human; iHub does not check that.
+- **iAssistant.** The `iassistant-conversation` provider does not use iHub's system message (its adapter
+  sends only the last user message), so the rule does not reach it that way; iAssistant handles its own
+  disclosure.
 - **A reduction, not a guarantee.** A model can still ignore a prompt rule in a strong role-play. Check
   the models you use with the question "Are you a human?".
 
@@ -41,7 +47,7 @@ Answers can be wrong, so please check important information.*
   use the platform notice (no key), a custom `text`, or `enabled: false` for this app. The platform switch
   wins: an app cannot turn the notice on when the platform has it off.
 - **Shown in:** the app chat (also above a start form). Not shown for apps that start by themselves
-  (`autoStart`), in the Office add-in panel or for `iframe` and `redirect` apps; the guardrail applies to
+  (`autoStart`), in the Office add-in panel, in compare mode or for `iframe` and `redirect` apps; the guardrail applies to
   all model calls regardless.
 
 ```json
@@ -63,7 +69,7 @@ that people were told, not a legal opinion: the wording is yours.
   admin actions, never by a settings save.
 - **What is stored.** On the user in `users.json`: `aiAcknowledgements: [{ version, textHash,
   acknowledgedAt, language }]`, one entry per version. `textHash` is the SHA-256 of the exact text the user
-  saw in that `language`, so the wording can be shown later even after the text changed. Every confirmation
+  saw in that `language`. It proves that a stored text is the one that was shown, but it cannot bring back wording that was changed or removed: keep a copy of each version's text (for example in your change history) if you need to show it later. Every confirmation
   and every admin action is also an audit entry (`resource: aiAcknowledgement`).
 - **Enforcement.** One middleware answers `428` with `code: AI_ACKNOWLEDGEMENT_REQUIRED`
   (`application/problem+json`) before any side effect on: the chat message

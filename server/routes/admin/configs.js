@@ -15,6 +15,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 import { toolApprovalConfigProblem } from '../../utils/toolApproval.js';
+import { platformConfigSchema } from '../../validators/platformConfigSchema.js';
 import {
   describeSettingsChange,
   mergeSettingsForSave
@@ -286,6 +287,20 @@ export default function registerAdminConfigRoutes(app) {
         'BAD_REQUEST',
         'defaultLanguage must be a valid language code, e.g. "en"'
       );
+    }
+
+    // The AI disclosure block is read straight from the file at run time (a string where a
+    // boolean belongs would be read as "on"), so it is checked before it is stored.
+    if (newConfig.aiDisclosure !== undefined) {
+      const checked = platformConfigSchema.shape.aiDisclosure.safeParse(newConfig.aiDisclosure);
+      if (!checked.success) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `aiDisclosure is invalid: ${checked.error.issues
+            .map(issue => `${issue.path.join('.')} ${issue.message}`)
+            .join('; ')}`
+        );
+      }
     }
 
     // The shared secret header is removed from every request, so it must not

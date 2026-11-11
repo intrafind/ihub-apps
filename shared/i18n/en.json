@@ -6096,11 +6096,15 @@
     },
     "aiDisclosure": {
       "title": "AI notice",
-      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. The assistants always tell users they are an AI system when asked; that rule cannot be switched off.",
+      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.",
       "enabled": "Show an AI notice before the first message",
       "text": "Notice text (empty uses the built-in text)",
       "saved": "AI notice saved",
-      "saveError": "Failed to save the AI notice"
+      "saveError": "Failed to save the AI notice",
+      "guardrailText": "Rule for the AI (empty uses the built-in rule)",
+      "guardrailHint": "Written for the model, in English works best. It is added as the last line of the system prompt of every model call (chat, API, MCP, A2A, agents, workflows). Apps and users cannot change it. Keep it clear that the assistant is an AI and never claims to be human.",
+      "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+      "loadError": "Failed to load the AI notice settings"
     },
     "aiAcknowledgement": {
       "title": "AI acknowledgement",
@@ -6431,6 +6435,21 @@
       "missing_other": "{{count}} projects not available",
       "missingIFinder": "iFinder could not be reached, so this answer did not use it.",
       "missingOther": "This answer did not use it."
+    },
+    "provenance": {
+      "button": "AI generated: details",
+      "title": "AI generated",
+      "model": "Model",
+      "created": "Created",
+      "marking": "Marking",
+      "markingNone": "Not marked by the model",
+      "markingProvider": "Marked by the provider (declared)",
+      "markingIhub": "iHub watermark",
+      "hash": "Content hash (SHA-256)",
+      "copyHash": "Copy hash",
+      "copied": "Copied",
+      "outputId": "Output ID",
+      "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it."
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",
@@ -9014,7 +9033,6 @@
       "defaultAppHint": "New chats of this project start in this app. Anyone can still pick another app when they start a chat."
     },
     "items": {
-      "aiAccessFor": "Use of {{name}} by the AI",
       "aiAccessHint": "Pinned items are always in the prompt. \"Not for AI\" items stay in the project for people but are never given to the model, listed or searched.",
       "aiAccess": {
         "normal": "Normal",
@@ -9025,7 +9043,6 @@
         "preview": "Preview text",
         "refresh": "Refresh",
         "remove": "Remove item",
-        "rename": "Rename",
         "retry": "Retry",
         "transfer": "Move or copy to…",
         "openInIFinder": "Open in iFinder",
@@ -9056,7 +9073,6 @@
       "pinnedHint": "Pinned items are always in the prompt, even when the project is searched.",
       "removeConfirm": "Remove \"{{name}}\" from the project?",
       "removeTitle": "Remove item",
-      "renameTitle": "Rename item",
       "status": {
         "extracting": "Extracting",
         "failed": "Failed",
@@ -10017,7 +10033,7 @@
     "retry": "Try again",
     "saving": "Saving...",
     "skip": "Continue without confirming",
-    "anonymousNote": "This confirmation applies to this browser session only.",
+    "anonymousNote": "This confirmation is remembered in this browser for up to 30 days.",
     "composerNote": "Please confirm the AI-use notice to send messages.",
     "review": "Review notice",
     "confirmed": "Confirmed.",

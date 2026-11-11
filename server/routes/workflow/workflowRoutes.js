@@ -1137,6 +1137,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     buildServerPath('/api/workflows/executions/:executionId/_restart'),
     checkWorkflowsFeature,
     authRequired,
+    aiAcknowledgementRequired,
     async (req, res) => {
       try {
         const { executionId } = req.params;

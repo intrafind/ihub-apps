@@ -30,10 +30,8 @@ jest.mock('../../../client/src/shared/contexts/UIConfigContext', () => ({
   useUIConfig: () => ({ uiConfig: mockUiConfig })
 }));
 
-import {
-  AiAcknowledgementProvider,
-  useAiAcknowledgement
-} from '../../../client/src/shared/contexts/AiAcknowledgementContext';
+import { AiAcknowledgementProvider } from '../../../client/src/shared/contexts/AiAcknowledgementContext';
+import { useAiAcknowledgement } from '../../../client/src/shared/hooks/useAiAcknowledgement';
 
 const notice = (extra = {}) => ({
   enabled: true,

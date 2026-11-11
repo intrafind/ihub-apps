@@ -1454,8 +1454,8 @@ that say `auto` keep saying it. In **Admin → Projects → Project settings**, 
 choose" lets you switch a mode off, for example full context to save cost; links and admin projects
 an administrator set keep their mode.
 
-- **Not for AI:** an item can be marked "Not for AI" in the project's "For the AI" column, next to
-  Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
+- **Not for AI:** an item can be marked "Not for AI" with the "For the AI" setting in its Edit
+  dialog, next to Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
   model, listed or searched.
 - **Models without tools** cannot call `knowledge_search`. For them Look things up reads as Best passages,
   so unpinned documents are not silently out of reach.
@@ -1581,8 +1581,11 @@ the prompt" is a realistic alternative to retrieval.
   pages, after removing repeated lines, and without blog and news sections), the largest pages,
   duplicates, how much of the sitemap was crawled, and the method.
 - Only pages of the site itself are fetched, with the SSRF guard and the proxy settings, within
-  the site's `robots.txt`, a few requests per second. A crawl belongs to the user who started it and
-  is removed after 14 days.
+  the site's `robots.txt`. The speed is an installation setting: **Parallel requests per crawl**
+  (default 4, at most 16) and **Pause between requests (ms)**, so a site of several hundred pages
+  is crawled in a minute or two instead of ten, and a site that must not be loaded heavily can be
+  crawled slowly. A chat turn now allows up to 50 tool rounds (was 25), so a crawl of a large site
+  is not cut off. A crawl belongs to the user who started it and is removed after 14 days.
 - Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
   `website-corpus-sizer` skill from the marketplace guides users through it.
 - Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
@@ -1643,7 +1646,8 @@ See [EU AI Act](../../ai-act.md#first-turn-notice).
 Every call to a text model now carries the rule "You are an AI system. If asked, always say so. Never claim to
 be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
 A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
-`system` message cannot remove it, and there is no setting to switch it off.
+`system` message cannot remove it, and there is no setting to switch it off. Admins can reword the rule for the
+whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
 
 Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
 still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
@@ -1679,6 +1683,7 @@ AI Act.
   is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
   `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
   results as `metadata.provenance`.
+- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model, time, marking and content hash, with a **Copy hash** action.
 - **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
 - **Look it up.** `POST /api/provenance/_verify` takes a text or a hash and answers "Found" with the record or

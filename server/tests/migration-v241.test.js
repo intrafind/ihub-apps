@@ -16,6 +16,7 @@ import {
   version,
   description
 } from '../migrations/V241__ai_disclosure_first_turn_notice.js';
+import { AI_DISCLOSURE_RULE, resolveGuardrailRule } from '../services/provenance/guardrail.js';
 import { platformConfigSchema } from '../validators/platformConfigSchema.js';
 import { aiDisclosureClientConfig } from '../routes/chat/dataRoutes.js';
 import { appConfigSchema } from '../validators/appConfigSchema.js';
@@ -47,7 +48,8 @@ test('adds the defaults, keeps everything else, is idempotent', async () => {
   const ctx = fakeCtx({ [PLATFORM]: { defaultLanguage: 'de' } });
   await up(ctx);
   assert.deepEqual(ctx.files[PLATFORM].aiDisclosure, {
-    firstTurnNotice: { enabled: true, text: {} }
+    firstTurnNotice: { enabled: true, text: {} },
+    guardrail: { text: '' }
   });
   assert.equal(ctx.files[PLATFORM].defaultLanguage, 'de');
   const once = JSON.stringify(ctx.files[PLATFORM]);
@@ -57,9 +59,15 @@ test('adds the defaults, keeps everything else, is idempotent', async () => {
 
 test('keeps admin values', async () => {
   const ctx = fakeCtx({
-    [PLATFORM]: { aiDisclosure: { firstTurnNotice: { enabled: false, text: { en: 'Hi' } } } }
+    [PLATFORM]: {
+      aiDisclosure: {
+        firstTurnNotice: { enabled: false, text: { en: 'Hi' } },
+        guardrail: { text: 'Custom rule.' }
+      }
+    }
   });
   await up(ctx);
+  assert.equal(ctx.files[PLATFORM].aiDisclosure.guardrail.text, 'Custom rule.');
   assert.deepEqual(ctx.files[PLATFORM].aiDisclosure.firstTurnNotice, {
     enabled: false,
     text: { en: 'Hi' }
@@ -88,9 +96,17 @@ test('platform schema: defaults, validation, and no guardrail switch', () => {
     }).success,
     false
   );
-  // Unknown keys pass through the schema but nothing reads them.
-  const parsed = platformConfigSchema.parse({ aiDisclosure: { guardrail: false } });
-  assert.equal(parsed.aiDisclosure.guardrail, false);
+  assert.equal(base.aiDisclosure.guardrail.text, '');
+  assert.equal(
+    platformConfigSchema.safeParse({ aiDisclosure: { guardrail: { text: 'x'.repeat(2001) } } })
+      .success,
+    false
+  );
+  // The rule can be reworded but not switched off: an `enabled` key is not a setting.
+  const parsed = platformConfigSchema.parse({
+    aiDisclosure: { guardrail: { enabled: false, text: '' } }
+  });
+  assert.equal(resolveGuardrailRule(parsed), AI_DISCLOSURE_RULE);
 });
 
 test('client config exposes enabled and non-blank text only', () => {
@@ -117,7 +133,7 @@ test('app schema accepts the override and rejects unknown keys', () => {
   {
     assert.equal(parse({ firstTurnNotice: { enabled: false } }), true);
     assert.equal(parse({ firstTurnNotice: { text: { en: 'Hi' } } }), true);
-    assert.equal(parse({ guardrail: false }), false);
+    assert.equal(parse({ guardrail: { text: 'x' } }), false); // the rule is platform-wide only
     assert.equal(parse({ firstTurnNotice: { other: 1 } }), false);
   }
 });

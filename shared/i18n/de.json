@@ -722,6 +722,21 @@
       "missingIFinder": "iFinder war nicht erreichbar, daher hat diese Antwort es nicht verwendet.",
       "missingOther": "Diese Antwort hat es nicht verwendet."
     },
+    "provenance": {
+      "button": "KI-generiert: Details",
+      "title": "KI-generiert",
+      "model": "Modell",
+      "created": "Erstellt",
+      "marking": "Kennzeichnung",
+      "markingNone": "Vom Modell nicht gekennzeichnet",
+      "markingProvider": "Vom Anbieter gekennzeichnet (erklärt)",
+      "markingIhub": "iHub-Wasserzeichen",
+      "hash": "Inhalts-Hash (SHA-256)",
+      "copyHash": "Hash kopieren",
+      "copied": "Kopiert",
+      "outputId": "Ausgabe-ID",
+      "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat."
+    },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
       "websearch": "Basierend auf Websuche",
@@ -6510,11 +6525,15 @@
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",
-      "description": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet. Die Assistenten sagen auf Nachfrage immer, dass sie ein KI-System sind; diese Regel lässt sich nicht abschalten.",
+      "description": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet. Unabhängig davon sorgt eine Regel in jedem System-Prompt dafür, dass die Assistenten auf Nachfrage sagen, dass sie ein KI-System sind; Sie können sie unten umformulieren, aber nicht abschalten.",
       "enabled": "KI-Hinweis vor der ersten Nachricht anzeigen",
       "text": "Hinweistext (leer verwendet den eingebauten Text)",
       "saved": "KI-Hinweis gespeichert",
-      "saveError": "KI-Hinweis konnte nicht gespeichert werden"
+      "saveError": "KI-Hinweis konnte nicht gespeichert werden",
+      "guardrailText": "Regel für die KI (leer verwendet die eingebaute Regel)",
+      "guardrailHint": "Für das Modell geschrieben, Englisch funktioniert am besten. Sie wird als letzte Zeile an den System-Prompt jedes Modellaufrufs angehängt (Chat, API, MCP, A2A, Agenten, Workflows). Apps und Nutzer können sie nicht ändern. Sie sollte klar festhalten, dass der Assistent eine KI ist und sich nie als Mensch ausgibt.",
+      "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+      "loadError": "KI-Hinweis-Einstellungen konnten nicht geladen werden"
     },
     "aiAcknowledgement": {
       "title": "KI-Bestätigung",
@@ -9013,7 +9032,6 @@
       "defaultAppHint": "Neue Chats dieses Projekts starten in dieser App. Beim Start eines Chats kann jeder eine andere App wählen."
     },
     "items": {
-      "aiAccessFor": "Nutzung von {{name}} durch die KI",
       "aiAccessHint": "Angeheftete Einträge stehen immer im Prompt. Einträge „Nicht für KI“ bleiben für Personen im Projekt, werden dem Modell aber nie gegeben, aufgelistet oder durchsucht.",
       "aiAccess": {
         "normal": "Normal",
@@ -9024,7 +9042,6 @@
         "preview": "Text ansehen",
         "refresh": "Aktualisieren",
         "remove": "Element entfernen",
-        "rename": "Umbenennen",
         "retry": "Erneut versuchen",
         "transfer": "Verschieben oder kopieren nach…",
         "openInIFinder": "In iFinder öffnen",
@@ -9055,7 +9072,6 @@
       "pinnedHint": "Angeheftete Elemente sind immer im Prompt, auch wenn das Projekt durchsucht wird.",
       "removeConfirm": "„{{name}}“ aus dem Projekt entfernen?",
       "removeTitle": "Element entfernen",
-      "renameTitle": "Element umbenennen",
       "status": {
         "extracting": "Wird extrahiert",
         "failed": "Fehlgeschlagen",
@@ -10016,7 +10032,7 @@
     "retry": "Erneut versuchen",
     "saving": "Wird gespeichert...",
     "skip": "Ohne Bestätigung fortfahren",
-    "anonymousNote": "Diese Bestätigung gilt nur für diese Browsersitzung.",
+    "anonymousNote": "Diese Bestätigung wird bis zu 30 Tage in diesem Browser gespeichert.",
     "composerNote": "Bitte bestätigen Sie den KI-Hinweis, um Nachrichten zu senden.",
     "review": "Hinweis ansehen",
     "confirmed": "Bestätigt.",

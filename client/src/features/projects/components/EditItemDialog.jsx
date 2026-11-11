@@ -6,9 +6,10 @@ import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import Icon from '../../../shared/components/Icon';
 import { MAX_ITEM_NAME_LENGTH } from '../utils/projectView';
-import { buildItemChanges, draftFromItem } from '../utils/projectItems';
+import { buildItemChanges, draftFromItem, isEditableItem } from '../utils/projectItems';
 import { LinkKindPicker } from './item-dialog/ItemPickers';
 import {
+  HINT_CLASS,
   INPUT_CLASS,
   LABEL_CLASS,
   PRIMARY_BUTTON,
@@ -32,15 +33,16 @@ function validationMessage(t, code) {
 }
 
 /**
- * Edits one link item of a project — a web page, an iHub page, an iFinder
- * document or an iFinder search — in the pickers the add dialog uses, filled
- * with what the item holds now. It changes the item in place: its id, its
- * pin and its place in the project stay.
+ * Edits one item of a project: its name and its "For the AI" setting (normal,
+ * pinned or not for the AI). A link item — a web page, an iHub page, an iFinder
+ * document or an iFinder search — also gets the pickers the add dialog uses,
+ * filled with what the item holds now. It changes the item in place: its id and
+ * its place in the project stay.
  *
  * Mount it only while open.
  *
  * @param {Object} props
- * @param {Object} props.item - The item to edit (one of `EDITABLE_ITEM_KINDS`).
+ * @param {Object} props.item - The item to edit.
  * @param {() => void} props.onClose
  * @param {(changes: {name?: string, ref?: Object}) => Promise<void>} props.onSave -
  *   Rejects with the failure, which the dialog shows.
@@ -99,8 +101,16 @@ function EditItemDialog({ item, onClose, onSave, api }) {
           >
             {t('projects.editItem.title', 'Edit item')}
           </h2>
-          {/* No crawl: it adds pages, and this edits one. */}
-          <LinkKindPicker kind={item.kind} draft={draft} update={update} api={api} pages={pages} />
+          {/* No crawl: it adds pages, and this edits one. Other kinds have no reference to change. */}
+          {isEditableItem(item) && (
+            <LinkKindPicker
+              kind={item.kind}
+              draft={draft}
+              update={update}
+              api={api}
+              pages={pages}
+            />
+          )}
           <div>
             <label htmlFor="edit-item-name" className={LABEL_CLASS}>
               {t('projects.addItem.name', 'Name')}
@@ -113,6 +123,29 @@ function EditItemDialog({ item, onClose, onSave, api }) {
               onChange={e => update({ name: e.target.value })}
               className={INPUT_CLASS}
             />
+          </div>
+          <div>
+            <label htmlFor="edit-item-ai-access" className={LABEL_CLASS}>
+              {t('projects.items.columns.aiAccess', 'For the AI')}
+            </label>
+            <select
+              id="edit-item-ai-access"
+              value={draft.aiAccess}
+              onChange={e => update({ aiAccess: e.target.value })}
+              className={INPUT_CLASS}
+            >
+              <option value="normal">{t('projects.items.aiAccess.normal', 'Normal')}</option>
+              <option value="pinned">{t('projects.items.aiAccess.pinned', 'Pinned')}</option>
+              <option value="excluded">
+                {t('projects.items.aiAccess.excluded', 'Not for AI')}
+              </option>
+            </select>
+            <p className={HINT_CLASS}>
+              {t(
+                'projects.items.aiAccessHint',
+                'Pinned items are always in the prompt. "Not for AI" items stay in the project for people but are never given to the model, listed or searched.'
+              )}
+            </p>
           </div>
           {error && (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400 whitespace-pre-line">

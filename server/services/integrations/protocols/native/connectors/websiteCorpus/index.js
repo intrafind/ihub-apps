@@ -111,8 +111,9 @@ const PARAMETERS = {
       batchSize: {
         type: 'integer',
         minimum: 1,
-        maximum: 60,
-        description: 'Pages to fetch in this call (default 30).'
+        maximum: 100,
+        description:
+          'Pages to fetch in this call (default 60). A call stops starting pages after about 22 seconds and reports how many remain, so a large batch is safe.'
       },
       restart: {
         type: 'boolean',
@@ -203,6 +204,12 @@ const maxPagesOf = ctx => Number(ctx.values?.maxPages) || DEFAULT_MAX_PAGES;
 /** Whether the installation lets crawls reach company-internal addresses. */
 const allowPrivateOf = ctx => ctx.values?.allowPrivateAddresses === true;
 
+/** The crawl speed of the installation; the service clamps and defaults what is missing. */
+const crawlSpeedOf = ctx => ({
+  crawlConcurrency: ctx.values?.crawlConcurrency,
+  requestDelayMs: ctx.values?.requestDelayMs
+});
+
 function action(name, call) {
   return {
     parameters: PARAMETERS[name],
@@ -211,7 +218,8 @@ function action(name, call) {
         call(service(), args || {}, {
           user: ctx.user,
           maxPages: maxPagesOf(ctx),
-          allowPrivateAddresses: allowPrivateOf(ctx)
+          allowPrivateAddresses: allowPrivateOf(ctx),
+          ...crawlSpeedOf(ctx)
         })
       )
   };

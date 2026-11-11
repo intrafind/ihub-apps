@@ -7,10 +7,10 @@ import {
   isEditableItem
 } from '../../../client/src/features/projects/utils/projectItems';
 
-describe('editing a link item', () => {
+describe('editing an item', () => {
   const url = { kind: 'url', name: 'Docs', ref: { url: 'https://a.example', maxContentLength: 9 } };
 
-  test('only link kinds can be edited', () => {
+  test('only link kinds have a reference to edit', () => {
     for (const kind of ['url', 'page', 'ifinder-document', 'ifinder-query']) {
       expect(isEditableItem({ kind })).toBe(true);
     }
@@ -36,6 +36,36 @@ describe('editing a link item', () => {
       name: 'Handbook'
     });
     expect(buildItemChanges(url, { ...draftFromItem(url), name: '  ' }).changes).toBeNull();
+  });
+
+  test('the For the AI setting is sent when it changed', () => {
+    const draft = draftFromItem(url);
+    expect(draft.aiAccess).toBe('normal');
+    expect(buildItemChanges(url, { ...draft, aiAccess: 'pinned' }).changes).toEqual({
+      pinned: true,
+      excludedFromAi: false
+    });
+    expect(buildItemChanges(url, { ...draft, aiAccess: 'excluded' }).changes).toEqual({
+      pinned: false,
+      excludedFromAi: true
+    });
+    const pinned = { ...url, pinned: true };
+    expect(buildItemChanges(pinned, draftFromItem(pinned))).toEqual({ changes: null, error: null });
+    expect(
+      buildItemChanges(pinned, { ...draftFromItem(pinned), aiAccess: 'normal' }).changes
+    ).toEqual({ pinned: false, excludedFromAi: false });
+  });
+
+  test('an upload is edited for its name and For the AI setting only', () => {
+    const upload = { kind: 'upload', name: 'Notes', ref: { fileName: 'notes.txt' } };
+    expect(buildItemChanges(upload, draftFromItem(upload))).toEqual({ changes: null, error: null });
+    expect(
+      buildItemChanges(upload, {
+        ...draftFromItem(upload),
+        name: 'Meeting notes',
+        aiAccess: 'excluded'
+      }).changes
+    ).toEqual({ name: 'Meeting notes', pinned: false, excludedFromAi: true });
   });
 
   test('an invalid address is refused with a code', () => {

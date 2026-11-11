@@ -44,7 +44,8 @@ jest.mock('../../../client/src/shared/hooks/useEventSource', () => ({
 // stub the api module so importing the hook does not pull in the client.
 jest.mock('../../../client/src/api', () => ({
   __esModule: true,
-  sendAppChatMessage: jest.fn().mockResolvedValue({})
+  sendAppChatMessage: jest.fn().mockResolvedValue({}),
+  checkAppChatStatus: jest.fn().mockResolvedValue({ active: false })
 }));
 
 // Minimal i18n: return the provided default string (or the key).
@@ -65,7 +66,7 @@ jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
 }));
 
 const useAppChat = require('../../../client/src/features/chat/hooks/useAppChat').default;
-const { sendAppChatMessage } = require('../../../client/src/api');
+const { sendAppChatMessage, checkAppChatStatus } = require('../../../client/src/api');
 
 let seq = 0;
 const RUN_ID = 'run-turn-1';
@@ -168,6 +169,37 @@ test("'run/ended' completes the message, stops processing and calls onMessageCom
   expect(done.finishReason).toBe('stop');
   expect(result.current.processing).toBe(false);
   expect(onMessageComplete).toHaveBeenCalledWith('final answer', 'hello');
+});
+
+test('a turn that outlives the POST timeout keeps streaming instead of failing', async () => {
+  sendAppChatMessage.mockRejectedValueOnce(
+    Object.assign(new Error('timeout'), { isTimeout: true })
+  );
+  checkAppChatStatus.mockResolvedValueOnce({ active: true, processing: true });
+  const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-long' }));
+  const assistant = startAssistantMessage(result);
+
+  await deliver('stream/connected', { runId: 'chat-long', lastSeq: 0, protocol: 2 }, 'chat-long');
+
+  expect(checkAppChatStatus).toHaveBeenCalledWith('app1', 'chat-long');
+  const msg = result.current.messages.find(m => m.id === assistant.id);
+  expect(msg.content).not.toMatch(/timed out/i);
+  expect(result.current.processing).toBe(true);
+});
+
+test('a timed-out POST for a turn the server is not running still reports the error', async () => {
+  sendAppChatMessage.mockRejectedValueOnce(
+    Object.assign(new Error('Request timed out.'), { isTimeout: true })
+  );
+  checkAppChatStatus.mockResolvedValueOnce({ active: false });
+  const { result } = renderHook(() => useAppChat({ appId: 'app1', chatId: 'chat-dead' }));
+  const assistant = startAssistantMessage(result);
+
+  await deliver('stream/connected', { runId: 'chat-dead', lastSeq: 0, protocol: 2 }, 'chat-dead');
+
+  const msg = result.current.messages.find(m => m.id === assistant.id);
+  expect(msg.content).toMatch(/timed out/i);
+  expect(result.current.processing).toBe(false);
 });
 
 test('a delta → meta → run/ended sequence keeps both effects', async () => {
