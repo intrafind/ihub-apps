@@ -1,7 +1,7 @@
 # Strands Agents memory compared with this plan: findings and proposed amendments
 
 **Date:** 2026-11-11
-**Status:** Proposal. Six amendments, written as ADRs M21–M26 in the format of `architecture.md` §11. They are **not accepted**: §11 says accepted decisions are reopened with an ADR, so each one needs a yes or no before it touches the README, the architecture or the tickets. Nothing outside this folder has been changed.
+**Status:** Accepted on 2026-11-11, with one change: **M21 adds no keyword, BM25 or ranked search to memory** (see §3). The six amendments are written as ADRs M21–M26 in the format of `architecture.md` §11 and have been folded into the README (§5 decisions 16–21, §6.3, §6.4, §6.6, §7), the architecture (§2.2.1, §4.5, §5.3, §5.7, §6.1–§6.3, §6.5, §7.1, §8.6, §8.7, §10.8, §11), the engineering and product plans and `tickets.json`. M22 stays conditional on a Phase 1 spike. Nothing outside this folder has been changed.
 **Input:** [`research/strands_agents_memory.md`](research/strands_agents_memory.md), the verified account of what `strands-agents/sdk-python` ships (the public docs page and the design documents describe more than the code does).
 **Method:** the Strands feature set was set against README §5–§7, `architecture.md` §0–§11 and the open memory issues (epic #3365, phases #3374–#3378). Every claim about this plan below cites the section it comes from.
 
@@ -39,7 +39,7 @@ Priority if only some are taken: **M23, M25, M22** (correctness or cost that app
 | Compaction and memory | Independent; extraction never sees the summary | Summary feeds extraction; flush before drop (ADR-M10) | Ours is stronger |
 | Review, consent, deletion | None | Review queue, pause, per-chat off, cascade (§6.5–6.7) | Ours is stronger |
 | Telemetry | Spans for search, add, inject, extract; the memory text is always recorded in them | Redacted, hash-only ledger rules (§6.7, ADR-M12) | Ours is stronger |
-| Backends | Pluggable `MemoryStore`: `search` required, everything else optional | Scope handlers; no retrieval layer until a database provider exists (ADR-M01) | Strands' minimal interface is a useful seam to reserve (M21) |
+| Backends | Pluggable `MemoryStore`: `search` required, everything else optional | Scope handlers; no retrieval layer until a database provider exists (ADR-M01) | Strands' minimal interface is a possible seam for a later retrieval concept; not planned now (decision 2026-11-11) |
 
 ---
 
@@ -47,20 +47,19 @@ Priority if only some are taken: **M23, M25, M22** (correctness or cost that app
 
 Each entry gives the evidence, the change, the tickets it touches and the alternative that was weighed.
 
-### ADR-M21: a bounded read path for the overflow case
+### ADR-M21: a bounded overflow read, without search
 
-**Gap.** When the valid set exceeds `promptBudgetChars`, §6.4 shows the highest-priority entries and tells the model to call `memory_list`. `memory_list` takes `category`, `includeInvalidated` and `limit` (default 100, maximum 200; `architecture.md` §4.5), so with the default `maxEntries` of 100 it can return one partition's whole set (up to 100 entries of 500 characters, about 50 KB, more with an app and a project partition) into the model's context, and it cannot answer "what do I know about the migration?" without returning everything. `limit` bounds the count, not the size.
+**Gap.** When the valid set exceeds `promptBudgetChars`, §6.4 shows the highest-priority entries and tells the model to call `memory_list`. `memory_list` takes `category`, `includeInvalidated` and `limit` (default 100, maximum 200; `architecture.md` §4.5), so with the default `maxEntries` of 100 it can return one partition's whole set (up to 100 entries of 500 characters, about 50 KB, more with an app and a project partition) into the model's context. `limit` bounds the count, not the size. And the block only says that entries are missing, not which kind.
 
-**What Strands shows.** Its one required store method is `search(query, {limit})`; everything else is optional, which is why a keyword store, a managed store and a test store all fit. Its default `FileMemoryStore` search is plain keyword scoring. The iHub projects code already ships a BM25 provider without embeddings (README §4.5, `LocalKnowledgeProvider.js`).
+**Decision of 2026-11-11.** No free-text query, no BM25 over entries and no `search` method on the handler contract. The original proposal reused the projects BM25 provider and reserved `search(scope, query, { limit })` as the seam for a later retrieval backend (Strands' one required store method). That is dropped: ranked or keyword retrieval stays a later concept (ADR-M01, #2389, #2906) and this plan does not prepare a seam for it.
 
 **Change.**
-- `memory_list` gets an optional `query`. With a query the result is the BM25-ranked entries of the partitions the chat may read (default `limit` 20). The result is also capped by `maxResultChars` (default `2 × promptBudgetChars`) and carries `truncated: true` when the cap cut it.
-- The entries-shaped handler contract (§3.1) gets `search(scope, query, { limit })` as a **required** method, implemented once over the document with BM25. A later retrieval backend (after #2389 and #2906) implements the same method, so the upgrade is additive and ADR-M01's "no retrieval layer" stays true for Phase 1–4.
-- When `shown < entries`, the trailing paragraph of the block lists the unshown entries per category ("3 more: profile 1, reference 2; use memory_list with a query") instead of only saying that some exist.
+- `memory_list` serialises at most `2 × promptBudgetChars` characters (8 000 by default), in the selection order of §6.2, and returns `truncated: true` when entries were cut. `category` is how the model narrows a result; `limit` stays.
+- When `shown < entries`, the trailing paragraph of the block names the unshown entries per category ("3 entries are not shown (profile 1, reference 2); call memory_list with a category to see them") instead of only saying that some exist.
 
-**Touches.** #3379 (contract), #3390 (repository: `search`), #3394 (tool schema), #3392 (block text), architecture §4.5, §6.1, §6.2.
-**Size.** Small. No new infrastructure.
-**Rejected.** Embeddings (ADR-M01). Injecting the top-N by relevance to the last message every turn, as Strands does: it puts retrieval on the critical path of every turn and depends on query quality, which the always-on block avoids.
+**Touches.** #3394 (tool), #3392 (block text), architecture §4.5, §6.1, §6.2.
+**Size.** Small. No new infrastructure and no new setting.
+**Rejected.** Keyword or BM25 search over entries (decided against, above), embeddings (ADR-M01), and injecting the top-N entries by relevance to the last message every turn, as Strands does: it puts retrieval on the critical path of every turn and depends on query quality, which the always-on block avoids.
 
 ### ADR-M22: entries added during a chat do not enter that chat's block
 
@@ -143,7 +142,7 @@ Each entry gives the evidence, the change, the tickets it touches and the altern
 | The usage of an extraction call that ends in a content-class failure is still recorded under `surface: 'memory'`, because the provider billed it (Strands `…usage_to_the_request_total_even_when_the_request_limit_is_used_up` makes the same point for its own accounting) | #3408, #3409 |
 | An override of `extraction.modelId` never drops the current entries from the prompt (the Strands harness drops its key-aware extractor when a custom one is passed) | #3409 |
 | Block rendering with `asOf`: an entry added after `asOf` is absent, an entry deleted after `asOf` is absent, `shown` / `entries` agree | #3392, M22 |
-| `memory_list` with a query returns ranked entries, never more than `maxResultChars`, `truncated` set when cut | #3394, M21 |
+| `memory_list` never returns more than `2 × promptBudgetChars` characters and sets `truncated` when entries were cut; the block trailer names the unshown count per category | #3394, #3392, M21 |
 | A consolidation reply whose notes drop an unnamed bullet is rejected; one that references a missing bullet number is rejected; the newest watermark cannot be dropped | #3422, M25 |
 | A restart between the turn and the debounce firing: the sweep extracts the chat within two intervals | #3409, M24 |
 
@@ -159,12 +158,14 @@ Each entry gives the evidence, the change, the tickets it touches and the altern
 | The file-listing injector and `read_<store>_file` tool | Design only in Strands. `memory_list` with a query (M21) covers the same need with one tool |
 | An eviction trigger for extraction | Design only in Strands; the Phase 3 flush before compaction already covers it, and Strands' own shipped code does not connect compaction to extraction at all |
 | Consolidation operations `deriveInsights` and `reorganize` | An unreviewed generalisation is the "wrong reflection sticks" failure of README §2.6; lessons stay review-gated (Phase 4) |
+| A `query` on `memory_list`, BM25 over entries, a `search` method on the handler contract | Decided 2026-11-11: no ranked or keyword retrieval in memory yet; revisit with the retrieval concept after #2389 and #2906 (ADR-M01) |
 | Search and add as the default agent surface | Recall by model judgment is the weakness the always-on block exists to avoid |
 
 ---
 
-## 6. What is needed from you
+## 6. Decisions of 2026-11-11 and what is still open
 
-For each of M21–M26: accept, change or drop. On acceptance the next commit folds the decision into the README (§5, §6.4, §6.7 wording), the architecture (§2.2, §4.5, §5.3, §6, §8.6, §11) and `tickets.json`, and the matching GitHub issues get a comment. M22 is the one with an open technical question (the cache breakpoint spike), so it can be accepted conditionally on the spike.
-
-Two things this note could not settle from the code: whether the usage normaliser exposes cached-token counts (M22 metric), and whether the BM25 provider in `LocalKnowledgeProvider.js` can be reused for entries without copying it (M21). Both are one-hour checks at the start of the tickets they affect.
+- **Accepted:** M21 (without any search), M22 (conditional, below), M23, M24, M25, M26.
+- **M22 is conditional** on the Phase 1 spike in ticket P1-09: where the Anthropic, Bedrock and OpenAI adapters put the cache breakpoint relative to the system prompt and the messages, and whether the usage normaliser exposes cached-token counts. If the system prompt is not part of a cached prefix together with the messages, M22 is withdrawn and `architecture.md` §6.3 and README Decision 17 revert.
+- **Measured in P2-01:** the listing cost of the catch-up sweep (M24) at 10 000 budget documents; the interval is a constant and can be lengthened.
+- **Not done here:** the GitHub issue bodies still carry their original text. `tickets.json` holds the amendments; the epic #3365 has a comment that lists them.
