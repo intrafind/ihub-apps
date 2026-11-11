@@ -22,6 +22,7 @@ import {
   toForm,
   validateForm
 } from './provenanceSettingsForm';
+import EuAiActStateNote from './EuAiActStateNote';
 
 const FIELD_ORDER = [
   'retentionDays',
@@ -274,6 +275,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
         'How long output records are kept, who may check an output, and how strict the watermark detector is. Changes apply immediately; no restart is needed. Every save is written to the audit log.'
       )}
     >
+      <EuAiActStateNote hideWhenOn className="mb-4" />
       {loadError && !form ? (
         <AdminLoadError
           framed={false}

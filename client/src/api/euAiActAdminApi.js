@@ -99,3 +99,27 @@ export async function verifyFile(file, kind) {
   const response = await makeAdminApiCall('/provenance/_verify', { method: 'POST', body: form });
   return response.data;
 }
+
+/** The master switch record: `{ enabled, valid, changedAt, changedBy, reason, history }`. */
+export async function fetchConformity() {
+  const response = await makeAdminApiCall('/admin/eu-ai-act/conformity');
+  return response.data;
+}
+
+/** Switch every EU AI Act feature off. The server records who, when and why. */
+export async function disableConformity({ reason }) {
+  const response = await makeAdminApiCall('/admin/eu-ai-act/conformity/_disable', {
+    method: 'POST',
+    body: { reason, acceptResponsibility: true }
+  });
+  return response.data;
+}
+
+/** Switch the features on again; the reason is optional. */
+export async function enableConformity({ reason } = {}) {
+  const response = await makeAdminApiCall('/admin/eu-ai-act/conformity/_enable', {
+    method: 'POST',
+    body: reason ? { reason } : {}
+  });
+  return response.data;
+}

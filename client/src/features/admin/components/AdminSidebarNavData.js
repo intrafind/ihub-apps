@@ -42,7 +42,7 @@ import {
  * @param {function} params.t - i18n translation function
  * @param {function} params.showAdminPage - (key: string) => boolean
  * @param {object} params.featureFlags - FeatureFlags instance
- * @param {object} [params.badges] - Counts shown next to items, by item key
+ * @param {object} [params.badges] - Counts shown next to items, by item key (`euAiActOff`: show "Off")
  *   (`integrations`: open integration requests and requests for internal websites)
  */
 export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {} }) {
@@ -356,6 +356,11 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           label: t('admin.nav.euAiAct', 'EU AI Act'),
           href: '/admin/eu-ai-act',
           icon: ScaleIcon,
+          // Only while the EU AI Act master switch is off: visible from every admin page.
+          badgeText: badges.euAiActOff ? t('admin.euAiAct.master.navOff', 'Off') : undefined,
+          badgeLabel: badges.euAiActOff
+            ? t('admin.euAiAct.master.offTitle', 'EU AI Act features are switched off')
+            : undefined,
           visible: showAdminPage('system')
         },
         {

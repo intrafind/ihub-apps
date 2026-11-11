@@ -25,6 +25,7 @@ import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../../../../shared/outputTokens.js
 import { isCustomLlmProvider, providerEnvKeyName } from '../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../utils/modelImport';
 import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../../../../shared/modelCapabilities.js';
+import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 
 /** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
 const TOOL_SUPPORT_LABELS = {
@@ -1463,9 +1464,17 @@ function ModelFormEditor({
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         {t(
                           'admin.models.hints.marking',
-                          'Whether this model marks the text it generates as AI generated. Choose "Provider marks the output" only when the provider confirmed that in writing; iHub cannot check it. Every output still gets a provenance record, whatever you choose here.'
+                          'Whether this model marks the text it generates as AI generated. Choose "Provider marks the output" only when the provider confirmed that in writing; iHub cannot check it. While the EU AI Act features are on, every output still gets a provenance record, whatever you choose here.'
                         )}
                       </p>
+                      <EuAiActStateNote
+                        hideWhenOn
+                        className="mt-3"
+                        offText={t(
+                          'admin.euAiAct.master.markingOff',
+                          'Marking is switched off platform-wide. This setting is saved and applies again when you switch the features on.'
+                        )}
+                      />
                       <div className="mt-4 grid grid-cols-6 gap-6">
                         <div className="col-span-6 sm:col-span-2">
                           <label

@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { usePlatformConfig } from '../../../shared/contexts/platformConfigContextValue';
 
 /**
  * Status of a users.json record against the required version: `acknowledged`,
@@ -35,7 +36,8 @@ export function latestAcknowledgement(user) {
  * @param {Object} [options]
  * @param {() => void} [options.onChanged] - Called after an action that changed data
  * @returns {{
- *   settings: {enabled: boolean, enforce: boolean, requiredVersion: number}|null,
+ *   settings: {enabled: boolean, enforce: boolean, requiredVersion: number, masterOn: boolean}|null,
+ *     `enabled` is what the admin configured; `masterOn` is the EU AI Act master switch,
  *   message: {type: 'success'|'error', text: string}|null,
  *   busy: boolean,
  *   dialogProps: Object|null,
@@ -49,7 +51,13 @@ export function latestAcknowledgement(user) {
  */
 export function useAiAcknowledgementAdmin({ onChanged } = {}) {
   const { t } = useTranslation();
-  const [settings, setSettings] = useState(null);
+  const [loaded, setLoaded] = useState(null);
+  // The EU AI Act master switch (public platform config, on while unknown). While it is off the
+  // acknowledgements stay as they are: only the read-only export is available.
+  const platform = usePlatformConfig();
+  const masterOn = platform?.platformConfig?.euAiAct?.enabled !== false;
+  const settings = loaded ? { ...loaded, masterOn } : null;
+  const setSettings = setLoaded;
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(false);
   const [dialogProps, setDialogProps] = useState(null);

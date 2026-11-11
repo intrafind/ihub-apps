@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import AcknowledgementsCard from '../components/euAiAct/AcknowledgementsCard';
+import ConformityCard from '../components/euAiAct/ConformityCard';
 import ConfigCheckCard from '../components/euAiAct/ConfigCheckCard';
 import ProvenanceSettingsCard from '../components/euAiAct/ProvenanceSettingsCard';
 import VerificationCard from '../components/euAiAct/VerificationCard';
@@ -10,13 +11,15 @@ import WatermarkKeysCard from '../components/euAiAct/WatermarkKeysCard';
 import useEuAiActStatus from '../hooks/useEuAiActStatus';
 
 /**
- * `/admin/eu-ai-act`: one page for the EU AI Act Art. 50 duties. Five cards:
- * the configuration check, acknowledgements, watermark keys (with detector and
+ * `/admin/eu-ai-act`: one page for the EU AI Act Art. 50 duties. Six cards: the master
+ * switch (all EU AI Act features on or off, with who, when and why), the configuration check, acknowledgements, watermark keys (with detector and
  * self-test), provenance settings and verification. Each card loads and fails on its own.
  */
 function AdminEuAiActPage() {
   const { t } = useTranslation();
   const { status, loading, checking, error, reload } = useEuAiActStatus();
+  // The master switch is off: the cards below are paused (read-only, explained).
+  const paused = status?.conformity?.enabled === false;
 
   return (
     <div>
@@ -34,6 +37,12 @@ function AdminEuAiActPage() {
         </div>
       </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <ConformityCard
+          conformity={status?.conformity || null}
+          loading={loading}
+          error={error}
+          onReload={reload}
+        />
         <ConfigCheckCard
           status={status}
           loading={loading}
@@ -41,7 +50,11 @@ function AdminEuAiActPage() {
           checking={checking}
           onRecheck={reload}
         />
-        <AcknowledgementsCard acknowledgements={status?.acknowledgements} onChanged={reload} />
+        <AcknowledgementsCard
+          acknowledgements={status?.acknowledgements}
+          onChanged={reload}
+          paused={paused}
+        />
         <WatermarkKeysCard statusModels={status?.models} onChanged={reload} />
         <ProvenanceSettingsCard onSaved={reload} />
         <VerificationCard maxFileBytes={status?.provenance?.media?.maxVerifyBytes} />

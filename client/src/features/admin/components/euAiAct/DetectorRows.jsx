@@ -9,6 +9,7 @@ import { getAdminApiErrorMessage } from '../../../../api/adminApi';
 import { runWatermarkSelfTest, testWatermarkDetector } from '../../../../api/euAiActAdminApi';
 import CheckStatus from './CheckStatus';
 import { BUTTON_SECONDARY } from './KeyDialogs';
+import { useEuAiActEnabled } from './EuAiActStateNote';
 
 /** Self-test diagnosis (server-side step 4) -> level and sentence. Never over-claims. */
 function describeSelfTest(result, t) {
@@ -113,6 +114,8 @@ function describeConnection(result, t) {
 function DetectorRow({ detector, modelStatus, onChanged }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(null); // 'test' | 'selfTest' | null
+  // The detector actions are outbound calls that only serve the EU AI Act measures.
+  const paused = !useEuAiActEnabled();
   const [outcome, setOutcome] = useState(null);
   const modelId = detector.modelId;
 
@@ -174,7 +177,7 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         </Link>
         <button
           type="button"
-          disabled={Boolean(busy)}
+          disabled={Boolean(busy) || paused}
           onClick={() => run('test', testWatermarkDetector, describeConnection)}
           className={BUTTON_SECONDARY}
         >
@@ -183,7 +186,7 @@ function DetectorRow({ detector, modelStatus, onChanged }) {
         </button>
         <button
           type="button"
-          disabled={Boolean(busy)}
+          disabled={Boolean(busy) || paused}
           aria-busy={busy === 'selfTest'}
           onClick={() => run('selfTest', runWatermarkSelfTest, describeSelfTest)}
           className={BUTTON_SECONDARY}

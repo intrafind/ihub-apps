@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { PlatformConfigContext, usePlatformConfig } from './platformConfigContextValue';
 import {
   fetchAuthStatus,
   fetchUIConfig,
@@ -11,12 +12,7 @@ import {
   invalidateUIConfigCache
 } from '../../api';
 
-const PlatformConfigContext = createContext({
-  platformConfig: null,
-  isLoading: true,
-  error: null,
-  refreshConfig: () => {}
-});
+export { PlatformConfigContext, usePlatformConfig };
 
 export function PlatformConfigProvider({ children }) {
   const [platformConfig, setPlatformConfig] = useState(null);
@@ -165,19 +161,6 @@ export function PlatformConfigProvider({ children }) {
       {children}
     </PlatformConfigContext.Provider>
   );
-}
-
-/**
- * Hook to access platform configuration context.
- * Provides server configuration, authentication settings, and feature flags.
- * @returns {Object} Platform config context value
- * @returns {Object|null} returns.platformConfig - The platform configuration object
- * @returns {boolean} returns.isLoading - Whether config is still loading
- * @returns {string|null} returns.error - Error message if loading failed
- * @returns {Function} returns.refreshConfig - Function to reload configuration
- */
-export function usePlatformConfig() {
-  return useContext(PlatformConfigContext);
 }
 
 export default PlatformConfigContext;
