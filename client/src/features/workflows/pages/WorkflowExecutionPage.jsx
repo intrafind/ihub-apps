@@ -283,8 +283,12 @@ function WorkflowExecutionPage() {
     setRestartError(null);
     setRestarting(true);
     try {
-      await apiClient.post(`/workflows/executions/${executionId}/_restart`);
-      await refetch();
+      const restart = () => apiClient.post(`/workflows/executions/${executionId}/_restart`);
+      // A restart starts AI work again: the AI-use notice has to be confirmed first (#3326).
+      const done = acknowledgement
+        ? await acknowledgement.runWithAcknowledgement(restart)
+        : await restart();
+      if (done) await refetch();
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Failed to restart workflow';
       setRestartError(msg);
