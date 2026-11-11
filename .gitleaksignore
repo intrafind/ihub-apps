@@ -2,3 +2,8 @@
 # (actionTester.test.js) of a commit already pushed, which cannot be
 # rewritten. The line itself now uses a stopword value (.gitleaks.toml).
 c3986d01bb25d1088497ca1d17ce5038987b7e4e:server/tests/integrations/actionTester.test.js:generic-api-key:60
+
+# Prose, not a secret: gitleaks reads the file name "3326-ai-acknowledgement.md"
+# in a sentence of an analysis document as a generic API key. The commit is
+# already pushed and cannot be rewritten (the stack is merged as pushed).
+28c267673bbe272fdd04bac87faa8f43160ed2fa:concepts/2026-11-11 EU AI Act Art 50 focused scope/integrations-acknowledgement.md:generic-api-key:11
