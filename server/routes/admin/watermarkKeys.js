@@ -111,21 +111,24 @@ export default function registerAdminWatermarkKeyRoutes(app) {
    *     summary: Make a retired key active again (rollback)
    *     tags: [Admin - Watermark]
    *     responses:
-   *       200: { description: The item }
+   *       200: { description: "The item. Already active: 200 with the item and no change." }
    *       404: { description: Unknown key }
    */
   app.post(buildServerPath(`${base}/:keyId/_activate`), adminAuth, async (req, res) => {
     const { keyId } = req.params;
     assertValidId(keyId, 'watermark key');
     const { item, previousActiveKeyId } = await store().activate(keyId);
-    await logAudit({
-      req,
-      action: 'update',
-      resource: RESOURCE,
-      resourceId: keyId,
-      summary: `Activated watermark key ${keyId}`,
-      details: { from: previousActiveKeyId, to: keyId }
-    });
+    // Activating the key that is already active changes nothing: no audit entry.
+    if (previousActiveKeyId !== keyId) {
+      await logAudit({
+        req,
+        action: 'update',
+        resource: RESOURCE,
+        resourceId: keyId,
+        summary: `Activated watermark key ${keyId}`,
+        details: { from: previousActiveKeyId, to: keyId }
+      });
+    }
     res.json(item);
   });
 

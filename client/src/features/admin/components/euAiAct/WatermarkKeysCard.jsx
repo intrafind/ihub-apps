@@ -8,6 +8,7 @@ import Badge from '../../../../shared/components/Badge';
 import Icon from '../../../../shared/components/Icon';
 import { getAdminApiErrorMessage } from '../../../../api/adminApi';
 import {
+  activateWatermarkKey,
   createWatermarkKey,
   deleteWatermarkKey,
   fetchWatermarkDetectors,
@@ -40,6 +41,8 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
   const [confirmGenerate, setConfirmGenerate] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [activating, setActivating] = useState(null);
+  const [activated, setActivated] = useState(null);
   const [busy, setBusy] = useState(false);
   const captionRef = useRef(null);
 
@@ -145,6 +148,39 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
       // A stale list ("already deleted") only needs a refresh.
       setMessage(getAdminApiErrorMessage(err));
     }
+    await changed();
+    captionRef.current?.focus();
+  };
+
+  const confirmActivate = async () => {
+    const keyId = activating;
+    const previous = active?.keyId;
+    setActivating(null);
+    setBusy(true);
+    try {
+      await activateWatermarkKey(keyId);
+      setActivated({ keyId, previous });
+      setMessage(
+        t('admin.euAiAct.keys.activated', 'Key {{id}} is now active. {{old}} is retired.', {
+          id: keyId,
+          old: previous || '-'
+        })
+      );
+    } catch (err) {
+      setActivated(null);
+      setMessage(
+        err?.response?.status === 404
+          ? t(
+              'admin.euAiAct.keys.activateNotFound',
+              'Key {{id}} no longer exists. The list was refreshed.',
+              { id: keyId }
+            )
+          : getAdminApiErrorMessage(err)
+      );
+    } finally {
+      setBusy(false);
+    }
+    // Success or failure: the list may have changed, and the self-test rows follow the key.
     await changed();
     captionRef.current?.focus();
   };
@@ -271,6 +307,22 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
                             {item.status === 'retired' && (
                               <button
                                 type="button"
+                                onClick={() => setActivating(item.keyId)}
+                                disabled={busy}
+                                aria-label={t(
+                                  'admin.euAiAct.keys.activateAria',
+                                  'Make key {{id}} active',
+                                  { id: item.keyId }
+                                )}
+                                className={BUTTON_SECONDARY}
+                              >
+                                <Icon name="check-circle" size="sm" />
+                                {t('admin.euAiAct.keys.activate', 'Make active')}
+                              </button>
+                            )}
+                            {item.status === 'retired' && (
+                              <button
+                                type="button"
                                 onClick={() => setDeleting(item.keyId)}
                                 aria-label={t(
                                   'admin.euAiAct.keys.deleteAria',
@@ -309,6 +361,25 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
           <div role="status" aria-live="polite">
             {message && <p className="text-sm text-gray-900 dark:text-gray-100">{message}</p>}
           </div>
+          {activated && (
+            <div className="flex flex-wrap items-center gap-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/30 p-3 text-sm text-amber-900 dark:text-amber-200">
+              <p className="min-w-0 flex-1">
+                {t(
+                  'admin.euAiAct.keys.activatedNext',
+                  'Next: update the --watermark-config of your vLLM server to key {{id}}, then run the self-test. Until then the self-test shows a mismatch.',
+                  { id: activated.keyId }
+                )}
+              </p>
+              <button
+                type="button"
+                onClick={() => reveal(activated.keyId)}
+                className={BUTTON_SECONDARY}
+              >
+                <Icon name="eye" size="sm" />
+                {t('admin.euAiAct.keys.showOption', 'Show key and vLLM option')}
+              </button>
+            </div>
+          )}
           <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
               {t('admin.euAiAct.detector.title', 'Detectors and self-test')}
@@ -336,6 +407,36 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
         confirmLabel={t('admin.euAiAct.keys.generate', 'Generate key')}
         onConfirm={generate}
         onDeny={() => setConfirmGenerate(false)}
+      />
+      <ConfirmDialog
+        isOpen={Boolean(activating)}
+        title={t('admin.euAiAct.keys.activateTitle', 'Make key {{id}} active?', { id: activating })}
+        message={
+          <div className="space-y-2">
+            <p>
+              {t(
+                'admin.euAiAct.keys.activateMessage',
+                'New output will be marked with key {{id}}. The current active key {{current}} becomes retired and is used for detection only.',
+                { id: activating, current: active?.keyId || '-' }
+              )}
+            </p>
+            <p>
+              {t(
+                'admin.euAiAct.keys.activateVllm',
+                'Update the --watermark-config of your vLLM server to this key. Until you do, new output is still marked with the old key and the self-test shows a mismatch.'
+              )}
+            </p>
+            <p>
+              {t(
+                'admin.euAiAct.keys.activateStale',
+                'Earlier self-test results become outdated. Run the self-test again afterwards.'
+              )}
+            </p>
+          </div>
+        }
+        confirmLabel={t('admin.euAiAct.keys.activate', 'Make active')}
+        onConfirm={confirmActivate}
+        onDeny={() => setActivating(null)}
       />
       <ConfirmDialog
         isOpen={Boolean(deleting)}

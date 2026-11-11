@@ -4,14 +4,15 @@
 import { useTranslation } from 'react-i18next';
 import AcknowledgementsCard from '../components/euAiAct/AcknowledgementsCard';
 import ConfigCheckCard from '../components/euAiAct/ConfigCheckCard';
+import ProvenanceSettingsCard from '../components/euAiAct/ProvenanceSettingsCard';
 import VerificationCard from '../components/euAiAct/VerificationCard';
 import WatermarkKeysCard from '../components/euAiAct/WatermarkKeysCard';
 import useEuAiActStatus from '../hooks/useEuAiActStatus';
 
 /**
- * `/admin/eu-ai-act`: one page for the EU AI Act Art. 50 duties. Four cards:
+ * `/admin/eu-ai-act`: one page for the EU AI Act Art. 50 duties. Five cards:
  * the configuration check, acknowledgements, watermark keys (with detector and
- * self-test) and verification. Each card loads and fails on its own.
+ * self-test), provenance settings and verification. Each card loads and fails on its own.
  */
 function AdminEuAiActPage() {
   const { t } = useTranslation();
@@ -42,6 +43,7 @@ function AdminEuAiActPage() {
         />
         <AcknowledgementsCard acknowledgements={status?.acknowledgements} onChanged={reload} />
         <WatermarkKeysCard statusModels={status?.models} onChanged={reload} />
+        <ProvenanceSettingsCard onSaved={reload} />
         <VerificationCard maxFileBytes={status?.provenance?.media?.maxVerifyBytes} />
       </div>
     </div>

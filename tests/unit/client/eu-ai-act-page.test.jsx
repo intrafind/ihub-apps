@@ -19,6 +19,7 @@ const mockApi = {
   createWatermarkKey: jest.fn(),
   revealWatermarkKey: jest.fn(),
   deleteWatermarkKey: jest.fn(),
+  activateWatermarkKey: jest.fn(),
   testWatermarkDetector: jest.fn(),
   runWatermarkSelfTest: jest.fn(),
   verifyText: jest.fn(),
@@ -32,6 +33,7 @@ jest.mock('../../../client/src/api/euAiActAdminApi', () => ({
   createWatermarkKey: (...a) => mockApi.createWatermarkKey(...a),
   revealWatermarkKey: (...a) => mockApi.revealWatermarkKey(...a),
   deleteWatermarkKey: (...a) => mockApi.deleteWatermarkKey(...a),
+  activateWatermarkKey: (...a) => mockApi.activateWatermarkKey(...a),
   testWatermarkDetector: (...a) => mockApi.testWatermarkDetector(...a),
   runWatermarkSelfTest: (...a) => mockApi.runWatermarkSelfTest(...a),
   verifyText: (...a) => mockApi.verifyText(...a),
@@ -270,6 +272,61 @@ describe('WatermarkKeysCard', () => {
     expect(mockApi.deleteWatermarkKey).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Delete key' }));
     await waitFor(() => expect(mockApi.deleteWatermarkKey).toHaveBeenCalledWith('wm-2026-1'));
+  });
+
+  test('Make active is offered on retired keys only, states the consequences and calls _activate after the confirmation', async () => {
+    mockApi.activateWatermarkKey.mockResolvedValue({ keyId: 'wm-2026-1', status: 'active' });
+    const onChanged = jest.fn();
+    const { container } = renderInRouter(
+      <WatermarkKeysCard statusModels={[]} onChanged={onChanged} />
+    );
+    await screen.findByText('wm-2026-1');
+    expect(screen.queryByRole('button', { name: 'Make key wm-2026-2 active' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Make key wm-2026-1 active' }));
+    const dialog = screen.getByText('Make key wm-2026-1 active?').closest('[role="alertdialog"]');
+    expect(
+      within(dialog).getByText(/wm-2026-2 becomes retired and is used for detection only/)
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText(/--watermark-config of your vLLM server/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/self-test shows a mismatch/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Earlier self-test results become outdated/)
+    ).toBeInTheDocument();
+    expect(mockApi.activateWatermarkKey).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Make active' }));
+    await waitFor(() => expect(mockApi.activateWatermarkKey).toHaveBeenCalledWith('wm-2026-1'));
+    await screen.findByText(/Key wm-2026-1 is now active. wm-2026-2 is retired./);
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    // The key value is not in the page until the admin asks for it.
+    expect(container.textContent).not.toContain(SECRET);
+    expect(mockApi.revealWatermarkKey).not.toHaveBeenCalled();
+    mockApi.revealWatermarkKey.mockResolvedValue({
+      keyId: 'wm-2026-1',
+      key: SECRET,
+      vllmConfigSnippet: SNIPPET
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Show key and vLLM option' }));
+    await screen.findByText(SECRET);
+    expect(mockApi.revealWatermarkKey).toHaveBeenCalledWith('wm-2026-1');
+  });
+
+  test('Make active: cancel calls nothing; a 404 says the key is gone and refreshes the list', async () => {
+    mockApi.activateWatermarkKey.mockRejectedValue({ response: { status: 404 }, message: 'x' });
+    renderInRouter(<WatermarkKeysCard statusModels={[]} />);
+    await screen.findByText('wm-2026-1');
+    fireEvent.click(screen.getByRole('button', { name: 'Make key wm-2026-1 active' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(mockApi.activateWatermarkKey).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Make key wm-2026-1 active' }));
+    const calls = mockApi.fetchWatermarkKeys.mock.calls.length;
+    fireEvent.click(
+      within(
+        screen.getByText('Make key wm-2026-1 active?').closest('[role="alertdialog"]')
+      ).getByRole('button', { name: 'Make active' })
+    );
+    await screen.findByText(/Key wm-2026-1 no longer exists. The list was refreshed./);
+    expect(mockApi.fetchWatermarkKeys.mock.calls.length).toBeGreaterThan(calls);
+    expect(screen.queryByText(/Next: update the --watermark-config/)).toBeNull();
   });
 
   test('add own key validates digits, then posts and shows the result', async () => {

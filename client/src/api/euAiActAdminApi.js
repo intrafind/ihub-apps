@@ -41,6 +41,18 @@ export async function revealWatermarkKey(keyId) {
   return response.data;
 }
 
+/**
+ * Make a retired key the active one (rollback). The answer is the item, never the
+ * key value. Already active answers 200 too (nothing changes); unknown is 404.
+ */
+export async function activateWatermarkKey(keyId) {
+  const response = await makeAdminApiCall(
+    `/admin/watermark-keys/${encodeURIComponent(keyId)}/_activate`,
+    { method: 'POST' }
+  );
+  return response.data;
+}
+
 export async function deleteWatermarkKey(keyId) {
   await makeAdminApiCall(`/admin/watermark-keys/${encodeURIComponent(keyId)}`, {
     method: 'DELETE'
