@@ -5319,7 +5319,7 @@
           "id": "string",
           "name": "string",
           "protocol": "string",
-          "type": "null"
+          "type": "null|string"
         }
       ]
     }
