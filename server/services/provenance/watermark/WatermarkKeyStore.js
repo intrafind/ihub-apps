@@ -6,7 +6,8 @@
  *
  * Keys are safe integers (vLLM takes an integer key; JavaScript loses
  * precision above 2^53, so v1 never stores or sends anything larger). Each key
- * has a server-assigned id `wm-<year>-<seq>` that is never reused, and a status:
+ * has a server-assigned id `ihub-wm-<year>-<seq>-<8 hex>` that is never reused and does
+ * not clash with another installation's, and a status:
  * exactly one `active` key (the one vLLM should be started with) once any key
  * exists, the rest `retired` (detection only).
  *
@@ -19,7 +20,7 @@
  *
  * @module services/provenance/watermark/WatermarkKeyStore
  */
-import { randomInt } from 'node:crypto';
+import { randomBytes, randomInt } from 'node:crypto';
 import configStore from '../../config/ConfigStore.js';
 import tokenStorageService from '../../TokenStorageService.js';
 import { ServiceError } from '../../../utils/ServiceError.js';
@@ -116,13 +117,22 @@ function assertInvariant(store) {
 function allocateKeyId(store, now) {
   const year = String(now.getUTCFullYear());
   const existing = store.keys
-    .map(entry => /^wm-(\d{4})-(\d+)$/.exec(entry.keyId))
+    .map(entry => /^ihub-wm-(\d{4})-(\d+)-[0-9a-f]{8}$/.exec(entry.keyId))
     .filter(match => match && match[1] === year)
     .map(match => Number(match[2]));
   // The counter survives deletion; the max of what is stored guards a hand-edited file.
   const seq = Math.max(store.nextSeq[year] || 1, ...existing.map(n => n + 1));
   store.nextSeq[year] = seq + 1;
-  return `wm-${year}-${seq}`;
+  // The `ihub-` prefix says which product made the key (an id also travels alone, in
+  // detector requests and logs), and the random suffix keeps ids apart between
+  // installations (a cloned or restored installation, two installations sharing a
+  // detector): `wm-2026-2` alone is only unique within one store. The sequence stays
+  // for people to read.
+  let keyId;
+  do {
+    keyId = `ihub-wm-${year}-${seq}-${randomBytes(4).toString('hex')}`;
+  } while (store.keys.some(entry => entry.keyId === keyId));
+  return keyId;
 }
 
 /**

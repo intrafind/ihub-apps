@@ -89,7 +89,8 @@ throwaway random key; no real key leaves iHub.
 2. **Restart vLLM right away** with the new `--watermark-config`, then run the self-test.
 3. Retired keys stay in the store and are tried by the detector, so older text is still recognised and reports its
    **old** `keyId`. Delete one only deliberately: text made with it can no longer be recognised, and its id is never
-   reused. `POST .../{keyId}/_activate` re-activates a retired key (rollback).
+   reused. Key ids look like `ihub-wm-2026-2-9f3a1c7e` (product, year, running number, random suffix), so an id
+   says where it comes from and ids from two installations never collide. `POST .../{keyId}/_activate` re-activates a retired key (rollback).
 
 Output generated between "rotate in iHub" and "restart vLLM" is recorded under the new `key_id` but marked with
 the old key. A reveal (`POST .../{keyId}/_reveal`) is `Cache-Control: no-store`, written to the audit log **before**
@@ -106,10 +107,10 @@ iHub does not ship a detector. It calls one over HTTP:
 POST <detectorUrl>
 Authorization: Bearer <token of detectorCredentialRef>
 { "text": "...", "tokenizer": "...", "algorithm": "gumbel", "prf": "philox", "context_width": 4,
-  "keys": [ { "key_id": "wm-2026-2", "key": 123456789012 }, { "key_id": "wm-2026-1", "key": 987654321 } ] }
+  "keys": [ { "key_id": "ihub-wm-2026-2-9f3a1c7e", "key": 123456789012 }, { "key_id": "ihub-wm-2026-1-4be07d12", "key": 987654321 } ] }
 
 200 { "num_scored_tokens": 240,
-      "results": [ { "key_id": "wm-2026-2", "p_value": 0.47 }, { "key_id": "wm-2026-1", "p_value": 1.2e-9 } ] }
+      "results": [ { "key_id": "ihub-wm-2026-2-9f3a1c7e", "p_value": 0.47 }, { "key_id": "ihub-wm-2026-1-4be07d12", "p_value": 1.2e-9 } ] }
 ```
 
 - Active key first. `key` is a safe integer; accept a decimal string as well if you can.
