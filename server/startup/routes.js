@@ -36,6 +36,7 @@ import registerScheduledTaskRoutes from '../routes/scheduledTasks.js';
 import runLog from '../services/loop/RunLog.js';
 import { startChatRetentionSweep } from '../services/chat/chatRetention.js';
 import { startProjectRetentionSweep } from '../services/projects/projectRetention.js';
+import { startWebsiteCorpusRetentionSweep } from '../services/websiteCorpus/corpusRetention.js';
 import { startWorkflowStateRetention } from '../services/workflow/workflowRetention.js';
 import { registerCheckpointResume } from '../services/workflow/checkpointResume.js';
 import { registerChatClarificationLifecycle } from '../services/chat/chatClarificationLifecycle.js';
@@ -141,6 +142,8 @@ const ROUTE_STEPS = [
       startWorkflowStateRetention();
       // Abandoned user projects, when `platform.projects.retentionDays` says so.
       startProjectRetentionSweep();
+      // Crawls of the Website Corpus older than their 14 days, also of people who stopped using it.
+      startWebsiteCorpusRetentionSweep();
     }
   },
   app => registerVoiceRoutes(app),

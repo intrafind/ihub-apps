@@ -250,6 +250,19 @@ function kindFromName(layout) {
 }
 
 /**
+ * The kind of slide a layout serves (`title`, `section`, `content`,
+ * `twoColumn`, `titleOnly`, `blank`), or null when it cannot be told.
+ *
+ * @param {Object} layout - From {@link loadPresentationTemplate}.
+ * @returns {string|null}
+ */
+export function layoutKind(layout) {
+  const byType = KIND_BY_TYPE[layout.type];
+  if (byType) return byType;
+  return kindFromPlaceholders(layout) || kindFromName(layout);
+}
+
+/**
  * The layout for each kind of slide, with fallbacks.
  *
  * @param {Array} layouts - From {@link loadPresentationTemplate}.

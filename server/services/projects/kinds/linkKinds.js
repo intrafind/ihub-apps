@@ -88,8 +88,8 @@ export const urlKind = registerItemKind({
       }
     }
     try {
-      const { default: readPage } = await import('../../../tools/webContentExtractor.js');
-      const page = await readPage({ url: ref.url, maxLength: 1 });
+      const { readWebPage } = await import('../../pageReader/pageReader.js');
+      const page = await readWebPage({ url: ref.url, maxLength: 1 });
       const info = cleanItemInfo({ title: page?.title, description: page?.description });
       const prepared = {};
       if (!name && info.title) prepared.name = info.title;

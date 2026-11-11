@@ -23,7 +23,7 @@ import {
   readBoundedBytes,
   robotsAllows
 } from '../services/projects/siteCrawler.js';
-import { dropRawTextElements } from '../tools/lib/pageContent.js';
+import { dropRawTextElements } from '../services/pageReader/pageContent.js';
 
 const page = (title, hrefs) =>
   `<html><head><title>${title}</title></head><body>${hrefs

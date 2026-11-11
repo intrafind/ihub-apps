@@ -821,9 +821,7 @@ describe('link items their source cut short', () => {
 
   it('a URL fetch cut at its length limit says so in its metadata', async () => {
     const handler = new URLHandler();
-    handler.getWebContentExtractor = async () => ({
-      extract: async () => ({ content: 'start of a page', truncated: true, metadata: {} })
-    });
+    handler.readPage = async () => ({ content: 'start of a page', truncated: true });
     const loaded = await handler.loadContent({ url: 'https://example.com/long' });
     assert.equal(loaded.metadata.truncated, true);
   });

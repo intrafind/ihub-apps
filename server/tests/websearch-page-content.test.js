@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * What the page reader makes of a page (`tools/lib/pageContent.js`), how its
+ * What the page reader makes of a page (`services/pageReader/pageContent.js`), how its
  * cache is bounded (`services/pageCache.js`), and the result shape and filters
  * shared by the script-backed search tools (`tools/lib/searchWithExtraction.js`).
  *
@@ -28,8 +28,8 @@ import {
   MAX_DOCUMENT_CHARS,
   pdfDate,
   sliceDocument
-} from '../tools/lib/pageContent.js';
-import readPage from '../tools/webContentExtractor.js';
+} from '../services/pageReader/pageContent.js';
+import { readWebPage as readPage } from '../services/pageReader/pageReader.js';
 import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
 import {
   _clearPageCache,

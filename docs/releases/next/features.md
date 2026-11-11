@@ -1,5 +1,27 @@
 # Features — Unreleased
 
+## Uploaded Presentations Move Into the Company Design
+
+A user uploads a PowerPoint deck made elsewhere and asks for it in the company design. The `pptx`
+skill has a new tool, `restyle_pptx`, that puts the deck on the **document template's slide master
+and layouts** and gives it back as a download, instead of rebuilding it from its text.
+
+- **Content is kept.** Pictures, charts with their data, tables and speaker notes come along.
+- **The template decides the look.** Each slide gets the template's layout for its kind; titles,
+  footers and slide numbers take its positions, fonts and colours; text alone on a slide uses its
+  content area. Pictures, charts, tables and other shapes keep their arrangement and are scaled into
+  the content area, also when the deck has another size (4:3 to 16:9).
+- **Colours follow the theme.** Colours the deck took from its old theme, in slides and charts, become
+  the template's. Slide backgrounds and the old master are dropped.
+- **Works with any template.** Upload the company's PowerPoint template under **Admin → Document
+  templates**: a cover photo, edge strips, logos and a footer bar in its master reach every slide. Without
+  a PowerPoint template, iHub's built-in design made from the brand is used.
+- **A move, not a redesign.** A colour or font a shape sets itself stays, and slides with several
+  pictures can need a look afterwards; the tool reports slides whose content had to shrink a lot. To
+  rewrite a deck, `create_pptx` still rebuilds it from its text.
+
+See [Document templates → Uploaded presentations](../../document-templates.md#uploaded-presentations).
+
 ## The Chat Scrolls Behind the Message Box
 
 In a chat, the message box no longer sits on a band of its own below the conversation. The
@@ -1521,6 +1543,35 @@ sources) no longer fail to load.
   enough). Plugins that could not be read are listed in the server log.
 
 See [Marketplace → Claude Code plugin marketplaces](../../marketplace.md#claude-code-plugin-marketplaces).
+
+## Website Corpus: Measure How Many Tokens a Website Holds
+
+The new **Website Corpus** integration tells you how much text a website really has, in tokens,
+and whether all of it fits into one context window. That decides whether "put the whole site into
+the prompt" is a realistic alternative to retrieval.
+
+- Five tools: find a site's pages from its sitemap, outline a few pages to spot boilerplate, crawl
+  the pages in resumable batches, show the kept text of a page, and report the size.
+- The report gives tokens per section, how many 128k, 256k and 1M windows the corpus fills (all
+  pages, after removing repeated lines, and without blog and news sections), the largest pages,
+  duplicates, how much of the sitemap was crawled, and the method.
+- Only pages of the site itself are fetched, with the SSRF guard and the proxy settings, within
+  the site's `robots.txt`, a few requests per second. A crawl belongs to the user who started it and
+  is removed after 14 days.
+- Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
+  `website-corpus-sizer` skill from the marketplace guides users through it.
+- Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
+  user whose crawl was refused can ask an admin to allow the host, and the admin approves or
+  declines under **Admin → Integrations → Requests** (the sidebar counts open requests). An approval
+  covers only the Website Corpus and a host's web ports (80 and 443; another port is approved as
+  `host:port`). The setting **Allow company-internal websites** lets every crawl
+  reach the company network instead. Loopback, link-local and cloud metadata addresses stay blocked
+  in both cases.
+- Tokens are counted with the shared token estimator. The server does not ship `gpt-tokenizer`, so
+  without it the estimator counts one token per four characters; the report says which method it
+  used.
+
+See [Website Corpus](../../website-corpus.md).
 
 ## Chat Inside a Project From the Catalog, Privately
 

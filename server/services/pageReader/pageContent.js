@@ -11,7 +11,7 @@ import TurndownService from 'turndown';
  * at a time.
  *
  * Everything here is pure — HTML or PDF bytes in, text out — so the extraction
- * rules are testable without a network. `webContentExtractor.js` owns the
+ * rules are testable without a network. `pageReader.js` owns the
  * fetching, the SSRF guard and the cache.
  *
  * ## Why Markdown
@@ -29,7 +29,7 @@ import TurndownService from 'turndown';
  * older selector rules stay as the fallback: strip navigation, ads and chrome,
  * then take `main` / `article` / the first known content container, or `body`.
  *
- * @module tools/lib/pageContent
+ * @module services/pageReader/pageContent
  */
 
 /**
@@ -397,13 +397,15 @@ export function dropRawTextElements(html, tags) {
  * @param {string} html - The page's HTML
  * @param {Object} [options]
  * @param {string} [options.url] - The page's URL; relative links are resolved against it
+ * @param {number} [options.maxChars=MAX_DOCUMENT_CHARS] - Most Markdown characters kept; a
+ *   caller with a limit of its own (a project item) raises it. `capped` says the page was longer
  * @returns {{
  *   title: string, description: string, author: string, siteName: string,
  *   publishedDate: string, language: string, markdown: string,
  *   extractor: 'readability'|'selectors', thin: boolean
  * }}
  */
-export function extractHtmlPage(html, { url } = {}) {
+export function extractHtmlPage(html, { url, maxChars = MAX_DOCUMENT_CHARS } = {}) {
   // Style blocks are dropped before parsing: JSDOM's CSS parser throws on some
   // real-world stylesheets, and nothing in them is content.
   const source = dropRawTextElements(html, ['style']);
@@ -461,9 +463,9 @@ export function extractHtmlPage(html, { url } = {}) {
     siteName: metaSiteName || article?.siteName?.trim() || '',
     publishedDate: article?.publishedTime || metaPublished || '',
     language: language || article?.lang || '',
-    markdown: markdown.slice(0, MAX_DOCUMENT_CHARS),
+    markdown: markdown.slice(0, maxChars),
     // The page is longer than the reader keeps: the rest cannot be read at any offset.
-    capped: markdown.length > MAX_DOCUMENT_CHARS,
+    capped: markdown.length > maxChars,
     extractor,
     thin: textLength(markdown) < THIN_CONTENT_CHARS
   };

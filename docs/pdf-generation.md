@@ -34,14 +34,14 @@ The shipped system skills:
 |---|---|---|
 | `pdf` | `create_pdf`, `preview_pdf` | Create PDF documents on request |
 | `docx` | `create_docx` | Create editable Word documents on request |
-| `pptx` | `create_pptx` | Create PowerPoint presentations on request |
+| `pptx` | `create_pptx`, `restyle_pptx` | Create PowerPoint presentations on request; move an uploaded deck into the company design |
 | `xlsx` | `create_xlsx` | Create formatted Excel workbooks with live formulas on request |
 | `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (dashboards, calculators, prototypes) and SVG graphics that run in the chat's workspace pane |
 | `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
 
 ### Skill access checks
 
-System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `create_xlsx`, `create_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `restyle_pptx`, `create_xlsx`, `create_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
 
 ### Document templates and the tools
 
@@ -133,6 +133,10 @@ Enable it like the `pdf` skill: add `docx` to the app's skills.
 - Limits: 60 slides, 30 table rows and 12 columns per slide, 12 chart series with 60 categories, 15 MB of images.
 
 There is no slide preview for the model: rendering slides would need Office or LibreOffice on the server.
+
+### `restyle_pptx`: an uploaded deck in the company design
+
+`restyle_pptx` moves a `.pptx` the user uploaded onto the document template's slide master and layouts and hands the result back as a download. The deck is not rebuilt from text: its pictures, charts with their data, tables and speaker notes are carried over, titles and footers take the template's design, other content is scaled into the template's content area, and colours the deck took from its old theme follow the template's. Parameters: `fileId` (the id of the uploaded file) and `filename`; where the model may choose a template, `template`. Details and limits: [Document templates → Uploaded presentations](document-templates.md#uploaded-presentations). Use `create_pptx` to write a new deck or to rewrite a deck's text.
 
 ## The `xlsx` skill
 

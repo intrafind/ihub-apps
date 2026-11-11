@@ -87,6 +87,7 @@
     - [Realtime Voice & Transcription](voice-transcription.md)
     - [Read Aloud (Text-to-Speech)](text-to-speech.md)
     - [Web Tools](web-tools.md)
+    - [Website Corpus](website-corpus.md)
     - [Answer Sources](answer-sources.md)
     - [Magic Prompt](magic-prompt-feature.md)
     - [Image Upload Feature](image-upload-feature.md)
