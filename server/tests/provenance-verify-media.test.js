@@ -27,11 +27,15 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: { getPlatform: () => platform }
 }));
 const { ServiceError } = await import('../utils/ServiceError.js');
+// The route guards with `authenticatedOnly` (the shipped default has `anonymousAuth` on,
+// where `authRequired` would let a guest through); both stand-ins accept a signed-in caller.
+const signedInOnly = (req, res, next) =>
+  req.headers['x-test-user']
+    ? next()
+    : next(new ServiceError('AUTH_REQUIRED', 'Authentication required'));
 jest.unstable_mockModule('../middleware/authRequired.js', () => ({
-  authRequired: (req, res, next) =>
-    req.headers['x-test-user']
-      ? next()
-      : next(new ServiceError('AUTH_REQUIRED', 'Authentication required'))
+  authRequired: signedInOnly,
+  authenticatedOnly: signedInOnly
 }));
 
 const { startTestStorage } = await import('./helpers/testStorage.js');
