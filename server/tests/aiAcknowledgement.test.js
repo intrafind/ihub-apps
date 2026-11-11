@@ -202,6 +202,9 @@ describe('service rules', () => {
     expect(service.resolveText(settings, 'de').language).toBe('de');
     expect(service.resolveText(settings, 'fr', 'de').language).toBe('de');
     expect(service.resolveText({ text: {} }, 'de').text).toBe(service.FALLBACK_TEXT.de);
+    // A language that names an inherited property is no language at all.
+    expect(service.resolveText({ text: {} }, 'constructor').language).toBe('en');
+    expect(service.resolveText({ text: { en: 'E' } }, 'toString').text).toBe('E');
     // The built-in text follows the platform language before English.
     expect(service.resolveText({ text: {} }, 'fr', 'de')).toEqual({
       text: service.FALLBACK_TEXT.de,

@@ -170,6 +170,7 @@ function AdminUsersPage() {
   // AI-use acknowledgements (#3326): the same hook the EU AI Act page will use.
   const ack = useAiAcknowledgementAdmin({ onChanged: () => void loadUsers() });
   const ackRequired = ack.settings?.requiredVersion ?? 1;
+  const ackResetAt = ack.settings?.resetAt ?? null;
   const ackEnabled = ack.settings?.enabled === true;
 
   const loadUsers = async () => {
@@ -264,7 +265,7 @@ function AdminUsersPage() {
       }
     }
     if (ackEnabled && ackFilter !== 'all') {
-      if (acknowledgementStatus(user, ackRequired) !== ackFilter) return false;
+      if (acknowledgementStatus(user, ackRequired, ackResetAt) !== ackFilter) return false;
     }
     if (lastActiveDaysFilter !== 'all') {
       if (!user.lastActiveDate) return lastActiveDaysFilter === 'never';
@@ -333,7 +334,7 @@ function AdminUsersPage() {
             render: u => (
               <AiAcknowledgementCell
                 user={u}
-                status={acknowledgementStatus(u, ackRequired)}
+                status={acknowledgementStatus(u, ackRequired, ackResetAt)}
                 requiredVersion={ackRequired}
               />
             )

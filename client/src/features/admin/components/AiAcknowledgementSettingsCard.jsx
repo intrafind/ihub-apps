@@ -20,6 +20,7 @@ const BUTTON =
 function AiAcknowledgementSettingsCard() {
   const { t } = useTranslation();
   const [form, setForm] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const admin = useAiAcknowledgementAdmin();
@@ -39,7 +40,8 @@ function AiAcknowledgementSettingsCard() {
         }
       })
       .catch(() => {
-        if (!cancelled) setForm({ enabled: true, enforce: true, text: {}, policyUrl: '' });
+        // No default form: saving it would replace the stored text and link with empty ones.
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
@@ -94,6 +96,14 @@ function AiAcknowledgementSettingsCard() {
         )}
       </p>
       <EuAiActStateNote className="mb-4" />
+      {loadFailed && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {t(
+            'admin.aiAcknowledgement.loadError',
+            'The AI acknowledgement settings could not be loaded. Reload the page to try again.'
+          )}
+        </p>
+      )}
       {form && (
         <>
           <div className="flex items-start gap-3 mb-3">

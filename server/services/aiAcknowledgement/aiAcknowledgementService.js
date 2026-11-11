@@ -80,11 +80,13 @@ export function usersFilePath(platform = configCache.getPlatform() || {}) {
  */
 export function resolveText(settings, language, defaultLanguage = 'en') {
   const texts = settings.text || {};
-  const usable = code => typeof texts[code] === 'string' && texts[code].trim() !== '';
+  // Own properties only: `language` comes from a query string (`constructor`, `toString`, ...).
+  const usable = code =>
+    Object.hasOwn(texts, code) && typeof texts[code] === 'string' && texts[code].trim() !== '';
   const order = [language, defaultLanguage, 'en', ...Object.keys(texts)].filter(Boolean);
   const code = order.find(usable);
   if (code) return { text: texts[code], language: code };
-  const builtIn = [language, defaultLanguage].find(code => FALLBACK_TEXT[code]) || 'en';
+  const builtIn = [language, defaultLanguage].find(c => Object.hasOwn(FALLBACK_TEXT, c)) || 'en';
   return { text: FALLBACK_TEXT[builtIn], language: builtIn };
 }
 

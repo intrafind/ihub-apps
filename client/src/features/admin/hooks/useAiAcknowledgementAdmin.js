@@ -13,11 +13,17 @@ import { usePlatformConfig } from '../../../shared/contexts/platformConfigContex
  *
  * @param {{aiAcknowledgements?: Array<{version: number}>}} user
  * @param {number} requiredVersion
+ * @param {string|null} [resetAt] - Set by "Remove all"
  * @returns {'acknowledged'|'outdated'|'never'}
  */
-export function acknowledgementStatus(user, requiredVersion) {
+export function acknowledgementStatus(user, requiredVersion, resetAt = null) {
   const entries = Array.isArray(user?.aiAcknowledgements) ? user.aiAcknowledgements : [];
-  if (entries.some(entry => entry.version >= requiredVersion)) return 'acknowledged';
+  const reset = resetAt ? Date.parse(resetAt) : NaN;
+  // Same rule as the server: an entry from before `resetAt` does not count.
+  const counts = entry =>
+    entry.version >= requiredVersion &&
+    (!Number.isFinite(reset) || !(Date.parse(entry.acknowledgedAt) < reset));
+  if (entries.some(counts)) return 'acknowledged';
   return entries.length > 0 ? 'outdated' : 'never';
 }
 
@@ -69,7 +75,8 @@ export function useAiAcknowledgementAdmin({ onChanged } = {}) {
       setSettings({
         enabled: block.enabled !== false,
         enforce: block.enforce !== false,
-        requiredVersion: Number.isInteger(block.requiredVersion) ? block.requiredVersion : 1
+        requiredVersion: Number.isInteger(block.requiredVersion) ? block.requiredVersion : 1,
+        resetAt: typeof block.resetAt === 'string' ? block.resetAt : null
       });
     } catch {
       setSettings(null);

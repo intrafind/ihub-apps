@@ -32,9 +32,11 @@ test.describe('AI-use acknowledgement', () => {
     expect(removed.status()).toBe(204);
   };
 
-  // A chat POST the guard sees before it looks at the body.
+  // A chat POST the guard sees before it looks at the body. The body is invalid on purpose:
+  // once the guard lets the request through, validation answers 400, so a 428 versus a 400 tells
+  // "asked to confirm" from "confirmed" without sending a message.
   const chatPost = page =>
-    page.request.post('/api/apps/chat/chat/chat-e2e-ack', { data: { messages: [] } });
+    page.request.post('/api/apps/chat/chat/chat-e2e-ack', { data: { messages: null } });
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -95,7 +97,7 @@ test.describe('AI-use acknowledgement', () => {
 
     // Acknowledged: the same request is accepted by the guard now (it fails later, on the body).
     const after = await chatPost(page);
-    expect(after.status()).not.toBe(428);
+    expect(after.status()).toBe(400);
   });
 
   test('Cancel keeps the draft and sends nothing', async ({ page }) => {
@@ -124,7 +126,7 @@ test.describe('AI-use acknowledgement', () => {
       }
     });
     expect(confirmed.status()).toBe(201);
-    expect((await chatPost(page)).status()).not.toBe(428);
+    expect((await chatPost(page)).status()).toBe(400);
 
     const csv = await page.request.get(
       '/api/admin/eu-ai-act/acknowledgements/_export?status=acknowledged'
@@ -144,7 +146,7 @@ test.describe('AI-use acknowledgement', () => {
     await page.request.post('/api/eu-ai-act/acknowledgements/me', {
       data: { version: next.requiredVersion, textHash: next.textHash, language: next.language }
     });
-    expect((await chatPost(page)).status()).not.toBe(428);
+    expect((await chatPost(page)).status()).toBe(400);
     await removeAll(page);
     expect((await chatPost(page)).status()).toBe(428);
   });
