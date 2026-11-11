@@ -423,6 +423,19 @@ built-in default.
 
 See [Stream deadlines](llm-client.md#stream-deadlines).
 
+### **aiDisclosure**
+
+The first-turn AI notice shown in an empty chat (EU AI Act Art. 50(1)); see [EU AI Act](ai-act.md).
+
+```json
+"aiDisclosure": { "firstTurnNotice": { "enabled": true, "text": { "en": "…", "de": "…" } } }
+```
+
+- `firstTurnNotice.enabled` — `false` hides the notice in every app. Default `true`.
+- `firstTurnNotice.text` — text per language; empty uses the built-in text. Inline Markdown is allowed.
+- There is no setting for the guardrail prompt that makes the assistant say it is an AI: it is always on.
+- Editable under **Admin → Advanced → AI notice**.
+
 ### **telemetry**
 OpenTelemetry integration configuration.
 

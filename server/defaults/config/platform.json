@@ -429,6 +429,12 @@
     "flushIntervalMs": 2000,
     "spillThresholdBytes": 65536
   },
+  "aiDisclosure": {
+    "firstTurnNotice": {
+      "enabled": true,
+      "text": {}
+    }
+  },
   "chats": {
     "enabled": true,
     "retentionDays": 90,

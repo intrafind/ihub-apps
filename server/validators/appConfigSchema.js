@@ -579,6 +579,20 @@ const baseAppConfigSchema = z.object({
   upload: uploadSchema.optional(),
   features: featuresSchema.optional(),
   greeting: localizedGreetingSchema.optional(),
+  // Per-app override of the platform's first-turn AI notice (Art. 50(1)).
+  // `enabled` undefined = inherit; there is no setting for the guardrail prompt.
+  aiDisclosure: z
+    .object({
+      firstTurnNotice: z
+        .object({
+          enabled: z.boolean().optional(),
+          text: localizedStringSchema.optional()
+        })
+        .strict()
+        .optional()
+    })
+    .strict()
+    .optional(),
   starterPrompts: z.array(starterPromptSchema).optional(),
   usageGuide: usageGuideSchema,
   // Projects linked to the app (#1036, spec 1 §6.1): a bare id or

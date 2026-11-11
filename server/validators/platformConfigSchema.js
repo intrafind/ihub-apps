@@ -511,6 +511,24 @@ export const platformConfigSchema = z
     // rules are switched off by a value of zero or less — chats are then kept
     // until an owner deletes them. Temporary chats always expire, after
     // `temporaryRetentionHours` without activity.
+    // AI disclosure (EU AI Act Art. 50(1)). Only the first-turn notice is
+    // configurable; the guardrail prompt has no setting by design.
+    aiDisclosure: z
+      .object({
+        firstTurnNotice: z
+          .object({
+            // Master switch: when false no app shows the notice.
+            enabled: z.boolean().prefault(true),
+            // { "en": "...", "de": "..." }; empty uses the built-in text.
+            text: z
+              .record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string().max(1000))
+              .prefault({})
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
     chats: z
       .object({
         enabled: z.boolean().prefault(true),

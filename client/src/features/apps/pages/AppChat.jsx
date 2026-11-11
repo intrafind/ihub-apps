@@ -42,6 +42,7 @@ import ArtifactViewerHost from '../../chat/components/ArtifactViewerHost';
 import ComposerDock from '../../workspace/components/ComposerDock';
 import WorkspaceLayout from '../../workspace/components/WorkspaceLayout';
 import { composeQuotedMessage } from '../../workspace/utils/quote';
+import AiFirstTurnNotice from '../../chat/components/AiFirstTurnNotice';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
@@ -214,7 +215,14 @@ const renderStartupState = (
     return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
   }
 
-  return startupView(app, welcomeMessage, handleStarterPromptClick, onOpenUsageGuide);
+  // The AI notice (Art. 50(1)) sits with the startup view in every layout. It
+  // is UI only: not a message, so it ends with the first one.
+  return (
+    <>
+      {startupView(app, welcomeMessage, handleStarterPromptClick, onOpenUsageGuide)}
+      <AiFirstTurnNotice app={app} />
+    </>
+  );
 };
 
 // The query string an embedded chat reads: none. Module-level, so its identity
@@ -3060,6 +3068,7 @@ function AppChat({
     return (
       <div className="min-h-full flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
+          <AiFirstTurnNotice app={app} />
           <ChatStartForm
             app={app}
             localizedVariables={localizedVariables}

@@ -20,6 +20,7 @@ import ExportConfigSection from './app-form/ExportConfigSection';
 import DocumentTemplateSection from './app-form/DocumentTemplateSection';
 import CompareModeSection from './app-form/CompareModeSection';
 import FeedbackSection from './app-form/FeedbackSection';
+import AiNoticeSection from './app-form/AiNoticeSection';
 import SystemInstructionsSection from './app-form/SystemInstructionsSection';
 import ProjectsConfigSection from './app-form/ProjectsConfigSection';
 import SettingsConfigSection from './app-form/SettingsConfigSection';
@@ -303,6 +304,9 @@ function AppFormEditor({
 
             {/* Response Feedback */}
             <FeedbackSection app={app} onChange={onChange} />
+
+            {/* First-turn AI notice (EU AI Act Art. 50(1)) */}
+            <AiNoticeSection app={app} onChange={onChange} />
 
             <InputModeSection
               app={app}
