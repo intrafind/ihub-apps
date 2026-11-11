@@ -24,8 +24,8 @@
 import { parseRobotsTxt, robotsAllows } from '../projects/siteCrawler.js';
 import { extractPage, outlinePage, validateSelector } from './extract.js';
 import {
-  CORPUS_CONCURRENCY,
   checkHostReachable,
+  configureCorpusThrottle,
   fetchRobotsText,
   fetchSitemapText,
   fetchSitePage
@@ -40,8 +40,8 @@ import { hostKey, nonDefaultPort, normalizePrefix, sectionCounts, siteKeyOf } fr
 /** Defaults and limits. An installation may lower or raise `maxPages` within the cap. */
 export const DEFAULT_MAX_PAGES = 3000;
 export const MAX_PAGES_CAP = 10_000;
-export const DEFAULT_BATCH_SIZE = 30;
-export const MAX_BATCH_SIZE = 60;
+export const DEFAULT_BATCH_SIZE = 60;
+export const MAX_BATCH_SIZE = 100;
 /** A crawl call stops starting pages after this long, so its answer reaches the model in time. */
 export const BATCH_DEADLINE_MS = 22_000;
 /** The most characters of one page kept (a page longer than this is cut and counted). */
@@ -418,14 +418,19 @@ export class WebsiteCorpusService {
    * @param {number} [args.batchSize]
    * @param {boolean} [args.restart] - Start the crawl over (needed to change the selector after pages were kept)
    * @param {Object} context
+   * @param {number} [context.crawlConcurrency] - Requests in flight at once (the installation's setting)
+   * @param {number} [context.requestDelayMs] - Pause after a request before the next may start
    * @returns {Promise<Object>}
    */
   async crawlPages(
     { corpusId, dropSelector, batchSize, restart = false },
-    { user, allowPrivateAddresses }
+    { user, allowPrivateAddresses, crawlConcurrency, requestDelayMs }
   ) {
     const ownerId = requireUser(user);
     const policy = await this.policyFor({ allowPrivateAddresses });
+    // The settings reach the throttle queue and size the worker pool: a worker without a free
+    // slot would only wait in the queue, so the pool is exactly as wide as the queue lets run.
+    const throttle = configureCorpusThrottle({ crawlConcurrency, requestDelayMs });
     // Ownership first, so an unknown corpus or another user's id is answered at once instead of
     // waiting behind a running crawl's lock (a batch holds it for up to 22 s, the wait is 5 s).
     // It is checked again below, on the corpus as it is under the lock.
@@ -485,7 +490,7 @@ export class WebsiteCorpusService {
         }
       };
       // Pool of workers, as many as the throttle queue lets run at once.
-      await Promise.all(Array.from({ length: CORPUS_CONCURRENCY }, worker));
+      await Promise.all(Array.from({ length: throttle.concurrency }, worker));
 
       // The pool takes pages in order, so what started is a prefix of the slice;
       // keep the batch in sitemap order.

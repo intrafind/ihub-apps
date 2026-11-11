@@ -72,6 +72,32 @@ describe('website corpus fetch', () => {
     );
   });
 
+  test('sets the throttle from the installation settings, clamped', async () => {
+    const { configureCorpusThrottle } = await import('../services/websiteCorpus/fetch.js');
+    registerThrottleHintsMock.mockClear();
+    expect(configureCorpusThrottle({ crawlConcurrency: 8, requestDelayMs: 100 })).toEqual({
+      concurrency: 8,
+      requestDelayMs: 100
+    });
+    expect(registerThrottleHintsMock).toHaveBeenLastCalledWith(CORPUS_THROTTLE_ID, {
+      concurrency: 8,
+      requestDelayMs: 100
+    });
+    // A pause of 0 is a real value (no pause), not "missing".
+    expect(configureCorpusThrottle({ crawlConcurrency: 2, requestDelayMs: 0 }).requestDelayMs).toBe(
+      0
+    );
+    expect(configureCorpusThrottle({ crawlConcurrency: 0 }).concurrency).toBe(1);
+    expect(configureCorpusThrottle({ crawlConcurrency: 999 }).concurrency).toBe(16);
+    expect(configureCorpusThrottle({ requestDelayMs: 999999 }).requestDelayMs).toBe(5000);
+    // Missing, empty or not a number: the defaults.
+    expect(configureCorpusThrottle({ crawlConcurrency: null, requestDelayMs: '' })).toEqual({
+      concurrency: 4,
+      requestDelayMs: 400
+    });
+    expect(configureCorpusThrottle()).toEqual({ concurrency: 4, requestDelayMs: 400 });
+  });
+
   test('refuses a private address that is not trusted, without sending a request', async () => {
     await expect(
       fetchSitePage('http://127.0.0.1/', { siteHost: '127.0.0.1' })

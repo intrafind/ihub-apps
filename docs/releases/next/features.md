@@ -1556,8 +1556,10 @@ the prompt" is a realistic alternative to retrieval.
   pages, after removing repeated lines, and without blog and news sections), the largest pages,
   duplicates, how much of the sitemap was crawled, and the method.
 - Only pages of the site itself are fetched, with the SSRF guard and the proxy settings, within
-  the site's `robots.txt`, a few requests per second. A crawl belongs to the user who started it and
-  is removed after 14 days.
+  the site's `robots.txt`. The speed is an installation setting: **Parallel requests per crawl**
+  (default 4, at most 16) and **Pause between requests (ms)**, so a site of several hundred pages
+  is crawled in a minute or two instead of ten, and a site that must not be loaded heavily can be
+  crawled slowly. A crawl belongs to the user who started it and is removed after 14 days.
 - Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
   `website-corpus-sizer` skill from the marketplace guides users through it.
 - Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
