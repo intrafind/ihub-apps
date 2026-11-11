@@ -118,6 +118,9 @@ export function AiAcknowledgementProvider({
   stateRef.current = state;
   const openRef = useRef(false);
   openRef.current = open;
+  // The read-only notice is not waiting on a confirmation: nothing closes it silently.
+  const readOnlyRef = useRef(false);
+  readOnlyRef.current = readOnly;
   const channelRef = useRef(null);
   const anonymous = anonymousOverride ?? !auth?.isAuthenticated;
 
@@ -177,8 +180,9 @@ export function AiAcknowledgementProvider({
   // The feature was switched off, or this user confirmed elsewhere, while the dialog was open:
   // nothing is left to ask, and the waiting sends must not stay blocked.
   useEffect(() => {
-    if (open && state && (!state.enabled || state.acknowledged)) closeDialog(true);
-  }, [open, state, closeDialog]);
+    // Not the read-only notice: it is opened because the user already confirmed.
+    if (open && !readOnly && state && (!state.enabled || state.acknowledged)) closeDialog(true);
+  }, [open, readOnly, state, closeDialog]);
 
   // Another tab confirmed: take it over silently and let the waiting sender go on.
   useEffect(() => {
@@ -187,7 +191,7 @@ export function AiAcknowledgementProvider({
     channelRef.current = channel;
     channel.onmessage = async () => {
       const data = await load();
-      if (data?.acknowledged) closeDialog(true);
+      if (data?.acknowledged && !readOnlyRef.current) closeDialog(true);
     };
     return () => {
       channel.close();
@@ -204,7 +208,8 @@ export function AiAcknowledgementProvider({
     const recheck = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       const current = stateRef.current;
-      const waiting = openRef.current;
+      // A dialog that waits for a confirmation; the read-only notice does not.
+      const waiting = openRef.current && !readOnlyRef.current;
       if (current && !waiting && !needsDialog(current)) return;
       const data = await load();
       if (waiting && data && !needsDialog(data)) closeDialog(true);
