@@ -537,6 +537,31 @@ export const platformConfigSchema = z
       })
       .passthrough()
       .prefault({}),
+    // AI-use acknowledgement (EU AI Act Art. 4 / 50, #3326). A user confirms a
+    // configurable statement before the first chat message. `requiredVersion`
+    // and `resetAt` are server-owned: only the admin actions "request again" and
+    // "remove all" write them, never a settings save (see routes/admin/configs.js).
+    aiAcknowledgement: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        // true: a chat request without a valid acknowledgement answers 428.
+        // false: the dialog only asks and the server never refuses.
+        enforce: z.boolean().prefault(true),
+        requiredVersion: z.number().int().min(1).prefault(1),
+        resetAt: z.string().nullable().prefault(null),
+        // { "en": "...", "de": "..." }; plain text, never rendered as HTML.
+        text: z.record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string().max(5000)).prefault({}),
+        // http(s) URL or a site-relative path; empty means no link.
+        policyUrl: z
+          .string()
+          .max(2000)
+          .refine(value => value === '' || /^(https?:\/\/\S+|\/(?!\/)\S*)$/i.test(value), {
+            message: 'policyUrl must be an http(s) URL or a site-relative path'
+          })
+          .prefault('')
+      })
+      .passthrough()
+      .prefault({}),
     chats: z
       .object({
         enabled: z.boolean().prefault(true),

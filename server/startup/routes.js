@@ -17,6 +17,7 @@ import registerRendererRoutes from '../routes/rendererRoutes.js';
 import registerAppSessionStartRoute from '../routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from '../routes/magicPromptRoutes.js';
 import registerUsageRoutes from '../routes/usageRoutes.js';
+import registerAiAcknowledgementRoutes from '../routes/aiAcknowledgementRoutes.js';
 import registerShortLinkRoutes from '../routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from '../routes/openaiProxy.js';
 import registerAuthRoutes from '../routes/auth.js';
@@ -96,6 +97,7 @@ const ROUTE_STEPS = [
   app => registerAppSessionStartRoute(app),
   app => registerMagicPromptRoutes(app),
   app => registerUsageRoutes(app),
+  app => registerAiAcknowledgementRoutes(app),
   (app, { DEFAULT_TIMEOUT }) =>
     registerChatRoutes(app, {
       processMessageTemplates,

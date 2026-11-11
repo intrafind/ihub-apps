@@ -14,6 +14,7 @@
  */
 
 import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
+import { aiAcknowledgementRequired } from '../../middleware/aiAcknowledgementRequired.js';
 import {
   translateInternalEvent,
   buildEnvelope,
@@ -159,6 +160,7 @@ export default function registerAgentRunRoutes(app) {
     buildServerPath('/api/agents/profiles/:profileId/runs'),
     authRequired,
     authenticatedOnly,
+    aiAcknowledgementRequired,
     async (req, res) => {
       const { profileId } = req.params;
       assertValidId(profileId, 'profile');
@@ -647,6 +649,7 @@ export default function registerAgentRunRoutes(app) {
     buildServerPath('/api/agents/runs/:runId/_resume'),
     authRequired,
     authenticatedOnly,
+    aiAcknowledgementRequired,
     async (req, res) => {
       try {
         const { runId } = req.params;

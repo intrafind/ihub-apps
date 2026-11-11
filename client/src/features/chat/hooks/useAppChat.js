@@ -24,6 +24,7 @@ import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 import { splitFilesForWire } from '../utils/chatFileUpload';
 import { refreshMyUsage } from '../../../shared/hooks/useMyUsage';
+import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 
 /**
  * Refusals of the chat request the user can do something about, by the code
@@ -108,9 +109,17 @@ function useAppChat({
   persistConversationId = true,
   ephemeral = false,
   hydrates = true,
-  toolApprovals = false
+  toolApprovals = false,
+  onSendRefused
 }) {
   const { t } = useTranslation();
+  // The AI-use acknowledgement gate; null outside its provider (then the server decides).
+  const acknowledgement = useAiAcknowledgement();
+  // The last send, to roll back and retry once when the server answers 428.
+  const lastSendRef = useRef(null);
+  const initEventSourceRef = useRef(null);
+  const onSendRefusedRef = useRef(onSendRefused);
+  onSendRefusedRef.current = onSendRefused;
   // Use the chatId directly instead of storing it in a ref
   // This allows the useChatMessages hook to properly react to chatId changes.
   //
@@ -357,6 +366,43 @@ function useAppChat({
           return;
         }
       }
+      const pendingSend = pendingMessageDataRef.current;
+      if (
+        error?.code === 'AI_ACKNOWLEDGEMENT_REQUIRED' &&
+        acknowledgement &&
+        pendingSend &&
+        !pendingSend.acknowledgementRetried
+      ) {
+        // Not an error to show: ask the user to confirm the AI-use notice, then send
+        // the very same prepared request once more. The prepared request, not
+        // arguments rebuilt from it, so what a first attempt consumed (the stored-history
+        // fork of an edit or regenerate) is still on it, and a clarification answer or
+        // a tool approval is retried as itself.
+        const own = lastSendRef.current?.pending === pendingSend ? lastSendRef.current : null;
+        const placeholderId = lastMessageIdRef.current;
+        const originChatId = pendingSend.chatId;
+        detachEventSourceRef.current?.();
+        setProcessing(false);
+        void acknowledgement.handleAcknowledgementRequired().then(ok => {
+          if (ok && currentChatIdRef.current === originChatId) {
+            pendingSend.acknowledgementRetried = true;
+            pendingMessageDataRef.current = pendingSend;
+            setProcessing(true);
+            initEventSourceRef.current?.(
+              buildApiUrl(`apps/${pendingSend.appId}/chat/${pendingSend.chatId}`)
+            );
+            return;
+          }
+          // Declined, or the user moved to another chat meanwhile: take the turn back.
+          pendingMessageDataRef.current = null;
+          if (own) {
+            removeMessage(own.userMessageId);
+            if (placeholderId) removeMessage(placeholderId);
+            if (ok === false) onSendRefusedRef.current?.(own.args);
+          }
+        });
+        return;
+      }
       if (lastMessageIdRef.current && !isCancellingRef.current) {
         // Only show error if this wasn't a manual cancellation
         let errorMessage;
@@ -398,7 +444,15 @@ function useAppChat({
       setProcessing(false);
       reopenToolApproval(error?.code);
     }
-  }, [t, messagesRef, updateAssistantMessage, toolApprovals, reopenToolApproval]);
+  }, [
+    t,
+    messagesRef,
+    updateAssistantMessage,
+    toolApprovals,
+    reopenToolApproval,
+    acknowledgement,
+    removeMessage
+  ]);
 
   /**
    * Resolve the assistant message a run belongs to. `run/started` binds the
@@ -655,6 +709,7 @@ function useAppChat({
 
   // Store the detach function in a ref for access in callbacks
   detachEventSourceRef.current = detachEventSource;
+  initEventSourceRef.current = initEventSource;
 
   /**
    * Send a chat message and start streaming the response.
@@ -667,14 +722,15 @@ function useAppChat({
    * @param {string[]} [requestedSkills] - Skills to pre-activate for this turn (slash command)
    */
   const sendMessage = useCallback(
-    ({
-      displayMessage,
-      apiMessage,
-      params,
-      sendChatHistory = true,
-      messageMetadata = null,
-      requestedSkills = null
-    }) => {
+    args => {
+      const {
+        displayMessage,
+        apiMessage,
+        params,
+        sendChatHistory = true,
+        messageMetadata = null,
+        requestedSkills = null
+      } = args;
       try {
         // Reset cancellation flag when starting a new message
         isCancellingRef.current = false;
@@ -696,7 +752,7 @@ function useAppChat({
         const contentToAdd =
           typeof displayMessage === 'string' ? displayMessage : displayMessage?.content || '';
 
-        addUserMessage(contentToAdd, {
+        const userMessageId = addUserMessage(contentToAdd, {
           ...displayMessage?.meta,
           // The exchange id is what the store files this turn under
           // (`clientMessageId`), so it is the only handle an edit or a
@@ -742,6 +798,8 @@ function useAppChat({
             ...takeProtocolParams(sendChatHistory)
           }
         };
+
+        lastSendRef.current = { args, userMessageId, pending: pendingMessageDataRef.current };
 
         initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
       } catch (err) {

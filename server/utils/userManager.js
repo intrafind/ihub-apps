@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { atomicWriteJSON } from './atomicWrite.js';
+import { withFileLock } from './fileLock.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
@@ -218,6 +219,115 @@ export async function saveUsers(usersConfig, usersFilePath) {
     });
     throw error;
   }
+}
+
+/**
+ * Change users.json under the store's compare-and-set, so many people
+ * acknowledging at once (a rollout) do not overwrite each other the way a
+ * `loadUsers` + `saveUsers` rewrite of the whole file would. A users file
+ * outside `contents/` is rewritten from a fresh read instead.
+ *
+ * `change` runs again on the newer body when another worker wrote first, so it
+ * must derive everything from the body it is handed. Returning `false` writes
+ * nothing.
+ *
+ * @param {string} usersFilePath - Path to users.json as configured
+ * @param {(usersConfig: Object) => (boolean|void)} change
+ * @returns {Promise<boolean>} Whether the file was written
+ */
+async function updateUsersFile(usersFilePath, change) {
+  const { fullPath, cacheKey, relPath } = locateUsersFile(usersFilePath);
+  const apply = current => {
+    const usersConfig = current && typeof current === 'object' ? current : {};
+    if (!usersConfig.users || typeof usersConfig.users !== 'object') usersConfig.users = {};
+    if (!usersConfig.metadata) usersConfig.metadata = { version: '2.0.0' };
+    if (change(usersConfig) === false) return undefined;
+    usersConfig.metadata.lastUpdated = new Date().toISOString();
+    return usersConfig;
+  };
+
+  if (!relPath) {
+    // A file outside contents/ has no compare-and-set: the read, the change and the
+    // write run under a lock file, so two confirmations at once both land.
+    return await withFileLock(
+      `${fullPath}.lock`,
+      async () => {
+        const usersConfig = await loadUsersFresh(usersFilePath);
+        if (change(usersConfig) === false) return false;
+        await saveUsers(usersConfig, usersFilePath);
+        return true;
+      },
+      { component: 'UserManager' }
+    );
+  }
+
+  const { data, written } = await configStore.updateJson(relPath, apply);
+  if (data && typeof data === 'object' && data.users && typeof data.users === 'object') {
+    configCache.setCacheEntry(cacheKey, data);
+  }
+  if (written) announceConfigChange(cacheKey);
+  return written;
+}
+
+/**
+ * Record an AI-use acknowledgement on a user (#3326). One entry per version: a
+ * repeat at a version the user already confirmed changes nothing.
+ *
+ * @param {string} userId - Key in users.json
+ * @param {{version: number, textHash: string, acknowledgedAt: string, language?: string}} entry
+ * @param {string} usersFilePath - Path to users.json
+ * @returns {Promise<{recorded: boolean, entry: Object|null}>} `recorded` is
+ *   false when the version was already there; `entry` is null for an unknown user
+ */
+export async function recordAiAcknowledgement(userId, entry, usersFilePath) {
+  let result = { recorded: false, entry: null };
+  await updateUsersFile(usersFilePath, usersConfig => {
+    result = { recorded: false, entry: null };
+    if (!Object.hasOwn(usersConfig.users, userId)) return false;
+    const user = usersConfig.users[userId];
+    const existing = Array.isArray(user.aiAcknowledgements) ? user.aiAcknowledgements : [];
+    const same = existing.find(item => item?.version === entry.version);
+    if (same) {
+      result = { recorded: false, entry: same };
+      return false;
+    }
+    user.aiAcknowledgements = [...existing, entry];
+    result = { recorded: true, entry };
+    return true;
+  });
+  return result;
+}
+
+/**
+ * Remove the AI-use acknowledgements of one user, or of every user.
+ *
+ * @param {string|null} userId - Key in users.json, or null for every user
+ * @param {string} usersFilePath - Path to users.json
+ * @returns {Promise<{users: number, entries: number, found: boolean}>} How many
+ *   users lost entries and how many entries went; `found` is false for an
+ *   unknown `userId`
+ */
+export async function clearAiAcknowledgements(userId, usersFilePath) {
+  let result = { users: 0, entries: 0, found: true };
+  await updateUsersFile(usersFilePath, usersConfig => {
+    result = { users: 0, entries: 0, found: true };
+    const ids = userId === null ? Object.keys(usersConfig.users) : [userId];
+    if (userId !== null && !Object.hasOwn(usersConfig.users, userId)) {
+      result.found = false;
+      return false;
+    }
+    for (const id of ids) {
+      const user = usersConfig.users[id];
+      if (!user || !Array.isArray(user.aiAcknowledgements)) continue;
+      if (user.aiAcknowledgements.length > 0) {
+        result.users += 1;
+        result.entries += user.aiAcknowledgements.length;
+      }
+      delete user.aiAcknowledgements;
+    }
+    return result.entries > 0 ? true : false;
+  });
+  return result;
 }
 
 /**

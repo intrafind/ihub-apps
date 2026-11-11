@@ -79,6 +79,10 @@ export function PlatformConfigProvider({ children }) {
         // shared/aiDisclosure.js against the app's override.
         aiDisclosure: platformCfg.aiDisclosure,
 
+        // AI-use acknowledgement (#3326): only the switches. The notice itself is
+        // per user and language, from /api/ai-acknowledgements/me.
+        aiAcknowledgement: platformCfg.aiAcknowledgement,
+
         // Voice input: backend switches, the Azure host / keyConfigured flag and
         // the platform-wide defaults (dictation service, transcription model)
         // that apps fall back to. Dropping it here silently broke all of them.

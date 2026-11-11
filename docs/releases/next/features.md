@@ -1628,3 +1628,22 @@ Utility calls such as chat titles and translations carry it too (about 25 more t
 still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
 
 See [EU AI Act](../../ai-act.md#guardrail-prompt-always-on).
+
+## Users Confirm the Use of AI Before Their First Message
+
+Before the first chat message a dialog asks the user to confirm a short AI-use statement, with an optional link
+to your AI policy. The confirmation is stored with the user (version, time, SHA-256 of the exact text and its
+language) and in the audit log, so you can answer "who confirmed which version, and what did it say?".
+
+- **Versioned.** Editing the text asks nobody again. **Request again** raises the required version and everyone is
+  asked at their next message. Anonymous visitors confirm once per browser (a signed cookie plus an audit entry).
+- **Enforced by the server.** Without a valid confirmation, sending a chat message, starting a workflow or its
+  chat step, and starting an agent run answer `428 AI_ACKNOWLEDGEMENT_REQUIRED`. OAuth clients, API keys, MCP,
+  A2A and the inference API are not asked. With enforcement off the dialog only asks.
+- **Admin.** **Admin → Advanced → AI acknowledgement** holds the switches, the text per language and the policy
+  link. **Admin → Users** gets an **AI acknowledgement** column and filter, a per-user **Remove AI
+  acknowledgement** action and an **AI acknowledgements** menu: **Export CSV**, **Request again**, **Remove all**.
+  (`aiAcknowledgement` in `platform.json`; migration V242 adds the defaults.)
+
+See [EU AI Act](../../ai-act.md#ai-use-acknowledgement).
+
