@@ -9,7 +9,10 @@ described here may not be available on your installation.
 
 Depending on the installation you are signed in automatically (single sign-on), see a sign-in page
 for a local or LDAP account, or can use iHub anonymously with a limited set of apps. The first time
-you open iHub you may be asked to acknowledge a disclaimer from your administrator.
+you open iHub you may be asked to acknowledge a disclaimer from your administrator. Before your first
+message you are also asked once to confirm a short notice about using AI. The same confirmation counts in the
+web app, Teams, the Outlook add-in, the browser extension and Nextcloud; you can read it again later, in the
+Outlook and extension panes under the menu entry **AI-use notice**.
 
 ## The start page
 

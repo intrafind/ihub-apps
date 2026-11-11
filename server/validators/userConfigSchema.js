@@ -22,7 +22,20 @@ export const userConfigSchema = z
     externalId: z.string().nullish(),
     provider: z.string().nullish(),
     // Personal token and file storage limits (services/quota).
-    usageLimits: usageLimitsSchema.optional()
+    usageLimits: usageLimitsSchema.optional(),
+    // AI-use acknowledgements (#3326), one entry per confirmed version.
+    aiAcknowledgements: z
+      .array(
+        z.object({
+          version: z.number().int().min(1),
+          textHash: z.string(),
+          acknowledgedAt: z.string(),
+          language: z.string().optional(),
+          // The first-party client the confirmation came from (office, extension, nextcloud).
+          client: z.string().optional()
+        })
+      )
+      .optional()
   })
   .passthrough();
 

@@ -11,11 +11,17 @@
  * - A last user message containing `e2e-fail` is answered with HTTP 400 (a failure the
  *   server does not retry, so the error shows at once).
  * - `GET /v1/models` lists the one model.
+ * - `GET /__last-request` returns the body of the last chat request the stub got
+ *   (`{ body }`, or `{ body: null }`), so a spec can assert what reached the model:
+ *   the EU AI Act guardrail rule, a `watermarking` flag.
  */
 
 import http from 'node:http';
 
 export const STUB_MODEL_ID = 'e2e-stub-model';
+
+/** The last chat request body the stub received. */
+let lastRequestBody = null;
 
 function textOf(content) {
   if (typeof content === 'string') return content;
@@ -59,6 +65,11 @@ export function startLlmStub(port) {
       res.end(JSON.stringify({ object: 'list', data: [{ id: STUB_MODEL_ID, object: 'model' }] }));
       return;
     }
+    if (req.method === 'GET' && req.url?.startsWith('/__last-request')) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ body: lastRequestBody }));
+      return;
+    }
     if (req.method !== 'POST' || !req.url?.startsWith('/v1/chat/completions')) {
       res.writeHead(404, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: { message: 'not found' } }));
@@ -66,6 +77,7 @@ export function startLlmStub(port) {
     }
 
     const body = await readBody(req);
+    lastRequestBody = body;
     const { last, reply } = replyFor(body.messages);
     if (last.includes('e2e-fail')) {
       res.writeHead(400, { 'content-type': 'application/json' });

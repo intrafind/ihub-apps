@@ -33,6 +33,7 @@ import { getDisplayableOutput } from '../utils/filterInternalFields';
 import { ProjectInputValue } from '../components/ProjectInputField';
 import { PROJECT_INPUT_TYPE } from '../utils/projectNodeConfig';
 import { answerOf, executionOutputOf } from '../../../../../shared/workflowChatOutput.js';
+import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 
 /** The Output setting of the end step an execution finished at, or ''. */
 function endStepOutputSpec(state) {
@@ -253,6 +254,7 @@ function WorkflowExecutionPage() {
   const { executionId } = useParams();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const acknowledgement = useAiAcknowledgement();
   const currentLanguage = i18n.language;
   const [showAppSelection, setShowAppSelection] = useState(false);
   /** @type {[Set<string>, Function]} Tracks which output accordion panels are expanded */
@@ -281,8 +283,12 @@ function WorkflowExecutionPage() {
     setRestartError(null);
     setRestarting(true);
     try {
-      await apiClient.post(`/workflows/executions/${executionId}/_restart`);
-      await refetch();
+      const restart = () => apiClient.post(`/workflows/executions/${executionId}/_restart`);
+      // A restart starts AI work again: the AI-use notice has to be confirmed first (#3326).
+      const done = acknowledgement
+        ? await acknowledgement.runWithAcknowledgement(restart)
+        : await restart();
+      if (done) await refetch();
     } catch (err) {
       const msg = err.response?.data?.detail || err.message || 'Failed to restart workflow';
       setRestartError(msg);
@@ -384,11 +390,15 @@ function WorkflowExecutionPage() {
     // The server creates the chat from the execution itself — a kept one, or a
     // temporary one for an `ephemeral` app or an installation without history.
     try {
-      const response = await apiClient.post(
-        `/workflows/executions/${executionId}/chat/${encodeURIComponent(app.id)}`,
-        { contextMessage }
-      );
+      const start = () =>
+        apiClient.post(`/workflows/executions/${executionId}/chat/${encodeURIComponent(app.id)}`, {
+          contextMessage
+        });
+      const response = acknowledgement
+        ? await acknowledgement.runWithAcknowledgement(start)
+        : await start();
       setShowAppSelection(false);
+      if (!response) return;
       invalidateChatsCache();
       navigate(`/apps/${app.id}/c/${response.data.chatId}`);
     } catch {

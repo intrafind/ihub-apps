@@ -61,7 +61,8 @@ function bootstrap() {
   // `javascript:` / `data:` / opaque-host inputs have already been rejected.
   iframe.src = src;
   iframe.allow = 'clipboard-write';
-  iframe.style.cssText = 'border:0;width:100%;height:100vh;min-height:600px;background:#fff;';
+  iframe.style.cssText =
+    'border:0;width:100%;height:100vh;min-height:600px;background:transparent;';
   rootEl.appendChild(iframe);
 
   // Forward subsequent selection changes (when the user navigates Files in

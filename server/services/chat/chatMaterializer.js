@@ -174,7 +174,13 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
     const bytes = Buffer.byteLength(artifact.data, 'base64');
     // A refused file keeps its name, so the card can still say which one.
     const name = typeof artifact.name === 'string' && artifact.name ? artifact.name : null;
-    const refused = { kind, mimeType, bytes, ...(name ? { name } : {}) };
+    const refused = {
+      kind,
+      mimeType,
+      bytes,
+      ...(name ? { name } : {}),
+      ...(artifact.provenance?.outputId ? { outputId: artifact.provenance.outputId } : {})
+    };
     if (maxPerBatch > 0 && stored >= maxPerBatch) {
       descriptors.push({ ...refused, unavailable: 'too-many' });
       continue;
@@ -200,7 +206,13 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
         runId
       });
       if (descriptor) stored += 1;
-      descriptors.push(descriptor || { ...refused, unavailable: 'not-stored' });
+      // The provenance output id of a generated image (#3328), so the stored
+      // message can name the record that describes it.
+      const outputId = artifact.provenance?.outputId;
+      const described = outputId ? { outputId } : {};
+      descriptors.push(
+        descriptor ? { ...descriptor, ...described } : { ...refused, unavailable: 'not-stored' }
+      );
     } catch (error) {
       logger.error('Artifact not stored', {
         component: COMPONENT,
@@ -711,7 +723,8 @@ export async function settleAssistantTurn({
             ...(integrationAuthRequired.length > 0 ? { integrationAuthRequired } : {}),
             ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
             ...(activity ? { activity } : {}),
-            ...(sources ? { sources } : {})
+            ...(sources ? { sources } : {}),
+            ...(summary?.provenance ? { provenance: summary.provenance } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

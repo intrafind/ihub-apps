@@ -47,3 +47,12 @@ path = "server/defaults/config/certs/*.pem"
 precedence = "override"
 SPDX-FileCopyrightText = "Bundesamt für Sicherheit in der Informationstechnik (BSI)"
 SPDX-License-Identifier = "LicenseRef-Public-Certificate"
+
+# Signed C2PA test image from the c2pa-rs repository (sdk/tests/fixtures/C.jpg), vendored
+# unchanged for the provider-mark reader tests (#3328). Licensed MIT OR Apache-2.0 by the
+# upstream project; both texts are in LICENSES/.
+[[annotations]]
+path = "server/tests/fixtures/provenance/C.jpg"
+precedence = "override"
+SPDX-FileCopyrightText = "2020 Adobe. All rights reserved. (https://github.com/contentauth/c2pa-rs)"
+SPDX-License-Identifier = "MIT OR Apache-2.0"

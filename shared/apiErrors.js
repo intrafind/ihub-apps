@@ -326,6 +326,8 @@ export const CHAT_SESSION_ERROR_CODES = Object.freeze({
   APP_NOT_FOUND: 404,
   CHAT_STORAGE_UNAVAILABLE: 503,
   GUEST_COOKIE_MISSING: 404,
+  // The AI-use acknowledgement (#3326) is missing or outdated: confirm, then retry.
+  AI_ACKNOWLEDGEMENT_REQUIRED: 428,
   INVALID_APP: 400,
   PREFERENCES_UNAVAILABLE: 503,
   FEATURE_DISABLED: 403
@@ -414,6 +416,17 @@ export const MISC_ERROR_CODES = Object.freeze({
   USER_VALIDATION_FAILED: 403
 });
 
+/** Codes of the text watermark key store and detector (`routes/admin/watermark*.js`, #3331). */
+export const WATERMARK_ERROR_CODES = Object.freeze({
+  WATERMARK_KEY_NOT_FOUND: 404,
+  WATERMARK_KEY_ACTIVE: 409,
+  WATERMARK_KEY_DUPLICATE: 409,
+  WATERMARK_KEY_INVALID: 400,
+  WATERMARK_DETECTOR_NOT_CONFIGURED: 409,
+  WATERMARK_DETECTOR_UNREACHABLE: 502,
+  WATERMARK_AUDIT_UNAVAILABLE: 503
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -437,7 +450,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...PROJECT_SERVICE_ERROR_CODES,
   ...PROJECT_ERROR_CODES,
   ...VOICE_ERROR_CODES,
-  ...MISC_ERROR_CODES
+  ...MISC_ERROR_CODES,
+  ...WATERMARK_ERROR_CODES
 });
 
 /**

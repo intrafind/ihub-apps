@@ -20,7 +20,12 @@ function Modal({
   // Stacking of the overlay; raised where the dialog opens above a full-window viewer.
   zIndexClassName = 'z-50',
   // Id of the element that names the dialog (its heading).
-  labelledBy
+  labelledBy,
+  // Padding around the panel and its height cap; narrow hosts (the Outlook
+  // task pane) tighten both so the panel gets the room.
+  overlayPaddingClassName = 'p-4',
+  maxHeightClassName = 'max-h-[90vh]',
+  surfaceClassName = 'bg-white dark:bg-gray-800'
 }) {
   const containerRef = useRef(null);
 
@@ -46,7 +51,7 @@ function Modal({
 
   return (
     <div
-      className={`fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full ${zIndexClassName} flex items-center justify-center p-4`}
+      className={`fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full ${zIndexClassName} flex items-center justify-center ${overlayPaddingClassName}`}
     >
       <div
         className="fixed inset-0"
@@ -58,7 +63,7 @@ function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
-        className={`relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-h-[90vh] overflow-hidden flex flex-col ${maxWidthClassName} ${panelClassName}`}
+        className={`relative ${surfaceClassName} rounded-lg shadow-xl w-full ${maxHeightClassName} overflow-hidden flex flex-col ${maxWidthClassName} ${panelClassName}`}
       >
         {children}
       </div>

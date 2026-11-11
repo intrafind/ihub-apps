@@ -42,6 +42,9 @@ import ArtifactViewerHost from '../../chat/components/ArtifactViewerHost';
 import ComposerDock from '../../workspace/components/ComposerDock';
 import WorkspaceLayout from '../../workspace/components/WorkspaceLayout';
 import { composeQuotedMessage } from '../../workspace/utils/quote';
+import AiFirstTurnNotice from '../../chat/components/AiFirstTurnNotice';
+import AiAcknowledgementNote from '../../chat/components/AiAcknowledgementNote';
+import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import lazyWithRetry from '../../../utils/lazyWithRetry';
@@ -214,7 +217,14 @@ const renderStartupState = (
     return <LoadingSpinner message={t('pages.appChat.loadingChat', 'Loading chat...')} />;
   }
 
-  return startupView(app, welcomeMessage, handleStarterPromptClick, onOpenUsageGuide);
+  // The AI notice (Art. 50(1)) sits with the startup view in every layout. It
+  // is UI only: not a message, so it ends with the first one.
+  return (
+    <>
+      {startupView(app, welcomeMessage, handleStarterPromptClick, onOpenUsageGuide)}
+      <AiFirstTurnNotice app={app} />
+    </>
+  );
 };
 
 // The query string an embedded chat reads: none. Module-level, so its identity
@@ -698,6 +708,7 @@ function AppChat({
   }, [fileUploadHandler.selectedFile, selectedModel, models, t]);
 
   const inputRef = useRef(null);
+  const ackSubmitRef = useRef(false);
   const formRef = useRef(null);
   // The chat this page is showing. `/apps/:appId/c/:chatId` names one outright
   // — that is how the history opens a stored conversation — while `/apps/:appId`
@@ -909,8 +920,15 @@ function AppChat({
     // the chat settings. When on, a new chat is created as a temporary one.
     ephemeral,
     // This page draws tool approval cards and answers them (#2945).
-    toolApprovals: true
+    toolApprovals: true,
+    // The server refused the turn until the AI-use notice is confirmed and the
+    // user closed the dialog: the message goes back into the composer.
+    onSendRefused: args => {
+      const text = args?.displayMessage?.meta?.rawContent ?? args?.apiMessage?.content;
+      if (typeof text === 'string' && text) setInput(text);
+    }
   });
+  const aiAcknowledgement = useAiAcknowledgement();
 
   // Form-based start (issue #2581): a new chat — or a new comparison, whose
   // panels hold transcripts of their own — opens with the start form in place
@@ -2544,6 +2562,21 @@ function AppChat({
       return;
     }
 
+    // AI-use acknowledgement (#3326): the user confirms the notice before the
+    // first message. Nothing was cleared yet, so Cancel leaves the draft as it is.
+    // A second submit while the dialog is open waits for nothing: one send per confirmation.
+    if (aiAcknowledgement) {
+      if (ackSubmitRef.current) return;
+      ackSubmitRef.current = true;
+      let confirmed = false;
+      try {
+        confirmed = await aiAcknowledgement.ensureAcknowledged({ hasPendingMessage: true });
+      } finally {
+        ackSubmitRef.current = false;
+      }
+      if (!confirmed) return;
+    }
+
     // The message is the text that was typed, and nothing else: its files go out as the
     // payload below and are shown from `message.attachments` (derived from that payload), never
     // as markup pasted into the text.
@@ -2999,24 +3032,27 @@ function AppChat({
 
     // Always use ChatInput (which now has the NextGen design with model selector)
     return (
-      <ChatInput
-        {...commonProps}
-        models={models}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-        currentLanguage={currentLanguage}
-        showModelSelector={!compareModeActive && modelSelectionAllowed}
-        compact={composerCompact}
-        // AI disclaimer shares the tight line below the input with the
-        // ephemeral toggle; shown after the first submitted message.
-        disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}
-        // The usage guide: one control, in the same place in every state,
-        // bottom left under the input, opposite the incognito toggle.
-        leadingAction={renderUsageGuideButton()}
-        // The guide is a modal dialog: an answer that finishes while it is open
-        // must not move the focus to the composer behind it.
-        autoFocusSuspended={usageGuideViewerOpen}
-      />
+      <>
+        <AiAcknowledgementNote />
+        <ChatInput
+          {...commonProps}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          currentLanguage={currentLanguage}
+          showModelSelector={!compareModeActive && modelSelectionAllowed}
+          compact={composerCompact}
+          // AI disclaimer shares the tight line below the input with the
+          // ephemeral toggle; shown after the first submitted message.
+          disclaimer={messages.length > 0 ? <AIDisclaimerBanner /> : null}
+          // The usage guide: one control, in the same place in every state,
+          // bottom left under the input, opposite the incognito toggle.
+          leadingAction={renderUsageGuideButton()}
+          // The guide is a modal dialog: an answer that finishes while it is open
+          // must not move the focus to the composer behind it.
+          autoFocusSuspended={usageGuideViewerOpen}
+        />
+      </>
     );
   };
 
@@ -3060,6 +3096,7 @@ function AppChat({
     return (
       <div className="min-h-full flex items-center justify-center p-4">
         <div className="w-full max-w-2xl">
+          <AiFirstTurnNotice app={app} />
           <ChatStartForm
             app={app}
             localizedVariables={localizedVariables}

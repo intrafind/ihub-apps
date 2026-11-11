@@ -17,6 +17,8 @@ import registerRendererRoutes from '../routes/rendererRoutes.js';
 import registerAppSessionStartRoute from '../routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from '../routes/magicPromptRoutes.js';
 import registerUsageRoutes from '../routes/usageRoutes.js';
+import registerAiAcknowledgementRoutes from '../routes/aiAcknowledgementRoutes.js';
+import registerProvenanceRoutes from '../routes/provenanceRoutes.js';
 import registerShortLinkRoutes from '../routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from '../routes/openaiProxy.js';
 import registerAuthRoutes from '../routes/auth.js';
@@ -36,6 +38,8 @@ import registerScheduledTaskRoutes from '../routes/scheduledTasks.js';
 import runLog from '../services/loop/RunLog.js';
 import { startChatRetentionSweep } from '../services/chat/chatRetention.js';
 import { startProjectRetentionSweep } from '../services/projects/projectRetention.js';
+import { startWatermarkKeySnapshot } from '../services/provenance/watermark/WatermarkKeyStore.js';
+import { startProvenanceRetentionSweep } from '../services/provenance/provenanceRetention.js';
 import { startWebsiteCorpusRetentionSweep } from '../services/websiteCorpus/corpusRetention.js';
 import { startWorkflowStateRetention } from '../services/workflow/workflowRetention.js';
 import { registerCheckpointResume } from '../services/workflow/checkpointResume.js';
@@ -96,6 +100,8 @@ const ROUTE_STEPS = [
   app => registerAppSessionStartRoute(app),
   app => registerMagicPromptRoutes(app),
   app => registerUsageRoutes(app),
+  app => registerAiAcknowledgementRoutes(app),
+  app => registerProvenanceRoutes(app),
   (app, { DEFAULT_TIMEOUT }) =>
     registerChatRoutes(app, {
       processMessageTemplates,
@@ -124,6 +130,8 @@ const ROUTE_STEPS = [
   // Approvals, rejections and expiries of integration actions, for the
   // action detail's Usage (#2974).
   () => startActionUsageTracking(interactionService),
+  // Every worker: the active watermark key's id for the adapters (#3331). The value is never cached.
+  () => startWatermarkKeySnapshot(),
   // Once per cluster: only the worker that owns the singletons runs the sweeps.
   (_app, { ownsClusterSingletons }) => {
     if (ownsClusterSingletons) {
@@ -142,6 +150,8 @@ const ROUTE_STEPS = [
       startWorkflowStateRetention();
       // Abandoned user projects, when `platform.projects.retentionDays` says so.
       startProjectRetentionSweep();
+      // Provenance records older than `provenance.retentionDays`.
+      startProvenanceRetentionSweep();
       // Crawls of the Website Corpus older than their 14 days, also of people who stopped using it.
       startWebsiteCorpusRetentionSweep();
     }

@@ -39,6 +39,7 @@ import {
   chatAuthRequired,
   modelAccessRequired
 } from '../../middleware/authRequired.js';
+import { aiAcknowledgementRequired } from '../../middleware/aiAcknowledgementRequired.js';
 
 import ChatService from '../../services/chat/ChatService.js';
 import { authorizeChat } from '../../services/chat/chatAccess.js';
@@ -857,6 +858,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
   app.post(
     buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
+    aiAcknowledgementRequired,
     validate(chatPostSchema),
     async (req, res) => {
       // Destructured outside the try, and the durable mark tracked next to it,

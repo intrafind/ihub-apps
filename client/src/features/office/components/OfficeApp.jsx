@@ -13,6 +13,9 @@ import ChatHeader from './chat/ChatHeader';
 import './OfficeChatPanel.css';
 import SettingsDialog from './settings-dialog';
 import AppListPanel from '../../../shared/components/AppListPanel';
+import { AiAcknowledgementProvider } from '../../../shared/contexts/AiAcknowledgementContext';
+import useAiNoticeMenuItem from '../hooks/useAiNoticeMenuItem';
+import { canConfirmExternalOpen, openExternalUrlSettled } from '../../../utils/externalNavigation';
 import { officeLocale } from '../utilities/officeLocale';
 import { useOfficeFavoriteApps } from '../utilities/officeFavorites';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
@@ -150,6 +153,7 @@ function SelectPage({ user, onLogout, onSelect, onBack, onOpenHistory }) {
   const { t } = useTranslation();
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
   const { favorites, toggleFavorite } = useOfficeFavoriteApps();
+  const aiNoticeMenuItem = useAiNoticeMenuItem();
 
   const menuItems = [
     ...(onOpenHistory
@@ -161,6 +165,7 @@ function SelectPage({ user, onLogout, onSelect, onBack, onOpenHistory }) {
           }
         ]
       : []),
+    ...aiNoticeMenuItem,
     {
       key: 'settings',
       label: t('office.menu.settings', 'Settings'),
@@ -524,11 +529,34 @@ const OfficeApp = () => {
     <Navigate to={homePath} replace />
   );
 
+  // The AI-use acknowledgement (EU AI Act Art. 50) is asked here, in the pane
+  // itself: this root is shared by the Outlook pane, its pop-out window and the
+  // extension's side panel, so one provider covers all three. Not while signed
+  // out (the login screen wins, and a 401 would read as an expired session).
+  // The dialog is slate like the pane; the policy opens through the host's own
+  // API because `window.open` is a silent no-op here.
+  const withAcknowledgement = content => (
+    <AiAcknowledgementProvider
+      active={!!authData}
+      viewerKey={authData ? `office:${authData.user?.id ?? authData.user?.username ?? ''}` : ''}
+      anonymous={false}
+      tone="slate"
+      compact
+      openPolicy={openExternalUrlSettled}
+      showPolicyAddress={!canConfirmExternalOpen()}
+      appUrl={config?.baseUrl}
+    >
+      {content}
+    </AiAcknowledgementProvider>
+  );
+
   if (popoutOpen) {
-    return <PopoutPlaceholder onBringBack={() => popoutRef.current?.close()} />;
+    return withAcknowledgement(
+      <PopoutPlaceholder onBringBack={() => popoutRef.current?.close()} />
+    );
   }
 
-  return (
+  return withAcknowledgement(
     <Routes>
       <Route
         path="/"

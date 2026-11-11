@@ -262,7 +262,11 @@ export function makeClient(opts = {}) {
     // Usage limits are off unless a test passes its own `quota`.
     quota: opts.quota ?? null,
     // Usage reporting is off unless a test passes its own `usage` recorder.
-    usage: opts.usage ?? null
+    usage: opts.usage ?? null,
+    // The AI disclosure guardrail rewrites the system message, so unrelated
+    // message assertions run without it. Tests of the guardrail itself pass
+    // `guardrail: guardMessagesForModel` (see loop/llmClientGuardrail.test.js).
+    guardrail: opts.guardrail ?? null
   });
   return { client, calls };
 }

@@ -50,6 +50,10 @@ import registerAdminIntegrationExampleAppsRoutes from './admin/integrationExampl
 import registerAdminPeopleDirectoryEditorRoutes from './admin/peopleDirectoryEditor.js';
 import registerAdminDocumentTemplatesRoutes from './admin/documentTemplates.js';
 import registerAdminCredentialsRoutes from './admin/credentials.js';
+import registerAdminWatermarkKeyRoutes from './admin/watermarkKeys.js';
+import registerAdminWatermarkDetectorRoutes from './admin/watermarkDetectors.js';
+import registerAdminEuAiActRoutes from './admin/euAiAct.js';
+import registerAdminEuAiActConformityRoutes from './admin/euAiActConformity.js';
 import registerAdminAgentsRoutes from './admin/agents.js';
 import registerAdminAgentInboxesRoutes from './admin/agentInboxes.js';
 import registerAdminSearchRoutes from './admin/search.js';
@@ -61,9 +65,11 @@ import registerAdminDocsRoutes from './admin/docs.js';
 import registerAdminChangesRoutes from './admin/changes.js';
 import registerAdminOverviewRoutes from './admin/overview.js';
 import registerAdminSystemRoutes from './admin/system.js';
+import registerAdminAiAcknowledgementRoutes from './admin/aiAcknowledgements.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
+  registerAdminAiAcknowledgementRoutes(app);
   registerAdminLdapTestRoutes(app);
   registerAdminOAuthRoutes(app);
   registerAdminOAuthCimdRoutes(app);
@@ -112,6 +118,10 @@ export default async function registerAdminRoutes(app) {
   registerAdminPeopleDirectoryEditorRoutes(app);
   registerAdminDocumentTemplatesRoutes(app);
   registerAdminCredentialsRoutes(app);
+  registerAdminWatermarkKeyRoutes(app);
+  registerAdminWatermarkDetectorRoutes(app);
+  registerAdminEuAiActRoutes(app);
+  registerAdminEuAiActConformityRoutes(app);
   registerAdminAgentsRoutes(app);
   registerAdminAgentInboxesRoutes(app);
   registerAdminSearchRoutes(app);
