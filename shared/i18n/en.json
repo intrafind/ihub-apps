@@ -8928,7 +8928,6 @@
       "defaultAppHint": "New chats of this project start in this app. Anyone can still pick another app when they start a chat."
     },
     "items": {
-      "aiAccessFor": "Use of {{name}} by the AI",
       "aiAccessHint": "Pinned items are always in the prompt. \"Not for AI\" items stay in the project for people but are never given to the model, listed or searched.",
       "aiAccess": {
         "normal": "Normal",
@@ -8939,7 +8938,6 @@
         "preview": "Preview text",
         "refresh": "Refresh",
         "remove": "Remove item",
-        "rename": "Rename",
         "retry": "Retry",
         "transfer": "Move or copy to…",
         "openInIFinder": "Open in iFinder",
@@ -8970,7 +8968,6 @@
       "pinnedHint": "Pinned items are always in the prompt, even when the project is searched.",
       "removeConfirm": "Remove \"{{name}}\" from the project?",
       "removeTitle": "Remove item",
-      "renameTitle": "Rename item",
       "status": {
         "extracting": "Extracting",
         "failed": "Failed",

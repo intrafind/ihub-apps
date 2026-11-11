@@ -1429,8 +1429,8 @@ that say `auto` keep saying it. In **Admin → Projects → Project settings**, 
 choose" lets you switch a mode off, for example full context to save cost; links and admin projects
 an administrator set keep their mode.
 
-- **Not for AI:** an item can be marked "Not for AI" in the project's "For the AI" column, next to
-  Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
+- **Not for AI:** an item can be marked "Not for AI" with the "For the AI" setting in its Edit
+  dialog, next to Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
   model, listed or searched.
 - **Models without tools** cannot call `knowledge_search`. For them Look things up reads as Best passages,
   so unpinned documents are not silently out of reach.

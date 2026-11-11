@@ -39,7 +39,6 @@ import { useProjectItemDocumentActions } from './ProjectItemDocumentActions';
 import ProjectItemTextDialog from './ProjectItemTextDialog';
 import ProjectUsageBar from './ProjectUsageBar';
 import RefreshTtlDialog from './RefreshTtlDialog';
-import RenameItemDialog from './RenameItemDialog';
 
 /**
  * What the shared "Add item" dialog calls for a user project.
@@ -117,8 +116,8 @@ const fetchItemText = (...args) => fetchProjectItemText(...args);
 /**
  * The items of a project (spec 1 §3, spec 3 §9): the usage against the
  * quotas, the table with each item's status, and — for the owner and editors
- * — adding (every enabled kind, with the cloud pickers), pinning, renaming,
- * editing a link item, refreshing, removing, and removing every ticked item at once.
+ * — adding (every enabled kind, with the cloud pickers), editing an item (its
+ * name, "For the AI" and, for a link, what it points at), refreshing, removing, and removing every ticked item at once.
  *
  * @param {Object} props
  * @param {Object} props.project
@@ -134,7 +133,7 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
   const { t } = useTranslation();
   // A smart collection from iFinder: its documents are listed and read, and its
   // owner adds and removes them (`editable`, which the page derives from the
-  // permissions and the capability). The local limits, pins, renaming and
+  // permissions and the capability). The local limits, editing, pins and
   // refreshing a document, and the token estimate (a request the server does not
   // take for it) do not apply.
   const isIFinder = isIFinderProject(project);
@@ -142,7 +141,6 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
     !isIFinder || (config?.kinds || []).some(kind => kind.id === IFINDER_DOCUMENT_KIND);
   const [adding, setAdding] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
-  const [renaming, setRenaming] = useState(null);
   const [scheduling, setScheduling] = useState(null);
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
@@ -297,11 +295,9 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           kinds={config?.kinds || []}
           busyItemId={actions.busyItemId || documentActions.busyId}
           readOnly={!editable}
-          hidePinned={isIFinder}
           estimates={estimate ? estimateByItem : undefined}
           onPreview={setPreviewItem}
           onDocumentAction={documentActions.onDocumentAction}
-          onSetAiAccess={isIFinder ? undefined : actions.setAiAccess}
           onRefresh={
             isIFinder
               ? undefined
@@ -310,7 +306,6 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
                   return actions.refresh(item);
                 }
           }
-          onRename={isIFinder ? undefined : setRenaming}
           onSchedule={isIFinder ? undefined : setScheduling}
           onEdit={isIFinder ? undefined : setEditing}
           onRemove={setRemoving}
@@ -378,13 +373,6 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           }
           onClose={() => setScheduling(null)}
           onSave={ttl => actions.setRefreshTtl(scheduling, ttl)}
-        />
-      )}
-      {renaming && (
-        <RenameItemDialog
-          item={renaming}
-          onClose={() => setRenaming(null)}
-          onRename={name => actions.rename(renaming, name)}
         />
       )}
       <ConfirmDialog
