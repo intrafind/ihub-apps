@@ -27,7 +27,10 @@ the user through the steps; the tools also work without it.
    ```
 
    An app that also has the `website-corpus-sizer` skill enabled (`skillSettings.enabled: true`)
-   gets the whole guided process.
+   gets the whole guided process. Add the `dashboard` system skill to the app's `skills` as well
+   and the process ends with a dashboard of the result in the chat's workspace pane (see
+   [The `dashboard` skill](pdf-generation.md#the-dashboard-skill)); without it the answer holds
+   the Markdown report only.
 
 The installation test (**Test**) checks that the storage provider can keep crawled pages and says
 which tokenizer counts (see [How tokens are counted](#how-tokens-are-counted)).

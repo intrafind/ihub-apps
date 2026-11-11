@@ -3368,7 +3368,7 @@
     "status": 200,
     "shape": {
       "allowedTools": "string",
-      "assets": [],
+      "assets": ["string"],
       "body": "string",
       "compatibility": "null",
       "description": "string",
@@ -3394,7 +3394,7 @@
       "name": "string",
       "path": "string",
       "providedTools": ["string"],
-      "references": [],
+      "references": ["string"],
       "scripts": []
     }
   },
