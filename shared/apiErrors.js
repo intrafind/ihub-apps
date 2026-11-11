@@ -416,6 +416,17 @@ export const MISC_ERROR_CODES = Object.freeze({
   USER_VALIDATION_FAILED: 403
 });
 
+/** Codes of the text watermark key store and detector (`routes/admin/watermark*.js`, #3331). */
+export const WATERMARK_ERROR_CODES = Object.freeze({
+  WATERMARK_KEY_NOT_FOUND: 404,
+  WATERMARK_KEY_ACTIVE: 409,
+  WATERMARK_KEY_DUPLICATE: 409,
+  WATERMARK_KEY_INVALID: 400,
+  WATERMARK_DETECTOR_NOT_CONFIGURED: 409,
+  WATERMARK_DETECTOR_UNREACHABLE: 502,
+  WATERMARK_AUDIT_UNAVAILABLE: 503
+});
+
 /** Every code, with its default HTTP status. */
 export const API_ERROR_CODES = Object.freeze({
   ...GENERIC_ERROR_CODES,
@@ -439,7 +450,8 @@ export const API_ERROR_CODES = Object.freeze({
   ...PROJECT_SERVICE_ERROR_CODES,
   ...PROJECT_ERROR_CODES,
   ...VOICE_ERROR_CODES,
-  ...MISC_ERROR_CODES
+  ...MISC_ERROR_CODES,
+  ...WATERMARK_ERROR_CODES
 });
 
 /**

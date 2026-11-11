@@ -50,6 +50,8 @@ import registerAdminIntegrationExampleAppsRoutes from './admin/integrationExampl
 import registerAdminPeopleDirectoryEditorRoutes from './admin/peopleDirectoryEditor.js';
 import registerAdminDocumentTemplatesRoutes from './admin/documentTemplates.js';
 import registerAdminCredentialsRoutes from './admin/credentials.js';
+import registerAdminWatermarkKeyRoutes from './admin/watermarkKeys.js';
+import registerAdminWatermarkDetectorRoutes from './admin/watermarkDetectors.js';
 import registerAdminAgentsRoutes from './admin/agents.js';
 import registerAdminAgentInboxesRoutes from './admin/agentInboxes.js';
 import registerAdminSearchRoutes from './admin/search.js';
@@ -114,6 +116,8 @@ export default async function registerAdminRoutes(app) {
   registerAdminPeopleDirectoryEditorRoutes(app);
   registerAdminDocumentTemplatesRoutes(app);
   registerAdminCredentialsRoutes(app);
+  registerAdminWatermarkKeyRoutes(app);
+  registerAdminWatermarkDetectorRoutes(app);
   registerAdminAgentsRoutes(app);
   registerAdminAgentInboxesRoutes(app);
   registerAdminSearchRoutes(app);

@@ -130,17 +130,20 @@ export function getContentMarking(modelConfig, kind = 'text') {
  * The public `model.watermark` member. `provider` is `applied: true` on the
  * strength of the operator's written statement (we cannot check it); `ihub` is
  * `applied: true` only when the generation path reports that the watermark was
- * requested and not greedy, which nothing does until the watermarking feature
- * (#3331) exists; `none` is false. `statementRef` stays out of the public object.
+ * requested, not greedy and not structured output (`planTextWatermark`); `none` is false. `statementRef` stays out of the public object.
  *
  * @param {Object} [modelConfig]
  * @param {Object} [options]
  * @param {string} [options.kind]
  * @param {boolean} [options.watermarkApplied] - Reported by the generation path.
  * @param {string} [options.keyId] - Watermark key id actually used (#3331).
+ * @param {string} [options.watermarkReason] - Why `applied` is false (#3331).
  * @returns {{by: string, scheme?: string, key_id?: string, applied: boolean}}
  */
-export function buildWatermark(modelConfig, { kind = 'text', watermarkApplied, keyId } = {}) {
+export function buildWatermark(
+  modelConfig,
+  { kind = 'text', watermarkApplied, keyId, watermarkReason } = {}
+) {
   const marking = getContentMarking(modelConfig, kind);
   if (marking.by === 'none') return { by: 'none', applied: false };
   const watermark = { by: marking.by };
@@ -149,6 +152,8 @@ export function buildWatermark(modelConfig, { kind = 'text', watermarkApplied, k
     const used = keyId || marking.keyId;
     if (used) watermark.key_id = used;
     watermark.applied = watermarkApplied === true;
+    // Why a requested mark is not claimed: greedy, structured_output, no_active_key.
+    if (!watermark.applied && watermarkReason) watermark.reason = watermarkReason;
   } else {
     if (marking.keyId) watermark.key_id = marking.keyId;
     watermark.applied = true;
@@ -186,6 +191,7 @@ export function buildProvenance({
   modelConfig,
   watermarkApplied,
   keyId,
+  watermarkReason,
   installationId,
   version,
   verifyUrl
@@ -196,7 +202,7 @@ export function buildProvenance({
     generator: { product: 'iHub Apps', version, installation_id: installationId },
     model: {
       id: model?.id ?? null,
-      watermark: buildWatermark(modelConfig, { kind, watermarkApplied, keyId })
+      watermark: buildWatermark(modelConfig, { kind, watermarkApplied, keyId, watermarkReason })
     },
     output_id: outputId,
     created_at: createdAt

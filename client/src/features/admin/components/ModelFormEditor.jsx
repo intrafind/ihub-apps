@@ -415,20 +415,40 @@ function ModelFormEditor({
     onChange({ ...data, sampling: next });
   };
 
-  // Output marking (EU AI Act Art. 50(2)). Only `none` and `provider` are offered:
-  // `ihub` (own text watermark) is not selectable until that feature exists, so
-  // no model can claim a mark iHub does not apply. Empty optional fields are
-  // dropped because the schema is strict about their shape.
+  // Output marking (EU AI Act Art. 50(2)). `ihub` (iHub's own text watermark) is
+  // offered for vLLM models only (`local`, or `openai` pointed at vLLM); the
+  // server rejects it for any other provider. Empty optional fields are dropped
+  // because the schema is strict about their shape.
+  const isVllmProvider = data.provider === 'local' || data.provider === 'openai';
   const handleMarkingChange = (key, value) => {
     const current = data.contentMarking?.text || { by: 'none' };
     let text = key === 'by' ? { by: value } : { ...current, [key]: value };
     if (key === 'by' && value === 'provider') {
       text = { ...current, by: 'provider' };
     }
-    if (text.by !== 'provider') text = { by: text.by };
-    for (const optional of ['scheme', 'statementRef']) {
+    if (key === 'by' && value === 'ihub') {
+      text = { ...current, by: 'ihub', scheme: 'vllm-gumbel' };
+      delete text.statementRef;
+    }
+    if (text.by === 'ihub') {
+      delete text.keyId;
+    } else if (text.by !== 'provider') {
+      text = { by: text.by };
+    } else {
+      for (const field of ['detectorUrl', 'detectorCredentialRef', 'tokenizer', 'contextWidth']) {
+        delete text[field];
+      }
+    }
+    for (const optional of [
+      'scheme',
+      'statementRef',
+      'detectorUrl',
+      'detectorCredentialRef',
+      'tokenizer'
+    ]) {
       if (text[optional] === '') delete text[optional];
     }
+    if (text.contextWidth === '' || Number.isNaN(text.contextWidth)) delete text.contextWidth;
     onChange({ ...data, contentMarking: { ...data.contentMarking, text } });
   };
 
@@ -1449,8 +1469,61 @@ function ModelFormEditor({
                                 'Provider marks the output'
                               )}
                             </option>
+                            {(isVllmProvider || data.contentMarking?.text?.by === 'ihub') && (
+                              <option value="ihub">
+                                {t('admin.models.marking.optionIhub', 'iHub watermark (vLLM)')}
+                              </option>
+                            )}
                           </select>
                         </div>
+                        {data.contentMarking?.text?.by === 'ihub' && (
+                          <>
+                            {[
+                              ['detectorUrl', 'markingDetectorUrl', 'Detector URL', 'text', 500],
+                              [
+                                'detectorCredentialRef',
+                                'markingDetectorCredentialRef',
+                                'Detector credential (id)',
+                                'text',
+                                100
+                              ],
+                              ['tokenizer', 'markingTokenizer', 'Tokenizer', 'text', 300],
+                              ['contextWidth', 'markingContextWidth', 'Context width', 'number']
+                            ].map(([field, labelKey, fallback, type, maxLength]) => (
+                              <div key={field} className="col-span-6 sm:col-span-2">
+                                <label
+                                  htmlFor={`contentMarking.text.${field}`}
+                                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                >
+                                  {t(`admin.models.fields.${labelKey}`, fallback)}
+                                </label>
+                                <input
+                                  id={`contentMarking.text.${field}`}
+                                  type={type}
+                                  maxLength={maxLength}
+                                  min={type === 'number' ? 1 : undefined}
+                                  max={type === 'number' ? 16 : undefined}
+                                  value={data.contentMarking?.text?.[field] ?? ''}
+                                  onChange={e =>
+                                    handleMarkingChange(
+                                      field,
+                                      type === 'number' && e.target.value !== ''
+                                        ? Number(e.target.value)
+                                        : e.target.value
+                                    )
+                                  }
+                                  className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                />
+                              </div>
+                            ))}
+                            <p className="col-span-6 text-xs text-gray-500 dark:text-gray-400">
+                              {t(
+                                'admin.models.hints.markingIhub',
+                                'iHub asks vLLM to watermark every answer with the active key and recognises it again through the detector. The detector settings must equal the vLLM server settings. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied.'
+                              )}
+                            </p>
+                          </>
+                        )}
                         {data.contentMarking?.text?.by === 'provider' && (
                           <>
                             <div className="col-span-6 sm:col-span-2">

@@ -306,6 +306,7 @@ export class ResultAccumulator {
           }
         : null,
       content: this.content,
+      marking: this.meta.marking ?? null,
       thinking: [...this.thinking],
       toolCalls: this.toolCalls.map(c => ({ ...c, function: { ...c.function } })),
       thoughtSignatures: [...this.thoughtSignatures],
@@ -859,7 +860,18 @@ export class LLMClient {
     const startedAt = Date.now();
     const runId = telemetry.runId || null;
     const step = Number.isInteger(telemetry.step) ? telemetry.step : 0;
-    const meta = { requestId, runId, step, model, request, startedAt, stream: effectiveStream };
+    // `marking` is the adapter's non-wire statement of how this output is
+    // watermarked (#3331); provenance reads it from the result.
+    const meta = {
+      requestId,
+      runId,
+      step,
+      model,
+      request,
+      startedAt,
+      stream: effectiveStream,
+      marking: request.marking ?? null
+    };
 
     this._recordRequestHeader({
       runId,
