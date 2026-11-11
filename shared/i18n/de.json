@@ -722,6 +722,21 @@
       "missingIFinder": "iFinder war nicht erreichbar, daher hat diese Antwort es nicht verwendet.",
       "missingOther": "Diese Antwort hat es nicht verwendet."
     },
+    "provenance": {
+      "button": "KI-generiert: Details",
+      "title": "KI-generiert",
+      "model": "Modell",
+      "created": "Erstellt",
+      "marking": "Kennzeichnung",
+      "markingNone": "Vom Modell nicht gekennzeichnet",
+      "markingProvider": "Vom Anbieter gekennzeichnet (erklärt)",
+      "markingIhub": "iHub-Wasserzeichen",
+      "hash": "Inhalts-Hash (SHA-256)",
+      "copyHash": "Hash kopieren",
+      "copied": "Kopiert",
+      "outputId": "Ausgabe-ID",
+      "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat."
+    },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
       "websearch": "Basierend auf Websuche",

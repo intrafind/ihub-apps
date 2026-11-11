@@ -1654,6 +1654,7 @@ AI Act.
   is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
   `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
   results as `metadata.provenance`.
+- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model, time, marking and content hash, with a **Copy hash** action.
 - **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
 - **Look it up.** `POST /api/provenance/_verify` takes a text or a hash and answers "Found" with the record or

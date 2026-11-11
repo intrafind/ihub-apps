@@ -61,7 +61,7 @@ the hash of the final step's text, so a user who copied only the final answer st
 
 | Channel | Where |
 | --- | --- |
-| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. |
+| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens model, time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (stopped, or stored before this feature) shows no button. |
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |
 | MCP | `_meta.provenance` on an app or workflow `tools/call` result. |
 | A2A | `metadata.provenance` on the Task and on the response artifact. |

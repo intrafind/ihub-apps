@@ -6424,6 +6424,21 @@
       "missingIFinder": "iFinder could not be reached, so this answer did not use it.",
       "missingOther": "This answer did not use it."
     },
+    "provenance": {
+      "button": "AI generated: details",
+      "title": "AI generated",
+      "model": "Model",
+      "created": "Created",
+      "marking": "Marking",
+      "markingNone": "Not marked by the model",
+      "markingProvider": "Marked by the provider (declared)",
+      "markingIhub": "iHub watermark",
+      "hash": "Content hash (SHA-256)",
+      "copyHash": "Copy hash",
+      "copied": "Copied",
+      "outputId": "Output ID",
+      "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it."
+    },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",
       "websearch": "Based on web search",
