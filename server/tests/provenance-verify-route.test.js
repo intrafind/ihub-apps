@@ -19,7 +19,7 @@ const platform = {
 };
 
 jest.unstable_mockModule('../configCache.js', () => ({
-  default: { getPlatform: () => platform }
+  default: { getPlatform: () => platform, getModels: () => ({ data: [] }) }
 }));
 const { startTestStorage } = await import('./helpers/testStorage.js');
 const { default: registerProvenanceRoutes, MAX_VERIFY_TEXT_BYTES } =
@@ -95,7 +95,13 @@ describe('POST /api/provenance/_verify', () => {
       text: 'The verified answer. x'
     });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ found: false, normalization: 'nfc-trim' });
+    // A signed-in caller also gets the watermark verdict; with no detector configured
+    // that is "not_configured", never "not watermarked".
+    expect(res.body).toEqual({
+      found: false,
+      normalization: 'nfc-trim',
+      watermark: { status: 'not_configured' }
+    });
   });
 
   test('both or neither of text and contentHash is a 400 problem', async () => {
