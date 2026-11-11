@@ -1670,3 +1670,27 @@ AI Act.
   record yet; scheduled tasks and apps called by tools do.
 
 See [Provenance Records](../../provenance.md) and [EU AI Act](../../ai-act.md#provenance-records).
+
+## Text Watermarking for Self-Hosted vLLM Models, With Detection
+
+For vLLM models iHub can now watermark the text it generates and recognise it again, which supports the
+marking and detection duty of Art. 50(2) of the EU AI Act (due 2026-12-02).
+
+- **Marked on the server.** Set **Admin → Models → Output marking** to *iHub watermark (vLLM)* (models on the
+  `local` provider, or `openai` pointed at vLLM). iHub asks vLLM to watermark every answer; a caller cannot
+  switch it off. Greedy requests (temperature 0) and structured output cannot be marked and are recorded as *not
+  applied*, with the reason.
+- **Keys iHub holds.** One active key at a time, stored encrypted; rotating makes the old key *retired*
+  (still used to recognise older text). Keys are created, activated, revealed and deleted through
+  `/api/admin/watermark-keys`; every change and every reveal is in the audit log, and a reveal is refused when the
+  audit log is not available. After a rotation restart vLLM with the new `--watermark-config`, then run the
+  self-test.
+- **Detection.** `POST /api/provenance/_verify` also answers `watermark` for a text with no record: detected (with
+  the key it was made with), not detected, or too short to tell. This needs a detector service (the contract is
+  in the guide; iHub ships a mock for tests), reached over HTTPS or an internal network with a bearer
+  credential, and honours the SSL whitelist and the proxy. Not detected is not proof of human authorship.
+- **Checks.** `POST /api/admin/watermark-detectors/{modelId}/_test` and `/_self-test` show whether iHub and
+  vLLM use the same key.
+- **Also fixed.** The audit log now redacts a request field named `key`.
+
+See [Text Watermarking](../../ai-act-text-watermarking.md).

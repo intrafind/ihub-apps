@@ -412,9 +412,23 @@ vllm --version
 
 ---
 
+## Watermarking (EU AI Act Art. 50(2))
+
+vLLM can watermark generated text (a *developer preview* feature; it needs a vLLM build that has it). Start it with
+
+```bash
+--watermark-config '{"algorithm":"gumbel","key":<integer from iHub>,"enforce":true}'
+```
+
+and set the model's `contentMarking.text.by` to `ihub`. The key comes from **iHub's** key store, so there is one
+place for the secret. Full guide, including rotation and the detector: [Text Watermarking](ai-act-text-watermarking.md).
+
+---
+
 ## Related documentation
 
 - [Local LLM Providers Integration Guide](local-llm-providers.md) — full vLLM setup, reasoning parsers, per-model API keys
+- [Text Watermarking](ai-act-text-watermarking.md) — vLLM watermark, keys and detector
 - [Models](models.md) — model configuration reference
 - [Tool Calling](tool-calling.md) — iHub tool/function calling
 - [Image Upload Feature](image-upload-feature.md) — iHub image upload settings

@@ -14,6 +14,7 @@
     - [Icons](icons.md)
     - [Platform Configuration](platform.md)
     - [EU AI Act (Article 50)](ai-act.md)
+    - [Text Watermarking (vLLM)](ai-act-text-watermarking.md)
     - [Provenance Records](provenance.md)
     - [Styles](styles.md)
     - [Prompts Database](prompts.md)

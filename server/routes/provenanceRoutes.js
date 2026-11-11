@@ -22,6 +22,7 @@ import { ServiceError } from '../utils/ServiceError.js';
 import { isStorageReady } from '../storage/bootstrap.js';
 import { getProvenanceStore } from '../services/provenance/ProvenanceStore.js';
 import { provenanceSettings } from '../services/provenance/provenanceSettings.js';
+import { detectWatermark } from '../services/provenance/watermark/detect.js';
 import { verifyUrl } from '../services/provenance/turnProvenance.js';
 import {
   NORMALIZATION_NFC_TRIM,
@@ -67,7 +68,14 @@ export function parseVerifyBody(body) {
         details: { maxBytes: MAX_VERIFY_TEXT_BYTES }
       });
     }
-    return { text: input.text, normalization };
+    let modelId;
+    if (input.modelId !== undefined) {
+      if (typeof input.modelId !== 'string' || input.modelId.length > 200) {
+        throw invalid('/modelId', 'modelId must be a string');
+      }
+      modelId = input.modelId;
+    }
+    return { text: input.text, normalization, modelId };
   }
   const hash = typeof input.contentHash === 'string' ? input.contentHash.trim().toLowerCase() : '';
   if (!isHexHash(hash))
@@ -105,11 +113,15 @@ export default function registerProvenanceRoutes(app) {
    *               text: { type: string, maxLength: 262144 }
    *               contentHash: { type: string, description: 64 hex characters }
    *               normalization: { type: string, enum: [nfc-trim], default: nfc-trim }
+   *               modelId: { type: string, description: Narrow the watermark check to one model's detector }
    *     responses:
    *       200:
    *         description: >-
-   *           `{ found, normalization, records? }`. Records are provenance objects
-   *           (`intrafind-provenance/1.0`).
+   *           `{ found, normalization, records?, watermark? }`. Records are provenance objects
+   *           (`intrafind-provenance/1.0`). On a miss for a text from a signed-in caller,
+   *           `watermark` is `{ status: detected|not_detected|too_short|unavailable|not_configured,
+   *           scheme?, technique?, keyId?, pValue?, scoredTokens?, keysChecked?, detectorsChecked? }`.
+   *           A negative is never proof of human origin.
    *       400: { description: Both or neither of text and contentHash }
    *       401: { description: Authentication required (unless verify.access is public) }
    *       413: { description: Text too large }
@@ -118,7 +130,7 @@ export default function registerProvenanceRoutes(app) {
    */
   app.post(buildServerPath(VERIFY_PATH), limiter, maybeAuth, async (req, res, next) => {
     try {
-      const { text, hash, normalization } = parseVerifyBody(req.body);
+      const { text, hash, normalization, modelId } = parseVerifyBody(req.body);
       if (!isStorageReady() || !getProvenanceStore().isAvailable()) {
         throw new ServiceError('SERVICE_UNAVAILABLE', 'The provenance store is not available');
       }
@@ -126,7 +138,16 @@ export default function registerProvenanceRoutes(app) {
       const records = await getProvenanceStore().findByHash(value);
       // Sensitive request: never cache.
       res.setHeader('Cache-Control', 'no-store');
-      if (records.length === 0) return res.json({ found: false, normalization });
+      if (records.length === 0) {
+        const body = { found: false, normalization };
+        // No record: ask the watermark detector (#3331). Text only, and only for a
+        // signed-in caller: the call sends every key to the detector and costs
+        // CPU, so a public caller gets the hash lookup alone. Never a 5xx.
+        if (text !== undefined && req.user && req.user.id !== 'anonymous') {
+          body.watermark = await detectWatermark(text, { modelId });
+        }
+        return res.json(body);
+      }
       const verify = verifyUrl(req);
       return res.json({
         found: true,

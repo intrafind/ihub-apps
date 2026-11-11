@@ -39,7 +39,7 @@ const EXCLUDED_SEGMENTS = new Set([
 ]);
 
 const SENSITIVE_KEY_RE =
-  /pass(word)?|pwd|secret|token|api[-_]?key|client[-_]?secret|credential|priv(ate)?[-_]?key|passphrase|signing|\bpin\b|\botp\b|\bmfa\b|salt|authoriz|cookie|bearer/i;
+  /pass(word)?|pwd|secret|token|api[-_]?key|client[-_]?secret|credential|priv(ate)?[-_]?key|passphrase|signing|\bpin\b|\botp\b|\bmfa\b|salt|authoriz|cookie|bearer|^keys?$/i;
 
 function getAuditConfig() {
   try {

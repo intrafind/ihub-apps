@@ -44,7 +44,7 @@ Set per model with `contentMarking.text` (see [Models](models.md#output-marking-
 | --- | --- | --- |
 | `none` (default) | No marking. | `false` |
 | `provider` | The operator states that the provider marks the output (for example SynthID). | `true`, on the operator's written statement. iHub cannot check it. |
-| `ihub` | iHub's own watermark. Not available yet; it is never reported as applied. | `false` |
+| `ihub` | iHub's own text watermark for self-hosted vLLM models ([Text Watermarking](ai-act-text-watermarking.md)). | `true` only when the request asked vLLM to mark and was neither greedy nor structured output; else `false` with a `reason` (`greedy`, `structured_output`, `no_active_key`). `key_id` names the key used. |
 
 ## `nfc-trim`
 
@@ -89,6 +89,11 @@ A miss answers **200** with `{ "found": false, "normalization": "nfc-trim" }`. A
 exists**: the text may have been edited, the record may have expired, or it came from elsewhere. It is not
 proof of human authorship.
 
+- **Watermark detection.** When no record matches a `text` and the caller is signed in, the answer also carries
+  `watermark`: `{ "status": "detected" | "not_detected" | "too_short" | "unavailable" | "not_configured", "keyId?",
+  "pValue?", "scoredTokens?", … }`. It comes from the detector of the models marked `by: "ihub"`, tried with the
+  active and all retired keys; pass `modelId` to ask one model's detector only. "Not detected" and "Too short to
+  tell" are not proof of human authorship. Details: [Text Watermarking](ai-act-text-watermarking.md).
 - Send exactly one of `text` and `contentHash` (`400` otherwise). `text` is capped at 256 KB (`413`).
 - **Who may call.** By default any signed-in caller; set `provenance.verify.access` to `public` to let third
   parties verify. The lookup is a membership oracle for a candidate text, so it has its own rate limit

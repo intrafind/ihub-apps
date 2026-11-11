@@ -574,7 +574,17 @@ export const platformConfigSchema = z
         verify: z
           .object({ access: z.enum(['authenticated', 'public']).prefault('authenticated') })
           .passthrough()
-          .prefault({})
+          .prefault({}),
+        // Text watermark detection (#3331). All optional: code defaults apply
+        // (alpha 1e-4, minScoredTokens 200, detectorTimeoutMs 15000).
+        watermark: z
+          .object({
+            alpha: z.number().gt(0).lt(1).optional(),
+            minScoredTokens: z.number().int().min(1).optional(),
+            detectorTimeoutMs: z.number().int().min(1000).max(120000).optional()
+          })
+          .passthrough()
+          .optional()
       })
       .passthrough()
       .prefault({}),

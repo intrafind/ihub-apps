@@ -52,8 +52,11 @@ export function verifyUrl(req) {
  *   it differs, the same record is also indexed under its hash.
  * @param {{id: string}} input.model - `{ id }`; workflows use `workflow:<id>`.
  * @param {Object} [input.modelConfig] - Model config for `contentMarking`.
- * @param {boolean} [input.watermarkApplied] - Set by the generation path (#3331).
- * @param {string} [input.keyId] - Watermark key id used (#3331).
+ * @param {Object|null} [input.marking] - The generation path's watermark plan
+ *   (`result.marking`, #3331): `{applied, keyId?, reason?}`. Wins over the two
+ *   fields below.
+ * @param {boolean} [input.watermarkApplied] - Explicit override (tests, media).
+ * @param {string} [input.keyId] - Watermark key id used.
  * @param {import('express').Request} [input.req] - For an absolute verify URL.
  * @returns {Promise<Object|null>} The object, or null for an output without text and tool calls.
  */
@@ -63,6 +66,7 @@ export async function recordTextOutput({
   finalText,
   model,
   modelConfig,
+  marking,
   watermarkApplied,
   keyId,
   req
@@ -78,8 +82,9 @@ export async function recordTextOutput({
       text,
       model,
       modelConfig,
-      watermarkApplied,
-      keyId,
+      watermarkApplied: marking ? marking.applied === true : watermarkApplied,
+      keyId: marking?.keyId ?? keyId,
+      watermarkReason: marking && marking.applied !== true ? marking.reason : undefined,
       installationId,
       version: getAppVersion(),
       verifyUrl: verifyUrl(req)

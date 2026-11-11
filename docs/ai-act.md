@@ -118,3 +118,12 @@ it; "Not found" only means there is no record, not that a person wrote it.
   `provenance` member and two headers.
 
 Details: [Provenance Records](provenance.md).
+
+## Text watermark (self-hosted vLLM)
+
+For vLLM models iHub can do more than record: it asks vLLM to watermark the text, owns and rotates the secret
+keys, and can recognise a watermarked text again even when no record matches (a lightly edited copy, an expired
+record). Set **Admin → Models → Output marking** to *iHub watermark (vLLM)*, create a key (API
+`POST /api/admin/watermark-keys`), start vLLM with the printed `--watermark-config`, and point the model at a
+detector. A greedy request (temperature 0) or structured output cannot be watermarked and is recorded as *not
+applied*. Setup, rotation, the detector contract and the limits: [Text Watermarking](ai-act-text-watermarking.md).
