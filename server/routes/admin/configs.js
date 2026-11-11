@@ -347,6 +347,9 @@ export default function registerAdminConfigRoutes(app) {
         newConfig.aiAcknowledgement,
         existingConfig.aiAcknowledgement
       ),
+      // Provenance records (#3327): retention, store switch, verify access; same reason as above.
+      provenance:
+        newConfig.provenance !== undefined ? newConfig.provenance : existingConfig.provenance,
       auth: newConfig.auth || existingConfig.auth,
       anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
       proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,

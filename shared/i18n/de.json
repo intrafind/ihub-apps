@@ -722,6 +722,21 @@
       "missingIFinder": "iFinder war nicht erreichbar, daher hat diese Antwort es nicht verwendet.",
       "missingOther": "Diese Antwort hat es nicht verwendet."
     },
+    "provenance": {
+      "button": "KI-generiert: Details",
+      "title": "KI-generiert",
+      "model": "Modell",
+      "created": "Erstellt",
+      "marking": "Kennzeichnung",
+      "markingNone": "Vom Modell nicht gekennzeichnet",
+      "markingProvider": "Vom Anbieter gekennzeichnet (erklärt)",
+      "markingIhub": "iHub-Wasserzeichen",
+      "hash": "Inhalts-Hash (SHA-256)",
+      "copyHash": "Hash kopieren",
+      "copied": "Kopiert",
+      "outputId": "Ausgabe-ID",
+      "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat."
+    },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
       "websearch": "Basierend auf Websuche",
@@ -1579,7 +1594,15 @@
       "noModelsDesc": "Beginnen Sie mit der Erstellung eines neuen Modells.",
       "table": {
         "status": "Status",
-        "apiKey": "API-Schlüssel"
+        "apiKey": "API-Schlüssel",
+        "marking": "Ausgabekennzeichnung"
+      },
+      "marking": {
+        "none": "Nicht gekennzeichnet",
+        "provider": "Vom Anbieter gekennzeichnet",
+        "ihub": "iHub-Wasserzeichen",
+        "optionNone": "Nicht gekennzeichnet",
+        "optionProvider": "Der Anbieter kennzeichnet die Ausgabe"
       },
       "status": {
         "enabled": "Aktiviert",
@@ -1653,6 +1676,9 @@
         "thinkingLevelHigh": "Hoch",
         "thinkingThoughts": "Reasoning anzeigen",
         "samplingTemperature": "Temperatur",
+        "markingBy": "Kennzeichnung",
+        "markingScheme": "Verfahren",
+        "markingStatementRef": "Verweis auf die Erklärung",
         "samplingTopP": "Top P",
         "samplingTopK": "Top K",
         "ttsVoice": "Stimme",
@@ -1688,6 +1714,8 @@
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
         "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
         "sampling": "Optional. Ein leeres Feld verwendet den Standardwert des Modells bzw. des Anbieters; dafür wird nichts gesendet. Ein hier gesetzter Wert gilt für jede Anfrage an dieses Modell.",
+        "marking": "Ob dieses Modell den erzeugten Text als KI-generiert kennzeichnet. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann es nicht prüfen. Jede Ausgabe erhält unabhängig davon einen Herkunftsnachweis.",
+        "markingStatementRef": "Dokumentname oder URL der schriftlichen Erklärung des Anbieters. Sie wird nur als Verweis gespeichert und nie geöffnet.",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
         "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
         "ttsVoiceGoogle": "Eine der vorgefertigten Gemini-Stimmen, etwa Kore, Puck oder Charon. Jede spricht alle Sprachen; die Sprache wird am Text erkannt. Leer bedeutet Kore.",
@@ -1712,6 +1740,7 @@
         "promptCaching": "Prompt-Caching",
         "providerConfig": "Anbieter-Einstellungen",
         "sampling": "Sampling",
+        "marking": "Ausgabekennzeichnung",
         "thinking": "Reasoning"
       },
       "errors": {
@@ -2685,6 +2714,10 @@
           "inferenceApi": {
             "name": "Inference-API",
             "description": "/api/inference und Vorlesen."
+          },
+          "provenanceVerifyApi": {
+            "name": "Herkunftsabfrage",
+            "description": "Abfrage einer KI-Ausgabe über Text oder Hash (/api/provenance/_verify). Bewusst strenger: Die Abfrage verrät, ob ein Kandidatentext hier erzeugt wurde."
           }
         }
       }

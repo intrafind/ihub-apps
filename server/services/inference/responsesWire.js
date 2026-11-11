@@ -34,6 +34,7 @@
  */
 import crypto from 'node:crypto';
 import { openAiErrorObject } from './errors.js';
+import { applyProvenanceHeaders } from '../provenance/httpProvenance.js';
 
 const hex = () => crypto.randomUUID().replaceAll('-', '');
 
@@ -169,6 +170,8 @@ export class ResponseAssembler {
     this.res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     this.res.setHeader('Cache-Control', 'no-cache');
     this.res.setHeader('X-Accel-Buffering', 'no');
+    // EU AI Act Art. 50(2): the output id is allocated before the first byte.
+    applyProvenanceHeaders(this.res, this.base.outputId);
     this.res.flushHeaders?.();
     const snapshot = this.response();
     this._write('response.created', { response: snapshot });
@@ -328,7 +331,7 @@ export class ResponseAssembler {
    * @param {Object|null} [options.usage] - iHub usage.
    * @returns {Object} The completed response object.
    */
-  complete({ text, parsed, usage }) {
+  complete({ text, parsed, usage, provenance }) {
     let item = this.current;
     if (!item && text) {
       // An answer that arrived whole (a passthrough tool, Anthropic's
@@ -340,7 +343,8 @@ export class ResponseAssembler {
     const response = this.response({
       status: 'completed',
       output: this._output(),
-      usage: responsesUsage(usage)
+      usage: responsesUsage(usage),
+      ...(provenance ? { provenance } : {})
     });
     this._write('response.completed', { response });
     this._end();

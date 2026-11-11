@@ -41,6 +41,31 @@ function ModelNameCell({ model, currentLanguage }) {
   );
 }
 
+/**
+ * How a model's output is marked as AI generated. "Not marked" is a hint, not a
+ * warning: there is no gate. `ihub` (own watermark) is shown only as far as it exists.
+ */
+function MarkingBadge({ marking, t }) {
+  const by = marking?.by === 'provider' || marking?.by === 'ihub' ? marking.by : 'none';
+  const styles =
+    by === 'none'
+      ? 'bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300'
+      : 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300';
+  const labels = {
+    none: t('admin.models.marking.none', 'Not marked'),
+    provider: t('admin.models.marking.provider', 'Provider-marked'),
+    ihub: t('admin.models.marking.ihub', 'iHub watermark')
+  };
+  return (
+    <span
+      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${styles}`}
+      data-testid="model-marking-badge"
+    >
+      {labels[by]}
+    </span>
+  );
+}
+
 function StatusCell({ model, t }) {
   return (
     <div className="flex items-center gap-2">
@@ -349,6 +374,15 @@ function AdminModelsPage() {
       header: t('admin.models.table.apiKey', 'API key'),
       hideBelow: 'md',
       render: m => <ApiKeyStatusBadge status={keyStatuses[m.id]} />
+    },
+    {
+      key: 'marking',
+      header: t('admin.models.table.marking', 'Output marking'),
+      hideBelow: 'lg',
+      render: m =>
+        m.modelType === 'transcription' || m.modelType === 'tts' ? null : (
+          <MarkingBadge marking={m.contentMarking?.text} t={t} />
+        )
     },
     {
       key: 'status',

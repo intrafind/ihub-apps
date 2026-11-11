@@ -1253,6 +1253,14 @@ Files travel both ways; the full behaviour is described in [Chat and Scheduled-T
   file by its id. Large tool results are lifted the same way before they are spilled to the
   tool-result store.
 
+### Provenance
+
+An app or workflow `tools/call` result that has text carries `_meta.provenance`, the machine-readable
+provenance object of the answer (see [Provenance Records](provenance.md)). Workflows use
+`model.id: "workflow:<id>"`. `_meta` keys with the `modelcontextprotocol.io/` prefix are reserved by MCP, so the
+plain `provenance` key is valid today; a prefixed alias would be an additive change if MCP ever claims it.
+Error results carry none.
+
 ### Who sees which tool
 
 Scopes decide what a token may _do_; group permissions decide what it may
@@ -1685,6 +1693,10 @@ The pre-0.3 draft methods iHub implemented first (`agent/info`,
 (method not found). Use the Agent Card, `message/send` and `tasks/get`
 instead. A2A skills are apps and workflows only: raw iHub tools are available
 through the MCP gateway (`/mcp`), not through A2A.
+
+**Provenance.** The final Task carries `metadata.provenance`, and the response artifact carries the same object in
+its own `metadata.provenance` (also in the closing `artifact-update` event of a stream). Failed tasks have none.
+See [Provenance Records](provenance.md).
 
 Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
 

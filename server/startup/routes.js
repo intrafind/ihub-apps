@@ -18,6 +18,7 @@ import registerAppSessionStartRoute from '../routes/appSessionRoutes.js';
 import registerMagicPromptRoutes from '../routes/magicPromptRoutes.js';
 import registerUsageRoutes from '../routes/usageRoutes.js';
 import registerAiAcknowledgementRoutes from '../routes/aiAcknowledgementRoutes.js';
+import registerProvenanceRoutes from '../routes/provenanceRoutes.js';
 import registerShortLinkRoutes from '../routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from '../routes/openaiProxy.js';
 import registerAuthRoutes from '../routes/auth.js';
@@ -37,6 +38,7 @@ import registerScheduledTaskRoutes from '../routes/scheduledTasks.js';
 import runLog from '../services/loop/RunLog.js';
 import { startChatRetentionSweep } from '../services/chat/chatRetention.js';
 import { startProjectRetentionSweep } from '../services/projects/projectRetention.js';
+import { startProvenanceRetentionSweep } from '../services/provenance/provenanceRetention.js';
 import { startWebsiteCorpusRetentionSweep } from '../services/websiteCorpus/corpusRetention.js';
 import { startWorkflowStateRetention } from '../services/workflow/workflowRetention.js';
 import { registerCheckpointResume } from '../services/workflow/checkpointResume.js';
@@ -98,6 +100,7 @@ const ROUTE_STEPS = [
   app => registerMagicPromptRoutes(app),
   app => registerUsageRoutes(app),
   app => registerAiAcknowledgementRoutes(app),
+  app => registerProvenanceRoutes(app),
   (app, { DEFAULT_TIMEOUT }) =>
     registerChatRoutes(app, {
       processMessageTemplates,
@@ -144,6 +147,8 @@ const ROUTE_STEPS = [
       startWorkflowStateRetention();
       // Abandoned user projects, when `platform.projects.retentionDays` says so.
       startProjectRetentionSweep();
+      // Provenance records older than `provenance.retentionDays`.
+      startProvenanceRetentionSweep();
       // Crawls of the Website Corpus older than their 14 days, also of people who stopped using it.
       startWebsiteCorpusRetentionSweep();
     }

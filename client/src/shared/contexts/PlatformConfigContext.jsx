@@ -83,6 +83,9 @@ export function PlatformConfigProvider({ children }) {
         // per user and language, from /api/ai-acknowledgements/me.
         aiAcknowledgement: platformCfg.aiAcknowledgement,
 
+        // Provenance records (#3327): retention, store switch and who may call the lookup.
+        provenance: platformCfg.provenance,
+
         // Voice input: backend switches, the Azure host / keyConfigured flag and
         // the platform-wide defaults (dictation service, transcription model)
         // that apps fall back to. Dropping it here silently broke all of them.

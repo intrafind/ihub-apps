@@ -711,7 +711,8 @@ export async function settleAssistantTurn({
             ...(integrationAuthRequired.length > 0 ? { integrationAuthRequired } : {}),
             ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
             ...(activity ? { activity } : {}),
-            ...(sources ? { sources } : {})
+            ...(sources ? { sources } : {}),
+            ...(summary?.provenance ? { provenance: summary.provenance } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

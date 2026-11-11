@@ -88,6 +88,9 @@ import { createFileContext } from '../services/inference/files.js';
 import { appTurnError, executeAppTurn, prepareAppTurn } from '../services/inference/appTurn.js';
 import { apiUser, numberField, platformLanguage, requestLanguage } from './inference/shared.js';
 import registerResponsesRoutes from './inference/responses.js';
+import { newOutputId } from '../services/provenance/records.js';
+import { recordTextOutput } from '../services/provenance/turnProvenance.js';
+import { applyProvenanceHeaders, withProvenance } from '../services/provenance/httpProvenance.js';
 import registerConversationsRoutes from './inference/conversations.js';
 import registerFilesRoutes from './inference/files.js';
 
@@ -534,6 +537,8 @@ export default function registerOpenAIProxyRoutes(
     };
 
     const completionId = newCompletionId();
+    // Allocated before the first byte so the streaming headers can carry it.
+    const outputId = newOutputId();
 
     if (!clientWantsStream) {
       let result;
@@ -590,7 +595,16 @@ export default function registerOpenAIProxyRoutes(
           'openai'
         );
       }
-      return res.json(response);
+      // EU AI Act Art. 50(2): provenance in the body and the two headers.
+      const provenance = await recordTextOutput({
+        outputId,
+        text: result.content || '',
+        model: { id: modelId },
+        modelConfig: model,
+        req
+      });
+      if (provenance) applyProvenanceHeaders(res, outputId);
+      return res.json(withProvenance(response, provenance));
     }
 
     let llmStream;
@@ -615,6 +629,8 @@ export default function registerOpenAIProxyRoutes(
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('X-Accel-Buffering', 'no');
+    // Headers are final once flushed, hence the id allocated up front.
+    applyProvenanceHeaders(res, outputId);
     res.flushHeaders?.();
 
     const write = obj => {
@@ -627,6 +643,15 @@ export default function registerOpenAIProxyRoutes(
       }
     };
 
+    // The provenance object rides on the chunk that carries `finish_reason`
+    // (no extra choice-less chunk, which strict parsers may trip over).
+    let streamedText = '';
+    let streamProvenance = null;
+    const stampComplete = (wire, chunk) =>
+      chunk.complete && streamProvenance && wire && typeof wire === 'object'
+        ? { ...wire, provenance: streamProvenance }
+        : wire;
+
     let isFirstChunk = true;
     try {
       for await (const rawChunk of llmStream) {
@@ -637,6 +662,16 @@ export default function registerOpenAIProxyRoutes(
         const hasToolCalls = chunk.tool_calls.length > 0;
         const hasContent = chunk.content.length > 0;
         const wireCtx = { completionId, modelId };
+        if (hasContent) streamedText += chunk.content.join('');
+        if (chunk.complete) {
+          streamProvenance = await recordTextOutput({
+            outputId,
+            text: streamedText,
+            model: { id: modelId },
+            modelConfig: model,
+            req
+          });
+        }
 
         if (isFirstChunk && hasToolCalls) {
           // OpenAI clients expect the role in its own first chunk, then the calls.
@@ -648,20 +683,28 @@ export default function registerOpenAIProxyRoutes(
             )
           );
           write(
-            convertResponseFromGeneric(
-              {
-                content: [],
-                tool_calls: chunk.tool_calls,
-                complete: chunk.complete,
-                finishReason: chunk.finishReason
-              },
-              'openai',
-              { ...wireCtx, isFirstChunk: false }
+            stampComplete(
+              convertResponseFromGeneric(
+                {
+                  content: [],
+                  tool_calls: chunk.tool_calls,
+                  complete: chunk.complete,
+                  finishReason: chunk.finishReason
+                },
+                'openai',
+                { ...wireCtx, isFirstChunk: false }
+              ),
+              chunk
             )
           );
           isFirstChunk = false;
         } else if (hasContent || hasToolCalls || chunk.complete) {
-          write(convertResponseFromGeneric(chunk, 'openai', { ...wireCtx, isFirstChunk }));
+          write(
+            stampComplete(
+              convertResponseFromGeneric(chunk, 'openai', { ...wireCtx, isFirstChunk }),
+              chunk
+            )
+          );
           isFirstChunk = false;
         }
         if (chunk.complete) break;
@@ -792,6 +835,8 @@ export default function registerOpenAIProxyRoutes(
     recordAppUsage(appConfig.id, user?.id, { 'gen_ai.request.model': prepared.model.id });
 
     const completionId = newCompletionId();
+    // Allocated before the first byte: the streaming headers carry it.
+    const outputId = newOutputId();
     const created = Math.floor(Date.now() / 1000);
     const runId = newRunId('chat');
     let clientDisconnected = false;
@@ -817,6 +862,7 @@ export default function registerOpenAIProxyRoutes(
       res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('X-Accel-Buffering', 'no');
+      applyProvenanceHeaders(res, outputId);
       res.flushHeaders?.();
     }
     res.on('close', () => {
@@ -860,7 +906,8 @@ export default function registerOpenAIProxyRoutes(
         maxRetries: clientWantsStream ? 0 : 1,
         emitter,
         timeoutMs: DEFAULT_TIMEOUT,
-        getLocalizedError
+        getLocalizedError,
+        outputId
       });
     } catch (error) {
       logger.error('[OpenAI Proxy] App turn crashed', { component: 'OpenAIProxy', error });
@@ -897,7 +944,7 @@ export default function registerOpenAIProxyRoutes(
       else if (content !== streamed && content.startsWith(streamed)) {
         writeText(content.slice(streamed.length));
       }
-      write(chunk({}, finishReason));
+      write(withProvenance(chunk({}, finishReason), outcome.provenance));
       if (body.stream_options?.include_usage === true && usage) {
         write({
           id: completionId,
@@ -911,14 +958,22 @@ export default function registerOpenAIProxyRoutes(
       res.write('data: [DONE]\n\n');
       return res.end();
     }
-    return res.json({
-      id: completionId,
-      object: 'chat.completion',
-      created,
-      model: label,
-      choices: [{ index: 0, message: { role: 'assistant', content }, finish_reason: finishReason }],
-      ...(usage ? { usage } : {})
-    });
+    if (outcome.provenance) applyProvenanceHeaders(res, outputId);
+    return res.json(
+      withProvenance(
+        {
+          id: completionId,
+          object: 'chat.completion',
+          created,
+          model: label,
+          choices: [
+            { index: 0, message: { role: 'assistant', content }, finish_reason: finishReason }
+          ],
+          ...(usage ? { usage } : {})
+        },
+        outcome.provenance
+      )
+    );
   }
 
   registerResponsesRoutes(app, { llmClient, chatService, getLocalizedError, DEFAULT_TIMEOUT });
