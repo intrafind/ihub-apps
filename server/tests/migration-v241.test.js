@@ -119,6 +119,14 @@ test('client config exposes enabled and non-blank text only', () => {
   );
 });
 
+test('client config: the EU AI Act master switch off turns the notice off for every app', () => {
+  const settings = { firstTurnNotice: { enabled: true, text: { en: 'Hi' } } };
+  assert.equal(aiDisclosureClientConfig(settings, true).firstTurnNotice.enabled, true);
+  assert.deepEqual(aiDisclosureClientConfig(settings, false), {
+    firstTurnNotice: { enabled: false, text: { en: 'Hi' } }
+  });
+});
+
 test('app schema accepts the override and rejects unknown keys', () => {
   const app = {
     id: 'legal-assistant',

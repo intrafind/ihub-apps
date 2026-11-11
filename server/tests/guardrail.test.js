@@ -95,12 +95,16 @@ test('only text chat models are guarded', () => {
   assert.equal(guardMessagesForModel(messages, { modelType: 'tts' }), messages);
 });
 
-test('the rule module reads no env var or config cache (the caller passes the text)', () => {
+test('the rule module reads no env var or config cache itself (the caller passes the text; only the audited master switch can turn it off)', () => {
   const src = fs.readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), '../services/provenance/guardrail.js'),
     'utf8'
   );
-  assert.ok(!/process\.env|configCache/.test(src.replace(/^\s*\*.*$/gm, '')));
+  const code = src.replace(/^\s*\*.*$/gm, '');
+  assert.ok(!/process\.env|configCache/.test(code));
+  // The one thing it may consult is the master switch, through its helper.
+  const imports = [...code.matchAll(/from '([^']+)'/g)].map(m => m[1]);
+  assert.deepEqual(imports, ['../euAiAct/conformity.js']);
 });
 
 test('invariant: only LLMClient and adapters build completion requests', () => {

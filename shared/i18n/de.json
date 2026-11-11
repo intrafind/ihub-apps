@@ -6528,7 +6528,7 @@
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",
-      "description": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet. Unabhängig davon sorgt eine Regel in jedem System-Prompt dafür, dass die Assistenten auf Nachfrage sagen, dass sie ein KI-System sind; Sie können sie unten umformulieren, aber nicht abschalten.",
+      "description": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet. Unabhängig davon sorgt eine Regel in jedem System-Prompt dafür, dass die Assistenten auf Nachfrage sagen, dass sie ein KI-System sind; Sie können sie unten umformulieren. Nur der Hauptschalter für die EU-AI-Act-Funktionen schaltet sie ab.",
       "enabled": "KI-Hinweis vor der ersten Nachricht anzeigen",
       "text": "Hinweistext (leer verwendet den eingebauten Text)",
       "saved": "KI-Hinweis gespeichert",
@@ -6740,7 +6740,7 @@
       "description": "Ist diese Installation für die Transparenzpflichten nach Art. 50 eingerichtet, können Sie bedienen, was sie verlangen, und funktioniert es? Ein grünes Häkchen bedeutet „wie vorgesehen konfiguriert“, nicht „rechtlich konform“.",
       "checks": {
         "guardrail": {
-          "ok": "Die KI-Kennzeichnungsregel ist Teil jedes System-Prompts und lässt sich nicht ausschalten."
+          "ok": "Die KI-Kennzeichnungsregel ist Teil jedes System-Prompts. Nur der Hauptschalter für die EU-AI-Act-Funktionen schaltet sie ab."
         },
         "notice": {
           "ok": "Der Hinweis vor der ersten Nachricht ist eingeschaltet.",

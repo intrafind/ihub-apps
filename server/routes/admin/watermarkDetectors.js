@@ -7,6 +7,7 @@
  *
  * @module routes/admin/watermarkDetectors
  */
+import { requireEuAiActEnabled } from '../../services/euAiAct/conformity.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -82,12 +83,18 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
    *     responses:
    *       200: { description: "`{ reachable, authenticated, contractValid, latencyMs, error? }`" }
    *       404: { description: No such model }
+   *       403: { description: The EU AI Act features are switched off (FEATURE_DISABLED) }
    *       409: { description: No detector URL or credential configured }
    */
-  app.post(buildServerPath(`${base}/:modelId/_test`), adminAuth, async (req, res) => {
-    const model = findIhubModel(req.params.modelId);
-    res.json(await pingDetector(model));
-  });
+  app.post(
+    buildServerPath(`${base}/:modelId/_test`),
+    adminAuth,
+    requireEuAiActEnabled('watermark'),
+    async (req, res) => {
+      const model = findIhubModel(req.params.modelId);
+      res.json(await pingDetector(model));
+    }
+  );
 
   /**
    * @swagger
@@ -102,21 +109,27 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
    *       200:
    *         description: "`{ ok, diagnosis: keys_match|matches_retired_key|no_watermark_found|too_short|detector_unreachable|not_applied|no_keys, status, matchedKeyId?, scoredTokens, pValue? }`"
    *       404: { description: No such model }
+   *       403: { description: The EU AI Act features are switched off (FEATURE_DISABLED) }
    *       409: { description: No detector URL or credential configured }
    */
-  app.post(buildServerPath(`${base}/:modelId/_self-test`), adminAuth, async (req, res) => {
-    const model = findIhubModel(req.params.modelId);
-    const result = await runSelfTest(model, { llmClient, user: req.user });
-    // The overview page (#3329) shows the last result and marks it outdated after a key change.
-    await recordSelfTest(model.id, result);
-    await logAudit({
-      req,
-      action: 'execute',
-      resource: 'watermarkDetector',
-      resourceId: model.id,
-      summary: `Watermark self-test of ${model.id}: ${result.diagnosis}`,
-      details: { diagnosis: result.diagnosis, matchedKeyId: result.matchedKeyId }
-    });
-    res.json(result);
-  });
+  app.post(
+    buildServerPath(`${base}/:modelId/_self-test`),
+    adminAuth,
+    requireEuAiActEnabled('watermark'),
+    async (req, res) => {
+      const model = findIhubModel(req.params.modelId);
+      const result = await runSelfTest(model, { llmClient, user: req.user });
+      // The overview page (#3329) shows the last result and marks it outdated after a key change.
+      await recordSelfTest(model.id, result);
+      await logAudit({
+        req,
+        action: 'execute',
+        resource: 'watermarkDetector',
+        resourceId: model.id,
+        summary: `Watermark self-test of ${model.id}: ${result.diagnosis}`,
+        details: { diagnosis: result.diagnosis, matchedKeyId: result.matchedKeyId }
+      });
+      res.json(result);
+    }
+  );
 }

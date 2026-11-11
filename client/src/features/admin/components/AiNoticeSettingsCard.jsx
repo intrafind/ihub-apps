@@ -11,7 +11,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
  * Platform side of the AI disclosure (EU AI Act Art. 50(1)): the first-turn
  * notice (master switch and text per language) and the wording of the guardrail
  * prompt added to every system prompt. Empty text uses the built-in wording; the
- * guardrail cannot be switched off.
+ * guardrail only goes off through the audited EU AI Act master switch.
  */
 function AiNoticeSettingsCard() {
   const { t } = useTranslation();
@@ -87,7 +87,7 @@ function AiNoticeSettingsCard() {
       <p className="text-gray-600 dark:text-gray-400 mb-4">
         {t(
           'admin.aiDisclosure.description',
-          'The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.'
+          'The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below. Only the EU AI Act master switch turns it off.'
         )}
       </p>
       {loadFailed && (

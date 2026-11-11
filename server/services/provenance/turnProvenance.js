@@ -11,6 +11,7 @@
  *
  * @module services/provenance/turnProvenance
  */
+import { isEuAiActEnabled } from '../euAiAct/conformity.js';
 import logger from '../../utils/logger.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildApiPath } from '../../utils/basePath.js';
@@ -71,6 +72,8 @@ export async function recordTextOutput({
   keyId,
   req
 }) {
+  // EU AI Act master switch off: no record, no object (callers are null-safe).
+  if (!isEuAiActEnabled()) return null;
   const hasText = typeof text === 'string' && normalizeText(text) !== '';
   if (!hasText) return null;
   try {

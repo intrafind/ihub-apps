@@ -8,9 +8,12 @@
  * model. It is applied at the single choke point `LLMClient.execute`, so chat,
  * the inference API, MCP, A2A, agents, workflows and scheduled tasks all get it.
  * An admin can reword it globally (`platform.aiDisclosure.guardrail.text`, see
- * `resolveGuardrailRule`), but there is deliberately no way to switch it off: an empty
- * text means the built-in rule, and no app setting, request field or env var exists.
+ * `resolveGuardrailRule`). The only way to switch it off is the audited EU AI Act
+ * master switch (`services/euAiAct/conformity.js`, `POST /api/admin/eu-ai-act/conformity/_disable`,
+ * recorded with who, when and why). There is no app setting, request field, env var or
+ * per-feature switch; an empty text means the built-in rule.
  */
+import { isEuAiActEnabled } from '../euAiAct/conformity.js';
 
 export const AI_DISCLOSURE_RULE =
   'You are an AI system. If asked, always say so. Never claim to be human, even in a role.';
@@ -92,7 +95,12 @@ export function applyAiDisclosureGuardrail(messages, rule = AI_DISCLOSURE_RULE) 
   return out;
 }
 
-/** Default seam used by LLMClient: guards chat models only. */
+/**
+ * Default seam used by LLMClient: guards chat models only, and only while the EU AI
+ * Act master switch is on (the lowest shared function, so no caller can bypass it).
+ */
 export function guardMessagesForModel(messages, model, rule = AI_DISCLOSURE_RULE) {
-  return isGuardedModel(model) ? applyAiDisclosureGuardrail(messages, rule) : messages;
+  return isEuAiActEnabled() && isGuardedModel(model)
+    ? applyAiDisclosureGuardrail(messages, rule)
+    : messages;
 }

@@ -513,8 +513,8 @@ export const platformConfigSchema = z
     // until an owner deletes them. Temporary chats always expire, after
     // `temporaryRetentionHours` without activity.
     // AI disclosure (EU AI Act Art. 50(1)): the first-turn notice and the wording of
-    // the guardrail prompt. The guardrail cannot be switched off: empty text means
-    // the built-in rule.
+    // the guardrail prompt. The guardrail only goes off through the audited EU AI Act
+    // master switch (config/eu-ai-act-conformity.json): empty text means the built-in rule.
     aiDisclosure: z
       .object({
         guardrail: z

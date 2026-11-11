@@ -6099,7 +6099,7 @@
     },
     "aiDisclosure": {
       "title": "AI notice",
-      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.",
+      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below. Only the EU AI Act master switch turns it off.",
       "enabled": "Show an AI notice before the first message",
       "text": "Notice text (empty uses the built-in text)",
       "saved": "AI notice saved",
@@ -6311,7 +6311,7 @@
       "description": "Is this installation set up for the transparency duties of Art. 50, can you operate what they require, and does it work? A green check means \"configured as designed\", not \"legally compliant\".",
       "checks": {
         "guardrail": {
-          "ok": "The AI disclosure rule is part of every system prompt and cannot be switched off."
+          "ok": "The AI disclosure rule is part of every system prompt. Only the EU AI Act master switch turns it off."
         },
         "notice": {
           "ok": "The first-message notice is on.",
