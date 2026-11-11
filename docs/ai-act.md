@@ -171,12 +171,8 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
   (text), C2PA (media), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion",
   never "not watermarked".
 
-<<<<<<< HEAD
 The other two platform settings of this feature have forms of their own on **Admin → Advanced**: the first-turn
 notice (`aiDisclosure`) and the AI-use acknowledgement (`aiAcknowledgement`).
 
-Image and audio marking is declared per model in the model editor (*Image and audio marking*).
-=======
 Image marking is declared per model in the model editor (*Image marking*, shown for image-generating models).
->>>>>>> 44c5f64cd
 
