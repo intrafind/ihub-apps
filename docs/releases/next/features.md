@@ -1,5 +1,19 @@
 # Features — Unreleased
 
+## Interactive Artifacts Can Use Chart and UI Libraries
+
+HTML artifacts — the interactive pages, dashboards and calculators the `web-artifacts` skill builds — can now
+load libraries such as Chart.js, D3, Leaflet or Tailwind from a CDN, so charts drawn with them no longer stay
+blank in the preview.
+
+- **Allowlisted CDNs only.** Scripts and stylesheets load over https from `cdnjs.cloudflare.com`,
+  `cdn.jsdelivr.net` and `unpkg.com`. Everything else stays blocked: no `fetch`, no remote images or fonts.
+- **Admins decide.** Change the list in Admin → Platform Configuration (`artifacts.scriptHosts`), for example to
+  an internal mirror; `[]` keeps the preview fully offline, as before.
+- **Light and dark.** Artifacts now follow iHub's own light/dark switch instead of the operating system's.
+- **Fewer broken artifacts.** Before you see the result, iHub checks that the page's JavaScript parses and that
+  the file was not cut off, and has the model fix it.
+
 ## A Calmer Chat Input: Chips Collapse to Icons
 
 The chips under the chat input — web search, projects and connected systems — took a lot of room, and

@@ -1156,7 +1156,7 @@ The `skills` array specifies which skill identifiers are available for an app. S
 "documentTemplate": "acme"
 ```
 
-**Interactive pages and graphics:** the system skill `web-artifacts` lets the model create a self-contained interactive HTML page or a standalone SVG. The chat's workspace pane shows it in a sandboxed preview with no network access; the corporate colours and font reach the page as the CSS variables `--brand-primary`, `--brand-accent` and `--brand-font`.
+**Interactive pages and graphics:** the system skill `web-artifacts` lets the model create a self-contained interactive HTML page or a standalone SVG. The chat's workspace pane shows it in a sandboxed preview that may load scripts and stylesheets only from the CDN hosts in `platform.artifacts.scriptHosts` and nothing else from the network (see [Artifacts → HTML previews](artifacts.md#html-previews)), in iHub's current light or dark theme; the corporate colours and font reach the page as the CSS variables `--brand-primary`, `--brand-accent` and `--brand-font`.
 
 **Dashboards from figures:** the system skill `dashboard` lets the model turn numbers from a tool run, an analysis or the user's data into a dashboard page (KPI tiles, ranked bars, line charts, tables, method and sources) in the workspace pane. The model writes a small JSON spec and the server lays the page out, so it is quick and looks the same every time. Add `dashboard` to an app's `skills` for data-analysis apps and for apps that use measuring integrations such as [Website Corpus](website-corpus.md). See [The `dashboard` skill](pdf-generation.md#the-dashboard-skill).
 

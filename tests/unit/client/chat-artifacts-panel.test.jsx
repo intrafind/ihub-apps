@@ -150,6 +150,17 @@ describe('artifact helpers', () => {
       /^<!DOCTYPE html><meta http-equiv="Content-Security-Policy"[^>]*><html>/i
     );
   });
+
+  it('opens the preview CSP to the allowed CDN hosts and passes the theme on', () => {
+    const html = withPreviewCsp('<!DOCTYPE html><html><body>Hi</body></html>', {
+      scriptHosts: ['cdn.jsdelivr.net'],
+      theme: 'dark'
+    });
+    expect(html).toMatch(/script-src 'unsafe-inline' 'unsafe-eval' https:\/\/cdn\.jsdelivr\.net;/);
+    expect(html).toMatch(/setAttribute\('data-theme','dark'\)<\/script><html>/);
+    // Without hosts the preview stays offline.
+    expect(withPreviewCsp('<p>x</p>')).not.toMatch(/https:/);
+  });
 });
 
 function setViewport(wide) {

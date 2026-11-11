@@ -3,7 +3,7 @@ name: web-artifacts
 description: Build interactive, self-contained HTML web artifacts (.html) — live dashboards, calculators, ROI/pricing simulators, interactive data explorers, clickable UI prototypes, HTML5 Canvas/generative visualizations — and standalone vector graphics (.svg) that render live in the chat's Artifacts panel. Use whenever the user asks for an interactive web app, dashboard, calculator, UI prototype, interactive visualization or standalone SVG graphic. Do not use for static print PDFs/posters (use pdf), multi-file code repositories (use files/create_zip), or quick inline chat flowcharts (use a ```mermaid code block in chat).
 metadata:
   author: IntraFind
-  version: '1.0'
+  version: '1.1'
 allowed-tools: create_web_artifact
 ---
 
@@ -25,12 +25,15 @@ You create live, interactive web artifacts and vector graphics with the `create_
 Every `.html` artifact renders inside `<iframe sandbox="allow-scripts" referrerPolicy="no-referrer" srcDoc="…">`. Follow these rules strictly:
 
 1. **One self-contained file**: put all CSS inside `<style>` and all JavaScript inside `<script>`. Never reference relative sibling files (`<script src="./app.js">` or `<link href="./styles.css">`) — `srcDoc` has no base URL and relative paths fail.
-2. **Offline only**: use vanilla HTML5, modern CSS (Grid, Flexbox, custom properties), inline SVG, and HTML5 `<canvas>`. The preview blocks every network request (no `fetch`, WebSocket, external scripts, stylesheets, fonts or remote images); only `data:` and `blob:` images and `data:` fonts load. Inline everything, with no CDNs.
+2. **Network: allowlisted CDNs only.** Scripts and stylesheets may load over `https` from the CDN hosts this installation allows — by default `cdnjs.cloudflare.com`, `cdn.jsdelivr.net` and `unpkg.com`. Everything else is blocked: no `fetch`, XHR, WebSocket, remote images or fonts, and no CSS `url()`/`@import` from the network (so no Google Fonts). Only `data:` and `blob:` images and `data:` fonts load.
+   - Reach for a library only when it earns its weight (Chart.js, D3, Leaflet, Three.js, Mermaid, KaTeX, Tailwind's Play CDN, Alpine.js). A few bars, a line or a KPI strip are better as inline SVG (see the reference).
+   - **Pin an exact version** in the URL (`https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js`), never `@latest` or a bare package name.
+   - A library still needs the viewer to reach the CDN. If `create_web_artifact` warns that a URL will not load, the host is not allowed here: inline the code instead.
 3. **Sandbox storage safety**: because the preview iframe runs without `allow-same-origin`, accessing `localStorage`, `sessionStorage`, or `document.cookie` throws a `SecurityError` unless guarded. Always keep primary state in memory and wrap any persistence helper in `try { … } catch {}`.
-4. **No dead links**: the preview has no network and opens no new tabs or windows, so a link to anything outside the file does nothing. Never use `href="#"`, external URLs, file paths, `target="_blank"` or `window.open()` unless the user explicitly asks for a link to a given address. Everything a link, button, menu item, tab, "Sources" / "Quellen" or "Details" control points to must exist **inside the same file**: give it a real in-page target — a `#id` anchor to a section that exists, or a click handler that switches a view, opens a drawer, modal or dialog and shows the content (sample sources, details, a detail page, a help text). Navigation items must switch to a view, even a short one. If something is not part of the prototype, do not render it as a link or clickable control; show it as plain text or disable it.
+4. **No dead links**: the preview cannot leave the file and opens no new tabs or windows, so a link to anything outside the file does nothing. Never use `href="#"`, external URLs, file paths, `target="_blank"` or `window.open()` unless the user explicitly asks for a link to a given address. Everything a link, button, menu item, tab, "Sources" / "Quellen" or "Details" control points to must exist **inside the same file**: give it a real in-page target — a `#id` anchor to a section that exists, or a click handler that switches a view, opens a drawer, modal or dialog and shows the content (sample sources, details, a detail page, a help text). Navigation items must switch to a view, even a short one. If something is not part of the prototype, do not render it as a link or clickable control; show it as plain text or disable it.
 5. **Complete implementation**: never leave `// TODO` or `// rest of code here` placeholders. Pre-load realistic sample data so the dashboard, calculator, or explorer is immediately useful on first render, and include controls to edit or reset the data.
 
-If `create_web_artifact` returns `warnings` (such as a relative script/link, a dead link, unguarded `localStorage`, or missing `viewBox`), fix the issue and call `create_web_artifact` again.
+If `create_web_artifact` returns `warnings` (such as a relative script/link, a URL the preview will not load, a dead link, unguarded `localStorage`, JavaScript that does not parse, a file that was cut off, or a missing `viewBox`), fix the issue and call `create_web_artifact` again. A file that was cut off is too long: write a more compact one rather than the same one again.
 
 ## Corporate brand tokens & anti-"AI slop" design
 
@@ -51,7 +54,7 @@ Use them in your stylesheet (`color: var(--brand-primary); font-family: var(--br
   - _Financial / Engineering Workbench_: dense, scannable KPI strip, interactive sliders with live delta badges, tabular numerals, clean comparison tables.
   - _Studio / Dark Canvas_ (for generative art or media tools): deep slate background (`#0b0f19`), subtle hairline borders (`rgba(255,255,255,0.08)`), luminous data series.
 - **Numeric discipline**: always set `font-variant-numeric: tabular-nums` on KPI cards, tables, counters, and slider readouts so numbers never jitter when sliders move.
-- **Light & dark mode**: define semantic surface variables (`--bg`, `--surface`, `--border`, `--text`, `--muted`) with `@media (prefers-color-scheme: dark)` support.
+- **Light & dark mode**: define semantic surface variables (`--bg`, `--surface`, `--border`, `--text`, `--muted`) on `:root`, and the dark values twice: under `:root[data-theme="dark"]`, and under `@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { … } }`. The preview sets `data-theme` to iHub's own light/dark choice, which can differ from the operating system's; the media query covers the file opened on its own. Always give `body` an explicit background.
 
 ## Standalone `.svg` rules
 

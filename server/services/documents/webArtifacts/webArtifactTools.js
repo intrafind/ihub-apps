@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import vm from 'node:vm';
+import { isAllowedScriptUrl } from '../../../../shared/artifactPreview.js';
+import { artifactPolicy } from '../../artifacts/artifactPolicy.js';
 import { optionalString, toolFailure } from '../documentToolHelpers.js';
 import { GeneratedFileError, holdGeneratedFile, safeFileName } from '../generatedFiles.js';
 import { templateBundleFor } from '../templates/applyTemplate.js';
@@ -21,12 +24,21 @@ import { DASHBOARD_PRESET, renderDashboard } from './dashboardPreset.js';
  * referrerPolicy="no-referrer" srcDoc={…} />` and `.svg` via DOMPurify.
  */
 
-const RELATIVE_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["'](?!https?:\/\/|data:)([^"']+)["']/i;
+const RELATIVE_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["'](?!(?:https?:)?\/\/|data:)([^"']+)["']/i;
 const RELATIVE_LINK_RE =
-  /<link\b[^>]*\bhref\s*=\s*["'](?!https?:\/\/|data:)([^"']+\.css[^"']*)["']/i;
-// An absolute URL the preview's CSP (no network) blocks: script, stylesheet or image.
-const EXTERNAL_RESOURCE_RE =
-  /<(?:script\b[^>]*\bsrc|link\b[^>]*\bhref|img\b[^>]*\bsrc)\s*=\s*["'](?:https?:)?\/\/[^"']+["']/i;
+  /<link\b[^>]*\bhref\s*=\s*["'](?!(?:https?:)?\/\/|data:)([^"']+\.css[^"']*)["']/i;
+// Absolute URLs of scripts and stylesheets (the preview loads them from the
+// allowlisted CDN hosts only), and of images and CSS url()/@import targets
+// (the preview never loads those).
+const EXTERNAL_SCRIPT_RE = /<script\b[^>]*\bsrc\s*=\s*["']((?:https?:)?\/\/[^"']+)["']/gi;
+const EXTERNAL_LINK_RE = /<link\b[^>]*\bhref\s*=\s*["']((?:https?:)?\/\/[^"']+)["']/gi;
+const EXTERNAL_IMAGE_RE = /<img\b[^>]*\bsrc\s*=\s*["']((?:https?:)?\/\/[^"']+)["']/gi;
+const CSS_REMOTE_RE = /(?:@import\s+(?:url\()?|\burl\()\s*["']?((?:https?:)?\/\/[^"')\s]+)/gi;
+// Inline classic scripts, for the syntax check. `src` scripts and non-JS types
+// (JSON data, templates, text/babel) are skipped; modules too, since `vm`
+// compiles classic scripts only.
+const INLINE_SCRIPT_RE = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+const JS_TYPE_RE = /^(?:text|application)\/(?:javascript|ecmascript)$/i;
 // An <a> whose target cannot work in the sandboxed preview: an empty or bare "#",
 // "javascript:", an absolute or root-relative URL, or a relative file path. Only
 // "#section" anchors that point at an element of the same document work.
@@ -100,16 +112,86 @@ function findDeadLinks(text) {
   return [...new Set(dead)];
 }
 
+/** Every capture of a global regex over a text. */
+function capturesOf(re, text) {
+  return [...text.matchAll(re)].map(match => match[1]);
+}
+
+/**
+ * Remote URLs the preview will not load: scripts and stylesheets from a host
+ * that is not allowlisted, and every remote image or CSS `url()` / `@import`.
+ */
+function blockedRemoteUrls(text, scriptHosts) {
+  const blocked = [
+    ...capturesOf(EXTERNAL_SCRIPT_RE, text).filter(url => !isAllowedScriptUrl(url, scriptHosts)),
+    ...capturesOf(EXTERNAL_LINK_RE, text).filter(url => !isAllowedScriptUrl(url, scriptHosts)),
+    ...capturesOf(EXTERNAL_IMAGE_RE, text),
+    ...capturesOf(CSS_REMOTE_RE, text).filter(url => !isAllowedScriptUrl(url, scriptHosts))
+  ];
+  return [...new Set(blocked)];
+}
+
+/** How often a pattern occurs. */
+function countOf(re, text) {
+  return (text.match(re) || []).length;
+}
+
+/**
+ * Signs the markup was cut off mid-file — typically the model ran into its
+ * output limit: a `<script>` or `<style>` that never closes, or a document
+ * that opens `<html>` and closes neither `<body>` nor `<html>`.
+ */
+function looksTruncated(text, format) {
+  if (format === 'svg') return /<svg\b/i.test(text) && !/<\/svg\s*>/i.test(text);
+  if (countOf(/<script\b/gi, text) > countOf(/<\/script\s*>/gi, text)) return true;
+  if (countOf(/<style\b/gi, text) > countOf(/<\/style\s*>/gi, text)) return true;
+  return /<html\b/i.test(text) && !/<\/body\s*>/i.test(text) && !/<\/html\s*>/i.test(text);
+}
+
+/**
+ * Syntax errors in the inline classic scripts, as short descriptions. Each
+ * script is compiled with `vm.Script`, which parses but never runs it.
+ */
+function scriptSyntaxErrors(text) {
+  const errors = [];
+  let index = 0;
+  for (const [, attributes, body] of text.matchAll(INLINE_SCRIPT_RE)) {
+    index += 1;
+    if (/\bsrc\s*=/i.test(attributes) || !body.trim()) continue;
+    const type = /\btype\s*=\s*["']?([^"'\s>]+)/i.exec(attributes)?.[1];
+    if (type && !JS_TYPE_RE.test(type)) continue;
+    const filename = `script-${index}.js`;
+    try {
+      new vm.Script(body, { filename });
+    } catch (error) {
+      if (!(error instanceof SyntaxError)) continue;
+      const line = new RegExp(`${filename}:(\\d+)`).exec(String(error.stack))?.[1];
+      errors.push(
+        `<script> #${index}${line ? `, line ${line}` : ''}: ${error.name}: ${error.message}`
+      );
+    }
+  }
+  return errors;
+}
+
 /**
  * Inspect HTML or SVG content for sandbox and self-containment pitfalls.
  *
  * @param {string} content
  * @param {'html'|'svg'} format
+ * @param {{scriptHosts?: string[]}} [options] - CDN hosts the preview loads
+ *   scripts and stylesheets from (`platform.artifacts.scriptHosts`).
  * @returns {string[]}
  */
-export function inspectWebArtifact(content, format) {
+export function inspectWebArtifact(content, format, { scriptHosts = [] } = {}) {
   const warnings = [];
   const text = String(content || '');
+  const truncated = looksTruncated(text, format);
+  if (truncated) {
+    warnings.push(
+      'The file looks cut off: it ends inside a <script> or <style> block, or before </body>/</html> (or </svg>). This usually means the output limit was reached. Write a more compact version (less sample data, less repeated markup, shorter CSS) and call create_web_artifact again with the complete file.'
+    );
+  }
   if (format === 'svg') {
     if (!/<svg\b/i.test(text)) {
       warnings.push('The SVG content does not contain an <svg> root element.');
@@ -133,10 +215,26 @@ export function inspectWebArtifact(content, format) {
       `Relative stylesheet <link href="${relLink[1]}"> will not load inside the sandboxed srcDoc preview. Inline all CSS inside <style>…</style>.`
     );
   }
-  if (EXTERNAL_RESOURCE_RE.test(text)) {
+  const blocked = blockedRemoteUrls(text, scriptHosts);
+  if (blocked.length) {
+    const shown = blocked
+      .slice(0, 3)
+      .map(url => `"${url}"`)
+      .join(', ');
+    const allowed = scriptHosts.length
+      ? `Scripts and stylesheets load only over https from ${scriptHosts.join(', ')}`
+      : 'This installation allows no external scripts or stylesheets at all';
     warnings.push(
-      'An external script, stylesheet or image URL is blocked in the sandboxed preview, which has no network access. Inline all JavaScript and CSS, and embed images as data: URIs.'
+      `The sandboxed preview will not load ${shown}. ${allowed}; images, fonts and CSS url()/@import never load from the network. Inline the code or switch to an allowed host, and embed images as data: URIs or inline SVG.`
     );
+  }
+  if (!truncated) {
+    const syntaxErrors = scriptSyntaxErrors(text);
+    if (syntaxErrors.length) {
+      warnings.push(
+        `JavaScript that does not parse, so the script never runs: ${syntaxErrors.slice(0, 3).join('; ')}. Fix the syntax and send the complete file again.`
+      );
+    }
   }
   const deadLinks = findDeadLinks(text);
   if (deadLinks.length || WINDOW_OPEN_RE.test(text)) {
@@ -230,7 +328,9 @@ export async function runCreateWebArtifact(params) {
     const format = preset
       ? 'html'
       : detectFormat(params.filename || params.name, params.format, rawContent);
-    const warnings = inspectWebArtifact(rawContent, format);
+    const warnings = inspectWebArtifact(rawContent, format, {
+      scriptHosts: artifactPolicy().scriptHosts
+    });
 
     const bundle = await templateBundleFor({
       format: 'xlsx',
