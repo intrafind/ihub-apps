@@ -36,6 +36,7 @@ const ADMIN_PAGES = [
   { label: 'Voice Input', href: '/admin/voice-input' },
   { label: 'Features', href: '/admin/features' },
   { label: 'Security', href: '/admin/security' },
+  { label: 'EU AI Act', href: '/admin/eu-ai-act' },
   { label: 'Backup & Restore', href: '/admin/backup' },
   { label: 'Updates', href: '/admin/updates' },
   { label: 'Advanced', href: '/admin/advanced' },

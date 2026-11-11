@@ -16,6 +16,7 @@ import llmClient from '../../services/loop/LLMClient.js';
 import { getActiveKeyId } from '../../services/provenance/watermark/activeKeySnapshot.js';
 import { listDetectorConfigs } from '../../services/provenance/watermark/detect.js';
 import { checkDetectorUrl } from '../../services/provenance/watermark/detectorUrlPolicy.js';
+import { recordSelfTest } from '../../services/euAiAct/selfTestStore.js';
 import { pingDetector, runSelfTest } from '../../services/provenance/watermark/selfTest.js';
 
 function findIhubModel(modelId) {
@@ -106,6 +107,8 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
   app.post(buildServerPath(`${base}/:modelId/_self-test`), adminAuth, async (req, res) => {
     const model = findIhubModel(req.params.modelId);
     const result = await runSelfTest(model, { llmClient, user: req.user });
+    // The overview page (#3329) shows the last result and marks it outdated after a key change.
+    await recordSelfTest(model.id, result);
     await logAudit({
       req,
       action: 'execute',

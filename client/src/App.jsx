@@ -39,6 +39,7 @@ const AdminLayout = lazyWithRetry(() => import('./features/admin/components/Admi
 const AdminOverview = lazyWithRetry(() => import('./features/admin/pages/AdminOverview'));
 // Lazy load admin Platform pages (dismantled from SystemPage)
 const AdminSecurityPage = lazyWithRetry(() => import('./features/admin/pages/AdminSecurityPage'));
+const AdminEuAiActPage = lazyWithRetry(() => import('./features/admin/pages/AdminEuAiActPage'));
 const AdminBackupPage = lazyWithRetry(() => import('./features/admin/pages/AdminBackupPage'));
 const AdminUpdatesPage = lazyWithRetry(() => import('./features/admin/pages/AdminUpdatesPage'));
 const AdminAdvancedPage = lazyWithRetry(() => import('./features/admin/pages/AdminAdvancedPage'));
@@ -861,6 +862,9 @@ function App() {
             )}
             {showAdminPage('system') && (
               <Route path="security" element={<LazyAdminRoute component={AdminSecurityPage} />} />
+            )}
+            {showAdminPage('system') && (
+              <Route path="eu-ai-act" element={<LazyAdminRoute component={AdminEuAiActPage} />} />
             )}
             {showAdminPage('system') && (
               <Route path="backup" element={<LazyAdminRoute component={AdminBackupPage} />} />
