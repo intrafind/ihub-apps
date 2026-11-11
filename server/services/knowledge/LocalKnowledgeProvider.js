@@ -355,12 +355,15 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     const { texts, unavailable } = await this.texts(project, ctx, { itemIds });
     let tokens = 0;
     const docs = texts.map(({ item, text, truncated, failed }) => {
-      const stats = getContentStats(text);
-      tokens += stats.tokens;
+      // A stored text was counted when it was extracted: that figure belongs to
+      // exactly this text, so it is neither hashed nor tokenized again.
+      const counted = item.storage === 'text' ? item.text?.tokens : undefined;
+      const itemTokens = Number.isFinite(counted) ? counted : getContentStats(text).tokens;
+      tokens += itemTokens;
       return {
         doc: docOf(project, item),
         text,
-        tokens: stats.tokens,
+        tokens: itemTokens,
         ...(truncated ? { truncated: true, sourceTruncated: true } : {}),
         ...(failed.length ? { sourceFailed: failed.length } : {})
       };

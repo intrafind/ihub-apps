@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import {
   estimateTokens,
   estimateTokensFor,
+  estimateTokensMemo,
   FULL_COUNT_MAX_CHARS
 } from '../../shared/tokenEstimator.js';
 
@@ -52,5 +53,18 @@ describe('server token estimate', () => {
     message.content = `${message.content} Und beantwortet Fragen zu Prozessen.`;
     assert.equal(estimateTokensFor(message, message.content), estimateTokens(message.content));
     assert.equal(estimateTokensFor(null, 'abc'), estimateTokens('abc'));
+  });
+
+  it('remembers counts by content, stays exact and keeps a bounded amount of text', () => {
+    const text = 'Durchsucht Dokumente im Unternehmen und beantwortet Fragen. '.repeat(40);
+    assert.equal(estimateTokensMemo(text), estimateTokens(text));
+    assert.equal(estimateTokensMemo(`${text}`.slice(0)), estimateTokens(text));
+    assert.equal(estimateTokensMemo('kurz'), estimateTokens('kurz'));
+    assert.equal(estimateTokensMemo(undefined), 0);
+    // Far more than the memo budget goes through without error and stays correct.
+    for (let i = 0; i < 40; i++) {
+      const big = `${i} ${'x y z '.repeat(60000)}`;
+      assert.equal(estimateTokensMemo(big), estimateTokens(big));
+    }
   });
 });

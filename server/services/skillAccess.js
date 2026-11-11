@@ -37,7 +37,7 @@
 
 import configCache from '../configCache.js';
 import { isFeatureEnabled } from '../featureRegistry.js';
-import { estimateTokens } from '../../shared/tokenEstimator.js';
+import { estimateTokensMemo } from '../../shared/tokenEstimator.js';
 import { disablesModelInvocation, getSkillContent, getSkillResource } from './skillLoader.js';
 import { getUserSkillRepository, isUserSkillId } from './skills/UserSkillRepository.js';
 import { isUserSkillsConfigured } from './skills/userSkillSettings.js';
@@ -364,14 +364,14 @@ export function buildSkillCatalog(entries, { maxTokens = DEFAULT_MAX_CATALOG_TOK
   const full = `${CATALOG_INTRO}\n${buildAvailableSkillsBlock(
     skills.map(skill => ({ name: skill.name, description: skill.description || '' }))
   )}`;
-  if (estimateTokens(full) <= maxTokens) {
+  if (estimateTokensMemo(full) <= maxTokens) {
     return { text: full, compact: false, listed: skills.length };
   }
 
   const shortened = `${CATALOG_INTRO} ${CATALOG_SHORTENED_NOTE}\n${buildAvailableSkillsBlock(
     skills.map(skill => ({ name: skill.name, description: shortenDescription(skill.description) }))
   )}`;
-  if (estimateTokens(shortened) <= maxTokens) {
+  if (estimateTokensMemo(shortened) <= maxTokens) {
     return { text: shortened, compact: true, listed: skills.length };
   }
 
@@ -382,10 +382,10 @@ export function buildSkillCatalog(entries, { maxTokens = DEFAULT_MAX_CATALOG_TOK
         ? ` ${omitted} more skills are not listed here; find_skill searches them too.`
         : ''
     }`;
-  let used = estimateTokens(`${intro(skills.length)}\n${buildAvailableSkillsBlock([])}`);
+  let used = estimateTokensMemo(`${intro(skills.length)}\n${buildAvailableSkillsBlock([])}`);
   const listed = [];
   for (const skill of skills) {
-    const cost = estimateTokens(skillEntry({ name: skill.name })) + 1;
+    const cost = estimateTokensMemo(skillEntry({ name: skill.name })) + 1;
     if (listed.length > 0 && used + cost > maxTokens) break;
     listed.push({ name: skill.name });
     used += cost;
@@ -756,7 +756,7 @@ export async function prepareActiveSkills({
   for (const entry of entries) {
     const skill = await loadUsableSkill(entry.name, { skillIds: app.skills, app, user });
     if (!skill) continue;
-    const tokens = estimateTokens(skill.body);
+    const tokens = estimateTokensMemo(skill.body);
     const full = tokens <= perSkill && used + tokens <= total;
     if (full) used += tokens;
     skills.push({ ...entry, full });

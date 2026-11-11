@@ -104,6 +104,44 @@ export function tokenizerInfo() {
   return { method: countTokensFn ? 'o200k_base' : 'heuristic' };
 }
 
+const MEMO_MIN_CHARS = 256;
+const MEMO_MAX_CHARS = 128 * 1024;
+const MEMO_BUDGET_CHARS = 2 * 1024 * 1024;
+const memo = new Map();
+let memoChars = 0;
+
+/**
+ * `estimateTokens(text)` remembered by content, for texts that are counted
+ * again and again without belonging to an object: a tool definition, a skill
+ * body or catalog, a document-list line. Hashing an equal string costs about
+ * a twentieth of counting it. Only texts of 256 characters to 128 KB are kept
+ * (shorter ones are as cheap to count; longer ones belong on their owner, see
+ * `estimateTokensFor`, or are stored with the item), and the whole memo holds
+ * at most 2 M characters, the oldest first out.
+ * @param {string} text
+ * @returns {number}
+ */
+export function estimateTokensMemo(text) {
+  if (typeof text !== 'string' || text.length < MEMO_MIN_CHARS || text.length > MEMO_MAX_CHARS) {
+    return estimateTokens(text);
+  }
+  const hit = memo.get(text);
+  if (hit !== undefined) {
+    memo.delete(text);
+    memo.set(text, hit);
+    return hit;
+  }
+  const tokens = estimateTokens(text);
+  memo.set(text, tokens);
+  memoChars += text.length;
+  for (const [oldest] of memo) {
+    if (memoChars <= MEMO_BUDGET_CHARS) break;
+    memo.delete(oldest);
+    memoChars -= oldest.length;
+  }
+  return tokens;
+}
+
 const counted = new WeakMap();
 
 /**
