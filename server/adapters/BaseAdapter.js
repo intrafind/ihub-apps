@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { isEuAiActEnabled } from '../services/euAiAct/conformity.js';
 import logger from '../utils/logger.js';
+import { planTextWatermark } from '../services/provenance/watermark/watermarkPlan.js';
+import { getActiveKeyId } from '../services/provenance/watermark/activeKeySnapshot.js';
 import { createParser } from 'eventsource-parser';
 import { getReadableStream } from '../utils/streamUtils.js';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../shared/outputTokens.js';
@@ -72,6 +75,29 @@ export class BaseAdapter {
     if (Number.isFinite(topP)) sampling.topP = topP;
     if (Number.isFinite(topK)) sampling.topK = topK;
     return sampling;
+  }
+
+  /**
+   * Add iHub's text watermark flag to a vLLM-shaped request body (#3331).
+   *
+   * Server-owned: the decision comes from the model config and the key store
+   * only, never from anything the caller sent. `watermarking` is always `true`
+   * here (vLLM runs with `enforce: true`); the plan travels on the returned
+   * request as `request.marking`, which the transport does not put on the wire.
+   *
+   * @param {Object} body - Request body, modified in place
+   * @param {Object} model - Model config
+   * @param {Object} options - Adapter options
+   * @param {Object} sampling - `resolveSampling(model)`
+   * @returns {{text: Object}|undefined} The `marking` member for the request
+   */
+  applyTextWatermark(body, model, options, sampling) {
+    // EU AI Act master switch off: no `watermarking` flag, no plan, no `applied` claim.
+    if (!isEuAiActEnabled()) return undefined;
+    const plan = planTextWatermark(model, sampling, options, getActiveKeyId());
+    if (!plan) return undefined;
+    body.watermarking = true;
+    return { text: plan };
   }
 
   /**

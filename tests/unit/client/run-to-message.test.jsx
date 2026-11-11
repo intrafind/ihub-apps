@@ -89,6 +89,26 @@ describe('projectRunToMessage — streaming content', () => {
     expect(extras.ifinderMessageId).toBeUndefined();
   });
 
+  test('run/ended carries the provenance object onto the finished message only', () => {
+    const provenance = {
+      spec: 'intrafind-provenance/1.0',
+      ai_generated: true,
+      output_id: '01JC0000000000000000000000'
+    };
+    const running = runFrom([
+      started,
+      env(2, 'step/delta', { step: 0, kind: 'text', content: 'A' })
+    ]);
+    expect(projectRunToMessage(running).extras.provenance).toBeUndefined();
+
+    const ended = runFrom([
+      started,
+      env(2, 'step/delta', { step: 0, kind: 'text', content: 'A' }),
+      env(3, 'run/ended', { status: 'completed', finishReason: 'stop', provenance })
+    ]);
+    expect(projectRunToMessage(ended).extras.provenance).toEqual(provenance);
+  });
+
   test('a stream/error appends the message (legacy error path) and stops loading', () => {
     const run = runFrom([
       started,

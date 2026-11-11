@@ -219,6 +219,21 @@ Mistral `json_schema`, vLLM):
   attempt is recorded in the run ledger as a recoverable `error` event followed by the correction
   (`message/user`, `synthetic: "nudge"`).
 
+### Provenance
+
+Every completion that has text carries a machine-readable record of where it came from (see
+[Provenance Records](provenance.md)):
+
+- **Off while the EU AI Act features are off** ([switch](ai-act.md#switching-the-features-off)): no headers and no `provenance` member (absent, not null).
+- **Headers** (set before the first byte, so they are also on a stream): `X-AI-Generated: true` and
+  `X-AI-Content-Id: <output_id>`.
+- **Body:** a top-level `provenance` member. On a stream it is attached to the chunk that carries
+  `finish_reason`; no extra chunk is sent. The official SDKs keep unknown fields and ignore unknown headers.
+- The `output_id` in the header and in the object is the same. A completion without text (tool calls only)
+  has the headers on a stream but no object, and no record.
+- `/v1/responses` carries `provenance` on the response object, also in `response.completed`.
+- Look an output up with [`POST /api/eu-ai-act/provenance/_verify`](provenance.md#looking-an-output-up).
+
 ### Responses API
 
 `POST /api/inference/v1/responses` implements a subset of the OpenAI Responses API:

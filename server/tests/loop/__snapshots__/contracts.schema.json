@@ -222,6 +222,23 @@
                   "type": "string"
                 }
               },
+              "provenance": {
+                "type": "object",
+                "properties": {
+                  "spec": {
+                    "type": "string"
+                  },
+                  "ai_generated": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "output_id": {
+                    "type": "string"
+                  }
+                },
+                "required": ["spec", "ai_generated", "output_id"],
+                "additionalProperties": {}
+              },
               "cost": {
                 "type": "number",
                 "minimum": 0
@@ -4358,6 +4375,23 @@
                   "type": "string"
                 }
               },
+              "provenance": {
+                "type": "object",
+                "properties": {
+                  "spec": {
+                    "type": "string"
+                  },
+                  "ai_generated": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "output_id": {
+                    "type": "string"
+                  }
+                },
+                "required": ["spec", "ai_generated", "output_id"],
+                "additionalProperties": {}
+              },
               "output": {},
               "cause": {
                 "type": "object",
@@ -4567,6 +4601,19 @@
                   },
                   "data": {
                     "type": "string"
+                  },
+                  "provenance": {
+                    "type": "object",
+                    "properties": {
+                      "outputId": {
+                        "type": "string"
+                      },
+                      "contentHash": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["outputId", "contentHash"],
+                    "additionalProperties": false
                   },
                   "thoughtSignature": {
                     "type": "string"

@@ -199,6 +199,17 @@ If anything in this flow misbehaves, see **Troubleshooting** below.
 
 ---
 
+### AI-use notice
+
+With the [AI-use acknowledgement](ai-act.md#ai-use-acknowledgement) on (the default), the embedded iHub asks
+each user to confirm the notice before their first message, and the server refuses messages until they did
+(`428`); the embed's OAuth token is gated like a person's and the confirmation is recorded with
+`client: nextcloud`. The dialog is modal only inside the iframe: Nextcloud's own navigation stays usable, and
+leaving the Nextcloud page unloads the frame and loses an unsent draft. The policy link opens in a new tab.
+The host iframe is transparent, so a dark embed does not flash white (rebuild the plugin to pick this up).
+
+---
+
 ## Updating the plugin
 
 When a new iHub release is out:

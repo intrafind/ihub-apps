@@ -13,6 +13,8 @@ import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapsho
 import usePinnedEmails from '../hooks/usePinnedEmails';
 import useOfficeApps from '../hooks/useOfficeApps';
 import useOfficeChats from '../hooks/useOfficeChats';
+import useAiNoticeMenuItem from '../hooks/useAiNoticeMenuItem';
+import AiAcknowledgementNote from '../../chat/components/AiAcknowledgementNote';
 import { useOfficeFavoriteApps } from '../utilities/officeFavorites';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { officeLocale } from '../utilities/officeLocale';
@@ -202,6 +204,7 @@ function OfficeStartPage({
 
   const currentItemId = mailSnapshot.ctx?.itemId ?? null;
 
+  const aiNoticeMenuItem = useAiNoticeMenuItem();
   const menuItems = [
     ...(chatHistoryEnabled && onOpenHistory
       ? [
@@ -212,6 +215,7 @@ function OfficeStartPage({
           }
         ]
       : []),
+    ...aiNoticeMenuItem,
     {
       key: 'settings',
       label: t('office.menu.settings', 'Settings'),
@@ -287,6 +291,8 @@ function OfficeStartPage({
                 />
 
                 <div className="office-start-input bg-white shrink-0 dark:bg-slate-900">
+                  {/* Shown after the user closed the AI-use dialog in the chat. */}
+                  <AiAcknowledgementNote className="pb-2 text-xs text-slate-700 dark:text-slate-200" />
                   <ChatInput
                     app={defaultApp}
                     value={draft}

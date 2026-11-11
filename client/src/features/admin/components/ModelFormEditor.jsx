@@ -25,6 +25,7 @@ import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../../../../shared/outputTokens.js
 import { isCustomLlmProvider, providerEnvKeyName } from '../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../utils/modelImport';
 import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../../../../shared/modelCapabilities.js';
+import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 
 /** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
 const TOOL_SUPPORT_LABELS = {
@@ -413,6 +414,63 @@ function ModelFormEditor({
       return;
     }
     onChange({ ...data, sampling: next });
+  };
+
+  // Output marking (EU AI Act Art. 50(2)). `ihub` (iHub's own text watermark) is
+  // offered for vLLM models only (`local`, or `openai` pointed at vLLM); the
+  // server rejects it for any other provider. Empty optional fields are dropped
+  // because the schema is strict about their shape.
+  const isVllmProvider = data.provider === 'local' || data.provider === 'openai';
+  const handleMarkingChange = (key, value) => {
+    const current = data.contentMarking?.text || { by: 'none' };
+    let text = key === 'by' ? { by: value } : { ...current, [key]: value };
+    if (key === 'by' && value === 'provider') {
+      text = { ...current, by: 'provider' };
+    }
+    if (key === 'by' && value === 'ihub') {
+      text = { ...current, by: 'ihub', scheme: 'vllm-gumbel' };
+      delete text.statementRef;
+    }
+    if (text.by === 'ihub') {
+      delete text.keyId;
+    } else if (text.by !== 'provider') {
+      text = { by: text.by };
+    } else {
+      for (const field of ['detectorUrl', 'detectorCredentialRef', 'tokenizer', 'contextWidth']) {
+        delete text[field];
+      }
+    }
+    for (const optional of [
+      'scheme',
+      'statementRef',
+      'detectorUrl',
+      'detectorCredentialRef',
+      'tokenizer'
+    ]) {
+      if (text[optional] === '') delete text[optional];
+    }
+    if (text.contextWidth === '' || Number.isNaN(text.contextWidth)) delete text.contextWidth;
+    onChange({ ...data, contentMarking: { ...data.contentMarking, text } });
+  };
+
+  // Image marking (#3328): what the provider embeds in generated images, as the
+  // operator declares it. iHub adds no image mark, so only `none` and `provider`
+  // exist. `none` drops the member (the default); empty optional fields are
+  // dropped because the schema is strict about their shape.
+  const handleImageMarkingChange = (key, value) => {
+    const { image: current = { by: 'none' }, ...others } = data.contentMarking || {};
+    let image = key === 'by' ? { ...current, by: value } : { ...current, [key]: value };
+    if (image.by !== 'provider') image = { by: 'none' };
+    for (const optional of ['scheme', 'statementRef']) {
+      if (image[optional] === '') delete image[optional];
+    }
+    const contentMarking = image.by === 'none' ? others : { ...others, image };
+    if (Object.keys(contentMarking).length === 0) {
+      const { contentMarking: _dropped, ...rest } = data;
+      onChange(rest);
+      return;
+    }
+    onChange({ ...data, contentMarking });
   };
 
   const handleInputChange = e => {
@@ -1392,6 +1450,245 @@ function ModelFormEditor({
                             bounds={bounds}
                           />
                         ))}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+
+                {isChat && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.marking', 'Output marking')}
+                      </legend>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.marking',
+                          'Whether this model marks the text it generates as AI generated. Choose "Provider marks the output" only when the provider confirmed that in writing; iHub cannot check it. While the EU AI Act features are on, every output still gets a provenance record, whatever you choose here.'
+                        )}
+                      </p>
+                      <EuAiActStateNote
+                        hideWhenOn
+                        className="mt-3"
+                        offText={t(
+                          'admin.euAiAct.master.markingOff',
+                          'Marking is switched off platform-wide. This setting is saved and applies again when you switch the features on.'
+                        )}
+                      />
+                      <div className="mt-4 grid grid-cols-6 gap-6">
+                        <div className="col-span-6 sm:col-span-2">
+                          <label
+                            htmlFor="contentMarking.text.by"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.markingBy', 'Marking')}
+                          </label>
+                          <select
+                            id="contentMarking.text.by"
+                            value={data.contentMarking?.text?.by || 'none'}
+                            onChange={e => handleMarkingChange('by', e.target.value)}
+                            className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <option value="none">
+                              {t('admin.models.marking.optionNone', 'Not marked')}
+                            </option>
+                            <option value="provider">
+                              {t(
+                                'admin.models.marking.optionProvider',
+                                'Provider marks the output'
+                              )}
+                            </option>
+                            {(isVllmProvider || data.contentMarking?.text?.by === 'ihub') && (
+                              <option value="ihub">
+                                {t('admin.models.marking.optionIhub', 'iHub watermark (vLLM)')}
+                              </option>
+                            )}
+                          </select>
+                        </div>
+                        {data.contentMarking?.text?.by === 'ihub' && (
+                          <>
+                            {[
+                              ['detectorUrl', 'markingDetectorUrl', 'Detector URL', 'text', 500],
+                              [
+                                'detectorCredentialRef',
+                                'markingDetectorCredentialRef',
+                                'Detector credential (id)',
+                                'text',
+                                100
+                              ],
+                              ['tokenizer', 'markingTokenizer', 'Tokenizer', 'text', 300],
+                              ['contextWidth', 'markingContextWidth', 'Context width', 'number']
+                            ].map(([field, labelKey, fallback, type, maxLength]) => (
+                              <div key={field} className="col-span-6 sm:col-span-2">
+                                <label
+                                  htmlFor={`contentMarking.text.${field}`}
+                                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                                >
+                                  {t(`admin.models.fields.${labelKey}`, fallback)}
+                                </label>
+                                <input
+                                  id={`contentMarking.text.${field}`}
+                                  type={type}
+                                  maxLength={maxLength}
+                                  min={type === 'number' ? 1 : undefined}
+                                  max={type === 'number' ? 16 : undefined}
+                                  value={data.contentMarking?.text?.[field] ?? ''}
+                                  onChange={e =>
+                                    handleMarkingChange(
+                                      field,
+                                      type === 'number' && e.target.value !== ''
+                                        ? Number(e.target.value)
+                                        : e.target.value
+                                    )
+                                  }
+                                  className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                                />
+                              </div>
+                            ))}
+                            <p className="col-span-6 text-xs text-gray-500 dark:text-gray-400">
+                              {t(
+                                'admin.models.hints.markingIhub',
+                                'iHub asks vLLM to watermark every answer with the active key and recognises it again through the detector. The detector settings must equal the vLLM server settings. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied.'
+                              )}
+                            </p>
+                          </>
+                        )}
+                        {data.contentMarking?.text?.by === 'provider' && (
+                          <>
+                            <div className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor="contentMarking.text.scheme"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t('admin.models.fields.markingScheme', 'Scheme')}
+                              </label>
+                              <input
+                                id="contentMarking.text.scheme"
+                                type="text"
+                                maxLength={64}
+                                value={data.contentMarking?.text?.scheme || ''}
+                                onChange={e => handleMarkingChange('scheme', e.target.value)}
+                                placeholder="synthid"
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                            </div>
+                            <div className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor="contentMarking.text.statementRef"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t(
+                                  'admin.models.fields.markingStatementRef',
+                                  'Statement reference'
+                                )}
+                              </label>
+                              <input
+                                id="contentMarking.text.statementRef"
+                                type="text"
+                                maxLength={500}
+                                value={data.contentMarking?.text?.statementRef || ''}
+                                onChange={e => handleMarkingChange('statementRef', e.target.value)}
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {t(
+                                  'admin.models.hints.markingStatementRef',
+                                  "A document name or URL of the provider's written statement. It is only kept as a reference, never opened."
+                                )}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+
+                {isChat && data.supportsImageGeneration && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.imageMarking', 'Image marking')}
+                      </legend>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.imageMarking',
+                          'What the provider embeds in the images this model generates (for example SynthID, an invisible watermark, or a C2PA manifest). iHub adds no mark of its own and never re-encodes a generated image, so the provider\'s mark stays intact. Choose "Provider marks the output" only when the provider confirmed that in writing; iHub cannot detect it and records it as declared, never as detected.'
+                        )}
+                      </p>
+                      <div className="mt-4 grid grid-cols-6 gap-6">
+                        <div className="col-span-6 sm:col-span-2">
+                          <label
+                            htmlFor="contentMarking.image.by"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.markingBy', 'Marking')}
+                          </label>
+                          <select
+                            id="contentMarking.image.by"
+                            value={data.contentMarking?.image?.by || 'none'}
+                            onChange={e => handleImageMarkingChange('by', e.target.value)}
+                            className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <option value="none">
+                              {t('admin.models.marking.optionNone', 'Not marked')}
+                            </option>
+                            <option value="provider">
+                              {t(
+                                'admin.models.marking.optionProvider',
+                                'Provider marks the output'
+                              )}
+                            </option>
+                          </select>
+                        </div>
+                        {data.contentMarking?.image?.by === 'provider' && (
+                          <>
+                            <div className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor="contentMarking.image.scheme"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t('admin.models.fields.markingScheme', 'Scheme')}
+                              </label>
+                              <input
+                                id="contentMarking.image.scheme"
+                                type="text"
+                                maxLength={100}
+                                value={data.contentMarking?.image?.scheme || ''}
+                                onChange={e => handleImageMarkingChange('scheme', e.target.value)}
+                                placeholder="synthid"
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                            </div>
+                            <div className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor="contentMarking.image.statementRef"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t(
+                                  'admin.models.fields.markingStatementRef',
+                                  'Statement reference'
+                                )}
+                              </label>
+                              <input
+                                id="contentMarking.image.statementRef"
+                                type="text"
+                                maxLength={500}
+                                value={data.contentMarking?.image?.statementRef || ''}
+                                onChange={e =>
+                                  handleImageMarkingChange('statementRef', e.target.value)
+                                }
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {t(
+                                  'admin.models.hints.markingStatementRef',
+                                  "A document name or URL of the provider's written statement. It is only kept as a reference, never opened."
+                                )}
+                              </p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </fieldset>
                   </div>

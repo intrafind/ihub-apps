@@ -532,6 +532,12 @@ export const resizeImageCanvas = (img, maxDimension, quality = 0.8) => {
   return { width, height, dataUrl };
 };
 
+/** Image types sent as they are when no resize is needed (the types the server accepts). */
+const PRESERVED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+
+/** Above this a picture is still re-encoded: provider image limits are about 5 MB. */
+const PRESERVE_ORIGINAL_MAX_BYTES = 4 * 1024 * 1024;
+
 /**
  * Process an image (or TIFF) file into the uploader's preview/data shape.
  * Handles multipage TIFF (optionally returning one result per page via
@@ -542,6 +548,9 @@ export const resizeImageCanvas = (img, maxDimension, quality = 0.8) => {
  * @param {boolean} [options.resize] - Whether to resize images
  * @param {boolean} [options.allowMultiple] - Return one result per TIFF page
  * @param {number} [options.quality] - JPEG re-encode quality (0-1)
+ * @param {boolean} [options.preserveOriginal=true] - Keep the original bytes (and their
+ *   C2PA/XMP provider marks) of a picture that needs no resize; false always re-encodes
+ * @param {number} [options.preserveOriginalMaxBytes] - Larger files are still re-encoded
  * @param {Object} [progressOptions] - What the uploader hands its processors
  * @param {AbortSignal} [progressOptions.signal] - Stops a TIFF between its pages (a plain image is
  *   only stopped while it is read), rejecting with the abort error
@@ -550,7 +559,14 @@ export const resizeImageCanvas = (img, maxDimension, quality = 0.8) => {
  * @returns {Promise<Object>} `{ preview, data }` or `{ multipleResults }`
  */
 export const processImageFile = async (file, options = {}, progressOptions = {}) => {
-  const { maxDimension = 1024, resize = true, allowMultiple = false, quality = 0.8 } = options;
+  const {
+    maxDimension = 1024,
+    resize = true,
+    allowMultiple = false,
+    quality = 0.8,
+    preserveOriginal = true,
+    preserveOriginalMaxBytes = PRESERVE_ORIGINAL_MAX_BYTES
+  } = options;
   const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
 
   if (isTiff) {
@@ -638,7 +654,19 @@ export const processImageFile = async (file, options = {}, progressOptions = {})
     img.onload = () => {
       const previewUrl = URL.createObjectURL(file);
 
-      if (!resize) {
+      // EU AI Act Art. 50(2), #3328: the canvas re-encode below drops C2PA / XMP
+      // and part of a SynthID signal, so a picture that needs no resize (and is
+      // not large) goes out as the user's own bytes. `preserveOriginal: false`
+      // restores the old always-recompress behavior.
+      const keepsOriginal =
+        resize &&
+        preserveOriginal &&
+        PRESERVED_IMAGE_TYPES.includes(file.type) &&
+        file.size <= preserveOriginalMaxBytes &&
+        (img.naturalWidth || img.width) <= maxDimension &&
+        (img.naturalHeight || img.height) <= maxDimension;
+
+      if (!resize || keepsOriginal) {
         return resolve({
           preview: { type: 'image', url: previewUrl },
           data: {

@@ -81,6 +81,7 @@ import { scheduleChatTitle } from './chatTitles.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
 import * as defaultTelemetry from './chatTelemetry.js';
 import modelDiscoveryService from '../ModelDiscoveryService.js';
+import { recordTextOutput } from '../provenance/turnProvenance.js';
 
 const COMPONENT = 'ChatService';
 
@@ -374,7 +375,10 @@ class ChatService {
     }
   }
 
-  _endLedgerRun(runId, { status, finishReason, usage, error, knowledgeSources, cause, startedAt }) {
+  _endLedgerRun(
+    runId,
+    { status, finishReason, usage, error, knowledgeSources, cause, provenance, startedAt }
+  ) {
     try {
       this.runLog.endRun(runId, {
         status,
@@ -383,6 +387,7 @@ class ChatService {
         // What `run/ended` reported, so a replay of the ledger badges the
         // answer the same way the live stream did.
         ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
+        ...(provenance ? { provenance } : {}),
         // Why an aborted turn was stopped (`services/chat/abortCause.js`).
         ...(cause ? { cause } : {}),
         ...ledgerError(error),
@@ -490,7 +495,8 @@ class ChatService {
     canApproveTools = !headless,
     trigger = null,
     maxWallClockMs = null,
-    clientTimezone = null
+    clientTimezone = null,
+    outputId = undefined
   }) {
     const {
       app,
@@ -973,6 +979,7 @@ class ChatService {
       }
       outcome = await this._finishTurn({
         result,
+        outputId,
         runId,
         chatId,
         streaming,
@@ -1021,6 +1028,7 @@ class ChatService {
         usage: outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
+        provenance: outcome.provenance,
         cause: outcome.abortCause,
         startedAt
       });
@@ -1162,6 +1170,7 @@ class ChatService {
    */
   async _finishTurn({
     result,
+    outputId,
     runId,
     chatId,
     streaming,
@@ -1231,6 +1240,24 @@ class ChatService {
         ...(context ? { context } : {}),
         ...data
       });
+    // The provenance object of the answer (EU AI Act Art. 50(2)): hashed from
+    // the text the caller receives, so it runs after structured-output
+    // validation and before citation markers. A store failure never fails the
+    // turn. Set on the summary so every terminal branch below carries it onto
+    // the stored message, and on `run/ended` so a ledger replay keeps it.
+    const attachProvenance = async () => {
+      const provenance = await recordTextOutput({
+        outputId,
+        text: summary.content,
+        finalText: result.answerText,
+        model: { id: model?.id },
+        modelConfig: model,
+        marking: result.marking?.text
+      });
+      if (provenance) summary.provenance = provenance;
+      return provenance;
+    };
+    const provenanceOf = () => (summary.provenance ? { provenance: summary.provenance } : {});
     // Whether the turn wrote any answer — text or a picture — the user sees.
     const producedOutput = channel
       ? channel.state.answerOutput
@@ -1251,11 +1278,14 @@ class ChatService {
         : undefined;
       // Who stopped it: the reason the turn's controller was aborted with.
       const cause = causeOfSignal(signal);
+      // What was generated and shown is recorded; no text, no record.
+      await attachProvenance();
       endRun({
         status: 'aborted',
         finishReason: 'connection_closed',
         cause,
-        ...(knowledgeSources ? { knowledgeSources } : {})
+        ...(knowledgeSources ? { knowledgeSources } : {}),
+        ...provenanceOf()
       });
       return {
         ...summary,
@@ -1431,11 +1461,15 @@ class ChatService {
       const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources, {
         byModel: false
       });
+      // A passthrough answer is tool output, but the user sees it as the AI
+      // app's answer, so it is recorded with the turn's model.
+      await attachProvenance();
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
         ...(toolName ? { toolName: String(toolName) } : {}),
-        knowledgeSources
+        knowledgeSources,
+        ...provenanceOf()
       });
       return {
         ...summary,
@@ -1497,7 +1531,13 @@ class ChatService {
 
     const finishReason = result.finishReason || 'stop';
     const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources);
-    endRun({ status: result.status || 'completed', finishReason, knowledgeSources });
+    await attachProvenance();
+    endRun({
+      status: result.status || 'completed',
+      finishReason,
+      knowledgeSources,
+      ...provenanceOf()
+    });
     await this.logInteraction(
       'chat_response',
       buildLogData(streaming, {
@@ -1737,16 +1777,27 @@ class ChatService {
           toolCalls: collected.toolCalls
         };
       }
+      // One place for MCP, A2A and the app-as-tool gateway: the provenance of
+      // the answer this invocation returns (null for an answer without text).
+      const provenance = await recordTextOutput({
+        text: result.content || '',
+        finalText: result.answerText,
+        model: { id: model.id },
+        modelConfig: model,
+        marking: result.marking?.text
+      });
       this._endLedgerRun(runId, {
         status: result.status,
         finishReason: result.finishReason,
         usage: result.usage,
+        provenance,
         startedAt
       });
       return {
         status: 'ok',
         runId,
         finalMessage: { role: 'assistant', content: result.content || '' },
+        ...(provenance ? { provenance } : {}),
         toolCalls: collected.toolCalls,
         // What the app found, stored as its source set (no supports: those
         // place markers in the app's own answer text).

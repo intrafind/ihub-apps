@@ -13,7 +13,8 @@ export const RATE_LIMITERS = [
   'authApi',
   'oauthApi',
   'oauthTokenApi',
-  'inferenceApi'
+  'inferenceApi',
+  'provenanceVerifyApi'
 ];
 
 const COUNT_MODES = ['all', 'failed', 'successful'];

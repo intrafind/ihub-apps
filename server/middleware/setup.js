@@ -497,6 +497,8 @@ export function setupMiddleware(app, platformConfig = {}) {
   app.use(buildApiPath('/magic-prompt'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/shortlinks'), rateLimiters.publicApiLimiter);
   app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
+  // Read before every first send and when a pane regains focus (Outlook, extension).
+  app.use(buildApiPath('/eu-ai-act'), rateLimiters.publicApiLimiter);
 
   // Auth API rate limiters. Two layers, deliberately:
   //   1. the public limiter bounds the whole namespace generously, and

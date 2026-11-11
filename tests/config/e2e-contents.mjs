@@ -47,6 +47,10 @@ export async function prepareE2eContents({ root, contentsDir, llmPort }) {
   ]) {
     platform.rateLimit[key] = { ...platform.rateLimit[key], limit: RAISED_LIMIT };
   }
+  // The AI-use acknowledgement (#3326) is on by default and would block every chat
+  // turn of the other specs with a dialog / 428. Only ai-acknowledgement.spec.js
+  // turns it on, through the admin platform API.
+  platform.aiAcknowledgement = { ...platform.aiAcknowledgement, enabled: false };
   fs.writeFileSync(platformPath, `${JSON.stringify(platform, null, 2)}\n`);
 
   // No remote marketplace: the catalog the page lists must not depend on the

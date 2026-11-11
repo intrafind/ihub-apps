@@ -91,6 +91,21 @@ are remembered in `localStorage` until they are passed again with another value 
 [UI Configuration](ui.md#navigation-sidebar)). `mode` is new and is stored like a click on the
 dark-mode toggle (`ih-dark-mode`).
 
+## AI-use acknowledgement
+
+The [AI-use acknowledgement](ai-act.md#ai-use-acknowledgement) dialog appears in embed mode as everywhere
+else (not while the [EU AI Act features are switched off](ai-act.md#switching-the-features-off)). Signed-in users confirm once for the account, in any client. Two limits to know:
+
+- **Anonymous guests in a frame of another site.** A guest's confirmation is a cookie
+  (`SameSite=Lax`). A browser that blocks third-party cookies drops it in a cross-site frame, so the
+  confirmation does not stick. After **Confirm** the dialog then says so and offers **Open iHub in the
+  browser**, where the confirmation works. Authenticated embeds do not have this limit.
+- **Evidence quality depends on the host.** The confirmation is bound to the user (or guest), not to the frame,
+  but the frame is where the user reads the text. Pin `frame-ancestors` to the hosts you trust (see below)
+  so the dialog cannot be shown inside an untrusted page.
+
+---
+
 ## Notes for hosts
 
 - Embed mode only controls what iHub renders and stores. Whether a browser lets your site frame

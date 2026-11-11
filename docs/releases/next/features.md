@@ -1,5 +1,42 @@
 # Features — Unreleased
 
+## A Calmer Chat Input: Chips Collapse to Icons
+
+The chips under the chat input — web search, projects and connected systems — took a lot of room, and
+with several switched on they ran over each other and the model selector. They now show an icon only.
+
+- **Labels on hover.** The name of a chip (and the × to remove it) appears when you point at it or tab
+  to it; a tooltip and the screen-reader name stay the same.
+- **No more overlap.** When more chips are active than fit, the rest fold into a **+N** chip; point at
+  it to see their names. The switches themselves are unchanged in the **+** menu.
+- **On touch screens** there is no hover: the icons stay, a tap on web search turns it off, and a project
+  is removed in the project picker.
+  
+## Generated Images Keep the Provider's Marks, and Can Be Checked
+
+AI Act Art. 50(2) asks that generated images are marked and can be checked. The providers already mark their
+output (Gemini images carry SynthID; some models also embed a C2PA manifest). iHub now makes sure it never
+removes that mark, records what the provider claims, and lets anyone check a file.
+
+- **Bytes in, bytes out.** A generated picture reaches the chat, the stored artifact, a share link, the ZIP and
+  the download exactly as the provider sent it. A test fails if an image or audio library is ever added to
+  the server's request path.
+- **One record per generated image**, with the hash of the raw bytes, the model and what the provider marking
+  looks like (C2PA present, valid, issuer, digital source type; what you declared). Pictures too large for
+  the artifact store are recorded too. The record never holds the picture.
+- **Check a file.** `POST /api/eu-ai-act/provenance/_verify` now also takes an image or audio file (`multipart/form-data`,
+  one `file` field, up to 50 MiB) and answers whether this installation generated it, plus the file's C2PA
+  manifest. A file generated elsewhere still gets its manifest read. Results say "found" or "not found" and
+  "trust not evaluated"; a signature is never called authentic, and a missing record is not proof of origin.
+- **Declare what the provider embeds.** In **Admin → Models**, an image-generating model has an *Image marking*
+  section: *Provider marks the output*, a scheme such as `synthid` and a reference to the provider's written
+  statement (`contentMarking.image`). Nothing is preset: SynthID is only ever "declared", because it cannot be
+  detected.
+- **Settings.** `provenance.media.maxVerifyBytes` and `readC2pa` in `platform.json` (migration V244).
+
+See [Provenance Records → Images](../../provenance.md#images-provider-marks-3328) and
+[Models → Output Marking](../../models.md#output-marking-contentmarking).
+
 ## Uploaded Presentations Move Into the Company Design
 
 A user uploads a PowerPoint deck made elsewhere and asks for it in the company design. The `pptx`
@@ -1624,3 +1661,170 @@ for it once the results are in.
 
 See [Document and File Generation → The `dashboard` skill](../../pdf-generation.md#the-dashboard-skill)
 and [Apps → Skill Settings](../../apps.md#skill-settings).
+
+## Notice That You Are Chatting With an AI
+
+The empty chat now shows a short note above the message box: *You are chatting with an AI system, not a
+person. Answers can be wrong, so please check important information.* It is on by default, so installations
+see it after the upgrade.
+
+- **Passive and not stored.** It is not a message: it is not sent to the model, not saved with the chat and not
+  shown when a chat with messages is reopened. It disappears with the first message.
+- **Your wording.** Set the text per language, or switch the notice off for all apps, under
+  **Admin → Advanced → AI notice** (`aiDisclosure.firstTurnNotice` in `platform.json`). An app can use its own
+  text or no notice in the **AI notice** section of the app editor. Links in Markdown are allowed.
+- **Where.** The app chat, also above a start form. Apps that start by themselves, the Office add-in panel and
+  `iframe`/`redirect` apps do not show it.
+
+See [EU AI Act](../../ai-act.md#first-turn-notice).
+
+## Assistants Always Say They Are an AI
+
+Every call to a text model now carries the rule "You are an AI system. If asked, always say so. Never claim to
+be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
+A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
+`system` message cannot remove it, and there is no app setting to switch it off (only the audited EU AI Act master switch, below). Admins can reword the rule for the
+whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
+
+Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
+still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
+
+See [EU AI Act](../../ai-act.md#guardrail-prompt).
+
+## Users Confirm the Use of AI Before Their First Message
+
+Before the first chat message a dialog asks the user to confirm a short AI-use statement, with an optional link
+to your AI policy. The confirmation is stored with the user (version, time, SHA-256 of the exact text and its
+language) and in the audit log, so you can answer "who confirmed which version, and what did it say?".
+
+- **Versioned.** Editing the text asks nobody again. **Request again** raises the required version and everyone is
+  asked at their next message. Anonymous visitors confirm once per browser (a signed cookie plus an audit entry).
+- **Enforced by the server.** Without a valid confirmation, sending a chat message, starting a workflow or its
+  chat step, and starting an agent run answer `428 AI_ACKNOWLEDGEMENT_REQUIRED`. Other OAuth clients, API keys,
+  MCP, A2A and the inference API are not asked. With enforcement off the dialog only asks.
+- **In the Outlook add-in, the browser extension and the Nextcloud embed too.** The same dialog opens in the
+  pane or side panel before the first message, in the pane's look and language. A declined dialog keeps the
+  draft and the open email or page; the menu has an **AI-use notice** entry to read it again, and the policy
+  opens through the host (or its address is shown to copy). One confirmation counts in every client, and the
+  record says which one it came from (`client: office | extension | nextcloud`).
+- **Admin.** **Admin → Advanced → AI acknowledgement** holds the switches, the text per language and the policy
+  link. **Admin → Users** gets an **AI acknowledgement** column and filter, a per-user **Remove AI
+  acknowledgement** action and an **AI acknowledgements** menu: **Export CSV**, **Request again**, **Remove all**.
+  (`aiAcknowledgement` in `platform.json`; migration V242 adds the defaults.)
+
+See [EU AI Act](../../ai-act.md#ai-use-acknowledgement).
+
+
+## AI Outputs Carry a Provenance Object and Leave a Record
+
+Every AI answer now says where it came from, in a form a program can read, and iHub keeps a small record so
+"did this exact text come from us?" can be answered later. This supports the marking duty of Art. 50(2) of the EU
+AI Act.
+
+- **The object.** `provenance` has the model, the installation, a time, an output ID and a SHA-256 of the text. It
+  is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
+  `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
+  results as `metadata.provenance`.
+- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model, time, marking and content hash, with a **Copy hash** action.
+- **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
+  default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
+- **Look it up.** `POST /api/eu-ai-act/provenance/_verify` takes a text or a hash and answers "Found" with the record or
+  "Not found". Not found is not proof of human authorship. It needs a signed-in caller unless
+  `provenance.verify.access` is `public`, and has its own rate limit (**Admin → Security**).
+- **Per model.** **Admin → Models** shows an *Output marking* column ("Not marked" is only a hint) and an *Output
+  marking* section: choose "Provider marks the output" only with the provider's written statement.
+- **Upgrade.** Migration V243 writes the defaults. Workflow runs and the Slack and Teams integrations get no
+  record yet; scheduled tasks and apps called by tools do.
+
+See [Provenance Records](../../provenance.md) and [EU AI Act](../../ai-act.md#provenance-records).
+
+## Text Watermarking for Self-Hosted vLLM Models, With Detection
+
+For vLLM models iHub can now watermark the text it generates and recognise it again, which supports the
+marking and detection duty of Art. 50(2) of the EU AI Act (due 2026-12-02).
+
+- **Marked on the server.** Set **Admin → Models → Output marking** to *iHub watermark (vLLM)* (models on the
+  `local` provider, or `openai` pointed at vLLM). iHub asks vLLM to watermark every answer; a caller cannot
+  switch it off. Greedy requests (temperature 0) and structured output cannot be marked and are recorded as *not
+  applied*, with the reason.
+- **Keys iHub holds.** One active key at a time, stored encrypted; rotating makes the old key *retired*
+  (still used to recognise older text). Keys are created, activated, revealed and deleted through
+  `/api/admin/eu-ai-act/watermark-keys`; every change and every reveal is in the audit log, and a reveal is refused when the
+  audit log is not available. After a rotation restart vLLM with the new `--watermark-config`, then run the
+  self-test.
+- **Detection.** `POST /api/eu-ai-act/provenance/_verify` also answers `watermark` for a text with no record: detected (with
+  the key it was made with), not detected, or too short to tell. This needs a detector service (the contract is
+  in the guide; iHub ships a mock for tests), reached over HTTPS or an internal network with a bearer
+  credential, and honours the SSL whitelist and the proxy. Not detected is not proof of human authorship.
+- **Checks.** `POST /api/admin/eu-ai-act/watermark-detectors/{modelId}/_test` and `/_self-test` show whether iHub and
+  vLLM use the same key.
+- **Also fixed.** The audit log now redacts a request field named `key`.
+
+See [Text Watermarking](../../ai-act-text-watermarking.md).
+
+## EU AI Act Page: Configuration Check, Watermark Keys, Settings and Verification in One Place
+
+Admins find everything for the Art. 50 transparency duties on **Admin → EU AI Act** instead of in
+config files.
+
+- **Configuration check.** A traffic-light list (OK, Attention, Failing; always icon plus word)
+  covers the AI notice, the acknowledgement, provenance records and every model's marking. A model
+  marked "iHub watermark" is Failing when it has no active key, an unreachable detector or a failed
+  self-test. Each row links to where it is fixed. Green means "configured as designed", not
+  "legally compliant".
+- **Acknowledgements.** Counts (acknowledged, pending, total) and the Users page actions: request
+  again, remove all, CSV export.
+- **Watermark keys.** List, generate, add and delete retired keys; reveal a key on purpose
+  (audit-logged, hidden again after 60 seconds, never kept in the page), and test the connection
+  or run the self-test per model. **Make active** on a retired key rolls back to it; the
+  confirmation says that the current key is retired, that vLLM's `--watermark-config` must follow
+  and that self-test results turn outdated until then.
+- **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who may
+  check an output (signed-in users or anyone), the size limit of checked files (in MiB), C2PA reading and the text detector's false-positive limit, shortest judged text and
+  time limit are a form with defaults and units. Values are checked in the browser and on the
+  server against the same bounds. Lowering the retention or opening the check to the public asks
+  for a confirmation first. Changes apply at once, no restart, and are written to the audit log.
+- **Verification.** Paste a text or upload an image or audio file and see, per technique, whether
+  it was found, which watermark key matched, and whether C2PA content credentials are present. A
+  negative result never claims the content is human-made.
+- **Model editor.** Image-generating models have an *Image marking* section to declare what the
+  provider embeds.
+- `GET /api/admin/eu-ai-act/status` returns the check (admin only, never a key or token).
+
+See [EU AI Act](../../ai-act.md#admin-page).
+
+## EU AI Act Master Switch With a Recorded Reason, and the Acknowledgement APIs Under `eu-ai-act`
+
+Admins who do not need the Art. 50 measures can turn all EU AI Act features off from **Admin → EU AI Act**. The
+switch is deliberate and attributable: switching off needs a written reason (20-1000 characters) and a
+confirmation that the legal duty stays with the organisation, and the admin's name, the time and the reason are
+stored on the server and in the audit log.
+
+- **What stops.** The AI rule in prompts, the first-turn notice, the acknowledgement dialog and its enforcement,
+  provenance records and the `provenance` member and `X-AI-*` headers, text watermarking requests, image
+  marking, verification and the configuration check. Nothing shows an error; integrators see `euAiAct.enabled`
+  in `GET /api/configs/platform`.
+- **What stays.** Acknowledgements, provenance records, watermark keys, all settings and texts, and a history
+  of every switch. While off, removing or resetting acknowledgements is disabled; the CSV export stays.
+- **Switching on again.** Valid acknowledgements stay valid; only users without one are asked at their next
+  message.
+- **Only admins.** An interactive admin session; API keys, OAuth tokens and agents are refused.
+- **vLLM.** A vLLM server started with `"enforce": true` keeps watermarking until it is restarted without that
+  option.
+- **API paths.** The acknowledgement APIs now live under `eu-ai-act`: `GET/POST /api/eu-ai-act/acknowledgements/me`,
+  `/api/admin/eu-ai-act/acknowledgements/...` and `DELETE /api/admin/eu-ai-act/users/{userId}/acknowledgements`.
+  They replace `GET /api/ai-acknowledgements/me`, `POST /api/ai-acknowledgements/me`,
+  `POST /api/admin/ai-acknowledgements/_request-again`, `GET /api/admin/ai-acknowledgements/_export`,
+  `DELETE /api/admin/ai-acknowledgements` and `DELETE /api/admin/auth/users/{userId}/ai-acknowledgements`,
+  which never shipped in a release.
+- **Provenance and watermark APIs move too.** `POST /api/eu-ai-act/provenance/_verify`,
+  `/api/admin/eu-ai-act/watermark-keys` and `/api/admin/eu-ai-act/watermark-detectors` replace
+  `POST /api/provenance/_verify`, `/api/admin/watermark-keys` and `/api/admin/watermark-detectors`, which
+  never shipped either.
+- **No look-up URL in the provenance object.** The `verify` member is gone from the `provenance` object and
+  from the `_verify` answer, because the address of an installation can change. Clients build the URL from
+  the public address of iHub plus `/api/eu-ai-act/provenance/_verify`.
+
+The wording of the legal notes is a draft for legal review, not legal advice.
+
+See [EU AI Act](../../ai-act.md#switching-the-features-off).

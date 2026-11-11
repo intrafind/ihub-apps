@@ -33,11 +33,13 @@ const EXCLUDED_SEGMENTS = new Set([
   'short-links',
   'feedback',
   'translations',
-  'pages'
+  'pages',
+  // The pasted text of a provenance lookup must never reach the audit log.
+  'provenance'
 ]);
 
 const SENSITIVE_KEY_RE =
-  /pass(word)?|pwd|secret|token|api[-_]?key|client[-_]?secret|credential|priv(ate)?[-_]?key|passphrase|signing|\bpin\b|\botp\b|\bmfa\b|salt|authoriz|cookie|bearer/i;
+  /pass(word)?|pwd|secret|token|api[-_]?key|client[-_]?secret|credential|priv(ate)?[-_]?key|passphrase|signing|\bpin\b|\botp\b|\bmfa\b|salt|authoriz|cookie|bearer|^keys?$/i;
 
 function getAuditConfig() {
   try {

@@ -46,6 +46,8 @@ class OpenAIAdapterClass extends BaseAdapter {
     };
     if (sampling.temperature !== undefined) body.temperature = sampling.temperature;
     if (sampling.topP !== undefined) body.top_p = sampling.topP;
+    // iHub's own text watermark (#3331): decided from the model config alone.
+    const marking = this.applyTextWatermark(body, model, options, sampling);
 
     // Request usage data in streaming responses when model supports it
     if (stream && model.supportsUsageTracking !== false) {
@@ -93,7 +95,8 @@ class OpenAIAdapterClass extends BaseAdapter {
       url: model.url,
       method: 'POST',
       headers: this.createRequestHeaders(apiKey),
-      body
+      body,
+      ...(marking ? { marking } : {})
     };
   }
 }

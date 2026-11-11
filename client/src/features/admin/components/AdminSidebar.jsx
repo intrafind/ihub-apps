@@ -31,14 +31,18 @@ const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'projects']);
 
 /** A count next to a nav item (open requests an admin has to decide), with its meaning for screen readers. */
 function NavBadge({ item, isCollapsed }) {
-  if (!item.badge) return null;
-  const text = item.badge > 99 ? '99+' : String(item.badge);
+  if (!item.badge && !item.badgeText) return null;
+  // `badgeText` is a state word (the EU AI Act "Off"), amber; a count is indigo.
+  const text = item.badgeText || (item.badge > 99 ? '99+' : String(item.badge));
+  const tone = item.badgeText
+    ? 'bg-amber-100 text-amber-900 dark:bg-amber-900/50 dark:text-amber-200'
+    : 'bg-indigo-600 text-white';
   return (
     <span
       className={
         isCollapsed
-          ? 'absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-indigo-600 text-white text-[0.625rem] leading-4 text-center font-semibold'
-          : 'ml-auto min-w-5 h-5 px-1.5 rounded-full bg-indigo-600 text-white text-xs leading-5 text-center font-semibold'
+          ? `absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full ${tone} text-[0.625rem] leading-4 text-center font-semibold`
+          : `ml-auto min-w-5 h-5 px-1.5 rounded-full ${tone} text-xs leading-5 text-center font-semibold`
       }
       data-testid={`nav-badge-${item.key}`}
     >
@@ -261,7 +265,10 @@ export default function AdminSidebar({ onMobileToggle }) {
     t,
     showAdminPage,
     featureFlags,
-    badges: { integrations: openIntegrationRequests }
+    badges: {
+      integrations: openIntegrationRequests,
+      euAiActOff: platformConfig?.euAiAct?.enabled === false
+    }
   });
 
   // Filter sections for content-admin-only users
