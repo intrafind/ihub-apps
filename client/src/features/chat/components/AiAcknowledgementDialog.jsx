@@ -108,7 +108,7 @@ function AiAcknowledgementDialog({
             <p className="text-gray-500 dark:text-gray-400">
               {t(
                 'aiAcknowledgement.anonymousNote',
-                'This confirmation applies to this browser session only.'
+                'This confirmation is remembered in this browser for up to 30 days.'
               )}
             </p>
           )}

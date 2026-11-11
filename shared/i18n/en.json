@@ -9984,7 +9984,7 @@
     "retry": "Try again",
     "saving": "Saving...",
     "skip": "Continue without confirming",
-    "anonymousNote": "This confirmation applies to this browser session only.",
+    "anonymousNote": "This confirmation is remembered in this browser for up to 30 days.",
     "composerNote": "Please confirm the AI-use notice to send messages.",
     "review": "Review notice",
     "confirmed": "Confirmed.",

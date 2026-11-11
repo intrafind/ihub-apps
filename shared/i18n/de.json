@@ -9983,7 +9983,7 @@
     "retry": "Erneut versuchen",
     "saving": "Wird gespeichert...",
     "skip": "Ohne Bestätigung fortfahren",
-    "anonymousNote": "Diese Bestätigung gilt nur für diese Browsersitzung.",
+    "anonymousNote": "Diese Bestätigung wird bis zu 30 Tage in diesem Browser gespeichert.",
     "composerNote": "Bitte bestätigen Sie den KI-Hinweis, um Nachrichten zu senden.",
     "review": "Hinweis ansehen",
     "confirmed": "Bestätigt.",

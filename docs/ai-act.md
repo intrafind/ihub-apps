@@ -61,7 +61,7 @@ that people were told, not a legal opinion: the wording is yours.
   admin actions, never by a settings save.
 - **What is stored.** On the user in `users.json`: `aiAcknowledgements: [{ version, textHash,
   acknowledgedAt, language }]`, one entry per version. `textHash` is the SHA-256 of the exact text the user
-  saw in that `language`, so the wording can be shown later even after the text changed. Every confirmation
+  saw in that `language`. It proves that a stored text is the one that was shown, but it cannot bring back wording that was changed or removed: keep a copy of each version's text (for example in your change history) if you need to show it later. Every confirmation
   and every admin action is also an audit entry (`resource: aiAcknowledgement`).
 - **Enforcement.** One middleware answers `428` with `code: AI_ACKNOWLEDGEMENT_REQUIRED`
   (`application/problem+json`) before any side effect on: the chat message

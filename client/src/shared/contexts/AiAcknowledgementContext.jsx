@@ -157,6 +157,10 @@ export function AiAcknowledgementProvider({ children }) {
     // The server says it is needed, whatever this tab believed.
     const data = await load();
     if (data && data.enabled && data.acknowledged) return true;
+    // Without the notice there is nothing to show: settle the waiting send as declined
+    // instead of opening a dialog that cannot render.
+    if (data && !data.enabled) return true; // switched off meanwhile
+    if (!data && !stateRef.current?.enabled) return false;
     setState(prev => (prev ? { ...prev, acknowledged: false } : prev));
     return openDialog(true);
   }, [load, openDialog]);
@@ -176,7 +180,8 @@ export function AiAcknowledgementProvider({ children }) {
       try {
         return await fn();
       } catch (err) {
-        const code = err?.code || err?.response?.data?.code;
+        // The API's code first: Axios sets its own `code` (ERR_BAD_REQUEST) on an HTTP 428.
+        const code = err?.response?.data?.code || err?.code;
         if (code !== 'AI_ACKNOWLEDGEMENT_REQUIRED') throw err;
         if (!(await handleAcknowledgementRequired())) return undefined;
         return await fn();

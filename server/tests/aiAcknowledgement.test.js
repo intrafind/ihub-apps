@@ -179,6 +179,11 @@ describe('service rules', () => {
     expect(service.resolveText(settings, 'de').language).toBe('de');
     expect(service.resolveText(settings, 'fr', 'de').language).toBe('de');
     expect(service.resolveText({ text: {} }, 'de').text).toBe(service.FALLBACK_TEXT.de);
+    // The built-in text follows the platform language before English.
+    expect(service.resolveText({ text: {} }, 'fr', 'de')).toEqual({
+      text: service.FALLBACK_TEXT.de,
+      language: 'de'
+    });
     expect(service.resolveText({ text: { en: '  ' } }, 'xx').language).toBe('en');
   });
 

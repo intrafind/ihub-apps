@@ -79,7 +79,7 @@ export function resolveText(settings, language, defaultLanguage = 'en') {
   const order = [language, defaultLanguage, 'en', ...Object.keys(texts)].filter(Boolean);
   const code = order.find(usable);
   if (code) return { text: texts[code], language: code };
-  const builtIn = FALLBACK_TEXT[language] ? language : 'en';
+  const builtIn = [language, defaultLanguage].find(code => FALLBACK_TEXT[code]) || 'en';
   return { text: FALLBACK_TEXT[builtIn], language: builtIn };
 }
 
