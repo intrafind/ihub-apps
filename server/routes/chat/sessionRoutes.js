@@ -49,6 +49,7 @@ import {
   getChatRepository,
   isPersistableChatId,
   normalizeChatSettings,
+  chatTurnSettings,
   normalizeChatVariables
 } from '../../services/chat/ChatRepository.js';
 import { resolveChatStorage } from '../../services/chat/chatPersistence.js';
@@ -873,29 +874,17 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       try {
         const {
           messages,
-          modelId,
-          style,
-          outputFormat,
           language,
           bypassAppPrompts,
-          thinkingEnabled,
-          thinkingLevel,
-          thinkingThoughts,
-          enabledTools,
-          websearchEnabled,
-          imageAspectRatio,
-          imageQuality,
           requestedSkills,
           documentIds,
           replaceFromMessageId,
           ephemeral,
-          sendChatHistory,
           mcpAppContext,
           voiceMode,
           projectId: requestedProjectId,
           projects: requestedProjects,
           testProjectId: requestedTestProjectId,
-          integrationScopes: requestedScopes,
           toolApprovalCapable
         } = req.body;
 
@@ -915,6 +904,23 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           }
           throw new ServiceError('NOT_FOUND', 'Chat session not found');
         }
+        // What the request left out is what the chat was last answered with,
+        // never the app's defaults: an approval or clarification answer, or an
+        // API caller, sends only part of the setup (`chatTurnSettings`).
+        const {
+          modelId,
+          style,
+          outputFormat,
+          sendChatHistory,
+          thinkingEnabled,
+          thinkingLevel,
+          thinkingThoughts,
+          enabledTools,
+          websearchEnabled,
+          imageAspectRatio,
+          imageQuality,
+          integrationScopes: requestedScopes
+        } = chatTurnSettings(req.body, access.chat);
         // The chat's container project and the projects attached from the
         // picker (#1036): checked against the caller's access here, carried
         // on the request to the prompt builder, persisted with the chat.
@@ -1163,10 +1169,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // turn rather than quietly searching somewhere else.
         const scopeResolution = chatApp
           ? await resolveChatScopes({
-              requested:
-                requestedScopes !== undefined
-                  ? requestedScopes
-                  : access.chat?.settings?.integrationScopes,
+              requested: requestedScopes,
               user: req.user,
               app: chatApp,
               model: findByIdCaseInsensitive(
@@ -1274,10 +1277,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
               }
             : {}),
           // How this turn is being answered, so reopening the chat comes
-          // back with the same setup rather than the app's defaults. Only
-          // the keys this request actually carried: the repository merges
-          // them over what earlier turns recorded, and `undefined` here
-          // means "this turn said nothing about it".
+          // back with the same setup rather than the app's defaults. These
+          // are the request's values over the stored ones
+          // (`chatTurnSettings`); the repository merges them over what
+          // earlier turns recorded, and `undefined` means neither has one.
           settings: normalizeChatSettings({
             style,
             outputFormat,

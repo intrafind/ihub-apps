@@ -407,6 +407,31 @@ export function normalizeChatSettings(settings) {
   return Object.keys(out).length > 0 ? out : null;
 }
 
+/**
+ * The settings and model a turn is answered with: what the request sent,
+ * and for everything it left out, what the chat was last answered with.
+ *
+ * The server keeps the chat's setup so any request can run with it, not
+ * whatever a client remembered to send. An approval answer, a clarification
+ * answer, or an MCP/API caller carries only part of it, and the app's
+ * defaults are not what the user chose: a chat with one integration turned
+ * on must keep that integration on its next turn.
+ *
+ * @param {Object} requested - The request body.
+ * @param {Object|null} chat - The stored chat, or null for a new one.
+ * @returns {Object} Every declared setting plus `modelId`; `undefined` where
+ *   neither the request nor the chat has one.
+ */
+export function chatTurnSettings(requested, chat) {
+  const stored = normalizeChatSettings(chat?.settings) || {};
+  const out = {};
+  for (const key of Object.keys(CHAT_SETTING_TYPES)) {
+    out[key] = requested?.[key] !== undefined ? requested[key] : stored[key];
+  }
+  out.modelId = requested?.modelId !== undefined ? requested.modelId : chat?.modelId || undefined;
+  return out;
+}
+
 /** Most app variables a chat stores. */
 const MAX_CHAT_VARIABLES = 50;
 
