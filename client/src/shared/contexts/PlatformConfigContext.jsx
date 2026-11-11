@@ -83,6 +83,10 @@ export function PlatformConfigProvider({ children }) {
         // per user and language, from /api/eu-ai-act/acknowledgements/me.
         aiAcknowledgement: platformCfg.aiAcknowledgement,
 
+        // The EU AI Act master switch: `{ enabled }` only. Dropping it here would make
+        // every client read the features as on.
+        euAiAct: platformCfg.euAiAct,
+
         // Provenance records (#3327): retention, store switch and who may call the lookup.
         provenance: platformCfg.provenance,
 
