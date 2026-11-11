@@ -3,12 +3,16 @@
 
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import ChipOverflow, { HOVER_LABEL } from '../../../shared/components/ChipOverflow';
 import Icon from '../../../shared/components/Icon';
 import { useMyProjects, useProjectsAvailability } from '../hooks/useProjects';
 import { projectDisplayName } from '../utils/projectView';
 
 const CHIP =
-  'inline-flex items-center gap-1 rounded-full border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs max-w-[12rem]';
+  'group inline-flex shrink-0 items-center rounded-full border border-purple-200 dark:border-purple-800 bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs';
+
+// More than this many project chips fold into a "+N" chip.
+const MAX_VISIBLE_CHIPS = 2;
 
 /**
  * The projects of the open chat, as chips beside the chat input: the one it
@@ -44,31 +48,36 @@ function ChatProjectChips({ projectContext }) {
   };
   const linkTo = id => `/projects/${encodeURIComponent(id)}`;
 
-  return (
-    <div className="flex flex-wrap items-center gap-1.5 min-w-0" data-testid="chat-project-chips">
-      {containerProjectId && (
+  const items = [];
+  if (containerProjectId) {
+    const label = t('projects.chatBar.inProject', 'In project: {{name}}', {
+      name: nameOf(containerProjectId)
+    });
+    items.push({
+      key: containerProjectId,
+      label: nameOf(containerProjectId),
+      node: (
         <Link
+          key={`container-${containerProjectId}`}
           to={linkTo(containerProjectId)}
           className={`${CHIP} px-2 py-1 hover:underline`}
-          title={t('projects.chatBar.open', 'Open the project')}
+          title={label}
         >
           <Icon name="folder" size="xs" />
-          <span className="truncate">
-            {t('projects.chatBar.inProject', 'In project: {{name}}', {
-              name: nameOf(containerProjectId)
-            })}
-          </span>
+          <span className={`${HOVER_LABEL} truncate`}>{label}</span>
         </Link>
-      )}
-      {value.map(id => (
-        <span key={id} className={`${CHIP} pl-2 pr-1 py-1`}>
-          <Link
-            to={linkTo(id)}
-            className="inline-flex items-center gap-1 truncate hover:underline"
-            title={t('projects.chatBar.open', 'Open the project')}
-          >
+      )
+    });
+  }
+  for (const id of value) {
+    items.push({
+      key: id,
+      label: nameOf(id),
+      node: (
+        <span key={id} className={`${CHIP} px-2 py-1`} title={nameOf(id)}>
+          <Link to={linkTo(id)} className="inline-flex items-center hover:underline">
             <Icon name="folder" size="xs" />
-            <span className="truncate">{nameOf(id)}</span>
+            <span className={`${HOVER_LABEL} truncate`}>{nameOf(id)}</span>
           </Link>
           <button
             type="button"
@@ -77,14 +86,28 @@ function ChatProjectChips({ projectContext }) {
             aria-label={t('projects.attach.remove', 'Remove {{name}} from this chat', {
               name: nameOf(id)
             })}
-            className="rounded-full p-0.5 hover:bg-purple-100 dark:hover:bg-purple-800/60 disabled:opacity-50"
+            className={`${HOVER_LABEL} rounded-full hover:bg-purple-100 disabled:opacity-50 dark:hover:bg-purple-800/60`}
           >
             <Icon name="x" size="xs" />
           </button>
         </span>
-      ))}
+      )
+    });
+  }
+
+  return (
+    <div className="flex min-w-0 items-center gap-1.5" data-testid="chat-project-chips">
+      <ChipOverflow
+        items={items}
+        max={MAX_VISIBLE_CHIPS}
+        className="border border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-300"
+      />
       {error && (
-        <p role="alert" className="basis-full text-xs text-red-600 dark:text-red-400">
+        <p
+          role="alert"
+          title={error}
+          className="max-w-[12rem] truncate text-xs text-red-600 dark:text-red-400"
+        >
           {error}
         </p>
       )}

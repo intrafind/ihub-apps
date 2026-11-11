@@ -9,11 +9,16 @@ import {
   scopeActionLabel,
   scopeDisplayName
 } from '../../chat/utils/integrationScopes';
+import ChipOverflow, { HOVER_LABEL } from '../../../shared/components/ChipOverflow';
 import IntegrationLogo from './IntegrationLogo';
 import { connectionDotOf, isRowOn, needsConnect } from './pickerState';
 
+// `group` drives the hover label of a chip (see HOVER_LABEL).
 const CHIP =
-  'flex min-w-0 shrink items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300';
+  'group flex min-w-0 shrink-0 items-center rounded-full bg-indigo-50 px-2 py-1 text-xs font-medium text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300';
+
+// More than this many chips fold into a "+N" chip.
+const MAX_VISIBLE_CHIPS = 3;
 
 /** The status text of a chip's dot. */
 function statusLabel(row, t) {
@@ -101,83 +106,90 @@ export default function IntegrationChips({
     integration => !rows.some(row => row.integration && row.integration === integration.id)
   );
 
-  return (
-    <>
-      {websearch?.available && websearch.enabled && (
+  const items = [];
+
+  if (websearch?.available && websearch.enabled) {
+    const label = t('websearch.chip', 'Web search');
+    items.push({
+      key: 'websearch',
+      label,
+      node: (
         <button
+          key="websearch"
           type="button"
           onClick={() => websearch.onChange(false)}
           disabled={disabled}
           aria-pressed="true"
           aria-label={t('websearch.chipLabel', 'Web search is on — turn it off')}
           title={t('websearch.chipTitle', 'Web search is on. Click to turn it off.')}
-          className={`group ${CHIP} shrink-0 transition-colors hover:bg-indigo-100 disabled:opacity-50 dark:hover:bg-indigo-900/60`}
+          className={`${CHIP} transition-colors hover:bg-indigo-100 disabled:opacity-50 dark:hover:bg-indigo-900/60`}
         >
           <Icon name="globe-alt" size="sm" />
-          <span className="hidden sm:inline">{t('websearch.chip', 'Web search')}</span>
-          <Icon
-            name="x"
-            size="xs"
-            className="opacity-60 group-hover:opacity-100"
-            aria-hidden="true"
-          />
+          <span className={HOVER_LABEL}>{label}</span>
+          <Icon name="x" size="xs" className={HOVER_LABEL} aria-hidden="true" />
         </button>
-      )}
+      )
+    });
+  }
 
-      {active.map(row => {
-        const scope = scopes.find(integration => integration.id === row.integration);
-        const dot = connectionDotOf(row);
-        return (
-          <span
-            key={row.id}
-            data-chip={row.id}
-            className={CHIP}
-            title={row.description ? `${row.name}: ${row.description}` : row.name}
-          >
-            <IntegrationLogo row={row} size="sm" />
-            <span
-              className={
-                scope
-                  ? 'sr-only sm:not-sr-only sm:max-w-[8rem] sm:truncate'
-                  : 'max-w-[10rem] truncate'
-              }
-            >
-              {row.name}
+  for (const row of active) {
+    const scope = scopes.find(integration => integration.id === row.integration);
+    const dot = connectionDotOf(row);
+    items.push({
+      key: row.id,
+      label: row.name,
+      node: (
+        <span
+          key={row.id}
+          data-chip={row.id}
+          className={CHIP}
+          title={row.description ? `${row.name}: ${row.description}` : row.name}
+        >
+          <IntegrationLogo row={row} size="sm" />
+          <span className={`${HOVER_LABEL} truncate`}>{row.name}</span>
+          {dot && (
+            <span className="ml-1 flex items-center">
+              <StatusDot status={dot} size="sm" label={statusLabel(row, t)} />
             </span>
-            {dot && <StatusDot status={dot} size="sm" label={statusLabel(row, t)} />}
-            {scope && (
+          )}
+          {scope && (
+            <span className="ml-1 flex min-w-0 items-center">
               <ScopeLabel integration={scope} disabled={disabled} onScopeChange={onScopeChange} />
-            )}
-          </span>
-        );
-      })}
+            </span>
+          )}
+        </span>
+      )
+    });
+  }
 
-      {scopeOnly.map(integration => {
-        const name = scopeDisplayName(integration, i18n.language);
-        return (
-          <span
-            key={`scope-${integration.id}`}
-            data-chip={`scope-${integration.id}`}
-            className={CHIP}
-            title={`${name}: ${scopeActionLabel(integration, t)} ${scopeDisplayName(
-              currentScopeOf(integration),
-              i18n.language
-            )}`}
-          >
-            <Icon
-              name={integration.fixed ? 'lock-closed' : 'search'}
-              size="xs"
-              aria-hidden="true"
-            />
-            <span className="sr-only">{name}</span>
-            <ScopeLabel
-              integration={integration}
-              disabled={disabled}
-              onScopeChange={onScopeChange}
-            />
-          </span>
-        );
-      })}
-    </>
+  for (const integration of scopeOnly) {
+    const name = scopeDisplayName(integration, i18n.language);
+    items.push({
+      key: `scope-${integration.id}`,
+      label: name,
+      node: (
+        <span
+          key={`scope-${integration.id}`}
+          data-chip={`scope-${integration.id}`}
+          className={`${CHIP} gap-1`}
+          title={`${name}: ${scopeActionLabel(integration, t)} ${scopeDisplayName(
+            currentScopeOf(integration),
+            i18n.language
+          )}`}
+        >
+          <Icon name={integration.fixed ? 'lock-closed' : 'search'} size="xs" aria-hidden="true" />
+          <span className="sr-only">{name}</span>
+          <ScopeLabel integration={integration} disabled={disabled} onScopeChange={onScopeChange} />
+        </span>
+      )
+    });
+  }
+
+  return (
+    <ChipOverflow
+      items={items}
+      max={MAX_VISIBLE_CHIPS}
+      className="bg-indigo-50 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300"
+    />
   );
 }
