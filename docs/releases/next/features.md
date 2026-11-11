@@ -1776,6 +1776,10 @@ stored on the server and in the audit log.
   option.
 - **API paths.** The acknowledgement APIs now live under `eu-ai-act`: `GET/POST /api/eu-ai-act/acknowledgements/me`,
   `/api/admin/eu-ai-act/acknowledgements/...` and `DELETE /api/admin/eu-ai-act/users/{userId}/acknowledgements`.
+  They replace `GET /api/ai-acknowledgements/me`, `POST /api/ai-acknowledgements/me`,
+  `POST /api/admin/ai-acknowledgements/_request-again`, `GET /api/admin/ai-acknowledgements/_export`,
+  `DELETE /api/admin/ai-acknowledgements` and `DELETE /api/admin/auth/users/{userId}/ai-acknowledgements`,
+  which never shipped in a release.
 
 The wording of the legal notes is a draft for legal review, not legal advice.
 

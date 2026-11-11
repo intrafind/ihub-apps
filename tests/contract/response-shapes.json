@@ -404,7 +404,6 @@
         {
           "action": "string",
           "actor": "object",
-          "details?": "object",
           "id": "string",
           "ip": "string",
           "requestId": "string",
