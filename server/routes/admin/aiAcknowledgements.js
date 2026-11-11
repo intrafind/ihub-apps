@@ -10,7 +10,9 @@
  * - `GET    /api/admin/eu-ai-act/acknowledgements/_export?status=`: CSV
  *
  * The list itself is `GET /api/admin/auth/users`, which already carries
- * `aiAcknowledgements`. Every action is audited.
+ * `aiAcknowledgements`. Every action is audited. While the EU AI Act master switch is
+ * off, the actions that delete or reset acknowledgements answer 403 FEATURE_DISABLED
+ * (the acknowledgements stay as evidence); the read-only export stays available.
  */
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
@@ -21,6 +23,7 @@ import { assertValidId } from '../../utils/pathSecurity.js';
 import { buildCsv } from '../../utils/csv.js';
 import { clearAiAcknowledgements } from '../../utils/userManager.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { requireEuAiActEnabled } from '../../services/euAiAct/conformity.js';
 import {
   CSV_HEADERS,
   buildCsvRows,
@@ -65,6 +68,7 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
   app.post(
     buildServerPath('/api/admin/eu-ai-act/acknowledgements/_request-again'),
     adminAuth,
+    requireEuAiActEnabled('acknowledgement'),
     async (req, res) => {
       const { from, to } = await updateAcknowledgementState(block => {
         const previous =
@@ -101,6 +105,7 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
   app.delete(
     buildServerPath('/api/admin/eu-ai-act/users/:userId/acknowledgements'),
     adminAuth,
+    requireEuAiActEnabled('acknowledgement'),
     async (req, res) => {
       const { userId } = req.params;
       assertValidId(userId, 'user');
@@ -135,6 +140,7 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
   app.delete(
     buildServerPath('/api/admin/eu-ai-act/acknowledgements'),
     adminAuth,
+    requireEuAiActEnabled('acknowledgement'),
     async (req, res) => {
       const platform = configCache.getPlatform() || {};
       const removed = await clearAiAcknowledgements(null, usersFilePath(platform));

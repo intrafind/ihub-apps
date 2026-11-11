@@ -44,6 +44,8 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => store.files['config/platform.json'] || {},
     get: key => (store.files[key] ? { data: store.files[key] } : null),
+    getEuAiActConformity: () =>
+      store.files['config/eu-ai-act-conformity.json'] || { version: 1, enabled: true, history: [] },
     setCacheEntry: (key, data) => {
       store.files[key] = data;
     },
@@ -780,5 +782,87 @@ describe('userManager helpers', () => {
     seed();
     delete store.files[USERS].users.bob;
     expect(service.buildCsvRows(undefined).map(r => r[0])).not.toContain('bob');
+  });
+});
+
+describe('EU AI Act master switch off (step 9)', () => {
+  const FILE = 'config/eu-ai-act-conformity.json';
+  const admin = req => req.set('x-admin', '1');
+  const post = (app, user) => {
+    const req = request(app).post('/api/apps/x/chat/c1').send({});
+    if (user === 'guest') req.set('x-user', 'guest');
+    else if (user) req.set('x-user', user);
+    return req;
+  };
+  const actor = { id: 'admin', name: 'Anna Admin' };
+  beforeEach(() => {
+    seed();
+    store.files[FILE] = {
+      version: 1,
+      enabled: false,
+      changedAt: '2026-11-12T09:30:00.000Z',
+      changedBy: actor,
+      reason: 'Internal research sandbox, no EU users.',
+      statementVersion: 1,
+      history: []
+    };
+  });
+
+  test('the guard lets everyone through without reading users.json, enforcement stays configured', async () => {
+    const app = buildApp();
+    expect((await post(app, asUser('alice'))).status).toBe(200);
+    expect((await post(app, 'guest')).status).toBe(200);
+    expect(service.getSettings()).toMatchObject({ enabled: false, configuredEnabled: true });
+  });
+
+  test('GET /me says disabled and acknowledged; POST /me is FEATURE_DISABLED', async () => {
+    const app = buildApp();
+    const me = await request(app)
+      .get('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('alice'));
+    expect(me.body).toEqual({
+      enabled: false,
+      enforce: false,
+      acknowledged: true,
+      requiredVersion: 1
+    });
+    const confirm = await request(app)
+      .post('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('alice'))
+      .send({ version: 1, textHash: 'sha256:aa', language: 'en' });
+    expect(confirm.status).toBe(403);
+    expect(confirm.body.code).toBe('FEATURE_DISABLED');
+  });
+
+  test('acknowledgements stay: delete and reset actions are disabled, the export is not', async () => {
+    const app = buildApp({ chat: false });
+    for (const [method, url] of [
+      ['post', '/api/admin/eu-ai-act/acknowledgements/_request-again'],
+      ['delete', '/api/admin/eu-ai-act/users/bob/acknowledgements'],
+      ['delete', '/api/admin/eu-ai-act/acknowledgements']
+    ]) {
+      const res = await admin(request(app)[method](url));
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FEATURE_DISABLED');
+    }
+    expect(store.files[USERS].users.bob.aiAcknowledgements).toHaveLength(1);
+    expect(store.files[PLATFORM].aiAcknowledgement.requiredVersion).toBe(1);
+    expect(
+      (await admin(request(app).get('/api/admin/eu-ai-act/acknowledgements/_export'))).status
+    ).toBe(200);
+  });
+
+  test('switched on again: a valid acknowledgement stays valid, others are asked', async () => {
+    const app = buildApp();
+    store.files[FILE] = { version: 1, enabled: true, history: [] };
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    expect((await post(app, asUser('alice'))).status).toBe(428);
+    expect(store.files[PLATFORM].aiAcknowledgement.requiredVersion).toBe(1);
+  });
+
+  test('a settings save while off still audits a change of `enabled`', () => {
+    expect(
+      service.describeSettingsChange({ enabled: true }, { enabled: false })?.changed
+    ).toContain('enabled');
   });
 });
