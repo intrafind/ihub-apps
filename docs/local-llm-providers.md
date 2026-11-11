@@ -257,6 +257,9 @@ vLLM is a high-performance inference server optimized for serving large language
 > enabled with the correct vLLM start flags (`--enable-auto-tool-choice`, `--tool-call-parser`,
 > `--limit-mm-per-prompt`), and the iHub model config flags must match.
 
+> **EU AI Act text watermark?** vLLM can watermark generated text and iHub can detect it again. See
+> [Text Watermarking](ai-act-text-watermarking.md).
+
 ### Installation
 
 #### Docker Setup (Recommended)

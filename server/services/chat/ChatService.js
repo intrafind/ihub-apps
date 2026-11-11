@@ -1249,7 +1249,8 @@ class ChatService {
         text: summary.content,
         finalText: result.answerText,
         model: { id: model?.id },
-        modelConfig: model
+        modelConfig: model,
+        marking: result.marking?.text
       });
       if (provenance) summary.provenance = provenance;
       return provenance;
@@ -1780,7 +1781,8 @@ class ChatService {
         text: result.content || '',
         finalText: result.answerText,
         model: { id: model.id },
-        modelConfig: model
+        modelConfig: model,
+        marking: result.marking?.text
       });
       this._endLedgerRun(runId, {
         status: result.status,

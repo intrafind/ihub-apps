@@ -22,6 +22,7 @@
  *
  * @module services/loop/AgentLoop
  */
+import { combinePlans as combineTextPlans } from '../provenance/watermark/watermarkPlan.js';
 import crypto from 'node:crypto';
 import defaultLlmClient from './LLMClient.js';
 import runLogSingleton, { isValidRunId } from './RunLog.js';
@@ -324,6 +325,8 @@ export class AgentLoop {
     let iteration = 0;
     let content = '';
     let answerText = ''; // what the last model step answered, without earlier steps' prose
+    // Watermark plans of the text-producing steps (#3331): the turn is marked only if all were.
+    const markingPlans = [];
     let finishReason = null;
     let usage = null;
     const thoughtSignatures = [];
@@ -343,6 +346,7 @@ export class AgentLoop {
       status,
       content,
       answerText,
+      marking: (plan => (plan ? { text: plan } : null))(combineTextPlans(markingPlans)),
       finishReason: extra.finishReason ?? finishReason,
       usage: usage || { promptTokens: 0, completionTokens: 0, totalTokens: 0, source: 'estimate' },
       runUsage: {
@@ -655,6 +659,7 @@ export class AgentLoop {
           }
         }
         answerText = stepText;
+        if (stepText) markingPlans.push(result.marking?.text ?? null);
 
         const stepUsage = result.usage
           ? result.usage
