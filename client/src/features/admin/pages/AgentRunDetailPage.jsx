@@ -17,6 +17,7 @@ import { answerInteraction } from '../../../api';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
 import { isQuestionCheckpoint } from '../../../shared/run/interactionToCheckpoint';
 import AdminLoadError from '../components/AdminLoadError';
+import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 
 const AGENT_EXECUTION_OPTIONS = {
   requireFeature: ['agentFactory', 'workflows'],
@@ -26,6 +27,7 @@ const AGENT_EXECUTION_OPTIONS = {
 
 export default function AgentRunDetailPage() {
   const { t } = useTranslation();
+  const acknowledgement = useAiAcknowledgement();
   const navigate = useNavigate();
   const { runId } = useParams();
   const {
@@ -119,8 +121,11 @@ export default function AgentRunDetailPage() {
   async function handleResume() {
     setActionError(null);
     try {
-      await resumeAgentRun(runId);
-      refetch();
+      // Resuming starts AI work again: the AI-use notice has to be confirmed first (#3326).
+      const done = acknowledgement
+        ? await acknowledgement.runWithAcknowledgement(() => resumeAgentRun(runId))
+        : await resumeAgentRun(runId);
+      if (done) refetch();
     } catch (err) {
       setActionError(err?.response?.data?.detail || err.message);
     }

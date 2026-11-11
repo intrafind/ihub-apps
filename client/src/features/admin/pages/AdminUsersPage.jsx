@@ -413,35 +413,38 @@ function AdminUsersPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {(message || ack.message) && (
+        {/* The page's own result and the AI acknowledgement actions' result: both are shown,
+            so a newer one is never hidden behind an older one. */}
+        {[message, ack.message].filter(Boolean).map((banner, index) => (
           <div
+            key={`${index}-${banner.text}`}
             role="status"
             className={`mb-6 p-4 rounded-md ${
-              (message || ack.message).type === 'success'
+              banner.type === 'success'
                 ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
                 : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
             }`}
           >
             <div className="flex">
               <Icon
-                name={(message || ack.message).type === 'success' ? 'check' : 'warning'}
+                name={banner.type === 'success' ? 'check' : 'warning'}
                 size="md"
                 className={`mt-0.5 mr-3 ${
-                  (message || ack.message).type === 'success' ? 'text-green-500' : 'text-red-700'
+                  banner.type === 'success' ? 'text-green-500' : 'text-red-700'
                 }`}
               />
               <p
                 className={`text-sm ${
-                  (message || ack.message).type === 'success'
+                  banner.type === 'success'
                     ? 'text-green-700 dark:text-green-300'
                     : 'text-red-700 dark:text-red-300'
                 }`}
               >
-                {(message || ack.message).text}
+                {banner.text}
               </p>
             </div>
           </div>
-        )}
+        ))}
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <SearchInput
