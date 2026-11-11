@@ -983,6 +983,30 @@ describe('WebsiteCorpusService', () => {
     assert.match(result.report, /\| 6 \| 2 \| 2 \| 1 \| 1 \| 0 \|/);
   });
 
+  it('adds the dashboard spec only when asked, and says what to do with it', async () => {
+    const { service } = makeService(fakeSite({ pageCount: 5 }));
+    const { corpusId } = await service.discoverSite(
+      { siteUrl: 'https://a.test', name: 'Site A' },
+      { user: USER }
+    );
+    await service.crawlPages({ corpusId, dropSelector: '', batchSize: 20 }, { user: USER });
+    const plain = await service.corpusReport({ corpusId }, { user: USER });
+    assert.equal(plain.dashboard, undefined);
+    assert.doesNotMatch(plain.next, /dashboard/);
+
+    const withDashboard = await service.corpusReport(
+      { corpusId, dashboard: true, language: 'de' },
+      { user: USER }
+    );
+    assert.equal(withDashboard.dashboard.lang, 'de');
+    assert.equal(withDashboard.dashboard.title, 'Site A Website-Korpus');
+    assert.equal(withDashboard.dashboard.kpis[0].value, withDashboard.pages);
+    assert.equal(withDashboard.dashboard.kpis[1].value, withDashboard.tokens);
+    assert.match(withDashboard.next, /activate the "dashboard" skill/);
+    // The Markdown report is the same either way.
+    assert.equal(withDashboard.report, plain.report);
+  });
+
   it('states the tokenizer in the words of the report', () => {
     assert.match(tokenizerNote({ method: 'o200k_base' }), /o200k_base/);
     assert.match(tokenizerNote({ method: 'heuristic' }), /off in either direction/);

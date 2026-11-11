@@ -33,6 +33,7 @@ import {
 import { UNRESOLVED_HOST } from '../../utils/ssrfGuard.js';
 import { DomainError, DomainStore, normalizeHost, splitHost } from './DomainStore.js';
 import { renderReport } from './report.js';
+import { buildDashboard } from './dashboard.js';
 import { collectSiteUrls } from './sitemap.js';
 import { DEFAULT_NEWS_SECTIONS, analyseCorpus, findNearDuplicates } from './stats.js';
 import { hostKey, nonDefaultPort, normalizePrefix, sectionCounts, siteKeyOf } from './urls.js';
@@ -612,7 +613,7 @@ export class WebsiteCorpusService {
    * @param {Object} context
    * @returns {Promise<Object>}
    */
-  async corpusReport({ corpusId, name, newsSections }, { user }) {
+  async corpusReport({ corpusId, name, newsSections, dashboard, language }, { user }) {
     const corpus = await this.store.get(corpusId, requireUser(user));
     const pages = await this.store.pages(corpus.id, corpus.batches);
     if (!pages.length) {
@@ -629,7 +630,7 @@ export class WebsiteCorpusService {
     const nearDuplicates = await findNearDuplicates(pages);
     const info = this.tokenizerInfo();
     const notCrawled = corpus.total - corpus.cursor;
-    const markdown = renderReport({
+    const input = {
       name: String(name || corpus.name),
       analysis,
       nearDuplicates,
@@ -648,7 +649,8 @@ export class WebsiteCorpusService {
           notCrawled
         }
       }
-    });
+    };
+    const markdown = renderReport(input);
     return {
       corpusId: corpus.id,
       complete: notCrawled === 0,
@@ -658,9 +660,14 @@ export class WebsiteCorpusService {
       tokensDedup: analysis.totals.tokensDedup,
       failedPages: corpus.failures.slice(0, 10),
       report: markdown,
+      // The same numbers laid out for the `dashboard` skill, only when asked for.
+      ...(dashboard === true ? { dashboard: buildDashboard({ ...input, language }) } : {}),
       next:
         'Show the report to the user unchanged (tables and chart), then add the verdict, the oddities and the next steps. ' +
-        'Never recalculate a figure.'
+        'Never recalculate a figure.' +
+        (dashboard === true
+          ? ' Then create the dashboard: activate the "dashboard" skill and call create_web_artifact with preset "dashboard" and the "dashboard" field of this result, unchanged, as the JSON text of "data".'
+          : '')
     };
   }
 }

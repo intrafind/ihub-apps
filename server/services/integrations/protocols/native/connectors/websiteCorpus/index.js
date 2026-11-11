@@ -153,6 +153,17 @@ const PARAMETERS = {
         items: { type: 'string' },
         description:
           'Section names treated as blog or news for the "core pages" rows, replacing the default list (blog, news, newsroom, aktuelles, presse, press, magazin, magazine, neuigkeiten). An empty list leaves those rows out.'
+      },
+      dashboard: {
+        type: 'boolean',
+        description:
+          'Also return the result as a "dashboard" spec for the dashboard skill (create_web_artifact with preset "dashboard"). Ask for it only when the dashboard skill is available.'
+      },
+      language: {
+        type: 'string',
+        enum: ['en', 'de'],
+        description:
+          'Language of the dashboard texts (default en). Use the language the user writes in.'
       }
     },
     required: ['corpusId']
