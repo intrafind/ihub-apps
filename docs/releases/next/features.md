@@ -1559,7 +1559,8 @@ the prompt" is a realistic alternative to retrieval.
   the site's `robots.txt`. The speed is an installation setting: **Parallel requests per crawl**
   (default 4, at most 16) and **Pause between requests (ms)**, so a site of several hundred pages
   is crawled in a minute or two instead of ten, and a site that must not be loaded heavily can be
-  crawled slowly. A crawl belongs to the user who started it and is removed after 14 days.
+  crawled slowly. A chat turn now allows up to 50 tool rounds (was 25), so a crawl of a large site
+  is not cut off. A crawl belongs to the user who started it and is removed after 14 days.
 - Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
   `website-corpus-sizer` skill from the marketplace guides users through it.
 - Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
