@@ -1,18 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { acknowledgeAi, fetchMyAiAcknowledgement } from '../../api';
 import AiAcknowledgementDialog from '../../features/chat/components/AiAcknowledgementDialog';
+import AiAcknowledgementContext from './aiAcknowledgementContextValue';
 import { useOptionalAuth } from './authContextValue';
 import { useUIConfig } from './UIConfigContext';
 
@@ -20,8 +13,6 @@ const DISCLAIMER_STORAGE_KEY = 'ihub-disclaimer-acknowledged';
 const DISCLAIMER_CLOSED_EVENT = 'ihub-disclaimer-closed';
 const DISMISSED_KEY = 'ihub-ai-ack-dismissed';
 const CHANNEL_NAME = 'ihub-ai-ack';
-
-const AiAcknowledgementContext = createContext(null);
 
 function readSession(key) {
   try {
@@ -286,13 +277,3 @@ export function AiAcknowledgementProvider({ children }) {
     </AiAcknowledgementContext.Provider>
   );
 }
-
-/**
- * The acknowledgement gate, or `null` outside the provider (an embedded host,
- * a test): the caller then simply does not gate and the server decides.
- */
-export function useAiAcknowledgement() {
-  return useContext(AiAcknowledgementContext);
-}
-
-export default AiAcknowledgementContext;
