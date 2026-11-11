@@ -213,6 +213,49 @@ integration is not affected by this check; it is governed by the registry's trus
 A private registry is a good way to roll the same apps, prompts and skills out to several iHub
 installations — for example a test and a production system, or one installation per subsidiary.
 
+### Claude Code plugin marketplaces
+
+A registry can also be a Claude Code plugin marketplace: a `.claude-plugin/marketplace.json` that
+lists plugins, such as
+
+- `https://raw.githubusercontent.com/anthropics/knowledge-work-plugins/refs/heads/main/.claude-plugin/marketplace.json`
+- `https://raw.githubusercontent.com/anthropics/claude-plugins-official/refs/heads/main/.claude-plugin/marketplace.json`
+
+Add it under **Manage Registries** with that URL. iHub translates the plugins into skills when the
+catalog is refreshed: every `SKILL.md` a plugin ships becomes a skill item (`<plugin>-<skill>`; a
+plugin that is itself one skill keeps the plugin name), installed with its text files
+(`references/`, `scripts/` …; binary files are left out). Commands, agents, hooks and MCP/LSP
+servers of a plugin have no iHub counterpart and are not imported.
+
+| Plugin `source` | Read from |
+| --- | --- |
+| `"./plugins/x"` | that folder of the marketplace's own GitHub repository |
+| `{ "source": "github", "repo": "o/r" }` | the repository `o/r` |
+| `{ "source": "url", "url": "https://github.com/o/r.git" }` | the repository `o/r` |
+| `{ "source": "git-subdir", "url": …, "path": "p" }` | the folder `p` of that repository |
+
+The `sha` (else `ref`) of a source decides the revision the skill files are fetched at; without
+either, the default branch is used. A plugin that lists `skills` paths (relative to the plugin) gets
+exactly those skills, so several plugins can share one repository and each list a subset; without a
+list, the standard `skills/<name>/SKILL.md` folders and a `SKILL.md` at the plugin root are used.
+Sources of another kind (`npm`, `command`, a git host other than GitHub) cannot be read, and neither
+can a relative source (`"./plugins/x"`) of a marketplace that is not served from GitHub; such
+plugins are left out and named in the server log.
+
+The skills of a plugin are listed with the plugin's description. A plugin without a `version`
+uses the first seven characters of its commit as the version, so a new commit shows as an update.
+
+**GitHub rate limit.** The files of every repository are listed through the GitHub API, one call
+per repository and revision. A marketplace such as the two above has about a hundred plugins in
+other repositories, more than the 60 calls an hour GitHub allows without a token. Set the registry's
+authentication to **Bearer** with a GitHub token (no scopes needed for public repositories); a
+refresh that hits the limit keeps what it has read and logs the plugins it skipped. The token is
+sent to the GitHub API only when the registry's own URL is on GitHub (`raw.githubusercontent.com`,
+`github.com`); a marketplace served from another host is read without it, so a token does not lift
+the limit there. The same holds when a skill is installed: the registry's credentials are sent only
+to the registry's own host (and the GitHub hosts for a registry on GitHub), never to another host
+that an item points at.
+
 ### Versions, channel and pins
 
 A catalog item lists its current `version` and may list the versions the registry still serves:

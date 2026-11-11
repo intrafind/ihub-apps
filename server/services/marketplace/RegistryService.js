@@ -28,6 +28,7 @@ import {
 import tokenStorageService from '../TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { parseFrontMatter } from '../../utils/frontMatter.js';
+import { buildPluginSkillItems } from './claudePluginCatalog.js';
 import { getLocalContentIds, installationStatusFor } from './localContent.js';
 import { marketplaceFetch, sharesCredentialScope } from './marketplaceFetch.js';
 import { offeredVersion, versionPolicyFields } from './versionPolicy.js';
@@ -516,6 +517,13 @@ async function fetchGitHubTree(owner, repo, ref, authHeaders, registry) {
   });
   if (!response.ok) throw new Error(`GitHub tree API: HTTP ${response.status}`);
   const data = await response.json();
+  if (data.truncated) {
+    logger.warn('GitHub truncated a recursive file tree; some files are not listed', {
+      component: COMPONENT,
+      repository: `${owner}/${repo}`,
+      ref
+    });
+  }
   return data.tree || [];
 }
 
@@ -536,179 +544,6 @@ function findCompanionFiles(tree, dirPrefix) {
     companions.push(relative);
   }
   return companions;
-}
-
-/**
- * Resolve a plugins-format catalog to individual skill items.
- *
- * Two-phase approach:
- * - Phase 1: Plugins with an explicit `skills` array get SKILL.md URLs constructed
- *   directly from the listed paths.
- * - Phase 2: Plugins without a `skills` array fall back to the GitHub Trees API
- *   scan for SKILL.md files matching {pluginDir}/skills/{name}/SKILL.md.
- *
- * The GitHub tree is always fetched for GitHub registries so that companion files
- * (references/, scripts/, templates/, etc.) can be discovered and annotated on
- * each skill's source descriptor. ContentInstaller uses this to copy companion
- * files alongside SKILL.md during installation.
- *
- * Falls back to one-item-per-plugin for non-GitHub registries.
- *
- * @param {object} registry - Registry config; `source` is the marketplace.json URL
- * @param {Array} plugins - Plugin entries from marketplace.json
- * @param {object|undefined} owner - Top-level owner object from marketplace.json (for author fallback)
- * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
- * @returns {Promise<Array>} Catalog items — one per individual skill
- */
-async function resolvePluginSkills(registry, plugins, owner, authHeaders = {}) {
-  const registrySource = registry.source;
-  const ghInfo = parseGitHubUrl(registrySource);
-
-  if (!ghInfo) {
-    // Non-GitHub registry: fall back to one item per plugin (current behavior)
-    return plugins.map(plugin => ({
-      type: 'skill',
-      name: plugin.name,
-      displayName: { en: plugin.name },
-      description:
-        typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
-      author: plugin.author?.name,
-      tags: plugin.tags || [],
-      source: plugin.source
-        ? { type: 'relative', path: plugin.source.replace(/^\.\//, '') }
-        : { type: 'relative', path: plugin.name }
-    }));
-  }
-
-  // Base URL for constructing raw SKILL.md URLs (strip the marketplace.json filename)
-  const rawBase = toRawGitHubUrl(registrySource)
-    .replace(/\/.claude-plugin\/marketplace\.json$/, '')
-    .replace(/\/marketplace\.json$/, '')
-    .replace(/\/$/, '');
-
-  // Fetch the full tree once for companion file discovery and Phase 2 scanning
-  const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders, registry);
-
-  const items = [];
-  let needsTreeScan = false;
-
-  // Phase 1: plugins with explicit skills arrays → direct URL construction
-  for (const plugin of plugins) {
-    if (Array.isArray(plugin.skills) && plugin.skills.length > 0) {
-      for (const skillPath of plugin.skills) {
-        const cleanPath = skillPath.replace(/^\.\//, '');
-        const skillDir = cleanPath.split('/').pop();
-        const skillUrl = `${rawBase}/${cleanPath}/SKILL.md`;
-        const companions = findCompanionFiles(tree, `${cleanPath}/`);
-
-        // Humanize directory names: "ab-test-setup" → "Ab Test Setup"
-        const displaySkillName = skillDir
-          .replaceAll('-', ' ')
-          .replaceAll(/\b\w/g, c => c.toUpperCase());
-        const displayPluginName = (plugin.name || '')
-          .replaceAll('-', ' ')
-          .replaceAll(/\b\w/g, c => c.toUpperCase());
-
-        items.push({
-          type: 'skill',
-          name: `${plugin.name}-${skillDir}`,
-          displayName: { en: displaySkillName },
-          description:
-            typeof plugin.description === 'string'
-              ? { en: plugin.description }
-              : plugin.description,
-          author: plugin.author?.name || owner?.name,
-          category: displayPluginName,
-          tags: [plugin.name],
-          source: { type: 'url', url: skillUrl, companions, rawBase }
-        });
-      }
-    } else {
-      needsTreeScan = true;
-    }
-  }
-
-  // Phase 2: tree scan for plugins without explicit skills (Anthropic-style)
-  if (needsTreeScan) {
-    const treePaths = new Set(tree.filter(e => e.type === 'blob').map(e => e.path));
-
-    // Build maps — separate direct-skill plugins from Anthropic-style nested plugins
-    const pluginDirs = new Map();
-    for (const plugin of plugins) {
-      if (Array.isArray(plugin.skills) && plugin.skills.length > 0) continue;
-      const dir = (plugin.source || `./${plugin.name}`).replace(/^\.\//, '');
-      if (!dir) continue;
-
-      // Phase 2a: plugin source directly contains SKILL.md → single skill
-      if (treePaths.has(`${dir}/SKILL.md`)) {
-        const skillDir = dir.split('/').pop();
-        const skillUrl = `${rawBase}/${dir}/SKILL.md`;
-        const companions = findCompanionFiles(tree, `${dir}/`);
-        const displaySkillName = skillDir
-          .replaceAll('-', ' ')
-          .replaceAll(/\b\w/g, c => c.toUpperCase());
-        const displayPluginName = (plugin.category || plugin.name || '')
-          .replaceAll('-', ' ')
-          .replaceAll(/\b\w/g, c => c.toUpperCase());
-
-        items.push({
-          type: 'skill',
-          name: plugin.name,
-          displayName: { en: displaySkillName },
-          description:
-            typeof plugin.description === 'string'
-              ? { en: plugin.description }
-              : plugin.description,
-          author: plugin.author?.name || owner?.name,
-          category: displayPluginName,
-          tags: [plugin.category || plugin.name],
-          source: { type: 'url', url: skillUrl, companions, rawBase }
-        });
-      } else {
-        // Phase 2b: Anthropic-style — scan for nested skills below
-        pluginDirs.set(dir, plugin);
-      }
-    }
-
-    // Find all SKILL.md files matching {pluginDir}/skills/{skillName}/SKILL.md
-    const skillRegex = /^([^/]+)\/skills\/([^/]+)\/SKILL\.md$/;
-
-    for (const entry of tree) {
-      if (entry.type !== 'blob') continue;
-      const match = entry.path.match(skillRegex);
-      if (!match) continue;
-
-      const [, pluginDir, skillDir] = match;
-      const plugin = pluginDirs.get(pluginDir);
-      if (!plugin) continue;
-
-      const dirPrefix = `${pluginDir}/skills/${skillDir}/`;
-      const skillUrl = `${rawBase}/${pluginDir}/skills/${skillDir}/SKILL.md`;
-      const companions = findCompanionFiles(tree, dirPrefix);
-
-      // Humanize directory names: "canned-responses" → "Canned Responses"
-      const displaySkillName = skillDir
-        .replaceAll('-', ' ')
-        .replaceAll(/\b\w/g, c => c.toUpperCase());
-      const displayPluginName = pluginDir
-        .replaceAll('-', ' ')
-        .replaceAll(/\b\w/g, c => c.toUpperCase());
-
-      items.push({
-        type: 'skill',
-        name: `${pluginDir}-${skillDir}`,
-        displayName: { en: displaySkillName },
-        description:
-          typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
-        author: plugin.author?.name,
-        category: displayPluginName,
-        tags: [pluginDir],
-        source: { type: 'url', url: skillUrl, companions, rawBase }
-      });
-    }
-  }
-
-  return items;
 }
 
 // ---------------------------------------------------------------------------
@@ -792,26 +627,6 @@ function mapClaudeCodeCatalog(data) {
     };
   }
 
-  // Claude Code plugins format with a top-level `plugins` array (e.g. Anthropic knowledge-work-plugins)
-  if (data && Array.isArray(data.plugins)) {
-    return {
-      name: data.name,
-      description: data.description,
-      items: data.plugins.map(plugin => ({
-        type: 'skill',
-        name: plugin.name,
-        displayName: { en: plugin.name },
-        description:
-          typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
-        author: plugin.author?.name || data.owner?.name,
-        tags: plugin.tags || [],
-        source: plugin.source
-          ? { type: 'relative', path: plugin.source.replace(/^\.\//, '') }
-          : { type: 'relative', path: plugin.name }
-      }))
-    };
-  }
-
   return data;
 }
 
@@ -881,14 +696,24 @@ class RegistryService {
 
     const rawData = await fetchContent(catalogUrl, authHeaders, registry);
 
-    // Plugins format: resolve each plugin to its individual skills via GitHub tree API
+    // Claude Code plugin marketplace: one skill item per SKILL.md a plugin ships
     if (rawData && Array.isArray(rawData.plugins)) {
-      const items = await resolvePluginSkills(
-        registry,
-        rawData.plugins,
-        rawData.owner,
-        authHeaders
-      );
+      const items = await buildPluginSkillItems({
+        plugins: rawData.plugins,
+        owner: rawData.owner,
+        ownRepo: parseGitHubUrl(toRawGitHubUrl(catalogUrl)),
+        // The registry's credentials go to GitHub only when the registry itself is on GitHub
+        fetchTree: (owner, repo, ref) =>
+          fetchGitHubTree(
+            owner,
+            repo,
+            ref,
+            sharesCredentialScope('https://api.github.com/', [catalogUrl]) ? authHeaders : {},
+            registry
+          ),
+        logger,
+        logContext: { component: COMPONENT, registryId: registry.id }
+      });
       const catalog = {
         name: rawData.name,
         description: rawData.description,
