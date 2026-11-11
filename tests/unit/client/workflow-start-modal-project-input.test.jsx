@@ -30,6 +30,14 @@ jest.mock('../../../client/src/shared/components/LoadingSpinner', () => ({
   default: () => null
 }));
 
+// StartWorkflowModal -> useAiAcknowledgement -> UIConfigContext imports runtimeBasePath, which
+// uses `import.meta` and cannot load under jest.
+jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
+  buildApiUrl: p => `/api/${p}`,
+  buildPath: p => p,
+  buildAssetUrl: p => p
+}));
+
 let mockProjectsState;
 jest.mock('../../../client/src/features/projects/hooks/useProjects', () => ({
   useUsableProjects: () => mockProjectsState

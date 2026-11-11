@@ -374,6 +374,7 @@ const CLEAN_PAGES = [
   '/admin/changelog',
   '/admin/features',
   '/admin/security',
+  '/admin/eu-ai-act',
   '/admin/updates',
   '/admin/advanced',
   '/admin/models/new'
@@ -545,7 +546,8 @@ test.describe('Accessibility — landmarks', () => {
     '/admin',
     '/admin/apps',
     '/admin/marketplace',
-    '/admin/security'
+    '/admin/security',
+    '/admin/eu-ai-act'
   ]) {
     test(`${path} has exactly one main landmark and no ambiguous duplicates`, async ({ page }) => {
       await page.goto(path);
