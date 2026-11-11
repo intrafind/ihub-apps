@@ -89,10 +89,7 @@ throwaway random key; no real key leaves iHub.
 2. **Restart vLLM right away** with the new `--watermark-config`, then run the self-test.
 3. Retired keys stay in the store and are tried by the detector, so older text is still recognised and reports its
    **old** `keyId`. Delete one only deliberately: text made with it can no longer be recognised, and its id is never
-   reused. Key ids are `wm-<product>-<installation id>-<year>-<seq>`, for example
-   `wm-ihub-inst_3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2`. The installation id is the one in
-   `generator.installation_id` of every provenance object (`IHUB_INSTALLATION_ID` overrides it), so an id says
-   where it comes from and ids from two installations never collide. `POST .../{keyId}/_activate` re-activates a retired key (rollback); in the admin page it is **Make active** on a retired key, behind a confirmation. It is audited (`from`, `to`; never a key value), a no-op on the active key writes no entry, and the key is not shown until you choose *Show key and vLLM option* (audited like Reveal).
+   reused. `POST .../{keyId}/_activate` re-activates a retired key (rollback); in the admin page it is **Make active** on a retired key, behind a confirmation. It is audited (`from`, `to`; never a key value), a no-op on the active key writes no entry, and the key is not shown until you choose *Show key and vLLM option* (audited like Reveal).
 
 Output generated between "rotate in iHub" and "restart vLLM" is recorded under the new `key_id` but marked with
 the old key. A reveal (`POST .../{keyId}/_reveal`) is `Cache-Control: no-store`, written to the audit log **before**
@@ -100,6 +97,75 @@ the key is returned, and refused (`503`) when the audit log cannot be written.
 
 **Backup.** The keys are encrypted with `contents/.encryption-key`. A backup restored without that file, or on
 another installation, loses them (the retired ones included). There is no key export.
+
+## Key ids and the key store
+
+A **key id** names a key without revealing it. It is assigned by the server, never reused (not even after the key is
+deleted), and appears in provenance records (`model.watermark.key_id`), in `_verify` answers (`watermark.keyId`),
+in detector requests and in the audit log. Treat it as an opaque string.
+
+```
+wm-<product>-<installation uuid>-<year>-<seq>
+
+wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2
+```
+
+| Part | Meaning |
+| --- | --- |
+| `wm` | A watermark key. |
+| `product` | `ihub`: the product that made the key. |
+| `installation uuid` | The uuid of this installation, the one in `generator.installation_id` of every provenance object (`inst_<uuid>`, without the `inst_`). `IHUB_INSTALLATION_ID` overrides it; characters outside letters, digits, `-` and `_` become `-`. |
+| `year` | Year the key was created (UTC). |
+| `seq` | Running number within that year, counted per installation. A counter survives deletion, so a number is not handed out twice. |
+
+The installation uuid is what keeps ids from two installations apart (a clone, a restored backup, two installations
+sharing one detector): `wm-ihub-<uuid-a>-2026-1` and `wm-ihub-<uuid-b>-2026-1` are different keys. A key id is about 50 characters long.
+
+The keys live in `contents/config/watermark-keys.json`, encrypted with `contents/.encryption-key`; the file is not part
+of `platform.json` and is never loaded into the configuration cache.
+
+```json
+{
+  "version": 1,
+  "nextSeq": { "2026": 3 },
+  "keys": [
+    {
+      "keyId": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2",
+      "status": "active",
+      "key": "ENC[AES256_GCM,...]",
+      "source": "generated",
+      "label": "Q4 rotation",
+      "createdAt": "2026-11-11T10:00:00.000Z",
+      "createdBy": "admin"
+    },
+    {
+      "keyId": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-1",
+      "status": "retired",
+      "key": "ENC[AES256_GCM,...]",
+      "source": "entered",
+      "createdAt": "2026-06-02T08:15:00.000Z",
+      "createdBy": "admin",
+      "retiredAt": "2026-11-11T10:00:00.000Z"
+    }
+  ]
+}
+```
+
+| Field | Notes |
+| --- | --- |
+| `version` | Format version of the file (`1`). |
+| `nextSeq` | Next running number per year. Survives deletion of keys. |
+| `keyId` | As above. |
+| `status` | `active` (exactly one, as soon as any key exists; the one vLLM should run with) or `retired` (detection only). |
+| `key` | The key value, encrypted. A safe integer (1 to 9007199254740991): vLLM takes an integer and larger numbers lose precision in JSON. The admin API shows it as a decimal **string**, and only when a key is created or revealed. |
+| `source` | `generated` (random, below 2^48) or `entered` (typed in; below 2^32 gets a `weakKey` warning). |
+| `label` | Optional note, at most 100 characters. |
+| `createdAt`, `createdBy` | When and by which admin. |
+| `retiredAt` | Set when the key stopped being the active one; removed again if it is re-activated. |
+
+Every change keeps the invariant "exactly one `active` key" inside one atomic update, so concurrent requests, also
+from several servers sharing the storage, cannot leave two active keys. A value that is already stored is refused
+(`409 WATERMARK_KEY_DUPLICATE`).
 
 ## Detector contract
 
@@ -109,10 +175,10 @@ iHub does not ship a detector. It calls one over HTTP:
 POST <detectorUrl>
 Authorization: Bearer <token of detectorCredentialRef>
 { "text": "...", "tokenizer": "...", "algorithm": "gumbel", "prf": "philox", "context_width": 4,
-  "keys": [ { "key_id": "wm-ihub-inst_3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2", "key": 123456789012 }, { "key_id": "wm-ihub-inst_3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-1", "key": 987654321 } ] }
+  "keys": [ { "key_id": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2", "key": 123456789012 }, { "key_id": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-1", "key": 987654321 } ] }
 
 200 { "num_scored_tokens": 240,
-      "results": [ { "key_id": "wm-ihub-inst_3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2", "p_value": 0.47 }, { "key_id": "wm-ihub-inst_3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-1", "p_value": 1.2e-9 } ] }
+      "results": [ { "key_id": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-2", "p_value": 0.47 }, { "key_id": "wm-ihub-3c0d2b6e-5a41-4e0f-9d1c-7b8a2f4e6c10-2026-1", "p_value": 1.2e-9 } ] }
 ```
 
 - Active key first. `key` is a safe integer; accept a decimal string as well if you can.
