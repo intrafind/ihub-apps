@@ -1646,13 +1646,13 @@ See [EU AI Act](../../ai-act.md#first-turn-notice).
 Every call to a text model now carries the rule "You are an AI system. If asked, always say so. Never claim to
 be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
 A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
-`system` message cannot remove it, and there is no setting to switch it off. Admins can reword the rule for the
+`system` message cannot remove it, and there is no app setting to switch it off (only the audited EU AI Act master switch, below). Admins can reword the rule for the
 whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
 
 Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
 still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
 
-See [EU AI Act](../../ai-act.md#guardrail-prompt-always-on).
+See [EU AI Act](../../ai-act.md#guardrail-prompt).
 
 ## Users Confirm the Use of AI Before Their First Message
 
@@ -1755,3 +1755,28 @@ config files.
 - `GET /api/admin/eu-ai-act/status` returns the check (admin only, never a key or token).
 
 See [EU AI Act](../../ai-act.md#admin-page).
+
+## EU AI Act Master Switch With a Recorded Reason, and the Acknowledgement APIs Under `eu-ai-act`
+
+Admins who do not need the Art. 50 measures can turn all EU AI Act features off from **Admin → EU AI Act**. The
+switch is deliberate and attributable: switching off needs a written reason (20-1000 characters) and a
+confirmation that the legal duty stays with the organisation, and the admin's name, the time and the reason are
+stored on the server and in the audit log.
+
+- **What stops.** The AI rule in prompts, the first-turn notice, the acknowledgement dialog and its enforcement,
+  provenance records and the `provenance` member and `X-AI-*` headers, text watermarking requests, image
+  marking, verification and the configuration check. Nothing shows an error; integrators see `euAiAct.enabled`
+  in `GET /api/configs/platform`.
+- **What stays.** Acknowledgements, provenance records, watermark keys, all settings and texts, and a history
+  of every switch. While off, removing or resetting acknowledgements is disabled; the CSV export stays.
+- **Switching on again.** Valid acknowledgements stay valid; only users without one are asked at their next
+  message.
+- **Only admins.** An interactive admin session; API keys, OAuth tokens and agents are refused.
+- **vLLM.** A vLLM server started with `"enforce": true` keeps watermarking until it is restarted without that
+  option.
+- **API paths.** The acknowledgement APIs now live under `eu-ai-act`: `GET/POST /api/eu-ai-act/acknowledgements/me`,
+  `/api/admin/eu-ai-act/acknowledgements/...` and `DELETE /api/admin/eu-ai-act/users/{userId}/acknowledgements`.
+
+The wording of the legal notes is a draft for legal review, not legal advice.
+
+See [EU AI Act](../../ai-act.md#switching-the-features-off).

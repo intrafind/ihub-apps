@@ -224,6 +224,7 @@ Mistral `json_schema`, vLLM):
 Every completion that has text carries a machine-readable record of where it came from (see
 [Provenance Records](provenance.md)):
 
+- **Off while the EU AI Act features are off** ([switch](ai-act.md#switching-the-features-off)): no headers and no `provenance` member (absent, not null).
 - **Headers** (set before the first byte, so they are also on a stream): `X-AI-Generated: true` and
   `X-AI-Content-Id: <output_id>`.
 - **Body:** a top-level `provenance` member. On a stream it is attached to the chunk that carries

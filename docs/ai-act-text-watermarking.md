@@ -9,6 +9,8 @@ The watermark is **statistical**. It survives light edits, but not paraphrasing,
 a missing hit is **never proof that a person wrote a text**. The exact-text hash lookup of the provenance records
 and the watermark detector complement each other: `_verify` tries the hash first and the detector second.
 
+> **Master switch.** While the [EU AI Act features are switched off](ai-act.md#switching-the-features-off) iHub sends no `watermarking` flag, makes no claim and tests no detector; keys stay manageable. A vLLM started with `"enforce": true` keeps marking until it is restarted without it.
+
 ## How it fits together
 
 ```

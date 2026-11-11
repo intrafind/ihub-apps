@@ -1,5 +1,7 @@
 # #3325 AI Act Art. 50(1): the assistant always discloses that it is an AI
 
+> **Superseded (step 9).** "The guardrail cannot be switched off" now reads: it can only be turned off through the audited EU AI Act master switch (`eu-ai-act-switch.md`). No app setting, env var or per-feature switch exists.
+
 Epic: #3324 (EU AI Act Art. 50, focused scope). Stack position: **first** (3325 -> 3326 -> 3327 -> 3331 -> 3328 -> 3329).
 Repo state checked: `main` at `ed5557a`; branch `claude/epic-analysis-planning-45wief` exists locally, no #2619 branch (`git branch -a`), `server/services/provenance/` does not exist. The guardrail is written fresh.
 Author roles: Product Manager (Part 1), Senior Engineer (Part 2). Not legal advice.

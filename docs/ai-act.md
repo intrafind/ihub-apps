@@ -5,14 +5,16 @@ the landing page for the measures; it is not legal advice.
 
 | Duty | What iHub does | What the operator does |
 | --- | --- | --- |
-| Art. 50(1): people know they are dealing with an AI | The assistant always says it is an AI when asked and never claims to be human, even in a role. A notice in the empty chat says so before the first message. | Review the notice text; keep it on unless an app is clearly not a chat. |
+| Art. 50(1): people know they are dealing with an AI | The assistant says it is an AI when asked and never claims to be human, even in a role. A notice in the empty chat says so before the first message. | Review the notice text; keep it on unless an app is clearly not a chat. |
 | Art. 4: AI literacy, "can you show that people were told?" | A dialog before the first message asks users to confirm an AI-use statement. The confirmation is stored with the user and in the audit log. | Write the statement and the policy link; export the list when an auditor asks. |
 
 | Art. 50(2): output is marked and can be checked | Every output carries a machine-readable provenance object and gets a record (a hash, never the text), so "did this exact text come from here?" can be answered. | Declare which models are marked by their provider; set the retention; decide who may call the lookup. Generated images keep the provider's own marks (C2PA, SynthID) untouched, are recorded, and can be checked by upload; see [Provenance Records](provenance.md#images-provider-marks-3328). |
 
+One audited master switch turns all of these features off; see [Switching the features off](#switching-the-features-off).
+
 Further marking measures are added to this page as they ship.
 
-## Guardrail prompt (always on)
+## Guardrail prompt
 
 Every call to a text model carries this rule as the last text of the system prompt:
 
@@ -23,8 +25,9 @@ Every call to a text model carries this rule as the last text of the system prom
   get it. See [LLM Client](llm-client.md#ai-disclosure-guardrail).
 - **Wording is global, the rule is not optional.** An admin can reword it for the whole platform in
   `aiDisclosure.guardrail.text` (`platform.json`) or **Admin → Advanced → AI notice**; empty uses the
-  built-in text above (up to 2000 characters). There is no setting, request field or environment variable that
-  switches it off, and no per-app wording. An app prompt or a client-supplied `system` message cannot remove it:
+  built-in text above (up to 2000 characters). There is no app setting, request field, environment variable or
+  per-feature switch for it, and no per-app wording. The only way to turn it off is the audited
+  [master switch](#switching-the-features-off), which records who, when and why. An app prompt or a client-supplied `system` message cannot remove it:
   the rule is appended after them. A reworded rule still has to say that the assistant is an AI and never
   claims to be human; iHub does not check that.
 - **iAssistant.** The `iassistant-conversation` provider does not use iHub's system message (its adapter
@@ -122,6 +125,49 @@ that people were told, not a legal opinion: the wording is yours.
   confirms once, and so does every Outlook, extension and Nextcloud user at their next message. Set `aiAcknowledgement.enabled` to `false` first to roll out gradually.
 - **The legacy disclaimer.** The first-visit popup from **UI → disclaimer** is a separate setting and is shown
   first; the confirmation dialog waits until it is closed.
+
+## Switching the features off
+
+An admin can turn every EU AI Act feature of iHub off with one switch on **Admin → EU AI Act**. This is for
+deployments where the measures do not apply (internal-only tools, non-EU operation, research sandboxes). The
+switch is deliberate and attributable: the person, the time and a written reason are stored on the server.
+
+> **Legal note (draft wording, [LEGAL] pending legal review, not legal advice).** Regulation (EU) 2024/1689
+> places transparency duties on providers and deployers of AI systems according to their role and use. Turning
+> these measures off does not remove those duties. By turning them off you confirm that you have assessed that
+> they are not required for your use of this system, or that you meet them in another way, and that you accept
+> responsibility for this decision. Your name, the time and your reason are stored on this server and in the
+> audit log.
+
+- **Who.** An admin in an interactive session. Personal API keys, OAuth client tokens, delegated tokens and agents
+  get `403 INTERACTIVE_SESSION_REQUIRED`. The name comes from the session, never from the request.
+- **How.** Switch off needs a reason of 20-1000 characters and `acceptResponsibility: true`; switch on takes an
+  optional note. A second switch to the state the server is already in is a `409`, so two admins clicking at once
+  leave one record.
+- **What stops.** The guardrail rule in prompts, the first-turn notice, the acknowledgement dialog and the `428`
+  enforcement, provenance records and the `provenance` member and `X-AI-*` headers on every channel, the text
+  watermark flag to vLLM, image marking and records, `POST /api/provenance/_verify` (answers `403
+  FEATURE_DISABLED`), the detector test and self-test (same answer) and the configuration check (no probes).
+  Runtime paths skip silently; nothing errors for a user or a machine caller.
+- **What stays.** Acknowledgements already given, provenance records already written, watermark keys and their
+  management, all settings and texts (they stay editable but have no effect), the retention sweep, the CSV
+  export of acknowledgements and the history of the switch. While off, the admin actions that delete or reset
+  acknowledgements (remove one, remove all, request again) answer `403 FEATURE_DISABLED`.
+- **Switching on again.** Everything resumes with the saved settings. Acknowledgements that are still valid stay
+  valid; only users without a valid one are asked, at their next message. `requiredVersion` is not changed.
+  Outputs from the off period have no provenance; the history is the statement of that gap.
+- **Where it is stored.** `contents/config/eu-ai-act-conformity.json`, its own file, not `platform.json`: a
+  generic settings save or an `IHUB_*` override cannot flip it or erase the record. The record holds the current
+  state, who, when, why and the last 100 switches. A file that says "off" without a complete record (who, when,
+  why) is treated as **on**. Every switch also writes one `toggle` audit entry (`resource: euAiActConformity`);
+  that is the only notification. No end user sees a hint.
+- **API.** `GET /api/admin/eu-ai-act/conformity`, `POST /api/admin/eu-ai-act/conformity/_disable`, `POST
+  /api/admin/eu-ai-act/conformity/_enable` (the API says `conformity`, the UI says "EU AI Act features").
+  `GET /api/configs/platform` carries `euAiAct: { enabled }`, never who or why.
+- **vLLM keeps watermarking if you started it that way.** A vLLM server started with `--watermark-config` and
+  `"enforce": true` marks every output regardless of iHub. Restart vLLM without that option to stop marking at
+  the source.
+- **Backups.** A backup restore replaces `contents/`, including this record.
 
 ## Provenance records
 

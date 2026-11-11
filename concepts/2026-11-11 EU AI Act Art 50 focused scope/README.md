@@ -117,3 +117,9 @@ Corrections to the engineering analysis caused by later changes on the stack:
 - Migration numbers: take the next free one after the highest on your branch (`ls server/migrations | sort -V | tail`); the analysis expects none to be needed.
 
 Commit order inside the branch: move the acknowledgement APIs first (and update every caller, the contract file, rate limiter, docs), then the store and endpoints, then the gates, then the e2e, then the UI, then docs and the release note.
+
+### Step 9: as built
+
+- Branch `claude/ai-act-eu-ai-act-switch`, base `claude/ai-act-integrations-acknowledgement`. No migration (the shipped default `server/defaults/config/eu-ai-act-conformity.json` is "on"; an absent file means on).
+- Decisions 1-7 above were implemented as written. Owner's decision on admin actions: remove one, remove all and request again answer `403 FEATURE_DISABLED` while off; export stays.
+- Deviations from the analysis: no gate in `iassistant-conversation.js` (the preamble injection no longer exists) and no TTS gates (read-aloud audio is not recorded); `GET /me` and `POST /me` follow the analysis (`POST` is `403 FEATURE_DISABLED`), and the client treats that answer as "done" so an open dialog never shows an error; provenance settings and the key store stay editable and manageable while off (no disabled fields), only the detector actions, verification and the acknowledgement delete/reset actions are disabled; `statusService` adds `summary.level: "disabled"`; the sidebar shows an "Off" badge.
