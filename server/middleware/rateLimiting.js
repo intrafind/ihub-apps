@@ -139,7 +139,8 @@ export const RATE_LIMITER_KEYS = Object.freeze([
   'authApi',
   'oauthApi',
   'oauthTokenApi',
-  'inferenceApi'
+  'inferenceApi',
+  'provenanceVerifyApi'
 ]);
 
 /**
@@ -170,7 +171,10 @@ const LIMITER_FALLBACKS = Object.freeze({
     skipFailedRequests: false
   },
   // Inference API configuration - balanced for AI inference
-  inferenceApi: { limit: 500, windowMs: 1 * 60 * 1000 }
+  inferenceApi: { limit: 500, windowMs: 1 * 60 * 1000 },
+  // Provenance lookup (`POST /api/eu-ai-act/provenance/_verify`): a membership oracle for a
+  // candidate text, so it gets its own, stricter budget per client.
+  provenanceVerifyApi: { limit: 60, windowMs: 60 * 1000, skipFailedRequests: false }
 });
 
 /**
@@ -245,4 +249,18 @@ export function createRateLimiters(platformConfig = {}) {
 export function createOAuthTokenLimiter(platformConfig = {}) {
   const { oauthTokenApi } = resolveRateLimitConfigs(platformConfig);
   return createRateLimiter(oauthTokenApi, {}, 'OAuth token', undefined, { shared: true });
+}
+
+/**
+ * The limiter of the provenance lookup. The route mounts it itself; the budget
+ * is shared across cluster workers.
+ *
+ * @param {Object} platformConfig - Platform configuration object
+ * @returns {Function} Express rate limiter middleware
+ */
+export function createProvenanceVerifyLimiter(platformConfig = {}) {
+  const { provenanceVerifyApi } = resolveRateLimitConfigs(platformConfig);
+  return createRateLimiter(provenanceVerifyApi, {}, 'provenance verify', undefined, {
+    shared: true
+  });
 }

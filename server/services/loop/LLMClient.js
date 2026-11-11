@@ -49,6 +49,7 @@ import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
+import { recordGeneratedImage, stampGeneratedImage } from '../provenance/mediaMarking.js';
 import { getGenAIInstrumentation } from '../../telemetry.js';
 import { resolveProviderName, resolveOperation } from '../../telemetry/providerMap.js';
 import runLogSingleton, { hashPayload } from './RunLog.js';
@@ -68,6 +69,7 @@ import { mergeToolCallDeltas } from './toolCallMerge.js';
 import { resolveSurface, outcomeOf, errorCodeOf } from '../usage/callRecord.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
 import { raceAbort, abortError } from './abortRace.js';
+import { guardMessagesForModel, resolveGuardrailRule } from '../provenance/guardrail.js';
 
 /** Upper bound on runs whose last request hash is kept for request/header dedupe. */
 const MAX_TRACKED_RUN_HASHES = 5000;
@@ -254,6 +256,39 @@ export class ResultAccumulator {
     this.chunkCount = 0;
     this.extras = {};
     this.metadata = {};
+    this._mediaRecords = [];
+  }
+
+  /**
+   * The one funnel every generated image passes (chat, agents, workflows, MCP,
+   * A2A). Stamps it with `provenance: { outputId, contentHash }` (synchronous,
+   * the hash is over the decoded bytes) and starts its provenance record.
+   *
+   * Invariant (EU AI Act Art. 50(2), #3328): the image `data` is never decoded
+   * to pixels or re-encoded here or anywhere after here. Provider marks (C2PA,
+   * XMP, SynthID) live in those bytes; `server/tests/media-no-reencode-guard.test.js`
+   * fails when an image library is imported on the generated-media path.
+   */
+  _stampImages(images) {
+    for (const image of images) {
+      const stamp = stampGeneratedImage(image);
+      if (!stamp?.created || !this.meta.model) continue;
+      // After the current chunk has been delivered: the manifest read must not
+      // delay the stream. Awaited before the call ends (`settleMedia`).
+      this._mediaRecords.push(
+        new Promise(resolve => setImmediate(resolve)).then(() =>
+          recordGeneratedImage(image, { model: this.meta.model })
+        )
+      );
+    }
+  }
+
+  /** Wait for the records started by {@link _stampImages}; they never throw. */
+  async settleMedia() {
+    if (this._mediaRecords.length === 0) return;
+    const pending = this._mediaRecords;
+    this._mediaRecords = [];
+    await Promise.allSettled(pending);
   }
 
   push(chunk) {
@@ -264,7 +299,10 @@ export class ResultAccumulator {
     if (Array.isArray(chunk.thoughtSignatures) && chunk.thoughtSignatures.length) {
       this.thoughtSignatures.push(...chunk.thoughtSignatures);
     }
-    if (Array.isArray(chunk.images) && chunk.images.length) this.images.push(...chunk.images);
+    if (Array.isArray(chunk.images) && chunk.images.length) {
+      this._stampImages(chunk.images);
+      this.images.push(...chunk.images);
+    }
     if (chunk.groundingMetadata) this._mergeGrounding(chunk.groundingMetadata);
     if (chunk.usage) this.usage = mergeUsage(this.usage, chunk.usage);
     if (chunk.finishReason) this.finishReason = chunk.finishReason;
@@ -305,6 +343,7 @@ export class ResultAccumulator {
           }
         : null,
       content: this.content,
+      marking: this.meta.marking ?? null,
       thinking: [...this.thinking],
       toolCalls: this.toolCalls.map(c => ({ ...c, function: { ...c.function } })),
       thoughtSignatures: [...this.thoughtSignatures],
@@ -508,6 +547,16 @@ export class LLMClient {
     // whatever the surface, which the recorder counts against the user's
     // limits and stores for the usage reports — so both show the same numbers.
     this.usage = opts.usage !== undefined ? opts.usage : defaultUsage;
+    // AI disclosure guardrail (EU AI Act Art. 50(1)): `(messages, model) => messages`,
+    // applied to every call here. An admin can reword the rule globally (read per call,
+    // so a change applies at once); only the audited EU AI Act master switch turns it off
+    // (`guardMessagesForModel` checks it); only tests pass `null` to keep unrelated message
+    // snapshots stable.
+    this.guardrail =
+      opts.guardrail !== undefined
+        ? opts.guardrail
+        : (messages, model) =>
+            guardMessagesForModel(messages, model, resolveGuardrailRule(configCache.getPlatform()));
     // Kept as the constructed values only; the effective ceilings are
     // resolved per call so platform.json and per-model overrides apply to the
     // module-level singleton too (see resolveTimeoutMs).
@@ -623,7 +672,7 @@ export class LLMClient {
    */
   async execute(params) {
     const {
-      messages,
+      messages: callerMessages,
       options = {},
       stream = true,
       signal,
@@ -634,7 +683,7 @@ export class LLMClient {
       includeDisabled = false
     } = params;
     const callStartedAt = Date.now();
-    if (!Array.isArray(messages)) {
+    if (!Array.isArray(callerMessages)) {
       throw new LLMError('messages must be an array', {
         code: LLM_ERROR_CODES.INVALID_REQUEST,
         providerCode: 'INVALID_MESSAGES'
@@ -649,6 +698,10 @@ export class LLMClient {
         modelId: params.modelId || null
       });
     }
+
+    // AI disclosure guardrail: a guarded copy is what every later step sees
+    // (request, run log, usage estimate); the caller's array is never mutated.
+    const messages = this.guardrail ? this.guardrail(callerMessages, model) : callerMessages;
 
     // Usage limits: refuse a call over the caller's budget before anything is
     // sent. `quota: false` on the params exempts a call (none do today).
@@ -845,7 +898,18 @@ export class LLMClient {
     const startedAt = Date.now();
     const runId = telemetry.runId || null;
     const step = Number.isInteger(telemetry.step) ? telemetry.step : 0;
-    const meta = { requestId, runId, step, model, request, startedAt, stream: effectiveStream };
+    // `marking` is the adapter's non-wire statement of how this output is
+    // watermarked (#3331); provenance reads it from the result.
+    const meta = {
+      requestId,
+      runId,
+      step,
+      model,
+      request,
+      startedAt,
+      stream: effectiveStream,
+      marking: request.marking ?? null
+    };
 
     this._recordRequestHeader({
       runId,
@@ -1119,6 +1183,8 @@ export class LLMClient {
         } catch {
           /* providers without converter state */
         }
+        // Provenance records of generated images (best effort, #3328).
+        await accumulator.settleMedia();
         const toolCalls = accumulator.toolCalls.length;
         if (failure) {
           client._recordError({ runId, step, err: failure, span, startedAt });

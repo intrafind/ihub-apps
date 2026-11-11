@@ -429,6 +429,37 @@
     "flushIntervalMs": 2000,
     "spillThresholdBytes": 65536
   },
+  "aiAcknowledgement": {
+    "enabled": true,
+    "enforce": true,
+    "requiredVersion": 1,
+    "resetAt": null,
+    "text": {
+      "en": "This platform uses AI systems. Their answers can be incorrect or incomplete. Please use them responsibly and follow your organisation's AI policy.",
+      "de": "Diese Plattform nutzt KI-Systeme. Deren Antworten können falsch oder unvollständig sein. Bitte nutzen Sie sie verantwortungsvoll und beachten Sie die KI-Richtlinie Ihrer Organisation."
+    },
+    "policyUrl": ""
+  },
+  "provenance": {
+    "retentionDays": 365,
+    "storeRecords": true,
+    "verify": {
+      "access": "authenticated"
+    },
+    "media": {
+      "maxVerifyBytes": 52428800,
+      "readC2pa": true
+    }
+  },
+  "aiDisclosure": {
+    "guardrail": {
+      "text": ""
+    },
+    "firstTurnNotice": {
+      "enabled": true,
+      "text": {}
+    }
+  },
   "chats": {
     "enabled": true,
     "retentionDays": 90,

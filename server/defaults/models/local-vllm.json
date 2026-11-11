@@ -19,5 +19,10 @@
   "autoDiscovery": true,
   "thinking": {
     "enabled": true
+  },
+  "contentMarking": {
+    "text": {
+      "by": "none"
+    }
   }
 }

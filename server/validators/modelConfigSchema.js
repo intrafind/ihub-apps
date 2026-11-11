@@ -69,6 +69,101 @@ const samplingSchema = z
   .strict();
 
 // Image generation configuration schema
+// How a model's output is marked as AI generated (EU AI Act Art. 50(2)).
+// `by: "ihub"` is iHub's own text watermark for self-hosted vLLM (#3331): the
+// detector fields say how verify reaches the detector service and must equal
+// the vLLM server's watermark settings.
+const detectorUrlSchema = z
+  .string()
+  .max(500)
+  .refine(
+    value => {
+      try {
+        const url = new URL(value);
+        return ['http:', 'https:'].includes(url.protocol);
+      } catch {
+        return false;
+      }
+    },
+    { message: 'detectorUrl must be an http(s) URL' }
+  );
+
+const markingSchema = z
+  .object({
+    by: z.enum(['ihub', 'provider', 'none']),
+    scheme: z.string().max(64).optional(),
+    keyId: z.string().max(64).optional(),
+    statementRef: z.string().max(500).optional(),
+    detectorUrl: detectorUrlSchema.optional(),
+    // Id of a `bearer` entry in credentials.json; the token is never inline.
+    detectorCredentialRef: z.string().max(100).optional(),
+    // Hugging Face id or path the detector loads; defaults to the model's modelId.
+    tokenizer: z.string().max(300).optional(),
+    algorithm: z.enum(['gumbel']).optional(),
+    prf: z.enum(['philox']).optional(),
+    contextWidth: z.number().int().min(1).max(16).optional()
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.by === 'ihub') {
+      if (!value.scheme) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'contentMarking: by "ihub" requires a scheme',
+          path: ['scheme']
+        });
+      } else if (value.scheme !== 'vllm-gumbel') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'contentMarking: by "ihub" supports the scheme "vllm-gumbel" only',
+          path: ['scheme']
+        });
+      }
+      if (value.keyId !== undefined) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'contentMarking: keyId is not used with by "ihub" (the key store decides)',
+          path: ['keyId']
+        });
+      }
+    } else {
+      for (const field of [
+        'detectorUrl',
+        'detectorCredentialRef',
+        'tokenizer',
+        'algorithm',
+        'prf',
+        'contextWidth'
+      ]) {
+        if (value[field] !== undefined) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `contentMarking: ${field} is only valid with by "ihub"`,
+            path: [field]
+          });
+        }
+      }
+    }
+  });
+
+// Image marking (#3328): what the provider embeds, as the operator declares
+// it. iHub applies no image mark of its own, so `ihub` is not offered here; `scheme` is free text (e.g. "synthid", "c2pa") and
+// `statementRef` points at the operator's written statement (CoP 4.2).
+const mediaMarkingSchema = z
+  .object({
+    by: z.enum(['provider', 'none']),
+    scheme: z.string().min(1).max(100).optional(),
+    statementRef: z.string().max(2000).optional()
+  })
+  .strict();
+
+const contentMarkingSchema = z
+  .object({
+    text: markingSchema.optional(),
+    image: mediaMarkingSchema.optional()
+  })
+  .strict();
+
 const imageGenerationSchema = z
   .object({
     aspectRatio: z
@@ -293,6 +388,13 @@ const baseModelConfigSchema = z
     // Per-user token budget of this model per reset window — the ceiling
     // groups and users can only lower (services/quota/limitResolver.js).
     usageLimits: usageLimitBucketSchema.optional(),
+    // What the provider or iHub does to mark this model's output as AI generated
+    // (EU AI Act Art. 50(2)). `provider` is the operator's written statement that
+    // the provider marks the output (`statementRef` is a free reference, never
+    // fetched); `none` is the default. `ihub` (iHub's own text watermark) is
+    // reserved for the watermarking feature and needs a `scheme`. `image` (#3328)
+    // declares what the provider embeds; iHub adds no mark there.
+    contentMarking: contentMarkingSchema.optional(),
     supportsImageGeneration: z.boolean().optional().prefault(false),
     imageGeneration: imageGenerationSchema.optional(),
     // Text-to-speech settings (modelType: 'tts' only).
@@ -320,6 +422,9 @@ export const TRANSCRIPTION_ONLY_PROVIDERS = ['vllm-realtime', 'google-live', 'go
 // on any other provider could never be played, so it fails validation.
 export const TTS_PROVIDERS = ['mistral', 'google'];
 
+/** Providers that can be a vLLM server: iHub's text watermark is offered for these only. */
+export const VLLM_PROVIDERS = ['local', 'openai'];
+
 // Cross-field validation. Kept as a superRefine on top of the base object so
 // `knownModelKeys` can still be derived from `baseModelConfigSchema.shape`
 // (a ZodEffects wrapper has no `.shape`).
@@ -336,6 +441,15 @@ export const modelConfigSchema = baseModelConfigSchema.superRefine((data, ctx) =
       code: z.ZodIssueCode.custom,
       message: `Provider "${data.provider}" does not support modelType "tts" (supported: ${TTS_PROVIDERS.join(', ')})`,
       path: ['provider']
+    });
+  }
+  // iHub's own text watermark is a vLLM feature (`local`, or `openai` pointed at
+  // vLLM). The request carries a `watermarking` field a hosted API would reject.
+  if (data.contentMarking?.text?.by === 'ihub' && !VLLM_PROVIDERS.includes(data.provider)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `contentMarking: by "ihub" needs a vLLM model (provider ${VLLM_PROVIDERS.join(' or ')}), not "${data.provider}"`,
+      path: ['contentMarking', 'text', 'by']
     });
   }
   if (data.tts !== undefined && data.modelType !== 'tts') {

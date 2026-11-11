@@ -32,6 +32,8 @@ function DisclaimerPopup({ disclaimer, currentLanguage }) {
     // Store in localStorage that user has seen the disclaimer
     localStorage.setItem(DISCLAIMER_STORAGE_KEY, 'true');
     setIsVisible(false);
+    // The AI-use acknowledgement dialog queues behind this popup (#3326).
+    window.dispatchEvent(new Event('ihub-disclaimer-closed'));
   };
 
   if (!isVisible) return null;

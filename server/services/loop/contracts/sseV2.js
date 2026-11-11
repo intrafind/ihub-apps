@@ -24,6 +24,7 @@ import {
   abortCauseSchema
 } from './runLogEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
+import { provenanceContractSchema } from '../../provenance/provenanceSchema.js';
 
 const ts = z.string().datetime({ offset: true });
 
@@ -73,6 +74,8 @@ export const runEndedData = z.object({
   /** Surface hints preserved from the legacy `done` event. */
   toolName: z.string().optional(),
   knowledgeSources: z.array(z.string()).optional(),
+  /** Provenance of the answer (EU AI Act Art. 50(2)); chat turns with text. */
+  provenance: provenanceContractSchema.optional(),
   /** Workflow output (chat-visible result) when the run produced one. */
   output: z.any().optional(),
   /** Set when the run was aborted: who stopped it, from where and when. */
@@ -99,6 +102,8 @@ export const stepDeltaData = z.object({
     .object({
       mimeType: z.string(),
       data: z.string(),
+      /** Output id and raw-bytes hash (EU AI Act Art. 50(2), #3328). */
+      provenance: z.object({ outputId: z.string(), contentHash: z.string() }).optional(),
       thoughtSignature: z.string().optional()
     })
     .optional(),

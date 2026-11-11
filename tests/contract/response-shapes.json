@@ -541,6 +541,10 @@
           "age": "number",
           "sizeApprox": "number"
         },
+        "config/eu-ai-act-conformity.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
         "config/features.json": {
           "age": "number",
           "sizeApprox": "number"
@@ -777,6 +781,26 @@
   "GET /api/admin/configs/platform": {
     "status": 200,
     "shape": {
+      "aiAcknowledgement": {
+        "enabled": "boolean",
+        "enforce": "boolean",
+        "policyUrl": "string",
+        "requiredVersion": "number",
+        "resetAt": "null",
+        "text": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "aiDisclosure": {
+        "firstTurnNotice": {
+          "enabled": "boolean",
+          "text": "object"
+        },
+        "guardrail": {
+          "text": "string"
+        }
+      },
       "anonymousAuth": {
         "defaultGroups": ["string"],
         "enabled": "boolean"
@@ -990,6 +1014,17 @@
           "allowUsers": "boolean"
         },
         "tierPolicy": "string"
+      },
+      "provenance": {
+        "media": {
+          "maxVerifyBytes": "number",
+          "readC2pa": "boolean"
+        },
+        "retentionDays": "number",
+        "storeRecords": "boolean",
+        "verify": {
+          "access": "string"
+        }
       },
       "proxyAuth": {
         "enabled": "boolean",
@@ -1373,6 +1408,101 @@
   },
   "GET /api/admin/document-templates/:id/files/:slot": {
     "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/eu-ai-act/acknowledgements/_export": {
+    "status": 200,
+    "type": "text/csv"
+  },
+  "GET /api/admin/eu-ai-act/conformity": {
+    "status": 200,
+    "shape": {
+      "changedAt": "null",
+      "changedBy": "null",
+      "enabled": "boolean",
+      "history": [],
+      "reason": "null",
+      "statementVersion": "null",
+      "valid": "boolean"
+    }
+  },
+  "GET /api/admin/eu-ai-act/status": {
+    "status": 200,
+    "shape": {
+      "acknowledgements": {
+        "configuredEnabled": "boolean",
+        "counts": {
+          "acknowledged": "number",
+          "pending": "number",
+          "total": "number"
+        },
+        "enabled": "boolean",
+        "enforced": "boolean",
+        "requiredVersion": "number"
+      },
+      "checks": [
+        {
+          "fix": "null|object",
+          "id": "string",
+          "level": "string",
+          "message": "string",
+          "messageKey": "string",
+          "modelId?": "string",
+          "params": "object",
+          "scope": "string"
+        }
+      ],
+      "conformity": {
+        "changedAt": "null",
+        "changedBy": "null",
+        "enabled": "boolean",
+        "history": [],
+        "reason": "null",
+        "statementVersion": "null",
+        "valid": "boolean"
+      },
+      "generatedAt": "string",
+      "models": [
+        {
+          "activeKeyId": "null",
+          "detector": "null",
+          "marking": "object",
+          "modelId": "string",
+          "name": "object",
+          "selfTest": "null"
+        }
+      ],
+      "provenance": {
+        "media": {
+          "maxVerifyBytes": "number"
+        },
+        "retentionDays": "number",
+        "storeRecords": "boolean",
+        "verifyAccess": "string"
+      },
+      "summary": {
+        "counts": {
+          "error": "number",
+          "ok": "number",
+          "warn": "number"
+        },
+        "level": "string",
+        "skippedDisabledModels": "number"
+      }
+    }
+  },
+  "GET /api/admin/eu-ai-act/watermark-detectors": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/admin/eu-ai-act/watermark-keys": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
   },
   "GET /api/admin/features": {
     "status": 200,
@@ -2045,6 +2175,7 @@
           "apiKeySet": "boolean",
           "autoDiscovery": "boolean",
           "config?": "object",
+          "contentMarking?": "object",
           "contextWindow?": "null|number",
           "default": "boolean",
           "description": "object",
@@ -2745,6 +2876,11 @@
           "limit": "number",
           "windowMs": "number"
         },
+        "provenanceVerifyApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
         "publicApi": {
           "counts": "string",
           "limit": "number",
@@ -2774,6 +2910,11 @@
           "windowMs": "number"
         },
         "oauthTokenApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "provenanceVerifyApi": {
           "counts": "string",
           "limit": "number",
           "windowMs": "number"
@@ -2952,6 +3093,7 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
+          "aiDisclosure": "object",
           "allowEmptyContent": "object",
           "allowInheritance": "object",
           "allowUserTemplateUploads": "object",
@@ -3045,6 +3187,7 @@
           "concurrency": "object",
           "config": "object",
           "connectTimeoutMs": "object",
+          "contentMarking": "object",
           "contextWindow": "object",
           "default": "object",
           "description": "object",
@@ -3086,6 +3229,8 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
+          "aiAcknowledgement": "object",
+          "aiDisclosure": "object",
           "anonymousAuth": "object",
           "artifacts": "object",
           "audit": "object",
@@ -3100,6 +3245,7 @@
           "ntlmAuth": "object",
           "oidcAuth": "object",
           "projects": "object",
+          "provenance": "object",
           "proxy": "object",
           "proxyAuth": "object",
           "rateLimit": "object",
@@ -3158,6 +3304,7 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
+          "aiAcknowledgements": "object",
           "createdAt": "object",
           "email": "object",
           "enabled": "object",
@@ -4373,6 +4520,7 @@
           "context?": "object",
           "finishReason?": "string",
           "id": "string",
+          "provenance?": "object",
           "role": "string",
           "runId": "string",
           "ts": "string",
@@ -4665,6 +4813,16 @@
   "GET /api/configs/platform": {
     "status": 200,
     "shape": {
+      "aiAcknowledgement": {
+        "enabled": "boolean",
+        "enforce": "boolean"
+      },
+      "aiDisclosure": {
+        "firstTurnNotice": {
+          "enabled": "boolean",
+          "text": "object"
+        }
+      },
       "chats": {
         "persistence": "boolean",
         "sharing": {
@@ -4684,6 +4842,9 @@
         "methods": ["string"]
       },
       "defaultLanguage": "string",
+      "euAiAct": {
+        "enabled": "boolean"
+      },
       "features": [
         {
           "category": "string",
@@ -5082,6 +5243,15 @@
         }
       ],
       "pinned": "null"
+    }
+  },
+  "GET /api/eu-ai-act/acknowledgements/me": {
+    "status": 200,
+    "shape": {
+      "acknowledged": "boolean",
+      "enabled": "boolean",
+      "enforce": "boolean",
+      "requiredVersion": "number"
     }
   },
   "GET /api/health": {

@@ -12,6 +12,7 @@ import UnifiedUploader from '../../upload/components/UnifiedUploader';
 import ProjectInputField from './ProjectInputField';
 import { PROJECT_INPUT_TYPE } from '../utils/projectNodeConfig';
 import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
+import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 
 /**
  * Renders a form field based on variable type
@@ -170,6 +171,7 @@ function FormField({ variable, value, onChange, disabled, language, error, field
  */
 function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
   const { t, i18n } = useTranslation();
+  const acknowledgement = useAiAcknowledgement();
   const currentLanguage = i18n.language;
 
   const [initialData, setInitialData] = useState({});
@@ -295,12 +297,18 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
         ? { ...initialData, _modelOverride: selectedModel }
         : initialData;
 
-      const response = await apiClient.post(`/workflows/${workflow.id}/execute`, {
-        initialData: dataToSend,
-        options: {
-          checkpointOnNode: true
-        }
-      });
+      const start = () =>
+        apiClient.post(`/workflows/${workflow.id}/execute`, {
+          initialData: dataToSend,
+          options: {
+            checkpointOnNode: true
+          }
+        });
+      // The AI-use notice has to be confirmed before an LLM run starts (#3326).
+      const response = acknowledgement
+        ? await acknowledgement.runWithAcknowledgement(start)
+        : await start();
+      if (!response) return;
 
       onStarted(response.data);
     } catch (err) {

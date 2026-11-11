@@ -52,6 +52,9 @@ function TeamsTab() {
   const applyTeamsTheme = theme => {
     const root = document.documentElement;
 
+    // Lets teams.css style what React renders outside `.teams-container` (the
+    // AI-use dialog) for the high-contrast theme, which only sets `dark` otherwise.
+    root.dataset.teamsTheme = theme || 'default';
     switch (theme) {
       case 'dark':
         root.classList.add('dark');

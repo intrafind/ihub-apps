@@ -81,6 +81,14 @@ For local development with Teams:
 2. Update manifest with ngrok URL
 3. Enable Teams development mode
 
+## AI-use notice
+
+With the [AI-use acknowledgement](../docs/ai-act.md#ai-use-acknowledgement) on (the default), the tab asks each
+user to confirm the notice before their first message, exactly as the web app does (the tab is the web app).
+The dialog follows the Teams theme (light, dark, high contrast). If the policy link does not open from your
+Teams client, the user can copy the policy address from the dialog; list the policy host under
+`validDomains` in the manifest if Teams refuses the navigation.
+
 ## Troubleshooting
 
 - Ensure HTTPS is enabled (Teams requires secure connections)

@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { PlatformConfigContext, usePlatformConfig } from './platformConfigContextValue';
 import {
   fetchAuthStatus,
   fetchUIConfig,
@@ -11,12 +12,7 @@ import {
   invalidateUIConfigCache
 } from '../../api';
 
-const PlatformConfigContext = createContext({
-  platformConfig: null,
-  isLoading: true,
-  error: null,
-  refreshConfig: () => {}
-});
+export { PlatformConfigContext, usePlatformConfig };
 
 export function PlatformConfigProvider({ children }) {
   const [platformConfig, setPlatformConfig] = useState(null);
@@ -74,6 +70,21 @@ export function PlatformConfigProvider({ children }) {
         // storage provider that came up — `useChatPersistence()` gates the whole
         // history UI on it, so it has to survive this hand-assembled object.
         chats: platformCfg.chats,
+
+        // First-turn AI notice (Art. 50(1)): enabled + text, resolved by
+        // shared/aiDisclosure.js against the app's override.
+        aiDisclosure: platformCfg.aiDisclosure,
+
+        // AI-use acknowledgement (#3326): only the switches. The notice itself is
+        // per user and language, from /api/eu-ai-act/acknowledgements/me.
+        aiAcknowledgement: platformCfg.aiAcknowledgement,
+
+        // The EU AI Act master switch: `{ enabled }` only. Dropping it here would make
+        // every client read the features as on.
+        euAiAct: platformCfg.euAiAct,
+
+        // Provenance records (#3327): retention, store switch and who may call the lookup.
+        provenance: platformCfg.provenance,
 
         // Voice input: backend switches, the Azure host / keyConfigured flag and
         // the platform-wide defaults (dictation service, transcription model)
@@ -150,19 +161,6 @@ export function PlatformConfigProvider({ children }) {
       {children}
     </PlatformConfigContext.Provider>
   );
-}
-
-/**
- * Hook to access platform configuration context.
- * Provides server configuration, authentication settings, and feature flags.
- * @returns {Object} Platform config context value
- * @returns {Object|null} returns.platformConfig - The platform configuration object
- * @returns {boolean} returns.isLoading - Whether config is still loading
- * @returns {string|null} returns.error - Error message if loading failed
- * @returns {Function} returns.refreshConfig - Function to reload configuration
- */
-export function usePlatformConfig() {
-  return useContext(PlatformConfigContext);
 }
 
 export default PlatformConfigContext;

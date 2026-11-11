@@ -105,6 +105,9 @@ function cacheKeyForStorageChange(event) {
  * Keys not listed here load through the same default as an entry that omits
  * `load`, under the label "config".
  */
+/** What an absent EU AI Act switch record means: everything on, never switched. */
+const EU_AI_ACT_DEFAULT = Object.freeze({ version: 1, enabled: true, history: [] });
+
 const CONFIG_LOADERS = {
   'config/apps.json': {
     label: 'apps',
@@ -155,6 +158,13 @@ const CONFIG_LOADERS = {
       return decryptCredentials(credentialsData);
     },
     count: data => Object.keys(data.credentials || {}).length
+  },
+  'config/eu-ai-act-conformity.json': {
+    label: 'EU AI Act master switch record',
+    // A missing file is valid and means "on": nothing was ever switched off.
+    load: async () =>
+      (await loadJson('config/eu-ai-act-conformity.json')) || { ...EU_AI_ACT_DEFAULT },
+    count: data => (data.history || []).length
   },
   'config/providers.json': {
     label: 'providers',
@@ -248,6 +258,9 @@ class ConfigCache {
       'config/installations.json',
       'config/integrations.json',
       'config/credentials.json',
+      // The EU AI Act master switch record. Read synchronously on every request
+      // path that applies an Art. 50 measure, so it is preloaded.
+      'config/eu-ai-act-conformity.json',
       'config/agents.json',
       // Alongside users.json, and for the same reason: `loadOAuthClients` is a
       // synchronous middleware-path read that consults this cache first and
@@ -959,6 +972,16 @@ class ConfigCache {
    */
   getCredentials() {
     return this.get('config/credentials.json').data || { credentials: {} };
+  }
+
+  /**
+   * The raw EU AI Act master switch record (`{ version, enabled, history, ... }`).
+   * Read it through `isEuAiActEnabled()` / `getConformity()` of
+   * `services/euAiAct/conformity.js`, which validate it; that module is the only
+   * reader.
+   */
+  getEuAiActConformity() {
+    return this.get('config/eu-ai-act-conformity.json').data || { ...EU_AI_ACT_DEFAULT };
   }
 
   /**

@@ -803,6 +803,35 @@ describe('the materializer stores the activity with the answer', () => {
     });
   });
 
+  it('stores the provenance object of an answer (EU AI Act Art. 50(2)) next to it', async () => {
+    await withRepository(async repository => {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'q'
+      });
+      const provenance = {
+        spec: 'intrafind-provenance/1.0',
+        ai_generated: true,
+        output_id: '01JC0000000000000000000000',
+        content_hash: { alg: 'sha-256', normalization: 'nfc-trim', value: 'a'.repeat(64) }
+      };
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: { status: 'success', content: 'The answer.', finishReason: 'stop', provenance },
+        clientConnected: true
+      });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(messages.find(m => m.role === 'assistant').provenance, provenance);
+    });
+  });
+
   it('stores an activity handed over on the summary when nothing was recorded', async () => {
     await withRepository(async repository => {
       await materializeUserTurn({

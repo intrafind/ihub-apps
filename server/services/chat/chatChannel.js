@@ -80,6 +80,17 @@ export function createChatChannel({ chatId, runId = null, stream }) {
             image: {
               mimeType: String(image.mimeType),
               data: String(image.data),
+              // Stamped once in `ResultAccumulator.push` (EU AI Act Art. 50(2)):
+              // the output id and the hash of the raw bytes. The server decides,
+              // the client renders; `data` is never touched.
+              ...(image.provenance?.outputId
+                ? {
+                    provenance: {
+                      outputId: String(image.provenance.outputId),
+                      contentHash: String(image.provenance.contentHash)
+                    }
+                  }
+                : {}),
               ...(image.thoughtSignature
                 ? { thoughtSignature: String(image.thoughtSignature) }
                 : {})

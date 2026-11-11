@@ -147,7 +147,8 @@ const rateLimitSchema = z.object({
   authApi: rateLimitConfigSchema.partial().prefault({}),
   oauthApi: rateLimitConfigSchema.partial().prefault({}),
   oauthTokenApi: rateLimitConfigSchema.partial().prefault({}),
-  inferenceApi: rateLimitConfigSchema.partial().prefault({})
+  inferenceApi: rateLimitConfigSchema.partial().prefault({}),
+  provenanceVerifyApi: rateLimitConfigSchema.partial().prefault({})
 });
 
 // Accept either a boolean (true => mask) or a string mode ('off' | 'mask' |
@@ -511,6 +512,90 @@ export const platformConfigSchema = z
     // rules are switched off by a value of zero or less — chats are then kept
     // until an owner deletes them. Temporary chats always expire, after
     // `temporaryRetentionHours` without activity.
+    // AI disclosure (EU AI Act Art. 50(1)): the first-turn notice and the wording of
+    // the guardrail prompt. The guardrail only goes off through the audited EU AI Act
+    // master switch (config/eu-ai-act-conformity.json): empty text means the built-in rule.
+    aiDisclosure: z
+      .object({
+        guardrail: z
+          .object({
+            // Model-facing rule appended to every system prompt; empty = built-in.
+            text: z.string().max(2000).prefault('')
+          })
+          .passthrough()
+          .prefault({}),
+        firstTurnNotice: z
+          .object({
+            // Master switch: when false no app shows the notice.
+            enabled: z.boolean().prefault(true),
+            // { "en": "...", "de": "..." }; empty uses the built-in text.
+            text: z
+              .record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string().max(1000))
+              .prefault({})
+          })
+          .passthrough()
+          .prefault({})
+      })
+      .passthrough()
+      .prefault({}),
+    // AI-use acknowledgement (EU AI Act Art. 4 / 50, #3326). A user confirms a
+    // configurable statement before the first chat message. `requiredVersion`
+    // and `resetAt` are server-owned: only the admin actions "request again" and
+    // "remove all" write them, never a settings save (see routes/admin/configs.js).
+    aiAcknowledgement: z
+      .object({
+        enabled: z.boolean().prefault(true),
+        // true: a chat request without a valid acknowledgement answers 428.
+        // false: the dialog only asks and the server never refuses.
+        enforce: z.boolean().prefault(true),
+        requiredVersion: z.number().int().min(1).prefault(1),
+        resetAt: z.string().nullable().prefault(null),
+        // { "en": "...", "de": "..." }; plain text, never rendered as HTML.
+        text: z.record(z.string().regex(LANGUAGE_CODE_PATTERN), z.string().max(5000)).prefault({}),
+        // http(s) URL or a site-relative path; empty means no link.
+        policyUrl: z
+          .string()
+          .max(2000)
+          .refine(value => value === '' || /^(https?:\/\/\S+|\/(?!\/)\S*)$/i.test(value), {
+            message: 'policyUrl must be an http(s) URL or a site-relative path'
+          })
+          .prefault('')
+      })
+      .passthrough()
+      .prefault({}),
+    // Provenance records and metadata (EU AI Act Art. 50(2), #3327). The record
+    // store never holds output text. `retentionDays` <= 0 keeps records forever;
+    // `storeRecords: false` still attaches the provenance object but keeps no store.
+    provenance: z
+      .object({
+        retentionDays: z.number().prefault(365),
+        storeRecords: z.boolean().prefault(true),
+        // Who may call POST /api/eu-ai-act/provenance/_verify.
+        verify: z
+          .object({ access: z.enum(['authenticated', 'public']).prefault('authenticated') })
+          .passthrough()
+          .prefault({}),
+        // Provider marks on generated images and audio (#3328).
+        media: z
+          .object({
+            maxVerifyBytes: z.number().int().min(1024).prefault(52428800),
+            readC2pa: z.boolean().prefault(true)
+          })
+          .passthrough()
+          .prefault({}),
+        // Text watermark detection (#3331). All optional: code defaults apply
+        // (alpha 1e-4, minScoredTokens 200, detectorTimeoutMs 15000).
+        watermark: z
+          .object({
+            alpha: z.number().gt(0).lt(1).optional(),
+            minScoredTokens: z.number().int().min(1).optional(),
+            detectorTimeoutMs: z.number().int().min(1000).max(120000).optional()
+          })
+          .passthrough()
+          .optional()
+      })
+      .passthrough()
+      .prefault({}),
     chats: z
       .object({
         enabled: z.boolean().prefault(true),

@@ -23,6 +23,7 @@ import {
   authenticatedOnly,
   authRequired
 } from '../../middleware/authRequired.js';
+import { aiAcknowledgementRequired } from '../../middleware/aiAcknowledgementRequired.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
@@ -816,6 +817,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     buildServerPath('/api/workflows/:id/execute'),
     checkWorkflowsFeature,
     authRequired,
+    aiAcknowledgementRequired,
     async (req, res) => {
       try {
         const { id } = req.params;
@@ -1048,6 +1050,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     authRequired,
     authenticatedOnly,
     appAccessRequired,
+    aiAcknowledgementRequired,
     async (req, res) => {
       const { executionId, appId } = req.params;
       if (!isValidId(executionId)) throw new ServiceError('BAD_REQUEST', 'Invalid executionId');
@@ -1134,6 +1137,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     buildServerPath('/api/workflows/executions/:executionId/_restart'),
     checkWorkflowsFeature,
     authRequired,
+    aiAcknowledgementRequired,
     async (req, res) => {
       try {
         const { executionId } = req.params;

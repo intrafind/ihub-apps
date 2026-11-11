@@ -175,6 +175,14 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * document) is re-read, re-serialized and re-hashed on every turn.
    */
   artifacts: 'artifacts',
+  /**
+   * Provenance records (EU AI Act Art. 50(2)): one document per content hash
+   * holding the newest records for that hash, so a lookup by text or hash is
+   * one `get`. Never holds an output's text.
+   */
+  provenanceRecords: 'provenance-records',
+  /** Provenance bookkeeping: the installation id, minted once. */
+  provenanceMeta: 'provenance-meta',
   /** Per-run summaries for the history and retention views. */
   runs: 'runs',
   /** Pending and recently settled human interactions. */
