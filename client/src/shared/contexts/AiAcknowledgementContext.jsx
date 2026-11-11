@@ -118,6 +118,9 @@ export function AiAcknowledgementProvider({
   stateRef.current = state;
   const openRef = useRef(false);
   openRef.current = open;
+  // The read-only notice is not waiting on a confirmation: nothing closes it silently.
+  const readOnlyRef = useRef(false);
+  readOnlyRef.current = readOnly;
   const channelRef = useRef(null);
   const anonymous = anonymousOverride ?? !auth?.isAuthenticated;
 
@@ -188,7 +191,7 @@ export function AiAcknowledgementProvider({
     channelRef.current = channel;
     channel.onmessage = async () => {
       const data = await load();
-      if (data?.acknowledged) closeDialog(true);
+      if (data?.acknowledged && !readOnlyRef.current) closeDialog(true);
     };
     return () => {
       channel.close();
@@ -205,7 +208,8 @@ export function AiAcknowledgementProvider({
     const recheck = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       const current = stateRef.current;
-      const waiting = openRef.current;
+      // A dialog that waits for a confirmation; the read-only notice does not.
+      const waiting = openRef.current && !readOnlyRef.current;
       if (current && !waiting && !needsDialog(current)) return;
       const data = await load();
       if (waiting && data && !needsDialog(data)) closeDialog(true);

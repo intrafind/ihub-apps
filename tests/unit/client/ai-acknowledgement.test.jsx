@@ -367,6 +367,11 @@ describe('AiAcknowledgementProvider in an embedded host (Outlook pane, extension
     expect(dialog).toHaveTextContent('Use AI responsibly.');
     expect(screen.queryByText('Cancel')).toBeNull();
     expect(screen.queryByText('Confirm and send')).toBeNull();
+    // The pane regaining focus must not close the notice the user is reading.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+    });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
     await userEvent.click(screen.getByText('Close'));
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(screen.getByTestId('declined')).toHaveTextContent('false');
