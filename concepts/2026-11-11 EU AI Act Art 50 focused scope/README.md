@@ -88,3 +88,32 @@ These were decided by the coordinating session on the owner's request ("we have 
 5. UX questions: the pane menu entry "AI-use notice" is the review-later path; no auto-send after Confirm when the context (item, tab URL, selection) changed, the draft is kept with a status message; shared copy for Word, Excel and PowerPoint panes once they exist; a first-time Teams user may see the legacy `DisclaimerPopup` before the new dialog.
 
 **Ship order inside the branch:** the server gating of the three clients must not land before the Office wiring, or those users would be blocked with no dialog. Keep both in one branch, and commit the client wiring first.
+
+### Step 9: EU AI Act master switch and the acknowledgement API move
+
+Requested by the owner after step 8. Documents: `eu-ai-act-switch.md` (PM + engineering analysis; read it fully, it has the 21-row feature matrix, the store, the endpoints, every gate point, tests and the commit order) and `eu-ai-act-switch-ux-ui.md` (UX + UI: flows, states, EN/DE copy, wireframes). The agent that wrote the engineering analysis worked from the step 8 tip before the stack resync and before several follow-up changes on lower branches: re-verify every file and line reference, and note the corrections below.
+
+Requirement (owner, verbatim): "we should move all apis around acknowledgement behind eu-ai-act endpoint. we should be able to disable the eu-ai-act conformity. someone who does not want it, can disable it. it must be recorded who it was and when including a description why. this is stored in the server. it turns off all the features and requirements."
+
+Decisions by the owner:
+- **Who may switch:** admins. The analysis requires an interactive admin session (API keys, OAuth tokens and agents get 403), keep that.
+- **Acknowledgements while off:** they just stay. The admin actions that delete or reset acknowledgements (remove one, remove all, request again) are disabled while the features are off. Read-only export stays.
+- **Re-enabling:** acknowledgements that are still valid stay valid. Only users who have no valid acknowledgement are asked, at their next message. No automatic re-request, `requiredVersion` is not changed by the switch.
+- **Notification:** the audit log only. Every toggle writes an audit entry (the analysis specifies it); no email, banner for end users or other channel.
+
+Decisions taken by the coordinator on the analysis' open questions (reversible, name them in the PR):
+1. `POST /api/provenance/_verify` is off while disabled and answers 403 `FEATURE_DISABLED` ("turns off all the features").
+2. End users see no hint about the switch.
+3. No typed confirmation phrase and no re-authentication; the disable dialog needs the mandatory reason (20-1000 characters) and the "legal duty stays with my organisation" checkbox, as designed. Wording marked [LEGAL] is a draft for legal review, not legal advice.
+4. Only the acknowledgement APIs move under `eu-ai-act` (the owner's words). `/api/admin/watermark-keys`, `/api/admin/watermark-detectors` and `/api/provenance/_verify` stay where they are.
+5. The UI calls it "EU AI Act features" (iHub cannot confer conformity); the record may keep the technical name `conformity` in the API as the analysis proposes, say so in the docs.
+6. Keys, acknowledgements and provenance records are kept, the retention sweep keeps running, key management stays available while off (behaviour off, data kept).
+7. Document that a vLLM started with `--watermark-config ... "enforce": true` keeps watermarking regardless of iHub; operators must restart vLLM without the flag when they disable the features.
+
+Corrections to the engineering analysis caused by later changes on the stack:
+- Read-aloud audio is not saved any more (step 5 follow-up): there is no TTS record, no `recordTtsOutput` and no `provenance.media.recordTts` setting. Drop those gates and rows.
+- Step 1 left iAssistant alone (the preamble injection was removed): the "second guardrail path" in `iassistant-conversation.js` the analysis mentions may no longer exist. Verify; if it is gone no gate is needed there.
+- The guardrail wording is configurable globally (`platform.aiDisclosure.guardrail.text`); the master switch is the only way to turn the guardrail off, and the docs, code comments and tests that say it "cannot be switched off" must be reworded to say "only through the audited switch".
+- Migration numbers: take the next free one after the highest on your branch (`ls server/migrations | sort -V | tail`); the analysis expects none to be needed.
+
+Commit order inside the branch: move the acknowledgement APIs first (and update every caller, the contract file, rate limiter, docs), then the store and endpoints, then the gates, then the e2e, then the UI, then docs and the release note.
