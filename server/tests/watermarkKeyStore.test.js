@@ -22,6 +22,7 @@ const {
 } = await import('../services/provenance/watermark/WatermarkKeyStore.js');
 const { default: configStore } = await import('../services/config/ConfigStore.js');
 
+const KEY_ID = /^wm-ihub-inst_[0-9a-f-]{36}-2026-1$/;
 let storage;
 let store;
 
@@ -54,7 +55,7 @@ beforeEach(async () => {
 describe('WatermarkKeyStore', () => {
   test('stores ciphertext only', async () => {
     const created = await store.create({ key: '1234567890123' }, 'admin');
-    expect(created.item.keyId).toBe('wm-2026-1');
+    expect(created.item.keyId).toMatch(KEY_ID);
     await new Promise(resolve => setTimeout(resolve, 100));
     const raw = await allFilesText(storage.dir);
     expect(raw).toContain('ENC[');
@@ -67,11 +68,13 @@ describe('WatermarkKeyStore', () => {
     expect(second.previousActiveKeyId).toBe(first.item.keyId);
     const items = await store.list();
     expect(items.map(i => [i.keyId, i.status])).toEqual([
-      ['wm-2026-1', 'retired'],
-      ['wm-2026-2', 'active']
+      [first.item.keyId, 'retired'],
+      [second.item.keyId, 'active']
     ]);
+    expect(first.item.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-1$/);
+    expect(second.item.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-2$/);
     expect(items[0].retiredAt).toBeTruthy();
-    expect(getActiveKeyId()).toBe('wm-2026-2');
+    expect(getActiveKeyId()).toBe(second.item.keyId);
     expect(JSON.stringify(items)).not.toContain(String(first.key));
   });
 
@@ -84,23 +87,25 @@ describe('WatermarkKeyStore', () => {
   });
 
   test('ids are never reused after a delete', async () => {
+    const first = await store.create({}, 'a');
     await store.create({}, 'a');
-    await store.create({}, 'a');
-    await store.remove('wm-2026-1');
+    await store.remove(first.item.keyId);
     const third = await store.create({}, 'a');
-    expect(third.item.keyId).toBe('wm-2026-3');
+    expect(third.item.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-3$/);
   });
 
   test('rejects a duplicate value, an active delete and a missing key', async () => {
-    await store.create({ key: '555555555' }, 'a');
+    const stored = await store.create({ key: '555555555' }, 'a');
     await expect(store.create({ key: 555555555 }, 'a')).rejects.toMatchObject({
       code: 'WATERMARK_KEY_DUPLICATE'
     });
-    await expect(store.remove('wm-2026-1')).rejects.toMatchObject({ code: 'WATERMARK_KEY_ACTIVE' });
-    await expect(store.remove('wm-2026-9')).rejects.toMatchObject({
+    await expect(store.remove(stored.item.keyId)).rejects.toMatchObject({
+      code: 'WATERMARK_KEY_ACTIVE'
+    });
+    await expect(store.remove('wm-ihub-inst_x-2026-9')).rejects.toMatchObject({
       code: 'WATERMARK_KEY_NOT_FOUND'
     });
-    await expect(store.reveal('wm-2026-9')).rejects.toMatchObject({
+    await expect(store.reveal('wm-ihub-inst_x-2026-9')).rejects.toMatchObject({
       code: 'WATERMARK_KEY_NOT_FOUND'
     });
   });
@@ -109,13 +114,35 @@ describe('WatermarkKeyStore', () => {
     const a = await store.create({ key: '111111111' }, 'a');
     const b = await store.create({ key: '222222222' }, 'a');
     await store.activate(a.item.keyId);
-    expect(getActiveKeyId()).toBe('wm-2026-1');
+    expect(getActiveKeyId()).toBe(a.item.keyId);
     const keys = await store.getKeysForDetection();
     expect(keys.map(k => [k.keyId, k.key, k.status])).toEqual([
-      ['wm-2026-1', 111111111, 'active'],
-      ['wm-2026-2', 222222222, 'retired']
+      [a.item.keyId, 111111111, 'active'],
+      [b.item.keyId, 222222222, 'retired']
     ]);
     expect((await store.reveal(b.item.keyId)).key).toBe(222222222);
+  });
+
+  test('the id carries product and installation id, so two installations never clash', async () => {
+    const now = () => new Date('2026-11-11T10:00:00Z');
+    const one = new WatermarkKeyStore({ now, installationId: async () => 'inst_aaaa' });
+    const two = new WatermarkKeyStore({ now, installationId: async () => 'inst_bbbb' });
+    const a = await one.create({}, 'a');
+    // Another installation starts from an empty store of its own.
+    await configStore.writeJson('config/watermark-keys.json', {
+      version: 1,
+      nextSeq: {},
+      keys: []
+    });
+    const b = await two.create({}, 'a');
+    expect(a.item.keyId).toBe('wm-ihub-inst_aaaa-2026-1');
+    expect(b.item.keyId).toBe('wm-ihub-inst_bbbb-2026-1');
+  });
+
+  test('an installation id from the environment is made safe for an id', async () => {
+    const odd = new WatermarkKeyStore({ installationId: async () => 'my site/prod 1' });
+    const created = await odd.create({}, 'a');
+    expect(created.item.keyId).toMatch(/^wm-ihub-my-site-prod-1-\d{4}-1$/);
   });
 
   test('weak entered keys are flagged; generated keys are safe integers', async () => {
