@@ -1,0 +1,59 @@
+# EU AI Act Art. 50: focused scope: epic plan (#3324)
+
+Planning folder for epic [#3324](https://github.com/intrafind/ihub-apps/issues/3324). Each sub-issue was analysed by a product manager and a senior engineer (reading the real code). The three issues with a frontend part (#3325, #3326, #3329) were also designed by a UX designer and a UI designer.
+
+Deadlines: Art. 50(1) disclosure applies now. Art. 50(2) machine-readable marking and detection is due **2026-12-02**.
+
+## Documents
+
+| File | Content |
+| --- | --- |
+| `3325-ai-disclosure.md` | PM + engineering brief: guardrail prompt and first-turn notice |
+| `3326-ai-acknowledgement.md` | PM + engineering brief: acknowledgement dialog, 428 enforcement, admin actions |
+| `3327-provenance-records.md` | PM + engineering brief: provenance records, object, `contentMarking`, verify endpoint |
+| `3331-text-watermarking.md` | PM + engineering brief: vLLM watermark, key store with rotation, detector client |
+| `3328-provider-marks-media.md` | PM + engineering brief: keep and record provider marks on images and audio |
+| `3329-admin-overview-page.md` | PM + engineering brief: `/admin/eu-ai-act` page, status endpoint |
+| `ux-design.md` | UX design for #3325, #3326, #3329 (flows, states, EN/DE copy, a11y) |
+| `ui-design.md` | UI design for #3325, #3326, #3329 (components, classes, wireframes) |
+
+## Stack
+
+Branches are stacked: each branch is created from the one before it, and each draft PR targets the previous branch. The whole stack merges bottom to top.
+
+| # | Issue | Branch | Base |
+| --- | --- | --- | --- |
+| 0 | planning docs (this folder) | `claude/epic-analysis-planning-45wief` | `main` |
+| 1 | #3325 AI disclosure | `claude/ai-act-3325-disclosure` | 0 |
+| 2 | #3326 acknowledgement | `claude/ai-act-3326-acknowledgement` | 1 |
+| 3 | #3327 provenance records | `claude/ai-act-3327-provenance` | 2 |
+| 4 | #3331 text watermarking | `claude/ai-act-3331-watermark` | 3 |
+| 5 | #3328 provider marks (image/audio) | `claude/ai-act-3328-provider-marks` | 4 |
+| 6 | #3329 admin overview page | `claude/ai-act-3329-admin-page` | 5 |
+
+Order rationale: #3327 introduces the record store, the provenance object, `contentMarking` and the verify endpoint. #3331 and #3328 extend them. #3329 consumes everything, so it goes last. #3330 (optional signing) is a decision issue and is **not** implemented.
+
+## Decisions taken across the analyses
+
+These settle conflicts and open questions so each session can start without waiting. A session may raise an objection in its PR description, but should not silently deviate.
+
+1. **Migration numbers.** The issues say "after V226"; that is stale. The latest migration on disk is **V240**. Every session takes the next free number at the time it cuts its branch (`ls server/migrations | sort -V | tail`), in stack order. Expected: #3325 V241 (if it needs one), #3326 next, #3327 next. #3331 needs no migration. `server/defaults/` must carry the same defaults, because fresh installs run no migrations.
+2. **Verify endpoint name.** `docs/api-guidelines.md` forbids bare verbs, so the endpoint is **`POST /api/provenance/_verify`**, not `/verify`. #3327 creates it; #3331, #3328 and #3329 extend or consume it. The issue texts still say `/verify`.
+3. **No `#2619` branch exists** in this checkout. `guardrail.js`, `records.js`, `ProvenanceStore.js`, `turnProvenance.js` and `httpProvenance.js` are written fresh to the issue spec.
+4. **Guardrail injection** is a single point in `LLMClient.execute()` (after model resolution, before the request is built). See `3325-ai-disclosure.md`.
+5. **Key encoding.** Watermark keys are stored as safe integers in v1 (`3331`), but admin API payloads carry the key as a **string**, so the browser never loses precision above 2^53 (`3329`).
+6. **Self-test endpoint ownership.** #3331 owns the detector and self-test endpoints under `/api/admin/watermark-detectors`. #3329 consumes them rather than adding its own. Where the #3329 brief proposes different endpoint names, the endpoints actually built by #3331 win; the #3329 session reconciles.
+7. **Marking claims.** Until #3331 exists, `contentMarking.text.by = "ihub"` must not report `applied: true`. #3327 offers only `provider` and `none` in the model UI until then.
+8. **Wording of results** never over-claims. Allowed: "Detected", "Not detected", "Too short to tell", "Found", "Not found". Banned: "not watermarked", "human-written", "authentic". Every negative result says it is not proof of origin (`ux-design.md`).
+9. **Tests for a default-on feature.** #3326 enforces by default, which breaks existing e2e and integration suites; `tests/config/e2e-contents.mjs` switches the feature off and only the new spec turns it on.
+10. **Issue bodies are not edited.** Where a brief deviates from an issue's wording (migration number, `_verify`, self-test endpoint), the PR description names the deviation.
+
+## Rules every implementation session follows
+
+- Read this README, then your own brief, then `CLAUDE.md`. Use the briefs' file and line references as starting points and re-verify them against your branch, since earlier branches in the stack change the code.
+- Implement the issue's acceptance criteria. Briefs list the ordered checklist, tests, docs and pitfalls.
+- Run `npm run lint:fix && npm run format:fix` and the relevant tests before committing.
+- Add a release-note entry in `docs/releases/next/` (use the `/document-feature` skill) and update the topic docs named in the brief.
+- Add the SPDX header to every new source file.
+- Commit, push your branch, and open a **draft PR whose base is the previous branch of the stack** (not `main`). Use the PR template if the repo has one.
+- When the PR is open, message the coordinating session (id in the session prompt) with the branch name, PR URL, the migration number you took, and any deviation from the brief. The next session starts from your branch, so do not rebase or force-push it afterwards without telling the coordinator.
