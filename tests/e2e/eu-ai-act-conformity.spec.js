@@ -111,7 +111,7 @@ test.describe('EU AI Act master switch', () => {
     const body = await lastStubBody(page);
     expect(JSON.stringify(body.messages)).toContain('You are an AI system');
 
-    const verify = await page.request.post('/api/provenance/_verify', {
+    const verify = await page.request.post('/api/eu-ai-act/provenance/_verify', {
       data: { text: 'Some text that was never generated here.' }
     });
     expect(verify.status()).not.toBe(403);
@@ -181,7 +181,7 @@ test.describe('EU AI Act master switch', () => {
     expect(body.watermarking).toBeUndefined();
 
     // Verification, status and the public config.
-    const verify = await page.request.post('/api/provenance/_verify', {
+    const verify = await page.request.post('/api/eu-ai-act/provenance/_verify', {
       data: { text: 'Some text that was never generated here.' }
     });
     expect(verify.status()).toBe(403);
@@ -220,7 +220,7 @@ test.describe('EU AI Act master switch', () => {
     expect(me).toMatchObject({ enabled: true, acknowledged: true });
     expect((await chatPost(page)).status()).not.toBe(428);
 
-    const verify = await page.request.post('/api/provenance/_verify', {
+    const verify = await page.request.post('/api/eu-ai-act/provenance/_verify', {
       data: { text: 'Some text that was never generated here.' }
     });
     expect(verify.status()).not.toBe(403);

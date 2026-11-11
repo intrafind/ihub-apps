@@ -179,16 +179,18 @@ describe('admin routes', () => {
   const admin = r => r.set('x-role', 'admin');
 
   test('need an admin', async () => {
-    expect((await request(app).get('/api/admin/watermark-detectors')).status).toBe(401);
-    expect((await request(app).post('/api/admin/watermark-detectors/vl/_test')).status).toBe(401);
-    expect((await request(app).post('/api/admin/watermark-detectors/vl/_self-test')).status).toBe(
-      401
-    );
+    expect((await request(app).get('/api/admin/eu-ai-act/watermark-detectors')).status).toBe(401);
+    expect(
+      (await request(app).post('/api/admin/eu-ai-act/watermark-detectors/vl/_test')).status
+    ).toBe(401);
+    expect(
+      (await request(app).post('/api/admin/eu-ai-act/watermark-detectors/vl/_self-test')).status
+    ).toBe(401);
   });
 
   test('list shows the static configuration of marked models only, with no network call', async () => {
     setActiveKeyIdSnapshot('wm-2026-1');
-    const res = await admin(request(app).get('/api/admin/watermark-detectors'));
+    const res = await admin(request(app).get('/api/admin/eu-ai-act/watermark-detectors'));
     expect(res.status).toBe(200);
     expect(res.body.nextCursor).toBeNull();
     expect(res.body.items).toHaveLength(1);
@@ -206,20 +208,23 @@ describe('admin routes', () => {
   });
 
   test('_test answers 200 with the result; an unmarked model is 404; no detector is 409', async () => {
-    const ok = await admin(request(app).post('/api/admin/watermark-detectors/vl/_test'));
+    const ok = await admin(request(app).post('/api/admin/eu-ai-act/watermark-detectors/vl/_test'));
     expect(ok.status).toBe(200);
     expect(ok.body).toMatchObject({ reachable: true, authenticated: true, contractValid: true });
     mock.setMode('500');
-    expect((await admin(request(app).post('/api/admin/watermark-detectors/vl/_test'))).status).toBe(
-      200
-    );
     expect(
-      (await admin(request(app).post('/api/admin/watermark-detectors/plain/_test'))).status
+      (await admin(request(app).post('/api/admin/eu-ai-act/watermark-detectors/vl/_test'))).status
+    ).toBe(200);
+    expect(
+      (await admin(request(app).post('/api/admin/eu-ai-act/watermark-detectors/plain/_test')))
+        .status
     ).toBe(404);
     configCache.setCacheEntry('config/models.json', [
       { ...model, contentMarking: { text: { by: 'ihub', scheme: 'vllm-gumbel' } } }
     ]);
-    const none = await admin(request(app).post('/api/admin/watermark-detectors/vl/_test'));
+    const none = await admin(
+      request(app).post('/api/admin/eu-ai-act/watermark-detectors/vl/_test')
+    );
     expect(none.status).toBe(409);
     expect(none.body.code).toBe('WATERMARK_DETECTOR_NOT_CONFIGURED');
     configCache.setCacheEntry('config/models.json', [model, { id: 'plain', provider: 'local' }]);
@@ -229,7 +234,9 @@ describe('admin routes', () => {
     const store = getWatermarkKeyStore();
     const created = await store.create({ key: '6060606060' }, 'a');
     mock.markText(ANSWER, created.key);
-    const res = await admin(request(app).post('/api/admin/watermark-detectors/vl/_self-test'));
+    const res = await admin(
+      request(app).post('/api/admin/eu-ai-act/watermark-detectors/vl/_self-test')
+    );
     expect(res.status).toBe(200);
     expect(res.body.diagnosis).toBe('keys_match');
     expect(audits).toHaveLength(1);

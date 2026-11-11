@@ -10,8 +10,7 @@
  * (the same text answered many times, e.g. "Yes", must not grow a document
  * without bound). A lookup is one `get`; no scan.
  *
- * **The store never holds output text** — only the provenance object minus its
- * response-time `verify` URL: hash, time, model, generator, marking status and
+ * **The store never holds output text** — only the provenance object: hash, time, model, generator, marking status and
  * the output id. Records are keyed by hash alone, so text (`nfc-trim`) and
  * media bytes (`none`, #3328) share one store; the record's own
  * `content_hash.normalization` says how the hash was made.
@@ -28,7 +27,7 @@ import logger from '../../utils/logger.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { EtagMismatchError } from '../../storage/errors.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
-import { isHexHash, toStoredRecord } from './records.js';
+import { isHexHash } from './records.js';
 
 export const PROVENANCE_RECORDS_NAMESPACE = RUNTIME_NAMESPACES.provenanceRecords;
 export const PROVENANCE_META_NAMESPACE = RUNTIME_NAMESPACES.provenanceMeta;
@@ -68,7 +67,7 @@ function createdAtMs(record) {
  * feature: a caller that passes more (a text by mistake) cannot reach disk.
  */
 function sanitizeRecord(provenance) {
-  const record = toStoredRecord(provenance);
+  const record = provenance || {};
   const clean = {};
   for (const key of ALLOWED_RECORD_KEYS) {
     if (record[key] !== undefined) clean[key] = record[key];

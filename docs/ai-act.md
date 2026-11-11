@@ -146,7 +146,7 @@ switch is deliberate and attributable: the person, the time and a written reason
   leave one record.
 - **What stops.** The guardrail rule in prompts, the first-turn notice, the acknowledgement dialog and the `428`
   enforcement, provenance records and the `provenance` member and `X-AI-*` headers on every channel, the text
-  watermark flag to vLLM, image marking and records, `POST /api/provenance/_verify` (answers `403
+  watermark flag to vLLM, image marking and records, `POST /api/eu-ai-act/provenance/_verify` (answers `403
   FEATURE_DISABLED`), the detector test and self-test (same answer) and the configuration check (no probes).
   Runtime paths skip silently; nothing errors for a user or a machine caller.
 - **What stays.** Acknowledgements already given, provenance records already written, watermark keys and their
@@ -173,7 +173,7 @@ switch is deliberate and attributable: the person, the time and a written reason
 
 Every chat answer, inference API completion, MCP result and A2A result carries a `provenance` object, and a
 record of it is kept. The record holds the SHA-256 of the output, never the output. A caller can ask
-`POST /api/provenance/_verify` whether an exact text or hash is known. "Found" means this installation produced
+`POST /api/eu-ai-act/provenance/_verify` whether an exact text or hash is known. "Found" means this installation produced
 it; "Not found" only means there is no record, not that a person wrote it.
 
 - **Per model:** `contentMarking.text.by` is `none` (default) or `provider` (**Admin → Models**, *Output
@@ -186,7 +186,7 @@ it; "Not found" only means there is no record, not that a person wrote it.
   |---|---|---|---|
   | `provenance.retentionDays` | 365 | 0 to 36500 | Days records are kept; 0 keeps them forever. |
   | `provenance.storeRecords` | true | on/off | Off still attaches the provenance object but keeps no record. |
-  | `provenance.verify.access` | `authenticated` | `authenticated`, `public` | Who may call `POST /api/provenance/_verify`. |
+  | `provenance.verify.access` | `authenticated` | `authenticated`, `public` | Who may call `POST /api/eu-ai-act/provenance/_verify`. |
   | `provenance.media.maxVerifyBytes` | 52428800 (50 MiB) | 1024 bytes to 1 GiB | Largest uploaded file; the form shows MiB. |
   | `provenance.media.readC2pa` | true | on/off | Read C2PA marks of images. |
   | `provenance.watermark.alpha` | 0.0001 | above 0, below 1 | False-positive limit of the text detector. |
@@ -205,7 +205,7 @@ Details: [Provenance Records](provenance.md).
 For vLLM models iHub can do more than record: it asks vLLM to watermark the text, owns and rotates the secret
 keys, and can recognise a watermarked text again even when no record matches (a lightly edited copy, an expired
 record). Set **Admin → Models → Output marking** to *iHub watermark (vLLM)*, create a key (API
-`POST /api/admin/watermark-keys`), start vLLM with the printed `--watermark-config`, and point the model at a
+`POST /api/admin/eu-ai-act/watermark-keys`), start vLLM with the printed `--watermark-config`, and point the model at a
 detector. A greedy request (temperature 0) or structured output cannot be watermarked and is recorded as *not
 applied*. Setup, rotation, the detector contract and the limits: [Text Watermarking](ai-act-text-watermarking.md).
 
@@ -234,7 +234,7 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
   at the next daily clean-up, irreversibly) and changing who may check outputs ask for a confirmation that names
   the consequence. Every change is written to the audit log (resource `provenanceSettings`, old and new values),
   and the configuration check refreshes after saving.
-- **Verification.** Text or image/audio upload against `POST /api/provenance/_verify`. Rows: output record, watermark
+- **Verification.** Text or image/audio upload against `POST /api/eu-ai-act/provenance/_verify`. Rows: output record, watermark
   (text), C2PA (media), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion",
   never "not watermarked".
 

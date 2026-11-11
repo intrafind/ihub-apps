@@ -2298,7 +2298,7 @@
           },
           "provenanceVerifyApi": {
             "name": "Provenance lookup",
-            "description": "Looking up an AI output by its text or hash (/api/provenance/_verify). Stricter on purpose: the lookup tells a caller whether a candidate text was produced here."
+            "description": "Looking up an AI output by its text or hash (/api/eu-ai-act/provenance/_verify). Stricter on purpose: the lookup tells a caller whether a candidate text was produced here."
           }
         }
       }

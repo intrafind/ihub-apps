@@ -36,11 +36,11 @@ function withKey(item, key, extra = {}) {
 
 export default function registerAdminWatermarkKeyRoutes(app) {
   const store = () => getWatermarkKeyStore();
-  const base = '/api/admin/watermark-keys';
+  const base = '/api/admin/eu-ai-act/watermark-keys';
 
   /**
    * @swagger
-   * /api/admin/watermark-keys:
+   * /api/admin/eu-ai-act/watermark-keys:
    *   get:
    *     summary: List the text watermark keys (never their values)
    *     tags: [Admin - Watermark]
@@ -106,7 +106,7 @@ export default function registerAdminWatermarkKeyRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/watermark-keys/{keyId}/_activate:
+   * /api/admin/eu-ai-act/watermark-keys/{keyId}/_activate:
    *   post:
    *     summary: Make a retired key active again (rollback)
    *     tags: [Admin - Watermark]
@@ -134,7 +134,7 @@ export default function registerAdminWatermarkKeyRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/watermark-keys/{keyId}/_reveal:
+   * /api/admin/eu-ai-act/watermark-keys/{keyId}/_reveal:
    *   post:
    *     summary: Reveal a key value (audited)
    *     description: >-
@@ -173,7 +173,7 @@ export default function registerAdminWatermarkKeyRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/watermark-keys/{keyId}:
+   * /api/admin/eu-ai-act/watermark-keys/{keyId}:
    *   delete:
    *     summary: Delete a retired key
    *     description: Output made with it can no longer be recognised. The id is never reused.

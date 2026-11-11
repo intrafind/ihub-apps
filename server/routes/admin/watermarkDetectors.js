@@ -29,11 +29,11 @@ function findIhubModel(modelId) {
 }
 
 export default function registerAdminWatermarkDetectorRoutes(app) {
-  const base = '/api/admin/watermark-detectors';
+  const base = '/api/admin/eu-ai-act/watermark-detectors';
 
   /**
    * @swagger
-   * /api/admin/watermark-detectors:
+   * /api/admin/eu-ai-act/watermark-detectors:
    *   get:
    *     summary: List the detector settings of every model marked by iHub
    *     description: Static configuration; no network call and no key.
@@ -72,7 +72,7 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/watermark-detectors/{modelId}/_test:
+   * /api/admin/eu-ai-act/watermark-detectors/{modelId}/_test:
    *   post:
    *     summary: Test the connection to a model's detector
    *     description: >-
@@ -98,7 +98,7 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/watermark-detectors/{modelId}/_self-test:
+   * /api/admin/eu-ai-act/watermark-detectors/{modelId}/_self-test:
    *   post:
    *     summary: Generate text with the model and detect it with all keys
    *     description: >-

@@ -570,7 +570,7 @@ export const platformConfigSchema = z
       .object({
         retentionDays: z.number().prefault(365),
         storeRecords: z.boolean().prefault(true),
-        // Who may call POST /api/provenance/_verify.
+        // Who may call POST /api/eu-ai-act/provenance/_verify.
         verify: z
           .object({ access: z.enum(['authenticated', 'public']).prefault('authenticated') })
           .passthrough()

@@ -19,7 +19,7 @@ export async function fetchEuAiActStatus({ refresh = false } = {}) {
 
 /** @returns {Promise<{items: Object[]}>} Keys without key material. */
 export async function fetchWatermarkKeys() {
-  const response = await makeAdminApiCall('/admin/watermark-keys');
+  const response = await makeAdminApiCall('/admin/eu-ai-act/watermark-keys');
   return response.data;
 }
 
@@ -28,14 +28,17 @@ export async function createWatermarkKey({ key, label } = {}) {
   const body = {};
   if (key) body.key = key;
   if (label) body.label = label;
-  const response = await makeAdminApiCall('/admin/watermark-keys', { method: 'POST', body });
+  const response = await makeAdminApiCall('/admin/eu-ai-act/watermark-keys', {
+    method: 'POST',
+    body
+  });
   return response.data;
 }
 
 /** Show a stored key (audited by the server). */
 export async function revealWatermarkKey(keyId) {
   const response = await makeAdminApiCall(
-    `/admin/watermark-keys/${encodeURIComponent(keyId)}/_reveal`,
+    `/admin/eu-ai-act/watermark-keys/${encodeURIComponent(keyId)}/_reveal`,
     { method: 'POST' }
   );
   return response.data;
@@ -47,27 +50,27 @@ export async function revealWatermarkKey(keyId) {
  */
 export async function activateWatermarkKey(keyId) {
   const response = await makeAdminApiCall(
-    `/admin/watermark-keys/${encodeURIComponent(keyId)}/_activate`,
+    `/admin/eu-ai-act/watermark-keys/${encodeURIComponent(keyId)}/_activate`,
     { method: 'POST' }
   );
   return response.data;
 }
 
 export async function deleteWatermarkKey(keyId) {
-  await makeAdminApiCall(`/admin/watermark-keys/${encodeURIComponent(keyId)}`, {
+  await makeAdminApiCall(`/admin/eu-ai-act/watermark-keys/${encodeURIComponent(keyId)}`, {
     method: 'DELETE'
   });
 }
 
 /** @returns {Promise<{items: Object[]}>} Static detector settings per "ihub" model. */
 export async function fetchWatermarkDetectors() {
-  const response = await makeAdminApiCall('/admin/watermark-detectors');
+  const response = await makeAdminApiCall('/admin/eu-ai-act/watermark-detectors');
   return response.data;
 }
 
 export async function testWatermarkDetector(modelId) {
   const response = await makeAdminApiCall(
-    `/admin/watermark-detectors/${encodeURIComponent(modelId)}/_test`,
+    `/admin/eu-ai-act/watermark-detectors/${encodeURIComponent(modelId)}/_test`,
     { method: 'POST' }
   );
   return response.data;
@@ -76,7 +79,7 @@ export async function testWatermarkDetector(modelId) {
 /** One real generation: costs about 400 tokens. */
 export async function runWatermarkSelfTest(modelId) {
   const response = await makeAdminApiCall(
-    `/admin/watermark-detectors/${encodeURIComponent(modelId)}/_self-test`,
+    `/admin/eu-ai-act/watermark-detectors/${encodeURIComponent(modelId)}/_self-test`,
     { method: 'POST' }
   );
   return response.data;
@@ -84,7 +87,7 @@ export async function runWatermarkSelfTest(modelId) {
 
 /** Look up a text (`{text}`) or hash (`{contentHash}`). */
 export async function verifyText(text) {
-  const response = await makeAdminApiCall('/provenance/_verify', {
+  const response = await makeAdminApiCall('/eu-ai-act/provenance/_verify', {
     method: 'POST',
     body: { text }
   });
@@ -96,7 +99,10 @@ export async function verifyFile(file, kind) {
   const form = new FormData();
   if (kind) form.append('kind', kind);
   form.append('file', file);
-  const response = await makeAdminApiCall('/provenance/_verify', { method: 'POST', body: form });
+  const response = await makeAdminApiCall('/eu-ai-act/provenance/_verify', {
+    method: 'POST',
+    body: form
+  });
   return response.data;
 }
 

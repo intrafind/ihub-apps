@@ -15,7 +15,7 @@
  * - key: `getActiveKeyId()` (id snapshot, no key material)
  * - detector: `detectorConfigOf` + `checkDetectorUrl` + `probeDetector`
  *   (`pingDetector` of #3331, through `httpFetch`)
- * - self-test: the last stored result of `POST /api/admin/watermark-detectors/{id}/_self-test`
+ * - self-test: the last stored result of `POST /api/admin/eu-ai-act/watermark-detectors/{id}/_self-test`
  *
  * @module services/euAiAct/statusService
  */

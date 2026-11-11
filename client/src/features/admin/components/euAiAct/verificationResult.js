@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Turns an answer of `POST /api/provenance/_verify` into rows and a headline.
+ * Turns an answer of `POST /api/eu-ai-act/provenance/_verify` into rows and a headline.
  *
  * One row per technique, each with its own verdict, never one boolean. The
  * wording rules (README decision 8): a negative is never proof of origin, and

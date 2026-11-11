@@ -1490,6 +1490,20 @@
       }
     }
   },
+  "GET /api/admin/eu-ai-act/watermark-detectors": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/admin/eu-ai-act/watermark-keys": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
   "GET /api/admin/features": {
     "status": 200,
     "shape": {
@@ -4101,20 +4115,6 @@
   },
   "GET /api/admin/version/check-update": {
     "skipped": "reaches the network"
-  },
-  "GET /api/admin/watermark-detectors": {
-    "status": 200,
-    "shape": {
-      "items": [],
-      "nextCursor": "null"
-    }
-  },
-  "GET /api/admin/watermark-keys": {
-    "status": 200,
-    "shape": {
-      "items": [],
-      "nextCursor": "null"
-    }
   },
   "GET /api/admin/website-corpus/domains": {
     "status": 200,

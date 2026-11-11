@@ -2727,7 +2727,7 @@
           },
           "provenanceVerifyApi": {
             "name": "Herkunftsabfrage",
-            "description": "Abfrage einer KI-Ausgabe über Text oder Hash (/api/provenance/_verify). Bewusst strenger: Die Abfrage verrät, ob ein Kandidatentext hier erzeugt wurde."
+            "description": "Abfrage einer KI-Ausgabe über Text oder Hash (/api/eu-ai-act/provenance/_verify). Bewusst strenger: Die Abfrage verrät, ob ein Kandidatentext hier erzeugt wurde."
           }
         }
       }

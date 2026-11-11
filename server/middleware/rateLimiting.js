@@ -172,7 +172,7 @@ const LIMITER_FALLBACKS = Object.freeze({
   },
   // Inference API configuration - balanced for AI inference
   inferenceApi: { limit: 500, windowMs: 1 * 60 * 1000 },
-  // Provenance lookup (`POST /api/provenance/_verify`): a membership oracle for a
+  // Provenance lookup (`POST /api/eu-ai-act/provenance/_verify`): a membership oracle for a
   // candidate text, so it gets its own, stricter budget per client.
   provenanceVerifyApi: { limit: 60, windowMs: 60 * 1000, skipFailedRequests: false }
 });

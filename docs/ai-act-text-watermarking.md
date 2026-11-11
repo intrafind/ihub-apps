@@ -39,7 +39,7 @@ iHub  -- text + all keys  -->   detector (HTTPS/internal, bearer)         p-valu
 
 ## Setup
 
-1. **Create a key.** `POST /api/admin/watermark-keys` with `{}` (generate) or `{ "key": "123456789012" }`. The
+1. **Create a key.** `POST /api/admin/eu-ai-act/watermark-keys` with `{}` (generate) or `{ "key": "123456789012" }`. The
    response carries the key once, as a string, and the vLLM flag:
 
    ```
@@ -70,7 +70,7 @@ iHub  -- text + all keys  -->   detector (HTTPS/internal, bearer)         p-valu
 4. **Sample explicitly.** Set `sampling.temperature` (and not `topK: 1`) on the model. If it is unset, vLLM uses the
    model's `generation_config.json`, which iHub cannot see, and that file may say temperature 0 (greedy: no
    watermark) while iHub reports `applied: true`.
-5. **Run the self-test:** `POST /api/admin/watermark-detectors/{modelId}/_self-test` (one real generation of about
+5. **Run the self-test:** `POST /api/admin/eu-ai-act/watermark-detectors/{modelId}/_self-test` (one real generation of about
    350 words at temperature 1).
 
 | `diagnosis` | Meaning |
@@ -82,12 +82,12 @@ iHub  -- text + all keys  -->   detector (HTTPS/internal, bearer)         p-valu
 | `detector_unreachable` | See `_test`. |
 | `not_applied` / `no_keys` | iHub did not request a mark (see `reason`) / no key exists yet. |
 
-`POST /api/admin/watermark-detectors/{modelId}/_test` checks URL, TLS, token and response contract with a
+`POST /api/admin/eu-ai-act/watermark-detectors/{modelId}/_test` checks URL, TLS, token and response contract with a
 throwaway random key; no real key leaves iHub.
 
 ## Rotation
 
-1. `POST /api/admin/watermark-keys` (new key becomes **active**, the previous one **retired**).
+1. `POST /api/admin/eu-ai-act/watermark-keys` (new key becomes **active**, the previous one **retired**).
 2. **Restart vLLM right away** with the new `--watermark-config`, then run the self-test.
 3. Retired keys stay in the store and are tried by the detector, so older text is still recognised and reports its
    **old** `keyId`. Delete one only deliberately: text made with it can no longer be recognised, and its id is never
@@ -247,12 +247,12 @@ The provider duty of Art. 50(2) is only part of the picture. Operators who run i
 
 | Method and path | Result |
 | --- | --- |
-| `GET /api/admin/watermark-keys` | `{ items: [{ keyId, status, source, label?, createdAt, createdBy?, retiredAt? }], nextCursor: null }`, never a key |
-| `POST /api/admin/watermark-keys` `{ key?, label? }` | `201` + `Location`; item plus `key` (string), `vllmConfigSnippet`, `weakKey?` |
-| `POST /api/admin/watermark-keys/{keyId}/_activate` | `200` item |
-| `POST /api/admin/watermark-keys/{keyId}/_reveal` | `200 { keyId, key, vllmConfigSnippet }`, audited first |
-| `DELETE /api/admin/watermark-keys/{keyId}` | `204`; `409 WATERMARK_KEY_ACTIVE` for the active key |
-| `GET /api/admin/watermark-detectors` | `{ items: [{ modelId, detectorUrl, tokenizer, algorithm, prf, contextWidth, credentialRef, hasActiveKey, urlPolicyOk, urlPolicyProblem? }], nextCursor: null }` |
-| `POST /api/admin/watermark-detectors/{modelId}/_test` | `200 { reachable, authenticated, contractValid, latencyMs, error? }` |
-| `POST /api/admin/watermark-detectors/{modelId}/_self-test` | `200 { ok, diagnosis, status, matchedKeyId?, scoredTokens, pValue?, reason? }` |
-| `POST /api/provenance/_verify` | adds `watermark: { status, scheme?, technique?, keyId?, pValue?, scoredTokens?, keysChecked?, detectorsChecked? }` for a text with no record |
+| `GET /api/admin/eu-ai-act/watermark-keys` | `{ items: [{ keyId, status, source, label?, createdAt, createdBy?, retiredAt? }], nextCursor: null }`, never a key |
+| `POST /api/admin/eu-ai-act/watermark-keys` `{ key?, label? }` | `201` + `Location`; item plus `key` (string), `vllmConfigSnippet`, `weakKey?` |
+| `POST /api/admin/eu-ai-act/watermark-keys/{keyId}/_activate` | `200` item |
+| `POST /api/admin/eu-ai-act/watermark-keys/{keyId}/_reveal` | `200 { keyId, key, vllmConfigSnippet }`, audited first |
+| `DELETE /api/admin/eu-ai-act/watermark-keys/{keyId}` | `204`; `409 WATERMARK_KEY_ACTIVE` for the active key |
+| `GET /api/admin/eu-ai-act/watermark-detectors` | `{ items: [{ modelId, detectorUrl, tokenizer, algorithm, prf, contextWidth, credentialRef, hasActiveKey, urlPolicyOk, urlPolicyProblem? }], nextCursor: null }` |
+| `POST /api/admin/eu-ai-act/watermark-detectors/{modelId}/_test` | `200 { reachable, authenticated, contractValid, latencyMs, error? }` |
+| `POST /api/admin/eu-ai-act/watermark-detectors/{modelId}/_self-test` | `200 { ok, diagnosis, status, matchedKeyId?, scoredTokens, pValue?, reason? }` |
+| `POST /api/eu-ai-act/provenance/_verify` | adds `watermark: { status, scheme?, technique?, keyId?, pValue?, scoredTokens?, keysChecked?, detectorsChecked? }` for a text with no record |

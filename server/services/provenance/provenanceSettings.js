@@ -10,7 +10,7 @@
  * - `retentionDays` (default 365): records older than this are swept daily;
  *   0 or less keeps them forever (as `chats` and `projects`).
  * - `verify.access` (default `authenticated`): `public` lets third parties call
- *   `POST /api/provenance/_verify` without signing in.
+ *   `POST /api/eu-ai-act/provenance/_verify` without signing in.
  * - `media` (#3328): `maxVerifyBytes` (default 50 MiB) caps an uploaded image or
  *   audio file, `readC2pa` (default true) reads the C2PA manifest of generated
  *   images and uploads.

@@ -128,7 +128,6 @@ export function stampGeneratedImage(image) {
  * @param {Object|null} [input.c2pa] - {@link readC2pa} result.
  * @param {string} input.installationId
  * @param {string} [input.version]
- * @param {string} [input.verifyUrl]
  * @returns {Object}
  */
 export function buildMediaRecord({
@@ -141,8 +140,7 @@ export function buildMediaRecord({
   modelConfig,
   c2pa,
   installationId,
-  version = getAppVersion(),
-  verifyUrl
+  version = getAppVersion()
 }) {
   const record = buildProvenance({
     outputId,
@@ -152,8 +150,7 @@ export function buildMediaRecord({
     model,
     modelConfig,
     installationId,
-    version,
-    verifyUrl
+    version
   });
   record.content_hash = {
     ...record.content_hash,

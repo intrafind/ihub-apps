@@ -14,34 +14,11 @@
 import { isEuAiActEnabled } from '../euAiAct/conformity.js';
 import logger from '../../utils/logger.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
-import { buildApiPath } from '../../utils/basePath.js';
-import { resolveMcpPublicBase } from '../mcp/mcpOAuthPublicUrl.js';
 import { getProvenanceStore } from './ProvenanceStore.js';
 import { provenanceSettings } from './provenanceSettings.js';
 import { buildProvenance, hashText, normalizeText, newOutputId } from './records.js';
 
 const COMPONENT = 'TurnProvenance';
-
-/** Path of the lookup endpoint, relative to the public base. */
-export const VERIFY_PATH = '/api/provenance/_verify';
-
-/**
- * The verify URL embedded in an object: absolute when a request (or the
- * configured public URL) tells us the public base, else the site-relative path
- * including iHub's base path. Built at response time, never stored in a record.
- *
- * @param {import('express').Request} [req]
- * @returns {string}
- */
-export function verifyUrl(req) {
-  let base = null;
-  try {
-    base = resolveMcpPublicBase(req);
-  } catch {
-    base = null;
-  }
-  return base ? `${base}${VERIFY_PATH}` : buildApiPath('/provenance/_verify');
-}
 
 /**
  * Record one text output and return its provenance object.
@@ -58,7 +35,6 @@ export function verifyUrl(req) {
  *   fields below.
  * @param {boolean} [input.watermarkApplied] - Explicit override (tests, media).
  * @param {string} [input.keyId] - Watermark key id used.
- * @param {import('express').Request} [input.req] - For an absolute verify URL.
  * @returns {Promise<Object|null>} The object, or null for an output without text and tool calls.
  */
 export async function recordTextOutput({
@@ -69,8 +45,7 @@ export async function recordTextOutput({
   modelConfig,
   marking,
   watermarkApplied,
-  keyId,
-  req
+  keyId
 }) {
   // EU AI Act master switch off: no record, no object (callers are null-safe).
   if (!isEuAiActEnabled()) return null;
@@ -89,8 +64,7 @@ export async function recordTextOutput({
       keyId: marking?.keyId ?? keyId,
       watermarkReason: marking && marking.applied !== true ? marking.reason : undefined,
       installationId,
-      version: getAppVersion(),
-      verifyUrl: verifyUrl(req)
+      version: getAppVersion()
     });
     if (settings.storeRecords) {
       const extraHashes =

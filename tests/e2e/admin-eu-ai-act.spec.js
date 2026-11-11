@@ -247,9 +247,11 @@ test.describe('Admin EU AI Act page', () => {
     page
   }) => {
     // Make sure a retired key exists: a new key retires the active one.
-    expect((await page.request.post('/api/admin/watermark-keys', { data: {} })).ok()).toBeTruthy();
+    expect(
+      (await page.request.post('/api/admin/eu-ai-act/watermark-keys', { data: {} })).ok()
+    ).toBeTruthy();
     await page.goto('/admin/eu-ai-act#watermark-keys');
-    const before = await (await page.request.get('/api/admin/watermark-keys')).json();
+    const before = await (await page.request.get('/api/admin/eu-ai-act/watermark-keys')).json();
     const retired = before.items.find(k => k.status === 'retired');
     const current = before.items.find(k => k.status === 'active');
     expect(retired, 'an earlier test left a retired key').toBeTruthy();
@@ -261,12 +263,12 @@ test.describe('Admin EU AI Act page', () => {
     await expect(dialog).toContainText('mismatch');
     await expect(dialog).toContainText('outdated');
     // Nothing happened yet.
-    let now = await (await page.request.get('/api/admin/watermark-keys')).json();
+    let now = await (await page.request.get('/api/admin/eu-ai-act/watermark-keys')).json();
     expect(now.items.find(k => k.keyId === retired.keyId).status).toBe('retired');
 
     await dialog.getByRole('button', { name: 'Make active' }).click();
     await expect(page.getByText(`Key ${retired.keyId} is now active`)).toBeVisible();
-    now = await (await page.request.get('/api/admin/watermark-keys')).json();
+    now = await (await page.request.get('/api/admin/eu-ai-act/watermark-keys')).json();
     expect(now.items.find(k => k.keyId === retired.keyId).status).toBe('active');
     expect(now.items.find(k => k.keyId === current.keyId).status).toBe('retired');
     // The key value stays out of the page until it is revealed.
@@ -341,9 +343,9 @@ test.describe('Admin EU AI Act page', () => {
   test('cleanup: remove the e2e model, credential and keys', async ({ page }) => {
     await page.request.delete(`/api/admin/models/${MODEL_ID}`);
     await page.request.delete(`/api/admin/credentials/${CREDENTIAL_ID}`);
-    const keys = await (await page.request.get('/api/admin/watermark-keys')).json();
+    const keys = await (await page.request.get('/api/admin/eu-ai-act/watermark-keys')).json();
     for (const key of keys.items.filter(k => k.status === 'retired')) {
-      await page.request.delete(`/api/admin/watermark-keys/${key.keyId}`);
+      await page.request.delete(`/api/admin/eu-ai-act/watermark-keys/${key.keyId}`);
     }
   });
 });

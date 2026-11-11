@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// The acknowledgement APIs live under `eu-ai-act` (step 9). The old layout never
+// The acknowledgement, provenance look-up and watermark admin APIs live under `eu-ai-act` (step 9). The old layout never
 // shipped, so there is no shim: a leftover caller of an old path would 404.
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.join(here, '../..');
@@ -27,7 +27,12 @@ const OLD_PATHS = [
   /\/ai-acknowledgements\/me\b/,
   /\/ai-acknowledgements\/_/,
   /(?<!eu-ai-act\/)\/ai-acknowledgements['"`)\s]/,
-  /auth\/users\/[^'"`\s]*ai-acknowledgements/
+  /auth\/users\/[^'"`\s]*ai-acknowledgements/,
+  // The provenance look-up and the watermark admin APIs live under `eu-ai-act` too.
+  /\/api\/provenance\/_verify/,
+  /\/api\/admin\/watermark-(keys|detectors)/,
+  /['"`]\/admin\/watermark-(keys|detectors)/,
+  /['"`]\/provenance\/_verify/
 ];
 const SELF = path.relative(root, fileURLToPath(import.meta.url));
 

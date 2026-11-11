@@ -4,7 +4,7 @@
 /**
  * Provenance lookup (EU AI Act Art. 50(2), #3327).
  *
- * `POST /api/provenance/_verify` takes a text, a content hash or (#3328) an image or
+ * `POST /api/eu-ai-act/provenance/_verify` takes a text, a content hash or (#3328) an image or
  * audio file and answers
  * whether this installation produced that exact output, and with which model
  * and version. A miss is a valid answer (200, `found: false`): it never says
@@ -25,7 +25,6 @@ import { isStorageReady } from '../storage/bootstrap.js';
 import { getProvenanceStore } from '../services/provenance/ProvenanceStore.js';
 import { provenanceSettings } from '../services/provenance/provenanceSettings.js';
 import { detectWatermark } from '../services/provenance/watermark/detect.js';
-import { verifyUrl } from '../services/provenance/turnProvenance.js';
 import {
   isJsonRequest,
   isMultipart,
@@ -39,7 +38,7 @@ import {
   isHexHash
 } from '../services/provenance/records.js';
 
-const VERIFY_PATH = '/api/provenance/_verify';
+const VERIFY_PATH = '/api/eu-ai-act/provenance/_verify';
 
 /** Largest text accepted, in bytes. */
 export const MAX_VERIFY_TEXT_BYTES = 256 * 1024;
@@ -102,7 +101,7 @@ export default function registerProvenanceRoutes(app) {
 
   /**
    * @swagger
-   * /api/provenance/_verify:
+   * /api/eu-ai-act/provenance/_verify:
    *   post:
    *     summary: Look up an AI output by its text or content hash
    *     description: >-
@@ -169,11 +168,7 @@ export default function registerProvenanceRoutes(app) {
             res,
             provenanceSettings().media.maxVerifyBytes
           );
-          const verify = verifyUrl(req);
-          const result = await verifyMediaFile(buffer, {
-            kind,
-            decorate: records => records.map(record => ({ ...record, verify }))
-          });
+          const result = await verifyMediaFile(buffer, { kind });
           res.setHeader('Cache-Control', 'no-store');
           return res.json(result);
         }
@@ -197,12 +192,7 @@ export default function registerProvenanceRoutes(app) {
           }
           return res.json(body);
         }
-        const verify = verifyUrl(req);
-        return res.json({
-          found: true,
-          normalization,
-          records: records.map(record => ({ ...record, verify }))
-        });
+        return res.json({ found: true, normalization, records });
       } catch (error) {
         return next(error);
       }
