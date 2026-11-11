@@ -139,7 +139,7 @@ function SlotCard({ id, slot, found, names, error, onChange, onRemove }) {
  * @param {(slots: Object<string, Object>) => void} props.onChange
  */
 export default function TemplateSlots({ slots = {}, info, errors = {}, onChange }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [newId, setNewId] = useState('');
   const newIdFieldId = useId();
   const names = placeholderNames(info);
@@ -150,6 +150,35 @@ export default function TemplateSlots({ slots = {}, info, errors = {}, onChange 
     slot => slot.source === 'convention' && slot.layouts.length > 0
   );
   const validId = SLOT_ID_PATTERN.test(newId) && !slots[newId];
+  // Placeholders that look like slots and are not declared yet.
+  const declared = new Set(
+    Object.values(slots).map(slot =>
+      String(slot.placeholder || '')
+        .trim()
+        .toLowerCase()
+    )
+  );
+  const suggestions = (info?.suggestedSlots || []).filter(
+    suggestion => !declared.has(suggestion.placeholder.trim().toLowerCase())
+  );
+  const uiLanguage = LANGUAGES.includes(i18n?.language?.slice(0, 2))
+    ? i18n.language.slice(0, 2)
+    : 'en';
+
+  const adopt = suggestion => {
+    let id = suggestion.id;
+    for (let n = 2; slots[id]; n += 1) id = `${suggestion.id.slice(0, 29)}${n}`;
+    onChange({
+      ...slots,
+      [id]: {
+        placeholder: suggestion.placeholder,
+        ifMissing: 'drop',
+        ...(suggestion.prompt
+          ? { description: { [uiLanguage]: suggestion.prompt.slice(0, 200) } }
+          : {})
+      }
+    });
+  };
 
   const add = () => {
     if (!validId) return;
@@ -179,6 +208,50 @@ export default function TemplateSlots({ slots = {}, info, errors = {}, onChange 
             </li>
           ))}
         </ul>
+      )}
+      {suggestions.length > 0 && (
+        <div className="mt-3 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3">
+          <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            {t('admin.documentTemplates.pptx.slots.suggestionsTitle', 'Found in your template')}
+          </h4>
+          <p className={HELP_CLASS}>
+            {t(
+              'admin.documentTemplates.pptx.slots.suggestionsHelp',
+              'Small text placeholders with a name of their own. Add the ones slides should be able to fill.'
+            )}
+          </p>
+          <ul className="mt-2 space-y-2">
+            {suggestions.map(suggestion => (
+              <li
+                key={suggestion.placeholder}
+                className="flex flex-wrap items-center justify-between gap-2 text-sm text-gray-700 dark:text-gray-300"
+              >
+                <span>
+                  <strong>{suggestion.placeholder}</strong> (<code>{suggestion.id}</code>){' — '}
+                  {t(
+                    'admin.documentTemplates.pptx.slots.suggestionDetail',
+                    '{{position}}, about {{chars}} characters, in: {{layouts}}',
+                    {
+                      position: t(
+                        `admin.documentTemplates.pptx.slots.positions.${suggestion.position}`,
+                        suggestion.position.replace('-', ' ')
+                      ),
+                      chars: suggestion.capacity?.chars ?? 0,
+                      layouts: suggestion.layouts.map(layout => layout.name).join(', ')
+                    }
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className={SECONDARY_BUTTON_CLASS}
+                  onClick={() => adopt(suggestion)}
+                >
+                  {t('admin.documentTemplates.pptx.slots.addSuggestion', 'Add as slot')}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <div className="mt-3 space-y-3">
         {Object.entries(slots).map(([id, slot]) => (

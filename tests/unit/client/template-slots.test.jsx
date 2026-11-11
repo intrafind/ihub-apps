@@ -112,6 +112,70 @@ describe('TemplateSlots', () => {
   });
 });
 
+describe('TemplateSlots suggestions', () => {
+  const suggested = {
+    ...INFO,
+    suggestedSlots: [
+      {
+        id: 'referentIn',
+        placeholder: 'Referent/in',
+        prompt: 'Name der Person',
+        position: 'below-title',
+        capacity: { lines: 1, chars: 60 },
+        layouts: [{ name: 'Titelfolie', kind: 'title' }]
+      },
+      {
+        id: 'chapter',
+        placeholder: 'Kapitel',
+        prompt: '',
+        position: 'above-title',
+        capacity: { lines: 1, chars: 120 },
+        layouts: [{ name: 'Content with lead', kind: 'content' }]
+      }
+    ]
+  };
+
+  it('offers placeholders that look like slots and adds one with its id and prompt text', () => {
+    const onChange = jest.fn();
+    render(<TemplateSlots slots={{}} info={suggested} onChange={onChange} />);
+    expect(screen.getByText('Found in your template')).toBeInTheDocument();
+    expect(
+      screen.getByText(/below title, about 60 characters, in: Titelfolie/)
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add as slot' })[0]);
+    expect(onChange).toHaveBeenLastCalledWith({
+      referentIn: {
+        placeholder: 'Referent/in',
+        ifMissing: 'drop',
+        description: { en: 'Name der Person' }
+      }
+    });
+    fireEvent.click(screen.getAllByRole('button', { name: 'Add as slot' })[1]);
+    expect(onChange.mock.calls.at(-1)[0].chapter).toEqual({
+      placeholder: 'Kapitel',
+      ifMissing: 'drop'
+    });
+  });
+
+  it('does not offer what is declared already, and keeps ids unique', () => {
+    const onChange = jest.fn();
+    const slots = {
+      referentIn: { placeholder: 'something else' },
+      other: { placeholder: 'kapitel' }
+    };
+    render(<TemplateSlots slots={slots} info={suggested} onChange={onChange} />);
+    // "Kapitel" is declared (without regard to case); "Referent/in" is offered with a new id.
+    const buttons = screen.getAllByRole('button', { name: 'Add as slot' });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(Object.keys(onChange.mock.calls.at(-1)[0])).toEqual([
+      'referentIn',
+      'other',
+      'referentIn2'
+    ]);
+  });
+});
+
 describe('validateTemplate for slots', () => {
   const t = (key, fallback, values) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_, name) => String(values?.[name] ?? ''));

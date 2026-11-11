@@ -6175,7 +6175,24 @@
           "remove": "Feld entfernen",
           "newId": "ID des neuen Feldes",
           "add": "Feld hinzufügen",
-          "newIdHelp": "Buchstaben und Ziffern, beginnend mit einem Buchstaben, etwa \"presenter\" oder \"chapter\"."
+          "newIdHelp": "Buchstaben und Ziffern, beginnend mit einem Buchstaben, etwa \"presenter\" oder \"chapter\".",
+          "suggestionsTitle": "In Ihrer Vorlage gefunden",
+          "suggestionsHelp": "Kleine Textplatzhalter mit eigenem Namen. Fügen Sie die hinzu, die Folien füllen können sollen.",
+          "suggestionDetail": "{{position}}, etwa {{chars}} Zeichen, in: {{layouts}}",
+          "addSuggestion": "Als Feld hinzufügen",
+          "positions": {
+            "above-title": "über dem Titel",
+            "below-title": "unter dem Titel",
+            "top-left": "oben links",
+            "top-centre": "oben mittig",
+            "top-right": "oben rechts",
+            "middle-left": "Mitte links",
+            "middle-centre": "Mitte",
+            "middle-right": "Mitte rechts",
+            "bottom-left": "unten links",
+            "bottom-centre": "unten mittig",
+            "bottom-right": "unten rechts"
+          }
         }
       },
       "preview": {

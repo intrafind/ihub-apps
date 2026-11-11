@@ -5746,7 +5746,24 @@
           "remove": "Remove slot",
           "newId": "New slot id",
           "add": "Add slot",
-          "newIdHelp": "Letters and digits, starting with a letter, such as \"presenter\" or \"chapter\"."
+          "newIdHelp": "Letters and digits, starting with a letter, such as \"presenter\" or \"chapter\".",
+          "suggestionsTitle": "Found in your template",
+          "suggestionsHelp": "Small text placeholders with a name of their own. Add the ones slides should be able to fill.",
+          "suggestionDetail": "{{position}}, about {{chars}} characters, in: {{layouts}}",
+          "addSuggestion": "Add as slot",
+          "positions": {
+            "above-title": "above the title",
+            "below-title": "below the title",
+            "top-left": "top left",
+            "top-centre": "top centre",
+            "top-right": "top right",
+            "middle-left": "middle left",
+            "middle-centre": "middle",
+            "middle-right": "middle right",
+            "bottom-left": "bottom left",
+            "bottom-centre": "bottom centre",
+            "bottom-right": "bottom right"
+          }
         }
       },
       "preview": {

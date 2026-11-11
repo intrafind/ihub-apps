@@ -235,6 +235,83 @@ describe('text slots in a template', () => {
   });
 });
 
+// --- Suggestions ----------------------------------------------------------------
+
+describe('slot suggestions from the template file', () => {
+  const NOTE = shape(
+    42,
+    'Notiz',
+    'type="body" idx="16"',
+    [INCH, Math.round(6 * INCH), 4 * INCH, Math.round(0.3 * INCH)],
+    'Notiz: ein kurzer Hinweis',
+    1100
+  );
+  const FIXTURE = [
+    'Title and Content',
+    'Odd',
+    shape(40, 'Referent/in', 'type="body" idx="13"', BOX.below, 'Name der Person', 1400) +
+      shape(41, 'Chapter label (shown above)', 'type="body" idx="14"', BOX.above, '', 1200) +
+      shape(43, 'Textplatzhalter 5', 'type="body" idx="15"', BOX.bottom) +
+      shape(44, 'Big notes', 'type="body" idx="17"', [INCH, 2 * INCH, 6 * INCH, 3 * INCH]) +
+      NOTE
+  ];
+
+  it('are named, small text placeholders: with an id, the prompt text and where they are', async () => {
+    const { buffer } = await templateWith(FIXTURE);
+    const { suggestedSlots } = await analyzePowerpointTemplate(buffer);
+    const byId = Object.fromEntries(suggestedSlots.map(s => [s.id, s]));
+    assert.deepEqual(Object.keys(byId).sort(), ['chapterLabel', 'notiz', 'referentIn']);
+    assert.equal(byId.referentIn.placeholder, 'Referent/in');
+    assert.equal(byId.referentIn.prompt, 'Name der Person');
+    assert.equal(byId.referentIn.position, 'below-title');
+    assert.equal(byId.chapterLabel.position, 'above-title');
+    assert.deepEqual(byId.notiz.layouts, [{ name: 'Odd', kind: 'content' }]);
+    assert.ok(byId.notiz.capacity.chars > 0);
+  });
+
+  it('leave out what is declared, what follows the convention and what is no slot', async () => {
+    const { buffer } = await templateWith(FIXTURE, ['Title and Content', 'Both', KICKER + LEAD]);
+    const slots = { person: { placeholder: 'referent/IN' } };
+    const { suggestedSlots, slots: summary } = await analyzePowerpointTemplate(buffer, undefined, {
+      slots
+    });
+    const names = suggestedSlots.map(s => s.placeholder).sort();
+    assert.deepEqual(names, ['Chapter label (shown above)', 'Notiz']);
+    // Kicker and lead are slots already; a suggested id never clashes with a slot id.
+    assert.deepEqual(summary.map(s => s.id).sort(), ['kicker', 'lead', 'person']);
+  });
+
+  it('do not take the subtitle of a title or section slide, and make ids unique', async () => {
+    const { buffer } = await templateWith(
+      [
+        'Section Header',
+        'Section with note',
+        shape(40, 'Notiz', 'type="body" idx="20"', BOX.bottom, 'Hinweis', 1100)
+      ],
+      ['Title and Content', 'Second', shape(41, 'Notiz!', 'type="body" idx="21"', BOX.bottom)]
+    );
+    const { suggestedSlots } = await analyzePowerpointTemplate(buffer);
+    // The section layout's own body placeholder is its subtitle (and is named by default anyway).
+    assert.deepEqual(suggestedSlots.map(s => s.id).sort(), ['notiz', 'notiz2']);
+  });
+
+  it('turn names into ids: accents, capitals and separators', async () => {
+    const names = ['Überschrift-Zeile', 'ABT. Name', '2nd line', 'Étiquette (Label)'];
+    const { buffer } = await templateWith([
+      'Title and Content',
+      'Names',
+      names.map((n, i) => shape(40 + i, n, `type="body" idx="${30 + i}"`, BOX.bottom)).join('')
+    ]);
+    const { suggestedSlots } = await analyzePowerpointTemplate(buffer);
+    assert.deepEqual(suggestedSlots.map(s => s.id).sort(), [
+      'abtName',
+      'etiquette',
+      'slot2ndLine',
+      'uberschriftZeile'
+    ]);
+  });
+});
+
 // --- Choosing the layout --------------------------------------------------------
 
 describe('the layout of a slide with text slots', () => {

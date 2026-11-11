@@ -1842,6 +1842,12 @@ template has, and the model is told which exist, where each one sits and how muc
   what to do in a layout without it. This works with any template, any language and any number of
   slots, for example the presenter on a title slide. A placeholder named `Kicker` or `Lead` is a slot
   without any setup.
+- **Read from the template file.** The editor lists small, named text placeholders it finds in the
+  uploaded PowerPoint file and adds one as a slot with a click, with an id and the instruction the
+  template author typed into the placeholder.
+- **A guide for the template's authors.** The new [PowerPoint Template Guide](../../powerpoint-template-guide.md)
+  explains how the template should be built — layouts, placeholders, theme, text slots — with a
+  brief admins can hand to marketing, in English and German.
 - **The model sees the template.** The description of `create_pptx` lists the slots with their
   position (above or below the title …) and how many characters fit, and what each slide type has:
   title, subtitle, content areas, slots. The model passes the text in the slide field `slots`.

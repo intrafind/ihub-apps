@@ -479,7 +479,10 @@ function describeLayout(layout, template) {
         name: ph.name,
         type: ph.type,
         ...(ph.text && role === 'footer' ? { text: ph.text } : {}),
+        ...(ph.text && (role === 'slot' || role === 'content') ? { prompt: ph.text } : {}),
         position: positionOf(ph.rect, title, template.slideSize),
+        left: inches(ph.rect.x),
+        top: inches(ph.rect.y),
         width: inches(ph.rect.cx),
         height: inches(ph.rect.cy),
         ...(textual
@@ -515,6 +518,124 @@ function summarizeSlots(layouts, declared = {}) {
 }
 
 /**
+ * Words PowerPoint puts into the names of placeholders nobody named: a name
+ * made of these says nothing about what belongs in the placeholder.
+ */
+const GENERIC_NAME_WORDS = new Set([
+  'content',
+  'text',
+  'body',
+  'object',
+  'inhalt',
+  'inhalts',
+  'objekt',
+  'contenu',
+  'texte',
+  'platzhalter',
+  'placeholder',
+  'textplatzhalter',
+  'inhaltsplatzhalter',
+  'objektplatzhalter',
+  'textfeld',
+  'espace',
+  'reserve',
+  'left',
+  'right',
+  'links',
+  'rechts',
+  'top',
+  'bottom',
+  'oben',
+  'unten',
+  'de',
+  'du',
+  'and',
+  'und'
+]);
+
+function isGenericName(name) {
+  const words = String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  return words.every(word => GENERIC_NAME_WORDS.has(word));
+}
+
+/** A slot id from a placeholder name: "Kicker (Label above the title)" → `kicker`, "Referent/in" → `referentIn`. */
+function slotIdFromName(name) {
+  const words = String(name || '')
+    .replace(/\s*[([].*$/, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ß/g, 'ss')
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean);
+  const id = words
+    .map((word, i) =>
+      i ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word.toLowerCase()
+    )
+    .join('');
+  const clean = /^[a-z]/.test(id) ? id : `slot${id}`;
+  return clean.slice(0, 32);
+}
+
+/** The tallest a text placeholder is to count as a slot rather than a content area (inches). */
+const SLOT_MAX_HEIGHT = 1.3;
+
+/**
+ * Text placeholders that look like slots a template author meant, though no
+ * slot is declared for them: named by hand (not "Content Placeholder 3"),
+ * small (a label or a sentence, not a content area) and not the subtitle of a
+ * title or section slide. Suggestions only: the admin decides which become
+ * slots.
+ *
+ * @param {Array} layouts - Described layouts (`kind`, `name`, `elements`).
+ * @param {Set<string>} taken - Slot ids already in use.
+ * @returns {Array<{ id: string, placeholder: string, prompt: string, position: string, capacity: Object, layouts: Array<{ name: string, kind: string }> }>}
+ */
+function suggestSlots(layouts, taken) {
+  const byName = new Map();
+  for (const layout of layouts) {
+    const texts = layout.elements.filter(
+      e => e.role === 'content' && ['body', 'obj', 'tx'].includes(e.type)
+    );
+    // On a title or section slide the text placeholder under the title is its subtitle.
+    const headline = layout.kind === 'title' || layout.kind === 'section';
+    const hasSubtitle = layout.elements.some(e => e.role === 'subtitle');
+    const subtitle =
+      headline && !hasSubtitle
+        ? [...texts].sort((a, b) => a.left - b.left || a.top - b.top)[0]
+        : null;
+    for (const element of texts) {
+      if (element === subtitle || element.height > SLOT_MAX_HEIGHT) continue;
+      if (!element.name || isGenericName(element.name)) continue;
+      const key = element.name.trim().toLowerCase();
+      const entry = byName.get(key) || { element, layouts: [] };
+      entry.layouts.push({ name: layout.name, kind: layout.kind });
+      byName.set(key, entry);
+    }
+  }
+  const used = new Set(taken);
+  return [...byName.values()].map(({ element, layouts: where }) => {
+    const base = slotIdFromName(element.name) || 'slot';
+    let id = base;
+    for (let n = 2; used.has(id); n += 1) id = `${base.slice(0, 29)}${n}`;
+    used.add(id);
+    return {
+      id,
+      placeholder: element.name,
+      prompt: element.prompt || '',
+      position: element.position,
+      capacity: element.capacity,
+      layouts: where
+    };
+  });
+}
+
+/**
  * What a PowerPoint template offers, for the admin page and for the model:
  * its layouts, the one chosen for each kind of slide, and its text slots.
  *
@@ -529,6 +650,14 @@ export async function analyzePowerpointTemplate(buffer, overrides, { slots } = {
   const chosen = chooseLayouts(template.layouts, overrides);
   const ratio = template.slideSize.cx / template.slideSize.cy;
   const theme = template.masters[0]?.theme || { colors: {}, fonts: {} };
+  const layouts = template.layouts.map(layout => ({
+    name: layout.name,
+    type: layout.type,
+    kind: layoutKind(layout),
+    placeholders: layout.placeholders.map(ph => ph.type),
+    elements: describeLayout(layout, template)
+  }));
+  const slotSummary = summarizeSlots(template.layouts, slots);
   return {
     slideSize: {
       width: Math.round((template.slideSize.cx / 914400) * 100) / 100,
@@ -540,17 +669,16 @@ export async function analyzePowerpointTemplate(buffer, overrides, { slots } = {
             ? '4:3'
             : ratio.toFixed(2)
     },
-    layouts: template.layouts.map(layout => ({
-      name: layout.name,
-      type: layout.type,
-      kind: layoutKind(layout),
-      placeholders: layout.placeholders.map(ph => ph.type),
-      elements: describeLayout(layout, template)
-    })),
+    layouts,
     mapping: Object.fromEntries(
       Object.entries(chosen).map(([kind, layout]) => [kind, layout.name])
     ),
-    slots: summarizeSlots(template.layouts, slots),
+    slots: slotSummary,
+    // Placeholders that look like slots but are not declared: for the admin to adopt.
+    suggestedSlots: suggestSlots(
+      layouts,
+      new Set([...slotSummary.map(slot => slot.id), ...Object.keys(CONVENTIONAL_SLOTS)])
+    ),
     theme: { colors: theme.colors, fonts: theme.fonts },
     hasNotesMaster: Boolean(template.notesMaster)
   };
