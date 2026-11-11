@@ -398,7 +398,18 @@ function useAppChat({
           if (own) {
             removeMessage(own.userMessageId);
             if (placeholderId) removeMessage(placeholderId);
+            // The fork of an edit or regenerate was consumed by the first attempt: put it back,
+            // so the send the user makes after confirming still replaces the stored exchange.
+            const fork = pendingSend.params?.replaceFromMessageId;
+            if (fork) pendingReplaceFromRef.current = fork;
             if (ok === false) onSendRefusedRef.current?.(own.args);
+          } else {
+            // A tool approval or a clarification answer: stop the placeholder's spinner and
+            // give the approval card its question back.
+            const placeholder = messagesRef.current.find(m => m.id === placeholderId);
+            if (placeholder)
+              updateAssistantMessage(placeholderId, placeholder.content || '', false);
+            reopenToolApproval('AI_ACKNOWLEDGEMENT_REQUIRED');
           }
         });
         return;
@@ -451,7 +462,8 @@ function useAppChat({
     toolApprovals,
     reopenToolApproval,
     acknowledgement,
-    removeMessage
+    removeMessage,
+    reopenToolApproval
   ]);
 
   /**
