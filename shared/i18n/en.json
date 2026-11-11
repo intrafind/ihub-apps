@@ -1287,9 +1287,7 @@
         "ttsVoice": "Voice",
         "ttsVoices": "Voices per language",
         "ttsVoiceLanguage": "Language",
-        "customProviders": "Custom providers",
-        "markingByImage": "Image marking",
-        "markingByAudio": "Audio marking"
+        "customProviders": "Custom providers"
       },
       "toolSupport": {
         "none": "No tools",
@@ -1321,14 +1319,14 @@
         "sampling": "Optional. Leave a field empty to use the model's or provider's own default; nothing is sent for it. A value set here applies to every request to this model.",
         "marking": "Whether this model marks the text it generates as AI generated. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot check it. Every output still gets a provenance record, whatever you choose here.",
         "markingStatementRef": "A document name or URL of the provider's written statement. It is only kept as a reference, never opened.",
+        "imageMarking": "What the provider embeds in the images this model generates (for example SynthID, an invisible watermark, or a C2PA manifest). iHub adds no mark of its own and never re-encodes a generated image, so the provider's mark stays intact. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot detect it and records it as declared, never as detected.",
         "markingIhub": "iHub asks vLLM to watermark every answer with the active key and recognises it again through the detector. The detector settings must equal the vLLM server settings. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
         "ttsVoiceGoogle": "One of the prebuilt Gemini voices, such as Kore, Puck or Charon. Each speaks every language, which is detected from the text. Empty uses Kore.",
         "ttsVoices": "A message written in one of these languages is read with that voice; every other language uses the voice above. The language is told from the message itself.",
         "ttsVoicesAfterSave": "Save the model once to browse the provider’s voices and create custom voices here.",
-        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}}).",
-        "mediaMarking": "Declare what the provider embeds in generated images or audio (for example SynthID or a C2PA manifest). iHub keeps the mark untouched and records your declaration; it cannot detect SynthID. Choose \"Provider marks the output\" only with the provider's written statement."
+        "linkedProvider": "Uses the API key of the provider \"{{provider}}\" and its API type ({{apiType}})."
       },
       "placeholders": {
         "maxOutputTokens": "Default: {{value}}",
@@ -1348,8 +1346,8 @@
         "providerConfig": "Provider Settings",
         "sampling": "Sampling",
         "marking": "Output marking",
-        "thinking": "Reasoning",
-        "mediaMarking": "Image and audio marking"
+        "imageMarking": "Image marking",
+        "thinking": "Reasoning"
       },
       "errors": {
         "invalidJson": "Invalid JSON"
@@ -6100,11 +6098,15 @@
     },
     "aiDisclosure": {
       "title": "AI notice",
-      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. The assistants always tell users they are an AI system when asked; that rule cannot be switched off.",
+      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.",
       "enabled": "Show an AI notice before the first message",
       "text": "Notice text (empty uses the built-in text)",
       "saved": "AI notice saved",
-      "saveError": "Failed to save the AI notice"
+      "saveError": "Failed to save the AI notice",
+      "guardrailText": "Rule for the AI (empty uses the built-in rule)",
+      "guardrailHint": "Written for the model, in English works best. It is added as the last line of the system prompt of every model call (chat, API, MCP, A2A, agents, workflows). Apps and users cannot change it. Keep it clear that the assistant is an AI and never claims to be human.",
+      "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+      "loadError": "Failed to load the AI notice settings"
     },
     "aiAcknowledgement": {
       "title": "AI acknowledgement",
@@ -6372,8 +6374,6 @@
         "accessPublicHelp": "Third parties such as journalists or platforms can check a text or file. Anyone can then find out whether a text came from this installation.",
         "maxVerify": "Largest file that can be checked",
         "maxVerifyHelp": "Applies to image and audio uploads on the check form. Larger files are refused.",
-        "recordTts": "Record read-aloud audio",
-        "recordTtsHelp": "One record per spoken answer, so the audio can be checked later. Default: on.",
         "readC2pa": "Read C2PA marks of images",
         "readC2paHelp": "Reads the provider mark (C2PA manifest) of generated and uploaded images. Default: on.",
         "detection": "Text watermark detection",
@@ -6723,6 +6723,21 @@
       "missing_other": "{{count}} projects not available",
       "missingIFinder": "iFinder could not be reached, so this answer did not use it.",
       "missingOther": "This answer did not use it."
+    },
+    "provenance": {
+      "button": "AI generated: details",
+      "title": "AI generated",
+      "model": "Model",
+      "created": "Created",
+      "marking": "Marking",
+      "markingNone": "Not marked by the model",
+      "markingProvider": "Marked by the provider (declared)",
+      "markingIhub": "iHub watermark",
+      "hash": "Content hash (SHA-256)",
+      "copyHash": "Copy hash",
+      "copied": "Copied",
+      "outputId": "Output ID",
+      "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it."
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",
@@ -9306,7 +9321,6 @@
       "defaultAppHint": "New chats of this project start in this app. Anyone can still pick another app when they start a chat."
     },
     "items": {
-      "aiAccessFor": "Use of {{name}} by the AI",
       "aiAccessHint": "Pinned items are always in the prompt. \"Not for AI\" items stay in the project for people but are never given to the model, listed or searched.",
       "aiAccess": {
         "normal": "Normal",
@@ -9317,7 +9331,6 @@
         "preview": "Preview text",
         "refresh": "Refresh",
         "remove": "Remove item",
-        "rename": "Rename",
         "retry": "Retry",
         "transfer": "Move or copy to…",
         "openInIFinder": "Open in iFinder",
@@ -9348,7 +9361,6 @@
       "pinnedHint": "Pinned items are always in the prompt, even when the project is searched.",
       "removeConfirm": "Remove \"{{name}}\" from the project?",
       "removeTitle": "Remove item",
-      "renameTitle": "Rename item",
       "status": {
         "extracting": "Extracting",
         "failed": "Failed",
@@ -10309,7 +10321,7 @@
     "retry": "Try again",
     "saving": "Saving...",
     "skip": "Continue without confirming",
-    "anonymousNote": "This confirmation applies to this browser session only.",
+    "anonymousNote": "This confirmation is remembered in this browser for up to 30 days.",
     "composerNote": "Please confirm the AI-use notice to send messages.",
     "review": "Review notice",
     "confirmed": "Confirmed.",

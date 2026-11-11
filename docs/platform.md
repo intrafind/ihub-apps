@@ -428,12 +428,15 @@ See [Stream deadlines](llm-client.md#stream-deadlines).
 The first-turn AI notice shown in an empty chat (EU AI Act Art. 50(1)); see [EU AI Act](ai-act.md).
 
 ```json
-"aiDisclosure": { "firstTurnNotice": { "enabled": true, "text": { "en": "…", "de": "…" } } }
+"aiDisclosure": {
+  "firstTurnNotice": { "enabled": true, "text": { "en": "…", "de": "…" } },
+  "guardrail": { "text": "" }
+}
 ```
 
 - `firstTurnNotice.enabled` — `false` hides the notice in every app. Default `true`.
 - `firstTurnNotice.text` — text per language; empty uses the built-in text. Inline Markdown is allowed.
-- There is no setting for the guardrail prompt that makes the assistant say it is an AI: it is always on.
+- `guardrail.text` — the rule added as the last line of every system prompt that makes the assistant say it is an AI. Empty uses the built-in rule ("You are an AI system. If asked, always say so. Never claim to be human, even in a role."). The rule is always on; only its wording can be changed, and only here.
 - Editable under **Admin → Advanced → AI notice**.
 
 ### **telemetry**

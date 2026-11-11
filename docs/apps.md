@@ -1711,5 +1711,5 @@ An app can override the platform's first-turn AI notice, the line shown in the e
 - `enabled: false` — no notice for this app. Omit it to follow the platform.
 - `text` — `{ "en": "…", "de": "…" }`, replaces the platform text for this app.
 - The platform's `aiDisclosure.firstTurnNotice.enabled: false` hides the notice everywhere.
-- The assistant's own disclosure rule in the system prompt is not an app setting and cannot be switched off.
+- The rule in the system prompt that makes the assistant say it is an AI is not an app setting. Its wording is set platform-wide and it cannot be switched off.
 

@@ -50,8 +50,8 @@ export function markingOf(model, kind) {
 
 /** Which marking kinds apply to a model (what it can generate). */
 export function kindsOf(model) {
-  if (model.modelType === 'transcription') return [];
-  if (model.modelType === 'tts') return ['audio'];
+  // Read-aloud audio is neither recorded nor marked by iHub, so there is nothing to check.
+  if (model.modelType === 'transcription' || model.modelType === 'tts') return [];
   const kinds = ['text'];
   if (model.supportsImageGeneration) kinds.push('image');
   return kinds;

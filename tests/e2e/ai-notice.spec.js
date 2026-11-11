@@ -19,6 +19,11 @@ const NOTICE = /You are chatting with an AI system/;
 test.describe('AI first-turn notice', () => {
   // One test switches the notice off platform-wide: never run them side by side.
   test.describe.configure({ mode: 'serial' });
+  // ...and not in several browser projects at once: they share one server and one platform.json.
+  test.skip(
+    ({ browserName }, testInfo) => testInfo.project.name !== 'chromium',
+    'mutates platform.json'
+  );
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
       window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');

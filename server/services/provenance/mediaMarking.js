@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Provenance records for generated images and audio (#3328, EU AI Act Art.
- * 50(2)).
+ * Provenance records for generated images (#3328, EU AI Act Art. 50(2)).
  *
  * iHub applies no image or audio mark of its own. The providers do (Gemini:
  * SynthID in the signal; OpenAI gpt-image and some Google models: a C2PA
@@ -31,7 +30,6 @@ import { getProvenanceStore } from './ProvenanceStore.js';
 import { provenanceSettings } from './provenanceSettings.js';
 import { readC2pa } from './c2paReader.js';
 import { sniffMedia } from './mediaSniff.js';
-import { verifyUrl } from './turnProvenance.js';
 import { NORMALIZATION_NONE, buildProvenance, getContentMarking, newOutputId } from './records.js';
 
 const COMPONENT = 'MediaMarking';
@@ -124,7 +122,6 @@ export function stampGeneratedImage(image) {
  * @param {{id: string}} input.model
  * @param {Object} [input.modelConfig]
  * @param {Object|null} [input.c2pa] - {@link readC2pa} result.
- * @param {Object} [input.container] - Audio stream parameters (`encoding`, `sample_rate`, `channels`).
  * @param {string} input.installationId
  * @param {string} [input.version]
  * @param {string} [input.verifyUrl]
@@ -139,7 +136,6 @@ export function buildMediaRecord({
   model,
   modelConfig,
   c2pa,
-  container,
   installationId,
   version = getAppVersion(),
   verifyUrl
@@ -161,7 +157,6 @@ export function buildMediaRecord({
     ...(mimeType ? { mime_type: mimeType } : {})
   };
   record.provider_marking = buildProviderMarking(c2pa, modelConfig, kind);
-  if (container) record.container = container;
   return record;
 }
 
@@ -208,72 +203,6 @@ export async function recordGeneratedImage(image, { model }) {
       component: COMPONENT,
       error: error.message
     });
-    return null;
-  }
-}
-
-/**
- * Store the record of one TTS response (`audio`, `pcm_s16le`). The audio is
- * never kept: the record holds the SHA-256 of the exact PCM bytes streamed and
- * the stream parameters. A raw headerless PCM stream has no container, so no
- * C2PA or XMP can be carried; any mark the provider applies lives in the signal.
- * Best effort: a failure costs the record, never the audio. Skipped when
- * `provenance.media.recordTts` or `provenance.storeRecords` is off.
- *
- * Call only for a stream that completed (an aborted one has no complete clip).
- *
- * @param {Object} input
- * @param {string} input.outputId - The id sent in `X-AI-Content-Id`.
- * @param {string} input.contentHash - SHA-256 hex of the streamed PCM.
- * @param {number} input.byteLength
- * @param {Object} input.model - TTS model config (`id`, `contentMarking`).
- * @param {string} input.encoding - e.g. `pcm_s16le`.
- * @param {number} input.sampleRate
- * @param {number} [input.channels=1]
- * @param {import('express').Request} [input.req]
- * @returns {Promise<Object|null>}
- */
-export async function recordTtsOutput({
-  outputId,
-  contentHash,
-  byteLength,
-  model,
-  encoding,
-  sampleRate,
-  channels = 1,
-  req
-}) {
-  try {
-    const settings = provenanceSettings();
-    if (!settings.storeRecords || !settings.media.recordTts) return null;
-    const store = getProvenanceStore();
-    if (!store.isAvailable()) return null;
-    const record = buildMediaRecord({
-      outputId,
-      kind: 'audio',
-      contentHash,
-      byteLength,
-      mimeType: `audio/L16;rate=${sampleRate}`,
-      model: { id: model?.id ?? null },
-      modelConfig: model,
-      c2pa: {
-        present: false,
-        status: 'unsupported_format',
-        valid: null,
-        issuer: null,
-        digitalSourceType: null,
-        claimGenerator: null,
-        signedAt: null,
-        trust: 'not-evaluated'
-      },
-      container: { encoding, sample_rate: sampleRate, channels },
-      installationId: await store.installationId(),
-      verifyUrl: req ? verifyUrl(req) : undefined
-    });
-    await store.record(record);
-    return record;
-  } catch (error) {
-    logger.warn('Could not record a speech output', { component: COMPONENT, error: error.message });
     return null;
   }
 }

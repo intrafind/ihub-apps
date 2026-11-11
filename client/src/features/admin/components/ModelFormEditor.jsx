@@ -452,23 +452,23 @@ function ModelFormEditor({
     onChange({ ...data, contentMarking: { ...data.contentMarking, text } });
   };
 
-  // Image and audio marking (#3328): what the provider embeds, as the operator declares it.
-  // iHub applies no image or audio mark of its own, so only `none` and `provider` exist.
-  // Empty optional fields are dropped because the schema is strict about their shape.
-  const mediaMarkingKinds = [
-    ...(data.supportsImageGeneration ? ['image'] : []),
-    ...(data.modelType === 'tts' ? ['audio'] : [])
-  ];
-  const handleMediaMarkingChange = (kind, key, value) => {
-    const current = data.contentMarking?.[kind] || { by: 'none' };
-    let next = key === 'by' ? { ...current, by: value } : { ...current, [key]: value };
-    if (next.by !== 'provider') next = { by: 'none' };
+  // Image marking (#3328): what the provider embeds in generated images, as the
+  // operator declares it. iHub adds no image mark, so only `none` and `provider`
+  // exist. `none` drops the member (the default); empty optional fields are
+  // dropped because the schema is strict about their shape.
+  const handleImageMarkingChange = (key, value) => {
+    const { image: current = { by: 'none' }, ...others } = data.contentMarking || {};
+    let image = key === 'by' ? { ...current, by: value } : { ...current, [key]: value };
+    if (image.by !== 'provider') image = { by: 'none' };
     for (const optional of ['scheme', 'statementRef']) {
-      if (next[optional] === '') delete next[optional];
+      if (image[optional] === '') delete image[optional];
     }
-    const contentMarking = { ...data.contentMarking };
-    if (next.by === 'none') delete contentMarking[kind];
-    else contentMarking[kind] = next;
+    const contentMarking = image.by === 'none' ? others : { ...others, image };
+    if (Object.keys(contentMarking).length === 0) {
+      const { contentMarking: _dropped, ...rest } = data;
+      onChange(rest);
+      return;
+    }
     onChange({ ...data, contentMarking });
   };
 
@@ -1595,97 +1595,92 @@ function ModelFormEditor({
                   </div>
                 )}
 
-                {mediaMarkingKinds.length > 0 && (
+                {isChat && data.supportsImageGeneration && (
                   <div className="col-span-6">
                     <fieldset>
                       <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
-                        {t('admin.models.sections.mediaMarking', 'Image and audio marking')}
+                        {t('admin.models.sections.imageMarking', 'Image marking')}
                       </legend>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         {t(
-                          'admin.models.hints.mediaMarking',
-                          'Declare what the provider embeds in generated images or audio (for example SynthID or a C2PA manifest). iHub keeps the mark untouched and records your declaration; it cannot detect SynthID. Choose "Provider marks the output" only with the provider\'s written statement.'
+                          'admin.models.hints.imageMarking',
+                          'What the provider embeds in the images this model generates (for example SynthID, an invisible watermark, or a C2PA manifest). iHub adds no mark of its own and never re-encodes a generated image, so the provider\'s mark stays intact. Choose "Provider marks the output" only when the provider confirmed that in writing; iHub cannot detect it and records it as declared, never as detected.'
                         )}
                       </p>
-                      {mediaMarkingKinds.map(kind => {
-                        const marking = data.contentMarking?.[kind] || { by: 'none' };
-                        const inputClass =
-                          'mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm';
-                        return (
-                          <div key={kind} className="mt-4 grid grid-cols-6 gap-6">
+                      <div className="mt-4 grid grid-cols-6 gap-6">
+                        <div className="col-span-6 sm:col-span-2">
+                          <label
+                            htmlFor="contentMarking.image.by"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.markingBy', 'Marking')}
+                          </label>
+                          <select
+                            id="contentMarking.image.by"
+                            value={data.contentMarking?.image?.by || 'none'}
+                            onChange={e => handleImageMarkingChange('by', e.target.value)}
+                            className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <option value="none">
+                              {t('admin.models.marking.optionNone', 'Not marked')}
+                            </option>
+                            <option value="provider">
+                              {t(
+                                'admin.models.marking.optionProvider',
+                                'Provider marks the output'
+                              )}
+                            </option>
+                          </select>
+                        </div>
+                        {data.contentMarking?.image?.by === 'provider' && (
+                          <>
                             <div className="col-span-6 sm:col-span-2">
                               <label
-                                htmlFor={`contentMarking.${kind}.by`}
+                                htmlFor="contentMarking.image.scheme"
                                 className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                               >
-                                {kind === 'image'
-                                  ? t('admin.models.fields.markingByImage', 'Image marking')
-                                  : t('admin.models.fields.markingByAudio', 'Audio marking')}
+                                {t('admin.models.fields.markingScheme', 'Scheme')}
                               </label>
-                              <select
-                                id={`contentMarking.${kind}.by`}
-                                value={marking.by}
-                                onChange={e => handleMediaMarkingChange(kind, 'by', e.target.value)}
-                                className={inputClass}
-                              >
-                                <option value="none">
-                                  {t('admin.models.marking.optionNone', 'Not marked')}
-                                </option>
-                                <option value="provider">
-                                  {t(
-                                    'admin.models.marking.optionProvider',
-                                    'Provider marks the output'
-                                  )}
-                                </option>
-                              </select>
+                              <input
+                                id="contentMarking.image.scheme"
+                                type="text"
+                                maxLength={100}
+                                value={data.contentMarking?.image?.scheme || ''}
+                                onChange={e => handleImageMarkingChange('scheme', e.target.value)}
+                                placeholder="synthid"
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
                             </div>
-                            {marking.by === 'provider' && (
-                              <>
-                                <div className="col-span-6 sm:col-span-2">
-                                  <label
-                                    htmlFor={`contentMarking.${kind}.scheme`}
-                                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                  >
-                                    {t('admin.models.fields.markingScheme', 'Scheme')}
-                                  </label>
-                                  <input
-                                    id={`contentMarking.${kind}.scheme`}
-                                    type="text"
-                                    maxLength={100}
-                                    value={marking.scheme || ''}
-                                    onChange={e =>
-                                      handleMediaMarkingChange(kind, 'scheme', e.target.value)
-                                    }
-                                    placeholder={kind === 'image' ? 'synthid, c2pa' : 'synthid'}
-                                    className={inputClass}
-                                  />
-                                </div>
-                                <div className="col-span-6 sm:col-span-2">
-                                  <label
-                                    htmlFor={`contentMarking.${kind}.statementRef`}
-                                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                                  >
-                                    {t(
-                                      'admin.models.fields.markingStatementRef',
-                                      'Statement reference'
-                                    )}
-                                  </label>
-                                  <input
-                                    id={`contentMarking.${kind}.statementRef`}
-                                    type="text"
-                                    maxLength={2000}
-                                    value={marking.statementRef || ''}
-                                    onChange={e =>
-                                      handleMediaMarkingChange(kind, 'statementRef', e.target.value)
-                                    }
-                                    className={inputClass}
-                                  />
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        );
-                      })}
+                            <div className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor="contentMarking.image.statementRef"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t(
+                                  'admin.models.fields.markingStatementRef',
+                                  'Statement reference'
+                                )}
+                              </label>
+                              <input
+                                id="contentMarking.image.statementRef"
+                                type="text"
+                                maxLength={500}
+                                value={data.contentMarking?.image?.statementRef || ''}
+                                onChange={e =>
+                                  handleImageMarkingChange('statementRef', e.target.value)
+                                }
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {t(
+                                  'admin.models.hints.markingStatementRef',
+                                  "A document name or URL of the provider's written statement. It is only kept as a reference, never opened."
+                                )}
+                              </p>
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </fieldset>
                   </div>
                 )}

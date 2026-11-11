@@ -30,8 +30,6 @@ import { EtagMismatchError } from '../../storage/errors.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { isHexHash, toStoredRecord } from './records.js';
 
-const COMPONENT = 'ProvenanceStore';
-
 export const PROVENANCE_RECORDS_NAMESPACE = RUNTIME_NAMESPACES.provenanceRecords;
 export const PROVENANCE_META_NAMESPACE = RUNTIME_NAMESPACES.provenanceMeta;
 
@@ -56,9 +54,8 @@ export const ALLOWED_RECORD_KEYS = Object.freeze([
   'created_at',
   'kind',
   'content_hash',
-  // Media records (#3328): what the provider embedded, and the audio container.
-  'provider_marking',
-  'container'
+  // Media records (#3328): what the provider embedded.
+  'provider_marking'
 ]);
 
 function createdAtMs(record) {

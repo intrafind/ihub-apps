@@ -30,7 +30,6 @@ export const provenanceSettingsSaveSchema = z
           .min(B.maxVerifyBytes.min)
           .max(B.maxVerifyBytes.max)
           .optional(),
-        recordTts: z.boolean().optional(),
         readC2pa: z.boolean().optional()
       })
       .passthrough()

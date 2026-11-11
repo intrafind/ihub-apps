@@ -487,15 +487,16 @@ describe('ProjectPage – owner', () => {
     expect(mockApi.fetchProject).toHaveBeenCalledTimes(3);
   });
 
-  test('pins an item and deletes the project after confirmation', async () => {
+  test('pins an item in its edit dialog and deletes the project after confirmation', async () => {
     mockApi.fetchProject.mockResolvedValue(makeProject());
     mockApi.updateProjectItem.mockResolvedValue({ ...ITEMS[0], pinned: true });
     mockApi.deleteProject.mockResolvedValue();
     renderPage();
 
-    fireEvent.change(await screen.findByLabelText('Use of Lease.pdf by the AI'), {
-      target: { value: 'pinned' }
-    });
+    const row = (await screen.findByText('Lease.pdf')).closest('tr');
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+    fireEvent.change(await screen.findByLabelText('For the AI'), { target: { value: 'pinned' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mockApi.updateProjectItem).toHaveBeenCalledWith('prj_a', 'itm_ready', {
         pinned: true,

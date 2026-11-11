@@ -70,7 +70,6 @@ function effective(block) {
     storeRecords: p.storeRecords,
     'verify.access': p.verify.access,
     'media.maxVerifyBytes': p.media.maxVerifyBytes,
-    'media.recordTts': p.media.recordTts,
     'media.readC2pa': p.media.readC2pa,
     'watermark.alpha': w.alpha,
     'watermark.minScoredTokens': w.minScoredTokens,

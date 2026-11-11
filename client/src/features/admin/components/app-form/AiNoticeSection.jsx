@@ -23,7 +23,7 @@ function AiNoticeSection({ app, onChange }) {
   const handleMode = value => {
     if (value === 'inherit') write(null);
     else if (value === 'off') write({ enabled: false });
-    else write({ text: notice.text || { en: '' } });
+    else write({ text: notice.text || {} });
   };
 
   const options = [

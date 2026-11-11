@@ -22,7 +22,7 @@ import { getProvenanceStore } from './ProvenanceStore.js';
 import { provenanceSettings } from './provenanceSettings.js';
 import { readC2pa } from './c2paReader.js';
 import { hashBytes } from './mediaMarking.js';
-import { sniffMedia, wavPayload } from './mediaSniff.js';
+import { sniffMedia } from './mediaSniff.js';
 import { NORMALIZATION_NONE } from './records.js';
 
 /** Types the file branch accepts, named in the 415 detail. */
@@ -117,10 +117,9 @@ export function parseMediaUpload(req, res, maxBytes) {
 /**
  * Verify an uploaded media file.
  *
- * (1) SHA-256 of the whole file → record lookup; (2) for a WAV also the hash of
- * its PCM payload, because a TTS record hashes the raw `pcm_s16le` stream and a
- * user who wrapped it in a header would otherwise never match; (3) the C2PA
- * read. A miss in (1)/(2) still returns (3).
+ * (1) SHA-256 of the whole file → record lookup; (2) the C2PA read. A miss in
+ * (1) still returns (2). Only generated images have records; an audio file gets
+ * its C2PA read and never a hash hit.
  *
  * @param {Buffer} buffer
  * @param {Object} [options]
@@ -148,18 +147,6 @@ export async function verifyMediaFile(buffer, { kind, decorate = records => reco
 
   const byOutput = new Map();
   for (const record of await store.findByHash(value)) byOutput.set(record.output_id, record);
-  let payloadHash = null;
-  if (sniffed.kind === 'audio') {
-    const payload = wavPayload(buffer);
-    if (payload && payload.length > 0) {
-      payloadHash = hashBytes(payload);
-      if (payloadHash !== value) {
-        for (const record of await store.findByHash(payloadHash)) {
-          byOutput.set(record.output_id, record);
-        }
-      }
-    }
-  }
   const records = [...byOutput.values()];
   if (records.length > 0) technique.push('hash-lookup');
 
@@ -179,7 +166,6 @@ export async function verifyMediaFile(buffer, { kind, decorate = records => reco
     contentHash: {
       alg: 'sha-256',
       value,
-      ...(payloadHash && payloadHash !== value ? { payloadValue: payloadHash } : {}),
       bytes: buffer.length,
       mimeType: sniffed.mimeType
     },

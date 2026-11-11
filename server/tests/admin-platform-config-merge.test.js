@@ -453,7 +453,7 @@ describe('POST /api/admin/configs/platform provenance block', () => {
       retentionDays: 365,
       storeRecords: true,
       verify: { access: 'authenticated', futureFlag: 'keep' },
-      media: { maxVerifyBytes: 52428800, recordTts: true, readC2pa: true, extra: 1 },
+      media: { maxVerifyBytes: 52428800, readC2pa: true, extra: 1 },
       watermark: { alpha: 0.001, minScoredTokens: 300 },
       somethingElse: { nested: true }
     }
@@ -476,7 +476,7 @@ describe('POST /api/admin/configs/platform provenance block', () => {
       provenance: {
         retentionDays: 30,
         verify: { access: 'public' },
-        media: { recordTts: false },
+        media: { readC2pa: false },
         watermark: { minScoredTokens: 500 }
       }
     });
@@ -487,7 +487,7 @@ describe('POST /api/admin/configs/platform provenance block', () => {
       retentionDays: 30,
       storeRecords: true,
       verify: { access: 'public', futureFlag: 'keep' },
-      media: { maxVerifyBytes: 52428800, recordTts: false, readC2pa: true, extra: 1 },
+      media: { maxVerifyBytes: 52428800, readC2pa: false, extra: 1 },
       watermark: { alpha: 0.001, minScoredTokens: 500 },
       somethingElse: { nested: true }
     });

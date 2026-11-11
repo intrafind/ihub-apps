@@ -448,11 +448,13 @@
     },
     "media": {
       "maxVerifyBytes": 52428800,
-      "recordTts": true,
       "readC2pa": true
     }
   },
   "aiDisclosure": {
+    "guardrail": {
+      "text": ""
+    },
     "firstTurnNotice": {
       "enabled": true,
       "text": {}

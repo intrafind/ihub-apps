@@ -87,10 +87,12 @@ const COMPONENT = 'ChatService';
 
 /**
  * Tool rounds per chat turn (the loop forces a final answer on the last one).
- * Sized for multi-step web research: several searches plus reading the most
- * relevant pages with the page reader easily takes more than ten rounds.
+ * Sized for multi-step web research (several searches plus reading the most
+ * relevant pages with the page reader easily takes more than ten rounds) and for
+ * resumable batch tools such as the website corpus crawl, which needs one round
+ * per batch of pages.
  */
-export const CHAT_MAX_TOOL_ROUNDS = 25;
+export const CHAT_MAX_TOOL_ROUNDS = 50;
 
 /**
  * Wall-clock ceiling on a durable chat turn.

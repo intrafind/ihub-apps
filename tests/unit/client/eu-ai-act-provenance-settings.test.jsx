@@ -44,7 +44,7 @@ const STORED = {
     retentionDays: 365,
     storeRecords: true,
     verify: { access: 'authenticated' },
-    media: { maxVerifyBytes: 52428800, recordTts: true, readC2pa: true },
+    media: { maxVerifyBytes: 52428800, readC2pa: true },
     watermark: { minScoredTokens: 300 }
   }
 };
@@ -154,7 +154,7 @@ describe('ProvenanceSettingsCard', () => {
       retentionDays: 400,
       storeRecords: true,
       verify: { access: 'authenticated' },
-      media: { maxVerifyBytes: 52428800, recordTts: true, readC2pa: true },
+      media: { maxVerifyBytes: 52428800, readC2pa: true },
       watermark: { alpha: null, minScoredTokens: 300, detectorTimeoutMs: null }
     });
     expect(onSaved).toHaveBeenCalled();

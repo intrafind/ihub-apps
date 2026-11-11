@@ -1,30 +1,28 @@
 # Features — Unreleased
 
-## Generated Images and Audio Keep the Provider's Marks, and Can Be Checked
+## Generated Images Keep the Provider's Marks, and Can Be Checked
 
-AI Act Art. 50(2) asks that generated images and audio are marked and can be checked. The providers already
-mark their output (Gemini images carry SynthID; some models also embed a C2PA manifest). iHub now makes sure
-it never removes that mark, records what the provider claims, and lets anyone check a file.
+AI Act Art. 50(2) asks that generated images are marked and can be checked. The providers already mark their
+output (Gemini images carry SynthID; some models also embed a C2PA manifest). iHub now makes sure it never
+removes that mark, records what the provider claims, and lets anyone check a file.
 
 - **Bytes in, bytes out.** A generated picture reaches the chat, the stored artifact, a share link, the ZIP and
   the download exactly as the provider sent it. A test fails if an image or audio library is ever added to
   the server's request path.
-- **One record per generated image and per read-aloud response**, with the hash of the raw bytes, the model and
-  what the provider marking looks like (C2PA present, valid, issuer, digital source type; what you declared).
-  Pictures too large for the artifact store are recorded too. The record never holds the picture or the audio.
+- **One record per generated image**, with the hash of the raw bytes, the model and what the provider marking
+  looks like (C2PA present, valid, issuer, digital source type; what you declared). Pictures too large for
+  the artifact store are recorded too. The record never holds the picture.
 - **Check a file.** `POST /api/provenance/_verify` now also takes an image or audio file (`multipart/form-data`,
   one `file` field, up to 50 MiB) and answers whether this installation generated it, plus the file's C2PA
   manifest. A file generated elsewhere still gets its manifest read. Results say "found" or "not found" and
   "trust not evaluated"; a signature is never called authentic, and a missing record is not proof of origin.
-  A read-aloud clip wrapped in a WAV header matches too.
-- **Declare what the provider embeds.** Image and TTS models accept `contentMarking.image` and
-  `contentMarking.audio` (`by: "provider"`, a scheme such as `synthid`, a statement reference). Nothing is
-  preset: SynthID is only ever "declared", because it cannot be detected. The model editor has no fields for
-  it yet; edit the model's JSON.
-- **Settings.** `provenance.media.maxVerifyBytes`, `recordTts` and `readC2pa` in `platform.json` (migration
-  V244). Read-aloud records can be switched off with `recordTts: false`.
+- **Declare what the provider embeds.** In **Admin → Models**, an image-generating model has an *Image marking*
+  section: *Provider marks the output*, a scheme such as `synthid` and a reference to the provider's written
+  statement (`contentMarking.image`). Nothing is preset: SynthID is only ever "declared", because it cannot be
+  detected.
+- **Settings.** `provenance.media.maxVerifyBytes` and `readC2pa` in `platform.json` (migration V244).
 
-See [Provenance Records → Images and audio](../../provenance.md#images-and-audio-provider-marks-3328) and
+See [Provenance Records → Images](../../provenance.md#images-provider-marks-3328) and
 [Models → Output Marking](../../models.md#output-marking-contentmarking).
 
 ## Uploaded Presentations Move Into the Company Design
@@ -1456,8 +1454,8 @@ that say `auto` keep saying it. In **Admin → Projects → Project settings**, 
 choose" lets you switch a mode off, for example full context to save cost; links and admin projects
 an administrator set keep their mode.
 
-- **Not for AI:** an item can be marked "Not for AI" in the project's "For the AI" column, next to
-  Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
+- **Not for AI:** an item can be marked "Not for AI" with the "For the AI" setting in its Edit
+  dialog, next to Pinned. It stays in the project for people (preview, download, sharing) but is never given to the
   model, listed or searched.
 - **Models without tools** cannot call `knowledge_search`. For them Look things up reads as Best passages,
   so unpinned documents are not silently out of reach.
@@ -1583,8 +1581,11 @@ the prompt" is a realistic alternative to retrieval.
   pages, after removing repeated lines, and without blog and news sections), the largest pages,
   duplicates, how much of the sitemap was crawled, and the method.
 - Only pages of the site itself are fetched, with the SSRF guard and the proxy settings, within
-  the site's `robots.txt`, a few requests per second. A crawl belongs to the user who started it and
-  is removed after 14 days.
+  the site's `robots.txt`. The speed is an installation setting: **Parallel requests per crawl**
+  (default 4, at most 16) and **Pause between requests (ms)**, so a site of several hundred pages
+  is crawled in a minute or two instead of ten, and a site that must not be loaded heavily can be
+  crawled slowly. A chat turn now allows up to 50 tool rounds (was 25), so a crawl of a large site
+  is not cut off. A crawl belongs to the user who started it and is removed after 14 days.
 - Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
   `website-corpus-sizer` skill from the marketplace guides users through it.
 - Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
@@ -1645,7 +1646,8 @@ See [EU AI Act](../../ai-act.md#first-turn-notice).
 Every call to a text model now carries the rule "You are an AI system. If asked, always say so. Never claim to
 be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
 A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
-`system` message cannot remove it, and there is no setting to switch it off.
+`system` message cannot remove it, and there is no setting to switch it off. Admins can reword the rule for the
+whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
 
 Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
 still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
@@ -1681,6 +1683,7 @@ AI Act.
   is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
   `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
   results as `metadata.provenance`.
+- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model, time, marking and content hash, with a **Copy hash** action.
 - **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
 - **Look it up.** `POST /api/provenance/_verify` takes a text or a hash and answers "Found" with the record or
@@ -1735,8 +1738,7 @@ config files.
   confirmation says that the current key is retired, that vLLM's `--watermark-config` must follow
   and that self-test results turn outdated until then.
 - **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who may
-  check an output (signed-in users or anyone), the size limit of checked files (in MiB), read-aloud
-  records, C2PA reading and the text detector's false-positive limit, shortest judged text and
+  check an output (signed-in users or anyone), the size limit of checked files (in MiB), C2PA reading and the text detector's false-positive limit, shortest judged text and
   time limit are a form with defaults and units. Values are checked in the browser and on the
   server against the same bounds. Lowering the retention or opening the check to the public asks
   for a confirmation first. Changes apply at once, no restart, and are written to the audit log.

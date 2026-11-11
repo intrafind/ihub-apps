@@ -70,6 +70,8 @@ export function transformStoredMessage(msg) {
   // The context window as the server counted it when the answer ended.
   if (msg.context) message.context = msg.context;
   if (msg.finishReason) message.finishReason = msg.finishReason;
+  // Where the answer came from (EU AI Act Art. 50(2)): the "AI generated" details.
+  if (msg.provenance && typeof msg.provenance === 'object') message.provenance = msg.provenance;
   // A transcription turn (its audio is not kept: no edit, no resend).
   if (msg.transcription === true) message.transcription = true;
   // A turn spoken in voice mode: the bubble marks it with the waveform icon.

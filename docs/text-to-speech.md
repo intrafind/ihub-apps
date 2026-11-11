@@ -341,13 +341,6 @@ A provider that manages voices also exports `listVoices(cfg)`,
 editor shows the voices panel for Mistral models only (`ModelFormEditor.jsx`),
 so a new provider with voices needs adding there too.
 
-## Provenance
-
-The response carries `X-AI-Generated: true` and `X-AI-Content-Id`, and a record with the SHA-256 of the exact
-PCM streamed is kept (never the audio), so a captured clip, or a WAV wrapper of it, can be checked at
-`POST /api/provenance/_verify`. The PCM stream has no container for C2PA or XMP. Turn the record off with
-`provenance.media.recordTts: false`; details in [Provenance Records](provenance.md#text-to-speech).
-
 ## Troubleshooting
 
 | Symptom | Cause |
