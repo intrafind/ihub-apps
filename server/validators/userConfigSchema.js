@@ -30,7 +30,9 @@ export const userConfigSchema = z
           version: z.number().int().min(1),
           textHash: z.string(),
           acknowledgedAt: z.string(),
-          language: z.string().optional()
+          language: z.string().optional(),
+          // The first-party client the confirmation came from (office, extension, nextcloud).
+          client: z.string().optional()
         })
       )
       .optional()

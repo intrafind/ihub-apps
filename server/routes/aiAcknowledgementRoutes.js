@@ -15,6 +15,7 @@ import { z } from 'zod';
 import configCache from '../configCache.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { sendCreated } from '../utils/created.js';
@@ -23,6 +24,7 @@ import { logAudit } from '../services/AuditLogService.js';
 import { attachGuestIdentity, guestIdOf, guestOwnerId } from '../services/chat/chatOwner.js';
 import { loadUsers, recordAiAcknowledgement } from '../utils/userManager.js';
 import {
+  firstPartyClientKind,
   getSettings,
   resolveText,
   textHash,
@@ -56,6 +58,17 @@ function principalOf(req, res) {
   req.user = user;
   attachGuestIdentity(req, res);
   return user;
+}
+
+/**
+ * The policy link as the client can open it. A site-relative `/path` would
+ * resolve against `chrome-extension://...` in the extension, against the Office
+ * add-in's host, or drop the base path of a sub-path deployment, so it leaves
+ * here absolute. An http(s) link is returned as it is.
+ */
+function absolutePolicyUrl(policyUrl, req) {
+  if (!policyUrl.startsWith('/')) return policyUrl;
+  return `${buildPublicBaseUrl(req)}${policyUrl}`;
 }
 
 function requestedLanguage(req, platform) {
@@ -111,7 +124,9 @@ export default function registerAiAcknowledgementRoutes(app) {
       text,
       textHash: textHash(text),
       language,
-      policyUrl: settings.policyUrl
+      policyUrl: absolutePolicyUrl(settings.policyUrl, req),
+      // Where "Open iHub in its own tab" goes (a frame that drops the guest cookie).
+      appUrl: buildPublicBaseUrl(req)
     };
     const record =
       user?.id && user.id !== 'anonymous'
@@ -166,6 +181,11 @@ export default function registerAiAcknowledgementRoutes(app) {
         acknowledgedAt: new Date().toISOString(),
         language: resolved.language
       };
+      // Which first-party client the confirmation came from, read from the token
+      // (never from the body, which a caller could set to anything). Absent for the
+      // web app, Teams and embeds: the same cookie session as the web app.
+      const client = user.isOAuthAuthCode ? firstPartyClientKind(user.clientId, platform) : null;
+      if (client) entry.client = client;
       const isUser = Boolean(user.id && user.id !== 'anonymous');
       const subject = isUser ? 'user' : 'guest';
       const guestId = guestIdOf(user);
@@ -182,7 +202,8 @@ export default function registerAiAcknowledgementRoutes(app) {
             textHash: shownHash,
             language: resolved.language,
             policyUrl: settings.policyUrl,
-            subject
+            subject,
+            ...(client ? { client } : {})
           }
         });
 
