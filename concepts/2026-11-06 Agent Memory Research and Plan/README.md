@@ -5,6 +5,7 @@
 **Issues:** #2522, #1039, #1465, #3192 (open); #2750, #2831, #2964, #1464 (closed, prior work)
 **Research notes:** [`research/`](research/) — theory, open-source frameworks, user memory in chat apps, audit of today's iHub memory, integration points.
 **Companion documents (2026-11-07):** [`product-plan.md`](product-plan.md) (personas, user stories P0–P4 with acceptance criteria, release packaging, metrics, DoD), [`architecture.md`](architecture.md) (implementation-grade design; its §0 corrections C1–C12 and its ADRs override this plan where they conflict), [`ux-design.md`](ux-design.md) (screens, components, i18n keys, interaction and accessibility rules), [`engineering-plan.md`](engineering-plan.md) and [`tickets.json`](tickets.json) (team playbook and the GitHub issue breakdown).
+**Comparison with Strands Agents (2026-11-11):** [`strands-amendments.md`](strands-amendments.md) (what the Strands memory feature does better and worse, and six proposed ADRs M21–M26, not yet accepted) on the evidence in [`research/strands_agents_memory.md`](research/strands_agents_memory.md).
 
 ## Grow iHub memory from the service it already has
 
