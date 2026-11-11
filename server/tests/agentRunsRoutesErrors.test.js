@@ -34,7 +34,8 @@ jest.unstable_mockModule('../utils/sseChannel.js', () => ({
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getAgentProfiles: () => ({ data: state.profiles }),
-    getPlatform: () => ({})
+    // These tests are about the run routes' own errors: the AI-use acknowledgement is off.
+    getPlatform: () => ({ aiAcknowledgement: { enabled: false } })
   }
 }));
 jest.unstable_mockModule('../services/workflow/index.js', () => ({

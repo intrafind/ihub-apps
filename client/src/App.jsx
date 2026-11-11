@@ -194,6 +194,7 @@ import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
+import { AiAcknowledgementProvider } from './shared/contexts/AiAcknowledgementContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
 import { useChatHistoryRouteState } from './shared/hooks/useChats';
@@ -897,13 +898,15 @@ function App() {
     <AppProviders>
       <AuthProvider>
         <AdminAuthProvider>
-          {isTeams ? (
-            <Suspense fallback={loadingSpinner}>
-              <TeamsWrapper>{routerContent}</TeamsWrapper>
-            </Suspense>
-          ) : (
-            routerContent
-          )}
+          <AiAcknowledgementProvider>
+            {isTeams ? (
+              <Suspense fallback={loadingSpinner}>
+                <TeamsWrapper>{routerContent}</TeamsWrapper>
+              </Suspense>
+            ) : (
+              routerContent
+            )}
+          </AiAcknowledgementProvider>
         </AdminAuthProvider>
       </AuthProvider>
     </AppProviders>

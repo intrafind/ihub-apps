@@ -2735,7 +2735,39 @@
       "groupMembership": "Gruppenzugehörigkeit",
       "groupMembershipDescription": "Weisen Sie diesen Benutzer Gruppen zu, um seine Berechtigungen und Zugriffsebenen zu steuern",
       "statusToggle": "Konto aktiv: {{name}}",
-      "deleteConfirm": "Diesen Benutzer löschen? Der Zugriff endet sofort, und seine API-Schlüssel, Verbindungen, gespeicherten Zugangsdaten, geplanten Aufgaben, Chats, Prompts, Skills und Kurzlinks werden entfernt. Das lässt sich nicht rückgängig machen. Um jemandem die Anmeldung zu sperren und das Erstellte zu behalten, deaktiviere stattdessen das Konto."
+      "deleteConfirm": "Diesen Benutzer löschen? Der Zugriff endet sofort, und seine API-Schlüssel, Verbindungen, gespeicherten Zugangsdaten, geplanten Aufgaben, Chats, Prompts, Skills und Kurzlinks werden entfernt. Das lässt sich nicht rückgängig machen. Um jemandem die Anmeldung zu sperren und das Erstellte zu behalten, deaktiviere stattdessen das Konto.",
+      "aiAcknowledgement": {
+        "menu": "KI-Bestätigungen",
+        "export": "CSV exportieren",
+        "requestAgain": "Erneut anfordern",
+        "removeAll": "Alle entfernen",
+        "column": "KI-Bestätigung",
+        "filter": "KI-Bestätigung",
+        "filterAll": "Alle",
+        "filterAcknowledged": "Bestätigt",
+        "filterOutdated": "Veraltet",
+        "filterNever": "Nicht bestätigt",
+        "statusAcknowledged": "Bestätigt v{{version}}",
+        "statusOutdated": "Veraltet (v{{version}}, v{{required}} erforderlich)",
+        "statusNever": "Nicht bestätigt",
+        "anonymousNote": "Bestätigungen anonymer Sitzungen erscheinen nur im Audit-Log.",
+        "removeRow": "KI-Bestätigung entfernen",
+        "requestAgainTitle": "Alle erneut fragen?",
+        "requestAgainMessage": "Alle Nutzer werden bei ihrer nächsten Nachricht erneut um Bestätigung gebeten (Version {{from}} -> {{to}}). Bestehende Bestätigungen bleiben als Verlauf erhalten.",
+        "requestAgainConfirm": "Alle erneut fragen",
+        "requestAgainDone": "Die Version ist jetzt {{version}}. Nutzer werden bei ihrer nächsten Nachricht gefragt.",
+        "requestAgainFailed": "Die erneute Abfrage konnte nicht angefordert werden",
+        "removeOneTitle": "KI-Bestätigung entfernen",
+        "removeOneMessage": "KI-Bestätigung von {{name}} entfernen? Die Person wird bei der nächsten Nachricht erneut gefragt. Das Audit-Log behält den Verlauf.",
+        "removeOneConfirm": "Bestätigung entfernen",
+        "removeOneDone": "Bestätigung entfernt.",
+        "removeAllTitle": "Alle KI-Bestätigungen entfernen?",
+        "removeAllMessage": "{{count}} Bestätigungen werden entfernt und alle, auch anonyme Besucher, werden bei ihrer nächsten Nachricht erneut gefragt. Exportieren Sie vorher die CSV, wenn Sie die Liste brauchen. Das Audit-Log behält den Verlauf.",
+        "removeAllConfirm": "Alle entfernen",
+        "removeAllDone": "Alle Bestätigungen entfernt.",
+        "removeFailed": "Die Bestätigung konnte nicht entfernt werden",
+        "exportFailed": "Die CSV konnte nicht exportiert werden"
+      }
     },
     "logging": {
       "loadError": "Fehler beim Laden der Logging-Konfiguration",
@@ -6461,6 +6493,19 @@
       "guardrailHint": "Für das Modell geschrieben, Englisch funktioniert am besten. Sie wird als letzte Zeile an den System-Prompt jedes Modellaufrufs angehängt (Chat, API, MCP, A2A, Agenten, Workflows). Apps und Nutzer können sie nicht ändern. Sie sollte klar festhalten, dass der Assistent eine KI ist und sich nie als Mensch ausgibt.",
       "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
       "loadError": "KI-Hinweis-Einstellungen konnten nicht geladen werden"
+    },
+    "aiAcknowledgement": {
+      "title": "KI-Bestätigung",
+      "description": "Nutzer bestätigen vor ihrer ersten Nachricht einen kurzen Hinweis zur KI-Nutzung. Die Bestätigung wird beim Nutzer und im Audit-Log gespeichert. Bestehende Bestätigungen bleiben gültig, wenn Sie den Text ändern; mit \"Erneut anfordern\" werden alle erneut gefragt.",
+      "enabled": "Nutzer die Nutzung von KI bestätigen lassen",
+      "enforce": "Senden bis zur Bestätigung blockieren (sonst fragt der Dialog nur)",
+      "enforceOffWarning": "Nutzer können die KI ohne Bestätigung verwenden.",
+      "text": "Hinweistext (Klartext; leer verwendet den eingebauten Text)",
+      "policyUrl": "Link zur KI-Richtlinie (https://… oder /pfad)",
+      "currentVersion": "Aktuelle Version: {{version}}",
+      "saved": "KI-Bestätigung gespeichert",
+      "saveError": "Die KI-Bestätigung konnte nicht gespeichert werden",
+      "loadError": "Die Einstellungen der KI-Bestätigung konnten nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen."
     }
   },
   "cloudStorage": {
@@ -9820,7 +9865,8 @@
     "COPILOT_AGENT_DISABLED": "Der Microsoft-365-Copilot-Agent ist ausgeschaltet.",
     "COPILOT_REFERENCE_ID_MISSING": "Für den Copilot-Agenten ist noch keine Referenz-ID eingetragen.",
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "Der Copilot-Agent benötigt eine öffentliche HTTPS-Adresse.",
-    "INTEGRATION_AUTH_REQUIRED": "Verbinden Sie Ihr Konto, um diese Integration zu nutzen."
+    "INTEGRATION_AUTH_REQUIRED": "Verbinden Sie Ihr Konto, um diese Integration zu nutzen.",
+    "AI_ACKNOWLEDGEMENT_REQUIRED": "Bitte bestätigen Sie den KI-Hinweis, bevor Sie Nachrichten senden."
   },
   "workspace": {
     "backTo": "Zurück zu {{name}}",
@@ -9929,5 +9975,22 @@
   },
   "aiDisclosure": {
     "firstTurnNotice": "Sie chatten mit einem KI-System, nicht mit einem Menschen. Antworten können fehlerhaft sein, bitte prüfen Sie wichtige Informationen."
+  },
+  "aiAcknowledgement": {
+    "title": "Nutzung von KI bestätigen",
+    "policyLink": "KI-Richtlinie lesen",
+    "opensInNewTab": "(öffnet in neuem Tab)",
+    "confirm": "Ich habe verstanden",
+    "confirmAndSend": "Bestätigen und senden",
+    "retry": "Erneut versuchen",
+    "saving": "Wird gespeichert...",
+    "skip": "Ohne Bestätigung fortfahren",
+    "anonymousNote": "Diese Bestätigung wird bis zu 30 Tage in diesem Browser gespeichert.",
+    "composerNote": "Bitte bestätigen Sie den KI-Hinweis, um Nachrichten zu senden.",
+    "review": "Hinweis ansehen",
+    "confirmed": "Bestätigt.",
+    "sending": "Ihre Nachricht wird gesendet.",
+    "error": "Ihre Bestätigung konnte nicht gespeichert werden. Ihre Nachricht ist noch vorhanden. Bitte versuchen Sie es erneut.",
+    "stale": "Der Hinweis wurde aktualisiert. Bitte lesen und erneut bestätigen."
   }
 }

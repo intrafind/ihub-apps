@@ -16,6 +16,10 @@ import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 import { toolApprovalConfigProblem } from '../../utils/toolApproval.js';
 import { platformConfigSchema } from '../../validators/platformConfigSchema.js';
+import {
+  describeSettingsChange,
+  mergeSettingsForSave
+} from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
 
 /** The platform configuration, as a path relative to `contents/`. */
 const PLATFORM_FILE = 'config/platform.json';
@@ -336,6 +340,13 @@ export default function registerAdminConfigRoutes(app) {
       // First-turn AI notice (Admin → Advanced); same reason as above.
       aiDisclosure:
         newConfig.aiDisclosure !== undefined ? newConfig.aiDisclosure : existingConfig.aiDisclosure,
+      // AI-use acknowledgement (#3326): the form owns enabled/enforce/text/
+      // policyUrl; `requiredVersion` and `resetAt` always come from the stored
+      // block, so a stale form cannot re-validate everyone.
+      aiAcknowledgement: mergeSettingsForSave(
+        newConfig.aiAcknowledgement,
+        existingConfig.aiAcknowledgement
+      ),
       auth: newConfig.auth || existingConfig.auth,
       anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
       proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
@@ -431,6 +442,21 @@ export default function registerAdminConfigRoutes(app) {
 
     // Refresh cache
     await configCache.refreshCacheEntry('config/platform.json');
+
+    const acknowledgementChange = describeSettingsChange(
+      existingConfig.aiAcknowledgement,
+      mergedConfig.aiAcknowledgement
+    );
+    if (acknowledgementChange) {
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'aiAcknowledgement',
+        resourceId: 'settings',
+        summary: `AI-use acknowledgement settings changed: ${acknowledgementChange.changed.join(', ')}`,
+        details: acknowledgementChange
+      });
+    }
 
     // Apply runtime-mutable telemetry settings without server restart
     try {

@@ -136,14 +136,32 @@ describe('chat session lookups', () => {
   beforeEach(() => {
     app = buildApp();
     authorizeChat.mockResolvedValue({ ok: false });
-    jest
-      .spyOn(configCache, 'getPlatform')
-      .mockReturnValue({ defaultLanguage: 'en', anonymousAuth: { enabled: true } });
+    jest.spyOn(configCache, 'getPlatform').mockReturnValue({
+      defaultLanguage: 'en',
+      anonymousAuth: { enabled: true },
+      // The AI-use acknowledgement is off here; its own test below turns it on.
+      aiAcknowledgement: { enabled: false }
+    });
     jest.spyOn(configCache, 'getApps').mockReturnValue({ data: [] });
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
+  });
+
+  test('POST without the AI-use acknowledgement answers 428 before anything runs', async () => {
+    configCache.getPlatform.mockReturnValue({
+      defaultLanguage: 'en',
+      anonymousAuth: { enabled: true },
+      aiAcknowledgement: { enabled: true, enforce: true, requiredVersion: 1 }
+    });
+    const res = await request(app)
+      .post('/api/apps/chat/chat/chat-unknown')
+      .send({ messages: [{ role: 'user', content: 'hi' }] });
+    expectProblem(res, 428, 'AI_ACKNOWLEDGEMENT_REQUIRED');
+    expect(res.body.details).toMatchObject({ requiredVersion: 1 });
+    // Refused before the chat was looked up or any side effect ran.
+    expect(authorizeChat).not.toHaveBeenCalled();
   });
 
   test('POST answers 404 NOT_FOUND for an unknown chat, not the generic 500', async () => {

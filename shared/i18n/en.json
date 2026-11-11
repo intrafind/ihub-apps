@@ -2321,7 +2321,39 @@
       "groupMembership": "Group Membership",
       "groupMembershipDescription": "Assign this user to groups to control their permissions and access levels",
       "statusToggle": "Account active: {{name}}",
-      "deleteConfirm": "Delete this user? Their access ends immediately, and their API keys, connections, stored credentials, scheduled tasks, chats, prompts, skills and short links are removed. This cannot be undone. To stop someone from signing in and keep what they made, disable the account instead."
+      "deleteConfirm": "Delete this user? Their access ends immediately, and their API keys, connections, stored credentials, scheduled tasks, chats, prompts, skills and short links are removed. This cannot be undone. To stop someone from signing in and keep what they made, disable the account instead.",
+      "aiAcknowledgement": {
+        "menu": "AI acknowledgements",
+        "export": "Export CSV",
+        "requestAgain": "Request again",
+        "removeAll": "Remove all",
+        "column": "AI acknowledgement",
+        "filter": "AI acknowledgement",
+        "filterAll": "All",
+        "filterAcknowledged": "Acknowledged",
+        "filterOutdated": "Outdated",
+        "filterNever": "Not acknowledged",
+        "statusAcknowledged": "Acknowledged v{{version}}",
+        "statusOutdated": "Outdated (v{{version}}, v{{required}} required)",
+        "statusNever": "Not acknowledged",
+        "anonymousNote": "Confirmations of anonymous sessions appear only in the audit log.",
+        "removeRow": "Remove AI acknowledgement",
+        "requestAgainTitle": "Ask everyone again?",
+        "requestAgainMessage": "All users will be asked to confirm again at their next message (version {{from}} -> {{to}}). Existing confirmations are kept as history.",
+        "requestAgainConfirm": "Ask everyone again",
+        "requestAgainDone": "Version is now {{version}}. Users are asked at their next message.",
+        "requestAgainFailed": "Could not ask everyone again",
+        "removeOneTitle": "Remove AI confirmation",
+        "removeOneMessage": "Remove the AI-use confirmation of {{name}}? They will be asked again at their next message. The audit log keeps the history.",
+        "removeOneConfirm": "Remove confirmation",
+        "removeOneDone": "Confirmation removed.",
+        "removeAllTitle": "Remove all AI confirmations?",
+        "removeAllMessage": "{{count}} confirmations will be removed and everyone, anonymous visitors included, is asked again at their next message. Export the CSV first if you need the list. The audit log keeps the history.",
+        "removeAllConfirm": "Remove all",
+        "removeAllDone": "All confirmations removed.",
+        "removeFailed": "Could not remove the confirmation",
+        "exportFailed": "Could not export the CSV"
+      }
     },
     "logging": {
       "loadError": "Failed to load logging configuration",
@@ -6047,6 +6079,19 @@
       "guardrailHint": "Written for the model, in English works best. It is added as the last line of the system prompt of every model call (chat, API, MCP, A2A, agents, workflows). Apps and users cannot change it. Keep it clear that the assistant is an AI and never claims to be human.",
       "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
       "loadError": "Failed to load the AI notice settings"
+    },
+    "aiAcknowledgement": {
+      "title": "AI acknowledgement",
+      "description": "Users confirm a short AI-use notice before their first message. The confirmation is stored with the user and in the audit log. Existing confirmations stay valid when you edit the text; use \"Request again\" to ask everyone again.",
+      "enabled": "Ask users to confirm their use of AI",
+      "enforce": "Block sending until confirmed (otherwise the dialog only asks)",
+      "enforceOffWarning": "Users can use the AI without confirming.",
+      "text": "Notice text (plain text; empty uses the built-in text)",
+      "policyUrl": "AI policy link (https://… or /path)",
+      "currentVersion": "Current version: {{version}}",
+      "saved": "AI acknowledgement saved",
+      "saveError": "Failed to save the AI acknowledgement",
+      "loadError": "The AI acknowledgement settings could not be loaded. Reload the page to try again."
     }
   },
   "cloudStorage": {
@@ -9821,7 +9866,8 @@
     "COPILOT_AGENT_DISABLED": "The Microsoft 365 Copilot agent is turned off.",
     "COPILOT_REFERENCE_ID_MISSING": "The Copilot agent has no reference ID yet.",
     "COPILOT_PUBLIC_HTTPS_REQUIRED": "The Copilot agent needs a public HTTPS address.",
-    "INTEGRATION_AUTH_REQUIRED": "Connect your account to use this integration."
+    "INTEGRATION_AUTH_REQUIRED": "Connect your account to use this integration.",
+    "AI_ACKNOWLEDGEMENT_REQUIRED": "Please confirm the AI-use notice before sending messages."
   },
   "workspace": {
     "backTo": "Back to {{name}}",
@@ -9930,5 +9976,22 @@
   },
   "aiDisclosure": {
     "firstTurnNotice": "You are chatting with an AI system, not a person. Answers can be wrong, so please check important information."
+  },
+  "aiAcknowledgement": {
+    "title": "Confirm your use of AI",
+    "policyLink": "Read the AI policy",
+    "opensInNewTab": "(opens in a new tab)",
+    "confirm": "I understand",
+    "confirmAndSend": "Confirm and send",
+    "retry": "Try again",
+    "saving": "Saving...",
+    "skip": "Continue without confirming",
+    "anonymousNote": "This confirmation is remembered in this browser for up to 30 days.",
+    "composerNote": "Please confirm the AI-use notice to send messages.",
+    "review": "Review notice",
+    "confirmed": "Confirmed.",
+    "sending": "Sending your message.",
+    "error": "Your confirmation could not be saved. Your message is still here. Try again.",
+    "stale": "The notice was updated. Please read it and confirm again."
   }
 }

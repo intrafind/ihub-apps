@@ -167,6 +167,10 @@
       "version": "number"
     }
   },
+  "GET /api/admin/ai-acknowledgements/_export": {
+    "status": 200,
+    "type": "text/csv"
+  },
   "GET /api/admin/apps": {
     "status": 200,
     "shape": {
@@ -404,6 +408,7 @@
         {
           "action": "string",
           "actor": "object",
+          "details?": "object",
           "id": "string",
           "ip": "string",
           "requestId": "string",
@@ -777,6 +782,17 @@
   "GET /api/admin/configs/platform": {
     "status": 200,
     "shape": {
+      "aiAcknowledgement": {
+        "enabled": "boolean",
+        "enforce": "boolean",
+        "policyUrl": "string",
+        "requiredVersion": "number",
+        "resetAt": "null",
+        "text": {
+          "de": "string",
+          "en": "string"
+        }
+      },
       "aiDisclosure": {
         "firstTurnNotice": {
           "enabled": "boolean",
@@ -3096,6 +3112,7 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
+          "aiAcknowledgement": "object",
           "aiDisclosure": "object",
           "anonymousAuth": "object",
           "artifacts": "object",
@@ -3169,6 +3186,7 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
+          "aiAcknowledgements": "object",
           "createdAt": "object",
           "email": "object",
           "enabled": "object",
@@ -4062,6 +4080,15 @@
   "GET /api/agents/runs/:runId/stream": {
     "skipped": "streams"
   },
+  "GET /api/ai-acknowledgements/me": {
+    "status": 200,
+    "shape": {
+      "acknowledged": "boolean",
+      "enabled": "boolean",
+      "enforce": "boolean",
+      "requiredVersion": "number"
+    }
+  },
   "GET /api/apps": {
     "status": 200,
     "shape": {
@@ -4676,6 +4703,10 @@
   "GET /api/configs/platform": {
     "status": 200,
     "shape": {
+      "aiAcknowledgement": {
+        "enabled": "boolean",
+        "enforce": "boolean"
+      },
       "aiDisclosure": {
         "firstTurnNotice": {
           "enabled": "boolean",

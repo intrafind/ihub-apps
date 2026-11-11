@@ -10,6 +10,15 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import Switch from '../../../shared/components/Switch';
 import { useFilterState } from '../hooks/useFilterState';
 import {
+  acknowledgementStatus,
+  latestAcknowledgement,
+  useAiAcknowledgementAdmin
+} from '../hooks/useAiAcknowledgementAdmin';
+import {
+  AiAcknowledgementActions,
+  AiAcknowledgementCell
+} from '../components/AiAcknowledgementActions';
+import {
   DataTable,
   SearchInput,
   FilterSelect,
@@ -146,6 +155,7 @@ function AdminUsersPage() {
   const [groupFilter, setGroupFilter] = useFilterState('group', 'all');
   const [statusFilter, setStatusFilter] = useFilterState('status', 'all');
   const [lastActiveDaysFilter, setLastActiveDaysFilter] = useFilterState('days', 'all');
+  const [ackFilter, setAckFilter] = useFilterState('ack', 'all');
   const [sortParam, setSortParam] = useFilterState('sort', '');
   const sort = useMemo(
     () => parseSortParam(sortParam) || { column: 'name', direction: 'asc' },
@@ -155,6 +165,12 @@ function AdminUsersPage() {
   useEffect(() => {
     void loadUsers();
   }, []);
+
+  // AI-use acknowledgements (#3326): the same hook the EU AI Act page will use.
+  const ack = useAiAcknowledgementAdmin({ onChanged: () => void loadUsers() });
+  const ackRequired = ack.settings?.requiredVersion ?? 1;
+  const ackResetAt = ack.settings?.resetAt ?? null;
+  const ackEnabled = ack.settings?.enabled === true;
 
   const loadUsers = async () => {
     try {
@@ -247,6 +263,9 @@ function AdminUsersPage() {
         return false;
       }
     }
+    if (ackEnabled && ackFilter !== 'all') {
+      if (acknowledgementStatus(user, ackRequired, ackResetAt) !== ackFilter) return false;
+    }
     if (lastActiveDaysFilter !== 'all') {
       if (!user.lastActiveDate) return lastActiveDaysFilter === 'never';
       const daysAgo = Math.floor(
@@ -299,7 +318,28 @@ function AdminUsersPage() {
       hideBelow: 'lg',
       sortAccessor: u => (u.lastActiveDate ? new Date(u.lastActiveDate).getTime() : 0),
       render: u => <LastActiveCell user={u} />
-    }
+    },
+    ...(ackEnabled
+      ? [
+          {
+            key: 'aiAck',
+            header: t('admin.users.aiAcknowledgement.column', 'AI acknowledgement'),
+            hideBelow: 'md',
+            sortable: true,
+            sortAccessor: u => {
+              const entry = latestAcknowledgement(u);
+              return entry?.acknowledgedAt ? new Date(entry.acknowledgedAt).getTime() : 0;
+            },
+            render: u => (
+              <AiAcknowledgementCell
+                user={u}
+                status={acknowledgementStatus(u, ackRequired, ackResetAt)}
+                requiredVersion={ackRequired}
+              />
+            )
+          }
+        ]
+      : [])
   ];
 
   const actions = [
@@ -322,8 +362,25 @@ function AdminUsersPage() {
       icon: 'trash',
       destructive: true,
       onClick: u => handleDeleteUser(u.id)
-    }
+    },
+    ...(ackEnabled
+      ? [
+          {
+            id: 'removeAck',
+            label: t('admin.users.aiAcknowledgement.removeRow', 'Remove AI acknowledgement'),
+            icon: 'trash',
+            destructive: true,
+            hidden: u => !(u.aiAcknowledgements?.length > 0),
+            onClick: u => ack.askRemoveOne(u)
+          }
+        ]
+      : [])
   ];
+
+  // What "Remove all" deletes, and the filter the CSV honours.
+  const confirmedCount = users.reduce((sum, u) => sum + (u.aiAcknowledgements?.length || 0), 0);
+  const exportStatus =
+    ackFilter === 'acknowledged' ? 'acknowledged' : ackFilter === 'all' ? undefined : 'pending';
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -338,46 +395,57 @@ function AdminUsersPage() {
                 Manage local authentication users and their permissions
               </p>
             </div>
-            <button
-              onClick={() => navigate('/admin/users/new')}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              <Icon name="plus" size="md" className="mr-2" />
-              Add User
-            </button>
+            <div className="flex items-center gap-3">
+              <AiAcknowledgementActions
+                admin={ack}
+                confirmedCount={confirmedCount}
+                exportStatus={exportStatus}
+              />
+              <button
+                onClick={() => navigate('/admin/users/new')}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-xs text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <Icon name="plus" size="md" className="mr-2" />
+                Add User
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {message && (
+        {/* The page's own result and the AI acknowledgement actions' result: both are shown,
+            so a newer one is never hidden behind an older one. */}
+        {[message, ack.message].filter(Boolean).map((banner, index) => (
           <div
+            key={`${index}-${banner.text}`}
+            role="status"
             className={`mb-6 p-4 rounded-md ${
-              message.type === 'success'
+              banner.type === 'success'
                 ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
                 : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
             }`}
           >
             <div className="flex">
               <Icon
-                name={message.type === 'success' ? 'check' : 'warning'}
+                name={banner.type === 'success' ? 'check' : 'warning'}
                 size="md"
                 className={`mt-0.5 mr-3 ${
-                  message.type === 'success' ? 'text-green-500' : 'text-red-700'
+                  banner.type === 'success' ? 'text-green-500' : 'text-red-700'
                 }`}
               />
               <p
                 className={`text-sm ${
-                  message.type === 'success'
+                  banner.type === 'success'
                     ? 'text-green-700 dark:text-green-300'
                     : 'text-red-700 dark:text-red-300'
                 }`}
               >
-                {message.text}
+                {banner.text}
               </p>
             </div>
           </div>
-        )}
+        ))}
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <SearchInput
@@ -388,7 +456,9 @@ function AdminUsersPage() {
         </div>
 
         <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-4">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div
+            className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${ackEnabled ? 'lg:grid-cols-5' : 'lg:grid-cols-4'}`}
+          >
             <FilterSelect
               label="Auth Method"
               value={authMethodFilter}
@@ -431,7 +501,37 @@ function AdminUsersPage() {
                 { value: 'never', label: 'Never' }
               ]}
             />
+            {ackEnabled && (
+              <FilterSelect
+                label={t('admin.users.aiAcknowledgement.filter', 'AI acknowledgement')}
+                value={ackFilter}
+                onChange={setAckFilter}
+                options={[
+                  { value: 'all', label: t('admin.users.aiAcknowledgement.filterAll', 'All') },
+                  {
+                    value: 'acknowledged',
+                    label: t('admin.users.aiAcknowledgement.filterAcknowledged', 'Acknowledged')
+                  },
+                  {
+                    value: 'outdated',
+                    label: t('admin.users.aiAcknowledgement.filterOutdated', 'Outdated')
+                  },
+                  {
+                    value: 'never',
+                    label: t('admin.users.aiAcknowledgement.filterNever', 'Not acknowledged')
+                  }
+                ]}
+              />
+            )}
           </div>
+          {ackEnabled && (
+            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.users.aiAcknowledgement.anonymousNote',
+                'Confirmations of anonymous sessions appear only in the audit log.'
+              )}
+            </p>
+          )}
         </div>
 
         <DataTable
