@@ -22,7 +22,7 @@ const {
 } = await import('../services/provenance/watermark/WatermarkKeyStore.js');
 const { default: configStore } = await import('../services/config/ConfigStore.js');
 
-const KEY_ID = /^wm-ihub-inst_[0-9a-f-]{36}-2026-1$/;
+const KEY_ID = /^wm-ihub-[0-9a-f-]{36}-2026-1$/;
 let storage;
 let store;
 
@@ -71,8 +71,8 @@ describe('WatermarkKeyStore', () => {
       [first.item.keyId, 'retired'],
       [second.item.keyId, 'active']
     ]);
-    expect(first.item.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-1$/);
-    expect(second.item.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-2$/);
+    expect(first.item.keyId).toMatch(/^wm-ihub-[0-9a-f-]{36}-2026-1$/);
+    expect(second.item.keyId).toMatch(/^wm-ihub-[0-9a-f-]{36}-2026-2$/);
     expect(items[0].retiredAt).toBeTruthy();
     expect(getActiveKeyId()).toBe(second.item.keyId);
     expect(JSON.stringify(items)).not.toContain(String(first.key));
@@ -91,7 +91,7 @@ describe('WatermarkKeyStore', () => {
     await store.create({}, 'a');
     await store.remove(first.item.keyId);
     const third = await store.create({}, 'a');
-    expect(third.item.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-3$/);
+    expect(third.item.keyId).toMatch(/^wm-ihub-[0-9a-f-]{36}-2026-3$/);
   });
 
   test('rejects a duplicate value, an active delete and a missing key', async () => {
@@ -102,10 +102,10 @@ describe('WatermarkKeyStore', () => {
     await expect(store.remove(stored.item.keyId)).rejects.toMatchObject({
       code: 'WATERMARK_KEY_ACTIVE'
     });
-    await expect(store.remove('wm-ihub-inst_x-2026-9')).rejects.toMatchObject({
+    await expect(store.remove('wm-ihub-x-2026-9')).rejects.toMatchObject({
       code: 'WATERMARK_KEY_NOT_FOUND'
     });
-    await expect(store.reveal('wm-ihub-inst_x-2026-9')).rejects.toMatchObject({
+    await expect(store.reveal('wm-ihub-x-2026-9')).rejects.toMatchObject({
       code: 'WATERMARK_KEY_NOT_FOUND'
     });
   });
@@ -135,8 +135,8 @@ describe('WatermarkKeyStore', () => {
       keys: []
     });
     const b = await two.create({}, 'a');
-    expect(a.item.keyId).toBe('wm-ihub-inst_aaaa-2026-1');
-    expect(b.item.keyId).toBe('wm-ihub-inst_bbbb-2026-1');
+    expect(a.item.keyId).toBe('wm-ihub-aaaa-2026-1');
+    expect(b.item.keyId).toBe('wm-ihub-bbbb-2026-1');
   });
 
   test('an installation id from the environment is made safe for an id', async () => {
