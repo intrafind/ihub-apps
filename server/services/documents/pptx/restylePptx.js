@@ -240,7 +240,10 @@ function bindFixedRoles(shapes, layout) {
     else if (shape.role === 'subtitle') {
       bound =
         take(p => p.type === 'subTitle', shape) ||
-        take(p => TEXT_PLACEHOLDER_TYPES.has(p.type === 'obj' ? undefined : p.type), shape);
+        take(
+          p => !p.role && TEXT_PLACEHOLDER_TYPES.has(p.type === 'obj' ? undefined : p.type),
+          shape
+        );
     } else if (shape.role === 'footer') {
       bound = take(p => p.type === type, shape);
       if (!bound) {

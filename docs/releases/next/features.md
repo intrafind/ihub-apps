@@ -1803,3 +1803,23 @@ stored on the server and in the audit log.
 The wording of the legal notes is a draft for legal review, not legal advice.
 
 See [EU AI Act](../../ai-act.md#switching-the-features-off).
+
+## Kicker and Lead on Slides, and a Footer Strip on the Title Slide
+
+Presentations from the `pptx` skill can now carry the two small texts that make a strategy deck
+read well: a **kicker**, a short label above the slide title ("VISION 2027"), and a **lead**, one
+sentence under it that gives the context. The model sets them with the new `kicker` and `lead`
+fields of a content, two-column or title-only slide.
+
+- **The template draws them.** Add two text placeholders to a slide layout of the company's
+  PowerPoint template and name them `Kicker` and `Lead` (in the Selection Pane). Slides with a
+  kicker or a lead use such a layout; all other slides keep the layout they had. A template without
+  them keeps working: the kicker is left out and the lead becomes the first paragraph of the text.
+- **Title slide strip.** A title layout can name its footer placeholder's text, for example the
+  company name, and the model can replace it per deck with the `footer` field of the title slide
+  ("Strategy 2027 · November 2026"). The deck's footer text still appears on the other slides only.
+- **KPI cards follow the company colours.** The KPI cards are now light neutral cards with a rule
+  across the top in the template's first coloured accent, instead of a tint of accent 1. A template
+  whose accent 1 is grey no longer produces grey cards.
+
+See [Document templates → PowerPoint](../../document-templates.md#powerpoint).

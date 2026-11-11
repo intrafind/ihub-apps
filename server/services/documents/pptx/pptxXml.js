@@ -415,79 +415,85 @@ export function tableFrame({ id, rect, table, lang, accent, fontSize, columnWidt
   return `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="${id}" name="Table ${id}"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr><p:xfrm><a:off x="${rect.x}" y="${rect.y}"/><a:ext cx="${width}" cy="${rowHeight * rows.length}"/></p:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table"><a:tbl><a:tblPr firstRow="1" bandRow="1"><a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId></a:tblPr><a:tblGrid>${columnWidths.map(w => `<a:gridCol w="${w}"/>`).join('')}</a:tblGrid>${rows.join('')}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
 }
 
-/** Text colours on a metric card, which is always light whatever the template maps `tx1` to. */
-const METRIC_TEXT = '0F172A';
-const METRIC_NOTE = '334155';
+/** Fill and text a metric card falls back to when the template's own colours do not suit it. */
+const METRIC_FALLBACK_FILL = 'F2F2F2';
+const METRIC_FALLBACK_TEXT = '262626';
+/** Accents less saturated than this are greys: they do not make a good highlight colour. */
+const NEUTRAL_SATURATION = 0.25;
+const ACCENT_ROLES = ['accent1', 'accent2', 'accent3', 'accent4', 'accent5', 'accent6'];
 
-/**
- * Relative luminance of the metric card fill: `accent1` with `lumMod 10 % / lumOff 90 %`,
- * which DrawingML applies to the HSL lightness (so the fill is `L × 0.1 + 0.9`).
- *
- * @param {string} accent - 6-digit hex
- * @returns {number}
- */
-export function metricCardFillLuminance(accent) {
-  const value = String(accent || '').replace('#', '');
-  if (!/^[0-9a-f]{6}$/i.test(value)) return 0.9;
-  const [r, g, b] = [0, 2, 4].map(i => Number.parseInt(value.slice(i, i + 2), 16) / 255);
+function cleanHex(value) {
+  const hex = String(value || '').replace('#', '');
+  return /^[0-9a-f]{6}$/i.test(hex) ? hex.toUpperCase() : null;
+}
+
+/** HSL saturation of a hex colour (0 grey … 1 fully saturated). */
+function saturation(hex) {
+  const [r, g, b] = [0, 2, 4].map(i => Number.parseInt(hex.slice(i, i + 2), 16) / 255);
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
   const d = max - min;
-  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-  }
-  const nl = Math.min(1, l * 0.1 + 0.9);
-  const c = (1 - Math.abs(2 * nl - 1)) * s;
-  const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = nl - c / 2;
-  const [r1, g1, b1] =
-    h < 60
-      ? [c, x, 0]
-      : h < 120
-        ? [x, c, 0]
-        : h < 180
-          ? [0, c, x]
-          : h < 240
-            ? [0, x, c]
-            : h < 300
-              ? [x, 0, c]
-              : [c, 0, x];
-  const hex = v =>
-    Math.round((v + m) * 255)
-      .toString(16)
-      .padStart(2, '0');
-  return luminance(`${hex(r1)}${hex(g1)}${hex(b1)}`);
+  const l = (max + min) / 2;
+  return d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+}
+
+/** WCAG contrast ratio of two hex colours. */
+function contrast(a, b) {
+  const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (light + 0.05) / (dark + 0.05);
 }
 
 /**
- * Row of 1–4 KPI / big-number callout cards. The card fill and border are tints of
- * the template's `accent1`; the card is always light, so its text does not follow the
- * template's `tx1` (an uploaded template can map it to white): label and note use fixed
- * dark colours, and the value uses `accent1` unless that is too light to read (4.5:1).
+ * How a metric card looks in a template: a light neutral card (the theme's
+ * `lt2`) with the theme's dark text colour (`dk2`) and a rule in the first
+ * accent that is a real colour, so a template whose `accent1` is grey still
+ * gets a colourful highlight. The card never follows the template's `tx1` or
+ * `bg1`, which a template can map to white or black.
+ *
+ * @param {Object<string, string>} [colors] - The theme's colours by role (`dk2`, `lt2`, `accent1` …).
+ * @returns {{ fill: string, text: string, accent: string, valueFill: string }}
+ */
+export function metricCardStyle(colors = {}) {
+  const lt2 = cleanHex(colors.lt2);
+  const fill = lt2 && luminance(lt2) > 0.8 ? lt2 : METRIC_FALLBACK_FILL;
+  const dk2 = cleanHex(colors.dk2);
+  const text = dk2 && contrast(dk2, fill) >= 4.5 ? dk2 : METRIC_FALLBACK_TEXT;
+  const role =
+    ACCENT_ROLES.find(
+      name => cleanHex(colors[name]) && saturation(cleanHex(colors[name])) >= NEUTRAL_SATURATION
+    ) || 'accent1';
+  const accentHex = cleanHex(colors[role]);
+  const readable = accentHex && contrast(accentHex, fill) >= 4.5;
+  return {
+    fill,
+    text,
+    accent: role,
+    valueFill: readable ? `<a:schemeClr val="${role}"/>` : `<a:srgbClr val="${text}"/>`
+  };
+}
+
+/**
+ * Row of 1–4 KPI / big-number callout cards. Each card is a group of a light
+ * neutral card and a rule across its top in the template's highlight colour
+ * (see {@link metricCardStyle}); the value takes that colour too when it is
+ * readable on the card (4.5:1), else the text colour.
  *
  * @param {Object} params
  * @param {() => number} params.nextId
  * @param {{ x: number, y: number, cx: number, cy: number }} params.rect
  * @param {Array<{ value: string, label: string, note?: string }>} params.metrics
  * @param {string} params.lang
- * @param {string} [params.accent] - Hex of the template's `accent1`; when it is too
- *   light to read on the card's light tint (4.5:1), the value is set in `tx1` instead.
- * @returns {string[]}
+ * @param {Object<string, string>} [params.colors] - The template's theme colours by role.
+ * @returns {string[]} One group shape per metric.
  */
-export function metricCards({ nextId, rect, metrics, lang, accent }) {
+export function metricCards({ nextId, rect, metrics, lang, colors }) {
   const count = metrics.length;
   if (!count) return [];
   const gap = Math.round((rect.cx < 5 * EMU_PER_INCH ? 0.16 : 0.22) * EMU_PER_INCH);
   const cardWidth = Math.max(1, Math.floor((rect.cx - gap * (count - 1)) / count));
   const cardHeight = Math.min(rect.cy, Math.round(2.2 * EMU_PER_INCH));
   const cardY = Math.round(rect.y + Math.max(0, (rect.cy - cardHeight) / 2));
+  const ruleHeight = Math.min(cardHeight, 38100);
   const compact = cardHeight < Math.round(1.4 * EMU_PER_INCH);
   const valSz = compact
     ? 2200
@@ -499,19 +505,22 @@ export function metricCards({ nextId, rect, metrics, lang, accent }) {
   const labelSz = compact ? 1200 : 1400;
   const noteSz = 1100;
   const safeLang = xmlEscape(lang);
-  const valueFill =
-    accent && (metricCardFillLuminance(accent) + 0.05) / (luminance(accent) + 0.05) < 4.5
-      ? `<a:srgbClr val="${METRIC_TEXT}"/>`
-      : '<a:schemeClr val="accent1"/>';
+  const style = metricCardStyle(colors);
+  const textFill = `<a:solidFill><a:srgbClr val="${style.text}"/></a:solidFill>`;
 
   return metrics.map((metric, idx) => {
-    const id = nextId();
+    const groupId = nextId();
+    const cardId = nextId();
+    const ruleId = nextId();
     const x = rect.x + idx * (cardWidth + gap);
-    const valPara = `<a:p><a:pPr algn="ctr"><a:spcAft><a:spcPts val="300"/></a:spcAft><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${valSz}" b="1" dirty="0"><a:solidFill>${valueFill}</a:solidFill></a:rPr><a:t>${xmlEscape(metric.value)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
-    const labelPara = `<a:p><a:pPr algn="ctr"><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${labelSz}" b="1" dirty="0"><a:solidFill><a:srgbClr val="${METRIC_TEXT}"/></a:solidFill></a:rPr><a:t>${xmlEscape(metric.label)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
+    const valPara = `<a:p><a:pPr algn="l"><a:spcAft><a:spcPts val="300"/></a:spcAft><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${valSz}" b="1" dirty="0"><a:solidFill>${style.valueFill}</a:solidFill></a:rPr><a:t>${xmlEscape(metric.value)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
+    const labelPara = `<a:p><a:pPr algn="l"><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${labelSz}" b="1" dirty="0">${textFill}</a:rPr><a:t>${xmlEscape(metric.label)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`;
     const notePara = metric.note
-      ? `<a:p><a:pPr algn="ctr"><a:spcBef><a:spcPts val="200"/></a:spcBef><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${noteSz}" dirty="0"><a:solidFill><a:srgbClr val="${METRIC_NOTE}"/></a:solidFill></a:rPr><a:t>${xmlEscape(metric.note)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`
+      ? `<a:p><a:pPr algn="l"><a:spcBef><a:spcPts val="200"/></a:spcBef><a:buNone/></a:pPr><a:r><a:rPr lang="${safeLang}" sz="${noteSz}" dirty="0">${textFill}</a:rPr><a:t>${xmlEscape(metric.note)}</a:t></a:r><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p>`
       : '';
-    return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Metric ${id}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${cardY}"/><a:ext cx="${cardWidth}" cy="${cardHeight}"/></a:xfrm><a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 6000"/></a:avLst></a:prstGeom><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="10000"/><a:lumOff val="90000"/></a:schemeClr></a:solidFill><a:ln w="12700"><a:solidFill><a:schemeClr val="accent1"><a:lumMod val="30000"/><a:lumOff val="70000"/></a:schemeClr></a:solidFill></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="114300" tIns="91440" rIns="114300" bIns="91440" rtlCol="0" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>${valPara}${labelPara}${notePara}</p:txBody></p:sp>`;
+    const frame = `<a:off x="${x}" y="${cardY}"/><a:ext cx="${cardWidth}" cy="${cardHeight}"/>`;
+    const card = `<p:sp><p:nvSpPr><p:cNvPr id="${cardId}" name="Metric ${cardId}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm>${frame}</a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="${style.fill}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="137160" tIns="137160" rIns="137160" bIns="91440" rtlCol="0" anchor="t"><a:normAutofit/></a:bodyPr><a:lstStyle/>${valPara}${labelPara}${notePara}</p:txBody></p:sp>`;
+    const rule = `<p:sp><p:nvSpPr><p:cNvPr id="${ruleId}" name="Metric rule ${ruleId}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${x}" y="${cardY}"/><a:ext cx="${cardWidth}" cy="${ruleHeight}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:schemeClr val="${style.accent}"/></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr><p:txBody><a:bodyPr rtlCol="0" anchor="ctr"/><a:lstStyle/><a:p><a:endParaRPr lang="${safeLang}" dirty="0"/></a:p></p:txBody></p:sp>`;
+    return `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="${groupId}" name="Metric card ${groupId}"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm>${frame}<a:chOff x="${x}" y="${cardY}"/><a:chExt cx="${cardWidth}" cy="${cardHeight}"/></a:xfrm></p:grpSpPr>${card}${rule}</p:grpSp>`;
   });
 }
