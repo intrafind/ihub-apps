@@ -4,9 +4,9 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useAiAcknowledgementAdmin } from '../hooks/useAiAcknowledgementAdmin';
+import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 
 const BUTTON =
@@ -14,10 +14,16 @@ const BUTTON =
 
 /**
  * Platform side of the AI-use acknowledgement (#3326): on/off, enforcement,
- * text per language, policy link, and the required version with "Request again".
- * The version is server-owned: this card never sends it.
+ * text per language, policy link, and the required version. The version is
+ * server-owned: this card never sends it; "Request again" is an action of the
+ * Acknowledgements card next to it.
+ *
+ * @param {Object} props
+ * @param {Function} [props.onSaved] - Called after a save (the page re-reads its status)
+ * @param {number} [props.requiredVersion] - The version from the page's status, so it
+ *   follows a "Request again" made on the Acknowledgements card
  */
-function AiAcknowledgementSettingsCard() {
+function AiAcknowledgementSettingsCard({ onSaved, requiredVersion }) {
   const { t } = useTranslation();
   const [form, setForm] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -55,6 +61,9 @@ function AiAcknowledgementSettingsCard() {
       // Read-modify-write: platform.json carries settings this card does not show.
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
+      // The read is redacted (proxy JWT provider `jwkUrl` values are left out), and the route
+      // keeps the stored proxyAuth when none is sent: posting the redacted one would erase them.
+      delete platform.proxyAuth;
       const text = Object.fromEntries(
         Object.entries(form.text).filter(([, value]) => typeof value === 'string' && value.trim())
       );
@@ -70,6 +79,7 @@ function AiAcknowledgementSettingsCard() {
         text: t('admin.aiAcknowledgement.saved', 'AI acknowledgement saved')
       });
       void admin.reload();
+      onSaved?.();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -82,19 +92,15 @@ function AiAcknowledgementSettingsCard() {
     }
   };
 
-  const { dialogProps } = admin;
-
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-        {t('admin.aiAcknowledgement.title', 'AI acknowledgement')}
-      </h3>
-      <p className="text-gray-600 dark:text-gray-400 mb-4">
-        {t(
-          'admin.aiAcknowledgement.description',
-          'Users confirm a short AI-use notice before their first message. The confirmation is stored with the user and in the audit log. Existing confirmations stay valid when you edit the text; use "Request again" to ask everyone again.'
-        )}
-      </p>
+    <EuAiActCard
+      id="ai-acknowledgement"
+      title={t('admin.aiAcknowledgement.title', 'AI acknowledgement')}
+      description={t(
+        'admin.aiAcknowledgement.description',
+        'Users confirm a short AI-use notice before their first message. The confirmation is stored with the user and in the audit log. Existing confirmations stay valid when you edit the text; use "Request again" to ask everyone again.'
+      )}
+    >
       <EuAiActStateNote className="mb-4" />
       {loadFailed && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-300">
@@ -175,48 +181,32 @@ function AiAcknowledgementSettingsCard() {
             />
           </div>
           <p className="mb-4 text-sm text-gray-700 dark:text-gray-300">
-            {t('admin.aiAcknowledgement.currentVersion', 'Current version: {{version}}', {
-              version: admin.settings?.requiredVersion ?? 1
-            })}
+            {t(
+              'admin.aiAcknowledgement.currentVersionHint',
+              'Current version: {{version}}. To ask everyone again, use "Request again" under Acknowledgements.',
+              { version: requiredVersion ?? admin.settings?.requiredVersion ?? 1 }
+            )}
           </p>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={save} disabled={saving} className={BUTTON}>
               {t('common.save', 'Save')}
             </button>
-            <button
-              type="button"
-              onClick={admin.askRequestAgain}
-              disabled={admin.busy}
-              className="px-4 py-2 rounded-lg font-medium border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50"
-            >
-              {t('admin.users.aiAcknowledgement.requestAgain', 'Request again')}
-            </button>
           </div>
         </>
       )}
-      {[message, admin.message].filter(Boolean).map((banner, index) => (
+      {message && (
         <p
-          key={`${index}-${banner.text}`}
           role="status"
           className={`text-sm mt-4 ${
-            banner.type === 'success'
+            message.type === 'success'
               ? 'text-green-700 dark:text-green-300'
               : 'text-red-700 dark:text-red-300'
           }`}
         >
-          {banner.text}
+          {message.text}
         </p>
-      ))}
-      <ConfirmDialog
-        isOpen={!!dialogProps}
-        title={dialogProps?.title ?? ''}
-        message={dialogProps?.message ?? ''}
-        confirmLabel={dialogProps?.confirmLabel}
-        danger={dialogProps?.danger}
-        onConfirm={() => dialogProps?.onConfirm()}
-        onDeny={admin.closeDialog}
-      />
-    </div>
+      )}
+    </EuAiActCard>
   );
 }
 

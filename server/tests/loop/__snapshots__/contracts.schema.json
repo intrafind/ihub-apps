@@ -4605,15 +4605,19 @@
                   "provenance": {
                     "type": "object",
                     "properties": {
-                      "outputId": {
+                      "spec": {
                         "type": "string"
                       },
-                      "contentHash": {
+                      "ai_generated": {
+                        "type": "boolean",
+                        "const": true
+                      },
+                      "output_id": {
                         "type": "string"
                       }
                     },
-                    "required": ["outputId", "contentHash"],
-                    "additionalProperties": false
+                    "required": ["spec", "ai_generated", "output_id"],
+                    "additionalProperties": {}
                   },
                   "thoughtSignature": {
                     "type": "string"

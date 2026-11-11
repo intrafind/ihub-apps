@@ -61,7 +61,7 @@ the hash of the final step's text, so a user who copied only the final answer st
 
 | Channel | Where |
 | --- | --- |
-| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens model, time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) shows no button; a stopped answer that had already written text does show it. |
+| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens the model (its display name and id), time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) shows no button; a stopped answer that had already written text does show it. |
 > **Master switch.** While the [EU AI Act features are switched off](ai-act.md#switching-the-features-off) no record is made, no `provenance` member or `X-AI-*` header is sent and `_verify` answers `403 FEATURE_DISABLED`. Existing records are kept, expire on schedule and answer again after switching on.
 
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |
@@ -165,8 +165,14 @@ of a SynthID signal. A picture that is already within the upload size limit (`ma
 
 Each generated image gets one record the moment it arrives, whether or not the artifact store keeps it (a 4K
 PNG over the artifact cap is recorded, sent and not stored), and on every channel (chat, agents, workflows,
-MCP, A2A). The SSE image delta carries `provenance: { outputId, contentHash }`; the stored message descriptor
-carries `outputId`; the MCP image block carries `_meta.provenance`; the A2A artifact `metadata.provenance`.
+MCP, A2A). The SSE image delta and the stored message descriptor carry `provenance`, the object of a text
+answer with `kind: "image"`, the model, the time and the hash of the raw bytes (the installation and the
+provider marking are in the stored record, which is read after the picture was sent); the descriptor also
+carries `outputId`. The MCP image block carries `_meta.provenance`; the A2A artifact `metadata.provenance`.
+
+In the chat every generated picture has an **AI-generated image: details** button (an info icon next to
+download and share) that opens the model, time, declared marking, a shortened hash with **Copy hash** and
+the output ID, the same as under a text answer. A picture stored before this change has no button.
 
 A media record is the usual provenance object with `kind: "image"`, `content_hash.normalization:
 "none"` (the hash is over the raw bytes, not the base64 text), `content_hash.bytes` and `mime_type`, plus:

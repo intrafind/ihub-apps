@@ -271,7 +271,7 @@ export class ResultAccumulator {
    */
   _stampImages(images) {
     for (const image of images) {
-      const stamp = stampGeneratedImage(image);
+      const stamp = stampGeneratedImage(image, { model: this.meta.model });
       if (!stamp?.created || !this.meta.model) continue;
       // After the current chunk has been delivered: the manifest read must not
       // delay the stream. Awaited before the call ends (`settleMedia`).

@@ -6162,7 +6162,8 @@
       "currentVersion": "Current version: {{version}}",
       "saved": "AI acknowledgement saved",
       "saveError": "Failed to save the AI acknowledgement",
-      "loadError": "The AI acknowledgement settings could not be loaded. Reload the page to try again."
+      "loadError": "The AI acknowledgement settings could not be loaded. Reload the page to try again.",
+      "currentVersionHint": "Current version: {{version}}. To ask everyone again, use \"Request again\" under Acknowledgements."
     },
     "euAiAct": {
       "verify": {
@@ -6215,7 +6216,12 @@
         "check": "Check",
         "needText": "Paste a text first.",
         "needFile": "Choose a file first.",
-        "declaredAs": "declared as {{type}}"
+        "declaredAs": "declared as {{type}}",
+        "c2paGenerator": "Made with: {{generator}}.",
+        "c2paSignedAt": "Signed on {{when}}.",
+        "recordTitle": "Provenance record",
+        "recordsTitle": "Provenance records ({{count}}, newest first)",
+        "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content, and names no user."
       },
       "selfTest": {
         "keysMatch": "Passed: the detector recognised the active key {{keyId}} ({{n}} tokens scored).",
@@ -6533,6 +6539,37 @@
         "verifyOff": "Verification is switched off.",
         "who": "Who",
         "loadMore": "Load more"
+      },
+      "record": {
+        "outputId": "Output ID",
+        "created": "Created",
+        "model": "Model",
+        "kind": "Kind",
+        "marking": "Model marking",
+        "markingNone": "None",
+        "markingIhub": "iHub watermark",
+        "markingProvider": "Provider (declared)",
+        "keyId": "key {{id}}",
+        "applied": "applied",
+        "notApplied": "not applied",
+        "generator": "Generator",
+        "installation": "Installation",
+        "hash": "Content hash",
+        "file": "File",
+        "declared": "Declared by the operator",
+        "c2pa": "C2PA manifest at generation",
+        "c2paPresent": "present",
+        "c2paAbsent": "absent",
+        "c2paSigner": "Signed by",
+        "c2paSignedAt": "Signed at",
+        "c2paGenerator": "Claim generator",
+        "c2paSource": "Digital source type",
+        "c2paValid": "Signature intact",
+        "trustNotEvaluated": "(trust not evaluated)",
+        "xmp": "XMP digital source type",
+        "json": "Show the record as JSON",
+        "copy": "Copy JSON",
+        "copied": "Copied"
       }
     }
   },
@@ -6866,7 +6903,10 @@
       "copyHash": "Copy hash",
       "copied": "Copied",
       "outputId": "Output ID",
-      "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it."
+      "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it.",
+      "imageButton": "AI-generated image: details",
+      "imageTitle": "AI-generated image",
+      "imageNote": "iHub keeps this hash, not the image. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it."
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",

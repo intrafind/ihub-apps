@@ -437,7 +437,7 @@ The first-turn AI notice shown in an empty chat (EU AI Act Art. 50(1)); see [EU 
 - `firstTurnNotice.enabled` — `false` hides the notice in every app. Default `true`.
 - `firstTurnNotice.text` — text per language; empty uses the built-in text. Inline Markdown is allowed.
 - `guardrail.text` — the rule added as the last line of every system prompt that makes the assistant say it is an AI. Empty uses the built-in rule ("You are an AI system. If asked, always say so. Never claim to be human, even in a role."). Only its wording can be changed, and only here; the audited EU AI Act master switch (Admin → EU AI Act) is the only way to turn it off.
-- Editable under **Admin → Advanced → AI notice**.
+- Editable under **Admin → EU AI Act → AI notice**.
 
 ### **telemetry**
 OpenTelemetry integration configuration.

@@ -740,7 +740,10 @@
       "copyHash": "Hash kopieren",
       "copied": "Kopiert",
       "outputId": "Ausgabe-ID",
-      "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat."
+      "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat.",
+      "imageButton": "KI-generiertes Bild: Details",
+      "imageTitle": "KI-generiertes Bild",
+      "imageNote": "iHub speichert diesen Hash, nicht das Bild. Mit ihm lässt sich die unveränderte Datei prüfen. Kennzeichnungen des Anbieters bleiben erhalten. Kein Treffer bedeutet nicht, dass ein Mensch es erstellt hat."
     },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
@@ -6591,7 +6594,8 @@
       "currentVersion": "Aktuelle Version: {{version}}",
       "saved": "KI-Bestätigung gespeichert",
       "saveError": "Die KI-Bestätigung konnte nicht gespeichert werden",
-      "loadError": "Die Einstellungen der KI-Bestätigung konnten nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen."
+      "loadError": "Die Einstellungen der KI-Bestätigung konnten nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen.",
+      "currentVersionHint": "Aktuelle Version: {{version}}. Um alle erneut zu fragen, nutzen Sie „Erneut anfordern“ unter Bestätigungen."
     },
     "euAiAct": {
       "verify": {
@@ -6644,7 +6648,12 @@
         "checking": "Prüfe…",
         "check": "Prüfen",
         "needText": "Fügen Sie zuerst einen Text ein.",
-        "needFile": "Wählen Sie zuerst eine Datei."
+        "needFile": "Wählen Sie zuerst eine Datei.",
+        "c2paGenerator": "Erstellt mit: {{generator}}.",
+        "c2paSignedAt": "Signiert am {{when}}.",
+        "recordTitle": "Herkunftsnachweis",
+        "recordsTitle": "Herkunftsnachweise ({{count}}, neueste zuerst)",
+        "recordHelp": "Was diese Installation gespeichert hat, als sie die Ausgabe erzeugt hat. Er enthält einen Hash, nie den Inhalt, und nennt keinen Benutzer."
       },
       "selfTest": {
         "keysMatch": "Bestanden: Der Detektor hat den aktiven Schlüssel {{keyId}} erkannt ({{n}} Tokens bewertet).",
@@ -6962,6 +6971,37 @@
         "verifyOff": "Die Prüfung ist ausgeschaltet.",
         "who": "Wer",
         "loadMore": "Mehr laden"
+      },
+      "record": {
+        "outputId": "Ausgabe-ID",
+        "created": "Erstellt",
+        "model": "Modell",
+        "kind": "Art",
+        "marking": "Kennzeichnung des Modells",
+        "markingNone": "Keine",
+        "markingIhub": "iHub-Wasserzeichen",
+        "markingProvider": "Anbieter (erklärt)",
+        "keyId": "Schlüssel {{id}}",
+        "applied": "angewendet",
+        "notApplied": "nicht angewendet",
+        "generator": "Erzeuger",
+        "installation": "Installation",
+        "hash": "Inhalts-Hash",
+        "file": "Datei",
+        "declared": "Vom Betreiber erklärt",
+        "c2pa": "C2PA-Manifest bei der Erzeugung",
+        "c2paPresent": "vorhanden",
+        "c2paAbsent": "nicht vorhanden",
+        "c2paSigner": "Signiert von",
+        "c2paSignedAt": "Signiert am",
+        "c2paGenerator": "Claim-Generator",
+        "c2paSource": "Digitaler Quelltyp",
+        "c2paValid": "Signatur unverändert",
+        "trustNotEvaluated": "(Vertrauen nicht geprüft)",
+        "xmp": "XMP: digitaler Quelltyp",
+        "json": "Nachweis als JSON anzeigen",
+        "copy": "JSON kopieren",
+        "copied": "Kopiert"
       }
     }
   },

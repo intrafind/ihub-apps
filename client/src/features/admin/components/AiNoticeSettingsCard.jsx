@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
 
 /**
@@ -13,8 +14,11 @@ import EuAiActStateNote from './euAiAct/EuAiActStateNote';
  * notice (master switch and text per language) and the wording of the guardrail
  * prompt added to every system prompt. Empty text uses the built-in wording; the
  * guardrail only goes off through the audited EU AI Act master switch.
+ *
+ * @param {Object} props
+ * @param {Function} [props.onSaved] - Called after a save (the page re-reads its status)
  */
-function AiNoticeSettingsCard() {
+function AiNoticeSettingsCard({ onSaved }) {
   const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
   const [notice, setNotice] = useState(null);
@@ -68,6 +72,7 @@ function AiNoticeSettingsCard() {
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
       setMessage({ type: 'success', text: t('admin.aiDisclosure.saved', 'AI notice saved') });
       refreshConfig();
+      onSaved?.();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -81,16 +86,14 @@ function AiNoticeSettingsCard() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-        {t('admin.aiDisclosure.title', 'AI notice')}
-      </h3>
-      <p className="text-gray-600 dark:text-gray-400 mb-4">
-        {t(
-          'admin.aiDisclosure.description',
-          'The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below. Only the EU AI Act master switch turns it off.'
-        )}
-      </p>
+    <EuAiActCard
+      id="ai-notice"
+      title={t('admin.aiDisclosure.title', 'AI notice')}
+      description={t(
+        'admin.aiDisclosure.description',
+        'The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below. Only the EU AI Act master switch turns it off.'
+      )}
+    >
       <EuAiActStateNote className="mb-4" />
       {loadFailed && (
         <div role="alert" className="text-sm text-red-700 dark:text-red-300 mb-4">
@@ -181,7 +184,7 @@ function AiNoticeSettingsCard() {
           {message.text}
         </p>
       )}
-    </div>
+    </EuAiActCard>
   );
 }
 

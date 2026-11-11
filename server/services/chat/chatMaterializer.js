@@ -74,6 +74,7 @@ import { getProjectService } from '../projects/ProjectService.js';
 import { recordChatInProject } from '../knowledge/chatProjects.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 import { artifactPolicy } from '../artifacts/artifactPolicy.js';
+import { publicImageProvenance } from '../provenance/mediaMarking.js';
 
 const COMPONENT = 'chatMaterializer';
 
@@ -174,12 +175,17 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
     const bytes = Buffer.byteLength(artifact.data, 'base64');
     // A refused file keeps its name, so the card can still say which one.
     const name = typeof artifact.name === 'string' && artifact.name ? artifact.name : null;
+    // The provenance of a generated image (#3328, EU AI Act Art. 50(2)): the
+    // output id names the record that describes it, and the object lets a
+    // reopened chat show the "AI generated" details of the picture.
+    const provenance = publicImageProvenance(artifact.provenance);
+    const described = provenance ? { outputId: provenance.output_id, provenance } : {};
     const refused = {
       kind,
       mimeType,
       bytes,
       ...(name ? { name } : {}),
-      ...(artifact.provenance?.outputId ? { outputId: artifact.provenance.outputId } : {})
+      ...described
     };
     if (maxPerBatch > 0 && stored >= maxPerBatch) {
       descriptors.push({ ...refused, unavailable: 'too-many' });
@@ -206,10 +212,6 @@ export async function storeGeneratedArtifacts({ chatId, runId, artifacts, store,
         runId
       });
       if (descriptor) stored += 1;
-      // The provenance output id of a generated image (#3328), so the stored
-      // message can name the record that describes it.
-      const outputId = artifact.provenance?.outputId;
-      const described = outputId ? { outputId } : {};
       descriptors.push(
         descriptor ? { ...descriptor, ...described } : { ...refused, unavailable: 'not-stored' }
       );

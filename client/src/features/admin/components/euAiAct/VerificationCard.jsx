@@ -11,6 +11,7 @@ import EuAiActCard from './EuAiActCard';
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, INPUT } from './KeyDialogs';
 import { summarizeVerification } from './verificationResult';
 import PausedNote from './PausedNote';
+import ProvenanceRecord from './ProvenanceRecord';
 import { useEuAiActEnabled } from './EuAiActStateNote';
 
 const MAX_TEXT_CHARS = 262144;
@@ -114,19 +115,33 @@ function describeRow(row, t) {
       case 'present':
         return {
           word: t('admin.euAiAct.verify.present', 'present'),
-          text: t(
-            'admin.euAiAct.verify.c2paPresent',
-            'Content credentials present{{issuer}}{{source}}. Signature {{valid}}.',
-            {
-              issuer: row.issuer ? `: ${row.issuer}` : '',
-              source: row.digitalSourceType
-                ? `, ${t('admin.euAiAct.verify.declaredAs', 'declared as {{type}}', { type: row.digitalSourceType })}`
-                : '',
-              valid: row.valid
-                ? t('admin.euAiAct.verify.validTrust', 'valid (trust not evaluated)')
-                : t('admin.euAiAct.verify.notValid', 'could not be validated')
-            }
-          )
+          text: [
+            t(
+              'admin.euAiAct.verify.c2paPresent',
+              'Content credentials present{{issuer}}{{source}}. Signature {{valid}}.',
+              {
+                issuer: row.issuer ? `: ${row.issuer}` : '',
+                source: row.digitalSourceType
+                  ? `, ${t('admin.euAiAct.verify.declaredAs', 'declared as {{type}}', { type: row.digitalSourceType })}`
+                  : '',
+                valid: row.valid
+                  ? t('admin.euAiAct.verify.validTrust', 'valid (trust not evaluated)')
+                  : t('admin.euAiAct.verify.notValid', 'could not be validated')
+              }
+            ),
+            row.claimGenerator
+              ? t('admin.euAiAct.verify.c2paGenerator', 'Made with: {{generator}}.', {
+                  generator: row.claimGenerator
+                })
+              : '',
+            row.signedAt
+              ? t('admin.euAiAct.verify.c2paSignedAt', 'Signed on {{when}}.', {
+                  when: new Date(row.signedAt).toLocaleString()
+                })
+              : ''
+          ]
+            .filter(Boolean)
+            .join(' ')
         };
       case 'absent':
         return {
@@ -427,6 +442,30 @@ export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES
                 );
               })}
             </dl>
+            {outcome.records.length > 0 && (
+              <div className="mt-4" data-testid="verify-records">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                  {outcome.records.length > 1
+                    ? t(
+                        'admin.euAiAct.verify.recordsTitle',
+                        'Provenance records ({{count}}, newest first)',
+                        { count: outcome.records.length }
+                      )
+                    : t('admin.euAiAct.verify.recordTitle', 'Provenance record')}
+                </h3>
+                <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                  {t(
+                    'admin.euAiAct.verify.recordHelp',
+                    'What this installation stored when it produced the output. It holds a hash, never the content, and names no user.'
+                  )}
+                </p>
+                <div className="mt-2 space-y-3">
+                  {outcome.records.map(record => (
+                    <ProvenanceRecord key={record.output_id} record={record} />
+                  ))}
+                </div>
+              </div>
+            )}
             {outcome.caveats.length > 0 && (
               <ul className="mt-3 list-disc pl-5 text-xs text-gray-600 dark:text-gray-400">
                 {outcome.caveats.map(caveat => (

@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
+import AiAcknowledgementSettingsCard from '../components/AiAcknowledgementSettingsCard';
+import AiNoticeSettingsCard from '../components/AiNoticeSettingsCard';
 import AcknowledgementsCard from '../components/euAiAct/AcknowledgementsCard';
 import ConformityCard from '../components/euAiAct/ConformityCard';
 import ConfigCheckCard from '../components/euAiAct/ConfigCheckCard';
@@ -11,13 +15,24 @@ import WatermarkKeysCard from '../components/euAiAct/WatermarkKeysCard';
 import useEuAiActStatus from '../hooks/useEuAiActStatus';
 
 /**
- * `/admin/eu-ai-act`: one page for the EU AI Act Art. 50 duties. Six cards: the master
- * switch (all EU AI Act features on or off, with who, when and why), the configuration check, acknowledgements, watermark keys (with detector and
- * self-test), provenance settings and verification. Each card loads and fails on its own.
+ * `/admin/eu-ai-act`: one page for the EU AI Act Art. 50 duties. Eight cards: the master
+ * switch (all EU AI Act features on or off, with who, when and why), the configuration
+ * check, the AI notice (first-turn notice and guardrail wording), the AI acknowledgement
+ * settings, acknowledgements, watermark keys (with detector and self-test), provenance
+ * settings and verification. Each card loads and fails on its own.
  */
 function AdminEuAiActPage() {
   const { t } = useTranslation();
+  const { hash } = useLocation();
   const { status, loading, checking, error, reload } = useEuAiActStatus();
+
+  // A fix link of the configuration check names a card (`#ai-notice`); the router
+  // does not scroll to it by itself.
+  useEffect(() => {
+    if (!hash) return;
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    target?.scrollIntoView?.({ block: 'start' });
+  }, [hash]);
   // The master switch is off: the cards below are paused (read-only, explained).
   const paused = status?.conformity?.enabled === false;
 
@@ -49,6 +64,11 @@ function AdminEuAiActPage() {
           error={error}
           checking={checking}
           onRecheck={reload}
+        />
+        <AiNoticeSettingsCard onSaved={reload} />
+        <AiAcknowledgementSettingsCard
+          onSaved={reload}
+          requiredVersion={status?.acknowledgements?.requiredVersion}
         />
         <AcknowledgementsCard
           acknowledgements={status?.acknowledgements}

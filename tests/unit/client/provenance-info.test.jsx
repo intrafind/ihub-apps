@@ -69,6 +69,43 @@ describe('ProvenanceInfo', () => {
     expect(panel.textContent).not.toMatch(/authentic|human-written/i);
   });
 
+  it('names the model by its display name and id when the model list has it', () => {
+    render(
+      <ProvenanceInfo
+        provenance={provenance}
+        models={[{ id: 'gpt-x', name: { en: 'GPT X', de: 'GPT X' } }]}
+      />
+    );
+    fireEvent.click(screen.getByTestId('provenance-button'));
+    expect(screen.getByTestId('provenance-model')).toHaveTextContent('GPT X (gpt-x)');
+  });
+
+  it('keeps the bare id for a model that is not in the list', () => {
+    render(<ProvenanceInfo provenance={provenance} models={[]} />);
+    fireEvent.click(screen.getByTestId('provenance-button'));
+    expect(screen.getByTestId('provenance-model')).toHaveTextContent(/^gpt-x$/);
+  });
+
+  it('speaks of an image for an image provenance object', () => {
+    render(
+      <ProvenanceInfo
+        provenance={{
+          ...provenance,
+          kind: 'image',
+          content_hash: { alg: 'sha-256', normalization: 'none', value: HASH }
+        }}
+        placement="bottom"
+      />
+    );
+    const button = screen.getByTestId('provenance-button');
+    expect(button).toHaveAttribute('aria-label', 'AI-generated image: details');
+    fireEvent.click(button);
+    const panel = screen.getByTestId('provenance-panel');
+    expect(panel).toHaveTextContent('AI-generated image');
+    expect(panel).toHaveTextContent('iHub keeps this hash, not the image');
+    expect(panel.className).toContain('top-full');
+  });
+
   it('closes on Escape and on a click outside', () => {
     render(
       <div>
