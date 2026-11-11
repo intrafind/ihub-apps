@@ -15,7 +15,7 @@
  * body is never logged.
  */
 import configCache from '../configCache.js';
-import { authRequired } from '../middleware/authRequired.js';
+import { authenticatedOnly } from '../middleware/authRequired.js';
 import { createProvenanceVerifyLimiter } from '../middleware/rateLimiting.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
@@ -86,8 +86,11 @@ export function parseVerifyBody(body) {
 export default function registerProvenanceRoutes(app) {
   const limiter = createProvenanceVerifyLimiter(configCache.getPlatform() || {});
   // Read per request, so an admin switching to `public` needs no restart.
+  // `authenticatedOnly`, not `authRequired`: the latter lets everyone through while
+  // anonymous access is on, which is the shipped default, and this lookup must stay
+  // closed to guests unless an admin opens it with `verify.access: public`.
   const maybeAuth = (req, res, next) =>
-    provenanceSettings().verify.access === 'public' ? next() : authRequired(req, res, next);
+    provenanceSettings().verify.access === 'public' ? next() : authenticatedOnly(req, res, next);
 
   /**
    * @swagger

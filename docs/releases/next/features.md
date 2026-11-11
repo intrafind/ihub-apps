@@ -1666,8 +1666,8 @@ AI Act.
   `provenance.verify.access` is `public`, and has its own rate limit (**Admin → Security**).
 - **Per model.** **Admin → Models** shows an *Output marking* column ("Not marked" is only a hint) and an *Output
   marking* section: choose "Provider marks the output" only with the provider's written statement.
-- **Upgrade.** Migration V243 writes the defaults. Scheduled tasks, Slack/Teams/Office integrations and workflow
-  runs started in the web app get no record yet.
+- **Upgrade.** Migration V243 writes the defaults. Workflow runs and the Slack and Teams integrations get no
+  record yet; scheduled tasks and apps called by tools do.
 
 See [Provenance Records](../../provenance.md) and [EU AI Act](../../ai-act.md#provenance-records).
 
