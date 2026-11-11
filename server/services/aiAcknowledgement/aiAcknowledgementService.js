@@ -146,16 +146,54 @@ export function statusOfUser(user, settings) {
 }
 
 /**
- * Principals that are machines: OAuth clients, personal API keys, delegated
- * tokens and agents. A person cannot click a dialog there, so they are exempt.
+ * The first-party clients a person types into: the Outlook add-in, the browser
+ * extension and the Nextcloud embed. Each signs in with a delegated OAuth token
+ * (authorization code + PKCE) that carries the client id the admin configured
+ * under `officeIntegration`, `browserExtension` and `nextcloudEmbed`
+ * (`oauthClientId`). They show the acknowledgement dialog, so they count as
+ * people. A small, explicit allow-list: every other client id stays a machine.
+ */
+const FIRST_PARTY_CLIENTS = Object.freeze([
+  { kind: 'office', platformKey: 'officeIntegration' },
+  { kind: 'extension', platformKey: 'browserExtension' },
+  { kind: 'nextcloud', platformKey: 'nextcloudEmbed' }
+]);
+
+/**
+ * Which first-party client a delegated token's client id belongs to.
+ *
+ * @param {string|null|undefined} clientId - `req.user.clientId`
+ * @param {Object} [platform] - Platform config; defaults to the cached one
+ * @returns {'office'|'extension'|'nextcloud'|null} null for any other client
+ */
+export function firstPartyClientKind(clientId, platform = configCache.getPlatform() || {}) {
+  if (typeof clientId !== 'string' || clientId === '') return null;
+  const match = FIRST_PARTY_CLIENTS.find(({ platformKey }) => {
+    const configured = platform?.[platformKey]?.oauthClientId;
+    return typeof configured === 'string' && configured !== '' && configured === clientId;
+  });
+  return match ? match.kind : null;
+}
+
+/**
+ * Principals that are machines: OAuth clients, personal API keys, third-party
+ * delegated tokens and agents. A person cannot click a dialog there, so they
+ * are exempt.
+ *
+ * A delegated (authorization code) token of one of the three first-party
+ * clients is a person: those clients show the dialog (see
+ * {@link firstPartyClientKind}). A token of the same client id that was not
+ * issued to a user (client credentials) stays a machine.
  *
  * @param {Object} [user] - `req.user`
+ * @param {Object} [platform] - Platform config; defaults to the cached one
  * @returns {boolean}
  */
-export function isMachinePrincipal(user) {
-  return Boolean(
-    user && (user.isOAuthClient || user.isPersonalApiKey || user.clientId || user.isAgent === true)
-  );
+export function isMachinePrincipal(user, platform = configCache.getPlatform() || {}) {
+  if (!user) return false;
+  if (user.isOAuthClient || user.isPersonalApiKey || user.isAgent === true) return true;
+  if (!user.clientId) return false;
+  return !(user.isOAuthAuthCode && firstPartyClientKind(user.clientId, platform));
 }
 
 /**

@@ -243,7 +243,8 @@
       "logout": "Logout",
       "variables": "Show variables",
       "history": "Chat history",
-      "openInWeb": "Open in web app"
+      "openInWeb": "Open in web app",
+      "aiNotice": "AI-use notice"
     },
     "openInWeb": {
       "fallback": "If the chat did not open in your browser, open this address:"
@@ -10328,6 +10329,13 @@
     "confirmed": "Confirmed.",
     "sending": "Sending your message.",
     "error": "Your confirmation could not be saved. Your message is still here. Try again.",
-    "stale": "The notice was updated. Please read it and confirm again."
+    "stale": "The notice was updated. Please read it and confirm again.",
+    "opensInBrowser": "(opens in your browser)",
+    "policyBlocked": "The policy could not be opened. Copy the address and open it in your browser.",
+    "copyAddress": "Copy address",
+    "contextChanged": "What you selected changed while you were confirming. Check it, then send again.",
+    "loadFailed": "The notice could not be loaded. Check your connection and try again.",
+    "cookieBlocked": "Your browser blocks cookies in this frame, so the confirmation cannot be kept here. Open iHub in its own tab to confirm.",
+    "openInBrowser": "Open iHub in the browser"
   }
 }

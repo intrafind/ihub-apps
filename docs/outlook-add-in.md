@@ -417,6 +417,25 @@ Users open the task-pane menu (**☰**) → **Settings** to adjust three persona
 
 ---
 
+## AI-use notice
+
+With the [AI-use acknowledgement](ai-act.md#ai-use-acknowledgement) on (it is by default), the pane asks
+the user to confirm the notice before their first message leaves Outlook, and the server refuses messages
+until they did (`428`). The dialog opens inside the pane (and inside the larger window), in the pane's own
+look and in the pane's language. Cancel keeps the typed text, the open email and the collected emails; a note
+above the input offers **Review notice**, and the menu (**☰**) has an **AI-use notice** entry to read it again
+later. The policy link opens in the browser through Outlook; where Outlook cannot open it (the larger
+window, some mobile clients) the address is shown to copy. If the user opens another email while the dialog
+is open, the message is not sent on its own after **Confirm and send**: the text stays in the input and the
+pane asks them to check the email and send again.
+
+One confirmation per user counts everywhere (web app, Teams, extension, Nextcloud, Outlook). It is recorded
+with `client: office`. Before this was added the add-in was exempt (its token is a delegated OAuth token);
+after the upgrade every add-in user is asked once at their next message. Turn
+`aiAcknowledgement.enforce` or `enabled` off first to roll out gradually.
+
+---
+
 ## Updating an existing deployment
 
 | Change | Action required |

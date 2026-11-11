@@ -108,7 +108,7 @@ test.describe('AI-use acknowledgement', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toHaveCount(0);
     await expect(input(page)).toHaveValue('Not yet');
-    await expect(page.getByTestId('ai-ack-note')).toBeVisible();
+    await expect(page.getByTestId('ai-ack-note').filter({ visible: true }).first()).toBeVisible();
   });
 
   test('Request again asks everyone once more; Remove all does too; the CSV lists the user', async ({

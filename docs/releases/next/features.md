@@ -1663,8 +1663,13 @@ language) and in the audit log, so you can answer "who confirmed which version, 
 - **Versioned.** Editing the text asks nobody again. **Request again** raises the required version and everyone is
   asked at their next message. Anonymous visitors confirm once per browser (a signed cookie plus an audit entry).
 - **Enforced by the server.** Without a valid confirmation, sending a chat message, starting a workflow or its
-  chat step, and starting an agent run answer `428 AI_ACKNOWLEDGEMENT_REQUIRED`. OAuth clients, API keys, MCP,
-  A2A and the inference API are not asked. With enforcement off the dialog only asks.
+  chat step, and starting an agent run answer `428 AI_ACKNOWLEDGEMENT_REQUIRED`. Other OAuth clients, API keys,
+  MCP, A2A and the inference API are not asked. With enforcement off the dialog only asks.
+- **In the Outlook add-in, the browser extension and the Nextcloud embed too.** The same dialog opens in the
+  pane or side panel before the first message, in the pane's look and language. A declined dialog keeps the
+  draft and the open email or page; the menu has an **AI-use notice** entry to read it again, and the policy
+  opens through the host (or its address is shown to copy). One confirmation counts in every client, and the
+  record says which one it came from (`client: office | extension | nextcloud`).
 - **Admin.** **Admin → Advanced → AI acknowledgement** holds the switches, the text per language and the policy
   link. **Admin → Users** gets an **AI acknowledgement** column and filter, a per-user **Remove AI
   acknowledgement** action and an **AI acknowledgements** menu: **Export CSV**, **Request again**, **Remove all**.

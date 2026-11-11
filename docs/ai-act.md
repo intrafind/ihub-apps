@@ -77,10 +77,29 @@ that people were told, not a legal opinion: the wording is yours.
   chat step (`POST /api/workflows/executions/{executionId}/chat/{appId}`), restarting a workflow execution (`POST /api/workflows/executions/{executionId}/_restart`), and starting
   or resuming an agent run (`POST /api/agents/profiles/{profileId}/runs`, `POST /api/agents/runs/{runId}/_resume`). The web app asks first, so a 428 only shows up for a stale
   tab or after **Request again**; it then re-opens the dialog and sends the message once more.
-- **Exempt.** OAuth clients, personal API keys, delegated tokens (so people who use iHub through the Office
-  add-in or another OAuth-signed-in client are **not** asked yet: those surfaces have no dialog), agents, the inference API (`/v1`,
-  `/api/inference/v1`), MCP and A2A: nobody can click a dialog there. Utility calls (the magic prompt),
-  scheduled tasks and webhooks are not gated either.
+- **Exempt.** OAuth clients (client credentials), personal API keys, agents, delegated tokens of any
+  other OAuth client, the inference API (`/v1`, `/api/inference/v1`), MCP and A2A: nobody can click a dialog
+  there. Utility calls (the magic prompt), scheduled tasks and webhooks are not gated either. The three
+  first-party clients below are **not** exempt.
+- **Client integrations.** Every surface a person types a prompt into asks once and records on the same
+  per-user record, so one confirmation counts in all of them (the Outlook pane re-reads the state before it
+  opens the dialog and when it regains focus, so a confirmation made in the web app is picked up).
+
+  | Surface | Signs in with | Asked | Enforced (`428`) |
+  | --- | --- | --- | --- |
+  | Web app, Teams tab, `?embed=true` frames | cookie / SSO session | yes | yes |
+  | Outlook add-in (task pane, pop-out window) | OAuth code + PKCE, client `officeIntegration.oauthClientId` | yes | yes |
+  | Browser extension side panel | same, `browserExtension.oauthClientId` | yes | yes |
+  | Nextcloud embed | same, `nextcloudEmbed.oauthClientId` | yes | yes |
+  | Microsoft 365 Copilot agent, MCP, A2A, personal API keys, client credentials, inference API | token / key | no | no |
+
+  The three first-party clients are recognised by the client ids stored in `platform.json`; no other OAuth
+  client is treated as a person, and there is nothing to configure. Before this was added they counted as
+  delegated tokens and were exempt, so users there were neither asked nor recorded. A user who only uses
+  Copilot and never opens one of the surfaces above is not asked. The entry records which first-party client
+  the confirmation came from (`client: office | extension | nextcloud`, read from the token, absent for the
+  web app and Teams). Anonymous guests exist only in `?embed=true` frames; see
+  [Embed Mode](embed-mode.md#ai-use-acknowledgement).
 - **Anonymous visitors.** A guest has no `users.json` record. The confirmation is a signed, HttpOnly cookie
   (`ihubAiAck`, bound to the guest cookie, 30 days) plus an audit entry. **Remove all** invalidates
   those cookies too. Clearing cookies means being asked again.
@@ -94,11 +113,13 @@ that people were told, not a legal opinion: the wording is yours.
   personal data). The list itself is `GET /api/admin/auth/users`.
 - **User API.** `GET /api/ai-acknowledgements/me?language=de` returns the notice, its hash and whether the
   caller confirmed (never cached); `POST /api/ai-acknowledgements/me` confirms the version and hash that were
-  shown (`409` when the text or the version changed meanwhile).
+  shown (`409` when the text or the version changed meanwhile). `policyUrl` is always absolute (a `/path` is
+  resolved against the public address, base path included, so it opens from the extension too) and `appUrl`
+  is the public address of iHub.
 - **Enforcement off.** The dialog can be dismissed with "Continue without confirming" and comes back at most
   once per browser session; nothing is stored for a dismissal.
 - **Upgrade.** The feature is on by default and enforced, so after the upgrade every user and anonymous visitor
-  confirms once. Set `aiAcknowledgement.enabled` to `false` first to roll out gradually.
+  confirms once, and so does every Outlook, extension and Nextcloud user at their next message. Set `aiAcknowledgement.enabled` to `false` first to roll out gradually.
 - **The legacy disclaimer.** The first-visit popup from **UI → disclaimer** is a separate setting and is shown
   first; the confirmation dialog waits until it is closed.
 

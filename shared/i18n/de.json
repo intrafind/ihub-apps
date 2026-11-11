@@ -312,7 +312,8 @@
       "logout": "Abmelden",
       "variables": "Variablen anzeigen",
       "history": "Chatverlauf",
-      "openInWeb": "In der Web-App öffnen"
+      "openInWeb": "In der Web-App öffnen",
+      "aiNotice": "KI-Hinweis"
     },
     "openInWeb": {
       "fallback": "Falls sich der Chat nicht im Browser geöffnet hat, öffnen Sie diese Adresse:"
@@ -10327,6 +10328,13 @@
     "confirmed": "Bestätigt.",
     "sending": "Ihre Nachricht wird gesendet.",
     "error": "Ihre Bestätigung konnte nicht gespeichert werden. Ihre Nachricht ist noch vorhanden. Bitte versuchen Sie es erneut.",
-    "stale": "Der Hinweis wurde aktualisiert. Bitte lesen und erneut bestätigen."
+    "stale": "Der Hinweis wurde aktualisiert. Bitte lesen und erneut bestätigen.",
+    "opensInBrowser": "(öffnet im Browser)",
+    "policyBlocked": "Die Richtlinie konnte nicht geöffnet werden. Kopieren Sie die Adresse und öffnen Sie sie im Browser.",
+    "copyAddress": "Adresse kopieren",
+    "contextChanged": "Ihre Auswahl hat sich geändert, während Sie bestätigt haben. Bitte prüfen Sie sie und senden Sie erneut.",
+    "loadFailed": "Der Hinweis konnte nicht geladen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "cookieBlocked": "Ihr Browser blockiert Cookies in diesem Frame, daher kann die Bestätigung hier nicht gespeichert werden. Öffnen Sie iHub in einem eigenen Tab, um zu bestätigen.",
+    "openInBrowser": "iHub im Browser öffnen"
   }
 }

@@ -514,6 +514,144 @@ describe('user routes', () => {
   });
 });
 
+describe('first-party delegated clients (Outlook, extension, Nextcloud)', () => {
+  const OFFICE = 'office-client';
+  const EXTENSION = 'extension-client';
+  const NEXTCLOUD = 'nextcloud-client';
+  const delegated = clientId => ({
+    id: 'alice',
+    groups: ['users'],
+    isOAuthAuthCode: true,
+    clientId
+  });
+  const post = (app, user) =>
+    request(app).post('/api/apps/x/chat/c1').set('x-user', JSON.stringify(user)).send({});
+
+  beforeEach(() => {
+    seed();
+    store.files[PLATFORM].officeIntegration = { oauthClientId: OFFICE };
+    store.files[PLATFORM].browserExtension = { oauthClientId: EXTENSION };
+    store.files[PLATFORM].nextcloudEmbed = { oauthClientId: NEXTCLOUD };
+  });
+
+  test('the three first-party clients count as people, whatever else holds a client id', () => {
+    for (const clientId of [OFFICE, EXTENSION, NEXTCLOUD]) {
+      expect(service.isMachinePrincipal(delegated(clientId))).toBe(false);
+    }
+    expect(service.firstPartyClientKind(OFFICE)).toBe('office');
+    expect(service.firstPartyClientKind(EXTENSION)).toBe('extension');
+    expect(service.firstPartyClientKind(NEXTCLOUD)).toBe('nextcloud');
+  });
+
+  test('every other principal type stays exempt', () => {
+    // Another delegated client (a Copilot-style agent, an integrator).
+    expect(service.isMachinePrincipal(delegated('someone-else'))).toBe(true);
+    // The same client id without a user behind it (client credentials, or any flag set).
+    expect(service.isMachinePrincipal({ clientId: OFFICE })).toBe(true);
+    expect(service.isMachinePrincipal({ isOAuthClient: true, clientId: OFFICE })).toBe(true);
+    expect(service.isMachinePrincipal({ ...delegated(OFFICE), isOAuthClient: true })).toBe(true);
+    expect(service.isMachinePrincipal({ ...delegated(OFFICE), isPersonalApiKey: true })).toBe(true);
+    expect(service.isMachinePrincipal({ ...delegated(OFFICE), isAgent: true })).toBe(true);
+    // A cookie session has no client id: a person.
+    expect(service.isMachinePrincipal({ id: 'alice' })).toBe(false);
+    expect(service.isMachinePrincipal(undefined)).toBe(false);
+  });
+
+  test('an unset or empty client id in platform.json gates nothing', () => {
+    store.files[PLATFORM].officeIntegration = { oauthClientId: '' };
+    delete store.files[PLATFORM].browserExtension;
+    expect(service.firstPartyClientKind('')).toBeNull();
+    expect(service.firstPartyClientKind(undefined)).toBeNull();
+    expect(service.isMachinePrincipal(delegated('anything'))).toBe(true);
+    expect(service.isMachinePrincipal(delegated(''))).toBe(false);
+  });
+
+  test('an unconfirmed first-party token gets 428; a third-party one does not', async () => {
+    const app = buildApp();
+    for (const clientId of [OFFICE, EXTENSION, NEXTCLOUD]) {
+      const res = await post(app, delegated(clientId));
+      expect(res.status).toBe(428);
+      expect(res.body.code).toBe('AI_ACKNOWLEDGEMENT_REQUIRED');
+      expect(res.body.details).toMatchObject({ requiredVersion: 1 });
+    }
+    expect((await post(app, delegated('someone-else'))).status).toBe(200);
+    expect(app.locals.sideEffect).toHaveBeenCalledTimes(1);
+  });
+
+  test('enforcement off, or the feature off, never refuses them', async () => {
+    store.files[PLATFORM].aiAcknowledgement.enforce = false;
+    expect((await post(buildApp(), delegated(OFFICE))).status).toBe(200);
+    store.files[PLATFORM].aiAcknowledgement.enforce = true;
+    store.files[PLATFORM].aiAcknowledgement.enabled = false;
+    expect((await post(buildApp(), delegated(OFFICE))).status).toBe(200);
+  });
+
+  test('with a bearer-style principal: read the notice, confirm, then send; the client is recorded', async () => {
+    const app = buildApp();
+    const user = JSON.stringify(delegated(OFFICE));
+    const notice = await request(app)
+      .get('/api/ai-acknowledgements/me?language=en')
+      .set('x-user', user);
+    expect(notice.status).toBe(200);
+    expect(notice.body).toMatchObject({ enabled: true, enforce: true, acknowledged: false });
+    const confirm = await request(app)
+      .post('/api/ai-acknowledgements/me')
+      .set('x-user', user)
+      .send({ version: 1, textHash: notice.body.textHash, language: 'en' });
+    expect(confirm.status).toBe(201);
+    expect(confirm.body.client).toBe('office');
+    expect(store.files[USERS].users.alice.aiAcknowledgements[0]).toMatchObject({
+      version: 1,
+      client: 'office'
+    });
+    const audit = store.audits.find(a => a.resource === 'aiAcknowledgement');
+    expect(audit.details).toMatchObject({ subject: 'user', client: 'office' });
+    expect((await post(app, delegated(OFFICE))).status).toBe(200);
+    // One record per user: the confirmation counts in the other first-party client too.
+    expect((await post(app, delegated(EXTENSION))).status).toBe(200);
+    expect(
+      (await request(app).get('/api/ai-acknowledgements/me').set('x-user', user)).body.acknowledged
+    ).toBe(true);
+  });
+
+  test('a cookie session records no client; a body cannot claim one', async () => {
+    const app = buildApp();
+    const hash = service.textHash('Use AI responsibly.');
+    const res = await request(app)
+      .post('/api/ai-acknowledgements/me')
+      .set('x-user', asUser('alice'))
+      .send({ version: 1, textHash: hash, language: 'en', client: 'office' });
+    // The schema is strict: an unknown field is a validation error, not a claim.
+    expect(res.status).toBe(400);
+    const ok = await request(app)
+      .post('/api/ai-acknowledgements/me')
+      .set('x-user', asUser('alice'))
+      .send({ version: 1, textHash: hash, language: 'en' });
+    expect(ok.status).toBe(201);
+    expect(ok.body.client).toBeUndefined();
+  });
+
+  test('the policy link leaves absolute: sub-path and forwarded host respected', async () => {
+    store.files[PLATFORM].aiAcknowledgement.policyUrl = '/page/ai-policy';
+    const res = await request(buildApp())
+      .get('/api/ai-acknowledgements/me')
+      .set('x-user', asUser('alice'))
+      .set('X-Forwarded-Proto', 'https')
+      .set('X-Forwarded-Host', 'ihub.example.org');
+    expect(res.body.policyUrl).toBe('https://ihub.example.org/page/ai-policy');
+    store.files[PLATFORM].aiAcknowledgement.policyUrl = 'https://corp.example/policy';
+    const external = await request(buildApp())
+      .get('/api/ai-acknowledgements/me')
+      .set('x-user', asUser('alice'));
+    expect(external.body.policyUrl).toBe('https://corp.example/policy');
+    store.files[PLATFORM].aiAcknowledgement.policyUrl = '';
+    const none = await request(buildApp())
+      .get('/api/ai-acknowledgements/me')
+      .set('x-user', asUser('alice'));
+    expect(none.body.policyUrl).toBe('');
+  });
+});
+
 describe('admin routes', () => {
   beforeEach(() => seed());
   const admin = req => req.set('x-admin', '1');
