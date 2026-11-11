@@ -54,7 +54,7 @@ describe('read_url SSRF guard', () => {
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    ({ default: read_url } = await import('../tools/webContentExtractor.js'));
+    ({ readWebPage: read_url } = await import('../services/pageReader/pageReader.js'));
   });
 
   test('blocks a private IP literal before ever fetching', async () => {

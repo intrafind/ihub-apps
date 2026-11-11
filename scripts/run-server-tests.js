@@ -71,7 +71,7 @@ const QUARANTINED = {
   'planner-maxtokens.test.js': 'exits non-zero',
   'nda-risk-analyzer.test.js': 'NDA app config not found in the test environment',
   'toolCallingIntegration.test.js': 'configured tools not found in the test environment',
-  'webContentExtractor-ssrf.test.js': 'redirect SSRF assertions fail: redirects are not rejected',
+  'pageReader-ssrf.test.js': 'redirect SSRF assertions fail: redirects are not rejected',
   'WebhookTrigger.test.js': 'raw signature assertion fails',
   'teamsAuth.test.js': 'imports `getClearAuthCookieOptions`, no longer exported by cookieSettings',
   'telemetry-providerMap.test.js': 'provider mapping assertions fail'

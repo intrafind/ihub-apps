@@ -28,7 +28,7 @@ import {
   resolveNativeWebSearchFallbackTools,
   READ_URL_TOOL_ID
 } from '../services/tools/webSearchResolver.js';
-import * as extractorModule from '../tools/webContentExtractor.js';
+import * as readUrlModule from '../tools/readUrl.js';
 import { isPlatformTool } from '../services/tools/platformTools.js';
 import { RETIRED_IHUB_TOOL_FILES } from '../utils/setupUtils.js';
 import {
@@ -124,10 +124,10 @@ describe('default read_url definition', () => {
     assert.equal(typeof reader.description, 'string', 'localized');
   });
 
-  it('runs the extractor’s model-facing entry point', () => {
-    assert.equal(READER.script, 'webContentExtractor.js');
-    assert.equal(READER.method, 'extractForTool');
-    assert.equal(typeof extractorModule.extractForTool, 'function');
+  it('runs the model-facing entry point on the page reader service', () => {
+    assert.equal(READER.script, 'readUrl.js');
+    assert.equal(READER.method, 'readUrl');
+    assert.equal(typeof readUrlModule.readUrl, 'function');
   });
 
   it('asks only for a url, a length, an offset and a focus, never for ignoreSSL', () => {
@@ -141,7 +141,7 @@ describe('default read_url definition', () => {
   });
 
   it('rejects a non-http URL through the model-facing entry point', async () => {
-    await assert.rejects(extractorModule.extractForTool({ url: 'file:///etc/passwd' }), {
+    await assert.rejects(readUrlModule.readUrl({ url: 'file:///etc/passwd' }), {
       code: 'INVALID_URL'
     });
   });

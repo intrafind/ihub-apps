@@ -75,7 +75,7 @@ const env = cleanEnv(
     // Staan's web search endpoint. STAAN_API_KEY needs no declaration: it
     // reaches `config` through the dynamic `*_API_KEY` pass-through below.
     STAAN_SEARCH_ENDPOINT: str({ optional: true }),
-    // User agent the page reader (tools/webContentExtractor.js) fetches with.
+    // User agent the page reader (services/pageReader/pageReader.js) fetches with.
     // A current browser one by default: many sites block a Node user agent.
     WEB_READER_USER_AGENT: str({ optional: true }),
     // TTL of the in-memory web-search result cache (services/searchCache.js),

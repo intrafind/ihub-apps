@@ -110,7 +110,7 @@ describe('website corpus fetch', () => {
   });
 
   test('revalidates every redirect hop: a redirect to a private address is refused', async () => {
-    const { fetchWebPage } = await import('../tools/webContentExtractor.js');
+    const { fetchWebPage } = await import('../services/pageReader/pageReader.js');
     throttledFetchMock.mockResolvedValueOnce(
       response({ status: 302, location: 'http://169.254.169.254/x' })
     );
@@ -221,7 +221,7 @@ describe('website corpus fetch', () => {
     });
 
     test('asks the policy for every hop: a redirect to another internal host is refused', async () => {
-      const { fetchWebPage } = await import('../tools/webContentExtractor.js');
+      const { fetchWebPage } = await import('../services/pageReader/pageReader.js');
       throttledFetchMock.mockResolvedValueOnce(
         response({ status: 302, location: 'http://10.9.9.9/x' })
       );
@@ -234,7 +234,7 @@ describe('website corpus fetch', () => {
     });
 
     test('a redirect from an allowed host to the metadata service is refused, even for a policy that allows all', async () => {
-      const { fetchWebPage } = await import('../tools/webContentExtractor.js');
+      const { fetchWebPage } = await import('../services/pageReader/pageReader.js');
       throttledFetchMock.mockResolvedValueOnce(
         response({ status: 302, location: 'http://169.254.169.254/latest/meta-data/' })
       );

@@ -3,8 +3,8 @@
 
 import webSearchService from '../../services/WebSearchService.js';
 import { normalizeFocus } from '../../services/knowledge/focusQuery.js';
-import webContentExtractor from '../webContentExtractor.js';
-import { BOT_PROTECTION_CODE } from './botProtection.js';
+import { readWebPage } from '../../services/pageReader/pageReader.js';
+import { BOT_PROTECTION_CODE } from '../../services/pageReader/botProtection.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -252,7 +252,7 @@ export default async function searchWithExtraction({
 
   const contentPromises = resultsToProcess.map(async result => {
     try {
-      const content = await webContentExtractor({
+      const content = await readWebPage({
         url: result.url,
         maxLength: contentMaxLength,
         // No outline per page: ten results would carry ten of them.

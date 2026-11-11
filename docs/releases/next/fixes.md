@@ -1,5 +1,17 @@
 # Fixes — Unreleased
 
+## Project Web Pages and HTML Files Read Like read_url
+
+A project's web page item and an HTML file in a project were read by code of their own next to the
+page reader that `read_url` and web search use. They now share it: the same fetch, the same
+extraction and the same page cache, so a page reads the same wherever it is opened. Visible changes:
+
+- An HTML file longer than 400,000 characters keeps its Markdown structure (headings, lists, tables)
+  to its end. Past the page reader's 400,000-character cap it used to be re-read by a second
+  converter that dropped the links; the text is now cut only at the project's limit.
+- A host that blocks automated access (bot protection) is remembered for the chat that hit it, not
+  for every project web page item at once.
+
 ## Attaching More Files No Longer Duplicates the Ones Already Attached
 
 Selecting files in the file dialog, confirming, and then opening the dialog again to add more attached

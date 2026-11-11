@@ -54,12 +54,12 @@ let counter = 0;
 const freshUrl = () => `http://93.184.216.34/manual-${++counter}`;
 
 describe('read_url with a focus', () => {
-  let extractForTool;
+  let readUrl;
   let runToolCallScope;
 
   beforeEach(async () => {
     jest.resetAllMocks();
-    ({ extractForTool } = await import('../tools/webContentExtractor.js'));
+    ({ readUrl } = await import('../tools/readUrl.js'));
     ({ runToolCallScope } = await import('../services/sources/toolCallScope.js'));
   });
 
@@ -67,12 +67,12 @@ describe('read_url with a focus', () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
 
-    const plain = await extractForTool({ url });
+    const plain = await readUrl({ url });
     expect(plain.truncated).toBe(true);
     expect(plain.content).not.toContain('quasar');
     expect(plain.excerpted).toBeUndefined();
 
-    const focused = await extractForTool({ url, focus: 'quasar support price per seat' });
+    const focused = await readUrl({ url, focus: 'quasar support price per seat' });
     expect(focused.content).toContain('includes quasar support.');
     expect(focused.content).toMatch(/Outline of the whole text/);
     expect(focused.content).toMatch(/<section id="pricing-details"[^>]* offset="\d+"/);
@@ -91,11 +91,11 @@ describe('read_url with a focus', () => {
   test('the offset an outline entry names reads from that section', async () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
-    const focused = await extractForTool({ url, focus: 'quasar support price' });
+    const focused = await readUrl({ url, focus: 'quasar support price' });
     const offset = Number(
       /<section id="pricing-details"[^>]* offset="(\d+)"/.exec(focused.content)[1]
     );
-    const read = await extractForTool({ url, offset, focus: 'quasar support price' });
+    const read = await readUrl({ url, offset, focus: 'quasar support price' });
     expect(read.excerpted).toBeUndefined();
     expect(read.content.startsWith('## Pricing details')).toBe(true);
     expect(read.content).toContain('includes quasar support.');
@@ -105,10 +105,10 @@ describe('read_url with a focus', () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
     const strip = ({ extractedAt: _at, ...rest }) => rest;
-    const plain = strip(await extractForTool({ url }));
-    expect(strip(await extractForTool({ url, focus: '' }))).toEqual(plain);
-    expect(strip(await extractForTool({ url, focus: '   ' }))).toEqual(plain);
-    expect(strip(await extractForTool({ url, focus: 42 }))).toEqual(plain);
+    const plain = strip(await readUrl({ url }));
+    expect(strip(await readUrl({ url, focus: '' }))).toEqual(plain);
+    expect(strip(await readUrl({ url, focus: '   ' }))).toEqual(plain);
+    expect(strip(await readUrl({ url, focus: 42 }))).toEqual(plain);
     expect(Object.keys(plain)).not.toContain('focus');
     expect(Object.keys(plain)).not.toContain('excerpted');
   });
@@ -120,8 +120,8 @@ describe('read_url with a focus', () => {
       )
     );
     const url = freshUrl();
-    const plain = await extractForTool({ url });
-    const focused = await extractForTool({ url, focus: 'quasar' });
+    const plain = await readUrl({ url });
+    const focused = await readUrl({ url, focus: 'quasar' });
     expect(focused.content).toBe(plain.content);
     expect(focused.excerpted).toBeUndefined();
   });
@@ -129,8 +129,8 @@ describe('read_url with a focus', () => {
   test('an explicit offset is paging, not a question', async () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
-    const paged = await extractForTool({ url, offset: 5000 });
-    const focused = await extractForTool({ url, offset: 5000, focus: 'quasar' });
+    const paged = await readUrl({ url, offset: 5000 });
+    const focused = await readUrl({ url, offset: 5000, focus: 'quasar' });
     expect(focused.content).toBe(paged.content);
     expect(focused.nextOffset).toBe(paged.nextOffset);
   });
@@ -138,8 +138,8 @@ describe('read_url with a focus', () => {
   test('a focus that matches nothing gives the start of the page and an outline', async () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
-    const plain = await extractForTool({ url });
-    const focused = await extractForTool({ url, focus: 'zzzqqq' });
+    const plain = await readUrl({ url });
+    const focused = await readUrl({ url, focus: 'zzzqqq' });
     expect(focused.excerpted).toBe(false);
     expect(focused.note).toMatch(/No section of the page matches/);
     expect(focused.content).toMatch(/Outline of the whole page/);
@@ -153,7 +153,7 @@ describe('read_url with a focus', () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
     for (const maxLength of [500, 1500, 4000, 20000]) {
-      const focused = await extractForTool({ url, focus: 'quasar support price', maxLength });
+      const focused = await readUrl({ url, focus: 'quasar support price', maxLength });
       expect(focused.content.length).toBeLessThanOrEqual(maxLength);
       expect(focused.excerpted).toBe(true);
     }
@@ -162,7 +162,7 @@ describe('read_url with a focus', () => {
   test('a focus is trimmed and cut at 500 characters', async () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
-    const focused = await extractForTool({
+    const focused = await readUrl({
       url,
       focus: `   quasar support price ${'x'.repeat(2000)}`
     });
@@ -174,14 +174,14 @@ describe('read_url with a focus', () => {
     throttledFetchMock.mockResolvedValue(htmlResponse(longPage()));
     const url = freshUrl();
     const reported = [];
-    await runToolCallScope(reported, () => extractForTool({ url, focus: 'quasar support price' }));
+    await runToolCallScope(reported, () => readUrl({ url, focus: 'quasar support price' }));
     expect(reported).toHaveLength(1);
     expect(reported[0]).toMatchObject({ provider: 'web', kind: 'page', url, private: true });
     expect(reported[0].passages[0].text).toMatch(/^Pricing details\n## Pricing details/);
     expect(reported[0].passages[0].text).toContain('includes quasar support.');
 
     const none = [];
-    await runToolCallScope(none, () => extractForTool({ url }));
+    await runToolCallScope(none, () => readUrl({ url }));
     expect(none).toEqual([]);
   });
 });

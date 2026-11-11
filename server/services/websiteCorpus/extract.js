@@ -4,7 +4,7 @@
 /**
  * The main text of a crawled page, as the website corpus sizer counts it.
  *
- * Not the page reader's extraction (`tools/lib/pageContent.js`): that one finds
+ * Not the page reader's extraction (`services/pageReader/pageContent.js`): that one finds
  * the *article* with Readability and shortens a page to fit a model call. A
  * corpus size needs everything a retrieval index or a long prompt would get, so
  * this keeps the text of `<main>` (`<body>` when there is none) and removes
@@ -19,7 +19,7 @@
  * @module services/websiteCorpus/extract
  */
 import { JSDOM } from 'jsdom';
-import { dropRawTextElements } from '../../tools/lib/pageContent.js';
+import { dropRawTextElements } from '../pageReader/pageContent.js';
 
 /** Elements that are never page content. */
 const NEVER_CONTENT = ['script', 'style', 'noscript', 'form', 'svg', 'iframe', 'button', 'nav'];

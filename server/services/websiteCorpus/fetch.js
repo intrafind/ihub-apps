@@ -15,7 +15,7 @@
  * @module services/websiteCorpus/fetch
  */
 import zlib from 'node:zlib';
-import { fetchWebPage } from '../../tools/webContentExtractor.js';
+import { fetchWebPage } from '../pageReader/pageReader.js';
 import { isSsrfTrustedHost } from '../../utils/httpConfig.js';
 import { assertPublicTarget } from '../../utils/ssrfGuard.js';
 import { decodeHtml, readBoundedBytes } from '../projects/siteCrawler.js';

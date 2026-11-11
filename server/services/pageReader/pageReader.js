@@ -1,48 +1,59 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+/**
+ * The page reader: the one way iHub fetches a web page or PDF and reads it as
+ * text. A platform service, not a tool: the model's `read_url` tool
+ * (`server/tools/readUrl.js`), the search tools' `extractContent`, a project's
+ * web page items and its site crawler all use it, so every web read gets the same
+ * fetch (SSRF guard on every redirect hop, DNS pinning, proxy, certificate
+ * whitelist), the same extraction (`pageContent.js`), the same page cache and the
+ * same bot-protection memory.
+ *
+ * @module services/pageReader/pageReader
+ */
+
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { throttledFetch } from '../requestThrottler.js';
-import { emitToolProgress } from '../services/loop/RunStream.js';
-import config from '../config.js';
-import configCache from '../configCache.js';
+import { throttledFetch } from '../../requestThrottler.js';
+import { emitToolProgress } from '../loop/RunStream.js';
+import config from '../../config.js';
+import configCache from '../../configCache.js';
 import {
   DEFAULT_PAGE_CACHE_TTL_MS,
   getCachedPage,
   makePageCacheKey,
   setCachedPage
-} from '../services/pageCache.js';
-import { resolveSearchLanguage } from '../services/search/searchLanguage.js';
-import { normalizeFocus } from '../services/knowledge/focusQuery.js';
-import { reportToolCallSources } from '../services/sources/toolCallScope.js';
+} from '../pageCache.js';
+import { resolveSearchLanguage } from '../search/searchLanguage.js';
+import { normalizeFocus } from '../knowledge/focusQuery.js';
+import { reportToolCallSources } from '../sources/toolCallScope.js';
 import {
   getDocumentIndex,
   partOffsets,
   renderOutline,
   selectContent
-} from '../sources/documentRetrieval.js';
-import logger from '../utils/logger.js';
+} from '../../sources/documentRetrieval.js';
+import logger from '../../utils/logger.js';
 import {
   describeProxyRouting,
   enhanceFetchOptions,
   isSsrfTrustedHost
-} from '../utils/httpConfig.js';
-import { assertPublicTarget, createPinnedLookup } from '../utils/ssrfGuard.js';
+} from '../../utils/httpConfig.js';
+import { assertPublicTarget, createPinnedLookup } from '../../utils/ssrfGuard.js';
 import {
   ACCESS_DENIED_CODE,
   AUTH_REQUIRED_CODE,
   BOT_PROTECTION_CODE,
   blockedResponseError,
-  botProtectionToolResult,
   classifyBlockedResponse
-} from './lib/botProtection.js';
+} from './botProtection.js';
 import {
   acceptLanguageFor,
   countWords,
   extractHtmlPage,
   extractPdf,
   sliceDocument
-} from './lib/pageContent.js';
+} from './pageContent.js';
 
 // Bound manual redirect-following so a malicious/misconfigured server can't
 // force an unbounded hop chain.
@@ -478,7 +489,7 @@ function readerNote(doc, slice) {
  * Extract clean, readable content from a web page (or PDF) as Markdown.
  *
  * Headings, lists, tables, links and code survive; navigation, ads, headers
- * and footers do not (see `lib/pageContent.js`). The document is cached for a
+ * and footers do not (see `pageContent.js`). The document is cached for a
  * short time, and each call returns one window of it: `truncated` says there
  * is more, `nextOffset` where to continue, `totalLength` how long it is.
  * `incomplete` says the document is longer than the reader keeps (the
@@ -496,12 +507,12 @@ function readerNote(doc, slice) {
  * @param {boolean} [params.outline=true] - With a `focus`: whether the result carries an
  *   outline of the page. A caller that reads many pages (search extraction) turns it off
  * @param {string} [params.language] - The reader's language (Accept-Language)
- * @param {boolean} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
+ * @param {boolean|null} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
  * @param {string} [params.chatId] - The chat ID for action tracking
  * @returns {Promise<Object>} The window of content with the page's metadata
  * @throws {Error} If URL is missing, invalid, or content extraction fails
  */
-export default async function webContentExtractor({
+export async function readWebPage({
   url,
   uri,
   link,
@@ -541,8 +552,7 @@ export default async function webContentExtractor({
 
   // Determine SSL ignore setting: explicit parameter > global config > default false
   const platformConfig = configCache.getPlatform() || {};
-  const shouldIgnoreSSL =
-    ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
+  const shouldIgnoreSSL = ignoreSSL ?? (platformConfig.ssl?.ignoreInvalidCertificates || false);
 
   const acceptLanguage = acceptLanguageFor(resolveSearchLanguage(language));
 
@@ -704,59 +714,4 @@ function recallBlockedHost(chatId, hostname) {
 /** Forget every remembered block (for tests). */
 export function clearBlockedHosts() {
   blockedHosts.clear();
-}
-
-/** Bounds of the model-facing `maxLength` (mirrors tools/webContentExtractor.json). */
-const TOOL_MIN_LENGTH = 500;
-const TOOL_MAX_LENGTH = 50000;
-const TOOL_DEFAULT_LENGTH = 10000;
-
-/**
- * Entry point for the `webContentExtractor` tool the model calls.
- *
- * Tool arguments come straight from the model, and nothing validates them
- * against the schema, so this wrapper does it for the arguments that matter:
- * `focus` is trimmed and cut at 500 characters (empty means none), and
- * `maxLength` is clamped to the schema's bounds (an oversized value would
- * otherwise land a whole PDF in the context), `offset` to a whole number of
- * characters from the start, and `ignoreSSL` is never taken from the model —
- * certificate checking stays with the platform's `ssl.ignoreInvalidCertificates`
- * setting and the SSL domain whitelist.
- *
- * @param {Object} params - Tool arguments plus the runtime context runTool adds
- * @returns {Promise<Object>} Same result as {@link webContentExtractor}
- */
-export async function extractForTool({
-  url,
-  uri,
-  link,
-  maxLength,
-  offset,
-  focus,
-  language,
-  chatId
-} = {}) {
-  let length = Number(maxLength);
-  if (!Number.isFinite(length)) length = TOOL_DEFAULT_LENGTH;
-  length = Math.min(TOOL_MAX_LENGTH, Math.max(TOOL_MIN_LENGTH, Math.floor(length)));
-  const start = Number(offset);
-  const targetUrl = url || uri || link;
-
-  try {
-    return await webContentExtractor({
-      url,
-      uri,
-      link,
-      maxLength: length,
-      offset: Number.isFinite(start) && start > 0 ? Math.floor(start) : 0,
-      focus: normalizeFocus(focus),
-      language,
-      chatId
-    });
-  } catch (error) {
-    if (error.code !== BOT_PROTECTION_CODE) throw error;
-    // Handed to the model as a result it cannot misread as "try again", not
-    // as a thrown error string.
-    return botProtectionToolResult(error, targetUrl);
-  }
 }

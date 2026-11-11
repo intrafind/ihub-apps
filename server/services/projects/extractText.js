@@ -40,7 +40,7 @@ import {
 import { extractXlsxText } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
 import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
-import { extractHtmlPage } from '../../tools/lib/pageContent.js';
+import { extractHtmlPage } from '../pageReader/pageContent.js';
 import { cleanItemInfo, infoFromText } from './itemInfo.js';
 
 /** The most characters one item keeps (about 10 MB of text). */
@@ -452,6 +452,10 @@ function markdownHeading(elem, walk, builder, formatOptions) {
   builder.closeBlock({ trailingLineBreaks: 2 });
 }
 
+/**
+ * An HTML fragment's text — an e-mail's body, which is no web page. A web page
+ * or an HTML file is read by `htmlFileText` (the page reader's extraction).
+ */
 function htmlText(html) {
   return htmlToText(html, {
     wordwrap: false,
@@ -477,19 +481,19 @@ function htmlText(html) {
 }
 
 /**
- * An HTML file's main content as Markdown, the way the page reader reads a
- * fetched page: menus, page trees, breadcrumbs and footers are left out, so
- * they do not repeat in every chunk of the item. Falls back to the whole page
- * when nothing is found, or when the main content is longer than the reader
- * keeps (the reader's cap would silently drop the rest).
+ * An HTML file's main content as Markdown, by the page reader's extraction
+ * (`services/pageReader/pageContent.js`, the one way iHub turns HTML into text): menus,
+ * page trees, breadcrumbs and footers are left out, so they do not repeat in
+ * every chunk of the item. Not cut at the reader's own character cap; the
+ * item's limit (`normalizeText`) applies.
  */
 function htmlFileText(html, report) {
-  const page = extractHtmlPage(html);
+  const page = extractHtmlPage(html, { maxChars: Infinity });
   if (report) {
     if (page.title) report.title = page.title;
     if (page.description) report.description = page.description;
   }
-  return page.markdown && !page.capped ? page.markdown : htmlText(html);
+  return page.markdown;
 }
 
 const latin1 = new TextDecoder('latin1');

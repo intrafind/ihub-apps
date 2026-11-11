@@ -9,7 +9,7 @@ import {
   classifyBlockedResponse,
   detectBotProtection,
   readBodyPrefix
-} from '../tools/lib/botProtection.js';
+} from '../services/pageReader/botProtection.js';
 
 const headers = map => {
   const lower = Object.fromEntries(Object.entries(map).map(([k, v]) => [k.toLowerCase(), v]));

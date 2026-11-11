@@ -14,7 +14,7 @@
  *
  * Detection only: this never tries to get past the protection.
  *
- * @module tools/lib/botProtection
+ * @module services/pageReader/botProtection
  */
 
 export const BOT_PROTECTION_CODE = 'BOT_PROTECTION';

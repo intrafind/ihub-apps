@@ -214,7 +214,7 @@ test('web: the search action of a shipped engine makes its hits public', () => {
   // The page reader is a platform tool; a page it read is private.
   const read = webSourceProducer.fromToolResult({
     toolId: 'read_url',
-    toolDef: { id: 'read_url', script: 'webContentExtractor.js' },
+    toolDef: { id: 'read_url', script: 'readUrl.js' },
     args: { url: 'https://example.com/a' },
     result: { url: 'https://example.com/a', content: 'body', wordCount: 1 }
   });

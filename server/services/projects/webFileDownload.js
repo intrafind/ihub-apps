@@ -16,8 +16,8 @@
  * @module services/projects/webFileDownload
  */
 import path from 'node:path';
-import { fetchWebPage } from '../../tools/webContentExtractor.js';
-import { classifyBlockedResponse } from '../../tools/lib/botProtection.js';
+import { fetchWebPage } from '../pageReader/pageReader.js';
+import { classifyBlockedResponse } from '../pageReader/botProtection.js';
 import { ProjectError } from './projectErrors.js';
 import { ACCEPTED_TYPES, HTML_MIME, acceptedTypeOf } from './extractText.js';
 
