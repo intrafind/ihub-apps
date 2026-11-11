@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
-import { sendAppChatMessage } from '../../../api';
+import { sendAppChatMessage, checkAppChatStatus } from '../../../api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
 import { debugLog } from '../../../utils/debugLog';
@@ -332,8 +332,8 @@ function useAppChat({
    */
   const sendPendingMessage = useCallback(async () => {
     if (!pendingMessageDataRef.current) return;
+    const { appId, chatId, messages, params } = pendingMessageDataRef.current;
     try {
-      const { appId, chatId, messages, params } = pendingMessageDataRef.current;
       await sendAppChatMessage(
         appId,
         chatId,
@@ -344,6 +344,19 @@ function useAppChat({
       // The server has the turn — the chat is in the store from here on.
       onMessageAcceptedRef.current?.(chatId);
     } catch (error) {
+      // The POST is answered when the turn ends, so a turn longer than the
+      // request timeout (axios, the ingress's proxy-read-timeout) loses the
+      // reply, not the turn: the server keeps running it and the open stream
+      // still carries every frame. Keep listening instead of reporting a failure.
+      const lostReply = error?.isTimeout || error?.status === 502 || error?.status === 504;
+      if (lostReply && !isCancellingRef.current) {
+        const status = await checkAppChatStatus(appId, chatId).catch(() => null);
+        if (status?.processing) {
+          pendingMessageDataRef.current = null;
+          onMessageAcceptedRef.current?.(chatId);
+          return;
+        }
+      }
       if (lastMessageIdRef.current && !isCancellingRef.current) {
         // Only show error if this wasn't a manual cancellation
         let errorMessage;

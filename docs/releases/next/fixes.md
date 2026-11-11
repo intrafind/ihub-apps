@@ -587,3 +587,14 @@ project size estimates, tool search and knowledge retrieval are real token count
   server for about 0.1 to 0.2 s. Texts above 256 KB (a very large attachment) are therefore counted
   from samples spread over the text, within about 7 percent of the exact count, in about 5 ms.
 - Installations that run from a copy without the package keep the old behaviour.
+
+## Chat: Answers Longer Than Five Minutes No Longer End in "Request timed out"
+
+A chat turn that ran longer than five minutes, such as an analysis that crawls a large website,
+stopped in the browser with the following text added to the answer, although the server went on
+and finished the answer:
+
+> Request timed out. The operation may have taken longer than expected.
+
+The browser now checks whether the turn is still running and keeps showing it until the answer
+is complete. A request that really failed still shows the error.
