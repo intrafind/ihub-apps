@@ -1599,7 +1599,9 @@ the prompt" is a realistic alternative to retrieval.
   crawled slowly. A chat turn now allows up to 50 tool rounds (was 25), so a crawl of a large site
   is not cut off. A crawl belongs to the user who started it and is removed after 14 days.
 - Install it under **Admin → Integrations**, grant it to groups and bind it to an app. The
-  `website-corpus-sizer` skill from the marketplace guides users through it.
+  `website-corpus-sizer` skill from the marketplace guides users through it. With the `dashboard`
+  system skill in the app's skills as well, the guided process ends with a dashboard of the result
+  in the chat's workspace pane, in English or German, without anyone asking for it.
 - Internal websites need no entry per page. The SSRF guard refuses company-internal addresses; a
   user whose crawl was refused can ask an admin to allow the host, and the admin approves or
   declines under **Admin → Integrations → Requests** (the sidebar counts open requests). An approval
@@ -1636,6 +1638,29 @@ project, like a chat in your own project, and the page lists your chats.
   (`projectPrivate`) when it opens in such a project.
 
 See [Projects → Chats in a project](../../projects.md#chats-in-a-project).
+
+## Dashboards From Data in the Artifacts Panel
+
+The new `dashboard` system skill turns the figures of a tool run, an analysis or the user's own
+data into a finished dashboard page in the chat's workspace pane, without the user having to ask
+for it once the results are in.
+
+- **One page, the answer first.** A headline sentence, KPI tiles, ranked bar charts (with limit
+  lines such as a context window), line charts, sortable tables with good/warning/critical cells,
+  a "How these numbers were made" section and a collapsed **Sources and formulas** section that
+  each chart opens from its **Source** button.
+- **Every chart has a Table view** with the same numbers, a tooltip on hover and focus, light and
+  dark colours and a phone layout. The header uses the app's brand colour and font.
+- **Quick and consistent.** The model writes a small JSON spec instead of a whole HTML page, and
+  the server lays it out. `create_web_artifact` gained the parameters `preset` (`dashboard`) and
+  `data` for it; a faulty spec comes back as a message that names the field at fault.
+- **Numbers are not recalculated.** The skill has the model copy every figure from the data; the
+  page works out shares, order, the sum of a folded tail and table sorting itself.
+- **Enable it** by adding `dashboard` to an app's `skills`. It brings the tool itself, so
+  `web-artifacts` does not have to be enabled as well.
+
+See [Document and File Generation → The `dashboard` skill](../../pdf-generation.md#the-dashboard-skill)
+and [Apps → Skill Settings](../../apps.md#skill-settings).
 
 ## Notice That You Are Chatting With an AI
 

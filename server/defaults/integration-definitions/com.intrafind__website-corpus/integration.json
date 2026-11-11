@@ -190,8 +190,8 @@
       "sideEffect": "read",
       "dataFlow": "internal",
       "guidance": {
-        "en": "Show the report unchanged, then add the verdict. Every figure comes from the report; never add up or recalculate anything.",
-        "de": "Zeige den Bericht unverändert und ergänze dann das Fazit. Jede Zahl stammt aus dem Bericht; rechne nichts zusammen oder nach."
+        "en": "Show the report unchanged, then add the verdict. Every figure comes from the report; never add up or recalculate anything. When the dashboard skill is available, ask for dashboard: true in the user's language (language) and build the dashboard from that field, unchanged.",
+        "de": "Zeige den Bericht unverändert und ergänze dann das Fazit. Jede Zahl stammt aus dem Bericht; rechne nichts zusammen oder nach. Ist der Skill dashboard verfügbar, fordere dashboard: true in der Sprache der Person (language) an und baue das Dashboard unverändert aus diesem Feld."
       }
     },
     {
