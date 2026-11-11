@@ -167,7 +167,7 @@
       "version": "number"
     }
   },
-  "GET /api/admin/ai-acknowledgements/_export": {
+  "GET /api/admin/eu-ai-act/acknowledgements/_export": {
     "status": 200,
     "type": "text/csv"
   },
@@ -4173,7 +4173,7 @@
   "GET /api/agents/runs/:runId/stream": {
     "skipped": "streams"
   },
-  "GET /api/ai-acknowledgements/me": {
+  "GET /api/eu-ai-act/acknowledgements/me": {
     "status": 200,
     "shape": {
       "acknowledged": "boolean",

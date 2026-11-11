@@ -28,7 +28,7 @@ test.describe('AI-use acknowledgement', () => {
   };
 
   const removeAll = async page => {
-    const removed = await page.request.delete('/api/admin/ai-acknowledgements');
+    const removed = await page.request.delete('/api/admin/eu-ai-act/acknowledgements');
     expect(removed.status()).toBe(204);
   };
 
@@ -112,9 +112,11 @@ test.describe('AI-use acknowledgement', () => {
   test('Request again asks everyone once more; Remove all does too; the CSV lists the user', async ({
     page
   }) => {
-    const notice = await (await page.request.get('/api/ai-acknowledgements/me?language=en')).json();
+    const notice = await (
+      await page.request.get('/api/eu-ai-act/acknowledgements/me?language=en')
+    ).json();
     expect(notice.acknowledged).toBe(false);
-    const confirmed = await page.request.post('/api/ai-acknowledgements/me', {
+    const confirmed = await page.request.post('/api/eu-ai-act/acknowledgements/me', {
       data: {
         version: notice.requiredVersion,
         textHash: notice.textHash,
@@ -125,19 +127,21 @@ test.describe('AI-use acknowledgement', () => {
     expect((await chatPost(page)).status()).not.toBe(428);
 
     const csv = await page.request.get(
-      '/api/admin/ai-acknowledgements/_export?status=acknowledged'
+      '/api/admin/eu-ai-act/acknowledgements/_export?status=acknowledged'
     );
     expect(csv.ok()).toBeTruthy();
     expect(await csv.text()).toContain('admin');
 
-    const again = await page.request.post('/api/admin/ai-acknowledgements/_request-again');
+    const again = await page.request.post('/api/admin/eu-ai-act/acknowledgements/_request-again');
     expect(again.ok()).toBeTruthy();
     expect((await again.json()).requiredVersion).toBe(notice.requiredVersion + 1);
     expect((await chatPost(page)).status()).toBe(428);
 
     // Confirm the new version, then remove every confirmation.
-    const next = await (await page.request.get('/api/ai-acknowledgements/me?language=en')).json();
-    await page.request.post('/api/ai-acknowledgements/me', {
+    const next = await (
+      await page.request.get('/api/eu-ai-act/acknowledgements/me?language=en')
+    ).json();
+    await page.request.post('/api/eu-ai-act/acknowledgements/me', {
       data: { version: next.requiredVersion, textHash: next.textHash, language: next.language }
     });
     expect((await chatPost(page)).status()).not.toBe(428);

@@ -80,7 +80,7 @@ export function PlatformConfigProvider({ children }) {
         aiDisclosure: platformCfg.aiDisclosure,
 
         // AI-use acknowledgement (#3326): only the switches. The notice itself is
-        // per user and language, from /api/ai-acknowledgements/me.
+        // per user and language, from /api/eu-ai-act/acknowledgements/me.
         aiAcknowledgement: platformCfg.aiAcknowledgement,
 
         // Provenance records (#3327): retention, store switch and who may call the lookup.

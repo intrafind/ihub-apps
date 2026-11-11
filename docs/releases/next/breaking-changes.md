@@ -874,5 +874,5 @@ affected.
 To roll it out gradually, set `aiAcknowledgement.enabled` to `false` (Admin → Advanced → AI acknowledgement) or
 `aiAcknowledgement.enforce` to `false` (the dialog then only asks) before upgrading. Custom clients that call the
 chat endpoint themselves with a user session must handle the `428` (confirm through
-`POST /api/ai-acknowledgements/me`, then retry).
+`POST /api/eu-ai-act/acknowledgements/me`, then retry).
 

@@ -106,13 +106,13 @@ that people were told, not a legal opinion: the wording is yours.
 - **Audit retention.** For known users the durable evidence is `users.json`. For guests it is only the audit
   log, which expires after `audit.retentionDays` (365 by default; forever when `audit.cleanupEnabled` is `false`).
 - **Admin actions** (Admin → Users, **AI acknowledgements** menu and the **AI acknowledgement** column and
-  filter): `POST /api/admin/ai-acknowledgements/_request-again`,
-  `DELETE /api/admin/auth/users/{userId}/ai-acknowledgements`, `DELETE /api/admin/ai-acknowledgements`,
-  `GET /api/admin/ai-acknowledgements/_export?status=acknowledged|pending` (CSV with `userId, username, name,
+  filter): `POST /api/admin/eu-ai-act/acknowledgements/_request-again`,
+  `DELETE /api/admin/eu-ai-act/users/{userId}/acknowledgements`, `DELETE /api/admin/eu-ai-act/acknowledgements`,
+  `GET /api/admin/eu-ai-act/acknowledgements/_export?status=acknowledged|pending` (CSV with `userId, username, name,
   authMethods, active, status, version, acknowledgedAt, textHash, requiredVersion`; no email; the file holds
   personal data). The list itself is `GET /api/admin/auth/users`.
-- **User API.** `GET /api/ai-acknowledgements/me?language=de` returns the notice, its hash and whether the
-  caller confirmed (never cached); `POST /api/ai-acknowledgements/me` confirms the version and hash that were
+- **User API.** `GET /api/eu-ai-act/acknowledgements/me?language=de` returns the notice, its hash and whether the
+  caller confirmed (never cached); `POST /api/eu-ai-act/acknowledgements/me` confirms the version and hash that were
   shown (`409` when the text or the version changed meanwhile). `policyUrl` is always absolute (a `/path` is
   resolved against the public address, base path included, so it opens from the extension too) and `appUrl`
   is the public address of iHub.

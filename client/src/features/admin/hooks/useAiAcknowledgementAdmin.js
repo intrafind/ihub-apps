@@ -107,7 +107,10 @@ export function useAiAcknowledgementAdmin({ onChanged } = {}) {
       confirmLabel: t('admin.users.aiAcknowledgement.requestAgainConfirm', 'Ask everyone again'),
       onConfirm: () =>
         run(
-          () => makeAdminApiCall('/admin/ai-acknowledgements/_request-again', { method: 'POST' }),
+          () =>
+            makeAdminApiCall('/admin/eu-ai-act/acknowledgements/_request-again', {
+              method: 'POST'
+            }),
           result =>
             t(
               'admin.users.aiAcknowledgement.requestAgainDone',
@@ -135,7 +138,7 @@ export function useAiAcknowledgementAdmin({ onChanged } = {}) {
           run(
             () =>
               makeAdminApiCall(
-                `/admin/auth/users/${encodeURIComponent(user.id)}/ai-acknowledgements`,
+                `/admin/eu-ai-act/users/${encodeURIComponent(user.id)}/acknowledgements`,
                 { method: 'DELETE' }
               ),
             () => t('admin.users.aiAcknowledgement.removeOneDone', 'Confirmation removed.'),
@@ -159,7 +162,7 @@ export function useAiAcknowledgementAdmin({ onChanged } = {}) {
         danger: true,
         onConfirm: () =>
           run(
-            () => makeAdminApiCall('/admin/ai-acknowledgements', { method: 'DELETE' }),
+            () => makeAdminApiCall('/admin/eu-ai-act/acknowledgements', { method: 'DELETE' }),
             () => t('admin.users.aiAcknowledgement.removeAllDone', 'All confirmations removed.'),
             t('admin.users.aiAcknowledgement.removeFailed', 'Could not remove the confirmation')
           )
@@ -173,9 +176,12 @@ export function useAiAcknowledgementAdmin({ onChanged } = {}) {
       setBusy(true);
       try {
         const query = status ? `?status=${encodeURIComponent(status)}` : '';
-        const response = await makeAdminApiCall(`/admin/ai-acknowledgements/_export${query}`, {
-          responseType: 'blob'
-        });
+        const response = await makeAdminApiCall(
+          `/admin/eu-ai-act/acknowledgements/_export${query}`,
+          {
+            responseType: 'blob'
+          }
+        );
         const blob = new Blob([response.data], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const link = document.createElement('a');

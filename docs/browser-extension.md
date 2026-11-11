@@ -390,7 +390,7 @@ open, the message is not sent on its own after confirming: the draft stays and t
 and send again. The confirmation is recorded with `client: extension` and counts in every other client.
 
 The packaged extension reaches the server through its host permissions, so no CORS entry is needed for
-`/api/ai-acknowledgements`; an unpacked development build needs its origin in `cors.origin` like for the
+`/api/eu-ai-act/acknowledgements`; an unpacked development build needs its origin in `cors.origin` like for the
 chat endpoint.
 
 ---
