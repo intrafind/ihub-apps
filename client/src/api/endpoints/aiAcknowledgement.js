@@ -13,7 +13,13 @@ import { handleApiResponse } from '../utils/requestHandler';
  */
 export const fetchMyAiAcknowledgement = async ({ language } = {}) =>
   handleApiResponse(
-    () => apiClient.get('/ai-acknowledgements/me', { params: language ? { language } : {} }),
+    () =>
+      apiClient.get('/ai-acknowledgements/me', {
+        params: language ? { language } : {},
+        // A 401 here (anonymous access is off and nobody is signed in, a public share link for
+        // one) only means "nothing to ask": it must not be read as an expired session.
+        _suppressAuthExpired: true
+      }),
     null,
     null,
     false

@@ -117,11 +117,18 @@ export function latestEntry(user) {
  * Whether a user's acknowledgement counts for the current policy version.
  *
  * @param {Object} user - users.json record
- * @param {{requiredVersion: number}} settings
+ * @param {{requiredVersion: number, resetAt?: string|null}} settings
  * @returns {boolean}
  */
 export function isAcknowledged(user, settings) {
-  return entriesOf(user).some(entry => entry.version >= settings.requiredVersion);
+  const reset = settings.resetAt ? Date.parse(settings.resetAt) : NaN;
+  return entriesOf(user).some(
+    entry =>
+      entry.version >= settings.requiredVersion &&
+      // "Remove all" sets `resetAt`. An entry from before it does not count even if a stale
+      // whole-file write of users.json brought it back.
+      (!Number.isFinite(reset) || !(Date.parse(entry.acknowledgedAt) < reset))
+  );
 }
 
 /**

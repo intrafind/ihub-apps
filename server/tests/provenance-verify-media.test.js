@@ -27,8 +27,8 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: { getPlatform: () => platform }
 }));
 const { ServiceError } = await import('../utils/ServiceError.js');
-// The route guards with `authenticatedOnly` (the shipped default has `anonymousAuth` on,
-// where `authRequired` would let a guest through); both stand-ins accept a signed-in caller.
+// Signed-in callers carry `x-test-user`; everyone else is turned away. The route uses
+// `authenticatedOnly`; `authRequired` stays exported for anything else that imports it.
 const signedInOnly = (req, res, next) =>
   req.headers['x-test-user']
     ? next()
