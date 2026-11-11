@@ -183,6 +183,10 @@ Setting `enabled` to `false` will completely remove the footer from all pages.
 
 ### Disclaimer Configuration
 
+The AI notice in the empty chat (`aiDisclosure.firstTurnNotice` in `platform.json`, see
+[EU AI Act](ai-act.md)) is separate from this disclaimer: it is shown before the first message and then
+disappears, while the disclaimer stays under the message box.
+
 The `disclaimer` section defines the legal disclaimer shown to users:
 
 ```json

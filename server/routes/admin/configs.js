@@ -318,6 +318,9 @@ export default function registerAdminConfigRoutes(app) {
           : existingConfig.defaultLanguage,
       // First-run onboarding toggle (Admin → Advanced); same reason as above.
       setup: newConfig.setup !== undefined ? newConfig.setup : existingConfig.setup,
+      // First-turn AI notice (Admin → Advanced); same reason as above.
+      aiDisclosure:
+        newConfig.aiDisclosure !== undefined ? newConfig.aiDisclosure : existingConfig.aiDisclosure,
       auth: newConfig.auth || existingConfig.auth,
       anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
       proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,

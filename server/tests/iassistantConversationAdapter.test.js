@@ -15,6 +15,7 @@
  * the conversation is created.
  */
 
+import { AI_DISCLOSURE_RULE } from '../services/provenance/guardrail.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import adapter from '../adapters/iassistant-conversation.js';
@@ -57,7 +58,10 @@ test('resolveConfig substitutes variables in systemPromptPreamble', () => {
     optionsWith({ systemPromptPreamble: 'Address the user as {{user_name}}.' })
   );
 
-  assert.equal(config.systemPromptPreamble, 'Address the user as Tim Vossen.');
+  assert.equal(
+    config.systemPromptPreamble,
+    `Address the user as Tim Vossen.\n\n${AI_DISCLOSURE_RULE}`
+  );
 });
 
 test('static text without placeholders passes through unchanged', () => {
@@ -111,7 +115,33 @@ test('createCompletionRequest sends the substituted extra_context to the convers
       captured.responseGeneration.extra_context,
       'You are talking to Tim Vossen (tim.vossen@intrafind.com).'
     );
-    assert.equal(captured.responseGeneration.system_prompt_preamble, 'Greet Tim Vossen once.');
+    assert.equal(
+      captured.responseGeneration.system_prompt_preamble,
+      `Greet Tim Vossen once.\n\n${AI_DISCLOSURE_RULE}`
+    );
+  } finally {
+    conversationApiService.createConversation = originalCreate;
+  }
+});
+
+test('the AI disclosure rule is sent as the preamble even when none is configured', async () => {
+  const originalCreate = conversationApiService.createConversation;
+  let captured = null;
+  conversationApiService.createConversation = async params => {
+    captured = params;
+    return { id: 'conv-test-2', title: null };
+  };
+  try {
+    await adapter
+      .createCompletionRequest(
+        model,
+        [{ role: 'user', content: 'Are you a human?' }],
+        null,
+        optionsWith({})
+      )
+      .catch(() => {});
+    assert.ok(captured, 'createConversation was not called');
+    assert.equal(captured.responseGeneration.system_prompt_preamble, AI_DISCLOSURE_RULE);
   } finally {
     conversationApiService.createConversation = originalCreate;
   }
