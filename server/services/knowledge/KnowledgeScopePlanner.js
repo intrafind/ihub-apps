@@ -53,7 +53,7 @@
  *
  * @module services/knowledge/KnowledgeScopePlanner
  */
-import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { estimateTokens, estimateTokensMemo } from '../../../shared/tokenEstimator.js';
 import { modelSupportsTools } from '../../../shared/modelCapabilities.js';
 import { selectContent } from '../../sources/documentRetrieval.js';
 import logger from '../../utils/logger.js';
@@ -682,13 +682,13 @@ function documentListLines(project, budgetTokens = MAX_LIST_TOKENS) {
   ];
   const cap = Math.min(MAX_LIST_TOKENS, Math.max(0, budgetTokens));
   // The frame of a cut list is what the documents share the room with.
-  const room = cap - estimateTokens(frame(0, true).join('\n'));
+  const room = cap - estimateTokensMemo(frame(0, true).join('\n'));
   const listed = [];
   let used = 0;
   for (const doc of ordered) {
     if (listed.length >= MAX_LISTED_DOCUMENTS) break;
     const line = listLine(doc);
-    const tokens = estimateTokens(line);
+    const tokens = estimateTokensMemo(line);
     if (used + tokens > room) break;
     listed.push(line);
     used += tokens;
@@ -696,7 +696,7 @@ function documentListLines(project, budgetTokens = MAX_LIST_TOKENS) {
   const left = ordered.length - listed.length;
   const [open, introLine, ...rest] = frame(listed.length, left > 0);
   const lines = [open, introLine, ...listed, ...rest];
-  return { lines, tokens: estimateTokens(lines.join('\n')) };
+  return { lines, tokens: estimateTokensMemo(lines.join('\n')) };
 }
 
 /**

@@ -569,3 +569,21 @@ instead of opening a new one. Only live chat answers handled this reliably.
 - Links to another host or port open in a new tab and cannot reach the iHub window.
 - Links within iHub, anchors (`#section`) and `mailto:` links stay in the current tab.
 - The same holds for links an answer writes as raw HTML.
+
+## Server: Token Estimates Count With the Real Tokenizer
+
+The server's token estimates were one token per four characters, although they are meant to use the
+`o200k_base` tokenizer: the tokenizer package was installed for the browser only, and the server
+fell back to the rough figure without a message. The package is now a dependency of the server, so
+the figures behind the agent loop and context compaction, the skill catalog and skill-body budgets,
+project size estimates, tool search and knowledge retrieval are real token counts.
+
+- **Numbers move, in both directions.** English prose comes out about 5 to 14 percent lower than
+  before, and a German sentence of 101 characters counted 26 tokens before and 18 now. JSON counts
+  about 11 percent higher, and Chinese or Japanese text two to three times higher. Limits written
+  in tokens, such as `skills.maxCatalogTokens` and `skills.maxSkillBodyTokens`, now apply to the
+  real counts: they fit more English or German prose and less JSON or Chinese and Japanese text.
+- **Cost.** Counting is exact but not free: about 7 ms for 100 KB of prose, 1 MB of prose holds the
+  server for about 0.1 to 0.2 s. Texts above 256 KB (a very large attachment) are therefore counted
+  from samples spread over the text, within about 7 percent of the exact count, in about 5 ms.
+- Installations that run from a copy without the package keep the old behaviour.

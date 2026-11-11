@@ -35,7 +35,7 @@
  * @module services/tools/toolSearch
  */
 
-import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { estimateTokensMemo } from '../../../shared/tokenEstimator.js';
 import { getLocalizedString } from '../../utils/localize.js';
 import { searchCatalog } from '../../utils/catalogSearch.js';
 import { isInteractiveTool } from '../../utils/toolSelection.js';
@@ -124,7 +124,7 @@ export function maxToolTokensFor(app, model) {
  * @returns {number}
  */
 export function toolDefinitionTokens(tool) {
-  return estimateTokens(
+  return estimateTokensMemo(
     JSON.stringify({ name: tool.id, description: tool.description, parameters: tool.parameters })
   );
 }
@@ -277,7 +277,7 @@ export function buildToolIndex(deferred, { maxTokens = MAX_INDEX_TOKENS } = {}) 
         )
         .join('\n')}\n  </integration>`
   );
-  if (estimateTokens(withDescriptions) <= maxTokens) {
+  if (estimateTokensMemo(withDescriptions) <= maxTokens) {
     return { text: withDescriptions, level: 'descriptions' };
   }
 
@@ -285,7 +285,7 @@ export function buildToolIndex(deferred, { maxTokens = MAX_INDEX_TOKENS } = {}) 
     INDEX_NAMES_NOTE,
     group => ` tools="${escapeXml(group.tools.map(tool => tool.id).join(', '))}"/>`
   );
-  if (estimateTokens(names) <= maxTokens) return { text: names, level: 'names' };
+  if (estimateTokensMemo(names) <= maxTokens) return { text: names, level: 'names' };
 
   return {
     text: render(INDEX_COUNTS_NOTE, group => ` tools="${group.tools.length}"/>`),
@@ -468,7 +468,7 @@ export async function prepareToolSearch({ tools, app, model, features, language,
   const index = buildToolIndex(deferred);
   // Searching must be cheaper than carrying the tools.
   const saved = deferred.reduce((sum, tool) => sum + toolDefinitionTokens(tool), 0);
-  if (saved <= estimateTokens(index.text) + searchToolTokens) return unchanged;
+  if (saved <= estimateTokensMemo(index.text) + searchToolTokens) return unchanged;
 
   return {
     tools: [...loaded, searchTool],
