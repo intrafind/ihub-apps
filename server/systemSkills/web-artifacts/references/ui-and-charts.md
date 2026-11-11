@@ -19,14 +19,22 @@
         --primary: var(--brand-primary, #1e3a8a);
         --accent: var(--brand-accent, #0f766e);
       }
+      /* Dark: follow iHub's switch (data-theme), else the OS setting. */
       @media (prefers-color-scheme: dark) {
-        :root {
+        :root:not([data-theme='light']) {
           --bg: #0b0f19;
           --surface: #111827;
           --border: #1e293b;
           --text: #f1f5f9;
           --muted: #94a3b8;
         }
+      }
+      :root[data-theme='dark'] {
+        --bg: #0b0f19;
+        --surface: #111827;
+        --border: #1e293b;
+        --text: #f1f5f9;
+        --muted: #94a3b8;
       }
       * {
         box-sizing: border-box;
@@ -75,7 +83,7 @@
 
 ## 2. Interactive SVG charts (zero dependencies)
 
-Instead of loading heavy chart libraries from CDNs that may be blocked by corporate proxies, render responsive SVG charts directly from state:
+For a handful of bars, lines or a donut, render responsive SVG charts directly from state rather than loading a chart library (it also works where a corporate proxy blocks the CDN):
 
 - Map data values to SVG coordinates inside a fixed `viewBox="0 0 640 240"`.
 - Add `<g>` hover targets or `<title>` tooltips on bars and points.

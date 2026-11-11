@@ -170,14 +170,55 @@ takes effect without a restart:
 | `maxPerBatch` | `8`        | Artifacts one producer records in one go; `<= 0` uncapped     |
 | `maxZipFiles` | `200`      | Files in one ZIP archive (download or `create_zip`); `<= 0` uncapped |
 | `maxZipBytes` | `104857600` | Content bytes in one ZIP archive, before compression; `<= 0` uncapped |
+| `scriptHosts` | `["cdnjs.cloudflare.com", "cdn.jsdelivr.net", "unpkg.com"]` | CDN hosts an HTML artifact's preview may load scripts and stylesheets from; `[]` keeps the preview offline. See [HTML previews](#html-previews) |
 
 Migration V106 seeds the block into existing installations at its defaults, so
 an upgrade changes nothing on its own. Migration V190 adds the two ZIP limits
-the same way.
+the same way. Migration V245 adds `scriptHosts` with the three default
+CDNs, so after the upgrade HTML artifacts can load libraries from them; set
+`[]` to keep the preview fully offline, as it was before.
 
 The settings live here rather than under `chats` precisely because a workflow
 reading its own limits must not have to reach into the chat settings to find
 them.
+
+## HTML previews
+
+An HTML artifact (from the `web-artifacts` or `dashboard` system skill) is
+model-written markup with script in it. The chat's Artifacts panel and the
+[share embed page](chat-sharing.md) run it in
+`<iframe sandbox="allow-scripts" srcdoc="…">` — an opaque origin with no
+access to iHub, its cookies or storage — under a Content Security Policy built
+in `shared/artifactPreview.js`:
+
+| Allowed                                                        | Blocked                                                    |
+| -------------------------------------------------------------- | ---------------------------------------------------------- |
+| Inline `<script>` and `<style>`, `eval` / `new Function`        | `fetch`, XHR, WebSocket, form posts                        |
+| Scripts and stylesheets over `https` from `artifacts.scriptHosts` | Every other host, and `http:`                              |
+| `data:` / `blob:` images and media, `data:` fonts               | Remote images and fonts, CSS `url()` / `@import` elsewhere |
+
+`scriptHosts` takes bare host names (`cdn.example.com`, or
+`https://cdn.example.com`); a wildcard, path, port or `http:` entry is dropped.
+An internal mirror of a public CDN works too: list its host. The names reach the
+browser through `GET /api/configs/platform` (`artifacts.scriptHosts`), because
+it builds the policy.
+
+**Theme.** `prefers-color-scheme` inside the frame follows the operating
+system, not iHub's own light/dark switch. The preview therefore sets
+`data-theme="light|dark"` on the artifact's `<html>` before its markup is
+parsed, and the skills style `:root[data-theme="dark"]` alongside the media
+query. A file opened on its own falls back to the media query.
+
+**Checks before the user sees it.** `create_web_artifact` returns warnings —
+and the model fixes and resends the file — for URLs the preview will not load
+(given this installation's `scriptHosts`), inline scripts that do not parse
+(compiled with `vm.Script`, never run), and markup that was cut off mid-file
+(an unclosed `<script>` or `<style>`, or no `</body>`/`</html>`), besides
+relative files, dead links and unguarded storage.
+
+Known limit: CSP does not govern navigation of the frame itself, so a script
+can still navigate the frame to another address. The sandbox stops top-level
+navigation, popups and any access to the parent.
 
 ## Authorization
 
