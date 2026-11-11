@@ -33,7 +33,7 @@ test.describe('AI-use acknowledgement', () => {
 
   // A chat POST the guard sees before it looks at the body.
   const chatPost = page =>
-    page.request.post('/api/apps/chat/chat-e2e-ack', { data: { messages: [] } });
+    page.request.post('/api/apps/chat/chat/chat-e2e-ack', { data: { messages: [] } });
 
   test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => {
@@ -105,7 +105,7 @@ test.describe('AI-use acknowledgement', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toHaveCount(0);
     await expect(input(page)).toHaveValue('Not yet');
-    await expect(page.getByTestId('ai-ack-note')).toBeVisible();
+    await expect(page.getByTestId('ai-ack-note').filter({ visible: true }).first()).toBeVisible();
   });
 
   test('Request again asks everyone once more; Remove all does too; the CSV lists the user', async ({
