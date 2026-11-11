@@ -326,6 +326,8 @@ export const CHAT_SESSION_ERROR_CODES = Object.freeze({
   APP_NOT_FOUND: 404,
   CHAT_STORAGE_UNAVAILABLE: 503,
   GUEST_COOKIE_MISSING: 404,
+  // The AI-use acknowledgement (#3326) is missing or outdated: confirm, then retry.
+  AI_ACKNOWLEDGEMENT_REQUIRED: 428,
   INVALID_APP: 400,
   PREFERENCES_UNAVAILABLE: 503,
   FEATURE_DISABLED: 403

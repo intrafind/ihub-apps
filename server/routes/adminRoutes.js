@@ -61,9 +61,11 @@ import registerAdminDocsRoutes from './admin/docs.js';
 import registerAdminChangesRoutes from './admin/changes.js';
 import registerAdminOverviewRoutes from './admin/overview.js';
 import registerAdminSystemRoutes from './admin/system.js';
+import registerAdminAiAcknowledgementRoutes from './admin/aiAcknowledgements.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
+  registerAdminAiAcknowledgementRoutes(app);
   registerAdminLdapTestRoutes(app);
   registerAdminOAuthRoutes(app);
   registerAdminOAuthCimdRoutes(app);

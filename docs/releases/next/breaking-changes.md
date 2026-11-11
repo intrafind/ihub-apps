@@ -861,3 +861,15 @@ apply to new and existing links at once.
 outbound calls (web tools, MCP servers, OpenAPI tools) reach that host when it resolves to an
 internal address, and short links created before 5.5.32 could name any host.
 
+## Users Are Asked to Confirm the Use of AI Once
+
+The AI-use acknowledgement is on and enforced by default. After the upgrade every user, anonymous visitors
+included, sees a confirmation dialog before their next chat message, and until they confirm the server answers
+`428 AI_ACKNOWLEDGEMENT_REQUIRED` for the chat message, starting a workflow or its chat step, and starting an
+agent run. OAuth clients, personal API keys, MCP, A2A and the inference API are not affected.
+
+To roll it out gradually, set `aiAcknowledgement.enabled` to `false` (Admin → Advanced → AI acknowledgement) or
+`aiAcknowledgement.enforce` to `false` (the dialog then only asks) before upgrading. Custom clients that call the
+chat endpoint themselves with a user session must handle the `428` (confirm through
+`POST /api/ai-acknowledgements/me`, then retry).
+

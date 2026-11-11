@@ -906,6 +906,11 @@ export default function registerDataRoutes(app) {
       // First-turn AI notice (Art. 50(1)): non-secret, resolved on the client by
       // shared/aiDisclosure.js against the app's own override.
       aiDisclosure: aiDisclosureClientConfig(platform.aiDisclosure),
+      // AI-use acknowledgement (#3326): the switches only; the notice is per user.
+      aiAcknowledgement: {
+        enabled: platform.aiAcknowledgement?.enabled !== false,
+        enforce: platform.aiAcknowledgement?.enforce !== false
+      },
       speech: platform.speech
         ? {
             defaultService: platform.speech.defaultService,

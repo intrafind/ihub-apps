@@ -24,6 +24,7 @@ import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 import { splitFilesForWire } from '../utils/chatFileUpload';
 import { refreshMyUsage } from '../../../shared/hooks/useMyUsage';
+import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 
 /**
  * Refusals of the chat request the user can do something about, by the code
@@ -108,9 +109,17 @@ function useAppChat({
   persistConversationId = true,
   ephemeral = false,
   hydrates = true,
-  toolApprovals = false
+  toolApprovals = false,
+  onSendRefused
 }) {
   const { t } = useTranslation();
+  // The AI-use acknowledgement gate; null outside its provider (then the server decides).
+  const acknowledgement = useAiAcknowledgement();
+  // The last send, to roll back and retry once when the server answers 428.
+  const lastSendRef = useRef(null);
+  const sendMessageRef = useRef(null);
+  const onSendRefusedRef = useRef(onSendRefused);
+  onSendRefusedRef.current = onSendRefused;
   // Use the chatId directly instead of storing it in a ref
   // This allows the useChatMessages hook to properly react to chatId changes.
   //
@@ -344,6 +353,28 @@ function useAppChat({
       // The server has the turn — the chat is in the store from here on.
       onMessageAcceptedRef.current?.(chatId);
     } catch (error) {
+      if (error?.code === 'AI_ACKNOWLEDGEMENT_REQUIRED' && acknowledgement && lastSendRef.current) {
+        // Not an error to show: take the optimistic turn back, ask the user to
+        // confirm the AI-use notice, then send the same message once more.
+        const { args, userMessageId, retried } = lastSendRef.current;
+        detachEventSourceRef.current?.();
+        setProcessing(false);
+        pendingMessageDataRef.current = null;
+        if (userMessageId) removeMessage(userMessageId);
+        if (lastMessageIdRef.current) removeMessage(lastMessageIdRef.current);
+        if (!retried) {
+          void acknowledgement.handleAcknowledgementRequired().then(ok => {
+            if (ok) {
+              sendMessageRef.current?.(args, { retried: true });
+            } else {
+              onSendRefusedRef.current?.(args);
+            }
+          });
+        } else {
+          onSendRefusedRef.current?.(args);
+        }
+        return;
+      }
       if (lastMessageIdRef.current && !isCancellingRef.current) {
         // Only show error if this wasn't a manual cancellation
         let errorMessage;
@@ -385,7 +416,15 @@ function useAppChat({
       setProcessing(false);
       reopenToolApproval(error?.code);
     }
-  }, [t, messagesRef, updateAssistantMessage, toolApprovals, reopenToolApproval]);
+  }, [
+    t,
+    messagesRef,
+    updateAssistantMessage,
+    toolApprovals,
+    reopenToolApproval,
+    acknowledgement,
+    removeMessage
+  ]);
 
   /**
    * Resolve the assistant message a run belongs to. `run/started` binds the
@@ -654,14 +693,15 @@ function useAppChat({
    * @param {string[]} [requestedSkills] - Skills to pre-activate for this turn (slash command)
    */
   const sendMessage = useCallback(
-    ({
-      displayMessage,
-      apiMessage,
-      params,
-      sendChatHistory = true,
-      messageMetadata = null,
-      requestedSkills = null
-    }) => {
+    (args, { retried = false } = {}) => {
+      const {
+        displayMessage,
+        apiMessage,
+        params,
+        sendChatHistory = true,
+        messageMetadata = null,
+        requestedSkills = null
+      } = args;
       try {
         // Reset cancellation flag when starting a new message
         isCancellingRef.current = false;
@@ -683,7 +723,7 @@ function useAppChat({
         const contentToAdd =
           typeof displayMessage === 'string' ? displayMessage : displayMessage?.content || '';
 
-        addUserMessage(contentToAdd, {
+        const userMessageId = addUserMessage(contentToAdd, {
           ...displayMessage?.meta,
           // The exchange id is what the store files this turn under
           // (`clientMessageId`), so it is the only handle an edit or a
@@ -695,6 +735,7 @@ function useAppChat({
           audioData: apiMessage.audioData
         });
         addAssistantMessage(exchangeId);
+        lastSendRef.current = { args, userMessageId, retried };
 
         // Documents the server already stores (pre-uploaded from the composer,
         // or kept from an earlier turn) travel as ids; the rest inline.
@@ -755,6 +796,8 @@ function useAppChat({
       chatId
     ]
   );
+
+  sendMessageRef.current = sendMessage;
 
   /**
    * Prepare content for resending a previous message.
