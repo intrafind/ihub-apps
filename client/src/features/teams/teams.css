@@ -42,6 +42,23 @@
   --teams-border: #ffffff;
 }
 
+/*
+ * The AI-use dialog is rendered by its provider outside `.teams-container`, so
+ * the overrides below do not reach it. In the high-contrast theme give it an
+ * outline and visible focus without relying on fills.
+ */
+[data-teams-theme='contrast'] [role='dialog'][aria-modal='true'] {
+  outline: 2px solid var(--teams-border);
+  outline-offset: -2px;
+}
+
+[data-teams-theme='contrast']
+  [role='dialog'][aria-modal='true']
+  :is(button, a, [tabindex='0']):focus-visible {
+  outline: 2px solid var(--teams-accent);
+  outline-offset: 2px;
+}
+
 /* Teams-specific component overrides */
 .teams-container .bg-white {
   background-color: var(--teams-bg);
