@@ -83,7 +83,6 @@ const renderPage = () =>
     </MemoryRouter>
   );
 
-const field = name => screen.getByLabelText(name);
 const saveButton = () => screen.getByRole('button', { name: 'admin.models.edit.saveChanges' });
 
 /** The body of the PUT the page sent when saved. */
