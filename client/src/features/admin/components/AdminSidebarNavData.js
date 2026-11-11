@@ -14,6 +14,7 @@ import {
   CodeBracketIcon,
   UsersIcon,
   UserGroupIcon,
+  ScaleIcon,
   ShieldCheckIcon,
   KeyIcon,
   LinkIcon,
@@ -348,6 +349,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           label: t('admin.nav.security', 'Security'),
           href: '/admin/security',
           icon: LockClosedIcon,
+          visible: showAdminPage('system')
+        },
+        {
+          key: 'eu-ai-act',
+          label: t('admin.nav.euAiAct', 'EU AI Act'),
+          href: '/admin/eu-ai-act',
+          icon: ScaleIcon,
           visible: showAdminPage('system')
         },
         {

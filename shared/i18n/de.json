@@ -174,7 +174,8 @@
     "expandArray": "Liste aufklappen ({{count}} Einträge)",
     "expandObject": "Objekt aufklappen ({{count}} Felder)",
     "details": "Details",
-    "tryAgain": "Erneut versuchen"
+    "tryAgain": "Erneut versuchen",
+    "done": "Fertig"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
@@ -2898,7 +2899,8 @@
       "backup": "Backup & Wiederherstellung",
       "updates": "Updates",
       "advanced": "Erweitert",
-      "docs": "Dokumentation"
+      "docs": "Dokumentation",
+      "euAiAct": "EU-KI-Verordnung"
     },
     "mcp": {
       "common": {
@@ -6547,6 +6549,232 @@
       "saved": "KI-Bestätigung gespeichert",
       "saveError": "Die KI-Bestätigung konnte nicht gespeichert werden",
       "loadError": "Die Einstellungen der KI-Bestätigung konnten nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen."
+    },
+    "euAiAct": {
+      "verify": {
+        "rowRecord": "Ausgabe-Nachweis (Hash)",
+        "rowWatermark": "Wasserzeichen-Erkennung",
+        "rowC2pa": "Inhaltsnachweise (C2PA)",
+        "rowSynthid": "SynthID",
+        "found": "Gefunden",
+        "recordFound": "Diese Installation hat genau diese Ausgabe{{when}}{{model}} erzeugt.",
+        "on": "am",
+        "notFound": "Nicht gefunden",
+        "recordNotFound": "Kein Nachweis zu genau diesem Inhalt. Er kann bearbeitet worden sein, aus einem anderen System stammen oder älter als die Aufbewahrungsdauer sein. Das ist kein Beweis für seine Herkunft.",
+        "detected": "Erkannt",
+        "wmDetected": "Wasserzeichen erkannt. Verfahren: iHub-Textwasserzeichen. Schlüssel-ID: {{keyId}}. p-Wert {{p}}, {{n}} Tokens bewertet.",
+        "notDetected": "Nicht erkannt",
+        "wmNotDetected": "Mit den {{k}} Schlüsseln dieser Installation wurde kein Wasserzeichen erkannt. Das zeigt nicht, dass der Text nicht KI-erzeugt ist: Er kann bearbeitet worden sein, von einem anderen Modell stammen oder ohne Wasserzeichen erzeugt worden sein.",
+        "tooShort": "Zu kurz für eine Aussage",
+        "wmTooShort": "Nur {{n}} Tokens konnten bewertet werden, etwa 200 werden benötigt. Keine Aussage möglich.",
+        "couldNot": "Konnte nicht geprüft werden",
+        "wmUnavailable": "Der Detektor ist nicht erreichbar. Keine Aussage möglich.",
+        "notChecked": "Nicht geprüft",
+        "wmNotConfigured": "Es ist kein Detektor konfiguriert.",
+        "wmSkipped": "Das Wasserzeichen wird geprüft, wenn kein Nachweis gefunden wird und Sie angemeldet sind.",
+        "present": "vorhanden",
+        "c2paPresent": "Inhaltsnachweise vorhanden{{issuer}}{{source}}. Signatur {{valid}}.",
+        "validTrust": "gültig (Vertrauen nicht bewertet)",
+        "notValid": "konnte nicht validiert werden",
+        "c2paAbsent": "Keine Inhaltsnachweise gefunden. Viele Werkzeuge entfernen sie, daher sagt das nichts über die Herkunft aus.",
+        "c2paUnsupported": "Dieses Dateiformat wird nicht auf Inhaltsnachweise geprüft.",
+        "c2paSkipped": "Das Lesen von Inhaltsnachweisen ist ausgeschaltet.",
+        "c2paUnreadable": "Die Inhaltsnachweise konnten nicht gelesen werden. Keine Aussage möglich.",
+        "declared": "angegeben, nicht erkennbar",
+        "synthidDeclared": "Der Anbieter gibt an, SynthID einzubetten. SynthID lässt sich hier nicht erkennen.",
+        "declaredAs": "angegeben als {{type}}",
+        "tooLarge": "Die Datei ist größer als {{mb}} MB.",
+        "textTooLong": "Der Text ist zu lang (höchstens {{max}} Zeichen).",
+        "headlineMatch": "Treffer gefunden: siehe Details.",
+        "headlineNone": "Kein Treffer. Dies ist kein Beweis, dass der Inhalt nicht KI-erzeugt ist.",
+        "headlineInconclusive": "Keine Aussage möglich.",
+        "title": "Prüfung",
+        "description": "Prüfen Sie, ob ein Text, ein Bild oder eine Audiodatei aus dieser Installation stammt und welche Kennzeichen sie trägt. Der Inhalt wird gehasht und nicht gespeichert.",
+        "kind": "Was möchten Sie prüfen?",
+        "modeText": "Text",
+        "modeFile": "Bild oder Audiodatei",
+        "textLabel": "Zu prüfender Text",
+        "textHelp": "Texte unter etwa 200 Tokens kann die Wasserzeichen-Prüfung nicht beurteilen.",
+        "fileLabel": "Zu prüfende Datei",
+        "removeFile": "Datei entfernen",
+        "fileHelp": "Bilder und Audio bis {{mb}} MB. Die Datei wird nicht gespeichert.",
+        "checking": "Prüfe…",
+        "check": "Prüfen",
+        "needText": "Fügen Sie zuerst einen Text ein.",
+        "needFile": "Wählen Sie zuerst eine Datei."
+      },
+      "selfTest": {
+        "keysMatch": "Bestanden: Der Detektor hat den aktiven Schlüssel {{keyId}} erkannt ({{n}} Tokens bewertet).",
+        "retiredKey": "Fehlgeschlagen: Der Text passt zum ausgemusterten Schlüssel {{keyId}}. vLLM läuft noch mit dem alten Schlüssel. Aktualisieren Sie vLLM mit der aktuellen Option und führen Sie den Test erneut aus.",
+        "notFound": "Fehlgeschlagen: Im Beispieltext wurde kein Schlüssel dieser Installation gefunden. vLLM läuft wahrscheinlich mit einem anderen Schlüssel oder ohne --watermark-config. Aktualisieren Sie vLLM mit der aktuellen Option und führen Sie den Test erneut aus.",
+        "tooShort": "Nicht eindeutig: Der Beispieltext war zu kurz ({{n}} Tokens bewertet). Führen Sie den Test erneut aus.",
+        "unreachable": "Fehlgeschlagen: Der Detektor war nicht erreichbar oder hat die Anfrage abgelehnt. Details zeigt „Verbindung testen“.",
+        "notApplied": "Fehlgeschlagen: Das Modell hat das Wasserzeichen im Beispiel nicht angewendet ({{reason}}).",
+        "noKeys": "Es gibt noch keinen Wasserzeichen-Schlüssel. Erzeugen Sie zuerst einen.",
+        "never": "Noch nicht ausgeführt",
+        "run": "Selbsttest ausführen",
+        "cost": "Verbraucht etwa 400 Tokens.",
+        "running": "Beispieltext wird erzeugt und der Detektor geprüft. Das kann bis zu eine Minute dauern…",
+        "state": {
+          "passed": "Bestanden",
+          "failed": "Fehlgeschlagen",
+          "inconclusive": "Nicht eindeutig",
+          "stale": "Veraltet (Schlüssel geändert)"
+        }
+      },
+      "test": {
+        "unreachable": "Der Detektor hat nicht geantwortet ({{reason}}).",
+        "unauthorized": "Der Detektor hat die Zugangsdaten abgelehnt.",
+        "contract": "Der Detektor hat geantwortet, aber nicht im erwarteten Format.",
+        "ok": "Der Detektor hat in {{ms}} ms geantwortet.",
+        "running": "Verbindung wird getestet…"
+      },
+      "detector": {
+        "url": "Detektor-URL",
+        "notSet": "Nicht gesetzt",
+        "credential": "Zugangsdaten",
+        "credentialSet": "Gesetzt ({{ref}})",
+        "lastSelfTest": "Letzter Selbsttest",
+        "edit": "Detektor-Einstellungen bearbeiten",
+        "test": "Verbindung testen",
+        "none": "Kein Modell ist mit „iHub-Wasserzeichen“ markiert. Stellen Sie bei einem vLLM-Modell die Ausgabe-Kennzeichnung ein, um das Wasserzeichen zu nutzen.",
+        "title": "Detektoren und Selbsttest"
+      },
+      "ack": {
+        "title": "Bestätigungen",
+        "description": "Nutzende bestätigen vor ihrer ersten Nachricht eine kurze Aussage zur KI-Nutzung. Die Zahlen betreffen registrierte Nutzende; anonyme Besuchende stehen nur im Audit-Log.",
+        "openUsers": "Nutzerliste öffnen",
+        "off": "Die Bestätigung ist ausgeschaltet",
+        "acknowledged": "Bestätigt",
+        "pending": "Ausstehend",
+        "pendingBadge": "Noch nicht bestätigt",
+        "total": "Gesamt",
+        "modeEnforced": "Erzwungen, Version {{version}}.",
+        "modeAskOnly": "Nutzende werden gefragt, aber nicht blockiert (nicht erzwungen), Version {{version}}.",
+        "pendingDefinition": "Ausstehend: Nutzende unterhalb der geforderten Version, auch solche, die noch nie gefragt wurden."
+      },
+      "fix": {
+        "openAdvanced": "Einstellungen öffnen",
+        "openModel": "Modell öffnen",
+        "openKeys": "Zu den Schlüsseln",
+        "runSelfTest": "Selbsttest ausführen"
+      },
+      "keys": {
+        "nowActive": "Schlüssel {{id}} ist jetzt aktiv. {{old}} ist ausgemustert.",
+        "nowActiveFirst": "Schlüssel {{id}} ist jetzt aktiv.",
+        "revealed": "Schlüssel angezeigt. Das wurde im Audit-Log festgehalten.",
+        "deleted": "Schlüssel {{id}} gelöscht.",
+        "generate": "Schlüssel erzeugen",
+        "add": "Eigenen Schlüssel hinzufügen…",
+        "title": "Wasserzeichen-Schlüssel",
+        "description": "Schlüssel für das iHub-Textwasserzeichen von vLLM-Modellen. Genau ein Schlüssel ist aktiv; ausgemusterte Schlüssel dienen nur der Erkennung. Das Anzeigen eines Schlüssels wird im Audit-Log festgehalten.",
+        "loadError": "Die Schlüssel konnten nicht geladen werden",
+        "empty": "Noch kein Wasserzeichen-Schlüssel. Schlüssel werden nur für Modelle mit „iHub-Wasserzeichen“ gebraucht.",
+        "tableRegion": "Tabelle der Wasserzeichen-Schlüssel",
+        "caption": "Wasserzeichen-Schlüssel",
+        "colId": "Schlüssel-ID",
+        "colCreated": "Erstellt",
+        "colStatus": "Status",
+        "colActions": "Aktionen",
+        "active": "Aktiv",
+        "retired": "Ausgemustert (nur Erkennung)",
+        "revealAria": "Schlüssel {{id}} anzeigen",
+        "reveal": "Anzeigen",
+        "deleteAria": "Schlüssel {{id}} löschen",
+        "delete": "Löschen",
+        "deleteNote": "Ausgemusterte Schlüssel lassen sich löschen. Der aktive Schlüssel nicht.",
+        "backup": "Die Schlüssel liegen verschlüsselt mit contents/.encryption-key. Sichern Sie diese Datei: Ohne sie sind die gespeicherten Schlüssel nicht lesbar.",
+        "generateTitle": "Neuen Schlüssel erzeugen?",
+        "generateMessage": "Der neue Schlüssel wird aktiv. {{keyId}} wird ausgemustert und dient nur noch der Erkennung. Danach müssen Sie vLLM aktualisieren.",
+        "deleteTitle": "Ausgemusterten Schlüssel {{id}} löschen?",
+        "deleteMessage": "Mit diesem Schlüssel erzeugte Texte können von dieser Installation nicht mehr als wasserzeichenmarkiert erkannt werden. Das lässt sich nicht rückgängig machen.",
+        "deleteConfirm": "Schlüssel löschen",
+        "copied": "In die Zwischenablage kopiert",
+        "copyFailed": "Kopieren fehlgeschlagen. Der Text ist markiert: Drücken Sie Strg+C.",
+        "dialogNew": "Neuer Wasserzeichen-Schlüssel {{keyId}}",
+        "dialogReveal": "Wasserzeichen-Schlüssel {{keyId}}",
+        "callout": "Aktualisieren Sie vLLM mit diesem Schlüssel und führen Sie dann den Selbsttest aus. Das Anzeigen eines Schlüssels wird im Audit-Log festgehalten. Wer den Schlüssel kennt, kann das Wasserzeichen fälschen oder entfernen: Fügen Sie ihn nicht in Tickets oder Chats ein.",
+        "weak": "Dieser Schlüssel ist kurz oder leicht zu erraten. Ein zufällig erzeugter Schlüssel ist sicherer.",
+        "keyValue": "Schlüssel",
+        "snippet": "vLLM-Option",
+        "copySnippet": "Option kopieren",
+        "copyKey": "Schlüssel kopieren",
+        "autoHide": "Der Schlüssel wird nach {{seconds}} Sekunden wieder ausgeblendet.",
+        "hidden": "Der Schlüssel ist ausgeblendet.",
+        "revealAgain": "Erneut anzeigen",
+        "addInvalid": "Geben Sie den Schlüssel als ganze Zahl ein (nur Ziffern).",
+        "addTitle": "Vorhandenen Schlüssel hinzufügen",
+        "addValue": "Schlüssel (ganze Zahl)",
+        "hideInput": "Verbergen",
+        "showInput": "Anzeigen",
+        "addHelp": "Muss dem Schlüssel in der --watermark-config Ihres vLLM-Servers entsprechen. Der neue Schlüssel wird aktiv; der aktuelle wird ausgemustert.",
+        "addLabel": "Bezeichnung (optional)",
+        "addConfirm": "Schlüssel hinzufügen"
+      },
+      "summary": {
+        "failing": "{{count}} fehlerhaft",
+        "attention": "{{count}} brauchen Aufmerksamkeit",
+        "allOk": "Alle Prüfungen bestanden"
+      },
+      "check": {
+        "title": "Konfigurationsprüfung",
+        "description": "Grün bedeutet „wie vorgesehen konfiguriert“, nicht „rechtlich konform“. Es zeigt, was eingerichtet ist, nicht ob Ihre Nutzung rechtmäßig ist.",
+        "loadError": "Die Prüfungen konnten nicht geladen werden",
+        "loading": "Prüfungen werden geladen",
+        "checking": "Prüfe…",
+        "recheck": "Erneut prüfen",
+        "lastChecked": "Zuletzt geprüft {{time}}",
+        "disabledSkipped": "{{count}} deaktivierte Modelle werden nicht geprüft."
+      },
+      "title": "EU-KI-Verordnung (Art. 50)",
+      "description": "Ist diese Installation für die Transparenzpflichten nach Art. 50 eingerichtet, können Sie bedienen, was sie verlangen, und funktioniert es? Ein grünes Häkchen bedeutet „wie vorgesehen konfiguriert“, nicht „rechtlich konform“.",
+      "checks": {
+        "guardrail": {
+          "ok": "Die KI-Kennzeichnungsregel ist Teil jedes System-Prompts und lässt sich nicht ausschalten."
+        },
+        "notice": {
+          "ok": "Der Hinweis vor der ersten Nachricht ist eingeschaltet.",
+          "off": "Der Hinweis vor der ersten Nachricht ist ausgeschaltet."
+        },
+        "ack": {
+          "off": "Die Bestätigung der KI-Nutzung ist ausgeschaltet. Sie ist optional, aber der Nachweis, dass Nutzende informiert wurden.",
+          "on": "Die Bestätigung der KI-Nutzung ist eingeschaltet (Version {{requiredVersion}}).",
+          "enforced": "Nachrichten ohne Bestätigung werden abgelehnt.",
+          "notEnforced": "Die Erzwingung ist aus: Nutzende werden gefragt, aber nicht blockiert."
+        },
+        "provenance": {
+          "recordsOff": "Herkunftsnachweise werden nicht gespeichert, daher lässt sich „stammt genau diese Ausgabe von hier?“ nicht beantworten.",
+          "retention": "Herkunftsnachweise werden {{days}} Tage aufbewahrt.",
+          "retentionForever": "Herkunftsnachweise werden ohne zeitliche Begrenzung aufbewahrt."
+        },
+        "model": {
+          "markedByIhub": "{{model}}: von iHub gekennzeichnet.",
+          "markedByProvider": "{{model}} ({{kind}}): Der Anbieter kennzeichnet die Ausgabe; Erklärung hinterlegt.",
+          "statementMissing": "{{model}} ({{kind}}): vom Anbieter gekennzeichnet, aber keine Erklärung verknüpft.",
+          "notMarked": "{{model}} ({{kind}}): Die Ausgabe ist nicht gekennzeichnet. Das ist ein Hinweis, nichts wird blockiert."
+        },
+        "watermark": {
+          "keyOk": "{{model}}: aktiver Schlüssel {{keyId}}.",
+          "noKey": "{{model}}: kein aktiver Wasserzeichen-Schlüssel. Die Ausgabe wird nicht gekennzeichnet.",
+          "detectorMissing": "{{model}}: Detektor-URL oder Zugangsdaten sind nicht gesetzt.",
+          "detectorUrlRefused": "{{model}}: Die Detektor-URL ist nicht erlaubt: {{reason}}",
+          "detectorUnreachable": "{{model}}: Der Detektor hat nicht geantwortet ({{reason}}).",
+          "detectorUnauthorized": "{{model}}: Der Detektor hat die Zugangsdaten abgelehnt.",
+          "detectorContract": "{{model}}: Der Detektor hat geantwortet, aber nicht im erwarteten Format.",
+          "detectorOk": "{{model}}: Der Detektor hat in {{latencyMs}} ms geantwortet.",
+          "selfTestPassed": "{{model}}: Der Selbsttest hat den aktiven Schlüssel gefunden.",
+          "selfTestFailed": "{{model}}: Der letzte Selbsttest ist fehlgeschlagen. vLLM und iHub nutzen wahrscheinlich nicht denselben Schlüssel.",
+          "selfTestInconclusive": "{{model}}: Der letzte Selbsttest war nicht eindeutig (Text zu kurz). Führen Sie ihn erneut aus.",
+          "selfTestStale": "{{model}}: Der Schlüssel hat sich seit dem letzten Selbsttest geändert. Aktualisieren Sie vLLM und führen Sie ihn erneut aus.",
+          "selfTestNever": "{{model}}: Der Selbsttest wurde noch nicht ausgeführt."
+        }
+      },
+      "level": {
+        "ok": "OK",
+        "warn": "Achtung",
+        "error": "Fehler",
+        "off": "Aus"
+      }
     }
   },
   "cloudStorage": {

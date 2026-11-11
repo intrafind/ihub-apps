@@ -57,9 +57,12 @@ describe('GET /api/models/:modelId/chat/test', () => {
 
   beforeEach(() => {
     app = buildApp();
-    jest
-      .spyOn(configCache, 'getPlatform')
-      .mockReturnValue({ defaultLanguage: 'en', anonymousAuth: { enabled: true } });
+    jest.spyOn(configCache, 'getPlatform').mockReturnValue({
+      defaultLanguage: 'en',
+      anonymousAuth: { enabled: true },
+      // These tests are about the error shape, not the AI-use acknowledgement (428).
+      aiAcknowledgement: { enabled: false }
+    });
     jest
       .spyOn(configCache, 'getModels')
       .mockReturnValue({ data: [{ id: 'gpt', provider: 'openai', modelId: 'x' }] });

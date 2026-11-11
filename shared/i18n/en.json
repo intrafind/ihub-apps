@@ -172,7 +172,8 @@
     "expandArray": "Expand array ({{count}} items)",
     "expandObject": "Expand object ({{count}} fields)",
     "details": "Details",
-    "tryAgain": "Try again"
+    "tryAgain": "Try again",
+    "done": "Done"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -2469,7 +2470,8 @@
       "backup": "Backup & Restore",
       "updates": "Updates",
       "advanced": "Advanced",
-      "docs": "Documentation"
+      "docs": "Documentation",
+      "euAiAct": "EU AI Act"
     },
     "mcp": {
       "common": {
@@ -6118,6 +6120,232 @@
       "saved": "AI acknowledgement saved",
       "saveError": "Failed to save the AI acknowledgement",
       "loadError": "The AI acknowledgement settings could not be loaded. Reload the page to try again."
+    },
+    "euAiAct": {
+      "verify": {
+        "rowRecord": "Output record (hash)",
+        "rowWatermark": "Watermark detection",
+        "rowC2pa": "Content credentials (C2PA)",
+        "rowSynthid": "SynthID",
+        "found": "Found",
+        "recordFound": "This installation produced exactly this output{{when}}{{model}}.",
+        "on": "on",
+        "notFound": "Not found",
+        "recordNotFound": "No record of this exact content. It may have been edited, come from another system or be older than the retention period. This is not proof of its origin.",
+        "detected": "Detected",
+        "wmDetected": "Watermark detected. Technique: iHub text watermark. Key ID: {{keyId}}. p-value {{p}}, {{n}} tokens scored.",
+        "notDetected": "Not detected",
+        "wmNotDetected": "No watermark detected with the {{k}} keys held by this installation. This does not show that the text is not AI-generated: it may be edited, come from another model or have been generated without a watermark.",
+        "tooShort": "Too short to tell",
+        "wmTooShort": "Only {{n}} tokens could be scored; about 200 are needed. No conclusion.",
+        "couldNot": "Could not be checked",
+        "wmUnavailable": "The detector is not reachable. No conclusion.",
+        "notChecked": "Not checked",
+        "wmNotConfigured": "No detector is configured.",
+        "wmSkipped": "The watermark is checked when no record is found and you are signed in.",
+        "present": "present",
+        "c2paPresent": "Content credentials present{{issuer}}{{source}}. Signature {{valid}}.",
+        "validTrust": "valid (trust not evaluated)",
+        "notValid": "could not be validated",
+        "c2paAbsent": "No content credentials found. Many tools remove them, so this proves nothing about the origin.",
+        "c2paUnsupported": "This file format is not read for content credentials.",
+        "c2paSkipped": "Reading content credentials is switched off.",
+        "c2paUnreadable": "The content credentials could not be read. No conclusion.",
+        "declared": "declared, not detectable",
+        "synthidDeclared": "The provider states it embeds SynthID. SynthID cannot be detected here.",
+        "tooLarge": "The file is larger than {{mb}} MB.",
+        "textTooLong": "The text is too long ({{max}} characters at most).",
+        "headlineMatch": "Match found: see details.",
+        "headlineNone": "No match found. This is not proof that the content is not AI-generated.",
+        "headlineInconclusive": "No conclusion possible.",
+        "title": "Verification",
+        "description": "Check whether a text, image or audio file came from this installation and which marks it carries. The content is hashed and not stored.",
+        "kind": "What do you want to check?",
+        "modeText": "Text",
+        "modeFile": "Image or audio file",
+        "textLabel": "Text to check",
+        "textHelp": "Texts shorter than about 200 tokens cannot be judged by the watermark check.",
+        "fileLabel": "File to check",
+        "removeFile": "Remove file",
+        "fileHelp": "Images and audio, up to {{mb}} MB. The file is not stored.",
+        "checking": "Checking…",
+        "check": "Check",
+        "needText": "Paste a text first.",
+        "needFile": "Choose a file first.",
+        "declaredAs": "declared as {{type}}"
+      },
+      "selfTest": {
+        "keysMatch": "Passed: the detector recognised the active key {{keyId}} ({{n}} tokens scored).",
+        "retiredKey": "Failed: the text matches the retired key {{keyId}}. vLLM still runs the old key. Update vLLM with the current option and run the test again.",
+        "notFound": "Failed: no key of this installation was found in the sample text. vLLM probably runs another key or no --watermark-config. Update vLLM with the current option and run the test again.",
+        "tooShort": "Inconclusive: the sample text was too short ({{n}} tokens scored). Run the test again.",
+        "unreachable": "Failed: the detector could not be reached or rejected the request. Use \"Test connection\" for details.",
+        "notApplied": "Failed: the model did not apply the watermark to the sample ({{reason}}).",
+        "noKeys": "There is no watermark key yet. Generate one first.",
+        "never": "Not run yet",
+        "run": "Run self-test",
+        "cost": "Uses about 400 tokens.",
+        "running": "Generating sample text and checking the detector. This can take up to a minute…",
+        "state": {
+          "passed": "Passed",
+          "failed": "Failed",
+          "inconclusive": "Inconclusive",
+          "stale": "Outdated (key changed)"
+        }
+      },
+      "test": {
+        "unreachable": "The detector did not answer ({{reason}}).",
+        "unauthorized": "The detector rejected the credential.",
+        "contract": "The detector answered, but not in the expected format.",
+        "ok": "The detector answered in {{ms}} ms.",
+        "running": "Testing the connection…"
+      },
+      "detector": {
+        "url": "Detector URL",
+        "notSet": "Not set",
+        "credential": "Credential",
+        "credentialSet": "Set ({{ref}})",
+        "lastSelfTest": "Last self-test",
+        "edit": "Edit detector settings",
+        "test": "Test connection",
+        "none": "No model is marked \"iHub watermark\". Set Output marking on a vLLM model to use the watermark.",
+        "title": "Detectors and self-test"
+      },
+      "ack": {
+        "title": "Acknowledgements",
+        "description": "Users confirm a short AI-use statement before their first message. Counts cover registered users; anonymous visitors are only in the audit log.",
+        "openUsers": "Open users list",
+        "off": "Acknowledgement is switched off",
+        "acknowledged": "Acknowledged",
+        "pending": "Pending",
+        "pendingBadge": "Not yet confirmed",
+        "total": "Total",
+        "modeEnforced": "Enforced, version {{version}}.",
+        "modeAskOnly": "Users are asked but not blocked (not enforced), version {{version}}.",
+        "pendingDefinition": "Pending: users below the required version, including those never asked."
+      },
+      "fix": {
+        "openAdvanced": "Open settings",
+        "openModel": "Open model",
+        "openKeys": "Go to keys",
+        "runSelfTest": "Run self-test"
+      },
+      "keys": {
+        "nowActive": "Key {{id}} is now active. {{old}} is retired.",
+        "nowActiveFirst": "Key {{id}} is now active.",
+        "revealed": "Key shown. This was recorded in the audit log.",
+        "deleted": "Key {{id}} deleted.",
+        "generate": "Generate key",
+        "add": "Add own key…",
+        "title": "Watermark keys",
+        "description": "Keys for the iHub text watermark of vLLM models. Exactly one key is active; retired keys are used for detection only. Showing a key is recorded in the audit log.",
+        "loadError": "Could not load the keys",
+        "empty": "No watermark key yet. Keys are only needed for models marked \"iHub watermark\".",
+        "tableRegion": "Watermark keys table",
+        "caption": "Watermark keys",
+        "colId": "Key ID",
+        "colCreated": "Created",
+        "colStatus": "Status",
+        "colActions": "Actions",
+        "active": "Active",
+        "retired": "Retired (detection only)",
+        "revealAria": "Reveal key {{id}}",
+        "reveal": "Reveal",
+        "deleteAria": "Delete key {{id}}",
+        "delete": "Delete",
+        "deleteNote": "Retired keys can be deleted. The active key cannot.",
+        "backup": "Keys are stored encrypted with contents/.encryption-key. Back that file up: without it the stored keys cannot be read.",
+        "generateTitle": "Generate a new key?",
+        "generateMessage": "The new key becomes active. {{keyId}} becomes retired and is used for detection only. You must update vLLM afterwards.",
+        "deleteTitle": "Delete retired key {{id}}?",
+        "deleteMessage": "Text generated with this key can no longer be recognised as watermarked by this installation. This cannot be undone.",
+        "deleteConfirm": "Delete key",
+        "copied": "Copied to clipboard",
+        "copyFailed": "Copy failed. The text is selected: press Ctrl+C.",
+        "dialogNew": "New watermark key {{keyId}}",
+        "dialogReveal": "Watermark key {{keyId}}",
+        "callout": "Update vLLM with this key, then run the self-test. Showing a key is written to the audit log. Anyone with this key can forge or strip the watermark: do not paste it into tickets or chats.",
+        "weak": "This key is short or easy to guess. A random generated key is safer.",
+        "keyValue": "Key",
+        "snippet": "vLLM option",
+        "copySnippet": "Copy option",
+        "copyKey": "Copy key",
+        "autoHide": "The key is hidden again after {{seconds}} seconds.",
+        "hidden": "The key is hidden.",
+        "revealAgain": "Reveal again",
+        "addInvalid": "Enter the key as a whole number (digits only).",
+        "addTitle": "Add an existing key",
+        "addValue": "Key (whole number)",
+        "hideInput": "Hide",
+        "showInput": "Show",
+        "addHelp": "Must equal the key in the --watermark-config of your vLLM server. The new key becomes active; the current one is retired.",
+        "addLabel": "Label (optional)",
+        "addConfirm": "Add key"
+      },
+      "summary": {
+        "failing": "{{count}} failing",
+        "attention": "{{count}} need attention",
+        "allOk": "All checks passed"
+      },
+      "check": {
+        "title": "Configuration check",
+        "description": "Green means \"configured as designed\", not \"legally compliant\". It shows what is set up, not whether your use is lawful.",
+        "loadError": "Could not load the checks",
+        "loading": "Loading checks",
+        "checking": "Checking…",
+        "recheck": "Check again",
+        "lastChecked": "Last checked {{time}}",
+        "disabledSkipped": "{{count}} disabled models are not checked."
+      },
+      "title": "EU AI Act (Art. 50)",
+      "description": "Is this installation set up for the transparency duties of Art. 50, can you operate what they require, and does it work? A green check means \"configured as designed\", not \"legally compliant\".",
+      "checks": {
+        "guardrail": {
+          "ok": "The AI disclosure rule is part of every system prompt and cannot be switched off."
+        },
+        "notice": {
+          "ok": "The first-message notice is on.",
+          "off": "The first-message notice is off."
+        },
+        "ack": {
+          "off": "The AI-use acknowledgement is off. It is optional, but it is the evidence that people were told.",
+          "on": "The AI-use acknowledgement is on (version {{requiredVersion}}).",
+          "enforced": "Messages without a confirmation are refused.",
+          "notEnforced": "Enforcement is off: users are asked, but not blocked."
+        },
+        "provenance": {
+          "recordsOff": "Provenance records are not stored, so \"did this exact output come from here?\" cannot be answered.",
+          "retention": "Provenance records are kept {{days}} days.",
+          "retentionForever": "Provenance records are kept without a time limit."
+        },
+        "model": {
+          "markedByIhub": "{{model}}: marked by iHub.",
+          "markedByProvider": "{{model}} ({{kind}}): the provider marks the output; statement on file.",
+          "statementMissing": "{{model}} ({{kind}}): marked by the provider, but no statement is referenced.",
+          "notMarked": "{{model}} ({{kind}}): output is not marked. This is a hint, nothing is blocked."
+        },
+        "watermark": {
+          "keyOk": "{{model}}: active key {{keyId}}.",
+          "noKey": "{{model}}: no active watermark key. Output is not marked.",
+          "detectorMissing": "{{model}}: detector URL or credential is not set.",
+          "detectorUrlRefused": "{{model}}: the detector URL is not allowed: {{reason}}",
+          "detectorUnreachable": "{{model}}: the detector did not answer ({{reason}}).",
+          "detectorUnauthorized": "{{model}}: the detector rejected the credential.",
+          "detectorContract": "{{model}}: the detector answered, but not in the expected format.",
+          "detectorOk": "{{model}}: the detector answered in {{latencyMs}} ms.",
+          "selfTestPassed": "{{model}}: the self-test found the active key.",
+          "selfTestFailed": "{{model}}: the last self-test failed. vLLM and iHub probably do not use the same key.",
+          "selfTestInconclusive": "{{model}}: the last self-test was inconclusive (text too short). Run it again.",
+          "selfTestStale": "{{model}}: the key changed since the last self-test. Update vLLM, then run it again.",
+          "selfTestNever": "{{model}}: the self-test has not been run."
+        }
+      },
+      "level": {
+        "ok": "OK",
+        "warn": "Attention",
+        "error": "Failing",
+        "off": "Off"
+      }
     }
   },
   "cloudStorage": {

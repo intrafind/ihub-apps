@@ -127,3 +127,26 @@ record). Set **Admin → Models → Output marking** to *iHub watermark (vLLM)*,
 `POST /api/admin/watermark-keys`), start vLLM with the printed `--watermark-config`, and point the model at a
 detector. A greedy request (temperature 0) or structured output cannot be watermarked and is recorded as *not
 applied*. Setup, rotation, the detector contract and the limits: [Text Watermarking](ai-act-text-watermarking.md).
+
+## Admin page
+
+**Admin → EU AI Act** (`/admin/eu-ai-act`) is the one place to see and operate the measures above. Four cards:
+
+- **Configuration check.** One row per check with a level (OK, Attention, Failing) and a link to where it is fixed.
+  The server decides every level (`GET /api/admin/eu-ai-act/status`, admin only, never a key or token). Failing is
+  reserved for the watermark chain of models marked "iHub" (no active key, detector missing, rejected or
+  unreachable, last self-test failed); a model that is not marked, a provider mark without a statement, the
+  notice or acknowledgement being off, or records not being stored is Attention. A retention of 0 means "kept
+  without limit" and is OK. Detectors are probed with a throwaway key (3 s timeout, cached 30 s; *Check again*
+  probes again) through the SSL whitelist and proxy. **Green means "configured as designed", not "legally
+  compliant".** Disabled models are not checked.
+- **Acknowledgements.** Counts for registered users and the same actions as the Users page (shared component).
+- **Watermark keys.** Generate, add, reveal and delete retired keys; per model: test connection and self-test
+  (about 400 tokens). The last self-test result is kept per model; after a key change it shows as outdated until
+  run again. Detector URL and credential are edited in the model editor.
+- **Verification.** Text or image/audio upload against `POST /api/provenance/_verify`. Rows: output record, watermark
+  (text), C2PA (media), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion",
+  never "not watermarked".
+
+Image marking is declared per model in the model editor (*Image marking*, shown for image-generating models).
+

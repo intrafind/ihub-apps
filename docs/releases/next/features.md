@@ -1719,3 +1719,27 @@ marking and detection duty of Art. 50(2) of the EU AI Act (due 2026-12-02).
 - **Also fixed.** The audit log now redacts a request field named `key`.
 
 See [Text Watermarking](../../ai-act-text-watermarking.md).
+
+## EU AI Act Page: Configuration Check, Watermark Keys and Verification in One Place
+
+Admins find everything for the Art. 50 transparency duties on **Admin → EU AI Act** instead of in
+config files.
+
+- **Configuration check.** A traffic-light list (OK, Attention, Failing; always icon plus word)
+  covers the AI notice, the acknowledgement, provenance records and every model's marking. A model
+  marked "iHub watermark" is Failing when it has no active key, an unreachable detector or a failed
+  self-test. Each row links to where it is fixed. Green means "configured as designed", not
+  "legally compliant".
+- **Acknowledgements.** Counts (acknowledged, pending, total) and the Users page actions: request
+  again, remove all, CSV export.
+- **Watermark keys.** List, generate, add and delete retired keys; reveal a key on purpose
+  (audit-logged, hidden again after 60 seconds, never kept in the page), and test the connection
+  or run the self-test per model.
+- **Verification.** Paste a text or upload an image or audio file and see, per technique, whether
+  it was found, which watermark key matched, and whether C2PA content credentials are present. A
+  negative result never claims the content is human-made.
+- **Model editor.** Image-generating models have an *Image marking* section to declare what the
+  provider embeds.
+- `GET /api/admin/eu-ai-act/status` returns the check (admin only, never a key or token).
+
+See [EU AI Act](../../ai-act.md#admin-page).
