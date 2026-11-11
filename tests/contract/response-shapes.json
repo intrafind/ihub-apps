@@ -138,7 +138,9 @@
         "strictness": "string"
       },
       "serviceAccount": {
-        "groups": ["string"]
+        "groups": [
+          "string"
+        ]
       },
       "skills": [],
       "synthesizer": {
@@ -166,6 +168,10 @@
       "updatedBy": "null",
       "version": "number"
     }
+  },
+  "GET /api/admin/ai-acknowledgements/_export": {
+    "status": 200,
+    "type": "text/csv"
   },
   "GET /api/admin/apps": {
     "status": 200,
@@ -350,7 +356,9 @@
         "order": "number",
         "preferredOutputFormat": "string",
         "preferredStyle": "string",
-        "projects": ["object"],
+        "projects": [
+          "object"
+        ],
         "sendChatHistory": "boolean",
         "settings": {
           "chatHistory": "object",
@@ -381,13 +389,16 @@
       "com.intrafind/entra-directory": "boolean",
       "com.intrafind/ihub": "boolean",
       "com.intrafind/ldap-directory": "boolean",
+      "com.intrafind/staan-search": "boolean",
       "drawio": "boolean",
       "entra": "boolean",
       "excalidraw": "boolean",
       "ihub": "boolean",
       "mcp/drawio": "boolean",
       "mcp/excalidraw": "boolean",
+      "staan": "boolean",
       "type:people-directory": "boolean",
+      "type:web-search": "boolean",
       "x500bund": "boolean"
     }
   },
@@ -404,6 +415,7 @@
         {
           "action": "string",
           "actor": "object",
+          "details?": "object",
           "id": "string",
           "ip": "string",
           "requestId": "string",
@@ -441,7 +453,9 @@
   "GET /api/admin/auth/demo-accounts": {
     "status": 200,
     "shape": {
-      "accounts": ["string"],
+      "accounts": [
+        "string"
+      ],
       "showDemoAccounts": "boolean",
       "warn": "boolean"
     }
@@ -499,7 +513,9 @@
   "GET /api/admin/browser-extension/status": {
     "status": 200,
     "shape": {
-      "allowedGroups": ["string"],
+      "allowedGroups": [
+        "string"
+      ],
       "configUrl": "string",
       "description": {
         "de": "string",
@@ -777,8 +793,27 @@
   "GET /api/admin/configs/platform": {
     "status": 200,
     "shape": {
+      "aiAcknowledgement": {
+        "enabled": "boolean",
+        "enforce": "boolean",
+        "policyUrl": "string",
+        "requiredVersion": "number",
+        "resetAt": "null",
+        "text": {
+          "de": "string",
+          "en": "string"
+        }
+      },
+      "aiDisclosure": {
+        "firstTurnNotice": {
+          "enabled": "boolean",
+          "text": "object"
+        }
+      },
       "anonymousAuth": {
-        "defaultGroups": ["string"],
+        "defaultGroups": [
+          "string"
+        ],
         "enabled": "boolean"
       },
       "artifacts": {
@@ -819,7 +854,9 @@
         },
         "enabled": "boolean",
         "oauthClientId": "string",
-        "starterPrompts": ["object"]
+        "starterPrompts": [
+          "object"
+        ]
       },
       "chats": {
         "enabled": "boolean",
@@ -858,10 +895,14 @@
         "oauthReferenceId": "string"
       },
       "cors": {
-        "allowedHeaders": ["string"],
+        "allowedHeaders": [
+          "string"
+        ],
         "credentials": "boolean",
         "maxAge": "number",
-        "methods": ["string"],
+        "methods": [
+          "string"
+        ],
         "origin": []
       },
       "defaultLanguage": "string",
@@ -900,7 +941,9 @@
         "a2a": {
           "enabled": "boolean"
         },
-        "defaultScopes": ["string"],
+        "defaultScopes": [
+          "string"
+        ],
         "enabled": "boolean",
         "expose": {
           "apps": "boolean",
@@ -926,7 +969,9 @@
         },
         "enabled": "boolean",
         "oauthClientId": "string",
-        "starterPrompts": ["object"]
+        "starterPrompts": [
+          "object"
+        ]
       },
       "oauth": {
         "enabled": {
@@ -934,7 +979,9 @@
         }
       },
       "officeIntegration": {
-        "calendarStarterPrompts": ["object"],
+        "calendarStarterPrompts": [
+          "object"
+        ],
         "defaultMailAction": "string",
         "description": {
           "de": "string",
@@ -953,7 +1000,9 @@
           "defaultPage": "string",
           "featuredAppIds": []
         },
-        "starterPrompts": ["object"]
+        "starterPrompts": [
+          "object"
+        ]
       },
       "pdfExport": {
         "defaultTemplate": "string",
@@ -991,10 +1040,19 @@
         },
         "tierPolicy": "string"
       },
+      "provenance": {
+        "retentionDays": "number",
+        "storeRecords": "boolean",
+        "verify": {
+          "access": "string"
+        }
+      },
       "proxyAuth": {
         "enabled": "boolean",
         "sharedSecretHeader": "string",
-        "trustedProxies": ["string"]
+        "trustedProxies": [
+          "string"
+        ]
       },
       "rateLimit": {
         "adminApi": {
@@ -1269,10 +1327,14 @@
   "GET /api/admin/cors/config": {
     "status": 200,
     "shape": {
-      "allowedHeaders": ["string"],
+      "allowedHeaders": [
+        "string"
+      ],
       "credentials": "boolean",
       "maxAge": "number",
-      "methods": ["string"],
+      "methods": [
+        "string"
+      ],
       "origin": []
     }
   },
@@ -1576,7 +1638,9 @@
         "registries": []
       },
       "serverVersion": "string",
-      "supportedProtocols": ["string"]
+      "supportedProtocols": [
+        "string"
+      ]
     }
   },
   "GET /api/admin/integrations/catalog/:definitionId": {
@@ -1588,7 +1652,9 @@
       "approvalPreset": "string",
       "auth": {
         "default": "string",
-        "modes": ["string"],
+        "modes": [
+          "string"
+        ],
         "oauthClient": {
           "field": "string"
         },
@@ -1597,10 +1663,16 @@
           "kind": "string"
         }
       },
-      "authModes": ["string"],
+      "authModes": [
+        "string"
+      ],
       "builtIn": "boolean",
-      "capabilities": ["string"],
-      "categories": ["string"],
+      "capabilities": [
+        "string"
+      ],
+      "categories": [
+        "string"
+      ],
       "compatibility": {
         "ihub": "string",
         "schema": "number"
@@ -1667,7 +1739,9 @@
       "status": "string",
       "statusReason": "null",
       "supported": "boolean",
-      "supportedAuthModes": ["string"],
+      "supportedAuthModes": [
+        "string"
+      ],
       "test": "null",
       "type": "null",
       "update": "null",
@@ -1754,10 +1828,16 @@
           "default": "string",
           "modes": "array"
         },
-        "authModes": ["string"],
+        "authModes": [
+          "string"
+        ],
         "builtIn": "boolean",
-        "capabilities": ["string"],
-        "categories": ["string"],
+        "capabilities": [
+          "string"
+        ],
+        "categories": [
+          "string"
+        ],
         "compatibility": {
           "ihub": "string",
           "schema": "number"
@@ -1774,8 +1854,12 @@
         "exampleAppCount": "number",
         "health": "null",
         "id": "string",
-        "install": ["object"],
-        "installedInstances": ["string"],
+        "install": [
+          "object"
+        ],
+        "installedInstances": [
+          "string"
+        ],
         "instructions": "string",
         "license": "null",
         "migrations": [],
@@ -1798,7 +1882,9 @@
         "status": "string",
         "statusReason": "null",
         "supported": "boolean",
-        "supportedAuthModes": ["string"],
+        "supportedAuthModes": [
+          "string"
+        ],
         "test": "null",
         "type": "null",
         "update": "null",
@@ -1913,7 +1999,9 @@
           "variable": "string"
         }
       },
-      "fields": ["string"],
+      "fields": [
+        "string"
+      ],
       "ldapProviders": [],
       "limits": {
         "concurrency": "number",
@@ -2020,7 +2108,9 @@
         "a2a": {
           "enabled": "boolean"
         },
-        "defaultScopes": ["string"],
+        "defaultScopes": [
+          "string"
+        ],
         "enabled": "boolean",
         "expose": {
           "apps": "boolean",
@@ -2045,6 +2135,7 @@
           "apiKeySet": "boolean",
           "autoDiscovery": "boolean",
           "config?": "object",
+          "contentMarking?": "object",
           "contextWindow?": "null|number",
           "default": "boolean",
           "description": "object",
@@ -2184,17 +2275,25 @@
     "status": 200,
     "shape": {
       "active": "boolean",
-      "allowedApps": ["string"],
+      "allowedApps": [
+        "string"
+      ],
       "allowedGroups": [],
-      "allowedModels": ["string"],
-      "allowedPrompts": ["string"],
+      "allowedModels": [
+        "string"
+      ],
+      "allowedPrompts": [
+        "string"
+      ],
       "clientId": "string",
       "clientType": "string",
       "consentRequired": "boolean",
       "createdAt": "string",
       "createdBy": "string",
       "description": "string",
-      "grantTypes": ["string"],
+      "grantTypes": [
+        "string"
+      ],
       "id": "string",
       "lastRotated": "string",
       "lastUsed": "null",
@@ -2207,8 +2306,12 @@
       "ownerUsername": "null",
       "personal": "boolean",
       "postLogoutRedirectUris": [],
-      "redirectUris": ["string"],
-      "scopes": ["string"],
+      "redirectUris": [
+        "string"
+      ],
+      "scopes": [
+        "string"
+      ],
       "tokenExpirationMinutes": "number",
       "trusted": "boolean"
     }
@@ -2470,9 +2573,13 @@
         "provider": "string"
       },
       "upload": {
-        "accept": ["string"],
+        "accept": [
+          "string"
+        ],
         "available": "boolean",
-        "mimeTypes": ["string"],
+        "mimeTypes": [
+          "string"
+        ],
         "summary": "string"
       }
     }
@@ -2505,7 +2612,9 @@
     "status": 200,
     "shape": {
       "defaultAppId": "string",
-      "knowledgeModes": ["string"],
+      "knowledgeModes": [
+        "string"
+      ],
       "limits": {
         "maxFileBytes": "number",
         "maxFiles": "number",
@@ -2745,6 +2854,11 @@
           "limit": "number",
           "windowMs": "number"
         },
+        "provenanceVerifyApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
         "publicApi": {
           "counts": "string",
           "limit": "number",
@@ -2774,6 +2888,11 @@
           "windowMs": "number"
         },
         "oauthTokenApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "provenanceVerifyApi": {
           "counts": "string",
           "limit": "number",
           "windowMs": "number"
@@ -2900,7 +3019,9 @@
       "owner": {
         "authMode": "string",
         "email": "string",
-        "groups": ["string"],
+        "groups": [
+          "string"
+        ],
         "name": "string",
         "userId": "string",
         "username": "string"
@@ -2950,8 +3071,11 @@
         "$schema": "string",
         "additionalProperties": "boolean",
         "description": "string",
-        "examples": ["object"],
+        "examples": [
+          "object"
+        ],
         "properties": {
+          "aiDisclosure": "object",
           "allowEmptyContent": "object",
           "allowInheritance": "object",
           "allowUserTemplateUploads": "object",
@@ -3011,7 +3135,9 @@
           "websearch": "object",
           "workflows": "object"
         },
-        "required": ["string"],
+        "required": [
+          "string"
+        ],
         "title": "string",
         "type": "string"
       },
@@ -3019,7 +3145,9 @@
         "$schema": "string",
         "additionalProperties": {},
         "description": "string",
-        "examples": ["object"],
+        "examples": [
+          "object"
+        ],
         "properties": {
           "description": "object",
           "enabled": "object",
@@ -3030,7 +3158,9 @@
           "permissions": "object",
           "usageLimits": "object"
         },
-        "required": ["string"],
+        "required": [
+          "string"
+        ],
         "title": "string",
         "type": "string"
       },
@@ -3038,13 +3168,16 @@
         "$schema": "string",
         "additionalProperties": "boolean",
         "description": "string",
-        "examples": ["object"],
+        "examples": [
+          "object"
+        ],
         "properties": {
           "apiKey": "object",
           "autoDiscovery": "object",
           "concurrency": "object",
           "config": "object",
           "connectTimeoutMs": "object",
+          "contentMarking": "object",
           "contextWindow": "object",
           "default": "object",
           "description": "object",
@@ -3076,7 +3209,9 @@
           "url": "object",
           "usageLimits": "object"
         },
-        "required": ["string"],
+        "required": [
+          "string"
+        ],
         "title": "string",
         "type": "string"
       },
@@ -3084,8 +3219,12 @@
         "$schema": "string",
         "additionalProperties": {},
         "description": "string",
-        "examples": ["object"],
+        "examples": [
+          "object"
+        ],
         "properties": {
+          "aiAcknowledgement": "object",
+          "aiDisclosure": "object",
           "anonymousAuth": "object",
           "artifacts": "object",
           "audit": "object",
@@ -3100,6 +3239,7 @@
           "ntlmAuth": "object",
           "oidcAuth": "object",
           "projects": "object",
+          "provenance": "object",
           "proxy": "object",
           "proxyAuth": "object",
           "rateLimit": "object",
@@ -3128,7 +3268,9 @@
         "$schema": "string",
         "additionalProperties": "boolean",
         "description": "string",
-        "examples": ["object"],
+        "examples": [
+          "object"
+        ],
         "properties": {
           "actions": "object",
           "appId": "object",
@@ -3148,7 +3290,9 @@
           "updatedBy": "object",
           "variables": "object"
         },
-        "required": ["string"],
+        "required": [
+          "string"
+        ],
         "title": "string",
         "type": "string"
       },
@@ -3156,8 +3300,11 @@
         "$schema": "string",
         "additionalProperties": {},
         "description": "string",
-        "examples": ["object"],
+        "examples": [
+          "object"
+        ],
         "properties": {
+          "aiAcknowledgements": "object",
           "createdAt": "object",
           "email": "object",
           "enabled": "object",
@@ -3173,7 +3320,9 @@
           "usageLimits": "object",
           "username": "object"
         },
-        "required": ["string"],
+        "required": [
+          "string"
+        ],
         "title": "string",
         "type": "string"
       }
@@ -3227,7 +3376,9 @@
       "description": "string",
       "displayName": "string",
       "enabled": "boolean",
-      "files": ["string"],
+      "files": [
+        "string"
+      ],
       "frontmatter": {
         "allowed-tools": "string",
         "description": "string",
@@ -3246,7 +3397,9 @@
       "modelInvocable": "boolean",
       "name": "string",
       "path": "string",
-      "providedTools": ["string"],
+      "providedTools": [
+        "string"
+      ],
       "references": [],
       "scripts": []
     }
@@ -3322,7 +3475,9 @@
           "criticalPercent": "number",
           "warningPercent": "number"
         },
-        "volumes": ["object"]
+        "volumes": [
+          "object"
+        ]
       }
     }
   },
@@ -3414,7 +3569,9 @@
         }
       },
       "footer": {
-        "links": ["object"],
+        "links": [
+          "object"
+        ],
         "text": {
           "de": "string",
           "en": "string"
@@ -3423,7 +3580,9 @@
       "header": {
         "defaultColor": "string",
         "favicon": "string",
-        "links": ["object"],
+        "links": [
+          "object"
+        ],
         "logo": {
           "alt": "object",
           "url": "string"
@@ -3969,6 +4128,20 @@
   "GET /api/admin/version/check-update": {
     "skipped": "reaches the network"
   },
+  "GET /api/admin/watermark-detectors": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/admin/watermark-keys": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
   "GET /api/admin/website-corpus/domains": {
     "status": 200,
     "shape": {
@@ -3981,7 +4154,9 @@
     "status": 200,
     "shape": [
       {
-        "allowedGroups?": ["string"],
+        "allowedGroups?": [
+          "string"
+        ],
         "canvas?": {
           "offsetX": "number",
           "offsetY": "number",
@@ -4006,15 +4181,21 @@
           "de?": "string",
           "en": "string"
         },
-        "edges": ["object"],
+        "edges": [
+          "object"
+        ],
         "enabled": "boolean",
         "id": "string",
         "name": {
           "de?": "string",
           "en": "string"
         },
-        "nodes": ["object"],
-        "projects?": ["object"],
+        "nodes": [
+          "object"
+        ],
+        "projects?": [
+          "object"
+        ],
         "status?": "string",
         "version": "string"
       }
@@ -4050,6 +4231,15 @@
   },
   "GET /api/agents/runs/:runId/stream": {
     "skipped": "streams"
+  },
+  "GET /api/ai-acknowledgements/me": {
+    "status": 200,
+    "shape": {
+      "acknowledged": "boolean",
+      "enabled": "boolean",
+      "enforce": "boolean",
+      "requiredVersion": "number"
+    }
   },
   "GET /api/apps": {
     "status": 200,
@@ -4218,7 +4408,9 @@
     "status": 200,
     "shape": {
       "anonymousAuth": {
-        "defaultGroups": ["string"],
+        "defaultGroups": [
+          "string"
+        ],
         "enabled": "boolean"
       },
       "authMethods": {
@@ -4263,7 +4455,9 @@
       },
       "user": {
         "email": "string",
-        "groups": ["string"],
+        "groups": [
+          "string"
+        ],
         "id": "string",
         "isAdmin": "boolean",
         "name": "string",
@@ -4295,7 +4489,9 @@
     "shape": {
       "user": {
         "email": "string",
-        "groups": ["string"],
+        "groups": [
+          "string"
+        ],
         "id": "string",
         "isAdmin": "boolean",
         "name": "string",
@@ -4359,7 +4555,9 @@
           "createdVia": "string"
         },
         "ownerId": "string",
-        "runIds": ["string"],
+        "runIds": [
+          "string"
+        ],
         "settings": "null",
         "status": "string",
         "title": "string",
@@ -4373,6 +4571,7 @@
           "context?": "object",
           "finishReason?": "string",
           "id": "string",
+          "provenance?": "object",
           "role": "string",
           "runId": "string",
           "ts": "string",
@@ -4665,6 +4864,16 @@
   "GET /api/configs/platform": {
     "status": 200,
     "shape": {
+      "aiAcknowledgement": {
+        "enabled": "boolean",
+        "enforce": "boolean"
+      },
+      "aiDisclosure": {
+        "firstTurnNotice": {
+          "enabled": "boolean",
+          "text": "object"
+        }
+      },
       "chats": {
         "persistence": "boolean",
         "sharing": {
@@ -4681,7 +4890,9 @@
       },
       "cors": {
         "credentials": "boolean",
-        "methods": ["string"]
+        "methods": [
+          "string"
+        ]
       },
       "defaultLanguage": "string",
       "features": [
@@ -4716,7 +4927,9 @@
       "projects": {
         "defaultAppId": "string",
         "enabled": "boolean",
-        "knowledgeModes": ["string"],
+        "knowledgeModes": [
+          "string"
+        ],
         "limits": {
           "maxFileBytes": "number",
           "maxFiles": "number",
@@ -4732,7 +4945,9 @@
           "allowUsers": "boolean"
         },
         "tierPolicy": "string",
-        "tiers": ["string"],
+        "tiers": [
+          "string"
+        ],
         "userProjects": "boolean"
       },
       "rateLimit": {
@@ -4943,7 +5158,9 @@
         }
       },
       "footer": {
-        "links": ["object"],
+        "links": [
+          "object"
+        ],
         "text": {
           "de": "string",
           "en": "string"
@@ -4952,7 +5169,9 @@
       "header": {
         "defaultColor": "string",
         "favicon": "string",
-        "links": ["object"],
+        "links": [
+          "object"
+        ],
         "logo": {
           "alt": "object",
           "url": "string"
@@ -5145,7 +5364,7 @@
           "id": "string",
           "name": "string",
           "protocol": "string",
-          "type": "null"
+          "type": "null|string"
         }
       ]
     }
@@ -5167,8 +5386,12 @@
           "name": "string"
         }
       ],
-      "capabilities": ["string"],
-      "categories": ["string"],
+      "capabilities": [
+        "string"
+      ],
+      "categories": [
+        "string"
+      ],
       "connection": {
         "account": "null",
         "connectable": "boolean",
@@ -5185,7 +5408,9 @@
       },
       "definition": "string",
       "description": "string",
-      "effects": ["string"],
+      "effects": [
+        "string"
+      ],
       "icon": "null",
       "id": "string",
       "name": "string",
@@ -5639,7 +5864,9 @@
       "published": "boolean",
       "refreshTtl": "null",
       "role": "string",
-      "tags": ["string"],
+      "tags": [
+        "string"
+      ],
       "tier": "string",
       "updatedAt": "string",
       "updatedBy": "string",
@@ -5764,7 +5991,9 @@
           "storage": "string"
         }
       ],
-      "knowledgeModes": ["string"],
+      "knowledgeModes": [
+        "string"
+      ],
       "limits": {
         "maxFileBytes": "number",
         "maxFiles": "number",
@@ -5780,11 +6009,17 @@
         "allowUsers": "boolean"
       },
       "tierPolicy": "string",
-      "tiers": ["string"],
+      "tiers": [
+        "string"
+      ],
       "upload": {
-        "accept": ["string"],
+        "accept": [
+          "string"
+        ],
         "available": "boolean",
-        "mimeTypes": ["string"],
+        "mimeTypes": [
+          "string"
+        ],
         "summary": "string"
       },
       "userProjects": {
@@ -5924,7 +6159,9 @@
           "variables": "object",
           "websearch": "object"
         },
-        "required": ["string"],
+        "required": [
+          "string"
+        ],
         "type": "string"
       },
       "owner": "null",
@@ -5982,7 +6219,9 @@
   "GET /api/prompts/variables": {
     "status": 200,
     "shape": {
-      "autoNames": ["string"],
+      "autoNames": [
+        "string"
+      ],
       "values": {
         "date": "string",
         "date_iso": "string",
