@@ -47,46 +47,48 @@ export function appendRuleToText(text, rule = AI_DISCLOSURE_RULE) {
   return base ? `${base.trimEnd()}${SEPARATOR}${rule}` : rule;
 }
 
+/** The message with the rule appended as its last text (unchanged when it already ends with it). */
+function withRule(system, rule) {
+  if (Array.isArray(system.content)) {
+    const last = system.content[system.content.length - 1];
+    if (
+      last?.type === 'text' &&
+      String(last.text || '')
+        .trimEnd()
+        .endsWith(rule)
+    )
+      return system;
+    return { ...system, content: [...system.content, { type: 'text', text: rule }] };
+  }
+  const content = appendRuleToText(system.content, rule);
+  return content === system.content ? system : { ...system, content };
+}
+
 /**
- * Return a copy of `messages` whose first system message ends with the rule.
+ * Return a copy of `messages` whose system prompt ends with the rule.
  *
- * The first system message is the only position every provider adapter keeps
- * (Anthropic uses the first one and drops the rest). The rule goes last so that
- * a persona prompt cannot out-rank it by recency. Pure and idempotent: the
- * caller's array and message objects are never mutated.
+ * The first system message always gets it: it is the only one every provider adapter
+ * keeps (Anthropic uses the first and drops the rest). Adapters that forward every
+ * system message (OpenAI-compatible) would then send a later one after the rule, so
+ * when there are several the last one ends with the rule too: whichever the model
+ * reads last, the rule comes last. The rule goes at the end so a persona prompt cannot
+ * out-rank it by recency. Pure and idempotent: the caller's array and message objects
+ * are never mutated.
  *
  * @param {Array} messages
+ * @param {string} [rule]
  * @returns {Array}
  */
 export function applyAiDisclosureGuardrail(messages, rule = AI_DISCLOSURE_RULE) {
   if (!Array.isArray(messages)) return messages;
-  const index = messages.findIndex(m => m && m.role === 'system');
-  if (index === -1) {
+  const systemAt = messages.map((m, i) => (m?.role === 'system' ? i : -1)).filter(i => i >= 0);
+  if (systemAt.length === 0) {
     return [{ role: 'system', content: rule }, ...messages];
   }
-  const system = messages[index];
-  let content;
-  if (Array.isArray(system.content)) {
-    const parts = system.content;
-    const last = parts[parts.length - 1];
-    if (
-      last &&
-      last.type === 'text' &&
-      String(last.text || '')
-        .trimEnd()
-        .endsWith(rule)
-    ) {
-      return messages;
-    }
-    content = [...parts, { type: 'text', text: rule }];
-  } else {
-    if (typeof system.content === 'string' && system.content.trimEnd().endsWith(rule)) {
-      return messages;
-    }
-    content = appendRuleToText(system.content, rule);
-  }
   const out = messages.slice();
-  out[index] = { ...system, content };
+  for (const index of new Set([systemAt[0], systemAt[systemAt.length - 1]])) {
+    out[index] = withRule(messages[index], rule);
+  }
   return out;
 }
 

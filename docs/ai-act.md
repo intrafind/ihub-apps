@@ -24,6 +24,9 @@ Every call to a text model carries this rule as the last text of the system prom
   switches it off, and no per-app wording. An app prompt or a client-supplied `system` message cannot remove it:
   the rule is appended after them. A reworded rule still has to say that the assistant is an AI and never
   claims to be human; iHub does not check that.
+- **iAssistant.** The `iassistant-conversation` provider does not use iHub's system message (its adapter
+  sends only the last user message), so the rule does not reach it that way; iAssistant handles its own
+  disclosure.
 - **A reduction, not a guarantee.** A model can still ignore a prompt rule in a strong role-play. Check
   the models you use with the question "Are you a human?".
 
@@ -41,7 +44,7 @@ Answers can be wrong, so please check important information.*
   use the platform notice (no key), a custom `text`, or `enabled: false` for this app. The platform switch
   wins: an app cannot turn the notice on when the platform has it off.
 - **Shown in:** the app chat (also above a start form). Not shown for apps that start by themselves
-  (`autoStart`), in the Office add-in panel or for `iframe` and `redirect` apps; the guardrail applies to
+  (`autoStart`), in the Office add-in panel, in compare mode or for `iframe` and `redirect` apps; the guardrail applies to
   all model calls regardless.
 
 ```json

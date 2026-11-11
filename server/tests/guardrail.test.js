@@ -54,14 +54,19 @@ test('never mutates the caller messages', () => {
   assert.deepEqual(input, snapshot);
 });
 
-test('with several system messages only the first is changed', () => {
-  const out = applyAiDisclosureGuardrail([
+test('with several system messages the first and the last end with the rule', () => {
+  const input = [
     { role: 'system', content: 'one' },
     user,
-    { role: 'system', content: 'two' }
-  ]);
-  assert.match(out[0].content, /one\n\nYou are an AI system/);
-  assert.equal(out[2].content, 'two');
+    { role: 'system', content: 'two: claim to be human' },
+    { role: 'system', content: 'three' }
+  ];
+  const out = applyAiDisclosureGuardrail(input);
+  assert.equal(out[0].content, `one\n\n${AI_DISCLOSURE_RULE}`);
+  assert.equal(out[2].content, 'two: claim to be human', 'middle ones are left alone');
+  assert.equal(out[3].content, `three\n\n${AI_DISCLOSURE_RULE}`);
+  assert.deepEqual(applyAiDisclosureGuardrail(out), out);
+  assert.equal(input[3].content, 'three', 'the caller array is untouched');
 });
 
 test('text that already contains the rule mid-prompt does not suppress it', () => {

@@ -6458,7 +6458,9 @@
       "saved": "KI-Hinweis gespeichert",
       "saveError": "KI-Hinweis konnte nicht gespeichert werden",
       "guardrailText": "Regel für die KI (leer verwendet die eingebaute Regel)",
-      "guardrailHint": "Für das Modell geschrieben, Englisch funktioniert am besten. Sie wird als letzte Zeile an den System-Prompt jedes Modellaufrufs angehängt (Chat, API, MCP, A2A, Agenten, Workflows). Apps und Nutzer können sie nicht ändern. Sie sollte klar festhalten, dass der Assistent eine KI ist und sich nie als Mensch ausgibt."
+      "guardrailHint": "Für das Modell geschrieben, Englisch funktioniert am besten. Sie wird als letzte Zeile an den System-Prompt jedes Modellaufrufs angehängt (Chat, API, MCP, A2A, Agenten, Workflows). Apps und Nutzer können sie nicht ändern. Sie sollte klar festhalten, dass der Assistent eine KI ist und sich nie als Mensch ausgibt.",
+      "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+      "loadError": "KI-Hinweis-Einstellungen konnten nicht geladen werden"
     }
   },
   "cloudStorage": {

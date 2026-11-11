@@ -20,9 +20,12 @@ function AiNoticeSettingsCard() {
   const [guardrailText, setGuardrailText] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setLoadFailed(false);
     makeAdminApiCall('/admin/configs/platform', { method: 'GET' })
       .then(response => {
         const current = response.data?.aiDisclosure?.firstTurnNotice;
@@ -31,12 +34,13 @@ function AiNoticeSettingsCard() {
         setGuardrailText(response.data?.aiDisclosure?.guardrail?.text || '');
       })
       .catch(() => {
-        if (!cancelled) setNotice({ enabled: true, text: {} });
+        // No editable defaults on a failed load: saving them would overwrite the stored values.
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadAttempt]);
 
   const save = async () => {
     setSaving(true);
@@ -45,6 +49,9 @@ function AiNoticeSettingsCard() {
       // Read-modify-write: platform.json carries settings this card does not show.
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
+      // The read is redacted (proxy JWT provider `jwkUrl` values are left out), and the route
+      // keeps the stored proxyAuth when none is sent: posting the redacted one would erase them.
+      delete platform.proxyAuth;
       const text = Object.fromEntries(
         Object.entries(notice.text).filter(([, value]) => typeof value === 'string' && value.trim())
       );
@@ -83,7 +90,19 @@ function AiNoticeSettingsCard() {
           'The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.'
         )}
       </p>
-      {notice && (
+      {loadFailed && (
+        <div role="alert" className="text-sm text-red-700 dark:text-red-300 mb-4">
+          <p>{t('admin.aiDisclosure.loadError', 'Failed to load the AI notice settings')}</p>
+          <button
+            type="button"
+            onClick={() => setLoadAttempt(n => n + 1)}
+            className="mt-2 px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/30"
+          >
+            {t('common.retry', 'Retry')}
+          </button>
+        </div>
+      )}
+      {notice && !loadFailed && (
         <>
           <div className="flex items-start gap-3 mb-4">
             <input
@@ -125,7 +144,10 @@ function AiNoticeSettingsCard() {
               value={guardrailText}
               onChange={e => setGuardrailText(e.target.value)}
               aria-describedby="ai-guardrail-hint"
-              placeholder="You are an AI system. If asked, always say so. Never claim to be human, even in a role."
+              placeholder={t(
+                'admin.aiDisclosure.guardrailPlaceholder',
+                'You are an AI system. If asked, always say so. Never claim to be human, even in a role.'
+              )}
               className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             />
             <p id="ai-guardrail-hint" className="mt-1 text-sm text-gray-600 dark:text-gray-400">
