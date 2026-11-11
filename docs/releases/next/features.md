@@ -1745,8 +1745,8 @@ config files.
 - **Verification.** Paste a text or upload an image or audio file and see, per technique, whether
   it was found, which watermark key matched, and whether C2PA content credentials are present. A
   negative result never claims the content is human-made.
-- **Model editor.** Image and audio models get an *Image and audio marking* section to declare
-  what the provider embeds.
+- **Model editor.** Image-generating models have an *Image marking* section to declare what the
+  provider embeds.
 - `GET /api/admin/eu-ai-act/status` returns the check (admin only, never a key or token).
 
 See [EU AI Act](../../ai-act.md#admin-page).
