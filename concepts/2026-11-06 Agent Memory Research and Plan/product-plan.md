@@ -486,7 +486,7 @@ A phase is done when every line below is true, in addition to the README's accep
 
 ### 8.3 Phase 2
 
-- [ ] `server/services/memory/memoryExtractor.js` with per-chat debounce (cancel and reschedule, immediate on chat close), JSON schema output validated by `createOutputValidator`, confidence ≥ 0.7 and sensitive filtering, `applyOperations` under `locks.withLock('user-memory:<key>')` with CAS, `controlsVersion` check, `appliedTurns` watermark, normalised-text dedupe, never creates a document.
+- [ ] `server/services/memory/memoryExtractor.js` with per-chat debounce (cancel and reschedule; durable `due` entry and catch-up sweep, ADR-M24; poison-batch and breaker rules, ADR-M23), JSON schema output validated by `createOutputValidator`, confidence ≥ 0.7 and sensitive filtering, `applyOperations` under `locks.withLock('user-memory:<key>')` with CAS, `controlsVersion` check, `appliedTurns` watermark, normalised-text dedupe, never creates a document.
 - [ ] Budget document `user-memory-budget/<userId>` with `reserveExtractionSlot(userId)` before every provider call (the JSON retry included), `retries: 0` on the call, release only when the failure proves no request reached the provider (architecture §2.2); cap skip without reschedule; cap 0 = unlimited.
 - [ ] Hooked on `postTurn`; skips temporary chats, `mode: 'read'` apps, paused or disabled users, "Memory off" chats, chats with fewer than two user turns.
 - [ ] Telemetry `{ kind: 'utility', purpose: 'user-memory', user, parentRunId, surface: 'memory' }` with `telemetry.redact: ['memory']`; quota applied; Usage page "memory" line.
