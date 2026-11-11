@@ -6116,7 +6116,8 @@
       "policyUrl": "AI policy link (https://… or /path)",
       "currentVersion": "Current version: {{version}}",
       "saved": "AI acknowledgement saved",
-      "saveError": "Failed to save the AI acknowledgement"
+      "saveError": "Failed to save the AI acknowledgement",
+      "loadError": "The AI acknowledgement settings could not be loaded. Reload the page to try again."
     }
   },
   "cloudStorage": {
