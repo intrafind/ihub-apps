@@ -42,6 +42,10 @@ import { OFFICE_APPS_PAGE_PATH } from '../utilities/officeStartPage';
 import { buildWebChatUrl } from '../utilities/officeChatHistory';
 import { canConfirmExternalOpen, openExternalUrlSettled } from '../../../utils/externalNavigation';
 import usePinnedEmails from '../hooks/usePinnedEmails';
+import useAiNoticeMenuItem from '../hooks/useAiNoticeMenuItem';
+import AiAcknowledgementNote from '../../chat/components/AiAcknowledgementNote';
+import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
+import { sameContext } from '../utilities/contextFingerprint';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
@@ -56,6 +60,22 @@ import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 import { appHasToolBindings } from '../../../shared/utils/boundIntegrationRefs';
 import './OfficeChatPanel.css';
+
+/**
+ * Put the cursor back into the composer. After the AI-use dialog closes the
+ * Send button is disabled while the answer starts, so "return focus to the
+ * opener" would drop focus to the page body. Deferred: the dialog's own focus
+ * trap hands focus back as it unmounts, and this has to come after that.
+ */
+function focusComposer() {
+  window.setTimeout(() => {
+    try {
+      document.querySelector('.office-chat-input textarea')?.focus();
+    } catch {
+      /* no composer in this view */
+    }
+  }, 0);
+}
 
 // How long the popped-out chat waits for a quiet moment before telling the
 // pane what it looks like now — and, while an answer streams and there is no
@@ -151,6 +171,9 @@ function OfficeChatPanel({
     if (freshChatIdsRef.current.delete(id)) noteAccepted();
   }, []);
 
+  // The server asked for the AI-use notice and the user closed the dialog: the
+  // message goes back into the composer. Set below, where the uploader exists.
+  const sendRefusedRef = useRef(null);
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
     chatId: chatIdRef.current,
@@ -158,8 +181,15 @@ function OfficeChatPanel({
     ephemeral: chatTemporary,
     isFreshChat,
     fileUploadConfig: selectedApp?.upload?.fileUpload,
-    app: selectedApp
+    app: selectedApp,
+    onSendRefused: args => sendRefusedRef.current?.(args)
   });
+  // The AI-use acknowledgement gate; null where no provider is mounted.
+  const acknowledgement = useAiAcknowledgement();
+  const aiNoticeMenuItem = useAiNoticeMenuItem();
+  // Set when a send was held back because the host context changed while the
+  // user was confirming; cleared by the next edit or send.
+  const [contextChangedNote, setContextChangedNote] = useState(false);
   // A stored chat is being fetched. A fresh one has nothing to wait for, so it
   // shows its greeting straight away.
   const loadingStoredChat = !isFreshChat && adapter.hydrating === true;
@@ -460,8 +490,12 @@ function OfficeChatPanel({
     [runAnswerAction, defaultMailActionId]
   );
 
+  // The live host context, for the check after the AI-use dialog.
+  const liveContextRef = useRef(null);
+  liveContextRef.current = mailSnapshot.loading ? null : mailSnapshot.ctx;
+
   const submitMessage = useCallback(
-    (messageText, overrides = {}) => {
+    async (messageText, overrides = {}) => {
       const text = (messageText ?? '').trim();
 
       // Resend can pass a `selectedFile` override to bypass async state updates;
@@ -525,6 +559,36 @@ function OfficeChatPanel({
           : mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
 
+      // AI-use acknowledgement (#3326): the user confirms the notice before the
+      // message leaves. Nothing is cleared yet, so a declined dialog keeps the
+      // draft, the files and the mail context as they are. This is the one seam
+      // of every send: typed, starter prompt, start page hand-off, resend.
+      if (acknowledgement) {
+        let asked = false;
+        setContextChangedNote(false);
+        const allowed = await acknowledgement.ensureAcknowledged({
+          hasPendingMessage: true,
+          onAsk: () => {
+            asked = true;
+          }
+        });
+        if (asked) focusComposer();
+        if (!allowed) {
+          // A start-page hand-off or a resend has nothing in the input yet. A start
+          // form keeps its own values and stays where it is.
+          if (text && !startForm) setInputValue(text);
+          return;
+        }
+        // The dialog does not block Outlook or the browser: the user may have
+        // opened another email or tab meanwhile. The message was captured at the
+        // press, so it is not sent on its own then; one more press sends it.
+        if (asked && !sameContext(snapshotOverride, liveContextRef.current)) {
+          if (text && !startForm) setInputValue(text);
+          setContextChangedNote(true);
+          return;
+        }
+      }
+
       adapter.sendMessage({
         // The form's message keeps its variables in the transcript: a chat
         // that is not stored posts its history, and that is what carries them
@@ -561,7 +625,8 @@ function OfficeChatPanel({
       hostContextFlags,
       pinnedEmails,
       fileUploadHandler,
-      mailSnapshot
+      mailSnapshot,
+      acknowledgement
     ]
   );
 
@@ -585,6 +650,21 @@ function OfficeChatPanel({
     if (!data) return [];
     const arr = Array.isArray(data) ? data : [data];
     return arr.filter(d => d && (d.type === 'image' || d.type === 'document' || d.type === 'file'));
+  };
+
+  // The server asked for the AI-use notice, the turn was taken back and the user
+  // closed the dialog: the text, and the files they attached, are theirs again.
+  sendRefusedRef.current = args => {
+    const text = args?.displayMessage?.meta?.rawContent ?? args?.apiMessage?.content;
+    if (typeof text === 'string' && text) setInputValue(text);
+    const manuals = [
+      ...pickManualUploads(args?.apiMessage?.imageData),
+      ...pickManualUploads(args?.apiMessage?.fileData)
+    ];
+    if (manuals.length > 0) {
+      fileUploadHandler.setSelectedFile(manuals.length === 1 ? manuals[0] : manuals);
+    }
+    focusComposer();
   };
 
   const handleResend = useCallback(
@@ -939,6 +1019,7 @@ function OfficeChatPanel({
           }
         ]
       : []),
+    ...aiNoticeMenuItem,
     {
       key: 'settings',
       label: t('office.menu.settings', 'Settings'),
@@ -1033,6 +1114,7 @@ function OfficeChatPanel({
 
             {showStartForm && (
               <div className="flex-1 min-h-0 overflow-y-auto p-3">
+                <AiAcknowledgementNote className="pb-2 text-xs text-slate-700 dark:text-slate-200" />
                 <ChatStartForm
                   app={selectedApp}
                   localizedVariables={localizedVariables}
@@ -1236,6 +1318,22 @@ function OfficeChatPanel({
             {/* Input */}
             {!showStartForm && (
               <div className="office-chat-input border-t border-gray-200 bg-white shrink-0 dark:border-slate-700 dark:bg-slate-900">
+                {/* The AI-use notice is pending (the user closed the dialog), or the
+                    mail or page changed while they were confirming. A notice, not an
+                    error: neutral, no dismiss button. */}
+                <AiAcknowledgementNote className="px-3 pt-2 text-xs text-slate-700 dark:text-slate-200" />
+                {contextChangedNote && (
+                  <p
+                    role="status"
+                    data-testid="ai-ack-context-changed"
+                    className="px-3 pt-2 text-xs text-slate-700 dark:text-slate-200"
+                  >
+                    {t(
+                      'aiAcknowledgement.contextChanged',
+                      'What you selected changed while you were confirming. Check it, then send again.'
+                    )}
+                  </p>
+                )}
                 <ChatInput
                   app={selectedApp}
                   value={inputValue}

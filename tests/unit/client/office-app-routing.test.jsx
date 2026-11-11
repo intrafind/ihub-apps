@@ -117,6 +117,16 @@ jest.mock('../../../client/src/shared/components/AppListPanel', () => ({
   )
 }));
 
+// The acknowledgement provider has its own tests (office-ai-acknowledgement); it pulls in
+// the API client, which the CJS transform cannot load.
+jest.mock('../../../client/src/shared/contexts/AiAcknowledgementContext', () => ({
+  AiAcknowledgementProvider: ({ children }) => <>{children}</>,
+  useAiAcknowledgement: () => null
+}));
+jest.mock('../../../client/src/shared/hooks/useAiAcknowledgement', () => ({
+  useAiAcknowledgement: () => null
+}));
+
 const OfficeApp = require('../../../client/src/features/office/components/OfficeApp').default;
 
 const renderApp = () =>

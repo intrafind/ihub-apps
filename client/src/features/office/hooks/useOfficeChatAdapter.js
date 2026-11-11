@@ -79,6 +79,8 @@ function combineUploadData(manualData, mailData) {
  * @param {Object} [options.fileUploadConfig] - The app's `upload.fileUpload` block; carries the
  *   Word review options (tracked changes, comments) for mail attachments
  * @param {Object} [options.app] - The app; its `uploads.storageMode` overrides the platform's
+ * @param {Function} [options.onSendRefused] - Forwarded to useAppChat: the server asked for the
+ *   AI-use notice and the user closed the dialog; called with the message that was not sent
  * @returns {Object} useAppChat's result with the enriched `sendMessage`, plus
  *   `storedChatSettings` and `storedChatVariables` — the settings and the app
  *   variables a reopened chat was last answered with.
@@ -91,9 +93,17 @@ function useOfficeChatAdapter({
   ephemeral = false,
   isFreshChat = false,
   fileUploadConfig,
-  app
+  app,
+  onSendRefused
 }) {
-  const chat = useAppChat({ appId, chatId, onMessageComplete, onMessageAccepted, ephemeral });
+  const chat = useAppChat({
+    appId,
+    chatId,
+    onMessageComplete,
+    onMessageAccepted,
+    ephemeral,
+    onSendRefused
+  });
   const { chatSettings: storedChatSettings, chatVariables: storedChatVariables } =
     useStoredChatHydration({ chat, chatId, isFreshChat });
   const host = useEmbeddedHost();
