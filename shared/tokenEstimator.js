@@ -104,6 +104,28 @@ export function tokenizerInfo() {
   return { method: countTokensFn ? 'o200k_base' : 'heuristic' };
 }
 
+const counted = new WeakMap();
+
+/**
+ * `estimateTokens(text)` remembered on `owner` (a message, a document record):
+ * a text that was counted for the same object is not counted again, which is
+ * what an agent loop does with its transcript after every step. The remembered
+ * figure is used only while the text is still the same string content, so an
+ * edited message is counted afresh. Nothing is retained beyond the owner's
+ * life (WeakMap), and the text is not copied.
+ * @param {object} owner
+ * @param {string} text
+ * @returns {number}
+ */
+export function estimateTokensFor(owner, text) {
+  if (!owner || typeof owner !== 'object') return estimateTokens(text);
+  const hit = counted.get(owner);
+  if (hit && hit.text === text) return hit.tokens;
+  const tokens = estimateTokens(text);
+  if (typeof text === 'string' && text.length > 0) counted.set(owner, { text, tokens });
+  return tokens;
+}
+
 /**
  * Estimate tokens across multiple text fragments (system prompt, sources,
  * history, new message, file content, ...). Non-string entries are ignored.

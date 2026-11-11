@@ -9,7 +9,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { estimateTokens, FULL_COUNT_MAX_CHARS } from '../../shared/tokenEstimator.js';
+import {
+  estimateTokens,
+  estimateTokensFor,
+  FULL_COUNT_MAX_CHARS
+} from '../../shared/tokenEstimator.js';
 
 describe('server token estimate', () => {
   it('depends on gpt-tokenizer and finds it from shared/', () => {
@@ -38,5 +42,15 @@ describe('server token estimate', () => {
     // A run without whitespace is the slow case of the exact count (~1.4 s per MB).
     const run = estimateTokens('a'.repeat(4 * 1024 * 1024));
     assert.ok(run > 0);
+  });
+
+  it('remembers the count on the owner and recounts when the text changes', () => {
+    const message = { content: 'Die Plattform durchsucht Dokumente im Unternehmen.' };
+    const first = estimateTokensFor(message, message.content);
+    assert.equal(first, estimateTokens(message.content));
+    assert.equal(estimateTokensFor(message, message.content), first);
+    message.content = `${message.content} Und beantwortet Fragen zu Prozessen.`;
+    assert.equal(estimateTokensFor(message, message.content), estimateTokens(message.content));
+    assert.equal(estimateTokensFor(null, 'abc'), estimateTokens('abc'));
   });
 });

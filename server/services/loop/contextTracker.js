@@ -24,7 +24,7 @@
  * @module services/loop/contextTracker
  */
 import { computeContextUsage } from '../../../shared/contextUsage.js';
-import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { estimateTokens, estimateTokensFor } from '../../../shared/tokenEstimator.js';
 
 /** Text a message puts into the prompt: its content plus the tool calls it carries. */
 function messageText(message) {
@@ -53,7 +53,7 @@ function messageText(message) {
  */
 export function estimateTranscriptTokens(messages) {
   if (!Array.isArray(messages) || messages.length === 0) return 0;
-  return estimateTokens(messages.map(messageText).join('\n'));
+  return messages.reduce((sum, m) => sum + estimateTokensFor(m, messageText(m)), 0);
 }
 
 /**

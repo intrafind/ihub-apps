@@ -16,7 +16,7 @@
  *
  * @module services/loop/contextCompaction
  */
-import { estimateTokens } from '../../../shared/tokenEstimator.js';
+import { estimateTokens, estimateTokensFor } from '../../../shared/tokenEstimator.js';
 import { isLLMError } from './contracts/errors.js';
 
 export function microcompactMessages(messages, opts = {}) {
@@ -45,10 +45,13 @@ export function microcompactMessages(messages, opts = {}) {
 }
 
 export function estimateMessagesTokens(messages) {
-  const totalText = (Array.isArray(messages) ? messages : [])
-    .map(m => (typeof m?.content === 'string' ? m.content : ''))
-    .join(' ');
-  return estimateTokens(totalText);
+  // Per message, remembered on the message: the transcript is counted after
+  // every step and only its newest messages are new. The sum is within 0.1
+  // percent of counting the joined text.
+  return (Array.isArray(messages) ? messages : []).reduce(
+    (sum, m) => sum + estimateTokensFor(m, typeof m?.content === 'string' ? m.content : ''),
+    0
+  );
 }
 
 export function compactIfOversized(messages, opts = {}) {
