@@ -351,7 +351,8 @@ export function buildItemRequest(tabId, draft = {}) {
  * link kinds, whose content stays where it is (a URL, an iHub page, an iFinder
  * document or search). An uploaded or written document has no reference to
  * change, a cloud document and a document linked from another project are
- * picked again instead.
+ * picked again instead. Every item can still be edited for its name and its
+ * "For the AI" setting.
  */
 export const EDITABLE_ITEM_KINDS = Object.freeze([
   'url',
@@ -361,7 +362,8 @@ export const EDITABLE_ITEM_KINDS = Object.freeze([
 ]);
 
 /**
- * Whether an item can be edited (its reference changed), not only renamed.
+ * Whether an item's reference can be changed, not only its name and its
+ * "For the AI" setting.
  *
  * @param {{kind?: string}|null|undefined} item
  * @returns {boolean}
@@ -371,8 +373,9 @@ export function isEditableItem(item) {
 }
 
 /**
- * The draft of the edit dialog for an item: its name and the fields of its
- * reference, in the shape the pickers of the add dialog work on.
+ * The draft of the edit dialog for an item: its name, its "For the AI" setting
+ * and the fields of its reference, in the shape the pickers of the add dialog
+ * work on.
  *
  * @param {{kind: string, name?: string, ref?: Object}} item
  * @returns {Object}
@@ -382,6 +385,7 @@ export function draftFromItem(item) {
   return {
     name: item?.name || '',
     pinned: false,
+    aiAccess: aiAccessOf(item),
     url: ref.url || '',
     selectedUrls: [],
     pageId: ref.pageId || '',
@@ -394,10 +398,11 @@ export function draftFromItem(item) {
 }
 
 /**
- * What to send for an edited item: the name when it changed and the reference
- * when it did. The server replaces the reference as sent, so the fields the
- * pickers do not show (a content limit, a result count) are carried over from
- * the stored reference.
+ * What to send for an edited item: the name when it changed, the "For the AI"
+ * setting when it changed, and — for the link kinds — the reference when it
+ * did. The server replaces the reference as sent, so the fields the pickers do
+ * not show (a content limit, a result count) are carried over from the stored
+ * reference. The reference of any other kind is left alone.
  *
  * @param {{kind: string, name?: string, ref?: Object}} item
  * @param {Object} draft - The edit dialog's draft.
@@ -410,30 +415,35 @@ export function draftFromItem(item) {
  * // => { changes: { ref: { url: 'https://b.example' } }, error: null }
  */
 export function buildItemChanges(item, draft) {
-  const { body, error } = buildItemRequest(item.kind, { ...draft, name: '' });
-  // A search migrated from a source that let the model supply the query has an
-  // empty one, which the server accepts: it stays empty unless one is typed.
-  const keepsEmptyQuery =
-    error === 'queryRequired' && item.kind === 'ifinder-query' && !item.ref?.query;
-  if (error && !keepsEmptyQuery) return { changes: null, error };
-  const searchProfile = (draft.searchProfile || '').trim();
-  const picked = keepsEmptyQuery
-    ? { query: '', ...(searchProfile ? { searchProfile } : {}) }
-    : body.ref;
-  // The profile and the language are optional: an emptied one is dropped.
-  const kept = { ...item.ref };
-  delete kept.searchProfile;
-  delete kept.language;
-  const ref = { ...kept, ...picked };
   const changes = {};
   const name = textOf(draft.name).trim();
   if (name && name !== item.name) changes.name = name;
-  // The values of a reference are scalars: equal keys with equal values.
-  const stored = item.ref || {};
-  const keys = Object.keys(ref);
-  const same =
-    keys.length === Object.keys(stored).length && keys.every(key => ref[key] === stored[key]);
-  if (!same) changes.ref = ref;
+  const aiAccess = draft.aiAccess || aiAccessOf(item);
+  if (aiAccess !== aiAccessOf(item)) Object.assign(changes, aiAccessChange(aiAccess));
+
+  if (isEditableItem(item)) {
+    const { body, error } = buildItemRequest(item.kind, { ...draft, name: '' });
+    // A search migrated from a source that let the model supply the query has an
+    // empty one, which the server accepts: it stays empty unless one is typed.
+    const keepsEmptyQuery =
+      error === 'queryRequired' && item.kind === 'ifinder-query' && !item.ref?.query;
+    if (error && !keepsEmptyQuery) return { changes: null, error };
+    const searchProfile = (draft.searchProfile || '').trim();
+    const picked = keepsEmptyQuery
+      ? { query: '', ...(searchProfile ? { searchProfile } : {}) }
+      : body.ref;
+    // The profile and the language are optional: an emptied one is dropped.
+    const kept = { ...item.ref };
+    delete kept.searchProfile;
+    delete kept.language;
+    const ref = { ...kept, ...picked };
+    // The values of a reference are scalars: equal keys with equal values.
+    const stored = item.ref || {};
+    const keys = Object.keys(ref);
+    const same =
+      keys.length === Object.keys(stored).length && keys.every(key => ref[key] === stored[key]);
+    if (!same) changes.ref = ref;
+  }
   return { changes: Object.keys(changes).length > 0 ? changes : null, error: null };
 }
 

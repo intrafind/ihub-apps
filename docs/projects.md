@@ -208,9 +208,10 @@ project, size of one file and of one project, projects per user; see
 2. **Create and add items** creates the project and opens its editor with the **Add item** dialog
    already open: upload files, paste text, or add a web page, an iHub page, an iFinder document or
    an iFinder search.
-3. Pin items that must always reach the model (see [Load in full or search](#load-in-full-or-search)).
-   Preview the stored text, edit the text of an uploaded, written or migrated document, rename,
-   refresh or remove an item from the items table.
+3. Pin items that must always reach the model (see [Load in full or search](#load-in-full-or-search)):
+   choose **Edit** on an item and set **For the AI** to *Pinned*. Preview the stored text, edit the
+   text of an uploaded, written or migrated document, edit an item's name, refresh or remove an item
+   from the items table.
 4. Link the project to apps, workflows and agents.
 
 ![The New project form: name, project ID filled in from the name, description, who can use the project, instructions](assets/screenshots/admin-project-new.png)
@@ -387,7 +388,8 @@ affected.
 - The name of a project on **Admin → Projects** (or **Edit project** in the list) opens its page
   (`/admin/projects/:id`). There is no separate read-only view and edit mode: on the same page you
   add, preview, refresh, move and remove items, and set each document's **For the AI** mode
-  (*Normal*, *Pinned* or *Not for AI*). **Used by** lists the apps, workflows and agents that link
+  (*Normal*, *Pinned* or *Not for AI*) in the item's **Edit** dialog, which also changes its name
+  (and, for a link item, what it points at). The table marks a pinned or *Not for AI* document. **Used by** lists the apps, workflows and agents that link
   the project, and the settings are rows beside the items, each changed in a dialog.
 - `GET /api/admin/projects/_tokens` reports each admin project's size in tokens, items and bytes,
   together with the load-all budget (`loadAllBudgetTokens`) and the tool result budget. The app
@@ -459,8 +461,8 @@ is read as `relevant`, and an `auto` project that does not fit injects its best 
 for any model, so unpinned documents are not silently out of reach. The prompt then names no
 knowledge tool and lists no documents to read from. The answer badge says the mode was replaced.
 
-**Not for AI.** Next to **Pinned**, an item can be marked **Not for AI** (the item's "For the AI"
-column, `excludedFromAi`). It stays in the project for people (preview, download, sharing) but is
+**Not for AI.** Next to **Pinned**, an item can be marked **Not for AI** (**For the AI** in the
+item's **Edit** dialog, `excludedFromAi`). It stays in the project for people (preview, download, sharing) but is
 never injected, listed to the model or searched, `knowledge_read` cannot open it, and the MCP project resource (`project://<id>`) leaves it out. Pinned,
 normal and "Not for AI" are one setting: choosing one clears the other. Workflow project nodes work
 on the documents themselves and still see it.
@@ -680,7 +682,7 @@ A project page shows:
   does not push them down. They come a page at a time (10, 25 or 50, newest first), and the Projects
   page pages its list the same way; a list on these pages never grows with its content.
 - **Documents** with status, provenance and size, and the usage against the limits; from six
-  documents on the list scrolls inside its card. Owners and editors pin, rename, refresh, preview
+  documents on the list scrolls inside its card. Owners and editors edit (name, **For the AI**), refresh, preview
   and remove documents and retry failed cloud documents. They can also tick several documents and
   choose **Delete** to delete them all after one confirmation. A document that cannot be deleted
   stays ticked, and the page says why. **Estimate tokens** shows what each

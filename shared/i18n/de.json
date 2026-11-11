@@ -8927,7 +8927,6 @@
       "defaultAppHint": "Neue Chats dieses Projekts starten in dieser App. Beim Start eines Chats kann jeder eine andere App wählen."
     },
     "items": {
-      "aiAccessFor": "Nutzung von {{name}} durch die KI",
       "aiAccessHint": "Angeheftete Einträge stehen immer im Prompt. Einträge „Nicht für KI“ bleiben für Personen im Projekt, werden dem Modell aber nie gegeben, aufgelistet oder durchsucht.",
       "aiAccess": {
         "normal": "Normal",
@@ -8938,7 +8937,6 @@
         "preview": "Text ansehen",
         "refresh": "Aktualisieren",
         "remove": "Element entfernen",
-        "rename": "Umbenennen",
         "retry": "Erneut versuchen",
         "transfer": "Verschieben oder kopieren nach…",
         "openInIFinder": "In iFinder öffnen",
@@ -8969,7 +8967,6 @@
       "pinnedHint": "Angeheftete Elemente sind immer im Prompt, auch wenn das Projekt durchsucht wird.",
       "removeConfirm": "„{{name}}“ aus dem Projekt entfernen?",
       "removeTitle": "Element entfernen",
-      "renameTitle": "Element umbenennen",
       "status": {
         "extracting": "Wird extrahiert",
         "failed": "Fehlgeschlagen",
