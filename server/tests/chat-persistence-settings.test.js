@@ -26,7 +26,11 @@ import path from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { ChatRepository, normalizeChatSettings } from '../services/chat/ChatRepository.js';
+import {
+  ChatRepository,
+  chatTurnSettings,
+  normalizeChatSettings
+} from '../services/chat/ChatRepository.js';
 import { materializeUserTurn } from '../services/chat/chatMaterializer.js';
 
 const OWNER = 'user-1';
@@ -233,5 +237,37 @@ describe('settings on the chat document', () => {
       const chat = await repository.getChat(CHAT_ID);
       assert.deepEqual(chat.settings, { websearchEnabled: true });
     });
+  });
+});
+
+describe('chatTurnSettings', () => {
+  // k3s01 chat-bd8593d8: the approval answer carried no `enabledTools`, so the
+  // continuation ran with the app's default tools, lost the website-corpus
+  // integration the chat had turned on, and the approved crawl found no tool.
+  const chat = {
+    modelId: 'local-vllm',
+    settings: { enabledTools: ['type:storage', 'website-corpus'], style: 'normal' }
+  };
+
+  it('answers a turn that left settings out with the chat ones', () => {
+    const turn = chatTurnSettings({ messages: [{ role: 'user', content: 'ok' }] }, chat);
+    assert.deepEqual(turn.enabledTools, ['type:storage', 'website-corpus']);
+    assert.equal(turn.style, 'normal');
+    assert.equal(turn.modelId, 'local-vllm');
+    assert.equal(turn.websearchEnabled, undefined);
+  });
+
+  it('lets what the request sent win, including an empty tool list', () => {
+    const turn = chatTurnSettings({ enabledTools: [], modelId: 'gpt-4o', style: 'concise' }, chat);
+    assert.deepEqual(turn.enabledTools, []);
+    assert.equal(turn.modelId, 'gpt-4o');
+    assert.equal(turn.style, 'concise');
+  });
+
+  it('has nothing to fall back to for a new chat', () => {
+    const turn = chatTurnSettings({ style: 'concise' }, null);
+    assert.equal(turn.style, 'concise');
+    assert.equal(turn.enabledTools, undefined);
+    assert.equal(turn.modelId, undefined);
   });
 });

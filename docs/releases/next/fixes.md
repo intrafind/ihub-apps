@@ -605,3 +605,11 @@ and finished the answer:
 
 The browser now checks whether the turn is still running and keeps showing it until the answer
 is complete. A request that really failed still shows the error.
+
+## Chat: Answering a Question Keeps the Chat's Tools and Settings
+
+After the user answered a clarifying question, the chat went on with the app's default tools and
+settings: an integration the user had switched on, such as the website corpus, was gone, and the
+assistant fell back to other tools. The same happened to API and MCP callers that send only part
+of the settings. A turn now uses the chat's stored setup (tools, model, style, output format,
+thinking, web search, image and integration settings) for everything the request leaves out.
