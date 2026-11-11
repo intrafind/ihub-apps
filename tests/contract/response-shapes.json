@@ -1697,7 +1697,7 @@
           "statusReason": "null",
           "supported": "boolean",
           "supportedAuthModes": "array",
-          "type": "null|string",
+          "type": "null",
           "update": "null",
           "version": "string"
         }
@@ -1858,7 +1858,7 @@
           "protocol": "string",
           "status": "null",
           "statusReason": "null",
-          "type": "null|string",
+          "type": "null",
           "update": "null",
           "updateAvailable": "boolean",
           "updatedAt?": "string",
@@ -5319,7 +5319,7 @@
           "id": "string",
           "name": "string",
           "protocol": "string",
-          "type": "null|string"
+          "type": "null"
         }
       ]
     }
