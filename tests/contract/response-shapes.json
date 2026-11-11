@@ -3969,6 +3969,14 @@
   "GET /api/admin/version/check-update": {
     "skipped": "reaches the network"
   },
+  "GET /api/admin/website-corpus/domains": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null",
+      "openCount": "number"
+    }
+  },
   "GET /api/admin/workflows": {
     "status": 200,
     "shape": [

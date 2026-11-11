@@ -29,7 +29,7 @@ const CONTENT_ADMIN_SECTIONS = new Set(['overview', 'aiWorkspace']);
 // Items within aiWorkspace visible to content-admin-only users
 const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'projects']);
 
-/** A count next to a nav item (open integration requests), with its meaning for screen readers. */
+/** A count next to a nav item (open requests an admin has to decide), with its meaning for screen readers. */
 function NavBadge({ item, isCollapsed }) {
   if (!item.badge) return null;
   const text = item.badge > 99 ? '99+' : String(item.badge);

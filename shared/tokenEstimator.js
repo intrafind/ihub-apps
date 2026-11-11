@@ -54,6 +54,17 @@ export function estimateTokens(text) {
 }
 
 /**
+ * Which method {@link estimateTokens} counts with: `o200k_base` when
+ * gpt-tokenizer is installed, `heuristic` (about 4 characters per token, a rough
+ * approximation that can be off in either direction) when it is not. For callers that show
+ * the figure to a person and should say how it was made.
+ * @returns {{method: 'o200k_base'|'heuristic'}}
+ */
+export function tokenizerInfo() {
+  return { method: countTokensFn ? 'o200k_base' : 'heuristic' };
+}
+
+/**
  * Estimate tokens across multiple text fragments (system prompt, sources,
  * history, new message, file content, ...). Non-string entries are ignored.
  * @param {Array<string>} fragments

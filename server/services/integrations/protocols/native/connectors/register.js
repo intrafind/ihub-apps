@@ -19,6 +19,7 @@ import entra from './entra/index.js';
 import ldapDirectory from './ldapDirectory/index.js';
 import ldapBrowser from './ldapBrowser/index.js';
 import ihub from './ihub/index.js';
+import websiteCorpus from './websiteCorpus/index.js';
 import {
   googleDriveConnector,
   nextcloudConnector,
@@ -35,6 +36,7 @@ registerConnector(entra);
 registerConnector(ldapDirectory);
 registerConnector(ldapBrowser);
 registerConnector(ihub);
+registerConnector(websiteCorpus);
 registerConnector(office365Connector);
 registerConnector(googleDriveConnector);
 registerConnector(nextcloudConnector);
