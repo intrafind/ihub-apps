@@ -178,9 +178,9 @@ export function AiAcknowledgementProvider({
   );
 
   // The feature was switched off, or this user confirmed elsewhere, while the dialog was open:
-  // nothing is left to ask, and the waiting sends must not stay blocked.
+  // nothing is left to ask, and the waiting sends must not stay blocked. The read-only
+  // review of an already confirmed notice stays open until the user closes it.
   useEffect(() => {
-    // Not the read-only notice: it is opened because the user already confirmed.
     if (open && !readOnly && state && (!state.enabled || state.acknowledged)) closeDialog(true);
   }, [open, readOnly, state, closeDialog]);
 
