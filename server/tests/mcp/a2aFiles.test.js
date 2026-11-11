@@ -408,3 +408,28 @@ describe('outbound FilePart artifacts', () => {
     expect(omitted).toEqual(['b.pdf']);
   });
 });
+
+describe('provenance (EU AI Act Art. 50(2))', () => {
+  const provenance = {
+    spec: 'intrafind-provenance/1.0',
+    ai_generated: true,
+    output_id: '01JC0000000000000000000000'
+  };
+
+  it('puts the provenance of an app answer in the Task metadata and the artifact metadata', async () => {
+    invokeApp.mockResolvedValue({ text: 'Hello', result: { provenance } });
+    const r = await send([{ kind: 'text', text: 'hi' }]);
+    expect(r.result.metadata.provenance).toEqual(provenance);
+    expect(r.result.metadata.skillId).toBe('app__chat');
+    expect(r.result.artifacts[0].metadata.provenance).toEqual(provenance);
+    const task = await store.getTask(r.result.id, 'alice');
+    expect(task.metadata.provenance).toEqual(provenance);
+  });
+
+  it('adds none to a failed task', async () => {
+    invokeApp.mockRejectedValue(new Error('boom'));
+    const r = await send([{ kind: 'text', text: 'hi' }]);
+    expect(r.result.status.state).toBe('failed');
+    expect(r.result.metadata.provenance).toBeUndefined();
+  });
+});

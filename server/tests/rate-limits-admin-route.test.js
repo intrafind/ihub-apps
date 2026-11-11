@@ -89,7 +89,8 @@ describe('GET /api/admin/rate-limits', () => {
       'authApi',
       'oauthApi',
       'oauthTokenApi',
-      'inferenceApi'
+      'inferenceApi',
+      'provenanceVerifyApi'
     ]);
     expect(res.body.limiters.oauthApi).toEqual({ windowMs: 60000, limit: 300, counts: 'all' });
     expect(res.body.limiters.oauthTokenApi).toEqual({

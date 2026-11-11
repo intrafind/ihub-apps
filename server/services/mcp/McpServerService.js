@@ -15,6 +15,8 @@ import {
 } from '../peopleDirectory/PeopleDirectoryService.js';
 import { withTrustedToolContext } from '../../utils/toolCallContext.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
+import { recordTextOutput } from '../provenance/turnProvenance.js';
+import { mcpMeta } from '../provenance/httpProvenance.js';
 import { listMcpResources, readMcpResource } from './resourceAdapter.js';
 import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
@@ -499,7 +501,11 @@ export async function buildMcpServer({ user, platform }) {
                 ...(context.fileData ? { _fileData: context.fileData } : {})
               })
             );
-            return workflowToolResult(result);
+            const answer = workflowAnswerParts(result);
+            const provenance = answer.ok
+              ? await recordTextOutput({ text: answer.text, model: { id: `workflow:${wf.id}` } })
+              : null;
+            return workflowToolResult(result, provenance);
           } catch (err) {
             logger.warn('MCP gateway workflow run failed', {
               component: 'McpServerService',
@@ -601,7 +607,7 @@ function toolSuccessResult(payload) {
  * base64 as the protocol says.
  *
  * @param {string} text - The app's answer
- * @param {{generatedFiles?: Array<Object>, images?: Array<Object>}|null} [outputs]
+ * @param {{generatedFiles?: Array<Object>, images?: Array<Object>, provenance?: Object}|null} [outputs]
  * @returns {Object} An MCP tool result
  */
 export function appToolResult(text, outputs = null) {
@@ -621,7 +627,8 @@ export function appToolResult(text, outputs = null) {
     if (!image?.data || !image?.mimeType) continue;
     content.push({ type: 'image', data: image.data, mimeType: image.mimeType });
   }
-  return { content };
+  // EU AI Act Art. 50(2): machine-readable provenance of the answer.
+  return { content, ...(outputs?.provenance ? { _meta: mcpMeta(outputs.provenance) } : {}) };
 }
 
 /**
@@ -668,13 +675,15 @@ async function workflowFileInput(args, user) {
  * caller *sends* to a workflow do work (`files`, see `workflowFileInput`).
  *
  * @param {Object|string} result - What `workflowRunner` resolved with
+ * @param {Object|null} [provenance] - Provenance object of the answer, put in `_meta.provenance`
  * @returns {Object} An MCP tool result
  */
-export function workflowToolResult(result) {
+export function workflowToolResult(result, provenance = null) {
   const answer = workflowAnswerParts(result);
   if (!answer.ok) return toolErrorResult(answer.error);
   return {
     content: [{ type: 'text', text: answer.text }],
+    ...(provenance ? { _meta: mcpMeta(provenance) } : {}),
     ...(answer.json ? { structuredContent: answer.json } : {})
   };
 }

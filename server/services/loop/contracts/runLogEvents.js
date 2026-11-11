@@ -16,6 +16,7 @@
  * @module services/loop/contracts/runLogEvents
  */
 import { z } from 'zod';
+import { provenanceContractSchema } from '../../provenance/provenanceSchema.js';
 import {
   RUN_KINDS,
   RUN_STATUSES,
@@ -137,6 +138,8 @@ export const runEndData = z.object({
   usage: usageSchema.optional(),
   /** The answer's sources as `run/ended` reported them (chat turns). */
   knowledgeSources: z.array(z.string()).optional(),
+  /** Provenance of the answer, so a replay of the ledger keeps it. */
+  provenance: provenanceContractSchema.optional(),
   cost: z.number().nonnegative().optional(),
   durationMs: z.number().int().nonnegative().optional(),
   /** Set when the run was aborted: who stopped it, from where and when. */

@@ -29,6 +29,8 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
 | `integration-conversations` | the iAssistant conversation a chat maps to                   | –                           | –                                        |
 | `runtime-imports`           | markers saying a one-time import (migration V219, the connection re-index) has already run | –            | [Run Ledger](run-ledger.md)              |
+| `provenance-records`        | one document per content hash with its newest provenance records (never the text), removed after `provenance.retentionDays` | – | [Provenance Records](provenance.md) |
+| `provenance-meta`           | the installation ID, minted once                              | –                           | [Provenance Records](provenance.md) |
 | `a2a-tasks`                 | tasks of the inbound A2A endpoint, kept 24 hours after they finish | the calling principal | [MCP Integration](mcp-integration.md) |
 | `a2a-contexts`              | A2A conversations (`contextId`): bound skill and recent history, kept 7 days after the last message | the calling principal | [MCP Integration](mcp-integration.md) |
 | `a2a-client-contexts`       | conversations with remote A2A agents: the agent's `contextId` and a waiting `taskId` per user, chat and agent, kept 30 days after the last call | the user | [A2A agents](a2a-agents.md) |

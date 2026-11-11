@@ -54,7 +54,28 @@ Each model is defined with the following properties:
 | `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
 | `nativeWebSearch`              | Object  | -        | Native (provider-run) web search settings for this model. See [Native Web Search](#native-web-search) below |
 | `promptCaching`                | Object  | provider default | `{ "enabled": true \| false }` — whether iHub marks prompts for the provider's prompt cache. See [Prompt Caching](#prompt-caching) below |
+| `contentMarking`               | Object  | `{ "text": { "by": "none" } }` | How the model's output is marked as AI generated. See [Output Marking](#output-marking-contentmarking) below |
 | `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |
+
+### Output Marking (`contentMarking`)
+
+Declares what the provider (or iHub) does to mark this model's generated text as AI generated, for the
+provenance object every output carries (see [Provenance Records](provenance.md)). Chat models only.
+
+```json
+{ "contentMarking": { "text": { "by": "provider", "scheme": "synthid", "statementRef": "Provider DPA, annex 3" } } }
+```
+
+| Field | Notes |
+| --- | --- |
+| `text.by` | `none` (default): no marking. `provider`: the provider marks the output; set it only on the provider's written statement, because iHub cannot check it and reports `applied: true` on your word. `ihub` is reserved for iHub's own text watermark and requires a `scheme`; it is not offered in the admin UI and is never reported as applied yet. |
+| `text.scheme` | Free label, at most 64 characters (`synthid`). |
+| `text.keyId` | Reserved for the watermark key. |
+| `text.statementRef` | A document name or URL of the written statement. Kept as a reference only, never opened, and left out of the public model list. |
+
+A model without the block counts as `none`. **Admin → Models** shows "Not marked" in the *Output marking*
+column as a hint and has an *Output marking* section in the editor. There is no gate: a model that is not
+marked still works.
 
 ### Sampling Parameters
 

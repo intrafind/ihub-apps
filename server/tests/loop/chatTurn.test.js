@@ -34,6 +34,8 @@ import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import { activeRequests, routeEnvelope } from '../../sse.js';
 import PromptService from '../../services/PromptService.js';
 import { startTestStorage } from '../helpers/testStorage.js';
+import { hashText } from '../../services/provenance/records.js';
+import { getProvenanceStore } from '../../services/provenance/ProvenanceStore.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import {
   fakeResponse,
@@ -411,6 +413,24 @@ test('no tools, streaming: run/started → step/delta×2 → step/completed → 
   assert.deepEqual(endOutcomes(telemetry), ['completed']);
   assert.equal(telemetry.recordChatCallEnd.calls[0][0].model, MODELS.openai);
   assert.equal(activeRequests.has(chatId), false, 'in-flight controller released');
+});
+
+test('provenance: run/ended, the summary, the ledger end and the record store carry one object; the text is hashed with nfc-trim', async t => {
+  const chatId = newChatId('provenance');
+  const frames = captureFrames(t, chatId);
+  const { service, runLog } = makeService([openaiText(['Hello', ' there'])]);
+
+  const summary = await runTurn(service, { chatId, prep: makePrep(), messageId: 'msg-prov' });
+
+  const ended = frame(frames, RUN_ENDED).data;
+  assert.equal(ended.provenance.ai_generated, true);
+  assert.equal(ended.provenance.model.id, MODELS.openai.id);
+  assert.equal(ended.provenance.content_hash.value, hashText('Hello there'));
+  assert.deepEqual(summary.provenance, ended.provenance, 'the summary the message is stored from');
+  assert.deepEqual(runLog.endRun.calls[0][1].provenance, ended.provenance, 'ledger run/end');
+  const found = await getProvenanceStore().findByHash(hashText('Hello there'));
+  assert.equal(found[0].output_id, ended.provenance.output_id);
+  assert.equal(JSON.stringify(found).includes('Hello there'), false, 'the record has no text');
 });
 
 test('run id: a caller-supplied ledger id is honoured, anything else is replaced by a minted one', async t => {

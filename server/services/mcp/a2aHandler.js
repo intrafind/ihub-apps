@@ -14,6 +14,7 @@ import { getLocalizedString } from '../../utils/localize.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { getA2aTaskStore, taskStatus } from './a2aTaskStore.js';
 import { workflowAnswerParts } from '../workflow/answerParts.js';
+import { recordTextOutput } from '../provenance/turnProvenance.js';
 import { ACCEPTED_TYPES } from '../projects/extractText.js';
 import { GENERATED_FILE_MEDIA_TYPES } from '../../../shared/generatedFiles.js';
 import { ARTIFACT_KINDS } from '../artifacts/artifactPolicy.js';
@@ -647,6 +648,8 @@ async function runTask({
     let answerData = null;
     // Files and pictures the skill produced, returned as `FilePart` artifacts
     let outputs = null;
+    // Provenance of the answer (EU AI Act Art. 50(2)), set by the branch below.
+    let provenance = null;
     if (skill._kind === 'app') {
       const history = contextMessages(await store.getContext(contextId, user.id));
       const { text: result, result: run } = await invokeApp({
@@ -676,6 +679,7 @@ async function runTask({
           : undefined
       });
       answer = result;
+      provenance = run?.provenance || null;
       outputs = { generatedFiles: run?.generatedFiles || [], images: run?.images || [] };
     } else {
       const output = await runTool(
@@ -697,6 +701,10 @@ async function runTask({
       if (!parts.ok) throw new Error(parts.error);
       answer = parts.text;
       answerData = parts.json;
+      provenance = await recordTextOutput({
+        text: answer,
+        model: { id: `workflow:${skill._id}` }
+      });
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
 
@@ -715,7 +723,8 @@ async function runTask({
       parts: [
         { kind: 'text', text: answer },
         ...(answerData ? [{ kind: 'data', data: answerData }] : [])
-      ]
+      ],
+      ...(provenance ? { metadata: { provenance } } : {})
     };
     // Streamed fragments came from every model step; the artifact is the
     // final answer. When they differ, the last event replaces what was
@@ -725,7 +734,12 @@ async function runTask({
         kind: 'artifact-update',
         taskId: task.id,
         contextId,
-        artifact: { artifactId, name: 'response', parts: [] },
+        artifact: {
+          artifactId,
+          name: 'response',
+          parts: [],
+          ...(provenance ? { metadata: { provenance } } : {})
+        },
         append: true,
         lastChunk: true
       });
@@ -751,6 +765,12 @@ async function runTask({
     }
     statusMessage = agentMessage(answer, { contextId, taskId: task.id });
     await store.setArtifact(task.id, artifact);
+    // The final Task carries the provenance object in `metadata.provenance`.
+    if (provenance) {
+      await store.updateTask(task.id, t => {
+        t.metadata = { ...(t.metadata || {}), provenance };
+      });
+    }
     for (const fileArtifact of fileArtifacts) await store.setArtifact(task.id, fileArtifact);
     const updated = await store.setStatus(task.id, 'completed', statusMessage);
     finalState = updated?.status?.state || 'completed';
