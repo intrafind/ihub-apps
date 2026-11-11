@@ -1,5 +1,12 @@
 # Fixes — Unreleased
 
+## Uploaded Pictures Keep Their Original Bytes When No Resize Is Needed
+
+Every picture a user attached was re-encoded to JPEG in the browser, which dropped its embedded provenance
+(C2PA, XMP) and part of an invisible watermark such as SynthID, for example when someone re-uploaded a
+generated image to edit it. A JPEG, PNG, WebP or GIF within the resize limit and under 4 MB is now sent as it
+is. Larger pictures are still resized, and other types are still converted.
+
 ## Project Web Pages and HTML Files Read Like read_url
 
 A project's web page item and an HTML file in a project were read by code of their own next to the

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { createHash } from 'node:crypto';
 import configCache from '../configCache.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { getAzureSpeechToken } from '../services/azureSpeechToken.js';
@@ -18,6 +19,9 @@ import { detectSpeechLanguage, normalizeLanguage } from '../tts/language.js';
 import { resolveVoiceModeSettings } from '../../shared/voiceMode.js';
 
 import { ServiceError } from '../utils/ServiceError.js';
+import { applyProvenanceHeaders } from '../services/provenance/httpProvenance.js';
+import { recordTtsOutput } from '../services/provenance/mediaMarking.js';
+import { newOutputId } from '../services/provenance/records.js';
 /** Longest message body `/api/voice/speech` accepts, before markup is stripped. */
 const MAX_INPUT_CHARACTERS = 200_000;
 
@@ -222,10 +226,18 @@ export default function registerVoiceRoutes(app) {
     const upstream = provider.resolveUpstream(model, { language });
     const cfg = voice ? { ...upstream, voice } : upstream;
 
+    // Allocated before the first byte so it can go into a header. The audio is
+    // never stored: the record holds the SHA-256 of exactly the bytes streamed
+    // (EU AI Act Art. 50(2), #3328). No transcoding anywhere on this path.
+    const outputId = newOutputId();
+    const pcmHash = createHash('sha256');
+    let pcmBytes = 0;
+
     let started = false;
     const start = () => {
       started = true;
       res.status(200);
+      applyProvenanceHeaders(res, outputId);
       res.setHeader('Content-Type', 'application/octet-stream');
       res.setHeader('Cache-Control', 'no-store, no-transform');
       res.setHeader('X-Accel-Buffering', 'no');
@@ -248,6 +260,8 @@ export default function registerVoiceRoutes(app) {
         onAudio: pcm => {
           if (controller.signal.aborted) return undefined;
           if (!started) start();
+          pcmHash.update(pcm);
+          pcmBytes += pcm.length;
           return writeWithBackpressure(res, pcm);
         }
       });
@@ -297,6 +311,17 @@ export default function registerVoiceRoutes(app) {
       logger.error('Read aloud returned no audio', summary);
       throw new ServiceError('NO_AUDIO', 'No audio was returned');
     }
+    // The record is stored before the stream ends, so a lookup that follows
+    // the playback always finds it (it is one small write; best effort).
+    await recordTtsOutput({
+      outputId,
+      contentHash: pcmHash.digest('hex'),
+      byteLength: pcmBytes,
+      model,
+      encoding: TTS_AUDIO_ENCODING,
+      sampleRate: provider.sampleRate,
+      req
+    });
     res.end();
     logger.info('Read aloud finished', summary);
     return undefined;

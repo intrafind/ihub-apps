@@ -599,6 +599,11 @@ function toolSuccessResult(payload) {
   return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
 }
 
+/** `content_hash` of a stamped generated image. */
+function imageHashOf(image) {
+  return { alg: 'sha-256', normalization: 'none', value: image.provenance.contentHash };
+}
+
 /**
  * The MCP result of an app run: its answer as a text block, then the files and
  * pictures the app produced as standard content blocks — an embedded resource
@@ -625,7 +630,21 @@ export function appToolResult(text, outputs = null) {
   }
   for (const image of outputs?.images || []) {
     if (!image?.data || !image?.mimeType) continue;
-    content.push({ type: 'image', data: image.data, mimeType: image.mimeType });
+    // `_meta.provenance` names the output (EU AI Act Art. 50(2), #3328); the
+    // bytes stay exactly as the provider sent them.
+    content.push({
+      type: 'image',
+      data: image.data,
+      mimeType: image.mimeType,
+      ...(image.provenance?.outputId
+        ? {
+            _meta: mcpMeta({
+              output_id: image.provenance.outputId,
+              content_hash: imageHashOf(image)
+            })
+          }
+        : {})
+    });
   }
   // EU AI Act Art. 50(2): machine-readable provenance of the answer.
   return { content, ...(outputs?.provenance ? { _meta: mcpMeta(outputs.provenance) } : {}) };

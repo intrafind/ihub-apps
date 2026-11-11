@@ -4602,6 +4602,19 @@
                   "data": {
                     "type": "string"
                   },
+                  "provenance": {
+                    "type": "object",
+                    "properties": {
+                      "outputId": {
+                        "type": "string"
+                      },
+                      "contentHash": {
+                        "type": "string"
+                      }
+                    },
+                    "required": ["outputId", "contentHash"],
+                    "additionalProperties": false
+                  },
                   "thoughtSignature": {
                     "type": "string"
                   }
