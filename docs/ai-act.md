@@ -112,8 +112,22 @@ it; "Not found" only means there is no record, not that a person wrote it.
 - **Per model:** `contentMarking.text.by` is `none` (default) or `provider` (**Admin → Models**, *Output
   marking*). Choose `provider` only with the provider's written statement; iHub cannot check it. The models
   list shows "Not marked" as a hint, never as a block.
-- **Platform:** `provenance.retentionDays` (365), `provenance.storeRecords` (true) and
-  `provenance.verify.access` (`authenticated` or `public`) in `platform.json`.
+- **Platform:** edit these in **Admin → EU AI Act → Provenance settings** (see below) or in `platform.json`.
+  Defaults and bounds (the form and the server refuse values outside them):
+
+  | Setting | Default | Allowed | Meaning |
+  |---|---|---|---|
+  | `provenance.retentionDays` | 365 | 0 to 36500 | Days records are kept; 0 keeps them forever. |
+  | `provenance.storeRecords` | true | on/off | Off still attaches the provenance object but keeps no record. |
+  | `provenance.verify.access` | `authenticated` | `authenticated`, `public` | Who may call `POST /api/provenance/_verify`. |
+  | `provenance.media.maxVerifyBytes` | 52428800 (50 MiB) | 1024 bytes to 1 GiB | Largest uploaded file; the form shows MiB. |
+  | `provenance.media.readC2pa` | true | on/off | Read C2PA marks of images. |
+  | `provenance.watermark.alpha` | 0.0001 | above 0, below 1 | False-positive limit of the text detector. |
+  | `provenance.watermark.minScoredTokens` | 200 | 1 to 100000 | Shorter texts are "too short to tell". |
+  | `provenance.watermark.detectorTimeoutMs` | 15000 | 1000 to 120000 | Wait for a detector. |
+
+  All of them apply at once; no restart is needed. The watermark tunables are optional: empty in the form
+  removes the key and the default applies.
 - **Upgrade:** migration V243 writes the defaults. Nothing changes for users; API consumers see an extra
   `provenance` member and two headers.
 
@@ -130,7 +144,7 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
 
 ## Admin page
 
-**Admin → EU AI Act** (`/admin/eu-ai-act`) is the one place to see and operate the measures above. Four cards:
+**Admin → EU AI Act** (`/admin/eu-ai-act`) is the one place to see and operate the measures above. Five cards:
 
 - **Configuration check.** One row per check with a level (OK, Attention, Failing) and a link to where it is fixed.
   The server decides every level (`GET /api/admin/eu-ai-act/status`, admin only, never a key or token). Failing is
@@ -141,12 +155,24 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
   probes again) through the SSL whitelist and proxy. **Green means "configured as designed", not "legally
   compliant".** Disabled models are not checked.
 - **Acknowledgements.** Counts for registered users and the same actions as the Users page (shared component).
-- **Watermark keys.** Generate, add, reveal and delete retired keys; per model: test connection and self-test
-  (about 400 tokens). The last self-test result is kept per model; after a key change it shows as outdated until
-  run again. Detector URL and credential are edited in the model editor.
+- **Watermark keys.** Generate, add, reveal, delete retired keys and **Make active** on a retired key
+  (rollback, for example when vLLM was not updated in time). Making a key active retires the current one,
+  asks you to update vLLM's `--watermark-config` (the printed option can be shown again, which is audited) and
+  until then the self-test shows a mismatch. Per model: test connection and self-test (about 400 tokens). The last
+  self-test result is kept per model; after a key change it shows as outdated until run again. Detector URL and
+  credential are edited in the model editor.
+- **Provenance settings.** The settings of the table above as a form, with defaults and units next to each
+  field. The save validates on the client and the server with the same bounds and merges into `platform.json`,
+  so keys the form does not own are kept. Lowering the retention (records older than the new limit are deleted
+  at the next daily clean-up, irreversibly) and changing who may check outputs ask for a confirmation that names
+  the consequence. Every change is written to the audit log (resource `provenanceSettings`, old and new values),
+  and the configuration check refreshes after saving.
 - **Verification.** Text or image/audio upload against `POST /api/provenance/_verify`. Rows: output record, watermark
   (text), C2PA (media), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion",
   never "not watermarked".
+
+The other two platform settings of this feature have forms of their own on **Admin → Advanced**: the first-turn
+notice (`aiDisclosure`) and the AI-use acknowledgement (`aiAcknowledgement`).
 
 Image marking is declared per model in the model editor (*Image marking*, shown for image-generating models).
 

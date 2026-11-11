@@ -20,6 +20,10 @@ import {
   describeSettingsChange,
   mergeSettingsForSave
 } from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
+import {
+  describeProvenanceChange,
+  mergeProvenanceForSave
+} from '../../services/provenance/provenanceSettingsAdmin.js';
 
 /** The platform configuration, as a path relative to `contents/`. */
 const PLATFORM_FILE = 'config/platform.json';
@@ -347,9 +351,9 @@ export default function registerAdminConfigRoutes(app) {
         newConfig.aiAcknowledgement,
         existingConfig.aiAcknowledgement
       ),
-      // Provenance records (#3327): retention, store switch, verify access; same reason as above.
-      provenance:
-        newConfig.provenance !== undefined ? newConfig.provenance : existingConfig.provenance,
+      // Provenance records (#3327): retention, store switch, verify access, media and
+      // watermark tunables. Validated and deep-merged, so keys a form does not own survive.
+      provenance: mergeProvenanceForSave(newConfig.provenance, existingConfig.provenance),
       auth: newConfig.auth || existingConfig.auth,
       anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
       proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
@@ -458,6 +462,21 @@ export default function registerAdminConfigRoutes(app) {
         resourceId: 'settings',
         summary: `AI-use acknowledgement settings changed: ${acknowledgementChange.changed.join(', ')}`,
         details: acknowledgementChange
+      });
+    }
+
+    const provenanceChange = describeProvenanceChange(
+      existingConfig.provenance,
+      mergedConfig.provenance
+    );
+    if (provenanceChange) {
+      await logAudit({
+        req,
+        action: 'update',
+        resource: 'provenanceSettings',
+        resourceId: 'settings',
+        summary: `Provenance settings changed: ${provenanceChange.changed.map(c => c.key).join(', ')}`,
+        details: provenanceChange
       });
     }
 

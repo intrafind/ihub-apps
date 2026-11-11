@@ -1720,7 +1720,7 @@ marking and detection duty of Art. 50(2) of the EU AI Act (due 2026-12-02).
 
 See [Text Watermarking](../../ai-act-text-watermarking.md).
 
-## EU AI Act Page: Configuration Check, Watermark Keys and Verification in One Place
+## EU AI Act Page: Configuration Check, Watermark Keys, Settings and Verification in One Place
 
 Admins find everything for the Art. 50 transparency duties on **Admin → EU AI Act** instead of in
 config files.
@@ -1734,7 +1734,14 @@ config files.
   again, remove all, CSV export.
 - **Watermark keys.** List, generate, add and delete retired keys; reveal a key on purpose
   (audit-logged, hidden again after 60 seconds, never kept in the page), and test the connection
-  or run the self-test per model.
+  or run the self-test per model. **Make active** on a retired key rolls back to it; the
+  confirmation says that the current key is retired, that vLLM's `--watermark-config` must follow
+  and that self-test results turn outdated until then.
+- **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who may
+  check an output (signed-in users or anyone), the size limit of checked files (in MiB), C2PA reading and the text detector's false-positive limit, shortest judged text and
+  time limit are a form with defaults and units. Values are checked in the browser and on the
+  server against the same bounds. Lowering the retention or opening the check to the public asks
+  for a confirmation first. Changes apply at once, no restart, and are written to the audit log.
 - **Verification.** Paste a text or upload an image or audio file and see, per technique, whether
   it was found, which watermark key matched, and whether C2PA content credentials are present. A
   negative result never claims the content is human-made.

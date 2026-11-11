@@ -89,7 +89,7 @@ throwaway random key; no real key leaves iHub.
 2. **Restart vLLM right away** with the new `--watermark-config`, then run the self-test.
 3. Retired keys stay in the store and are tried by the detector, so older text is still recognised and reports its
    **old** `keyId`. Delete one only deliberately: text made with it can no longer be recognised, and its id is never
-   reused. `POST .../{keyId}/_activate` re-activates a retired key (rollback).
+   reused. `POST .../{keyId}/_activate` re-activates a retired key (rollback); in the admin page it is **Make active** on a retired key, behind a confirmation. It is audited (`from`, `to`; never a key value), a no-op on the active key writes no entry, and the key is not shown until you choose *Show key and vLLM option* (audited like Reveal).
 
 Output generated between "rotate in iHub" and "restart vLLM" is recorded under the new `key_id` but marked with
 the old key. A reveal (`POST .../{keyId}/_reveal`) is `Cache-Control: no-store`, written to the audit log **before**

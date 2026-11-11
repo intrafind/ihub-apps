@@ -137,7 +137,7 @@ export default function registerProvenanceRoutes(app) {
    *           scheme?, technique?, keyId?, pValue?, scoredTokens?, keysChecked?, detectorsChecked? }`.
    *           A negative is never proof of human origin.
    *           For a file upload: `{ found, kind, normalization: "none", contentHash: { alg, value,
-   *           payloadValue?, bytes, mimeType }, records?, c2pa: { present, status, valid, issuer,
+   *           bytes, mimeType }, records?, c2pa: { present, status, valid, issuer,
    *           digitalSourceType, claimGenerator, signedAt, trust: "not-evaluated",
    *           xmpDigitalSourceType } | null, declared, technique, synthid, caveats }`. `valid`
    *           means signature and binding hold, not that the signer is trusted.

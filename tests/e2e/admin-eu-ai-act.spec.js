@@ -70,7 +70,7 @@ test.describe('Admin EU AI Act page', () => {
     expect(JSON.stringify(body)).not.toMatch(/"(key|token|secret)"/);
   });
 
-  test('the page loads with the four cards, shows real checks and the honesty note', async ({
+  test('the page loads with the five cards, shows real checks and the honesty note', async ({
     page
   }) => {
     await page.goto('/admin/eu-ai-act');
@@ -79,6 +79,7 @@ test.describe('Admin EU AI Act page', () => {
       'Configuration check',
       'Acknowledgements',
       'Watermark keys',
+      'Provenance settings',
       'Verification'
     ]) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
@@ -239,6 +240,80 @@ test.describe('Admin EU AI Act page', () => {
       await expect(card.getByText(new RegExp(`Enforced, version ${version + 1}`))).toBeVisible();
     } finally {
       await setEnabled(false);
+    }
+  });
+
+  test('rollback: Make active swaps the keys after a confirmation that names the consequences', async ({
+    page
+  }) => {
+    // Make sure a retired key exists: a new key retires the active one.
+    expect((await page.request.post('/api/admin/watermark-keys', { data: {} })).ok()).toBeTruthy();
+    await page.goto('/admin/eu-ai-act#watermark-keys');
+    const before = await (await page.request.get('/api/admin/watermark-keys')).json();
+    const retired = before.items.find(k => k.status === 'retired');
+    const current = before.items.find(k => k.status === 'active');
+    expect(retired, 'an earlier test left a retired key').toBeTruthy();
+
+    await page.getByRole('button', { name: `Make key ${retired.keyId} active` }).click();
+    const dialog = page.getByRole('alertdialog');
+    await expect(dialog).toContainText(`${current.keyId} becomes retired`);
+    await expect(dialog).toContainText('--watermark-config');
+    await expect(dialog).toContainText('mismatch');
+    await expect(dialog).toContainText('outdated');
+    // Nothing happened yet.
+    let now = await (await page.request.get('/api/admin/watermark-keys')).json();
+    expect(now.items.find(k => k.keyId === retired.keyId).status).toBe('retired');
+
+    await dialog.getByRole('button', { name: 'Make active' }).click();
+    await expect(page.getByText(`Key ${retired.keyId} is now active`)).toBeVisible();
+    now = await (await page.request.get('/api/admin/watermark-keys')).json();
+    expect(now.items.find(k => k.keyId === retired.keyId).status).toBe('active');
+    expect(now.items.find(k => k.keyId === current.keyId).status).toBe('retired');
+    // The key value stays out of the page until it is revealed.
+    expect(await page.content()).not.toContain('"algorithm"');
+    await page.getByRole('button', { name: 'Show key and vLLM option' }).click();
+    await expect(page.getByRole('dialog')).toContainText('"algorithm"');
+  });
+
+  test('provenance settings: validation, a consequence note, save and persistence', async ({
+    page
+  }) => {
+    const read = async () =>
+      (await (await page.request.get('/api/admin/configs/platform')).json()).provenance;
+    const original = await read();
+    try {
+      await page.goto('/admin/eu-ai-act#provenance-settings');
+      const retention = page.getByLabel(/Keep records for/);
+      await expect(retention).toBeVisible();
+
+      await retention.fill('-1');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await expect(retention).toHaveAttribute('aria-invalid', 'true');
+      await expect(page.locator('#provenance-retentionDays-error')).toContainText('0 or more');
+
+      // A lowered retention asks first; cancelling changes nothing.
+      await retention.fill('1');
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      const dialog = page.getByRole('alertdialog');
+      await expect(dialog).toContainText('deleted at the next daily clean-up');
+      await dialog.getByRole('button', { name: 'Cancel' }).click();
+      expect((await read()).retentionDays).toBe(original.retentionDays);
+
+      await page.getByRole('button', { name: 'Save', exact: true }).click();
+      await page.getByRole('alertdialog').getByRole('button', { name: 'Save' }).click();
+      await expect(page.getByText(/Settings saved/)).toBeVisible();
+      const saved = await read();
+      expect(saved.retentionDays).toBe(1);
+      // What the form does not own is untouched.
+      expect(saved.media).toEqual(original.media);
+      expect(saved.verify).toEqual(original.verify);
+    } finally {
+      await page.request.post('/api/admin/configs/platform', {
+        data: {
+          ...(await (await page.request.get('/api/admin/configs/platform')).json()),
+          provenance: { retentionDays: original.retentionDays }
+        }
+      });
     }
   });
 

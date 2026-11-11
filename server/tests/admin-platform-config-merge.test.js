@@ -58,8 +58,11 @@ jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
   }
 }));
 
+const auditEntries = [];
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({
-  logAudit: async () => {}
+  logAudit: async entry => {
+    auditEntries.push({ ...entry, req: undefined });
+  }
 }));
 
 jest.unstable_mockModule('../services/ChangeHistoryService.js', () => ({
@@ -439,5 +442,120 @@ describe('POST /api/admin/configs/platform answers refusals in the shared shape'
     expect(response.body).toMatchObject({ code: 'BAD_REQUEST' });
     expect(response.body.detail).toContain('defaultLanguage');
     expect(await readPlatform()).toEqual({ auth: { mode: 'local' } });
+  });
+});
+
+describe('POST /api/admin/configs/platform provenance block', () => {
+  const stored = {
+    auth: { mode: 'local' },
+    chats: { enabled: true, retentionDays: 90 },
+    provenance: {
+      retentionDays: 365,
+      storeRecords: true,
+      verify: { access: 'authenticated', futureFlag: 'keep' },
+      media: { maxVerifyBytes: 52428800, readC2pa: true, extra: 1 },
+      watermark: { alpha: 0.001, minScoredTokens: 300 },
+      somethingElse: { nested: true }
+    }
+  };
+
+  beforeEach(async () => {
+    auditEntries.length = 0;
+    state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-platform-prov-'));
+    await fs.mkdir(path.join(state.rootDir, 'contents', 'config'), { recursive: true });
+    await fs.writeFile(platformPath(), JSON.stringify(stored, null, 2));
+  });
+  afterEach(async () => {
+    await fs.rm(state.rootDir, { recursive: true, force: true });
+  });
+
+  const post = body => request(createTestApp()).post('/api/admin/configs/platform').send(body);
+
+  test('a partial provenance body changes its keys and keeps every other key, nested ones too', async () => {
+    const res = await post({
+      provenance: {
+        retentionDays: 30,
+        verify: { access: 'public' },
+        media: { readC2pa: false },
+        watermark: { minScoredTokens: 500 }
+      }
+    });
+    expect(res.status).toBe(200);
+    const saved = await readPlatform();
+    expect(saved.chats).toEqual(stored.chats);
+    expect(saved.provenance).toEqual({
+      retentionDays: 30,
+      storeRecords: true,
+      verify: { access: 'public', futureFlag: 'keep' },
+      media: { maxVerifyBytes: 52428800, readC2pa: false, extra: 1 },
+      watermark: { alpha: 0.001, minScoredTokens: 500 },
+      somethingElse: { nested: true }
+    });
+  });
+
+  test('null on a watermark tunable removes it (code default again); an emptied block is dropped', async () => {
+    await post({ provenance: { watermark: { alpha: null, minScoredTokens: null } } });
+    const saved = await readPlatform();
+    expect(saved.provenance.watermark).toBeUndefined();
+  });
+
+  test('a body without provenance leaves the block untouched', async () => {
+    await post({ chats: { enabled: false } });
+    expect((await readPlatform()).provenance).toEqual(stored.provenance);
+  });
+
+  test.each([
+    [{ retentionDays: -1 }, 'retentionDays'],
+    [{ retentionDays: 1.5 }, 'retentionDays'],
+    [{ retentionDays: 36501 }, 'retentionDays'],
+    [{ retentionDays: '30' }, 'retentionDays'],
+    [{ storeRecords: 'yes' }, 'storeRecords'],
+    [{ verify: { access: 'everyone' } }, 'verify.access'],
+    [{ media: { maxVerifyBytes: 10 } }, 'media.maxVerifyBytes'],
+    [{ media: { maxVerifyBytes: 2 * 1024 * 1024 * 1024 } }, 'media.maxVerifyBytes'],
+    [{ watermark: { alpha: 0 } }, 'watermark.alpha'],
+    [{ watermark: { alpha: 1 } }, 'watermark.alpha'],
+    [{ watermark: { minScoredTokens: 0 } }, 'watermark.minScoredTokens'],
+    [{ watermark: { detectorTimeoutMs: 999 } }, 'watermark.detectorTimeoutMs'],
+    [{ watermark: { detectorTimeoutMs: 120001 } }, 'watermark.detectorTimeoutMs']
+  ])('rejects %j with 400 naming %s and writes nothing', async (provenance, field) => {
+    const res = await post({ provenance });
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(res.body)).toContain(field);
+    expect((await readPlatform()).provenance).toEqual(stored.provenance);
+    expect(auditEntries).toHaveLength(0);
+  });
+
+  test('accepts the bounds themselves', async () => {
+    const res = await post({
+      provenance: {
+        retentionDays: 0,
+        media: { maxVerifyBytes: 1024 },
+        watermark: { alpha: 0.5, minScoredTokens: 1, detectorTimeoutMs: 120000 }
+      }
+    });
+    expect(res.status).toBe(200);
+  });
+
+  test('a legacy stored block sent back unchanged is not re-validated', async () => {
+    const legacy = { ...stored, provenance: { ...stored.provenance, retentionDays: -5 } };
+    await fs.writeFile(platformPath(), JSON.stringify(legacy));
+    const res = await post({ ...legacy, chats: { enabled: false } });
+    expect(res.status).toBe(200);
+    expect((await readPlatform()).provenance.retentionDays).toBe(-5);
+  });
+
+  test('a change is audit-logged with old and new values; no change writes no provenance entry', async () => {
+    await post({ provenance: { retentionDays: 30, verify: { access: 'public' } } });
+    const entry = auditEntries.find(e => e.resource === 'provenanceSettings');
+    expect(entry).toMatchObject({ action: 'update', resourceId: 'settings' });
+    expect(entry.details.changed).toEqual([
+      { key: 'retentionDays', from: 365, to: 30 },
+      { key: 'verify.access', from: 'authenticated', to: 'public' }
+    ]);
+
+    auditEntries.length = 0;
+    await post({ provenance: { retentionDays: 30 } });
+    expect(auditEntries.find(e => e.resource === 'provenanceSettings')).toBeUndefined();
   });
 });

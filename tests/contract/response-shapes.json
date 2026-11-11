@@ -1410,6 +1410,61 @@
   "GET /api/admin/document-templates/:id/files/:slot": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/admin/eu-ai-act/status": {
+    "status": 200,
+    "shape": {
+      "acknowledgements": {
+        "counts": {
+          "acknowledged": "number",
+          "pending": "number",
+          "total": "number"
+        },
+        "enabled": "boolean",
+        "enforced": "boolean",
+        "requiredVersion": "number"
+      },
+      "checks": [
+        {
+          "fix": "null|object",
+          "id": "string",
+          "level": "string",
+          "message": "string",
+          "messageKey": "string",
+          "modelId?": "string",
+          "params": "object",
+          "scope": "string"
+        }
+      ],
+      "generatedAt": "string",
+      "models": [
+        {
+          "activeKeyId": "null",
+          "detector": "null",
+          "marking": "object",
+          "modelId": "string",
+          "name": "object",
+          "selfTest": "null"
+        }
+      ],
+      "provenance": {
+        "media": {
+          "maxVerifyBytes": "number"
+        },
+        "retentionDays": "number",
+        "storeRecords": "boolean",
+        "verifyAccess": "string"
+      },
+      "summary": {
+        "counts": {
+          "error": "number",
+          "ok": "number",
+          "warn": "number"
+        },
+        "level": "string",
+        "skippedDisabledModels": "number"
+      }
+    }
+  },
   "GET /api/admin/features": {
     "status": 200,
     "shape": {
@@ -6742,60 +6797,5 @@
   },
   "GET /sw.js": {
     "skipped": "not an API answer"
-  },
-  "GET /api/admin/eu-ai-act/status": {
-    "status": 200,
-    "shape": {
-      "acknowledgements": {
-        "counts": {
-          "acknowledged": "number",
-          "pending": "number",
-          "total": "number"
-        },
-        "enabled": "boolean",
-        "enforced": "boolean",
-        "requiredVersion": "number"
-      },
-      "checks": [
-        {
-          "fix": "null|object",
-          "id": "string",
-          "level": "string",
-          "message": "string",
-          "messageKey": "string",
-          "modelId?": "string",
-          "params": "object",
-          "scope": "string"
-        }
-      ],
-      "generatedAt": "string",
-      "models": [
-        {
-          "activeKeyId": "null",
-          "detector": "null",
-          "marking": "object",
-          "modelId": "string",
-          "name": "object",
-          "selfTest": "null"
-        }
-      ],
-      "provenance": {
-        "media": {
-          "maxVerifyBytes": "number"
-        },
-        "retentionDays": "number",
-        "storeRecords": "boolean",
-        "verifyAccess": "string"
-      },
-      "summary": {
-        "counts": {
-          "error": "number",
-          "ok": "number",
-          "warn": "number"
-        },
-        "level": "string",
-        "skippedDisabledModels": "number"
-      }
-    }
   }
 }
