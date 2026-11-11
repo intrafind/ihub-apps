@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { highlightCode, renderMarkdown } from '../../../config/marked.config';
 import { sanitizeMermaidSvg } from '../../../utils/mermaidSecurity';
+import { usePlatformConfig } from '../../../shared/contexts/platformConfigContextValue';
+import useDocumentTheme from '../../../shared/hooks/useDocumentTheme';
 import {
   MAX_PREVIEW_BYTES,
   artifactDisplayName,
@@ -183,6 +185,12 @@ export default function ArtifactPreview({
   onViewModeChange
 }) {
   const { t } = useTranslation();
+  const { platformConfig } = usePlatformConfig();
+  const theme = useDocumentTheme();
+  // The CDN hosts the admin allows HTML artifacts to load scripts from; an older
+  // server that does not send the list keeps the preview offline.
+  const configuredHosts = platformConfig?.artifacts?.scriptHosts;
+  const scriptHosts = Array.isArray(configuredHosts) ? configuredHosts : [];
   const type = previewTypeOf(artifact);
   const name = artifactDisplayName(artifact);
   const [state, setState] = useState({ status: 'loading' });
@@ -344,7 +352,7 @@ export default function ArtifactPreview({
           <iframe
             sandbox="allow-scripts"
             referrerPolicy="no-referrer"
-            srcDoc={withPreviewCsp(state.text)}
+            srcDoc={withPreviewCsp(state.text, { scriptHosts, theme })}
             title={name}
             className={`w-full ${tall} ${frame} bg-white`}
           />

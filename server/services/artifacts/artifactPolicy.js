@@ -18,6 +18,7 @@
  */
 import configCache from '../../configCache.js';
 import { TEXT_FILE_MEDIA_TYPES, ZIP_MEDIA_TYPE } from '../../../shared/generatedFiles.js';
+import { normalizeScriptHosts } from '../../../shared/artifactPreview.js';
 
 /**
  * Largest single artifact stored, in bytes of base64, when
@@ -195,11 +196,13 @@ function readNumber(value, fallback) {
  * is looking at it and gone afterwards. `maxBytes` and `maxPerBatch` of zero
  * or less remove their cap. `maxZipFiles` and `maxZipBytes` bound one ZIP
  * archive (a download of several artifacts, or one `create_zip` builds); zero
- * or less removes their cap too.
+ * or less removes their cap too. `scriptHosts` are the CDN hosts an HTML
+ * artifact's preview may load scripts and stylesheets from (see
+ * `shared/artifactPreview.js`): absent means the defaults, `[]` none.
  *
  * @param {Object} [platformConfig] - Platform configuration.
  * @returns {{enabled: boolean, maxBytes: number, maxPerBatch: number,
- *   maxZipFiles: number, maxZipBytes: number}}
+ *   maxZipFiles: number, maxZipBytes: number, scriptHosts: string[]}}
  */
 export function artifactSettings(platformConfig) {
   const artifacts = platformConfig?.artifacts || {};
@@ -208,7 +211,8 @@ export function artifactSettings(platformConfig) {
     maxBytes: readNumber(artifacts.maxBytes, DEFAULT_MAX_ARTIFACT_BYTES),
     maxPerBatch: readNumber(artifacts.maxPerBatch, DEFAULT_MAX_ARTIFACTS_PER_BATCH),
     maxZipFiles: readNumber(artifacts.maxZipFiles, DEFAULT_MAX_ZIP_FILES),
-    maxZipBytes: readNumber(artifacts.maxZipBytes, DEFAULT_MAX_ZIP_BYTES)
+    maxZipBytes: readNumber(artifacts.maxZipBytes, DEFAULT_MAX_ZIP_BYTES),
+    scriptHosts: normalizeScriptHosts(artifacts.scriptHosts)
   };
 }
 

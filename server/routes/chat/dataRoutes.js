@@ -31,6 +31,7 @@ import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
 import { getSettings as getAcknowledgementSettings } from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
 import { isEuAiActEnabled } from '../../services/euAiAct/conformity.js';
+import { artifactSettings } from '../../services/artifacts/artifactPolicy.js';
 
 /**
  * The default dictation model as the client sees it: its id, and whether it is
@@ -871,6 +872,10 @@ export default function registerDataRoutes(app) {
       projects: projectsClientConfig(configCache.getFeatures(), platform, {
         storageAvailable: getProjectRepository().isAvailable()
       }),
+      // HTML artifacts: the CDN hosts their sandboxed preview may load
+      // scripts and stylesheets from. The browser needs the names to build
+      // the preview's CSP, so they are sent as configured.
+      artifacts: { scriptHosts: artifactSettings(platform).scriptHosts },
       uploads: uploadsClientConfig(platform, {
         storageAvailable: getChatFileRepository().isAvailable()
       }),

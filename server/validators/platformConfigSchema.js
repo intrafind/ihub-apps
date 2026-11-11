@@ -737,7 +737,12 @@ export const platformConfigSchema = z
         // One ZIP archive: a download of several artifacts, or one the
         // `create_zip` tool builds. Files in it, and bytes before compression.
         maxZipFiles: z.number().prefault(200),
-        maxZipBytes: z.number().prefault(104857600)
+        maxZipBytes: z.number().prefault(104857600),
+        // CDN hosts an HTML artifact's preview may load scripts and
+        // stylesheets from (shared/artifactPreview.js). Absent: the defaults;
+        // [] keeps the preview offline. Entries that are not plain hosts are
+        // dropped when the policy is built.
+        scriptHosts: z.array(z.string()).optional()
       })
       .passthrough()
       .prefault({}),

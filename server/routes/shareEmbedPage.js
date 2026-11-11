@@ -30,6 +30,8 @@ import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.
 import { getChatShareRepository, isShareId } from '../services/chat/ChatShareRepository.js';
 import { authorizeShareView } from '../services/chat/chatShareAccess.js';
 import { chatSharingSettings, isChatSharingConfigured } from '../services/chat/chatSharing.js';
+import { artifactSettings } from '../services/artifacts/artifactPolicy.js';
+import { artifactPreviewCsp, prepareHtmlPreview } from '../../shared/artifactPreview.js';
 
 const COMPONENT = 'ShareEmbedPage';
 
@@ -37,15 +39,21 @@ const COMPONENT = 'ShareEmbedPage';
 const MAX_EMBED_TEXT_BYTES = 512 * 1024;
 
 /**
- * CSP of an HTML artifact's frame. A `srcdoc` frame inherits the embedding
- * page's policy, so the page carries the same directives as the markup inside.
- * Mirror of `HTML_PREVIEW_CSP` in `client/src/features/chat/utils/artifactFiles.js`.
+ * CSP of the embed page. A `srcdoc` frame inherits the embedding page's
+ * policy, so the page carries the same directives as the markup inside
+ * (`shared/artifactPreview.js`, with the admin's CDN hosts), and may also show
+ * images from the share's own artifact endpoint. The page itself runs no
+ * script; everything it shows is escaped.
+ *
+ * @param {string[]} scriptHosts - Hosts HTML artifacts may load scripts from.
+ * @returns {string}
  */
-export const EMBED_HTML_CSP =
-  "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; form-action 'none'; base-uri 'none'";
-
-// The page itself also shows images from the share's own artifact endpoint.
-const EMBED_PAGE_CSP = EMBED_HTML_CSP.replace('img-src data: blob:', "img-src 'self' data: blob:");
+export function embedPageCsp(scriptHosts) {
+  return artifactPreviewCsp(scriptHosts).replace(
+    'img-src data: blob:',
+    "img-src 'self' data: blob:"
+  );
+}
 
 const PAGE_STYLE =
   'html,body{margin:0;height:100%;font-family:system-ui,sans-serif;background:#fff;color:#111}' +
@@ -85,20 +93,6 @@ export function embedTypeOf(artifact) {
   return 'none';
 }
 
-/**
- * Put the preview CSP in front of an HTML document, keeping a leading doctype
- * first so the document does not fall into quirks mode.
- *
- * @param {string} html - Markup.
- * @returns {string}
- */
-function withCsp(html) {
-  const meta = `<meta http-equiv="Content-Security-Policy" content="${EMBED_HTML_CSP}">`;
-  const doctype = html.match(/^\s*<!doctype[^>]*>/i);
-  if (!doctype) return meta + html;
-  return doctype[0] + meta + html.slice(doctype[0].length);
-}
-
 function page(body, { title = '' } = {}) {
   return (
     '<!doctype html><html><head><meta charset="utf-8">' +
@@ -127,9 +121,11 @@ function notFound(res) {
  *
  * @param {Object} share - Share document.
  * @param {Object} stored - `{ data: Buffer, mimeType, name }` from the artifact store.
+ * @param {string[]} scriptHosts - Hosts an HTML artifact may load scripts from.
  * @returns {string} Body markup.
  */
-function renderBody(share, stored) {
+function renderBody(share, stored, scriptHosts) {
+  const withCsp = html => prepareHtmlPreview(html, { scriptHosts });
   const artifact = { ...share.artifact, mimeType: stored.mimeType, name: stored.name };
   const type = embedTypeOf(artifact);
   const title = share.title || stored.name || 'Shared artifact';
@@ -207,13 +203,15 @@ export default function registerShareEmbedPageRoutes(app) {
       );
       if (!stored) return notFound(res);
 
+      const { scriptHosts } = artifactSettings(platform);
+
       if (access.counts) {
         const { counted } = await repository.recordView(share.id, null, { recordAs: null });
         if (!counted) return notFound(res);
       }
 
       applyFrameAncestorsCsp(res, settings.embedAllowedOrigins, [
-        EMBED_PAGE_CSP,
+        embedPageCsp(scriptHosts),
         "frame-src 'self'"
       ]);
       res.setHeader('Cache-Control', 'private, no-store');
@@ -222,7 +220,9 @@ export default function registerShareEmbedPageRoutes(app) {
       res.setHeader('Referrer-Policy', 'no-referrer');
       res.set('Content-Type', 'text/html; charset=utf-8');
       return res.send(
-        page(renderBody(share, { ...stored, id: share.artifact.id }), { title: share.title })
+        page(renderBody(share, { ...stored, id: share.artifact.id }, scriptHosts), {
+          title: share.title
+        })
       );
     } catch (error) {
       logger.error('Failed to render embedded share', {

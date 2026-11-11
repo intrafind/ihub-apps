@@ -458,15 +458,27 @@ describe('Web artifacts skill tool (create_web_artifact) & PDF AcroForm extracti
 
   it('warns about absolute script, stylesheet and image URLs the sandbox blocks', () => {
     const cdn = '<script src="https://cdn.example/chart.js"></script>';
-    assert.match(inspectWebArtifact(cdn, 'html').join(' '), /external script/i);
+    assert.match(
+      inspectWebArtifact(cdn, 'html').join(' '),
+      /will not load "https:\/\/cdn\.example/
+    );
     const css = '<link rel="stylesheet" href="//fonts.example/app.css">';
-    assert.match(inspectWebArtifact(css, 'html').join(' '), /external script, stylesheet/i);
+    const cssWarnings = inspectWebArtifact(css, 'html');
+    assert.equal(cssWarnings.length, 1);
+    assert.match(cssWarnings[0], /will not load "\/\/fonts\.example\/app\.css"/);
     const img = '<img src="https://img.example/a.png">';
     assert.match(
       inspectWebArtifact(img, 'html').join(' '),
-      /external script, stylesheet or image/i
+      /will not load "https:\/\/img\.example/
     );
     assert.deepEqual(inspectWebArtifact('<img src="data:image/png;base64,AAAA">', 'html'), []);
+    // An allowlisted CDN loads; an image from it still does not.
+    const hosts = { scriptHosts: ['cdn.example'] };
+    assert.deepEqual(inspectWebArtifact(cdn, 'html', hosts), []);
+    assert.equal(
+      inspectWebArtifact('<img src="https://cdn.example/a.png">', 'html', hosts).length,
+      1
+    );
   });
 
   it('injects brand tokens unless they are defined, not merely referenced', () => {
