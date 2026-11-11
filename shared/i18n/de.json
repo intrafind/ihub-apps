@@ -6547,7 +6547,8 @@
       "policyUrl": "Link zur KI-Richtlinie (https://… oder /pfad)",
       "currentVersion": "Aktuelle Version: {{version}}",
       "saved": "KI-Bestätigung gespeichert",
-      "saveError": "Die KI-Bestätigung konnte nicht gespeichert werden"
+      "saveError": "Die KI-Bestätigung konnte nicht gespeichert werden",
+      "loadError": "Die Einstellungen der KI-Bestätigung konnten nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen."
     },
     "euAiAct": {
       "verify": {
