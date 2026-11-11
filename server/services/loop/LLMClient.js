@@ -68,7 +68,7 @@ import { mergeToolCallDeltas } from './toolCallMerge.js';
 import { resolveSurface, outcomeOf, errorCodeOf } from '../usage/callRecord.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
 import { raceAbort, abortError } from './abortRace.js';
-import { guardMessagesForModel } from '../provenance/guardrail.js';
+import { guardMessagesForModel, resolveGuardrailRule } from '../provenance/guardrail.js';
 
 /** Upper bound on runs whose last request hash is kept for request/header dedupe. */
 const MAX_TRACKED_RUN_HASHES = 5000;
@@ -510,9 +510,14 @@ export class LLMClient {
     // limits and stores for the usage reports — so both show the same numbers.
     this.usage = opts.usage !== undefined ? opts.usage : defaultUsage;
     // AI disclosure guardrail (EU AI Act Art. 50(1)): `(messages, model) => messages`,
-    // applied to every call here. No config flag; only tests pass `null` to
-    // keep unrelated message snapshots stable.
-    this.guardrail = opts.guardrail !== undefined ? opts.guardrail : guardMessagesForModel;
+    // applied to every call here. An admin can reword the rule globally (read per call,
+    // so a change applies at once) but nothing switches it off; only tests pass `null`
+    // to keep unrelated message snapshots stable.
+    this.guardrail =
+      opts.guardrail !== undefined
+        ? opts.guardrail
+        : (messages, model) =>
+            guardMessagesForModel(messages, model, resolveGuardrailRule(configCache.getPlatform()));
     // Kept as the constructed values only; the effective ceilings are
     // resolved per call so platform.json and per-model overrides apply to the
     // module-level singleton too (see resolveTimeoutMs).

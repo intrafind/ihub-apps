@@ -430,6 +430,9 @@
     "spillThresholdBytes": 65536
   },
   "aiDisclosure": {
+    "guardrail": {
+      "text": ""
+    },
     "firstTurnNotice": {
       "enabled": true,
       "text": {}

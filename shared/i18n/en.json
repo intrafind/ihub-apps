@@ -6038,11 +6038,13 @@
     },
     "aiDisclosure": {
       "title": "AI notice",
-      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. The assistants always tell users they are an AI system when asked; that rule cannot be switched off.",
+      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.",
       "enabled": "Show an AI notice before the first message",
       "text": "Notice text (empty uses the built-in text)",
       "saved": "AI notice saved",
-      "saveError": "Failed to save the AI notice"
+      "saveError": "Failed to save the AI notice",
+      "guardrailText": "Rule for the AI (empty uses the built-in rule)",
+      "guardrailHint": "Written for the model, in English works best. It is added as the last line of the system prompt of every model call (chat, API, MCP, A2A, agents, workflows). Apps and users cannot change it. Keep it clear that the assistant is an AI and never claims to be human."
     }
   },
   "cloudStorage": {

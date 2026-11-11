@@ -1621,7 +1621,8 @@ See [EU AI Act](../../ai-act.md#first-turn-notice).
 Every call to a text model now carries the rule "You are an AI system. If asked, always say so. Never claim to
 be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
 A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
-`system` message cannot remove it, and there is no setting to switch it off.
+`system` message cannot remove it, and there is no setting to switch it off. Admins can reword the rule for the
+whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
 
 Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
 still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".

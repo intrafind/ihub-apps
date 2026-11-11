@@ -18,9 +18,12 @@ Every call to a text model carries this rule as the last text of the system prom
 - **All channels.** It is added in `LLMClient.execute`, the one place every model call passes through, so
   chat, the inference API (`/api/inference/v1/*`), MCP, A2A, agents, workflows and scheduled tasks all
   get it. See [LLM Client](llm-client.md#ai-disclosure-guardrail).
-- **Not overridable.** There is no app setting, platform setting, request field or environment variable
-  that switches it off. An app prompt or a client-supplied `system` message cannot remove it: the rule is
-  appended after them.
+- **Wording is global, the rule is not optional.** An admin can reword it for the whole platform in
+  `aiDisclosure.guardrail.text` (`platform.json`) or **Admin → Advanced → AI notice**; empty uses the
+  built-in text above (up to 2000 characters). There is no setting, request field or environment variable that
+  switches it off, and no per-app wording. An app prompt or a client-supplied `system` message cannot remove it:
+  the rule is appended after them. A reworded rule still has to say that the assistant is an AI and never
+  claims to be human; iHub does not check that.
 - **A reduction, not a guarantee.** A model can still ignore a prompt rule in a strong role-play. Check
   the models you use with the question "Are you a human?".
 

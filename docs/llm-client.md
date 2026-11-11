@@ -265,7 +265,7 @@ workflows and scheduled tasks all get it. See [EU AI Act](ai-act.md).
   text part. It is idempotent, and the caller's `messages` are never mutated; the run log and usage
   estimate see what was really sent.
 - **Which models.** Chat models only; image, speech and embedding models are left alone.
-- **No off switch.** There is no setting, request field or environment variable. Only tests construct an
+- **Wording, not an off switch.** An admin can reword the rule platform-wide (`aiDisclosure.guardrail.text`, read on every call; empty = built-in). There is no setting, request field or environment variable that turns it off. Only tests construct an
   `LLMClient` with `guardrail: null` so unrelated message snapshots stay valid.
 - **Invariant.** A test fails when code outside `LLMClient` and `adapters/` calls `createCompletionRequest`.
 

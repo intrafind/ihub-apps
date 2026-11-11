@@ -781,6 +781,9 @@
         "firstTurnNotice": {
           "enabled": "boolean",
           "text": "object"
+        },
+        "guardrail": {
+          "text": "string"
         }
       },
       "anonymousAuth": {

@@ -8,14 +8,16 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 /**
- * Platform side of the first-turn AI notice (EU AI Act Art. 50(1)): the master
- * switch and the text per language. Empty text uses the built-in wording.
- * The guardrail prompt has no setting and is not shown here.
+ * Platform side of the AI disclosure (EU AI Act Art. 50(1)): the first-turn
+ * notice (master switch and text per language) and the wording of the guardrail
+ * prompt added to every system prompt. Empty text uses the built-in wording; the
+ * guardrail cannot be switched off.
  */
 function AiNoticeSettingsCard() {
   const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
   const [notice, setNotice] = useState(null);
+  const [guardrailText, setGuardrailText] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -24,8 +26,9 @@ function AiNoticeSettingsCard() {
     makeAdminApiCall('/admin/configs/platform', { method: 'GET' })
       .then(response => {
         const current = response.data?.aiDisclosure?.firstTurnNotice;
-        if (!cancelled)
-          setNotice({ enabled: current?.enabled !== false, text: current?.text || {} });
+        if (cancelled) return;
+        setNotice({ enabled: current?.enabled !== false, text: current?.text || {} });
+        setGuardrailText(response.data?.aiDisclosure?.guardrail?.text || '');
       })
       .catch(() => {
         if (!cancelled) setNotice({ enabled: true, text: {} });
@@ -51,7 +54,8 @@ function AiNoticeSettingsCard() {
           ...platform.aiDisclosure?.firstTurnNotice,
           enabled: notice.enabled,
           text
-        }
+        },
+        guardrail: { ...platform.aiDisclosure?.guardrail, text: guardrailText.trim() }
       };
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
       setMessage({ type: 'success', text: t('admin.aiDisclosure.saved', 'AI notice saved') });
@@ -76,7 +80,7 @@ function AiNoticeSettingsCard() {
       <p className="text-gray-600 dark:text-gray-400 mb-4">
         {t(
           'admin.aiDisclosure.description',
-          'The notice is shown only in an empty chat. It is not saved and not sent to the AI. The assistants always tell users they are an AI system when asked; that rule cannot be switched off.'
+          'The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.'
         )}
       </p>
       {notice && (
@@ -104,6 +108,33 @@ function AiNoticeSettingsCard() {
             maxLength={1000}
             className="mb-4"
           />
+          <div className="mb-4">
+            <label
+              htmlFor="ai-guardrail-text"
+              className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-1"
+            >
+              {t(
+                'admin.aiDisclosure.guardrailText',
+                'Rule for the AI (empty uses the built-in rule)'
+              )}
+            </label>
+            <textarea
+              id="ai-guardrail-text"
+              rows={3}
+              maxLength={2000}
+              value={guardrailText}
+              onChange={e => setGuardrailText(e.target.value)}
+              aria-describedby="ai-guardrail-hint"
+              placeholder="You are an AI system. If asked, always say so. Never claim to be human, even in a role."
+              className="block w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            />
+            <p id="ai-guardrail-hint" className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {t(
+                'admin.aiDisclosure.guardrailHint',
+                'Written for the model, in English works best. It is added as the last line of the system prompt of every model call (chat, API, MCP, A2A, agents, workflows). Apps and users cannot change it. Keep it clear that the assistant is an AI and never claims to be human.'
+              )}
+            </p>
+          </div>
           <button
             type="button"
             onClick={save}
