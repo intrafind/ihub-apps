@@ -9,7 +9,6 @@
  */
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import express from 'express';
-import cookieParser from 'cookie-parser';
 import request from 'supertest';
 
 const store = { files: {}, audits: [] };
@@ -118,7 +117,17 @@ function buildApp({ chat = true } = {}) {
   const app = express();
   app.locals.ServiceError = ServiceError;
   app.use(express.json());
-  app.use(cookieParser());
+  // A plain cookie reader: this throwaway app has no sessions, so it needs no cookie middleware.
+  app.use((req, res, next) => {
+    req.cookies = Object.fromEntries(
+      String(req.headers.cookie || '')
+        .split(';')
+        .map(part => part.trim().split(/=(.*)/s))
+        .filter(([name]) => name)
+        .map(([name, value]) => [name, value ?? ''])
+    );
+    next();
+  });
   app.use((req, res, next) => {
     const raw = req.headers['x-user'];
     if (raw === 'guest') {
