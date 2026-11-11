@@ -82,9 +82,9 @@ beforeEach(async () => {
 const routes = [
   ['get', '/api/admin/watermark-keys'],
   ['post', '/api/admin/watermark-keys'],
-  ['post', '/api/admin/watermark-keys/wm-ihub-inst_x-2026-1/_activate'],
-  ['post', '/api/admin/watermark-keys/wm-ihub-inst_x-2026-1/_reveal'],
-  ['delete', '/api/admin/watermark-keys/wm-ihub-inst_x-2026-1']
+  ['post', '/api/admin/watermark-keys/wm-ihub-x-2026-1/_activate'],
+  ['post', '/api/admin/watermark-keys/wm-ihub-x-2026-1/_reveal'],
+  ['delete', '/api/admin/watermark-keys/wm-ihub-x-2026-1']
 ];
 
 describe('watermark key routes: authorization', () => {
@@ -101,7 +101,7 @@ describe('watermark key routes', () => {
       label: 'Q4'
     });
     expect(res.status).toBe(201);
-    expect(res.body.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-1$/);
+    expect(res.body.keyId).toMatch(/^wm-ihub-[0-9a-f-]{36}-2026-1$/);
     expect(res.headers.location).toMatch(
       new RegExp(`/api/admin/watermark-keys/${res.body.keyId}$`)
     );
@@ -123,7 +123,7 @@ describe('watermark key routes', () => {
     const first = await admin(request(app).post('/api/admin/watermark-keys')).send({});
     expect(first.body.source).toBe('generated');
     const second = await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    expect(second.body.keyId).toMatch(/^wm-ihub-inst_[0-9a-f-]{36}-2026-2$/);
+    expect(second.body.keyId).toMatch(/^wm-ihub-[0-9a-f-]{36}-2026-2$/);
     const del = id => admin(request(app).delete(`/api/admin/watermark-keys/${id}`));
     const dup = await admin(request(app).post('/api/admin/watermark-keys')).send({
       key: first.body.key

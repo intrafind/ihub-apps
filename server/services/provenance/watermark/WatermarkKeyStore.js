@@ -118,14 +118,20 @@ function assertInvariant(store) {
 /** Product segment of a key id. */
 export const KEY_ID_PRODUCT = 'ihub';
 
-/** An installation id as it may appear inside a key id (the env override is free text). */
+/**
+ * An installation id as it appears inside a key id: without its `inst_` prefix (the
+ * `wm-<product>-` part already says what it is), and safe for an id (the env
+ * override is free text).
+ */
 function idSegment(value) {
-  return String(value || 'unknown').replace(/[^A-Za-z0-9_-]/g, '-');
+  return String(value || 'unknown')
+    .replace(/^inst_/, '')
+    .replace(/[^A-Za-z0-9_-]/g, '-');
 }
 
 /**
- * `wm-<product>-<installation id>-<year>-<seq>`. The product and the installation
- * id (the same id that is `generator.installation_id` in provenance objects) say
+ * `wm-<product>-<installation uuid>-<year>-<seq>`. The product and the installation
+ * id (the uuid of `generator.installation_id` in provenance objects, without `inst_`) say
  * where a key id comes from when it travels alone, in detector requests and logs,
  * and keep two installations (a clone, a restored backup, a shared detector) from
  * handing out the same id. The sequence stays for people to read.
