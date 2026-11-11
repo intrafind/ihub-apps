@@ -167,10 +167,6 @@
       "version": "number"
     }
   },
-  "GET /api/admin/eu-ai-act/acknowledgements/_export": {
-    "status": 200,
-    "type": "text/csv"
-  },
   "GET /api/admin/apps": {
     "status": 200,
     "shape": {
@@ -543,6 +539,10 @@
           "sizeApprox": "number"
         },
         "config/credentials.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/eu-ai-act-conformity.json": {
           "age": "number",
           "sizeApprox": "number"
         },
@@ -1410,10 +1410,27 @@
   "GET /api/admin/document-templates/:id/files/:slot": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/admin/eu-ai-act/acknowledgements/_export": {
+    "status": 200,
+    "type": "text/csv"
+  },
+  "GET /api/admin/eu-ai-act/conformity": {
+    "status": 200,
+    "shape": {
+      "changedAt": "null",
+      "changedBy": "null",
+      "enabled": "boolean",
+      "history": [],
+      "reason": "null",
+      "statementVersion": "null",
+      "valid": "boolean"
+    }
+  },
   "GET /api/admin/eu-ai-act/status": {
     "status": 200,
     "shape": {
       "acknowledgements": {
+        "configuredEnabled": "boolean",
         "counts": {
           "acknowledged": "number",
           "pending": "number",
@@ -1435,6 +1452,15 @@
           "scope": "string"
         }
       ],
+      "conformity": {
+        "changedAt": "null",
+        "changedBy": "null",
+        "enabled": "boolean",
+        "history": [],
+        "reason": "null",
+        "statementVersion": "null",
+        "valid": "boolean"
+      },
       "generatedAt": "string",
       "models": [
         {
@@ -4173,15 +4199,6 @@
   "GET /api/agents/runs/:runId/stream": {
     "skipped": "streams"
   },
-  "GET /api/eu-ai-act/acknowledgements/me": {
-    "status": 200,
-    "shape": {
-      "acknowledged": "boolean",
-      "enabled": "boolean",
-      "enforce": "boolean",
-      "requiredVersion": "number"
-    }
-  },
   "GET /api/apps": {
     "status": 200,
     "shape": {
@@ -4826,6 +4843,9 @@
         "methods": ["string"]
       },
       "defaultLanguage": "string",
+      "euAiAct": {
+        "enabled": "boolean"
+      },
       "features": [
         {
           "category": "string",
@@ -5224,6 +5244,15 @@
         }
       ],
       "pinned": "null"
+    }
+  },
+  "GET /api/eu-ai-act/acknowledgements/me": {
+    "status": 200,
+    "shape": {
+      "acknowledged": "boolean",
+      "enabled": "boolean",
+      "enforce": "boolean",
+      "requiredVersion": "number"
     }
   },
   "GET /api/health": {
