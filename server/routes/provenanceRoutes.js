@@ -4,7 +4,7 @@
 /**
  * Provenance lookup (EU AI Act Art. 50(2), #3327).
  *
- * `POST /api/provenance/_verify` takes a text, a content hash or (#3328) an image or
+ * `POST /api/eu-ai-act/provenance/_verify` takes a text, a content hash or (#3328) an image or
  * audio file and answers
  * whether this installation produced that exact output, and with which model
  * and version. A miss is a valid answer (200, `found: false`): it never says
@@ -15,6 +15,7 @@
  * rate limited, capped in size, excluded from the audit log, and the request
  * body is never logged.
  */
+import { requireEuAiActEnabled } from '../services/euAiAct/conformity.js';
 import configCache from '../configCache.js';
 import { authenticatedOnly } from '../middleware/authRequired.js';
 import { createProvenanceVerifyLimiter } from '../middleware/rateLimiting.js';
@@ -24,7 +25,6 @@ import { isStorageReady } from '../storage/bootstrap.js';
 import { getProvenanceStore } from '../services/provenance/ProvenanceStore.js';
 import { provenanceSettings } from '../services/provenance/provenanceSettings.js';
 import { detectWatermark } from '../services/provenance/watermark/detect.js';
-import { verifyUrl } from '../services/provenance/turnProvenance.js';
 import {
   isJsonRequest,
   isMultipart,
@@ -38,7 +38,7 @@ import {
   isHexHash
 } from '../services/provenance/records.js';
 
-const VERIFY_PATH = '/api/provenance/_verify';
+const VERIFY_PATH = '/api/eu-ai-act/provenance/_verify';
 
 /** Largest text accepted, in bytes. */
 export const MAX_VERIFY_TEXT_BYTES = 256 * 1024;
@@ -101,7 +101,7 @@ export default function registerProvenanceRoutes(app) {
 
   /**
    * @swagger
-   * /api/provenance/_verify:
+   * /api/eu-ai-act/provenance/_verify:
    *   post:
    *     summary: Look up an AI output by its text or content hash
    *     description: >-
@@ -145,57 +145,57 @@ export default function registerProvenanceRoutes(app) {
    *       401: { description: Authentication required (unless verify.access is public) }
    *       413: { description: Text or file too large (provenance.media.maxVerifyBytes) }
    *       415: { description: Not JSON or multipart, or a file type that is not an accepted image or audio type }
+   *       403: { description: The EU AI Act features are switched off (FEATURE_DISABLED) }
    *       429: { description: Rate limited }
    *       503: { description: Storage not ready }
    */
-  app.post(buildServerPath(VERIFY_PATH), limiter, maybeAuth, async (req, res, next) => {
-    try {
-      if (!isStorageReady() || !getProvenanceStore().isAvailable()) {
-        throw new ServiceError('SERVICE_UNAVAILABLE', 'The provenance store is not available');
-      }
-      // A file (image or audio, #3328): same route, content negotiation.
-      if (isMultipart(req)) {
-        const { buffer, kind } = await parseMediaUpload(
-          req,
-          res,
-          provenanceSettings().media.maxVerifyBytes
-        );
-        const verify = verifyUrl(req);
-        const result = await verifyMediaFile(buffer, {
-          kind,
-          decorate: records => records.map(record => ({ ...record, verify }))
-        });
-        res.setHeader('Cache-Control', 'no-store');
-        return res.json(result);
-      }
-      if (!isJsonRequest(req)) {
-        throw new ServiceError('UNSUPPORTED_MEDIA_TYPE', 'Send JSON or a multipart file upload', {
-          details: { accepted: ['application/json', 'multipart/form-data'] }
-        });
-      }
-      const { text, hash, normalization, modelId } = parseVerifyBody(req.body);
-      const value = hash ?? hashText(text, normalization);
-      const records = await getProvenanceStore().findByHash(value);
-      // Sensitive request: never cache.
-      res.setHeader('Cache-Control', 'no-store');
-      if (records.length === 0) {
-        const body = { found: false, normalization };
-        // No record: ask the watermark detector (#3331). Text only, and only for a
-        // signed-in caller: the call sends every key to the detector and costs
-        // CPU, so a public caller gets the hash lookup alone. Never a 5xx.
-        if (text !== undefined && req.user && req.user.id !== 'anonymous') {
-          body.watermark = await detectWatermark(text, { modelId });
+  // The switch check comes after the limiter and the auth: a caller who may not use
+  // `_verify` still gets 401, not a hint about the switch.
+  app.post(
+    buildServerPath(VERIFY_PATH),
+    limiter,
+    maybeAuth,
+    requireEuAiActEnabled('provenance'),
+    async (req, res, next) => {
+      try {
+        if (!isStorageReady() || !getProvenanceStore().isAvailable()) {
+          throw new ServiceError('SERVICE_UNAVAILABLE', 'The provenance store is not available');
         }
-        return res.json(body);
+        // A file (image or audio, #3328): same route, content negotiation.
+        if (isMultipart(req)) {
+          const { buffer, kind } = await parseMediaUpload(
+            req,
+            res,
+            provenanceSettings().media.maxVerifyBytes
+          );
+          const result = await verifyMediaFile(buffer, { kind });
+          res.setHeader('Cache-Control', 'no-store');
+          return res.json(result);
+        }
+        if (!isJsonRequest(req)) {
+          throw new ServiceError('UNSUPPORTED_MEDIA_TYPE', 'Send JSON or a multipart file upload', {
+            details: { accepted: ['application/json', 'multipart/form-data'] }
+          });
+        }
+        const { text, hash, normalization, modelId } = parseVerifyBody(req.body);
+        const value = hash ?? hashText(text, normalization);
+        const records = await getProvenanceStore().findByHash(value);
+        // Sensitive request: never cache.
+        res.setHeader('Cache-Control', 'no-store');
+        if (records.length === 0) {
+          const body = { found: false, normalization };
+          // No record: ask the watermark detector (#3331). Text only, and only for a
+          // signed-in caller: the call sends every key to the detector and costs
+          // CPU, so a public caller gets the hash lookup alone. Never a 5xx.
+          if (text !== undefined && req.user && req.user.id !== 'anonymous') {
+            body.watermark = await detectWatermark(text, { modelId });
+          }
+          return res.json(body);
+        }
+        return res.json({ found: true, normalization, records });
+      } catch (error) {
+        return next(error);
       }
-      const verify = verifyUrl(req);
-      return res.json({
-        found: true,
-        normalization,
-        records: records.map(record => ({ ...record, verify }))
-      });
-    } catch (error) {
-      return next(error);
     }
-  });
+  );
 }

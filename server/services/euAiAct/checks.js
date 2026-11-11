@@ -72,7 +72,7 @@ export function platformChecks({ platform, acknowledgements, provenance }) {
       'guardrail.active',
       LEVEL.OK,
       'guardrail.ok',
-      'The AI disclosure rule is part of every system prompt and cannot be switched off.'
+      'The AI disclosure rule is part of every system prompt. Only the EU AI Act master switch turns it off.'
     )
   );
 

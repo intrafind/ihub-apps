@@ -8,18 +8,19 @@
  *
  * Mapping of the sibling APIs this reads (what was really built wins over the
  * brief's R1-R15):
- * - guardrail: always on (`provenance/guardrail.js` has no switch) -> check is always ok
+ * - guardrail: on unless the EU AI Act master switch is off (`provenance/guardrail.js` has no other switch)
  * - notice: `platform.aiDisclosure.firstTurnNotice.enabled`
  * - acknowledgements: `aiAcknowledgementService.summary()`
  * - provenance: `provenanceSettings()`
  * - key: `getActiveKeyId()` (id snapshot, no key material)
  * - detector: `detectorConfigOf` + `checkDetectorUrl` + `probeDetector`
  *   (`pingDetector` of #3331, through `httpFetch`)
- * - self-test: the last stored result of `POST /api/admin/watermark-detectors/{id}/_self-test`
+ * - self-test: the last stored result of `POST /api/admin/eu-ai-act/watermark-detectors/{id}/_self-test`
  *
  * @module services/euAiAct/statusService
  */
 import configCache from '../../configCache.js';
+import { getConformity } from './conformity.js';
 import { summary as acknowledgementSummary } from '../aiAcknowledgement/aiAcknowledgementService.js';
 import { provenanceSettings } from '../provenance/provenanceSettings.js';
 import { getActiveKeyId } from '../provenance/watermark/activeKeySnapshot.js';
@@ -51,6 +52,41 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
   const activeKeyId = deps.activeKeyId !== undefined ? deps.activeKeyId : getActiveKeyId() || null;
   const acknowledgements = (deps.acknowledgementSummary || acknowledgementSummary)({ platform });
   const provenance = provenanceSettings(platform);
+  const conformity = deps.conformity || getConformity();
+  const acknowledgementsView = {
+    enabled: acknowledgements.enabled,
+    configuredEnabled: acknowledgements.configuredEnabled ?? acknowledgements.enabled,
+    enforced: acknowledgements.enforce,
+    requiredVersion: acknowledgements.requiredVersion,
+    counts: {
+      acknowledged: acknowledgements.acknowledged,
+      pending: acknowledgements.pending,
+      total: acknowledgements.total
+    }
+  };
+  const provenanceView = {
+    storeRecords: provenance.storeRecords,
+    retentionDays: provenance.retentionDays,
+    verifyAccess: provenance.verify.access,
+    media: { maxVerifyBytes: provenance.media.maxVerifyBytes }
+  };
+  // EU AI Act master switch off: nothing is evaluated and no detector is probed (an
+  // outbound connection that only serves the measure). The page shows the record.
+  if (!conformity.enabled) {
+    return {
+      generatedAt: new Date().toISOString(),
+      conformity,
+      summary: {
+        level: 'disabled',
+        counts: { ok: 0, warn: 0, error: 0 },
+        skippedDisabledModels: 0
+      },
+      checks: [],
+      models: [],
+      acknowledgements: { ...acknowledgementsView, enabled: false },
+      provenance: provenanceView
+    };
+  }
   const selfTests = deps.selfTests || (await readSelfTests());
 
   const ihubModels = enabled.filter(model => markingOf(model, 'text').by === 'ihub');
@@ -118,6 +154,7 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
   for (const item of checks) counts[item.level] += 1;
   return {
     generatedAt: new Date().toISOString(),
+    conformity,
     summary: {
       level: worstLevel(checks.map(item => item.level)),
       counts,
@@ -125,22 +162,8 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
     },
     checks,
     models,
-    acknowledgements: {
-      enabled: acknowledgements.enabled,
-      enforced: acknowledgements.enforce,
-      requiredVersion: acknowledgements.requiredVersion,
-      counts: {
-        acknowledged: acknowledgements.acknowledged,
-        pending: acknowledgements.pending,
-        total: acknowledgements.total
-      }
-    },
-    provenance: {
-      storeRecords: provenance.storeRecords,
-      retentionDays: provenance.retentionDays,
-      verifyAccess: provenance.verify.access,
-      media: { maxVerifyBytes: provenance.media.maxVerifyBytes }
-    }
+    acknowledgements: acknowledgementsView,
+    provenance: provenanceView
   };
 }
 

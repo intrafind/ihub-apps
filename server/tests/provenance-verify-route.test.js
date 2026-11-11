@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * `POST /api/provenance/_verify` (#3327): lookup by text and by hash, a miss is
+ * `POST /api/eu-ai-act/provenance/_verify` (#3327): lookup by text and by hash, a miss is
  * a 200 `found:false`, validation and size errors are problem+json, the lookup
  * is authenticated by default and public on request, rate limited, and the
  * pasted text never reaches the audit log.
@@ -68,9 +68,9 @@ afterAll(async () => {
 
 const signedIn = r => r.set('x-test-user', 'u1');
 
-describe('POST /api/provenance/_verify', () => {
+describe('POST /api/eu-ai-act/provenance/_verify', () => {
   test('finds an exact output by text, and by the same text with other line endings and padding', async () => {
-    const res = await signedIn(request(app).post('/api/provenance/_verify')).send({
+    const res = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify')).send({
       text: '  The verified answer.\r\n'
     });
     expect(res.status).toBe(200);
@@ -78,12 +78,13 @@ describe('POST /api/provenance/_verify', () => {
     expect(res.body.normalization).toBe('nfc-trim');
     expect(res.body.records[0].output_id).toBe(outputId);
     expect(res.body.records[0].model.id).toBe('model-a');
-    expect(res.body.records[0].verify).toMatch(/\/api\/provenance\/_verify$/);
+    // No look-up URL in the answer: the client builds it from the API path.
+    expect(res.body.records[0].verify).toBeUndefined();
     expect(res.headers['cache-control']).toBe('no-store');
   });
 
   test('finds an output by hash', async () => {
-    const res = await signedIn(request(app).post('/api/provenance/_verify')).send({
+    const res = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify')).send({
       contentHash: hashText('The verified answer.').toUpperCase()
     });
     expect(res.status).toBe(200);
@@ -91,7 +92,7 @@ describe('POST /api/provenance/_verify', () => {
   });
 
   test('a modified text is a 200 miss that claims nothing about authorship', async () => {
-    const res = await signedIn(request(app).post('/api/provenance/_verify')).send({
+    const res = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify')).send({
       text: 'The verified answer. x'
     });
     expect(res.status).toBe(200);
@@ -106,7 +107,7 @@ describe('POST /api/provenance/_verify', () => {
 
   test('both or neither of text and contentHash is a 400 problem', async () => {
     for (const body of [{}, { text: 'a', contentHash: 'b'.repeat(64) }, { contentHash: 'zz' }]) {
-      const res = await signedIn(request(app).post('/api/provenance/_verify')).send(body);
+      const res = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify')).send(body);
       expect(res.status).toBe(400);
       expect(res.body.code).toBe('VALIDATION_FAILED');
       expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
@@ -114,7 +115,7 @@ describe('POST /api/provenance/_verify', () => {
   });
 
   test('an unknown normalization is a 400', async () => {
-    const res = await signedIn(request(app).post('/api/provenance/_verify')).send({
+    const res = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify')).send({
       text: 'a',
       normalization: 'md5'
     });
@@ -122,7 +123,7 @@ describe('POST /api/provenance/_verify', () => {
   });
 
   test('a text over the cap is a 413', async () => {
-    const res = await signedIn(request(app).post('/api/provenance/_verify')).send({
+    const res = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify')).send({
       text: 'a'.repeat(MAX_VERIFY_TEXT_BYTES + 1)
     });
     expect(res.status).toBe(413);
@@ -130,12 +131,12 @@ describe('POST /api/provenance/_verify', () => {
   });
 
   test('is closed to guests by default, even with anonymous access on, and public on request', async () => {
-    const denied = await request(app).post('/api/provenance/_verify').send({ text: 'a' });
+    const denied = await request(app).post('/api/eu-ai-act/provenance/_verify').send({ text: 'a' });
     expect(denied.status).toBe(401);
     expect(denied.body.code).toBe('AUTH_REQUIRED');
     platform.provenance.verify.access = 'public';
     try {
-      const open = await request(app).post('/api/provenance/_verify').send({ text: 'a' });
+      const open = await request(app).post('/api/eu-ai-act/provenance/_verify').send({ text: 'a' });
       expect(open.status).toBe(200);
     } finally {
       platform.provenance.verify.access = 'authenticated';
@@ -154,7 +155,10 @@ describe('privacy and abuse limits', () => {
     platform.rateLimit = { provenanceVerifyApi: { limit: 2, windowMs: 60000 } };
     const limited = buildApp();
     const call = () =>
-      request(limited).post('/api/provenance/_verify').set('x-test-user', 'u').send({ text: 'q' });
+      request(limited)
+        .post('/api/eu-ai-act/provenance/_verify')
+        .set('x-test-user', 'u')
+        .send({ text: 'q' });
     expect((await call()).status).toBe(200);
     expect((await call()).status).toBe(200);
     const blocked = await call();

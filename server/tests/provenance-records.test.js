@@ -74,7 +74,7 @@ describe('buildProvenance', () => {
   };
 
   it('matches the spec shape', () => {
-    const p = buildProvenance({ ...base, verifyUrl: 'https://x/api/provenance/_verify' });
+    const p = buildProvenance(base);
     assert.doesNotThrow(() => provenanceSchema.parse(p));
     assert.equal(p.spec, 'intrafind-provenance/1.0');
     assert.equal(p.ai_generated, true);
@@ -87,6 +87,7 @@ describe('buildProvenance', () => {
     assert.equal(p.kind, undefined, 'kind is omitted for text');
     assert.equal(p.digital_source_type, undefined, 'no digital_source_type for text');
     assert.equal(p.signature, undefined, 'no signature');
+    assert.equal('verify' in p, false, 'no look-up URL: the client builds it from the API path');
   });
 
   it('has no content_hash for an output without text', () => {
@@ -154,11 +155,10 @@ describe('ProvenanceStore', () => {
       model: { id: 'm' },
       installationId: 'inst_t',
       version: '1.0.0',
-      verifyUrl: 'https://x/verify',
       ...extra
     });
 
-  it('records and finds by hash, newest first, without the verify URL', async () => {
+  it('records and finds by hash, newest first', async () => {
     const first = make('store-find-text');
     const second = make('store-find-text');
     await store.record(first);
@@ -168,7 +168,8 @@ describe('ProvenanceStore', () => {
       found.map(r => r.output_id),
       [second.output_id, first.output_id]
     );
-    assert.equal(found[0].verify, undefined);
+    // The object has no look-up URL member at all (the client builds it from the API path).
+    assert.equal('verify' in found[0], false);
   });
 
   it('returns nothing for an unknown or malformed hash', async () => {

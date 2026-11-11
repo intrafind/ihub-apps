@@ -15,6 +15,7 @@
  *
  * @module services/provenance/watermark/detect
  */
+import { isEuAiActEnabled } from '../../euAiAct/conformity.js';
 import configCache from '../../../configCache.js';
 import logger from '../../../utils/logger.js';
 import { getWatermarkKeyStore } from './WatermarkKeyStore.js';
@@ -143,6 +144,9 @@ export function decide(outcomes, { alpha, minScoredTokens }) {
  *   Never throws for a detector problem: that is `unavailable`.
  */
 export async function detectWatermark(text, { modelId } = {}) {
+  // EU AI Act master switch off: nothing is sent to a detector (defence for callers
+  // other than the gated `_verify` route).
+  if (!isEuAiActEnabled()) return { status: WATERMARK_STATUS.NOT_CONFIGURED };
   const settings = watermarkSettings();
   let configs = listDetectorConfigs();
   if (modelId) configs = configs.filter(config => config.modelId === modelId);

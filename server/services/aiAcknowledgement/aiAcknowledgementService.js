@@ -12,6 +12,7 @@
  *
  * @module services/aiAcknowledgement/aiAcknowledgementService
  */
+import { isEuAiActEnabled } from '../euAiAct/conformity.js';
 import crypto from 'node:crypto';
 import configCache from '../../configCache.js';
 import { loadUsers } from '../../utils/userManager.js';
@@ -44,13 +45,17 @@ export function isSafePolicyUrl(value) {
  * The platform's acknowledgement settings with defaults applied.
  *
  * @param {Object} [platform] - Platform config; defaults to the cached one
- * @returns {{enabled: boolean, enforce: boolean, requiredVersion: number, resetAt: string|null, text: Object<string,string>, policyUrl: string}}
+ * @returns {{enabled: boolean, configuredEnabled: boolean, enforce: boolean, requiredVersion: number, resetAt: string|null, text: Object<string,string>, policyUrl: string}}
+ *   `enabled` is the effective value: the admin's setting AND the EU AI Act master switch.
+ *   One edit here covers the 428 guard, `GET/POST /me`, the summary and the public config.
+ *   `configuredEnabled` is what the admin configured; forms and the status page show it.
  */
 export function getSettings(platform = configCache.getPlatform() || {}) {
   const raw = platform.aiAcknowledgement || {};
   const version = Number.isInteger(raw.requiredVersion) && raw.requiredVersion >= 1;
   return {
-    enabled: raw.enabled !== false,
+    enabled: isEuAiActEnabled() && raw.enabled !== false,
+    configuredEnabled: raw.enabled !== false,
     enforce: raw.enforce !== false,
     requiredVersion: version ? raw.requiredVersion : 1,
     resetAt: typeof raw.resetAt === 'string' ? raw.resetAt : null,
@@ -212,6 +217,7 @@ export function summary({ platform = configCache.getPlatform() || {} } = {}) {
   for (const id of ids) if (isAcknowledged(users[id], settings)) acknowledged += 1;
   return {
     enabled: settings.enabled,
+    configuredEnabled: settings.configuredEnabled,
     enforce: settings.enforce,
     requiredVersion: settings.requiredVersion,
     acknowledged,
@@ -339,7 +345,10 @@ export function describeSettingsChange(before, after) {
   const a = getSettings({ aiAcknowledgement: before });
   const b = getSettings({ aiAcknowledgement: after });
   const changed = [];
-  for (const key of ['enabled', 'enforce', 'policyUrl']) if (a[key] !== b[key]) changed.push(key);
+  // The configured value, not the effective one: a save while the master switch is off still
+  // changes `enabled`.
+  if (a.configuredEnabled !== b.configuredEnabled) changed.push('enabled');
+  for (const key of ['enforce', 'policyUrl']) if (a[key] !== b[key]) changed.push(key);
   const hashes = settings =>
     Object.fromEntries(
       Object.entries(settings.text).map(([code, value]) => [code, textHash(value)])

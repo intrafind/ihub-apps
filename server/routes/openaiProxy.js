@@ -601,8 +601,7 @@ export default function registerOpenAIProxyRoutes(
         text: result.content || '',
         model: { id: modelId },
         modelConfig: model,
-        marking: result.marking?.text,
-        req
+        marking: result.marking?.text
       });
       if (provenance) applyProvenanceHeaders(res, outputId);
       return res.json(withProvenance(response, provenance));
@@ -670,8 +669,7 @@ export default function registerOpenAIProxyRoutes(
             text: streamedText,
             model: { id: modelId },
             modelConfig: model,
-            marking: llmStream.result?.().marking?.text,
-            req
+            marking: llmStream.result?.().marking?.text
           });
         }
 

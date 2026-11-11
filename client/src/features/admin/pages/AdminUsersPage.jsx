@@ -25,6 +25,7 @@ import {
   parseSortParam,
   formatSortParam
 } from '../components/data-table';
+import EuAiActStateNote from '../components/euAiAct/EuAiActStateNote';
 
 function UserNameCell({ user }) {
   return (
@@ -370,7 +371,7 @@ function AdminUsersPage() {
             label: t('admin.users.aiAcknowledgement.removeRow', 'Remove AI acknowledgement'),
             icon: 'trash',
             destructive: true,
-            hidden: u => !(u.aiAcknowledgements?.length > 0),
+            hidden: u => !(u.aiAcknowledgements?.length > 0) || ack.settings?.masterOn === false,
             onClick: u => ack.askRemoveOne(u)
           }
         ]
@@ -414,6 +415,14 @@ function AdminUsersPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <EuAiActStateNote
+          hideWhenOn
+          className="mb-4"
+          offText={t(
+            'admin.euAiAct.master.usersOff',
+            'AI acknowledgement is not asked while EU AI Act features are switched off. Values shown are from before.'
+          )}
+        />
         {/* The page's own result and the AI acknowledgement actions' result: both are shown,
             so a newer one is never hidden behind an older one. */}
         {[message, ack.message].filter(Boolean).map((banner, index) => (

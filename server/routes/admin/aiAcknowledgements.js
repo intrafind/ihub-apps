@@ -4,13 +4,15 @@
 /**
  * AI-use acknowledgement, admin side (#3326).
  *
- * - `POST   /api/admin/ai-acknowledgements/_request-again`: raise the required version
- * - `DELETE /api/admin/auth/users/:userId/ai-acknowledgements`: remove one user's entries
- * - `DELETE /api/admin/ai-acknowledgements`: remove everyone's entries
- * - `GET    /api/admin/ai-acknowledgements/_export?status=`: CSV
+ * - `POST   /api/admin/eu-ai-act/acknowledgements/_request-again`: raise the required version
+ * - `DELETE /api/admin/eu-ai-act/users/:userId/acknowledgements`: remove one user's entries
+ * - `DELETE /api/admin/eu-ai-act/acknowledgements`: remove everyone's entries
+ * - `GET    /api/admin/eu-ai-act/acknowledgements/_export?status=`: CSV
  *
  * The list itself is `GET /api/admin/auth/users`, which already carries
- * `aiAcknowledgements`. Every action is audited.
+ * `aiAcknowledgements`. Every action is audited. While the EU AI Act master switch is
+ * off, the actions that delete or reset acknowledgements answer 403 FEATURE_DISABLED
+ * (the acknowledgements stay as evidence); the read-only export stays available.
  */
 import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
@@ -21,6 +23,7 @@ import { assertValidId } from '../../utils/pathSecurity.js';
 import { buildCsv } from '../../utils/csv.js';
 import { clearAiAcknowledgements } from '../../utils/userManager.js';
 import { logAudit } from '../../services/AuditLogService.js';
+import { requireEuAiActEnabled } from '../../services/euAiAct/conformity.js';
 import {
   CSV_HEADERS,
   buildCsvRows,
@@ -53,7 +56,7 @@ async function updateAcknowledgementState(change) {
 export default function registerAdminAiAcknowledgementRoutes(app) {
   /**
    * @swagger
-   * /api/admin/ai-acknowledgements/_request-again:
+   * /api/admin/eu-ai-act/acknowledgements/_request-again:
    *   post:
    *     summary: Ask everyone to acknowledge again
    *     description: Raises requiredVersion by one. Allowed while the feature is off.
@@ -63,8 +66,9 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
    *         description: The new requiredVersion and the previousRequiredVersion
    */
   app.post(
-    buildServerPath('/api/admin/ai-acknowledgements/_request-again'),
+    buildServerPath('/api/admin/eu-ai-act/acknowledgements/_request-again'),
     adminAuth,
+    requireEuAiActEnabled('acknowledgement'),
     async (req, res) => {
       const { from, to } = await updateAcknowledgementState(block => {
         const previous =
@@ -88,7 +92,7 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/auth/users/{userId}/ai-acknowledgements:
+   * /api/admin/eu-ai-act/users/{userId}/acknowledgements:
    *   delete:
    *     summary: Remove the AI-use acknowledgements of one user
    *     tags: [Admin, AI Acknowledgement]
@@ -99,8 +103,9 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
    *         description: No such user
    */
   app.delete(
-    buildServerPath('/api/admin/auth/users/:userId/ai-acknowledgements'),
+    buildServerPath('/api/admin/eu-ai-act/users/:userId/acknowledgements'),
     adminAuth,
+    requireEuAiActEnabled('acknowledgement'),
     async (req, res) => {
       const { userId } = req.params;
       assertValidId(userId, 'user');
@@ -121,7 +126,7 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/ai-acknowledgements:
+   * /api/admin/eu-ai-act/acknowledgements:
    *   delete:
    *     summary: Remove every AI-use acknowledgement
    *     description: >-
@@ -132,26 +137,31 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
    *       204:
    *         description: Removed
    */
-  app.delete(buildServerPath('/api/admin/ai-acknowledgements'), adminAuth, async (req, res) => {
-    const platform = configCache.getPlatform() || {};
-    const removed = await clearAiAcknowledgements(null, usersFilePath(platform));
-    await updateAcknowledgementState(block => {
-      block.resetAt = new Date().toISOString();
-    });
-    logAudit({
-      req,
-      action: 'delete',
-      resource: 'aiAcknowledgement',
-      resourceId: '*',
-      summary: 'Removed all AI-use acknowledgements',
-      details: { users: removed.users, entries: removed.entries }
-    });
-    res.status(204).end();
-  });
+  app.delete(
+    buildServerPath('/api/admin/eu-ai-act/acknowledgements'),
+    adminAuth,
+    requireEuAiActEnabled('acknowledgement'),
+    async (req, res) => {
+      const platform = configCache.getPlatform() || {};
+      const removed = await clearAiAcknowledgements(null, usersFilePath(platform));
+      await updateAcknowledgementState(block => {
+        block.resetAt = new Date().toISOString();
+      });
+      logAudit({
+        req,
+        action: 'delete',
+        resource: 'aiAcknowledgement',
+        resourceId: '*',
+        summary: 'Removed all AI-use acknowledgements',
+        details: { users: removed.users, entries: removed.entries }
+      });
+      res.status(204).end();
+    }
+  );
 
   /**
    * @swagger
-   * /api/admin/ai-acknowledgements/_export:
+   * /api/admin/eu-ai-act/acknowledgements/_export:
    *   get:
    *     summary: CSV of who acknowledged which version
    *     tags: [Admin, AI Acknowledgement]
@@ -172,7 +182,7 @@ export default function registerAdminAiAcknowledgementRoutes(app) {
    *         description: Unknown status
    */
   app.get(
-    buildServerPath('/api/admin/ai-acknowledgements/_export'),
+    buildServerPath('/api/admin/eu-ai-act/acknowledgements/_export'),
     adminAuth,
     async (req, res) => {
       const { status } = req.query;

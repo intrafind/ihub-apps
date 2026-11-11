@@ -3,6 +3,7 @@
 
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../../shared/components/DynamicLanguageEditor';
+import EuAiActStateNote from '../euAiAct/EuAiActStateNote';
 
 /**
  * AiNoticeSection - per-app override of the first-turn AI notice (Art. 50(1)).
@@ -47,6 +48,7 @@ function AiNoticeSection({ app, onChange }) {
           </p>
         </div>
         <div className="mt-5 md:col-span-2 md:mt-0 space-y-4">
+          <EuAiActStateNote hideWhenOn />
           <fieldset>
             <legend className="sr-only">{t('admin.apps.aiNotice.title', 'AI notice')}</legend>
             <div className="space-y-2">

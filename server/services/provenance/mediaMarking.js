@@ -26,6 +26,7 @@
 import { createHash } from 'node:crypto';
 import logger from '../../utils/logger.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
+import { isEuAiActEnabled } from '../euAiAct/conformity.js';
 import { getProvenanceStore } from './ProvenanceStore.js';
 import { provenanceSettings } from './provenanceSettings.js';
 import { readC2pa } from './c2paReader.js';
@@ -98,6 +99,9 @@ export function buildProviderMarking(c2pa, modelConfig, kind) {
  *   Null for an image without data.
  */
 export function stampGeneratedImage(image) {
+  // EU AI Act master switch off: no stamp, hence no record (the image bytes are
+  // untouched in both states).
+  if (!isEuAiActEnabled()) return null;
   if (!image || typeof image.data !== 'string' || image.data.length === 0) return null;
   if (image.provenance?.outputId && image.provenance?.contentHash) {
     return { ...image.provenance, created: false };
@@ -124,7 +128,6 @@ export function stampGeneratedImage(image) {
  * @param {Object|null} [input.c2pa] - {@link readC2pa} result.
  * @param {string} input.installationId
  * @param {string} [input.version]
- * @param {string} [input.verifyUrl]
  * @returns {Object}
  */
 export function buildMediaRecord({
@@ -137,8 +140,7 @@ export function buildMediaRecord({
   modelConfig,
   c2pa,
   installationId,
-  version = getAppVersion(),
-  verifyUrl
+  version = getAppVersion()
 }) {
   const record = buildProvenance({
     outputId,
@@ -148,8 +150,7 @@ export function buildMediaRecord({
     model,
     modelConfig,
     installationId,
-    version,
-    verifyUrl
+    version
   });
   record.content_hash = {
     ...record.content_hash,
@@ -173,6 +174,7 @@ export function buildMediaRecord({
  */
 export async function recordGeneratedImage(image, { model }) {
   try {
+    if (!isEuAiActEnabled()) return null;
     const stamp = image?.provenance;
     if (!stamp?.outputId || !stamp?.contentHash) return null;
     const settings = provenanceSettings();

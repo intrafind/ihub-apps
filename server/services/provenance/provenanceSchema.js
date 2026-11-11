@@ -37,8 +37,7 @@ export const provenanceSchema = z
     content_hash: z
       .object({ alg: z.string(), normalization: z.string(), value: z.string() })
       .passthrough()
-      .optional(),
-    verify: z.string().optional()
+      .optional()
   })
   .passthrough();
 

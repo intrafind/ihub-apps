@@ -19,6 +19,8 @@ import AdminLoadError from '../AdminLoadError';
 import DetectorRows from './DetectorRows';
 import EuAiActCard from './EuAiActCard';
 import { AddKeyDialog, BUTTON_PRIMARY, BUTTON_SECONDARY, KeyShownDialog } from './KeyDialogs';
+import PausedNote from './PausedNote';
+import { useEuAiActEnabled } from './EuAiActStateNote';
 
 function formatDate(value) {
   const date = value ? new Date(value) : null;
@@ -32,6 +34,8 @@ function formatDate(value) {
  * Keys come back as decimal strings and live only in the open dialog's state.
  */
 export default function WatermarkKeysCard({ statusModels, onChanged }) {
+  // Keys stay manageable while the features are off (they are data); only the detector actions pause.
+  const euAiActEnabled = useEuAiActEnabled();
   const { t } = useTranslation();
   const [keys, setKeys] = useState(null);
   const [detectors, setDetectors] = useState([]);
@@ -384,6 +388,7 @@ export default function WatermarkKeysCard({ statusModels, onChanged }) {
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
               {t('admin.euAiAct.detector.title', 'Detectors and self-test')}
             </h3>
+            {!euAiActEnabled && <PausedNote />}
             <DetectorRows detectors={detectors} statusModels={statusModels} onChanged={onChanged} />
           </div>
         </div>

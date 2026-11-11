@@ -33,7 +33,7 @@ test.describe('AI-use acknowledgement in embedded roots', () => {
   };
 
   const removeAll = async page => {
-    const removed = await page.request.delete('/api/admin/ai-acknowledgements');
+    const removed = await page.request.delete('/api/admin/eu-ai-act/acknowledgements');
     expect(removed.status()).toBe(204);
   };
 
@@ -206,7 +206,7 @@ test.describe('AI-use acknowledgement in embedded roots', () => {
       ).toBeVisible({ timeout: 30_000 });
 
       // The confirmation is on the user's record, written through the bearer token.
-      const mine = await (await page.request.get('/api/ai-acknowledgements/me')).json();
+      const mine = await (await page.request.get('/api/eu-ai-act/acknowledgements/me')).json();
       expect(mine.acknowledged).toBe(true);
       expect(mine.policyUrl).toBe(POLICY);
 
@@ -289,7 +289,7 @@ test.describe('Office add-in OAuth token (delegated, PKCE)', () => {
     expect(
       (await page.request.post('/api/admin/configs/platform', { data: platform })).ok()
     ).toBeTruthy();
-    expect((await page.request.delete('/api/admin/ai-acknowledgements')).status()).toBe(204);
+    expect((await page.request.delete('/api/admin/eu-ai-act/acknowledgements')).status()).toBe(204);
 
     const accessToken = await mintOfficeToken(page);
     // No cookie: only the bearer token, as the add-in sends it.
@@ -302,12 +302,14 @@ test.describe('Office add-in OAuth token (delegated, PKCE)', () => {
       expect(refused.status()).toBe(428);
       expect((await refused.json()).code).toBe('AI_ACKNOWLEDGEMENT_REQUIRED');
 
-      const notice = await (await office.get('/api/ai-acknowledgements/me?language=en')).json();
+      const notice = await (
+        await office.get('/api/eu-ai-act/acknowledgements/me?language=en')
+      ).json();
       expect(notice.acknowledged).toBe(false);
       expect(notice.policyUrl).toBe(`${baseURL}/page/ai-policy`);
       expect(notice.appUrl).toBe(baseURL);
 
-      const confirmed = await office.post('/api/ai-acknowledgements/me', {
+      const confirmed = await office.post('/api/eu-ai-act/acknowledgements/me', {
         data: {
           version: notice.requiredVersion,
           textHash: notice.textHash,
@@ -321,7 +323,7 @@ test.describe('Office add-in OAuth token (delegated, PKCE)', () => {
       expect(after.status()).not.toBe(428);
     } finally {
       await office.dispose();
-      await page.request.delete('/api/admin/ai-acknowledgements');
+      await page.request.delete('/api/admin/eu-ai-act/acknowledgements');
       const restore = await (await page.request.get('/api/admin/configs/platform')).json();
       restore.aiAcknowledgement = {
         ...restore.aiAcknowledgement,

@@ -1,5 +1,7 @@
 # #3326 AI Act: user acknowledgement of AI use - PM + engineering analysis
 
+> **Paths superseded (step 9).** The acknowledgement APIs now live under `eu-ai-act`: `/api/eu-ai-act/acknowledgements/me`, `/api/admin/eu-ai-act/acknowledgements/...`, `/api/admin/eu-ai-act/users/{userId}/acknowledgements`. See `README.md` (Step 9) and `eu-ai-act-switch.md`. The text below keeps the paths of the time it was written.
+
 Epic #3324, stack position 2 of 6 (after #3325, before #3327). Written 2026-11-11 against the checkout at `/workspace/ihub-apps`. Line numbers are from that checkout and will drift; re-grep before editing.
 
 Facts that differ from the issue text:

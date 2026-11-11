@@ -7,6 +7,7 @@
  *
  * @module routes/admin/watermarkDetectors
  */
+import { requireEuAiActEnabled } from '../../services/euAiAct/conformity.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -28,11 +29,11 @@ function findIhubModel(modelId) {
 }
 
 export default function registerAdminWatermarkDetectorRoutes(app) {
-  const base = '/api/admin/watermark-detectors';
+  const base = '/api/admin/eu-ai-act/watermark-detectors';
 
   /**
    * @swagger
-   * /api/admin/watermark-detectors:
+   * /api/admin/eu-ai-act/watermark-detectors:
    *   get:
    *     summary: List the detector settings of every model marked by iHub
    *     description: Static configuration; no network call and no key.
@@ -71,7 +72,7 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/watermark-detectors/{modelId}/_test:
+   * /api/admin/eu-ai-act/watermark-detectors/{modelId}/_test:
    *   post:
    *     summary: Test the connection to a model's detector
    *     description: >-
@@ -82,16 +83,22 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
    *     responses:
    *       200: { description: "`{ reachable, authenticated, contractValid, latencyMs, error? }`" }
    *       404: { description: No such model }
+   *       403: { description: The EU AI Act features are switched off (FEATURE_DISABLED) }
    *       409: { description: No detector URL or credential configured }
    */
-  app.post(buildServerPath(`${base}/:modelId/_test`), adminAuth, async (req, res) => {
-    const model = findIhubModel(req.params.modelId);
-    res.json(await pingDetector(model));
-  });
+  app.post(
+    buildServerPath(`${base}/:modelId/_test`),
+    adminAuth,
+    requireEuAiActEnabled('watermark'),
+    async (req, res) => {
+      const model = findIhubModel(req.params.modelId);
+      res.json(await pingDetector(model));
+    }
+  );
 
   /**
    * @swagger
-   * /api/admin/watermark-detectors/{modelId}/_self-test:
+   * /api/admin/eu-ai-act/watermark-detectors/{modelId}/_self-test:
    *   post:
    *     summary: Generate text with the model and detect it with all keys
    *     description: >-
@@ -102,21 +109,27 @@ export default function registerAdminWatermarkDetectorRoutes(app) {
    *       200:
    *         description: "`{ ok, diagnosis: keys_match|matches_retired_key|no_watermark_found|too_short|detector_unreachable|not_applied|no_keys, status, matchedKeyId?, scoredTokens, pValue? }`"
    *       404: { description: No such model }
+   *       403: { description: The EU AI Act features are switched off (FEATURE_DISABLED) }
    *       409: { description: No detector URL or credential configured }
    */
-  app.post(buildServerPath(`${base}/:modelId/_self-test`), adminAuth, async (req, res) => {
-    const model = findIhubModel(req.params.modelId);
-    const result = await runSelfTest(model, { llmClient, user: req.user });
-    // The overview page (#3329) shows the last result and marks it outdated after a key change.
-    await recordSelfTest(model.id, result);
-    await logAudit({
-      req,
-      action: 'execute',
-      resource: 'watermarkDetector',
-      resourceId: model.id,
-      summary: `Watermark self-test of ${model.id}: ${result.diagnosis}`,
-      details: { diagnosis: result.diagnosis, matchedKeyId: result.matchedKeyId }
-    });
-    res.json(result);
-  });
+  app.post(
+    buildServerPath(`${base}/:modelId/_self-test`),
+    adminAuth,
+    requireEuAiActEnabled('watermark'),
+    async (req, res) => {
+      const model = findIhubModel(req.params.modelId);
+      const result = await runSelfTest(model, { llmClient, user: req.user });
+      // The overview page (#3329) shows the last result and marks it outdated after a key change.
+      await recordSelfTest(model.id, result);
+      await logAudit({
+        req,
+        action: 'execute',
+        resource: 'watermarkDetector',
+        resourceId: model.id,
+        summary: `Watermark self-test of ${model.id}: ${result.diagnosis}`,
+        details: { diagnosis: result.diagnosis, matchedKeyId: result.matchedKeyId }
+      });
+      res.json(result);
+    }
+  );
 }

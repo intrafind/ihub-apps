@@ -1,5 +1,7 @@
 # AI-use acknowledgement in the client integrations - PM + engineering analysis
 
+> **Paths superseded (step 9).** The acknowledgement APIs now live under `eu-ai-act`: `/api/eu-ai-act/acknowledgements/me`, `/api/admin/eu-ai-act/acknowledgements/...`, `/api/admin/eu-ai-act/users/{userId}/acknowledgements`. See `README.md` (Step 9) and `eu-ai-act-switch.md`. The text below keeps the paths of the time it was written.
+
 Epic #3324 (EU AI Act Art. 50), step 2 (#3326, PR #3590). Read against `origin/claude/ai-act-3329-admin-page` on 2026-11-11. Paths are repo-relative, line numbers are from that branch and will drift: re-grep before editing. Nothing was run on a real Office, Chrome, Teams or Nextcloud host; every claim below is from code reading, and "UNVERIFIED" marks what needs a manual check.
 
 ## 0. Premise check (read this first)

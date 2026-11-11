@@ -381,7 +381,7 @@ the `extractPageInPage` function — see `browser-extension/README.md`.
 
 ## AI-use notice
 
-With the [AI-use acknowledgement](ai-act.md#ai-use-acknowledgement) on (the default), the side panel asks
+With the [AI-use acknowledgement](ai-act.md#ai-use-acknowledgement) on (the default, and only while the [EU AI Act features](ai-act.md#switching-the-features-off) are on), the side panel asks
 the user to confirm the notice before their first message and the server refuses messages until they did
 (`428`); the extension's OAuth token is gated like a person's. The dialog is the same one the Outlook pane
 shows. The policy link opens in a new tab (`chrome.tabs.create`); if the browser refuses, the address is
@@ -390,7 +390,7 @@ open, the message is not sent on its own after confirming: the draft stays and t
 and send again. The confirmation is recorded with `client: extension` and counts in every other client.
 
 The packaged extension reaches the server through its host permissions, so no CORS entry is needed for
-`/api/ai-acknowledgements`; an unpacked development build needs its origin in `cors.origin` like for the
+`/api/eu-ai-act/acknowledgements`; an unpacked development build needs its origin in `cors.origin` like for the
 chat endpoint.
 
 ---

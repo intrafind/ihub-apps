@@ -8,6 +8,7 @@ import Icon from '../../../../shared/components/Icon';
 import useAiAcknowledgementAdmin from '../../hooks/useAiAcknowledgementAdmin';
 import AiAcknowledgementActions from '../AiAcknowledgementActions';
 import EuAiActCard from './EuAiActCard';
+import PausedNote from './PausedNote';
 
 function Figure({ label, value, children }) {
   return (
@@ -26,11 +27,13 @@ function Figure({ label, value, children }) {
  * CSV). The actions and their confirmations are the shared hook and menu, so
  * the two pages cannot drift. Counts cover registered users only.
  */
-export default function AcknowledgementsCard({ acknowledgements, onChanged }) {
+export default function AcknowledgementsCard({ acknowledgements, onChanged, paused = false }) {
   const { t } = useTranslation();
   const admin = useAiAcknowledgementAdmin({ onChanged });
   const counts = acknowledgements?.counts;
-  const enabled = acknowledgements?.enabled;
+  // Master switch off: the counts stay (the data is kept) and the export works; the
+  // delete and reset actions are disabled. The feature's own off state is different.
+  const enabled = paused ? acknowledgements?.configuredEnabled : acknowledgements?.enabled;
 
   return (
     <EuAiActCard
@@ -48,12 +51,13 @@ export default function AcknowledgementsCard({ acknowledgements, onChanged }) {
           >
             {t('admin.euAiAct.ack.openUsers', 'Open users list')}
           </Link>
-          {enabled && (
+          {(enabled || paused) && (
             <AiAcknowledgementActions admin={admin} confirmedCount={counts?.acknowledged ?? 0} />
           )}
         </>
       }
     >
+      {paused && <PausedNote />}
       {!acknowledgements ? null : !enabled ? (
         <div className="flex flex-wrap items-center gap-3">
           <Badge tone="neutral" icon={<Icon name="minus-circle" size="sm" />}>

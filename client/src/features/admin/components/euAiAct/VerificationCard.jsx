@@ -10,6 +10,8 @@ import { verifyFile, verifyText } from '../../../../api/euAiActAdminApi';
 import EuAiActCard from './EuAiActCard';
 import { BUTTON_PRIMARY, BUTTON_SECONDARY, INPUT } from './KeyDialogs';
 import { summarizeVerification } from './verificationResult';
+import PausedNote from './PausedNote';
+import { useEuAiActEnabled } from './EuAiActStateNote';
 
 const MAX_TEXT_CHARS = 262144;
 const DEFAULT_MAX_FILE_BYTES = 50 * 1024 * 1024;
@@ -176,6 +178,8 @@ function describeRow(row, t) {
  */
 export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES }) {
   const { t } = useTranslation();
+  // Verification is one of the features the EU AI Act master switch turns off.
+  const paused = !useEuAiActEnabled();
   const [mode, setMode] = useState('text');
   const [text, setText] = useState('');
   const [file, setFile] = useState(null);
@@ -259,126 +263,140 @@ export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES
         'Check whether a text, image or audio file came from this installation and which marks it carries. The content is hashed and not stored.'
       )}
     >
+      {paused && (
+        <PausedNote>
+          {t('admin.euAiAct.master.verifyOff', 'Verification is switched off.')}
+        </PausedNote>
+      )}
       <form onSubmit={submit} className="space-y-4">
-        <fieldset>
-          <legend className="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {t('admin.euAiAct.verify.kind', 'What do you want to check?')}
-          </legend>
-          <div className="mt-2 flex flex-wrap gap-4">
-            {['text', 'file'].map(value => (
+        <fieldset disabled={paused} className="space-y-4 min-w-0 border-0 p-0 m-0">
+          <fieldset>
+            <legend className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('admin.euAiAct.verify.kind', 'What do you want to check?')}
+            </legend>
+            <div className="mt-2 flex flex-wrap gap-4">
+              {['text', 'file'].map(value => (
+                <label
+                  key={value}
+                  className="inline-flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100"
+                >
+                  <input
+                    type="radio"
+                    name="verify-mode"
+                    value={value}
+                    checked={mode === value}
+                    onChange={() => {
+                      setMode(value);
+                      setOutcome(null);
+                      setError(null);
+                    }}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  {value === 'text'
+                    ? t('admin.euAiAct.verify.modeText', 'Text')
+                    : t('admin.euAiAct.verify.modeFile', 'Image or audio file')}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+
+          {mode === 'text' ? (
+            <div>
               <label
-                key={value}
-                className="inline-flex items-center gap-2 text-sm text-gray-900 dark:text-gray-100"
+                htmlFor="verify-text"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
               >
-                <input
-                  type="radio"
-                  name="verify-mode"
-                  value={value}
-                  checked={mode === value}
-                  onChange={() => {
-                    setMode(value);
-                    setOutcome(null);
-                    setError(null);
-                  }}
-                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500"
-                />
-                {value === 'text'
-                  ? t('admin.euAiAct.verify.modeText', 'Text')
-                  : t('admin.euAiAct.verify.modeFile', 'Image or audio file')}
+                {t('admin.euAiAct.verify.textLabel', 'Text to check')}
               </label>
-            ))}
+              <textarea
+                id="verify-text"
+                rows={6}
+                value={text}
+                onChange={e => setText(e.target.value)}
+                aria-describedby="verify-text-help"
+                className={`mt-1 ${INPUT}`}
+              />
+              <p id="verify-text-help" className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.euAiAct.verify.textHelp',
+                  'Texts shorter than about 200 tokens cannot be judged by the watermark check.'
+                )}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p
+                id="verify-file-label"
+                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                {t('admin.euAiAct.verify.fileLabel', 'File to check')}
+              </p>
+              <div className="mt-1 flex flex-wrap items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  id="verify-file"
+                  type="file"
+                  accept="image/*,audio/*"
+                  onChange={pickFile}
+                  aria-labelledby="verify-file-label"
+                  aria-describedby="verify-file-help"
+                  className="text-sm text-gray-900 dark:text-gray-100 file:mr-3 file:px-3 file:py-2 file:rounded-md file:border file:border-gray-300 dark:file:border-gray-600 file:bg-white dark:file:bg-gray-800 file:text-sm file:font-medium file:text-gray-700 dark:file:text-gray-200"
+                />
+                {file && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className={BUTTON_SECONDARY}
+                  >
+                    {t('admin.euAiAct.verify.removeFile', 'Remove file')}
+                  </button>
+                )}
+              </div>
+              <p id="verify-file-help" className="mt-1 text-xs text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.euAiAct.verify.fileHelp',
+                  'Images and audio, up to {{mb}} MB. The file is not stored.',
+                  {
+                    mb: Math.round(maxFileBytes / (1024 * 1024))
+                  }
+                )}
+              </p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="submit"
+              disabled={!hasInput || busy}
+              aria-describedby={!hasInput ? 'verify-disabled-reason' : undefined}
+              className={BUTTON_PRIMARY}
+            >
+              {busy && (
+                <Icon
+                  name="refresh"
+                  size="sm"
+                  className="animate-spin motion-reduce:animate-none"
+                />
+              )}
+              {busy
+                ? t('admin.euAiAct.verify.checking', 'Checking…')
+                : t('admin.euAiAct.verify.check', 'Check')}
+            </button>
+            {!hasInput && (
+              <span
+                id="verify-disabled-reason"
+                className="text-xs text-gray-600 dark:text-gray-400"
+              >
+                {mode === 'text'
+                  ? t('admin.euAiAct.verify.needText', 'Paste a text first.')
+                  : t('admin.euAiAct.verify.needFile', 'Choose a file first.')}
+              </span>
+            )}
           </div>
         </fieldset>
-
-        {mode === 'text' ? (
-          <div>
-            <label
-              htmlFor="verify-text"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {t('admin.euAiAct.verify.textLabel', 'Text to check')}
-            </label>
-            <textarea
-              id="verify-text"
-              rows={6}
-              value={text}
-              onChange={e => setText(e.target.value)}
-              aria-describedby="verify-text-help"
-              className={`mt-1 ${INPUT}`}
-            />
-            <p id="verify-text-help" className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-              {t(
-                'admin.euAiAct.verify.textHelp',
-                'Texts shorter than about 200 tokens cannot be judged by the watermark check.'
-              )}
-            </p>
-          </div>
-        ) : (
-          <div>
-            <p
-              id="verify-file-label"
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              {t('admin.euAiAct.verify.fileLabel', 'File to check')}
-            </p>
-            <div className="mt-1 flex flex-wrap items-center gap-3">
-              <input
-                ref={fileInputRef}
-                id="verify-file"
-                type="file"
-                accept="image/*,audio/*"
-                onChange={pickFile}
-                aria-labelledby="verify-file-label"
-                aria-describedby="verify-file-help"
-                className="text-sm text-gray-900 dark:text-gray-100 file:mr-3 file:px-3 file:py-2 file:rounded-md file:border file:border-gray-300 dark:file:border-gray-600 file:bg-white dark:file:bg-gray-800 file:text-sm file:font-medium file:text-gray-700 dark:file:text-gray-200"
-              />
-              {file && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFile(null);
-                    if (fileInputRef.current) fileInputRef.current.value = '';
-                  }}
-                  className={BUTTON_SECONDARY}
-                >
-                  {t('admin.euAiAct.verify.removeFile', 'Remove file')}
-                </button>
-              )}
-            </div>
-            <p id="verify-file-help" className="mt-1 text-xs text-gray-600 dark:text-gray-400">
-              {t(
-                'admin.euAiAct.verify.fileHelp',
-                'Images and audio, up to {{mb}} MB. The file is not stored.',
-                {
-                  mb: Math.round(maxFileBytes / (1024 * 1024))
-                }
-              )}
-            </p>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={!hasInput || busy}
-            aria-describedby={!hasInput ? 'verify-disabled-reason' : undefined}
-            className={BUTTON_PRIMARY}
-          >
-            {busy && (
-              <Icon name="refresh" size="sm" className="animate-spin motion-reduce:animate-none" />
-            )}
-            {busy
-              ? t('admin.euAiAct.verify.checking', 'Checking…')
-              : t('admin.euAiAct.verify.check', 'Check')}
-          </button>
-          {!hasInput && (
-            <span id="verify-disabled-reason" className="text-xs text-gray-600 dark:text-gray-400">
-              {mode === 'text'
-                ? t('admin.euAiAct.verify.needText', 'Paste a text first.')
-                : t('admin.euAiAct.verify.needFile', 'Choose a file first.')}
-            </span>
-          )}
-        </div>
       </form>
 
       <div role="status" aria-live="polite" aria-busy={busy} className="mt-4">

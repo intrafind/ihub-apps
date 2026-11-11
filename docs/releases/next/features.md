@@ -12,7 +12,7 @@ removes that mark, records what the provider claims, and lets anyone check a fil
 - **One record per generated image**, with the hash of the raw bytes, the model and what the provider marking
   looks like (C2PA present, valid, issuer, digital source type; what you declared). Pictures too large for
   the artifact store are recorded too. The record never holds the picture.
-- **Check a file.** `POST /api/provenance/_verify` now also takes an image or audio file (`multipart/form-data`,
+- **Check a file.** `POST /api/eu-ai-act/provenance/_verify` now also takes an image or audio file (`multipart/form-data`,
   one `file` field, up to 50 MiB) and answers whether this installation generated it, plus the file's C2PA
   manifest. A file generated elsewhere still gets its manifest read. Results say "found" or "not found" and
   "trust not evaluated"; a signature is never called authentic, and a missing record is not proof of origin.
@@ -1646,13 +1646,13 @@ See [EU AI Act](../../ai-act.md#first-turn-notice).
 Every call to a text model now carries the rule "You are an AI system. If asked, always say so. Never claim to
 be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
 A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
-`system` message cannot remove it, and there is no setting to switch it off. Admins can reword the rule for the
+`system` message cannot remove it, and there is no app setting to switch it off (only the audited EU AI Act master switch, below). Admins can reword the rule for the
 whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
 
 Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
 still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
 
-See [EU AI Act](../../ai-act.md#guardrail-prompt-always-on).
+See [EU AI Act](../../ai-act.md#guardrail-prompt).
 
 ## Users Confirm the Use of AI Before Their First Message
 
@@ -1691,7 +1691,7 @@ AI Act.
 - **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model, time, marking and content hash, with a **Copy hash** action.
 - **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
-- **Look it up.** `POST /api/provenance/_verify` takes a text or a hash and answers "Found" with the record or
+- **Look it up.** `POST /api/eu-ai-act/provenance/_verify` takes a text or a hash and answers "Found" with the record or
   "Not found". Not found is not proof of human authorship. It needs a signed-in caller unless
   `provenance.verify.access` is `public`, and has its own rate limit (**Admin → Security**).
 - **Per model.** **Admin → Models** shows an *Output marking* column ("Not marked" is only a hint) and an *Output
@@ -1712,14 +1712,14 @@ marking and detection duty of Art. 50(2) of the EU AI Act (due 2026-12-02).
   applied*, with the reason.
 - **Keys iHub holds.** One active key at a time, stored encrypted; rotating makes the old key *retired*
   (still used to recognise older text). Keys are created, activated, revealed and deleted through
-  `/api/admin/watermark-keys`; every change and every reveal is in the audit log, and a reveal is refused when the
+  `/api/admin/eu-ai-act/watermark-keys`; every change and every reveal is in the audit log, and a reveal is refused when the
   audit log is not available. After a rotation restart vLLM with the new `--watermark-config`, then run the
   self-test.
-- **Detection.** `POST /api/provenance/_verify` also answers `watermark` for a text with no record: detected (with
+- **Detection.** `POST /api/eu-ai-act/provenance/_verify` also answers `watermark` for a text with no record: detected (with
   the key it was made with), not detected, or too short to tell. This needs a detector service (the contract is
   in the guide; iHub ships a mock for tests), reached over HTTPS or an internal network with a bearer
   credential, and honours the SSL whitelist and the proxy. Not detected is not proof of human authorship.
-- **Checks.** `POST /api/admin/watermark-detectors/{modelId}/_test` and `/_self-test` show whether iHub and
+- **Checks.** `POST /api/admin/eu-ai-act/watermark-detectors/{modelId}/_test` and `/_self-test` show whether iHub and
   vLLM use the same key.
 - **Also fixed.** The audit log now redacts a request field named `key`.
 
@@ -1755,3 +1755,39 @@ config files.
 - `GET /api/admin/eu-ai-act/status` returns the check (admin only, never a key or token).
 
 See [EU AI Act](../../ai-act.md#admin-page).
+
+## EU AI Act Master Switch With a Recorded Reason, and the Acknowledgement APIs Under `eu-ai-act`
+
+Admins who do not need the Art. 50 measures can turn all EU AI Act features off from **Admin → EU AI Act**. The
+switch is deliberate and attributable: switching off needs a written reason (20-1000 characters) and a
+confirmation that the legal duty stays with the organisation, and the admin's name, the time and the reason are
+stored on the server and in the audit log.
+
+- **What stops.** The AI rule in prompts, the first-turn notice, the acknowledgement dialog and its enforcement,
+  provenance records and the `provenance` member and `X-AI-*` headers, text watermarking requests, image
+  marking, verification and the configuration check. Nothing shows an error; integrators see `euAiAct.enabled`
+  in `GET /api/configs/platform`.
+- **What stays.** Acknowledgements, provenance records, watermark keys, all settings and texts, and a history
+  of every switch. While off, removing or resetting acknowledgements is disabled; the CSV export stays.
+- **Switching on again.** Valid acknowledgements stay valid; only users without one are asked at their next
+  message.
+- **Only admins.** An interactive admin session; API keys, OAuth tokens and agents are refused.
+- **vLLM.** A vLLM server started with `"enforce": true` keeps watermarking until it is restarted without that
+  option.
+- **API paths.** The acknowledgement APIs now live under `eu-ai-act`: `GET/POST /api/eu-ai-act/acknowledgements/me`,
+  `/api/admin/eu-ai-act/acknowledgements/...` and `DELETE /api/admin/eu-ai-act/users/{userId}/acknowledgements`.
+  They replace `GET /api/ai-acknowledgements/me`, `POST /api/ai-acknowledgements/me`,
+  `POST /api/admin/ai-acknowledgements/_request-again`, `GET /api/admin/ai-acknowledgements/_export`,
+  `DELETE /api/admin/ai-acknowledgements` and `DELETE /api/admin/auth/users/{userId}/ai-acknowledgements`,
+  which never shipped in a release.
+- **Provenance and watermark APIs move too.** `POST /api/eu-ai-act/provenance/_verify`,
+  `/api/admin/eu-ai-act/watermark-keys` and `/api/admin/eu-ai-act/watermark-detectors` replace
+  `POST /api/provenance/_verify`, `/api/admin/watermark-keys` and `/api/admin/watermark-detectors`, which
+  never shipped either.
+- **No look-up URL in the provenance object.** The `verify` member is gone from the `provenance` object and
+  from the `_verify` answer, because the address of an installation can change. Clients build the URL from
+  the public address of iHub plus `/api/eu-ai-act/provenance/_verify`.
+
+The wording of the legal notes is a draft for legal review, not legal advice.
+
+See [EU AI Act](../../ai-act.md#switching-the-features-off).

@@ -20,8 +20,7 @@ The record **never stores the output text**. It stores a hash of it.
   },
   "output_id": "01JC8M2T6V0Q4W7R9XK3B5N1ZD",
   "created_at": "2026-11-05T10:12:03.412Z",
-  "content_hash": { "alg": "sha-256", "normalization": "nfc-trim", "value": "9f86d0…" },
-  "verify": "https://ihub.example.com/api/provenance/_verify"
+  "content_hash": { "alg": "sha-256", "normalization": "nfc-trim", "value": "9f86d0…" }
 }
 ```
 
@@ -32,7 +31,8 @@ The record **never stores the output text**. It stores a hash of it.
 | `model.id` | The model that answered. Workflows use `workflow:<id>`. |
 | `model.watermark` | What the model declares about marking its output, see below. |
 | `content_hash` | SHA-256 of the output text after the `nfc-trim` normalization. Missing when there is no text (a tool call only). |
-| `verify` | Where to look the output up. Absolute when the public URL is known (`mcpServer.publicUrl`, or the request's own host); the site-relative path in stored chat messages. |
+
+The object carries no look-up URL: the address of an installation can change, so it is not stored. A client builds the URL from the public address of iHub plus the API path `/api/eu-ai-act/provenance/_verify` (see [Looking an output up](#looking-an-output-up)).
 
 There is no `digital_source_type` for text (that vocabulary belongs to media) and no `signature`.
 
@@ -62,6 +62,8 @@ the hash of the final step's text, so a user who copied only the final answer st
 | Channel | Where |
 | --- | --- |
 | Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens model, time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) shows no button; a stopped answer that had already written text does show it. |
+> **Master switch.** While the [EU AI Act features are switched off](ai-act.md#switching-the-features-off) no record is made, no `provenance` member or `X-AI-*` header is sent and `_verify` answers `403 FEATURE_DISABLED`. Existing records are kept, expire on schedule and answer again after switching on.
+
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |
 | MCP | `_meta.provenance` on an app or workflow `tools/call` result. |
 | A2A | `metadata.provenance` on the Task and on the response artifact. |
@@ -72,10 +74,10 @@ Slack and Teams integrations do not go through it and get no record yet.
 
 ## Looking an output up
 
-`POST /api/provenance/_verify` takes a text or a hash:
+`POST /api/eu-ai-act/provenance/_verify` takes a text or a hash:
 
 ```bash
-curl -X POST https://ihub.example.com/api/provenance/_verify \
+curl -X POST https://ihub.example.com/api/eu-ai-act/provenance/_verify \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{ "text": "The answer you were given." }'
 # or  -d '{ "contentHash": "9f86d0…" }'
@@ -124,7 +126,7 @@ Edit these in `platform.json`; migrations V243 and V244 write the defaults.
 
 One document per content hash in the `provenance-records` namespace of the [storage provider](storage.md),
 holding up to the 20 newest records for that hash (the same text answered many times, such as "Yes", must not
-grow a document without bound). Each record is the provenance object without `verify`: spec, generator, model,
+grow a document without bound). Each record is the provenance object: spec, generator, model,
 `output_id`, `created_at`, `content_hash`. **No text, prompt, user, chat or run ID.**
 
 A short text's hash can be guessed by someone with disk access. They learn only that this installation once
@@ -190,11 +192,11 @@ A media record is the usual provenance object with `kind: "image"`, `content_has
 
 ### Verifying a file
 
-`POST /api/provenance/_verify` with `multipart/form-data`, one `file` field (and an optional `kind` field,
+`POST /api/eu-ai-act/provenance/_verify` with `multipart/form-data`, one `file` field (and an optional `kind` field,
 `image` or `audio`, which must match the bytes):
 
 ```bash
-curl -b cookies.txt -F "file=@picture.png" https://ihub.example.com/api/provenance/_verify
+curl -b cookies.txt -F "file=@picture.png" https://ihub.example.com/api/eu-ai-act/provenance/_verify
 ```
 
 ```json

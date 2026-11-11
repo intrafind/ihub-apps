@@ -44,6 +44,8 @@ jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getPlatform: () => store.files['config/platform.json'] || {},
     get: key => (store.files[key] ? { data: store.files[key] } : null),
+    getEuAiActConformity: () =>
+      store.files['config/eu-ai-act-conformity.json'] || { version: 1, enabled: true, history: [] },
     setCacheEntry: (key, data) => {
       store.files[key] = data;
     },
@@ -380,7 +382,7 @@ describe('user routes', () => {
 
   test('GET returns the notice, hash and status; never cached', async () => {
     const res = await request(buildApp())
-      .get('/api/ai-acknowledgements/me?language=de')
+      .get('/api/eu-ai-act/acknowledgements/me?language=de')
       .set('x-user', asUser('alice'));
     expect(res.status).toBe(200);
     expect(res.headers['cache-control']).toBe('no-store');
@@ -399,7 +401,7 @@ describe('user routes', () => {
   test('GET with the feature off carries no text', async () => {
     store.files[PLATFORM].aiAcknowledgement.enabled = false;
     const res = await request(buildApp())
-      .get('/api/ai-acknowledgements/me')
+      .get('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'));
     expect(res.body).toEqual({
       enabled: false,
@@ -412,19 +414,19 @@ describe('user routes', () => {
   test('POST records once: 201 with Location, then 200 without a second audit entry', async () => {
     const app = buildApp();
     const notice = await request(app)
-      .get('/api/ai-acknowledgements/me?language=en')
+      .get('/api/eu-ai-act/acknowledgements/me?language=en')
       .set('x-user', asUser('alice'));
     const body = { version: 1, textHash: notice.body.textHash, language: 'en' };
     const first = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send(body);
     expect(first.status).toBe(201);
-    expect(first.headers.location).toMatch(/\/api\/ai-acknowledgements\/me$/);
+    expect(first.headers.location).toMatch(/\/api\/eu-ai-act\/acknowledgements\/me$/);
     expect(first.body).toMatchObject({ version: 1, textHash: body.textHash, language: 'en' });
     expect(store.files[USERS].users.alice.aiAcknowledgements).toHaveLength(1);
     const second = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send(body);
     expect(second.status).toBe(200);
@@ -448,14 +450,14 @@ describe('user routes', () => {
   test('POST: a changed text or version answers 409 with the required version', async () => {
     const app = buildApp();
     const wrongHash = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send({ version: 1, textHash: 'sha256:stale', language: 'en' });
     expect(wrongHash.status).toBe(409);
     expect(wrongHash.body.details).toMatchObject({ requiredVersion: 1 });
     const hash = service.textHash('Use AI responsibly.');
     const wrongVersion = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send({ version: 7, textHash: hash, language: 'en' });
     expect(wrongVersion.status).toBe(409);
@@ -465,13 +467,13 @@ describe('user routes', () => {
   test('POST with the feature off answers 403 FEATURE_DISABLED; a bad body 400', async () => {
     const app = buildApp();
     const bad = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send({ version: 'x' });
     expect(bad.status).toBe(400);
     store.files[PLATFORM].aiAcknowledgement.enabled = false;
     const off = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send({ version: 1, textHash: 'sha256:x' });
     expect(off.status).toBe(403);
@@ -482,7 +484,7 @@ describe('user routes', () => {
     const app = buildApp();
     const hash = service.textHash('Use AI responsibly.');
     const res = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', 'guest')
       .send({ version: 1, textHash: hash, language: 'en' });
     expect(res.status).toBe(201);
@@ -505,7 +507,7 @@ describe('user routes', () => {
       ).status
     ).toBe(200);
     const repeat = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', 'guest')
       .set('Cookie', cookie)
       .send({ version: 1, textHash: hash, language: 'en' });
@@ -590,12 +592,12 @@ describe('first-party delegated clients (Outlook, extension, Nextcloud)', () => 
     const app = buildApp();
     const user = JSON.stringify(delegated(OFFICE));
     const notice = await request(app)
-      .get('/api/ai-acknowledgements/me?language=en')
+      .get('/api/eu-ai-act/acknowledgements/me?language=en')
       .set('x-user', user);
     expect(notice.status).toBe(200);
     expect(notice.body).toMatchObject({ enabled: true, enforce: true, acknowledged: false });
     const confirm = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', user)
       .send({ version: 1, textHash: notice.body.textHash, language: 'en' });
     expect(confirm.status).toBe(201);
@@ -610,7 +612,8 @@ describe('first-party delegated clients (Outlook, extension, Nextcloud)', () => 
     // One record per user: the confirmation counts in the other first-party client too.
     expect((await post(app, delegated(EXTENSION))).status).toBe(200);
     expect(
-      (await request(app).get('/api/ai-acknowledgements/me').set('x-user', user)).body.acknowledged
+      (await request(app).get('/api/eu-ai-act/acknowledgements/me').set('x-user', user)).body
+        .acknowledged
     ).toBe(true);
   });
 
@@ -618,13 +621,13 @@ describe('first-party delegated clients (Outlook, extension, Nextcloud)', () => 
     const app = buildApp();
     const hash = service.textHash('Use AI responsibly.');
     const res = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send({ version: 1, textHash: hash, language: 'en', client: 'office' });
     // The schema is strict: an unknown field is a validation error, not a claim.
     expect(res.status).toBe(400);
     const ok = await request(app)
-      .post('/api/ai-acknowledgements/me')
+      .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send({ version: 1, textHash: hash, language: 'en' });
     expect(ok.status).toBe(201);
@@ -634,19 +637,19 @@ describe('first-party delegated clients (Outlook, extension, Nextcloud)', () => 
   test('the policy link leaves absolute: sub-path and forwarded host respected', async () => {
     store.files[PLATFORM].aiAcknowledgement.policyUrl = '/page/ai-policy';
     const res = await request(buildApp())
-      .get('/api/ai-acknowledgements/me')
+      .get('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .set('X-Forwarded-Proto', 'https')
       .set('X-Forwarded-Host', 'ihub.example.org');
     expect(res.body.policyUrl).toBe('https://ihub.example.org/page/ai-policy');
     store.files[PLATFORM].aiAcknowledgement.policyUrl = 'https://corp.example/policy';
     const external = await request(buildApp())
-      .get('/api/ai-acknowledgements/me')
+      .get('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'));
     expect(external.body.policyUrl).toBe('https://corp.example/policy');
     store.files[PLATFORM].aiAcknowledgement.policyUrl = '';
     const none = await request(buildApp())
-      .get('/api/ai-acknowledgements/me')
+      .get('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'));
     expect(none.body.policyUrl).toBe('');
   });
@@ -659,10 +662,10 @@ describe('admin routes', () => {
   test('every action refuses a non-admin', async () => {
     const app = buildApp({ chat: false });
     for (const [method, url] of [
-      ['post', '/api/admin/ai-acknowledgements/_request-again'],
-      ['delete', '/api/admin/auth/users/bob/ai-acknowledgements'],
-      ['delete', '/api/admin/ai-acknowledgements'],
-      ['get', '/api/admin/ai-acknowledgements/_export']
+      ['post', '/api/admin/eu-ai-act/acknowledgements/_request-again'],
+      ['delete', '/api/admin/eu-ai-act/users/bob/acknowledgements'],
+      ['delete', '/api/admin/eu-ai-act/acknowledgements'],
+      ['get', '/api/admin/eu-ai-act/acknowledgements/_export']
     ]) {
       expect((await request(app)[method](url)).status).toBe(403);
     }
@@ -671,7 +674,9 @@ describe('admin routes', () => {
   test('request again raises the version atomically, also under parallel calls', async () => {
     const app = buildApp({ chat: false });
     const results = await Promise.all(
-      [1, 2, 3].map(() => admin(request(app).post('/api/admin/ai-acknowledgements/_request-again')))
+      [1, 2, 3].map(() =>
+        admin(request(app).post('/api/admin/eu-ai-act/acknowledgements/_request-again'))
+      )
     );
     expect(results.map(r => r.status)).toEqual([200, 200, 200]);
     expect(store.files[PLATFORM].aiAcknowledgement.requiredVersion).toBe(4);
@@ -684,7 +689,7 @@ describe('admin routes', () => {
   test('remove one: 204, entries gone, audit written; unknown user 404', async () => {
     const app = buildApp({ chat: false });
     expect(
-      (await admin(request(app).delete('/api/admin/auth/users/bob/ai-acknowledgements'))).status
+      (await admin(request(app).delete('/api/admin/eu-ai-act/users/bob/acknowledgements'))).status
     ).toBe(204);
     expect(store.files[USERS].users.bob.aiAcknowledgements).toBeUndefined();
     expect(store.audits.at(-1)).toMatchObject({
@@ -693,14 +698,17 @@ describe('admin routes', () => {
       resourceId: 'bob'
     });
     expect(
-      (await admin(request(app).delete('/api/admin/auth/users/nobody/ai-acknowledgements'))).status
+      (await admin(request(app).delete('/api/admin/eu-ai-act/users/nobody/acknowledgements')))
+        .status
     ).toBe(404);
   });
 
   test('remove all clears every record and sets resetAt, so old guest cookies die', async () => {
     const app = buildApp({ chat: false });
     const old = guest.signAcknowledgement(`guest:${GUEST_ID}`, 1, Date.now() - 5000);
-    expect((await admin(request(app).delete('/api/admin/ai-acknowledgements'))).status).toBe(204);
+    expect((await admin(request(app).delete('/api/admin/eu-ai-act/acknowledgements'))).status).toBe(
+      204
+    );
     expect(Object.values(store.files[USERS].users).some(u => u.aiAcknowledgements)).toBe(false);
     const { resetAt } = store.files[PLATFORM].aiAcknowledgement;
     expect(typeof resetAt).toBe('string');
@@ -714,7 +722,7 @@ describe('admin routes', () => {
   test('export: CSV, filter by status, audited; a bad status is 400', async () => {
     const app = buildApp({ chat: false });
     const res = await admin(
-      request(app).get('/api/admin/ai-acknowledgements/_export?status=acknowledged')
+      request(app).get('/api/admin/eu-ai-act/acknowledgements/_export?status=acknowledged')
     );
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/text\/csv/);
@@ -725,7 +733,8 @@ describe('admin routes', () => {
     expect(lines[1].startsWith('bob,')).toBe(true);
     expect(store.audits.at(-1)).toMatchObject({ action: 'export', resource: 'aiAcknowledgement' });
     expect(
-      (await admin(request(app).get('/api/admin/ai-acknowledgements/_export?status=nope'))).status
+      (await admin(request(app).get('/api/admin/eu-ai-act/acknowledgements/_export?status=nope')))
+        .status
     ).toBe(400);
   });
 });
@@ -776,5 +785,87 @@ describe('userManager helpers', () => {
     seed();
     delete store.files[USERS].users.bob;
     expect(service.buildCsvRows(undefined).map(r => r[0])).not.toContain('bob');
+  });
+});
+
+describe('EU AI Act master switch off (step 9)', () => {
+  const FILE = 'config/eu-ai-act-conformity.json';
+  const admin = req => req.set('x-admin', '1');
+  const post = (app, user) => {
+    const req = request(app).post('/api/apps/x/chat/c1').send({});
+    if (user === 'guest') req.set('x-user', 'guest');
+    else if (user) req.set('x-user', user);
+    return req;
+  };
+  const actor = { id: 'admin', name: 'Anna Admin' };
+  beforeEach(() => {
+    seed();
+    store.files[FILE] = {
+      version: 1,
+      enabled: false,
+      changedAt: '2026-11-12T09:30:00.000Z',
+      changedBy: actor,
+      reason: 'Internal research sandbox, no EU users.',
+      statementVersion: 1,
+      history: []
+    };
+  });
+
+  test('the guard lets everyone through without reading users.json, enforcement stays configured', async () => {
+    const app = buildApp();
+    expect((await post(app, asUser('alice'))).status).toBe(200);
+    expect((await post(app, 'guest')).status).toBe(200);
+    expect(service.getSettings()).toMatchObject({ enabled: false, configuredEnabled: true });
+  });
+
+  test('GET /me says disabled and acknowledged; POST /me is FEATURE_DISABLED', async () => {
+    const app = buildApp();
+    const me = await request(app)
+      .get('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('alice'));
+    expect(me.body).toEqual({
+      enabled: false,
+      enforce: false,
+      acknowledged: true,
+      requiredVersion: 1
+    });
+    const confirm = await request(app)
+      .post('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('alice'))
+      .send({ version: 1, textHash: 'sha256:aa', language: 'en' });
+    expect(confirm.status).toBe(403);
+    expect(confirm.body.code).toBe('FEATURE_DISABLED');
+  });
+
+  test('acknowledgements stay: delete and reset actions are disabled, the export is not', async () => {
+    const app = buildApp({ chat: false });
+    for (const [method, url] of [
+      ['post', '/api/admin/eu-ai-act/acknowledgements/_request-again'],
+      ['delete', '/api/admin/eu-ai-act/users/bob/acknowledgements'],
+      ['delete', '/api/admin/eu-ai-act/acknowledgements']
+    ]) {
+      const res = await admin(request(app)[method](url));
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('FEATURE_DISABLED');
+    }
+    expect(store.files[USERS].users.bob.aiAcknowledgements).toHaveLength(1);
+    expect(store.files[PLATFORM].aiAcknowledgement.requiredVersion).toBe(1);
+    expect(
+      (await admin(request(app).get('/api/admin/eu-ai-act/acknowledgements/_export'))).status
+    ).toBe(200);
+  });
+
+  test('switched on again: a valid acknowledgement stays valid, others are asked', async () => {
+    const app = buildApp();
+    store.files[FILE] = { version: 1, enabled: true, history: [] };
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    expect((await post(app, asUser('alice'))).status).toBe(428);
+    expect(store.files[PLATFORM].aiAcknowledgement.requiredVersion).toBe(1);
+  });
+
+  test('a settings save while off still audits a change of `enabled`', () => {
+    expect(
+      service.describeSettingsChange({ enabled: true }, { enabled: false })?.changed
+    ).toContain('enabled');
   });
 });

@@ -38,14 +38,15 @@ export function AiAcknowledgementActions({ admin, confirmedCount, exportStatus }
             {
               id: 'requestAgain',
               label: t('admin.users.aiAcknowledgement.requestAgain', 'Request again'),
-              disabled: admin.busy,
+              disabled: admin.busy || !settings.masterOn,
               onSelect: admin.askRequestAgain
             },
             {
               id: 'removeAll',
               label: t('admin.users.aiAcknowledgement.removeAll', 'Remove all'),
               destructive: true,
-              disabled: admin.busy,
+              // Acknowledgements stay while the EU AI Act features are off; the export does not.
+              disabled: admin.busy || !settings.masterOn,
               onSelect: () => admin.askRemoveAll(confirmedCount)
             }
           ]}

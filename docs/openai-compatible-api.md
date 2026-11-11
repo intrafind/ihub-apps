@@ -224,6 +224,7 @@ Mistral `json_schema`, vLLM):
 Every completion that has text carries a machine-readable record of where it came from (see
 [Provenance Records](provenance.md)):
 
+- **Off while the EU AI Act features are off** ([switch](ai-act.md#switching-the-features-off)): no headers and no `provenance` member (absent, not null).
 - **Headers** (set before the first byte, so they are also on a stream): `X-AI-Generated: true` and
   `X-AI-Content-Id: <output_id>`.
 - **Body:** a top-level `provenance` member. On a stream it is attached to the chunk that carries
@@ -231,7 +232,7 @@ Every completion that has text carries a machine-readable record of where it cam
 - The `output_id` in the header and in the object is the same. A completion without text (tool calls only)
   has the headers on a stream but no object, and no record.
 - `/v1/responses` carries `provenance` on the response object, also in `response.completed`.
-- Look an output up with [`POST /api/provenance/_verify`](provenance.md#looking-an-output-up).
+- Look an output up with [`POST /api/eu-ai-act/provenance/_verify`](provenance.md#looking-an-output-up).
 
 ### Responses API
 

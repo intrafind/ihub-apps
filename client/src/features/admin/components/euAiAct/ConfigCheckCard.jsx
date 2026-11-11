@@ -47,7 +47,8 @@ function CheckRow({ check }) {
  */
 export default function ConfigCheckCard({ status, loading, error, checking, onRecheck }) {
   const { t } = useTranslation();
-  const counts = status?.summary?.counts;
+  const paused = status?.summary?.level === 'disabled';
+  const counts = paused ? null : status?.summary?.counts;
   const checks = [...(status?.checks || [])].sort(byLevel);
 
   const summary = counts && (
@@ -82,7 +83,25 @@ export default function ConfigCheckCard({ status, loading, error, checking, onRe
       )}
       actions={summary}
     >
-      {error && !status ? (
+      {paused ? (
+        <div data-testid="checks-paused">
+          <Badge tone="neutral" icon={<Icon name="minus-circle" size="sm" />}>
+            {t('admin.euAiAct.master.notEvaluated', 'Not evaluated')}
+          </Badge>
+          <p className="mt-3 text-sm text-gray-700 dark:text-gray-300">
+            {t(
+              'admin.euAiAct.master.checksPaused',
+              'Checks are paused. Nothing is evaluated while the features are off.'
+            )}{' '}
+            <a
+              href="#conformity"
+              className="font-medium underline text-indigo-700 dark:text-indigo-300 focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
+            >
+              {t('admin.euAiAct.master.pausedLink', 'Switch on again')}
+            </a>
+          </p>
+        </div>
+      ) : error && !status ? (
         <AdminLoadError
           framed={false}
           message={error}

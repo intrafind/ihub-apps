@@ -417,9 +417,12 @@ describe('AcknowledgementsCard', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Request again' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Ask everyone again' }));
     await waitFor(() =>
-      expect(mockAdminCall).toHaveBeenCalledWith('/admin/ai-acknowledgements/_request-again', {
-        method: 'POST'
-      })
+      expect(mockAdminCall).toHaveBeenCalledWith(
+        '/admin/eu-ai-act/acknowledgements/_request-again',
+        {
+          method: 'POST'
+        }
+      )
     );
     await waitFor(() => expect(onChanged).toHaveBeenCalled());
   });

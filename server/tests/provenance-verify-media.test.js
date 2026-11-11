@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * `POST /api/provenance/_verify` with a file (#3328): a hash hit returns the
+ * `POST /api/eu-ai-act/provenance/_verify` with a file (#3328): a hash hit returns the
  * record, an unknown image still gets its C2PA read, a WAV-wrapped TTS clip
  * matches by its PCM payload, and refused input (oversize, SVG, spoofed
  * Content-Type, two files, other body types) fails with problem+json. The
@@ -80,11 +80,12 @@ afterAll(async () => {
   await storage.stop();
 });
 
-const verify = () => request(app).post('/api/provenance/_verify').set('x-test-user', 'u1');
+const verify = () =>
+  request(app).post('/api/eu-ai-act/provenance/_verify').set('x-test-user', 'u1');
 const upload = (bytes, name = 'file.bin', type) =>
   verify().attach('file', bytes, { filename: name, ...(type ? { contentType: type } : {}) });
 
-describe('POST /api/provenance/_verify with a file', () => {
+describe('POST /api/eu-ai-act/provenance/_verify with a file', () => {
   test('a generated image is found by its bytes, with the record and the C2PA read', async () => {
     const res = await upload(generated, 'a.png');
     expect(res.status).toBe(200);
@@ -105,7 +106,7 @@ describe('POST /api/provenance/_verify with a file', () => {
       output_id: '01JCIMAGE00000000000000001',
       kind: 'image'
     });
-    expect(res.body.records[0].verify).toMatch(/_verify$/);
+    expect(res.body.records[0].verify).toBeUndefined();
     expect(res.body.records[0].provider_marking.declared).toBe('synthid');
     expect(res.body.c2pa).toMatchObject({
       present: false,
@@ -199,7 +200,7 @@ describe('POST /api/provenance/_verify with a file', () => {
 
   test('a file needs a signed-in caller by default', async () => {
     const res = await request(app)
-      .post('/api/provenance/_verify')
+      .post('/api/eu-ai-act/provenance/_verify')
       .attach('file', generated, 'a.png');
     expect(res.status).toBe(401);
   });

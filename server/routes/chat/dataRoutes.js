@@ -29,6 +29,8 @@ import { getChatFileRepository } from '../../services/chatFiles/ChatFileReposito
 import crypto from 'node:crypto';
 import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
+import { getSettings as getAcknowledgementSettings } from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
+import { isEuAiActEnabled } from '../../services/euAiAct/conformity.js';
 
 /**
  * The default dictation model as the client sees it: its id, and whether it is
@@ -50,13 +52,16 @@ export function dictationClientConfig(dictation) {
  * Client-visible slice of `platform.aiDisclosure`.
  * @param {Object} [aiDisclosure]
  */
-export function aiDisclosureClientConfig(aiDisclosure) {
+export function aiDisclosureClientConfig(aiDisclosure, euAiActEnabled = isEuAiActEnabled()) {
   const notice = aiDisclosure?.firstTurnNotice;
   const text = {};
   for (const [lang, value] of Object.entries(notice?.text || {})) {
     if (typeof value === 'string' && value.trim()) text[lang] = value;
   }
-  return { firstTurnNotice: { enabled: notice?.enabled !== false, text } };
+  // The server decides: with the EU AI Act master switch off the notice is off for every app.
+  return {
+    firstTurnNotice: { enabled: euAiActEnabled && notice?.enabled !== false, text }
+  };
 }
 
 /**
@@ -906,9 +911,14 @@ export default function registerDataRoutes(app) {
       // First-turn AI notice (Art. 50(1)): non-secret, resolved on the client by
       // shared/aiDisclosure.js against the app's own override.
       aiDisclosure: aiDisclosureClientConfig(platform.aiDisclosure),
+      // The EU AI Act master switch: the state only, never who or why (admins read
+      // the record from /api/admin/eu-ai-act/conformity). Integrators use it to
+      // tell "metadata absent because the features are off" from an error.
+      euAiAct: { enabled: isEuAiActEnabled() },
       // AI-use acknowledgement (#3326): the switches only; the notice is per user.
       aiAcknowledgement: {
-        enabled: platform.aiAcknowledgement?.enabled !== false,
+        // Effective value: the admin's setting and the EU AI Act master switch.
+        enabled: getAcknowledgementSettings(platform).enabled,
         enforce: platform.aiAcknowledgement?.enforce !== false
       },
       speech: platform.speech

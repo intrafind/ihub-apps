@@ -324,7 +324,12 @@ export function AiAcknowledgementProvider({
       );
       closeDialog(true);
     } catch (err) {
-      if (err?.status === 409 || err?.code === 'CONFLICT') {
+      if (err?.code === 'FEATURE_DISABLED' || err?.response?.data?.code === 'FEATURE_DISABLED') {
+        // The EU AI Act features were switched off while the dialog was open: nothing to
+        // confirm any more. Never an error for the user; the held message is sent.
+        await load();
+        closeDialog(true);
+      } else if (err?.status === 409 || err?.code === 'CONFLICT') {
         // The text or the version changed while the dialog was open.
         await load();
         setStale(true);

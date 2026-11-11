@@ -4,9 +4,9 @@
 /**
  * AI-use acknowledgement, user side (#3326).
  *
- * - `GET  /api/ai-acknowledgements/me`: the notice the caller has to confirm and
+ * - `GET  /api/eu-ai-act/acknowledgements/me`: the notice the caller has to confirm and
  *   whether they did. Per user and language, so never cached.
- * - `POST /api/ai-acknowledgements/me`: confirm the current version.
+ * - `POST /api/eu-ai-act/acknowledgements/me`: confirm the current version.
  *
  * Works for the anonymous principal too: a guest's confirmation is a signed
  * cookie plus an audit entry (there is no users.json record).
@@ -37,7 +37,7 @@ import {
 } from '../services/aiAcknowledgement/guestAcknowledgement.js';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 
-const ME_PATH = '/api/ai-acknowledgements/me';
+const ME_PATH = '/api/eu-ai-act/acknowledgements/me';
 
 const acknowledgeSchema = {
   body: z
@@ -83,7 +83,7 @@ function requestedLanguage(req, platform) {
 export default function registerAiAcknowledgementRoutes(app) {
   /**
    * @swagger
-   * /api/ai-acknowledgements/me:
+   * /api/eu-ai-act/acknowledgements/me:
    *   get:
    *     summary: The AI-use notice the caller has to confirm
    *     tags: [AI Acknowledgement]
@@ -140,7 +140,7 @@ export default function registerAiAcknowledgementRoutes(app) {
 
   /**
    * @swagger
-   * /api/ai-acknowledgements/me:
+   * /api/eu-ai-act/acknowledgements/me:
    *   post:
    *     summary: Confirm the current AI-use notice
    *     tags: [AI Acknowledgement]

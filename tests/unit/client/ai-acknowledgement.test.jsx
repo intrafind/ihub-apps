@@ -116,6 +116,24 @@ describe('AiAcknowledgementProvider', () => {
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
+  it('Confirm while the EU AI Act features get switched off: no error, the dialog closes and the message goes on', async () => {
+    // The notice is read on mount and again at the click; the reload after the 403 says "off".
+    mockFetch
+      .mockResolvedValueOnce(notice())
+      .mockResolvedValueOnce(notice())
+      .mockResolvedValue({ enabled: false, enforce: false, acknowledged: true });
+    mockAcknowledge.mockRejectedValue({
+      response: { status: 403, data: { code: 'FEATURE_DISABLED' } }
+    });
+    await setup();
+    await userEvent.click(screen.getByText('send'));
+    await screen.findByRole('dialog');
+    await userEvent.click(screen.getByText('Confirm and send'));
+    await waitFor(() => expect(lastResult).toBe(true));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('Cancel resolves false and keeps the user blocked', async () => {
     mockFetch.mockResolvedValue(notice());
     await setup();

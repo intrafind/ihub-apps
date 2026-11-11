@@ -167,10 +167,6 @@
       "version": "number"
     }
   },
-  "GET /api/admin/ai-acknowledgements/_export": {
-    "status": 200,
-    "type": "text/csv"
-  },
   "GET /api/admin/apps": {
     "status": 200,
     "shape": {
@@ -408,7 +404,6 @@
         {
           "action": "string",
           "actor": "object",
-          "details?": "object",
           "id": "string",
           "ip": "string",
           "requestId": "string",
@@ -543,6 +538,10 @@
           "sizeApprox": "number"
         },
         "config/credentials.json": {
+          "age": "number",
+          "sizeApprox": "number"
+        },
+        "config/eu-ai-act-conformity.json": {
           "age": "number",
           "sizeApprox": "number"
         },
@@ -1410,10 +1409,27 @@
   "GET /api/admin/document-templates/:id/files/:slot": {
     "skipped": "its parent path is not a readable list"
   },
+  "GET /api/admin/eu-ai-act/acknowledgements/_export": {
+    "status": 200,
+    "type": "text/csv"
+  },
+  "GET /api/admin/eu-ai-act/conformity": {
+    "status": 200,
+    "shape": {
+      "changedAt": "null",
+      "changedBy": "null",
+      "enabled": "boolean",
+      "history": [],
+      "reason": "null",
+      "statementVersion": "null",
+      "valid": "boolean"
+    }
+  },
   "GET /api/admin/eu-ai-act/status": {
     "status": 200,
     "shape": {
       "acknowledgements": {
+        "configuredEnabled": "boolean",
         "counts": {
           "acknowledged": "number",
           "pending": "number",
@@ -1435,6 +1451,15 @@
           "scope": "string"
         }
       ],
+      "conformity": {
+        "changedAt": "null",
+        "changedBy": "null",
+        "enabled": "boolean",
+        "history": [],
+        "reason": "null",
+        "statementVersion": "null",
+        "valid": "boolean"
+      },
       "generatedAt": "string",
       "models": [
         {
@@ -1463,6 +1488,20 @@
         "level": "string",
         "skippedDisabledModels": "number"
       }
+    }
+  },
+  "GET /api/admin/eu-ai-act/watermark-detectors": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
+    }
+  },
+  "GET /api/admin/eu-ai-act/watermark-keys": {
+    "status": 200,
+    "shape": {
+      "items": [],
+      "nextCursor": "null"
     }
   },
   "GET /api/admin/features": {
@@ -4077,20 +4116,6 @@
   "GET /api/admin/version/check-update": {
     "skipped": "reaches the network"
   },
-  "GET /api/admin/watermark-detectors": {
-    "status": 200,
-    "shape": {
-      "items": [],
-      "nextCursor": "null"
-    }
-  },
-  "GET /api/admin/watermark-keys": {
-    "status": 200,
-    "shape": {
-      "items": [],
-      "nextCursor": "null"
-    }
-  },
   "GET /api/admin/website-corpus/domains": {
     "status": 200,
     "shape": {
@@ -4172,15 +4197,6 @@
   },
   "GET /api/agents/runs/:runId/stream": {
     "skipped": "streams"
-  },
-  "GET /api/ai-acknowledgements/me": {
-    "status": 200,
-    "shape": {
-      "acknowledged": "boolean",
-      "enabled": "boolean",
-      "enforce": "boolean",
-      "requiredVersion": "number"
-    }
   },
   "GET /api/apps": {
     "status": 200,
@@ -4826,6 +4842,9 @@
         "methods": ["string"]
       },
       "defaultLanguage": "string",
+      "euAiAct": {
+        "enabled": "boolean"
+      },
       "features": [
         {
           "category": "string",
@@ -5224,6 +5243,15 @@
         }
       ],
       "pinned": "null"
+    }
+  },
+  "GET /api/eu-ai-act/acknowledgements/me": {
+    "status": 200,
+    "shape": {
+      "acknowledged": "boolean",
+      "enabled": "boolean",
+      "enforce": "boolean",
+      "requiredVersion": "number"
     }
   },
   "GET /api/health": {

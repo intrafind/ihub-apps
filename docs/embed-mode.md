@@ -94,7 +94,7 @@ dark-mode toggle (`ih-dark-mode`).
 ## AI-use acknowledgement
 
 The [AI-use acknowledgement](ai-act.md#ai-use-acknowledgement) dialog appears in embed mode as everywhere
-else. Signed-in users confirm once for the account, in any client. Two limits to know:
+else (not while the [EU AI Act features are switched off](ai-act.md#switching-the-features-off)). Signed-in users confirm once for the account, in any client. Two limits to know:
 
 - **Anonymous guests in a frame of another site.** A guest's confirmation is a cookie
   (`SameSite=Lax`). A browser that blocks third-party cookies drops it in a cross-site frame, so the

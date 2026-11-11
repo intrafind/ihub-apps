@@ -549,8 +549,9 @@ export class LLMClient {
     this.usage = opts.usage !== undefined ? opts.usage : defaultUsage;
     // AI disclosure guardrail (EU AI Act Art. 50(1)): `(messages, model) => messages`,
     // applied to every call here. An admin can reword the rule globally (read per call,
-    // so a change applies at once) but nothing switches it off; only tests pass `null`
-    // to keep unrelated message snapshots stable.
+    // so a change applies at once); only the audited EU AI Act master switch turns it off
+    // (`guardMessagesForModel` checks it); only tests pass `null` to keep unrelated message
+    // snapshots stable.
     this.guardrail =
       opts.guardrail !== undefined
         ? opts.guardrail

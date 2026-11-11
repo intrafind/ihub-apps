@@ -1721,7 +1721,7 @@
         "thinkingThoughts": "Das Reasoning Nutzern hinter dem Umschalter „Denkprozess anzeigen“ zugänglich machen. Zum Verbergen deaktivieren.",
         "maxOutputTokens": "Leer bedeutet der Standardwert ({{value}}), nicht unbegrenzt. Reasoning-Modelle verbrauchen ihre Denk-Tokens aus diesem Limit – halten Sie es deutlich über der längsten erwarteten Antwort.",
         "sampling": "Optional. Ein leeres Feld verwendet den Standardwert des Modells bzw. des Anbieters; dafür wird nichts gesendet. Ein hier gesetzter Wert gilt für jede Anfrage an dieses Modell.",
-        "marking": "Ob dieses Modell den erzeugten Text als KI-generiert kennzeichnet. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann es nicht prüfen. Jede Ausgabe erhält unabhängig davon einen Herkunftsnachweis.",
+        "marking": "Ob dieses Modell den erzeugten Text als KI-generiert kennzeichnet. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann es nicht prüfen. Solange die Funktionen zum EU AI Act eingeschaltet sind, erhält jede Ausgabe unabhängig davon einen Herkunftsnachweis.",
         "markingStatementRef": "Dokumentname oder URL der schriftlichen Erklärung des Anbieters. Sie wird nur als Verweis gespeichert und nie geöffnet.",
         "imageMarking": "Was der Anbieter in die von diesem Modell erzeugten Bilder einbettet (zum Beispiel SynthID, ein unsichtbares Wasserzeichen, oder ein C2PA-Manifest). iHub fügt keine eigene Kennzeichnung hinzu und kodiert erzeugte Bilder nie neu, sodass die Kennzeichnung des Anbieters erhalten bleibt. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann sie nicht erkennen und erfasst sie als angegeben, nie als erkannt.",
         "markingIhub": "iHub weist vLLM an, jede Antwort mit dem aktiven Schlüssel zu kennzeichnen, und erkennt sie über den Detektor wieder. Die Detektor-Einstellungen müssen den Einstellungen des vLLM-Servers entsprechen. Greedy-Sampling (Temperatur 0) und strukturierte Ausgaben lassen sich nicht kennzeichnen und werden als „nicht angewendet“ erfasst.",
@@ -2727,7 +2727,7 @@
           },
           "provenanceVerifyApi": {
             "name": "Herkunftsabfrage",
-            "description": "Abfrage einer KI-Ausgabe über Text oder Hash (/api/provenance/_verify). Bewusst strenger: Die Abfrage verrät, ob ein Kandidatentext hier erzeugt wurde."
+            "description": "Abfrage einer KI-Ausgabe über Text oder Hash (/api/eu-ai-act/provenance/_verify). Bewusst strenger: Die Abfrage verrät, ob ein Kandidatentext hier erzeugt wurde."
           }
         }
       }
@@ -6528,7 +6528,7 @@
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",
-      "description": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet. Unabhängig davon sorgt eine Regel in jedem System-Prompt dafür, dass die Assistenten auf Nachfrage sagen, dass sie ein KI-System sind; Sie können sie unten umformulieren, aber nicht abschalten.",
+      "description": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet. Unabhängig davon sorgt eine Regel in jedem System-Prompt dafür, dass die Assistenten auf Nachfrage sagen, dass sie ein KI-System sind; Sie können sie unten umformulieren. Nur der Hauptschalter für die EU-AI-Act-Funktionen schaltet sie ab.",
       "enabled": "KI-Hinweis vor der ersten Nachricht anzeigen",
       "text": "Hinweistext (leer verwendet den eingebauten Text)",
       "saved": "KI-Hinweis gespeichert",
@@ -6741,7 +6741,7 @@
       "description": "Ist diese Installation für die Transparenzpflichten nach Art. 50 eingerichtet, können Sie bedienen, was sie verlangen, und funktioniert es? Ein grünes Häkchen bedeutet „wie vorgesehen konfiguriert“, nicht „rechtlich konform“.",
       "checks": {
         "guardrail": {
-          "ok": "Die KI-Kennzeichnungsregel ist Teil jedes System-Prompts und lässt sich nicht ausschalten."
+          "ok": "Die KI-Kennzeichnungsregel ist Teil jedes System-Prompts. Nur der Hauptschalter für die EU-AI-Act-Funktionen schaltet sie ab."
         },
         "notice": {
           "ok": "Der Hinweis vor der ersten Nachricht ist eingeschaltet.",
@@ -6835,6 +6835,91 @@
           "belowExclusive": "Geben Sie eine Zahl kleiner als {{max}} ein.",
           "invalid": "Dieser Wert ist nicht zulässig."
         }
+      },
+      "master": {
+        "title": "EU AI Act-Funktionen",
+        "on": "Eingeschaltet",
+        "off": "Ausgeschaltet",
+        "onText": "Alle Funktionen zum EU AI Act sind wie unten konfiguriert aktiv.",
+        "offTitle": "Die Funktionen zum EU AI Act sind ausgeschaltet",
+        "offText": "Es werden keine Schutzregel, kein Hinweis, keine Bestätigung, keine Nachweise, keine Kennzeichnung und keine Prüfung angewendet. Vorhandene Daten bleiben erhalten.",
+        "legal": "Das Ausschalten entbindet Ihre Organisation nicht von ihren Pflichten nach dem EU AI Act. Die Pflicht bleibt bei Ihnen als Betreiber. Dies ist keine Rechtsberatung.",
+        "by": "Ausgeschaltet von",
+        "when": "Wann",
+        "reason": "Begründung",
+        "showFull": "Vollständige Begründung anzeigen",
+        "showLess": "Weniger anzeigen",
+        "btnOff": "Ausschalten...",
+        "btnOn": "Wieder einschalten...",
+        "dlgOffTitle": "Funktionen zum EU AI Act ausschalten",
+        "dlgOffIntro": "Bitte lesen Sie, was sich ändert, bevor Sie fortfahren.",
+        "offListTitle": "Dies wird ausgeschaltet",
+        "offList": {
+          "rule": "KI-Regel in Prompts (Assistenten nennen sich nicht mehr als KI)",
+          "notice": "Hinweis vor der ersten Nachricht",
+          "ack": "Bestätigungsdialog und Durchsetzung",
+          "records": "Nachweise und Metadaten in Antworten",
+          "watermark": "Text-Wasserzeichen",
+          "media": "Bild- und Audio-Kennzeichnung",
+          "verify": "Prüfung",
+          "check": "Konfigurationsprüfung"
+        },
+        "keepTitle": "Dies bleibt erhalten",
+        "keepList": {
+          "ack": "Bereits erteilte Bestätigungen",
+          "records": "Bereits geschriebene Nachweise",
+          "keys": "Wasserzeichen-Schlüssel",
+          "settings": "Alle Einstellungen und Texte",
+          "history": "Der Verlauf dieses Schalters"
+        },
+        "vllm": "Ein vLLM-Server, der mit einer Wasserzeichen-Konfiguration gestartet wurde, die die Kennzeichnung erzwingt, kennzeichnet unabhängig von iHub weiter. Starten Sie vLLM ohne diese Option neu, um die Kennzeichnung an der Quelle zu beenden.",
+        "reasonField": "Warum schalten Sie dies aus?",
+        "reasonHint": "Für alle Admins sichtbar und im Audit-Protokoll gespeichert. Geben Sie keine personenbezogenen Daten oder Geheimnisse ein.",
+        "counter": "{{count}} von 1000 Zeichen, mindestens 20",
+        "counterOptional": "{{count}} von 1000 Zeichen",
+        "overLimit": "Das Limit von 1000 Zeichen ist überschritten.",
+        "needMore": "Geben Sie mindestens {{n}} weitere Zeichen ein.",
+        "ack": "Ich verstehe, dass die rechtliche Pflicht bei meiner Organisation bleibt.",
+        "needAck": "Setzen Sie den Haken, um fortzufahren.",
+        "confirmOff": "Ausschalten",
+        "cancel": "Abbrechen",
+        "saving": "Wird gespeichert...",
+        "dlgOnTitle": "Funktionen zum EU AI Act wieder einschalten",
+        "dlgOnIntro": "Alles, was ausgeschaltet war, wird sofort mit Ihren gespeicherten Einstellungen wieder aktiv. Ist die Durchsetzung aktiv, werden Nutzende, die die aktuelle Erklärung nicht bestätigt haben, bei der nächsten Nachricht gefragt.",
+        "reasonOptional": "Begründung (optional)",
+        "confirmOn": "Einschalten",
+        "savedOff": "Funktionen zum EU AI Act ausgeschaltet. Erfasst für {{name}}.",
+        "savedOn": "Funktionen zum EU AI Act eingeschaltet.",
+        "gap": "Von {{from}} bis {{to}} wurde nichts aufgezeichnet oder gekennzeichnet.",
+        "paused": "Pausiert, solange die Funktionen zum EU AI Act ausgeschaltet sind.",
+        "pausedLink": "Wieder einschalten",
+        "checksPaused": "Prüfungen pausiert. Solange die Funktionen aus sind, wird nichts bewertet.",
+        "notEvaluated": "Nicht bewertet",
+        "history": "Verlauf ({{count}})",
+        "historyCaption": "Änderungen des Hauptschalters für den EU AI Act, neueste zuerst",
+        "event": "Ereignis",
+        "evOff": "Ausgeschaltet",
+        "evOn": "Eingeschaltet",
+        "noReason": "Keine Begründung angegeben",
+        "noHistory": "Noch keine Änderungen erfasst.",
+        "conflict": "Ein anderer Admin hat dies um {{time}} geändert ({{name}}). Der Zustand ist jetzt: {{state}}.",
+        "reload": "Status neu laden",
+        "copyReason": "Meine Begründung kopieren",
+        "saveError": "Speichern nicht möglich. Ihre Begründung bleibt erhalten. Bitte erneut versuchen.",
+        "forbidden": "Nur eine interaktive Admin-Sitzung kann die Funktionen umschalten.",
+        "unknown": "Status unbekannt",
+        "loading": "Status wird geladen",
+        "loadError": "Der Status des Schalters konnte nicht geladen werden",
+        "invalid": "Der gespeicherte Eintrag ist unvollständig, deshalb bleiben die Funktionen eingeschaltet. Schalten Sie sie erneut aus, um Wer und Warum zu erfassen.",
+        "advOn": "Die Funktionen zum EU AI Act sind eingeschaltet. Ein- oder Ausschalten auf der EU-AI-Act-Seite.",
+        "advOff": "Die Funktionen zum EU AI Act sind ausgeschaltet. Diese Einstellungen werden gespeichert, wirken aber nicht.",
+        "advLink": "Auf der EU-AI-Act-Seite verwalten",
+        "usersOff": "Die KI-Bestätigung wird nicht abgefragt, solange die Funktionen zum EU AI Act ausgeschaltet sind. Angezeigte Werte stammen von früher.",
+        "markingOff": "Die Kennzeichnung ist plattformweit ausgeschaltet. Diese Einstellung wird gespeichert und gilt wieder, sobald Sie die Funktionen einschalten.",
+        "navOff": "Aus",
+        "verifyOff": "Die Prüfung ist ausgeschaltet.",
+        "who": "Wer",
+        "loadMore": "Mehr laden"
       }
     }
   },

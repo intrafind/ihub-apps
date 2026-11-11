@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * `POST /api/provenance/_verify` with the watermark detector (#3331): hash first,
+ * `POST /api/eu-ai-act/provenance/_verify` with the watermark detector (#3331): hash first,
  * then the detector with the active and all retired keys; retired-key detection
  * after rotation; "too short to tell"; the multiplicity correction; a detector
  * that is down never turns the request into a 5xx.
@@ -36,7 +36,7 @@ let app;
 let keys;
 
 const verify = body =>
-  request(app).post('/api/provenance/_verify').set('x-test-user', 'u1').send(body);
+  request(app).post('/api/eu-ai-act/provenance/_verify').set('x-test-user', 'u1').send(body);
 
 function configure({ detectorUrl = mock.url, extra = {}, platform = {} } = {}) {
   configCache.setCacheEntry('config/platform.json', {
@@ -177,7 +177,7 @@ describe('verify with the watermark detector', () => {
 
   test('an anonymous caller gets the hash lookup only, and no keys leave iHub', async () => {
     await keys.create({}, 'a');
-    const res = await request(app).post('/api/provenance/_verify').send({ text: LONG });
+    const res = await request(app).post('/api/eu-ai-act/provenance/_verify').send({ text: LONG });
     expect(res.body).toEqual({ found: false, normalization: 'nfc-trim' });
     expect(mock.calls).toHaveLength(0);
   });

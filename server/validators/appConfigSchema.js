@@ -580,7 +580,7 @@ const baseAppConfigSchema = z.object({
   features: featuresSchema.optional(),
   greeting: localizedGreetingSchema.optional(),
   // Per-app override of the platform's first-turn AI notice (Art. 50(1)).
-  // `enabled` undefined = inherit; there is no setting for the guardrail prompt.
+  // `enabled` undefined = inherit; there is no per-app setting for the guardrail prompt (only the EU AI Act master switch turns it off).
   aiDisclosure: z
     .object({
       firstTurnNotice: z

@@ -80,11 +80,11 @@ beforeEach(async () => {
 });
 
 const routes = [
-  ['get', '/api/admin/watermark-keys'],
-  ['post', '/api/admin/watermark-keys'],
-  ['post', '/api/admin/watermark-keys/wm-ihub-x-2026-1/_activate'],
-  ['post', '/api/admin/watermark-keys/wm-ihub-x-2026-1/_reveal'],
-  ['delete', '/api/admin/watermark-keys/wm-ihub-x-2026-1']
+  ['get', '/api/admin/eu-ai-act/watermark-keys'],
+  ['post', '/api/admin/eu-ai-act/watermark-keys'],
+  ['post', '/api/admin/eu-ai-act/watermark-keys/wm-ihub-x-2026-1/_activate'],
+  ['post', '/api/admin/eu-ai-act/watermark-keys/wm-ihub-x-2026-1/_reveal'],
+  ['delete', '/api/admin/eu-ai-act/watermark-keys/wm-ihub-x-2026-1']
 ];
 
 describe('watermark key routes: authorization', () => {
@@ -96,14 +96,14 @@ describe('watermark key routes: authorization', () => {
 
 describe('watermark key routes', () => {
   test('create returns the key once, as a string, with the snippet and Location; list never does', async () => {
-    const res = await admin(request(app).post('/api/admin/watermark-keys')).send({
+    const res = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({
       key: '9007199254740991',
       label: 'Q4'
     });
     expect(res.status).toBe(201);
     expect(res.body.keyId).toMatch(/^wm-ihub-[0-9a-f-]{36}-2026-1$/);
     expect(res.headers.location).toMatch(
-      new RegExp(`/api/admin/watermark-keys/${res.body.keyId}$`)
+      new RegExp(`/api/admin/eu-ai-act/watermark-keys/${res.body.keyId}$`)
     );
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.body).toMatchObject({
@@ -112,7 +112,7 @@ describe('watermark key routes', () => {
       label: 'Q4'
     });
     expect(res.body.vllmConfigSnippet).toContain('"key":9007199254740991');
-    const list = await admin(request(app).get('/api/admin/watermark-keys'));
+    const list = await admin(request(app).get('/api/admin/eu-ai-act/watermark-keys'));
     expect(list.status).toBe(200);
     expect(list.body.nextCursor).toBeNull();
     expect(list.body.items).toHaveLength(1);
@@ -120,17 +120,17 @@ describe('watermark key routes', () => {
   });
 
   test('a generated key and rotation; duplicate 409; invalid 400; delete rules', async () => {
-    const first = await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const first = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
     expect(first.body.source).toBe('generated');
-    const second = await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const second = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
     expect(second.body.keyId).toMatch(/^wm-ihub-[0-9a-f-]{36}-2026-2$/);
-    const del = id => admin(request(app).delete(`/api/admin/watermark-keys/${id}`));
-    const dup = await admin(request(app).post('/api/admin/watermark-keys')).send({
+    const del = id => admin(request(app).delete(`/api/admin/eu-ai-act/watermark-keys/${id}`));
+    const dup = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({
       key: first.body.key
     });
     expect(dup.status).toBe(409);
     expect(dup.body.code).toBe('WATERMARK_KEY_DUPLICATE');
-    const bad = await admin(request(app).post('/api/admin/watermark-keys')).send({
+    const bad = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({
       key: '9007199254740993'
     });
     expect(bad.status).toBe(400);
@@ -141,22 +141,24 @@ describe('watermark key routes', () => {
   });
 
   test('activate swaps the active key', async () => {
-    const first = await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const first = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
+    await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
     const res = await admin(
-      request(app).post(`/api/admin/watermark-keys/${first.body.keyId}/_activate`)
+      request(app).post(`/api/admin/eu-ai-act/watermark-keys/${first.body.keyId}/_activate`)
     );
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ keyId: first.body.keyId, status: 'active' });
   });
 
   test('activate is audited with from/to ids only, answers 404 for an unknown key and is a quiet no-op when already active', async () => {
-    const first = await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    const second = await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const first = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
+    const second = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
     const firstId = first.body.keyId;
     const secondId = second.body.keyId;
     state.entries.length = 0;
-    const res = await admin(request(app).post(`/api/admin/watermark-keys/${firstId}/_activate`));
+    const res = await admin(
+      request(app).post(`/api/admin/eu-ai-act/watermark-keys/${firstId}/_activate`)
+    );
     expect(res.status).toBe(200);
     expect(res.body.key).toBeUndefined();
     expect(state.entries).toHaveLength(1);
@@ -171,22 +173,26 @@ describe('watermark key routes', () => {
     expect(audited).not.toContain(second.body.key);
 
     state.entries.length = 0;
-    const again = await admin(request(app).post(`/api/admin/watermark-keys/${firstId}/_activate`));
+    const again = await admin(
+      request(app).post(`/api/admin/eu-ai-act/watermark-keys/${firstId}/_activate`)
+    );
     expect(again.status).toBe(200);
     expect(again.body.status).toBe('active');
     expect(state.entries).toHaveLength(0);
 
     const missing = await admin(
-      request(app).post(`/api/admin/watermark-keys/${firstId.replace(/-\d+$/, '')}-99/_activate`)
+      request(app).post(
+        `/api/admin/eu-ai-act/watermark-keys/${firstId.replace(/-\d+$/, '')}-99/_activate`
+      )
     );
     expect(missing.status).toBe(404);
   });
 
   test('reveal writes the audit entry and returns the key with no-store', async () => {
-    const created = await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const created = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
     state.entries.length = 0;
     const res = await admin(
-      request(app).post(`/api/admin/watermark-keys/${created.body.keyId}/_reveal`)
+      request(app).post(`/api/admin/eu-ai-act/watermark-keys/${created.body.keyId}/_reveal`)
     );
     expect(res.status).toBe(200);
     expect(res.body.key).toBe(created.body.key);
@@ -200,10 +206,10 @@ describe('watermark key routes', () => {
   });
 
   test('reveal fails closed when the audit write fails', async () => {
-    const created = await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const created = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
     state.auditReturns = false;
     const res = await admin(
-      request(app).post(`/api/admin/watermark-keys/${created.body.keyId}/_reveal`)
+      request(app).post(`/api/admin/eu-ai-act/watermark-keys/${created.body.keyId}/_reveal`)
     );
     expect(res.status).toBe(503);
     expect(res.body.code).toBe('WATERMARK_AUDIT_UNAVAILABLE');
@@ -211,16 +217,16 @@ describe('watermark key routes', () => {
   });
 
   test('each change writes one audit entry and no entry, log line or error holds a key', async () => {
-    const a = await admin(request(app).post('/api/admin/watermark-keys')).send({
+    const a = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({
       key: '777000111222'
     });
-    const b = await admin(request(app).post('/api/admin/watermark-keys')).send({});
-    await admin(request(app).post(`/api/admin/watermark-keys/${a.body.keyId}/_activate`));
-    await admin(request(app).post(`/api/admin/watermark-keys/${a.body.keyId}/_reveal`));
-    const dup = await admin(request(app).post('/api/admin/watermark-keys')).send({
+    const b = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
+    await admin(request(app).post(`/api/admin/eu-ai-act/watermark-keys/${a.body.keyId}/_activate`));
+    await admin(request(app).post(`/api/admin/eu-ai-act/watermark-keys/${a.body.keyId}/_reveal`));
+    const dup = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({
       key: '777000111222'
     });
-    await admin(request(app).delete(`/api/admin/watermark-keys/${b.body.keyId}`));
+    await admin(request(app).delete(`/api/admin/eu-ai-act/watermark-keys/${b.body.keyId}`));
     expect(state.entries.map(e => `${e.action}:${e.result || 'success'}`)).toEqual([
       'create:success',
       'create:success',
@@ -236,7 +242,7 @@ describe('watermark key routes', () => {
   });
 
   test('the key store file holds ciphertext only', async () => {
-    const created = await admin(request(app).post('/api/admin/watermark-keys')).send({});
+    const created = await admin(request(app).post('/api/admin/eu-ai-act/watermark-keys')).send({});
     await new Promise(resolve => setTimeout(resolve, 100));
     const walk = async dir => {
       let text = '';

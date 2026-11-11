@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The file branch of `POST /api/provenance/_verify` (#3328): an uploaded image
+ * The file branch of `POST /api/eu-ai-act/provenance/_verify` (#3328): an uploaded image
  * or audio file is looked up by its hash and its C2PA manifest is read.
  *
  * The upload is parsed into memory only (`multer.memoryStorage`), never
@@ -124,11 +124,10 @@ export function parseMediaUpload(req, res, maxBytes) {
  * @param {Buffer} buffer
  * @param {Object} [options]
  * @param {string} [options.kind] - Declared kind; must match the bytes.
- * @param {(records: Object[]) => Object[]} [options.decorate] - Per-record post-processing (verify URL).
  * @returns {Promise<Object>}
  * @throws {ServiceError} `UNSUPPORTED_MEDIA_TYPE` (415) for an unknown type or SVG.
  */
-export async function verifyMediaFile(buffer, { kind, decorate = records => records } = {}) {
+export async function verifyMediaFile(buffer, { kind } = {}) {
   const sniffed = sniffMedia(buffer);
   if (!sniffed) {
     throw new ServiceError('UNSUPPORTED_MEDIA_TYPE', 'This file type is not accepted', {
@@ -190,6 +189,6 @@ export async function verifyMediaFile(buffer, { kind, decorate = records => reco
       : 'not-detectable',
     caveats
   };
-  if (records.length > 0) body.records = decorate(records);
+  if (records.length > 0) body.records = records;
   return body;
 }
