@@ -1839,7 +1839,7 @@ template has, and the model is told which exist, where each one sits and how muc
 
 - **Declare slots per template.** Under **Admin → Document templates → PowerPoint → Text slots**
   give each slot an id, the name of its placeholder in the layouts, a description for the model and
-  what to do in a layout without it. This works with any template, any language and any number of
+  what to do in a layout without it. This works with any template, any language and up to twelve
   slots, for example the presenter on a title slide. A placeholder named `Kicker` or `Lead` is a slot
   without any setup.
 - **Read from the template file.** The editor lists small, named text placeholders it finds in the

@@ -3,7 +3,11 @@
 
 import { useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SLOT_ID_PATTERN } from '../../utils/documentTemplates';
+import {
+  MAX_SLOTS,
+  MAX_SLOT_PLACEHOLDER_CHARS,
+  SLOT_ID_PATTERN
+} from '../../utils/documentTemplates';
 import {
   CALLOUT_CLASS,
   DANGER_BUTTON_CLASS,
@@ -44,6 +48,7 @@ function SlotCard({ id, slot, found, names, error, onChange, onRemove }) {
             id={`${baseId}-placeholder`}
             className={INPUT_CLASS}
             list={`${baseId}-names`}
+            maxLength={MAX_SLOT_PLACEHOLDER_CHARS}
             value={slot.placeholder || ''}
             onChange={event => set({ placeholder: event.target.value })}
           />
@@ -149,7 +154,8 @@ export default function TemplateSlots({ slots = {}, info, errors = {}, onChange 
   const byConvention = (info?.slots || []).filter(
     slot => slot.source === 'convention' && slot.layouts.length > 0
   );
-  const validId = SLOT_ID_PATTERN.test(newId) && !slots[newId];
+  const full = Object.keys(slots).length >= MAX_SLOTS;
+  const validId = SLOT_ID_PATTERN.test(newId) && !slots[newId] && !full;
   // Placeholders that look like slots and are not declared yet.
   const declared = new Set(
     Object.values(slots).map(slot =>
@@ -244,6 +250,7 @@ export default function TemplateSlots({ slots = {}, info, errors = {}, onChange 
                 <button
                   type="button"
                   className={SECONDARY_BUTTON_CLASS}
+                  disabled={full}
                   onClick={() => adopt(suggestion)}
                 >
                   {t('admin.documentTemplates.pptx.slots.addSuggestion', 'Add as slot')}
@@ -264,8 +271,8 @@ export default function TemplateSlots({ slots = {}, info, errors = {}, onChange 
             error={errors[`slot:${id}`]}
             onChange={next => onChange({ ...slots, [id]: next })}
             onRemove={() => {
-              const { [id]: removed, ...rest } = slots;
-              void removed;
+              const rest = { ...slots };
+              delete rest[id];
               onChange(rest);
             }}
           />
@@ -294,6 +301,13 @@ export default function TemplateSlots({ slots = {}, info, errors = {}, onChange 
           {t('admin.documentTemplates.pptx.slots.add', 'Add slot')}
         </button>
       </div>
+      {full && (
+        <p className={HELP_CLASS}>
+          {t('admin.documentTemplates.pptx.slots.limit', 'At most {{max}} slots.', {
+            max: MAX_SLOTS
+          })}
+        </p>
+      )}
       <p className={HELP_CLASS}>
         {t(
           'admin.documentTemplates.pptx.slots.newIdHelp',

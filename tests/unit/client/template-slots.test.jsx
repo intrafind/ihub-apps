@@ -176,10 +176,49 @@ describe('TemplateSlots suggestions', () => {
   });
 });
 
+describe('TemplateSlots limits', () => {
+  it('shows declared slots without an analysis of the file, and stops adding at twelve', () => {
+    const slots = Object.fromEntries(
+      Array.from({ length: 12 }, (_, i) => [`slot${i}`, { placeholder: `P${i}` }])
+    );
+    render(<TemplateSlots slots={slots} onChange={() => {}} />);
+    expect(screen.getAllByRole('button', { name: 'Remove slot' })).toHaveLength(12);
+    fireEvent.change(screen.getByLabelText('New slot id'), { target: { value: 'extra' } });
+    expect(screen.getByRole('button', { name: 'Add slot' })).toBeDisabled();
+    expect(screen.getByText('At most 12 slots.')).toBeInTheDocument();
+    expect(screen.queryByText(/No layout has a placeholder/)).not.toBeInTheDocument();
+  });
+
+  it('removes one slot and keeps the others', () => {
+    const onChange = jest.fn();
+    const slots = { a: { placeholder: 'A' }, b: { placeholder: 'B' } };
+    render(<TemplateSlots slots={slots} onChange={onChange} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove slot' })[0]);
+    expect(onChange).toHaveBeenLastCalledWith({ b: { placeholder: 'B' } });
+    expect(slots).toEqual({ a: { placeholder: 'A' }, b: { placeholder: 'B' } });
+  });
+});
+
 describe('validateTemplate for slots', () => {
   const t = (key, fallback, values) =>
     fallback.replace(/\{\{(\w+)\}\}/g, (_, name) => String(values?.[name] ?? ''));
   const draft = slots => ({ id: 'acme', name: { en: 'ACME' }, brand: {}, pptx: { slots } });
+
+  it('checks what the server checks: the number of slots, name length and unique placeholders', () => {
+    const many = Object.fromEntries(
+      Array.from({ length: 13 }, (_, i) => [`s${i}`, { placeholder: `P${i}` }])
+    );
+    expect(validateTemplate(draft(many), t).slots).toMatch(/At most 12 slots/);
+    expect(validateTemplate(draft({ a: { placeholder: 'x'.repeat(201) } }), t)['slot:a']).toMatch(
+      /too long/
+    );
+    const errors = validateTemplate(
+      draft({ a: { placeholder: 'Referent' }, b: { placeholder: ' referent ' } }),
+      t
+    );
+    expect(errors['slot:a']).toBeUndefined();
+    expect(errors['slot:b']).toMatch(/already uses this placeholder/);
+  });
 
   it('wants a placeholder for every slot', () => {
     expect(validateTemplate(draft({ a: { placeholder: 'x' } }), t)).toEqual({});

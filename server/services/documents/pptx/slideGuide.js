@@ -26,6 +26,11 @@ const TEXT = {
   en: {
     intro:
       'The slide template has text slots besides title and content. Fill them with the slide field "slots", an object of text by slot id, and use only these ids:',
+    introDefault: name =>
+      `The default template "${name}" has these text slots besides title and content (other templates can have others: a slot id a template does not have is reported in the warnings). Fill them with the slide field "slots", an object of text by slot id:`,
+    choice: sets => `slots, from one of these sets per slide: ${sets}`,
+    upload:
+      'This applies to the company template. A deck the user uploaded as template (templateFileId) has its own placeholders and the slot ids are ignored.',
     above: 'Above the title.',
     below: 'Below the title.',
     at: (v, h) =>
@@ -52,6 +57,11 @@ const TEXT = {
   de: {
     intro:
       'Die Folienvorlage hat Textfelder neben Titel und Inhalt. Sie werden mit dem Folienfeld "slots" gefüllt, einem Objekt mit Text je Feld-ID; nur diese IDs verwenden:',
+    introDefault: name =>
+      `Die Standardvorlage "${name}" hat diese Textfelder neben Titel und Inhalt (andere Vorlagen können andere haben: eine Feld-ID, die eine Vorlage nicht hat, wird in den Warnungen gemeldet). Sie werden mit dem Folienfeld "slots" gefüllt, einem Objekt mit Text je Feld-ID:`,
+    choice: sets => `Felder, je Folie aus einer dieser Gruppen: ${sets}`,
+    upload:
+      'Das gilt für die Unternehmensvorlage. Eine vom Benutzer hochgeladene Präsentation als Vorlage (templateFileId) hat eigene Platzhalter; die Feld-IDs werden dann ignoriert.',
     above: 'Über dem Titel.',
     below: 'Unter dem Titel.',
     at: (v, h) => `${{ top: 'Oben', middle: 'In der Mitte', bottom: 'Unten' }[v]}${h}.`,
@@ -129,14 +139,28 @@ function kindLine(kind, analysis, t) {
   const areas = headline ? [] : base.elements.filter(e => e.role === 'content');
   if (areas.length === 1) parts.push(t.area(...sizeInches(areas[0], t)));
   else if (areas.length > 1) parts.push(t.areas(areas.length, ...sizeInches(areas[0], t)));
-  // Slots of any layout of the kind: the layout with the most of them serves the slide.
-  const seen = new Set();
-  for (const layout of layouts) {
-    for (const element of layout.elements) {
-      if (element.role !== 'slot' || seen.has(element.slot)) continue;
-      seen.add(element.slot);
-      parts.push(t.slot(element.slot, whereOf(element.position, t)));
+  // The slots a slide of this kind can fill: those of one layout. Layouts with different slots
+  // are alternatives, not one capability.
+  const sets = layouts
+    .map(layout => [...new Set(layout.elements.filter(e => e.role === 'slot').map(e => e.slot))])
+    .filter(ids => ids.length)
+    .filter(
+      (ids, i, all) =>
+        !all.some(
+          (other, j) =>
+            j !== i &&
+            other.length >= ids.length &&
+            ids.every(id => other.includes(id)) &&
+            (other.length > ids.length || j < i)
+        )
+    );
+  if (sets.length === 1) {
+    for (const id of sets[0]) {
+      const element = layouts.flatMap(l => l.elements).find(e => e.slot === id);
+      parts.push(t.slot(id, whereOf(element.position, t)));
     }
+  } else if (sets.length > 1) {
+    parts.push(t.choice(sets.map(ids => ids.map(id => `"${id}"`).join(' + ')).join(' | ')));
   }
   const strip =
     kind === 'title' &&
@@ -154,21 +178,27 @@ function kindLine(kind, analysis, t) {
  * @param {boolean} [options.others] - Other templates can be chosen: say they can differ.
  * @returns {string} Empty when there is nothing to tell.
  */
-export function buildSlideGuide(analysis, { language = 'en', others = false } = {}) {
+export function buildSlideGuide(
+  analysis,
+  { language = 'en', others = false, templateName = '', userUploads = false } = {}
+) {
   if (!analysis?.layouts?.length) return '';
-  const t = phrases(language);
+  // One language key for the fixed texts and the admin's descriptions: "de-DE" is "de".
+  const lang = String(language || 'en').slice(0, 2);
+  const t = phrases(lang);
   const lines = [];
   const slots = (analysis.slots || []).filter(slot => slot.layouts.length);
   if (slots.length) {
-    lines.push(t.intro);
+    lines.push(others && templateName ? t.introDefault(templateName) : t.intro);
     const elements = analysis.layouts.flatMap(layout => layout.elements);
-    for (const slot of slots) lines.push(slotLine(slot, elements, t, language));
+    for (const slot of slots) lines.push(slotLine(slot, elements, t, lang));
   }
   const kinds = KIND_ORDER.map(kind => kindLine(kind, analysis, t)).filter(Boolean);
   if (kinds.length) {
     lines.push(t.kinds, ...kinds);
   }
   if (!lines.length) return '';
-  if (others) lines.push(t.others);
+  if (others && !(slots.length && templateName)) lines.push(t.others);
+  if (userUploads) lines.push(t.upload);
   return lines.join('\n');
 }

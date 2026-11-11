@@ -6192,7 +6192,8 @@
             "bottom-left": "unten links",
             "bottom-centre": "unten mittig",
             "bottom-right": "unten rechts"
-          }
+          },
+          "limit": "Höchstens {{max}} Felder."
         }
       },
       "preview": {
@@ -6226,7 +6227,10 @@
         "reservedId": "Diese ID ist reserviert; bitte eine andere wählen.",
         "name": "Geben Sie der Vorlage einen Namen.",
         "color": "Hexadezimale Farbe wie #e30613 verwenden.",
-        "slotPlaceholder": "Platzhalter für das Feld \"{{id}}\" angeben."
+        "slotPlaceholder": "Platzhalter für das Feld \"{{id}}\" angeben.",
+        "slotCount": "Höchstens {{max}} Felder.",
+        "slotPlaceholderLength": "Der Platzhaltername ist zu lang (höchstens {{max}} Zeichen).",
+        "slotDuplicate": "Ein anderes Feld verwendet diesen Platzhalter schon."
       }
     },
     "integrationReleases": {

@@ -5763,7 +5763,8 @@
             "bottom-left": "bottom left",
             "bottom-centre": "bottom centre",
             "bottom-right": "bottom right"
-          }
+          },
+          "limit": "At most {{max}} slots."
         }
       },
       "preview": {
@@ -5797,7 +5798,10 @@
         "reservedId": "This id is reserved; choose another one.",
         "name": "Give the template a name.",
         "color": "Use a hex colour like #e30613.",
-        "slotPlaceholder": "Name the placeholder for the slot \"{{id}}\"."
+        "slotPlaceholder": "Name the placeholder for the slot \"{{id}}\".",
+        "slotCount": "At most {{max}} slots.",
+        "slotPlaceholderLength": "The placeholder name is too long (at most {{max}} characters).",
+        "slotDuplicate": "Another slot already uses this placeholder."
       }
     },
     "integrationReleases": {

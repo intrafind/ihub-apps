@@ -626,8 +626,8 @@ function withSlotText(slide, texts) {
   if (slide.kind === 'content' || slide.kind === 'twoColumn') {
     return { ...slide, text: join(slide.text) };
   }
-  if ((slide.kind === 'title' || slide.kind === 'section') && !slide.subtitle) {
-    return { ...slide, subtitle: texts.join(' ') };
+  if (slide.kind === 'title' || slide.kind === 'section') {
+    return { ...slide, subtitle: [...texts, slide.subtitle].filter(Boolean).join(' ') };
   }
   return slide;
 }
@@ -653,6 +653,12 @@ function buildSlide(source, number, ctx, spec) {
     const ph = slotPlaceholder(layout, id);
     if (ph) filled.push({ id, ph, value });
     else if (ctx.slotRules[id] === 'text') fallback.push(value);
+    else if (ctx.layoutSlotIds.has(id)) {
+      // Another layout has this slot but the one serving the slide does not: the model can combine differently.
+      ctx.warnings.push(
+        `Slide ${number}: the text of slot "${id}" was left out, as no layout has it together with the slide's other slots. Use slots that go together (see the tool description).`
+      );
+    }
   }
   const slide = withSlotText(source, fallback);
   const builder = new SlideBuilder({ number, layout, ctx });
@@ -858,7 +864,12 @@ function slotRulesOf(layouts, declared = {}) {
   for (const layout of layouts) {
     for (const id of layoutSlotIds(layout)) slotRules[id] ||= 'drop';
   }
-  return { slotRules, slotIds: new Set(Object.keys(slotRules)) };
+  const layoutSlotIdsOfTemplate = new Set(layouts.flatMap(layoutSlotIds));
+  return {
+    slotRules,
+    slotIds: new Set(Object.keys(slotRules)),
+    layoutSlotIds: layoutSlotIdsOfTemplate
+  };
 }
 
 /**

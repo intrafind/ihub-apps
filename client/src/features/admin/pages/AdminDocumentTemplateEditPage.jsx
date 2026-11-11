@@ -929,10 +929,10 @@ export default function AdminDocumentTemplateEditPage() {
                   </div>
                 </div>
               )}
-              {pptxInfo?.layouts && (
+              {(pptxInfo?.layouts || Object.keys(draft.pptx.slots || {}).length > 0) && (
                 <TemplateSlots
                   slots={draft.pptx.slots}
-                  info={pptxInfo}
+                  info={pptxInfo?.layouts ? pptxInfo : undefined}
                   errors={errors}
                   onChange={slots => update('pptx', 'slots', slots)}
                 />

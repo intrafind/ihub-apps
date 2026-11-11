@@ -481,8 +481,71 @@ describe("slots a slide's layout does not have", () => {
       ],
       buffer
     );
-    assert.equal(warnings.length, 1);
+    assert.equal(warnings.length, 2);
     assert.match(warnings[0], /Slide 1: the template has no slot "chapter".*kicker, lead/);
+    // A blank slide's layout has no kicker, though another layout does: the model is told.
+    assert.match(warnings[1], /Slide 2: the text of slot "kicker" was left out/);
+  });
+});
+
+describe('slots that do not go together in one layout', () => {
+  const NOTE1 = shape(40, 'Note one', 'type="body" idx="13"', BOX.above, '', 1200);
+  const NOTE2 = shape(41, 'Note two', 'type="body" idx="14"', BOX.below, '', 1200);
+  const slotConfig = { one: { placeholder: 'Note one' }, two: { placeholder: 'Note two' } };
+
+  it('use the layout with more of the slots and tell the model about the one it had to drop', async () => {
+    const { buffer, parts } = await templateWith(
+      ['Title and Content', 'Only one', NOTE1],
+      ['Title and Content', 'Only two', NOTE2]
+    );
+    const { layoutOf, warnings, slideXml } = await render(
+      [
+        { title: 'Both', slots: { one: 'First', two: 'Second' }, text: '- x' },
+        { title: 'One', slots: { one: 'First' }, text: '- y' },
+        { title: 'Two', slots: { two: 'Second' }, text: '- z' }
+      ],
+      buffer,
+      { slotConfig }
+    );
+    assert.equal(layoutOf[1], parts[0]);
+    assert.equal(layoutOf[2], parts[1]);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0], /Slide 1: the text of slot "(one|two)" was left out/);
+    assert.equal(textsOf(slideXml[1]).includes('First'), true);
+  });
+
+  it('are listed to the model as alternatives, not as one capability', async () => {
+    const { buffer } = await templateWith(
+      ['Title and Content', 'Only one', NOTE1],
+      ['Title and Content', 'Only two', NOTE2]
+    );
+    const analysis = await analyzePowerpointTemplate(buffer, undefined, { slots: slotConfig });
+    const guide = buildSlideGuide(analysis);
+    assert.match(
+      guide,
+      /- content: title; [^\n]*slots, from one of these sets per slide: "one" \| "two"/
+    );
+    // A layout that has both makes the single-slot ones redundant.
+    const both = await templateWith(
+      ['Title and Content', 'Only one', NOTE1],
+      ['Title and Content', 'Both', NOTE1 + NOTE2]
+    );
+    const together = buildSlideGuide(
+      await analyzePowerpointTemplate(both.buffer, undefined, { slots: slotConfig })
+    );
+    assert.match(together, /- content: [^\n]*slot "one" \([^)]*\); slot "two"/);
+    assert.doesNotMatch(together, /one of these sets/);
+  });
+});
+
+describe('a slot text for a title or section slide that has a subtitle already', () => {
+  it('is kept in front of the subtitle', async () => {
+    const { slideXml } = await render([
+      { layout: 'title', title: 'Deck', subtitle: 'Nov 2026', slots: { lead: 'The context' } },
+      { layout: 'section', title: 'Part', subtitle: 'Where', slots: { lead: 'Why' } }
+    ]);
+    assert.ok(textsOf(slideXml[0]).includes('The context Nov 2026'));
+    assert.ok(textsOf(slideXml[1]).includes('Why Where'));
   });
 });
 
@@ -604,6 +667,12 @@ describe('declaring slots in a document template', () => {
     assert.equal(parse({ a: { placeholder: 'x', other: 1 } }), false);
     assert.equal(parse({ a: { placeholder: ' ' } }), false);
     assert.equal(parse({ a: { placeholder: 'x', description: { en: 'y'.repeat(201) } } }), false);
+    // Two slots on one placeholder: the second could never be filled.
+    assert.equal(
+      parse({ a: { placeholder: 'Referent' }, b: { placeholder: ' referent ' } }),
+      false
+    );
+    assert.equal(parse({ a: { placeholder: 'Referent' }, b: { placeholder: 'Kapitel' } }), true);
     const many = Object.fromEntries(
       Array.from({ length: 13 }, (_, i) => [`s${i}`, { placeholder: 'x' }])
     );
@@ -659,6 +728,43 @@ describe('the slide guide for the model', () => {
     const german = await guideFor(extra, { language: 'de' }, slots);
     assert.match(german, /- "presenter": Wer vorträgt\. Unten links\./);
     assert.match(german, /Folientypen \("layout"\)/);
+  });
+
+  it('uses one language for the texts and the admin\'s descriptions, also for "de-DE"', async () => {
+    const slots = {
+      presenter: {
+        placeholder: 'Note one',
+        description: { en: 'Who presents.', de: 'Wer vorträgt.' }
+      }
+    };
+    const { buffer } = await templateWith([
+      'Title and Content',
+      'With note',
+      shape(40, 'Note one', 'type="body" idx="13"', BOX.above, '', 1200)
+    ]);
+    const analysis = await analyzePowerpointTemplate(buffer, undefined, { slots });
+    const guide = buildSlideGuide(analysis, { language: 'de-DE' });
+    assert.match(guide, /Wer vorträgt\./);
+    assert.match(guide, /Folientypen/);
+    assert.doesNotMatch(guide, /Who presents/);
+  });
+
+  it('says which template it describes when others can be chosen, and when an uploaded deck can replace it', async () => {
+    const { buffer } = await templateWith(['Title and Content', 'Both', KICKER + LEAD]);
+    const analysis = await analyzePowerpointTemplate(buffer);
+    const guide = buildSlideGuide(analysis, {
+      others: true,
+      templateName: 'ACME',
+      userUploads: true
+    });
+    assert.match(guide, /^The default template "ACME" has these text slots/);
+    assert.doesNotMatch(guide, /use only these ids/);
+    assert.match(guide, /reported in the warnings/);
+    assert.doesNotMatch(guide, /Other templates can differ/);
+    assert.match(guide, /templateFileId\) has its own placeholders/);
+    const plain = buildSlideGuide(analysis);
+    assert.match(plain, /use only these ids/);
+    assert.doesNotMatch(plain, /templateFileId/);
   });
 
   it('describes the slide types even when the template has no slots, and nothing without layouts', async () => {
@@ -720,6 +826,9 @@ describe('the slide guide in the tool description', () => {
       await descriptionOf({ documentTemplate: 'acme' }),
       /Other templates can differ/
     );
+    // An app that pins the template does not let users replace it with an uploaded deck.
+    assert.doesNotMatch(await descriptionOf({ documentTemplate: 'acme' }), /templateFileId/);
+    assert.match(description, /templateFileId\) has its own placeholders/);
   });
 
   it("follows a change of the template's slots and says nothing without a PowerPoint file", async () => {

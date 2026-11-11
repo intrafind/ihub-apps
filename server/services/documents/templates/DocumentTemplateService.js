@@ -218,7 +218,10 @@ const GUIDE_CACHE_ENTRIES = 50;
  * @param {boolean} [options.others] - Other templates can be chosen too.
  * @returns {Promise<string>}
  */
-export async function slideGuideFor(template, { language = 'en', others = false } = {}) {
+export async function slideGuideFor(
+  template,
+  { language = 'en', others = false, userUploads = false } = {}
+) {
   const name = template?.pptx?.template;
   if (!name) return '';
   let stat;
@@ -235,7 +238,8 @@ export async function slideGuideFor(template, { language = 'en', others = false 
     template.pptx.layouts || null,
     template.pptx.slots || null,
     language,
-    others
+    others,
+    userUploads
   ]);
   if (guideCache.has(key)) return guideCache.get(key);
   let guide = '';
@@ -249,7 +253,12 @@ export async function slideGuideFor(template, { language = 'en', others = false 
       template.pptx.layouts,
       { slots: template.pptx.slots }
     );
-    guide = buildSlideGuide(analysis, { language, others });
+    guide = buildSlideGuide(analysis, {
+      language,
+      others,
+      templateName: getLocalizedString(template.name, language) || template.id,
+      userUploads
+    });
   } catch (error) {
     logger.warn('The slides of a document template could not be described', {
       component: COMPONENT,
@@ -278,13 +287,19 @@ export async function documentTemplateContext({ app, language = 'en' } = {}) {
   const pinned = app?.documentTemplate ? choices.find(c => c.id === app.documentTemplate) : null;
   const applying = pinned || choices.find(c => c.default) || null;
   const template = applying ? await getTemplate(applying.id) : null;
+  // Loaded here: the chat file code it comes with is not needed to read or write templates.
+  const { userTemplateUploadsAllowed } = await import('../templateFiles.js');
   return {
     pinned: pinned ? { id: pinned.id, name: pinned.name } : null,
     choices,
     defaultName: choices.find(c => c.default)?.name || null,
     guides: {
       pptx: template
-        ? await slideGuideFor(template, { language, others: !pinned && choices.length > 1 })
+        ? await slideGuideFor(template, {
+            language,
+            others: !pinned && choices.length > 1,
+            userUploads: userTemplateUploadsAllowed(app)
+          })
         : ''
     }
   };

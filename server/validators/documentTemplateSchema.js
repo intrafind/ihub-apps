@@ -167,6 +167,13 @@ const pptxSchema = z
       .refine(slots => Object.keys(slots).length <= MAX_SLOTS, {
         message: `At most ${MAX_SLOTS} slots`
       })
+      .refine(
+        slots => {
+          const names = Object.values(slots).map(slot => slot.placeholder.trim().toLowerCase());
+          return new Set(names).size === names.length;
+        },
+        { message: 'Each slot needs a placeholder of its own' }
+      )
       .optional(),
     layouts: z
       .object(Object.fromEntries(SLIDE_LAYOUT_KINDS.map(kind => [kind, z.string().max(200)])))
