@@ -519,6 +519,9 @@
     "collapseInput": "Collapse input",
     "sendShortcutHint": "{{submit}} to send",
     "sendEnterHint": "Enter to send",
+    "chips": {
+      "more": "{{count}} more: {{names}}"
+    },
     "ephemeral": {
       "label": "Incognito mode",
       "enable": "Turn on incognito — the chat is not saved to your history",

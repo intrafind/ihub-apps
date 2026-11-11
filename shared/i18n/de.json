@@ -191,6 +191,9 @@
     "collapseInput": "Eingabe verkleinern",
     "sendShortcutHint": "{{submit}} zum Senden",
     "sendEnterHint": "Enter zum Senden",
+    "chips": {
+      "more": "{{count}} weitere: {{names}}"
+    },
     "ephemeral": {
       "label": "Inkognito-Modus",
       "enable": "Inkognito aktivieren – der Chat wird nicht im Verlauf gespeichert",

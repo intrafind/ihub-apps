@@ -1,5 +1,17 @@
 # Features — Unreleased
 
+## A Calmer Chat Input: Chips Collapse to Icons
+
+The chips under the chat input — web search, projects and connected systems — took a lot of room, and
+with several switched on they ran over each other and the model selector. They now show an icon only.
+
+- **Labels on hover.** The name of a chip (and the × to remove it) appears when you point at it or tab
+  to it; a tooltip and the screen-reader name stay the same.
+- **No more overlap.** When more chips are active than fit, the rest fold into a **+N** chip; point at
+  it to see their names. The switches themselves are unchanged in the **+** menu.
+- **On touch screens** there is no hover: the icons stay, a tap on web search turns it off, and a project
+  is removed in the project picker.
+  
 ## Generated Images Keep the Provider's Marks, and Can Be Checked
 
 AI Act Art. 50(2) asks that generated images are marked and can be checked. The providers already mark their
