@@ -1,5 +1,30 @@
 # Features — Unreleased
 
+## Generated Images Keep the Provider's Marks, and Can Be Checked
+
+AI Act Art. 50(2) asks that generated images are marked and can be checked. The providers already mark their
+output (Gemini images carry SynthID; some models also embed a C2PA manifest). iHub now makes sure it never
+removes that mark, records what the provider claims, and lets anyone check a file.
+
+- **Bytes in, bytes out.** A generated picture reaches the chat, the stored artifact, a share link, the ZIP and
+  the download exactly as the provider sent it. A test fails if an image or audio library is ever added to
+  the server's request path.
+- **One record per generated image**, with the hash of the raw bytes, the model and what the provider marking
+  looks like (C2PA present, valid, issuer, digital source type; what you declared). Pictures too large for
+  the artifact store are recorded too. The record never holds the picture.
+- **Check a file.** `POST /api/provenance/_verify` now also takes an image or audio file (`multipart/form-data`,
+  one `file` field, up to 50 MiB) and answers whether this installation generated it, plus the file's C2PA
+  manifest. A file generated elsewhere still gets its manifest read. Results say "found" or "not found" and
+  "trust not evaluated"; a signature is never called authentic, and a missing record is not proof of origin.
+- **Declare what the provider embeds.** In **Admin → Models**, an image-generating model has an *Image marking*
+  section: *Provider marks the output*, a scheme such as `synthid` and a reference to the provider's written
+  statement (`contentMarking.image`). Nothing is preset: SynthID is only ever "declared", because it cannot be
+  detected.
+- **Settings.** `provenance.media.maxVerifyBytes` and `readC2pa` in `platform.json` (migration V244).
+
+See [Provenance Records → Images](../../provenance.md#images-provider-marks-3328) and
+[Models → Output Marking](../../models.md#output-marking-contentmarking).
+
 ## Uploaded Presentations Move Into the Company Design
 
 A user uploads a PowerPoint deck made elsewhere and asks for it in the company design. The `pptx`

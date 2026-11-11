@@ -4,7 +4,8 @@
 /**
  * Provenance lookup (EU AI Act Art. 50(2), #3327).
  *
- * `POST /api/provenance/_verify` takes a text or a content hash and answers
+ * `POST /api/provenance/_verify` takes a text, a content hash or (#3328) an image or
+ * audio file and answers
  * whether this installation produced that exact output, and with which model
  * and version. A miss is a valid answer (200, `found: false`): it never says
  * the text is "not AI" or "human-written", only that no record exists.
@@ -24,6 +25,12 @@ import { getProvenanceStore } from '../services/provenance/ProvenanceStore.js';
 import { provenanceSettings } from '../services/provenance/provenanceSettings.js';
 import { detectWatermark } from '../services/provenance/watermark/detect.js';
 import { verifyUrl } from '../services/provenance/turnProvenance.js';
+import {
+  isJsonRequest,
+  isMultipart,
+  parseMediaUpload,
+  verifyMediaFile
+} from '../services/provenance/mediaVerify.js';
 import {
   NORMALIZATION_NFC_TRIM,
   TEXT_NORMALIZATIONS,
@@ -106,6 +113,13 @@ export default function registerProvenanceRoutes(app) {
    *     requestBody:
    *       required: true
    *       content:
+   *         multipart/form-data:
+   *           schema:
+   *             type: object
+   *             required: [file]
+   *             properties:
+   *               file: { type: string, format: binary, description: An image or audio file (type from the bytes; SVG refused) }
+   *               kind: { type: string, enum: [image, audio], description: Must match the detected type }
    *         application/json:
    *           schema:
    *             type: object
@@ -122,18 +136,44 @@ export default function registerProvenanceRoutes(app) {
    *           `watermark` is `{ status: detected|not_detected|too_short|unavailable|not_configured,
    *           scheme?, technique?, keyId?, pValue?, scoredTokens?, keysChecked?, detectorsChecked? }`.
    *           A negative is never proof of human origin.
+   *           For a file upload: `{ found, kind, normalization: "none", contentHash: { alg, value,
+   *           payloadValue?, bytes, mimeType }, records?, c2pa: { present, status, valid, issuer,
+   *           digitalSourceType, claimGenerator, signedAt, trust: "not-evaluated",
+   *           xmpDigitalSourceType } | null, declared, technique, synthid, caveats }`. `valid`
+   *           means signature and binding hold, not that the signer is trusted.
    *       400: { description: Both or neither of text and contentHash }
    *       401: { description: Authentication required (unless verify.access is public) }
-   *       413: { description: Text too large }
+   *       413: { description: Text or file too large (provenance.media.maxVerifyBytes) }
+   *       415: { description: Not JSON or multipart, or a file type that is not an accepted image or audio type }
    *       429: { description: Rate limited }
    *       503: { description: Storage not ready }
    */
   app.post(buildServerPath(VERIFY_PATH), limiter, maybeAuth, async (req, res, next) => {
     try {
-      const { text, hash, normalization, modelId } = parseVerifyBody(req.body);
       if (!isStorageReady() || !getProvenanceStore().isAvailable()) {
         throw new ServiceError('SERVICE_UNAVAILABLE', 'The provenance store is not available');
       }
+      // A file (image or audio, #3328): same route, content negotiation.
+      if (isMultipart(req)) {
+        const { buffer, kind } = await parseMediaUpload(
+          req,
+          res,
+          provenanceSettings().media.maxVerifyBytes
+        );
+        const verify = verifyUrl(req);
+        const result = await verifyMediaFile(buffer, {
+          kind,
+          decorate: records => records.map(record => ({ ...record, verify }))
+        });
+        res.setHeader('Cache-Control', 'no-store');
+        return res.json(result);
+      }
+      if (!isJsonRequest(req)) {
+        throw new ServiceError('UNSUPPORTED_MEDIA_TYPE', 'Send JSON or a multipart file upload', {
+          details: { accepted: ['application/json', 'multipart/form-data'] }
+        });
+      }
+      const { text, hash, normalization, modelId } = parseVerifyBody(req.body);
       const value = hash ?? hashText(text, normalization);
       const records = await getProvenanceStore().findByHash(value);
       // Sensitive request: never cache.

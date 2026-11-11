@@ -1721,6 +1721,7 @@
         "sampling": "Optional. Ein leeres Feld verwendet den Standardwert des Modells bzw. des Anbieters; dafür wird nichts gesendet. Ein hier gesetzter Wert gilt für jede Anfrage an dieses Modell.",
         "marking": "Ob dieses Modell den erzeugten Text als KI-generiert kennzeichnet. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann es nicht prüfen. Jede Ausgabe erhält unabhängig davon einen Herkunftsnachweis.",
         "markingStatementRef": "Dokumentname oder URL der schriftlichen Erklärung des Anbieters. Sie wird nur als Verweis gespeichert und nie geöffnet.",
+        "imageMarking": "Was der Anbieter in die von diesem Modell erzeugten Bilder einbettet (zum Beispiel SynthID, ein unsichtbares Wasserzeichen, oder ein C2PA-Manifest). iHub fügt keine eigene Kennzeichnung hinzu und kodiert erzeugte Bilder nie neu, sodass die Kennzeichnung des Anbieters erhalten bleibt. Wählen Sie „Der Anbieter kennzeichnet die Ausgabe“ nur, wenn der Anbieter das schriftlich bestätigt hat; iHub kann sie nicht erkennen und erfasst sie als angegeben, nie als erkannt.",
         "markingIhub": "iHub weist vLLM an, jede Antwort mit dem aktiven Schlüssel zu kennzeichnen, und erkennt sie über den Detektor wieder. Die Detektor-Einstellungen müssen den Einstellungen des vLLM-Servers entsprechen. Greedy-Sampling (Temperatur 0) und strukturierte Ausgaben lassen sich nicht kennzeichnen und werden als „nicht angewendet“ erfasst.",
         "ttsUrl": "Sprach-Endpunkt des Anbieters. Er bleibt auf dem Server und erreicht nie den Browser.",
         "ttsVoice": "Stimmen-ID des Anbieters: eine Mistral-Vorlage wie en_paul_neutral, gb_jane_neutral oder fr_marie_neutral oder die ID einer in Ihrem Mistral-Konto gespeicherten Stimme. Leer verwendet en_paul_neutral.",
@@ -1747,6 +1748,7 @@
         "providerConfig": "Anbieter-Einstellungen",
         "sampling": "Sampling",
         "marking": "Ausgabekennzeichnung",
+        "imageMarking": "Bildkennzeichnung",
         "thinking": "Reasoning"
       },
       "errors": {

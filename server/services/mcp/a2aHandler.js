@@ -443,7 +443,8 @@ export function fileArtifactsOf(outputs, acceptedOutputModes) {
     ...(outputs?.images || []).map((image, index) => ({
       name: image.name || `image-${index + 1}.${String(image.mimeType).split('/')[1] || 'png'}`,
       mimeType: image.mimeType,
-      data: image.data
+      data: image.data,
+      provenance: image.provenance
     }))
   ];
   for (const entry of entries) {
@@ -462,7 +463,22 @@ export function fileArtifactsOf(outputs, acceptedOutputModes) {
     artifacts.push({
       artifactId: randomUUID(),
       name,
-      parts: [{ kind: 'file', file: { name, mimeType: entry.mimeType, bytes: entry.data } }]
+      parts: [{ kind: 'file', file: { name, mimeType: entry.mimeType, bytes: entry.data } }],
+      // The generated picture's provenance (EU AI Act Art. 50(2), #3328).
+      ...(entry.provenance?.outputId
+        ? {
+            metadata: {
+              provenance: {
+                output_id: entry.provenance.outputId,
+                content_hash: {
+                  alg: 'sha-256',
+                  normalization: 'none',
+                  value: entry.provenance.contentHash
+                }
+              }
+            }
+          }
+        : {})
     });
   }
   return { artifacts, omitted };

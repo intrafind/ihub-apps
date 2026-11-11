@@ -104,14 +104,21 @@ proof of human authorship.
 ## Configuration
 
 ```json
-"provenance": { "retentionDays": 365, "storeRecords": true, "verify": { "access": "authenticated" } }
+"provenance": {
+  "retentionDays": 365,
+  "storeRecords": true,
+  "verify": { "access": "authenticated" },
+  "media": { "maxVerifyBytes": 52428800, "readC2pa": true }
+}
 ```
 
 - `retentionDays`: records older than this are removed by a daily sweep. `0` or less keeps them forever.
 - `storeRecords`: `false` still attaches the object everywhere but keeps no records, so nothing can be looked up.
 - `verify.access`: `authenticated` (default) or `public`.
+- `media.maxVerifyBytes`: largest image or audio file `_verify` accepts (default 50 MiB, `413` above).
+- `media.readC2pa`: read the C2PA manifest of generated images and uploaded files (default on).
 
-Edit these in `platform.json`; migration V243 writes the defaults.
+Edit these in `platform.json`; migrations V243 and V244 write the defaults.
 
 ## What is stored
 
@@ -127,3 +134,98 @@ set `storeRecords` to `false` if that is not acceptable.
 **Scale.** The filesystem provider keeps one file per hash in one directory. That is comfortable to roughly
 one to two million records, and the daily sweep reads every document; a retention below 365 days lowers the
 bound. A database provider answers the lookup and the sweep natively.
+
+## Images: provider marks (#3328)
+
+iHub applies **no mark of its own** to images. The providers do: Gemini images carry SynthID in
+the pixels, and some models (OpenAI gpt-image, Google models on Vertex) also embed a C2PA manifest. What iHub
+does is (1) not destroy that mark, (2) record what the provider claims, (3) let anyone ask whether a file came
+from this installation and what marks it carries.
+
+### Bytes in, bytes out
+
+Generated pictures pass through the server as the base64 string the provider sent: no decode, no encode, in
+the stream, the artifact store, the serve routes, the share links, the ZIP and the download. The SHA-256 of
+the original bytes equals that of the stored artifact and of the downloaded file, and a C2PA signature that
+validates on the original validates on the download. This is a rule, not an accident: a test fails when an
+image or audio library is imported on the server's request path.
+
+Three places are not iHub's to control: a reverse proxy or CDN that optimises images (Cloudflare Polish or
+Mirage, nginx `image_filter`, Azure Front Door; exclude `/api/chats/*/artifacts/*` and `/api/shares/*`), the
+browser's "copy image", and Office when an add-in inserts a picture. PDF and Word exports are new derived
+files, not the generated asset.
+
+A picture a **user uploads** used to be re-encoded to JPEG in the browser, which drops C2PA and XMP and part
+of a SynthID signal. A picture that is already within the upload size limit (`maxResizeDimension`, default
+1024 px) and 4 MB, in JPEG, PNG, WebP or GIF, is now sent unchanged; larger ones are still resized.
+
+### The record
+
+Each generated image gets one record the moment it arrives, whether or not the artifact store keeps it (a 4K
+PNG over the artifact cap is recorded, sent and not stored), and on every channel (chat, agents, workflows,
+MCP, A2A). The SSE image delta carries `provenance: { outputId, contentHash }`; the stored message descriptor
+carries `outputId`; the MCP image block carries `_meta.provenance`; the A2A artifact `metadata.provenance`.
+
+A media record is the usual provenance object with `kind: "image"`, `content_hash.normalization:
+"none"` (the hash is over the raw bytes, not the base64 text), `content_hash.bytes` and `mime_type`, plus:
+
+```json
+"provider_marking": {
+  "c2pa": { "present": true, "status": "present", "valid": true, "issuer": "Google LLC",
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+            "claimGenerator": "…", "signedAt": "2026-11-11T09:00:01Z", "trust": "not-evaluated" },
+  "xmp": { "digitalSourceType": null },
+  "declared": "synthid"
+}
+```
+
+- `c2pa.status` is `present`, `absent`, `unsupported_format` or `unreadable`; `valid` is `true`, `false` or
+  `null` (no manifest). `valid` means the signature and its binding to the file's bytes check out.
+  **Trust is never evaluated**: a valid signature from an unknown signer is still `valid`, and the result
+  always says `trust: "not-evaluated"`. It never says "authentic".
+- `declared` is what **you** declared for the model (`contentMarking.image`, set in **Admin → Models**
+  under *Image marking*, see [Models](models.md#output-marking-contentmarking)), never something iHub detected. SynthID has no public
+  detector: iHub can say "declared", never "there is no SynthID".
+- A record never holds the picture or audio.
+
+### Verifying a file
+
+`POST /api/provenance/_verify` with `multipart/form-data`, one `file` field (and an optional `kind` field,
+`image` or `audio`, which must match the bytes):
+
+```bash
+curl -b cookies.txt -F "file=@picture.png" https://ihub.example.com/api/provenance/_verify
+```
+
+```json
+{
+  "found": true,
+  "kind": "image",
+  "normalization": "none",
+  "contentHash": { "alg": "sha-256", "value": "…", "bytes": 1234567, "mimeType": "image/png" },
+  "records": [ { "…": "provenance records, as for text, each with verify" } ],
+  "c2pa": { "present": true, "status": "present", "valid": true, "issuer": "…",
+            "digitalSourceType": "…", "claimGenerator": "…", "signedAt": "…",
+            "trust": "not-evaluated", "xmpDigitalSourceType": null },
+  "declared": "synthid",
+  "technique": ["hash-lookup", "metadata"],
+  "synthid": "declared-not-detectable",
+  "caveats": ["trust-not-evaluated"]
+}
+```
+
+- A miss is a `200` with `found: false` and no `records`; the `c2pa` read is still there, so a file generated
+  elsewhere gets its manifest read. `caveats` then also holds `absence-is-not-proof`.
+- Only generated images have records. An audio file gets its C2PA read and never a hash hit.
+- `technique` names what produced evidence: `hash-lookup`, `metadata` (a C2PA manifest or XMP source type).
+- `synthid` is `declared-not-detectable` when a matching record declares SynthID, else `not-detectable`.
+- The type comes from the bytes (PNG, JPEG, WebP, GIF, BMP, TIFF, HEIC, AVIF; WAV, MP3, FLAC, OGG, M4A). SVG
+  and anything else is `415`; more than one file is `400`; over `media.maxVerifyBytes` is `413`.
+- The upload lives in memory only and is never logged or stored. The watermark detector is not called for
+  files (it is for text only), so a public caller costs no detector call.
+- The C2PA reader runs offline: remote manifests, OCSP and trust lists are switched off, so it makes no
+  outbound connection and cannot bypass the SSL whitelist.
+
+Real samples: CI has no Gemini or gpt-image key, so the tests use a signed upstream C2PA file and synthetic
+fixtures. They prove that any provider C2PA is preserved, not what a provider really embeds. Generate one
+image per provider model by hand and verify it once to find out; record the finding for your compliance file.

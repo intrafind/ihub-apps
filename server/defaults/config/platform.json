@@ -445,6 +445,10 @@
     "storeRecords": true,
     "verify": {
       "access": "authenticated"
+    },
+    "media": {
+      "maxVerifyBytes": 52428800,
+      "readC2pa": true
     }
   },
   "aiDisclosure": {

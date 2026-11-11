@@ -575,6 +575,14 @@ export const platformConfigSchema = z
           .object({ access: z.enum(['authenticated', 'public']).prefault('authenticated') })
           .passthrough()
           .prefault({}),
+        // Provider marks on generated images and audio (#3328).
+        media: z
+          .object({
+            maxVerifyBytes: z.number().int().min(1024).prefault(52428800),
+            readC2pa: z.boolean().prefault(true)
+          })
+          .passthrough()
+          .prefault({}),
         // Text watermark detection (#3331). All optional: code defaults apply
         // (alpha 1e-4, minScoredTokens 200, detectorTimeoutMs 15000).
         watermark: z

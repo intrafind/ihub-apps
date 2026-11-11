@@ -8,9 +8,9 @@ the landing page for the measures; it is not legal advice.
 | Art. 50(1): people know they are dealing with an AI | The assistant always says it is an AI when asked and never claims to be human, even in a role. A notice in the empty chat says so before the first message. | Review the notice text; keep it on unless an app is clearly not a chat. |
 | Art. 4: AI literacy, "can you show that people were told?" | A dialog before the first message asks users to confirm an AI-use statement. The confirmation is stored with the user and in the audit log. | Write the statement and the policy link; export the list when an auditor asks. |
 
-| Art. 50(2): output is marked and can be checked | Every output carries a machine-readable provenance object and gets a record (a hash, never the text), so "did this exact text come from here?" can be answered. | Declare which models are marked by their provider; set the retention; decide who may call the lookup. |
+| Art. 50(2): output is marked and can be checked | Every output carries a machine-readable provenance object and gets a record (a hash, never the text), so "did this exact text come from here?" can be answered. | Declare which models are marked by their provider; set the retention; decide who may call the lookup. Generated images keep the provider's own marks (C2PA, SynthID) untouched, are recorded, and can be checked by upload; see [Provenance Records](provenance.md#images-provider-marks-3328). |
 
-Further marking measures (a text watermark, marks on images and audio) are added to this page as they ship.
+Further marking measures are added to this page as they ship.
 
 ## Guardrail prompt (always on)
 

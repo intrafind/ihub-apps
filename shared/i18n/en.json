@@ -1318,6 +1318,7 @@
         "sampling": "Optional. Leave a field empty to use the model's or provider's own default; nothing is sent for it. A value set here applies to every request to this model.",
         "marking": "Whether this model marks the text it generates as AI generated. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot check it. Every output still gets a provenance record, whatever you choose here.",
         "markingStatementRef": "A document name or URL of the provider's written statement. It is only kept as a reference, never opened.",
+        "imageMarking": "What the provider embeds in the images this model generates (for example SynthID, an invisible watermark, or a C2PA manifest). iHub adds no mark of its own and never re-encodes a generated image, so the provider's mark stays intact. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot detect it and records it as declared, never as detected.",
         "markingIhub": "iHub asks vLLM to watermark every answer with the active key and recognises it again through the detector. The detector settings must equal the vLLM server settings. Greedy sampling (temperature 0) and structured output cannot be watermarked and are recorded as not applied.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
@@ -1344,6 +1345,7 @@
         "providerConfig": "Provider Settings",
         "sampling": "Sampling",
         "marking": "Output marking",
+        "imageMarking": "Image marking",
         "thinking": "Reasoning"
       },
       "errors": {

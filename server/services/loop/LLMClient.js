@@ -49,6 +49,7 @@ import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
+import { recordGeneratedImage, stampGeneratedImage } from '../provenance/mediaMarking.js';
 import { getGenAIInstrumentation } from '../../telemetry.js';
 import { resolveProviderName, resolveOperation } from '../../telemetry/providerMap.js';
 import runLogSingleton, { hashPayload } from './RunLog.js';
@@ -255,6 +256,39 @@ export class ResultAccumulator {
     this.chunkCount = 0;
     this.extras = {};
     this.metadata = {};
+    this._mediaRecords = [];
+  }
+
+  /**
+   * The one funnel every generated image passes (chat, agents, workflows, MCP,
+   * A2A). Stamps it with `provenance: { outputId, contentHash }` (synchronous,
+   * the hash is over the decoded bytes) and starts its provenance record.
+   *
+   * Invariant (EU AI Act Art. 50(2), #3328): the image `data` is never decoded
+   * to pixels or re-encoded here or anywhere after here. Provider marks (C2PA,
+   * XMP, SynthID) live in those bytes; `server/tests/media-no-reencode-guard.test.js`
+   * fails when an image library is imported on the generated-media path.
+   */
+  _stampImages(images) {
+    for (const image of images) {
+      const stamp = stampGeneratedImage(image);
+      if (!stamp?.created || !this.meta.model) continue;
+      // After the current chunk has been delivered: the manifest read must not
+      // delay the stream. Awaited before the call ends (`settleMedia`).
+      this._mediaRecords.push(
+        new Promise(resolve => setImmediate(resolve)).then(() =>
+          recordGeneratedImage(image, { model: this.meta.model })
+        )
+      );
+    }
+  }
+
+  /** Wait for the records started by {@link _stampImages}; they never throw. */
+  async settleMedia() {
+    if (this._mediaRecords.length === 0) return;
+    const pending = this._mediaRecords;
+    this._mediaRecords = [];
+    await Promise.allSettled(pending);
   }
 
   push(chunk) {
@@ -265,7 +299,10 @@ export class ResultAccumulator {
     if (Array.isArray(chunk.thoughtSignatures) && chunk.thoughtSignatures.length) {
       this.thoughtSignatures.push(...chunk.thoughtSignatures);
     }
-    if (Array.isArray(chunk.images) && chunk.images.length) this.images.push(...chunk.images);
+    if (Array.isArray(chunk.images) && chunk.images.length) {
+      this._stampImages(chunk.images);
+      this.images.push(...chunk.images);
+    }
     if (chunk.groundingMetadata) this._mergeGrounding(chunk.groundingMetadata);
     if (chunk.usage) this.usage = mergeUsage(this.usage, chunk.usage);
     if (chunk.finishReason) this.finishReason = chunk.finishReason;
@@ -1145,6 +1182,8 @@ export class LLMClient {
         } catch {
           /* providers without converter state */
         }
+        // Provenance records of generated images (best effort, #3328).
+        await accumulator.settleMedia();
         const toolCalls = accumulator.toolCalls.length;
         if (failure) {
           client._recordError({ runId, step, err: failure, span, startedAt });
