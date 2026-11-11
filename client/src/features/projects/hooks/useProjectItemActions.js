@@ -10,7 +10,6 @@ import {
   updateProjectItemText
 } from '../../../api';
 import { projectErrorMessage } from '../utils/projectErrors';
-import { aiAccessChange } from '../utils/projectItems';
 import { removeItemsInTurn, withoutItems } from '../utils/removeItems';
 
 /**
@@ -31,8 +30,8 @@ export function replaceItem(project, item) {
 }
 
 /**
- * The item actions of the user project page: pin, refresh (or retry),
- * rename, edit (change a link item's reference), remove one and remove several. Each answers in
+ * The item actions of the user project page: refresh (or retry),
+ * edit (an item's name, "For the AI" setting and a link's reference), remove one and remove several. Each answers in
  * the shown project right away and reconciles with the server; a failure is reported in `error`.
  *
  * @param {Object} options
@@ -40,8 +39,7 @@ export function replaceItem(project, item) {
  * @param {(updater: Function) => void} options.setProject - From `useProject`.
  * @param {() => Promise<Object|null>} options.reload - From `useProject`.
  * @returns {{busyItemId: string|null, error: string|null, clearError: () => void,
- *   setAiAccess: (item: Object, state: string) => Promise<void>, refresh: (item: Object) => Promise<void>,
- *   rename: (item: Object, name: string) => Promise<boolean>,
+ *   refresh: (item: Object) => Promise<void>,
  *   update: (item: Object, changes: {name?: string, ref?: Object}) => Promise<Object|undefined>,
  *   editText: (item: Object, text: string) => Promise<Object|undefined>,
  *   remove: (item: Object) => Promise<void>,
@@ -69,21 +67,6 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     [t]
   );
 
-  const setAiAccess = useCallback(
-    (item, state) =>
-      run(item, async () => {
-        const change = aiAccessChange(state);
-        const updated = await updateProjectItem(projectId, item.id, change);
-        setProject(prev =>
-          replaceItem(
-            prev,
-            updated || { ...item, ...change, excludedFromAi: change.excludedFromAi }
-          )
-        );
-      }),
-    [projectId, run, setProject]
-  );
-
   const refresh = useCallback(
     item =>
       run(item, async () => {
@@ -92,15 +75,6 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
         await reload();
       }),
     [projectId, run, setProject, reload]
-  );
-
-  const rename = useCallback(
-    (item, name) =>
-      run(item, async () => {
-        const updated = await updateProjectItem(projectId, item.id, { name });
-        setProject(prev => replaceItem(prev, updated || { ...item, name }));
-      }),
-    [projectId, run, setProject]
   );
 
   // The refresh TTL of a file from a website or a web page (#3536); null
@@ -216,9 +190,7 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     busyItemId,
     error,
     clearError: () => setError(null),
-    setAiAccess,
     refresh,
-    rename,
     setRefreshTtl,
     update,
     editText,

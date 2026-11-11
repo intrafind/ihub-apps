@@ -82,29 +82,3 @@ export function sniffMedia(buffer) {
   }
   return null;
 }
-
-/**
- * The PCM payload of a canonical WAV (the `data` chunk), or null when the
- * buffer is not a WAV with one. TTS records hash the raw `pcm_s16le` stream, so
- * a user who wraps that PCM in a WAV header still matches by the payload hash.
- *
- * @param {Buffer} buffer
- * @returns {Buffer|null}
- */
-export function wavPayload(buffer) {
-  if (!Buffer.isBuffer(buffer) || buffer.length < 12) return null;
-  if (ascii(buffer, 0, 4) !== 'RIFF' || ascii(buffer, 8, 12) !== 'WAVE') return null;
-  let offset = 12;
-  while (offset + 8 <= buffer.length) {
-    const id = ascii(buffer, offset, offset + 4);
-    const size = buffer.readUInt32LE(offset + 4);
-    const start = offset + 8;
-    if (id === 'data') {
-      // A streamed WAV may declare 0 or 0xFFFFFFFF: take what is there.
-      const end = size === 0 || size === 0xffffffff ? buffer.length : start + size;
-      return buffer.subarray(start, Math.min(end, buffer.length));
-    }
-    offset = start + size + (size % 2);
-  }
-  return null;
-}

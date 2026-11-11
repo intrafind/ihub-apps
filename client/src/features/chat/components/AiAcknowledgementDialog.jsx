@@ -177,6 +177,7 @@ function AiAcknowledgementDialog({
         <div
           role="region"
           aria-labelledby="ai-ack-title"
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- scrollable region must be keyboard focusable
           tabIndex={0}
           className={`${pad} py-3 text-sm leading-6 ${textColor} overflow-y-auto min-h-0 max-h-[50vh] break-words focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 focus:outline-hidden`}
         >
@@ -259,7 +260,7 @@ function AiAcknowledgementDialog({
             <p className={mutedColor}>
               {t(
                 'aiAcknowledgement.anonymousNote',
-                'This confirmation applies to this browser session only.'
+                'This confirmation is remembered in this browser for up to 30 days.'
               )}
             </p>
           )}

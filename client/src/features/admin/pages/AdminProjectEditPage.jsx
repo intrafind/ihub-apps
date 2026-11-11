@@ -26,7 +26,6 @@ import ProjectItemsTable from '../../projects/components/ProjectItemsTable';
 import { useProjectItemDocumentActions } from '../../projects/components/ProjectItemDocumentActions';
 import EditItemDialog from '../../projects/components/EditItemDialog';
 import ProjectItemTextDialog from '../../projects/components/ProjectItemTextDialog';
-import RenameItemDialog from '../../projects/components/RenameItemDialog';
 import RefreshTtlDialog from '../../projects/components/RefreshTtlDialog';
 import AdminProjectSettingsForm from '../components/AdminProjectSettingsForm';
 import AdminProjectSettingsPanel from '../components/AdminProjectSettingsPanel';
@@ -50,7 +49,7 @@ import {
   uploadsAreUnscanned,
   validateProjectForm
 } from '../utils/projectAdmin';
-import { aiAccessChange, localizedText } from '../../projects/utils/projectItems';
+import { localizedText } from '../../projects/utils/projectItems';
 import { removeItemsInTurn, withoutItems } from '../../projects/utils/removeItems';
 
 // The chat pulls in the whole chat page: load it when an admin opens it.
@@ -83,7 +82,7 @@ const adminErrorMessage = err => getAdminApiErrorMessage(err);
  * full settings form (id, localized name and description, availability,
  * instructions, category, tags). Once it exists, this is the one page of the
  * project, with no separate read-only view: its items (add, one tab per kind,
- * the "For the AI" mode of each, preview the text, retry, refresh, remove, a
+ * edit each (name, "For the AI" mode), preview the text, retry, refresh, remove, a
  * test of every item) and what links it (**Used by**); the settings sit
  * beside them as rows that each open a dialog and save at once, as on a
  * user's project page.
@@ -121,7 +120,6 @@ function AdminProjectEditPageContent({ id }) {
   // Until the admin types an ID, a new project's ID follows its name.
   const [idEdited, setIdEdited] = useState(false);
   const [previewItem, setPreviewItem] = useState(null);
-  const [renameTarget, setRenameTarget] = useState(null);
   const [scheduleTarget, setScheduleTarget] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const documentActions = useProjectItemDocumentActions(id);
@@ -249,11 +247,6 @@ function AdminProjectEditPageContent({ id }) {
     }
   };
 
-  const handleSetAiAccess = (item, state) =>
-    runItemAction(item, async () =>
-      replaceItem(await updateAdminProjectItem(id, item.id, aiAccessChange(state)))
-    );
-
   // Throws: the edit dialog shows the failure next to its form.
   const handleEditItem = async (item, changes) => {
     setBusyItemId(item.id);
@@ -264,16 +257,6 @@ function AdminProjectEditPageContent({ id }) {
     } finally {
       setBusyItemId(null);
     }
-  };
-
-  // Resolves `true` when the item was renamed, which closes the dialog.
-  const handleRename = async (item, name) => {
-    let renamed = false;
-    await runItemAction(item, async () => {
-      replaceItem(await updateAdminProjectItem(id, item.id, { name }));
-      renamed = true;
-    });
-    return renamed;
   };
 
   const handleRefresh = item =>
@@ -467,10 +450,8 @@ function AdminProjectEditPageContent({ id }) {
         estimates={estimate ? estimateByItem : undefined}
         selectedIds={new Set(selectedItems.map(item => item.id))}
         onSelectionChange={setSelectedItemIds}
-        onSetAiAccess={handleSetAiAccess}
         onPreview={setPreviewItem}
         onRefresh={handleRefresh}
-        onRename={setRenameTarget}
         onSchedule={setScheduleTarget}
         onEdit={setEditTarget}
         onTransfer={item => setTransfer({ mode: 'move', items: [item] })}
@@ -621,13 +602,6 @@ function AdminProjectEditPageContent({ id }) {
                 replaceItem(await updateAdminProjectItem(id, scheduleTarget.id, { refreshTtl }));
                 return true;
               }}
-            />
-          )}
-          {renameTarget && (
-            <RenameItemDialog
-              item={renameTarget}
-              onClose={() => setRenameTarget(null)}
-              onRename={name => handleRename(renameTarget, name)}
             />
           )}
           <ProjectItemTextDialog

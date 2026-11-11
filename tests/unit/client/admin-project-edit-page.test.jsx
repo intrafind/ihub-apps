@@ -370,12 +370,14 @@ describe('AdminProjectEditPage – items', () => {
     renderAt('/admin/projects/handbook');
 
     await screen.findByText('policies.pdf');
-    // An upload has no address to change: it is renamed instead.
+    // An upload has no address to change, but it can be edited for its name and
+    // its "For the AI" setting; there is no separate rename.
     const uploadRow = screen.getByText('policies.pdf').closest('tr');
-    expect(within(uploadRow).queryByRole('button', { name: 'Edit' })).toBeNull();
-    fireEvent.click(within(uploadRow).getByRole('button', { name: 'More actions' }));
-    expect(await screen.findByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
-    fireEvent.keyDown(document.activeElement || document.body, { key: 'Escape' });
+    fireEvent.click(within(uploadRow).getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByLabelText('For the AI')).toBeInTheDocument();
+    expect(screen.queryByLabelText('URL')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByLabelText('For the AI')).toBeNull());
 
     const row = screen
       .getByText('https://intra/old', { selector: 'div.font-medium' })
@@ -796,24 +798,32 @@ describe('AdminProjectEditPage – the one project page', () => {
     expect(screen.queryByRole('link', { name: 'Edit items' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add item' })).toBeEnabled();
     expect(screen.getAllByRole('button', { name: 'Remove item' })).toHaveLength(2);
-    // Each document's mode ("Normal", "Pinned", "Not for AI") is a live control.
-    expect(screen.getByLabelText('Use of https://www.intrafind.com by the AI')).toBeEnabled();
+    // A document's mode ("Normal", "Pinned", "Not for AI") is set in its edit dialog,
+    // not in the table.
+    expect(screen.queryByLabelText(/^Use of .* by the AI$/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Edit' })).toHaveLength(2);
   });
 
-  test('changes the AI mode of one document in place', async () => {
+  test('changes the AI mode of one document in its edit dialog', async () => {
     mockApi.fetchAdminProject.mockResolvedValue(makeProject(ITEMS));
     mockApi.updateAdminProjectItem.mockResolvedValue({ ...ITEMS[0], excludedFromAi: true });
     renderAt('/admin/projects/handbook');
-    const select = await screen.findByLabelText('Use of https://www.intrafind.com by the AI');
+    await screen.findByRole('heading', { level: 1, name: /Employee handbook/ });
+    const row = screen
+      .getByText('https://www.intrafind.com', { selector: 'div.font-medium' })
+      .closest('tr');
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
 
-    fireEvent.change(select, { target: { value: 'excluded' } });
+    fireEvent.change(await screen.findByLabelText('For the AI'), {
+      target: { value: 'excluded' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     await waitFor(() =>
-      expect(mockApi.updateAdminProjectItem).toHaveBeenCalledWith(
-        'handbook',
-        'itm_home',
-        expect.objectContaining({ excludedFromAi: true })
-      )
+      expect(mockApi.updateAdminProjectItem).toHaveBeenCalledWith('handbook', 'itm_home', {
+        pinned: false,
+        excludedFromAi: true
+      })
     );
   });
 

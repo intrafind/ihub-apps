@@ -8,7 +8,8 @@ import { test, expect } from '@playwright/test';
  *
  * The e2e contents switch the feature off (tests/config/e2e-contents.mjs) so the
  * other specs are not blocked by it; this spec turns it on through the admin
- * platform API and off again at the end. Signs in as the default local admin
+ * platform API and off again at the end. It changes platform-wide state, so run it on its
+ * own (`--workers=1`, as CI does) rather than beside the other specs on a shared server. Signs in as the default local admin
  * (`admin` / `password123`), who has a users.json record.
  */
 

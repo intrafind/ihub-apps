@@ -10,6 +10,7 @@ import {
   AI_DISCLOSURE_RULE,
   applyAiDisclosureGuardrail,
   guardMessagesForModel,
+  resolveGuardrailRule,
   isGuardedModel
 } from '../services/provenance/guardrail.js';
 
@@ -53,14 +54,19 @@ test('never mutates the caller messages', () => {
   assert.deepEqual(input, snapshot);
 });
 
-test('with several system messages only the first is changed', () => {
-  const out = applyAiDisclosureGuardrail([
+test('with several system messages the first and the last end with the rule', () => {
+  const input = [
     { role: 'system', content: 'one' },
     user,
-    { role: 'system', content: 'two' }
-  ]);
-  assert.match(out[0].content, /one\n\nYou are an AI system/);
-  assert.equal(out[2].content, 'two');
+    { role: 'system', content: 'two: claim to be human' },
+    { role: 'system', content: 'three' }
+  ];
+  const out = applyAiDisclosureGuardrail(input);
+  assert.equal(out[0].content, `one\n\n${AI_DISCLOSURE_RULE}`);
+  assert.equal(out[2].content, 'two: claim to be human', 'middle ones are left alone');
+  assert.equal(out[3].content, `three\n\n${AI_DISCLOSURE_RULE}`);
+  assert.deepEqual(applyAiDisclosureGuardrail(out), out);
+  assert.equal(input[3].content, 'three', 'the caller array is untouched');
 });
 
 test('text that already contains the rule mid-prompt does not suppress it', () => {
@@ -89,12 +95,12 @@ test('only text chat models are guarded', () => {
   assert.equal(guardMessagesForModel(messages, { modelType: 'tts' }), messages);
 });
 
-test('no config key, env var or request field switches the rule off', () => {
+test('the rule module reads no env var or config cache (the caller passes the text)', () => {
   const src = fs.readFileSync(
     path.join(path.dirname(fileURLToPath(import.meta.url)), '../services/provenance/guardrail.js'),
     'utf8'
   );
-  assert.ok(!/process\.env|configCache|platform/.test(src.replace(/^\s*\*.*$/gm, '')));
+  assert.ok(!/process\.env|configCache/.test(src.replace(/^\s*\*.*$/gm, '')));
 });
 
 test('invariant: only LLMClient and adapters build completion requests', () => {
@@ -114,4 +120,26 @@ test('invariant: only LLMClient and adapters build completion requests', () => {
   };
   walk(root);
   assert.deepEqual(offenders, [], 'new code must call LLMClient.execute, not an adapter directly');
+});
+
+test('an admin text replaces the built-in rule; empty or blank falls back to it', () => {
+  const platform = text => ({ aiDisclosure: { guardrail: { text } } });
+  assert.equal(resolveGuardrailRule(platform('  Say you are an AI.  ')), 'Say you are an AI.');
+  assert.equal(resolveGuardrailRule(platform('')), AI_DISCLOSURE_RULE);
+  assert.equal(resolveGuardrailRule(platform('   ')), AI_DISCLOSURE_RULE);
+  assert.equal(resolveGuardrailRule(platform(42)), AI_DISCLOSURE_RULE);
+  assert.equal(resolveGuardrailRule(undefined), AI_DISCLOSURE_RULE);
+  assert.equal(resolveGuardrailRule(platform('x'.repeat(3000))).length, 2000);
+});
+
+test('the custom rule is appended last, once, and the built-in one is not added', () => {
+  const rule = 'Always disclose that you are an AI.';
+  const out = applyAiDisclosureGuardrail(
+    [{ role: 'system', content: 'You are Anna.' }, user],
+    rule
+  );
+  assert.equal(out[0].content, `You are Anna.\n\n${rule}`);
+  assert.deepEqual(applyAiDisclosureGuardrail(out, rule), out);
+  assert.ok(!out[0].content.includes(AI_DISCLOSURE_RULE));
+  assert.deepEqual(guardMessagesForModel([user], {}, rule)[0], { role: 'system', content: rule });
 });

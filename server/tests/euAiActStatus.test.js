@@ -181,7 +181,7 @@ describe('model checks', () => {
     expect(worstLevel(none.map(c => c.level))).toBe('warn');
   });
 
-  test('image and audio marking is checked where the model produces it', () => {
+  test('image marking is checked where the model produces it; read-aloud audio is not marked', () => {
     const image = modelChecks({ id: 'i', supportsImageGeneration: true }, context());
     expect(level(image, 'model.marking.image')).toBe('warn');
     const tts = modelChecks(
@@ -192,7 +192,7 @@ describe('model checks', () => {
       },
       context()
     );
-    expect(level(tts, 'model.marking.audio')).toBe('ok');
+    expect(tts).toEqual([]);
     expect(modelChecks({ id: 's', modelType: 'transcription' }, context())).toEqual([]);
     // Only models marked "ihub" get the watermark chain.
     expect(find(image, 'model.watermark.key')).toBeUndefined();

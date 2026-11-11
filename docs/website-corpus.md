@@ -14,7 +14,8 @@ the user through the steps; the tools also work without it.
 
 1. **Install it.** **Admin → Integrations → Catalog → Website Corpus → Set up integration.** It is a
    singleton: one installation, `website-corpus`. Its settings are **Most pages per corpus**
-   (default 3,000, at most 10,000) and **Allow company-internal websites** (off by default, see
+   (default 3,000, at most 10,000), **Parallel requests per crawl** and **Pause between requests (ms)**
+   (how fast the sites are fetched, see [What it will and will not fetch](#what-it-will-and-will-not-fetch)), and **Allow company-internal websites** (off by default, see
    [Internal websites](#internal-websites)).
 2. **Grant it.** Add `website-corpus` to `permissions.integrations` of the groups that may use it
    (see [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration)).
@@ -43,7 +44,7 @@ sixth, `website_corpus_request_domain`, creates a request for an admin (`sideEff
 | -------------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `website_corpus_discover`  | `discover_site` | Reads robots.txt and the sitemaps, keeps the pages on the site under an optional path prefix (`/de/`), starts a corpus and lists the sections |
 | `website_corpus_outline`   | `outline_pages` | Shows the structure of up to three pages and marks what looks like boilerplate (breadcrumbs, cookie banners, teaser sliders)          |
-| `website_corpus_crawl`     | `crawl_pages`   | Fetches the next batch of pages (30 by default, at most 60) and keeps their main text; call it until it reports `done`                |
+| `website_corpus_crawl`     | `crawl_pages`   | Fetches the next batch of pages (60 by default, at most 100; a call stops starting pages after about 22 seconds and reports how many remain) and keeps their main text; call it until it reports `done`                |
 | `website_corpus_page_text` | `read_page_text`| The kept text of one page, for a spot-check against the live page                                                                     |
 | `website_corpus_report`    | `corpus_report` | Computes the numbers and returns the report as Markdown                                                                               |
 | `website_corpus_request_domain` | `request_domain` | Asks an admin to allow a company-internal host that the discovery was refused for; see [Internal websites](#internal-websites)    |
@@ -85,7 +86,11 @@ numbers matter, check the method named in the report.
   or port is ignored, and a redirect that leads there is not followed: nothing is sent to it.
 - The site's `robots.txt` is honored (`User-agent: *` rules). Pages it forbids are counted as
   blocked and never fetched.
-- Requests to sites are throttled across all workers: two at a time, 400 ms apart.
+- Requests to sites are throttled across all workers. The installation settings **Parallel requests
+  per crawl** (default 4, 1 to 16) and **Pause between requests (ms)** (default 400, 0 to 5000) set
+  how many pages are fetched at once and how long a finished request waits before the next one may
+  start. The limit is shared by all crawls on the server, not per user. A change applies to the next
+  batch, without a restart. Raise it only for sites you own or may load that heavily.
 - Only HTML is kept. PDFs and other files in a sitemap are counted as "not HTML".
 - A sitemap that lists more pages than **Most pages per corpus** is refused; the user narrows the
   scope with a path prefix.
@@ -153,7 +158,9 @@ namespace, one document per host, until an admin removes them.
 | Limit                              | Value                                            |
 | ---------------------------------- | ------------------------------------------------ |
 | Pages per corpus                   | 3,000 by default; **Most pages per corpus**, at most 10,000 |
-| Pages per crawl call               | 30 by default, 60 at most; a call stops starting pages after 22 seconds |
+| Pages per crawl call               | 60 by default, 100 at most; a call stops starting pages after 22 seconds |
+| Parallel requests                  | 4 by default; **Parallel requests per crawl**, 1 to 16 |
+| Pause between requests             | 400 ms by default; **Pause between requests (ms)**, 0 to 5000 |
 | Corpora per user                   | 5                                                |
 | Retention                          | 14 days                                          |
 | Near-duplicate pairs listed        | 25 (the report gives the total; counting stops after 3,000 candidate pairs, and the report then says "at least") |

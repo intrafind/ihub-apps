@@ -22,7 +22,6 @@ export const PROVENANCE_DEFAULTS = Object.freeze({
   storeRecords: true,
   verifyAccess: 'authenticated',
   maxVerifyBytes: 50 * MIB,
-  recordTts: true,
   readC2pa: true,
   alpha: 1e-4,
   minScoredTokens: 200,

@@ -1,19 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { acknowledgeAi, fetchMyAiAcknowledgement } from '../../api';
 import AiAcknowledgementDialog from '../../features/chat/components/AiAcknowledgementDialog';
 import { openExternalUrl } from '../../utils/externalNavigation';
+import AiAcknowledgementContext from './aiAcknowledgementContextValue';
 import { useOptionalAuth } from './authContextValue';
 import { useUIConfig } from './UIConfigContext';
 
@@ -21,8 +14,6 @@ const DISCLAIMER_STORAGE_KEY = 'ihub-disclaimer-acknowledged';
 const DISCLAIMER_CLOSED_EVENT = 'ihub-disclaimer-closed';
 const DISMISSED_KEY = 'ihub-ai-ack-dismissed';
 const CHANNEL_NAME = 'ihub-ai-ack';
-
-const AiAcknowledgementContext = createContext(null);
 
 function readSession(key) {
   try {
@@ -255,10 +246,15 @@ export function AiAcknowledgementProvider({
     // The server says it is needed, whatever this tab believed.
     const data = await load();
     if (data && data.enabled && data.acknowledged) return true;
-    if (data && !data.enabled) return true;
+    if (data && !data.enabled) return true; // switched off meanwhile
+    // Nothing to show: settle the waiting send as declined instead of opening a dialog
+    // that cannot render. It renders with a notice, or, when none was ever loaded and
+    // the load just failed, as the "could not load" state with Try again.
+    const canRender = Boolean(stateRef.current?.enabled) || (!stateRef.current && active);
+    if (!data && !canRender) return false;
     setState(prev => (prev ? { ...prev, acknowledged: false } : prev));
     return openDialog(true);
-  }, [load, openDialog]);
+  }, [active, load, openDialog]);
 
   /**
    * Run a request that starts an LLM turn (a workflow, say) behind the gate:
@@ -275,7 +271,8 @@ export function AiAcknowledgementProvider({
       try {
         return await fn();
       } catch (err) {
-        const code = err?.code || err?.response?.data?.code;
+        // The API's code first: Axios sets its own `code` (ERR_BAD_REQUEST) on an HTTP 428.
+        const code = err?.response?.data?.code || err?.code;
         if (code !== 'AI_ACKNOWLEDGEMENT_REQUIRED') throw err;
         if (!(await handleAcknowledgementRequired())) return undefined;
         return await fn();
@@ -424,13 +421,3 @@ export function AiAcknowledgementProvider({
     </AiAcknowledgementContext.Provider>
   );
 }
-
-/**
- * The acknowledgement gate, or `null` outside the provider (an embedded host,
- * a test): the caller then simply does not gate and the server decides.
- */
-export function useAiAcknowledgement() {
-  return useContext(AiAcknowledgementContext);
-}
-
-export default AiAcknowledgementContext;

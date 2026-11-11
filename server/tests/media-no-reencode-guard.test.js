@@ -58,9 +58,4 @@ describe('no image or audio codec on the generated-media path', () => {
     const shares = readFileSync(path.join(serverRoot, 'routes/chatShares.js'), 'utf8');
     assert.match(shares, /const body = artifact\.data;[\s\S]{0,1200}res\.send\(body\)/);
   });
-
-  it('the TTS route writes the provider PCM unchanged and hashes what it wrote', () => {
-    const voice = readFileSync(path.join(serverRoot, 'routes/voiceRoutes.js'), 'utf8');
-    assert.match(voice, /pcmHash\.update\(pcm\);[\s\S]{0,120}writeWithBackpressure\(res, pcm\)/);
-  });
 });

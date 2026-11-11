@@ -8,7 +8,6 @@
  *
  * Provider name: "iassistant-conversation"
  */
-import { appendRuleToText } from '../services/provenance/guardrail.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import iFinderTokenProvider from '../services/integrations/iFinderTokenProvider.js';
 import conversationApiService from '../services/integrations/ConversationApiService.js';
@@ -194,9 +193,7 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         appConfig.ephemeral ?? options.appConfig?.ephemeral ?? modelConfig.ephemeral ?? false,
       groundedOnly,
       extraContext: composeExtraContext(extraContext, groundedOnly),
-      // The conversation API never sees iHub's system message, so the AI
-      // disclosure rule (Art. 50(1)) travels in the preamble instead.
-      systemPromptPreamble: appendRuleToText(systemPromptPreamble)
+      systemPromptPreamble
     };
   }
 

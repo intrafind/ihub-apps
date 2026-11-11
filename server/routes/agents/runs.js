@@ -649,6 +649,7 @@ export default function registerAgentRunRoutes(app) {
     buildServerPath('/api/agents/runs/:runId/_resume'),
     authRequired,
     authenticatedOnly,
+    aiAcknowledgementRequired,
     async (req, res) => {
       try {
         const { runId } = req.params;

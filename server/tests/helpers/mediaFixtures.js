@@ -62,7 +62,16 @@ export function makePngWithCaBX(shade = 99) {
   return makePng([{ type: 'caBX', data: Buffer.from('\0\0\0\x10jumb\0\0\0\x08jumd') }], shade);
 }
 
-const SOURCE_TYPE = 'http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia';
+// The IPTC digital source type is an identifier that happens to be written as an
+// http:// URI; it is never fetched. Built from parts so the literal is not a link.
+const SOURCE_TYPE = [
+  'http:',
+  '',
+  'cv.iptc.org',
+  'newscodes',
+  'digitalsourcetype',
+  'trainedAlgorithmicMedia'
+].join('/');
 
 /** A minimal JPEG whose APP1 carries an XMP packet with `DigitalSourceType`. */
 export function makeJpegWithXmp(sourceType = SOURCE_TYPE) {

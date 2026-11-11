@@ -22,7 +22,7 @@ import {
 
 const { readC2pa, C2PA_READER_CONTEXT } = await import('../services/provenance/c2paReader.js');
 const { detectC2paPresence } = await import('../services/provenance/c2paPresence.js');
-const { sniffMedia, wavPayload } = await import('../services/provenance/mediaSniff.js');
+const { sniffMedia } = await import('../services/provenance/mediaSniff.js');
 const { buildMediaRecord, declaredMarking, hashBytes, stampGeneratedImage } =
   await import('../services/provenance/mediaMarking.js');
 
@@ -143,13 +143,6 @@ describe('sniffMedia', () => {
     expect(sniffMedia(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"></svg>'))).toBeNull();
     expect(sniffMedia(Buffer.from('<html><body>hello world</body></html>'))).toBeNull();
     expect(sniffMedia(Buffer.from('just some plain text here'))).toBeNull();
-  });
-
-  test('wavPayload returns the data chunk, also after extra chunks', () => {
-    const pcm = makePcm(0.05);
-    expect(wavPayload(makeWav(pcm)).equals(pcm)).toBe(true);
-    expect(wavPayload(makeWavWithC2pa(pcm)).equals(pcm)).toBe(true);
-    expect(wavPayload(makePng())).toBeNull();
   });
 });
 

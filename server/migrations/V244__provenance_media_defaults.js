@@ -6,13 +6,13 @@
  * EU AI Act Art. 50(2))
  *
  * `config/platform.json`: `provenance.media` — uploads to the verify endpoint up
- * to 50 MiB, one record per text-to-speech response, C2PA manifests read.
+ * to 50 MiB, C2PA manifests read.
  * Values the admin already set are kept.
  *
- * Models are not touched on purpose: `contentMarking.image` / `.audio` stay
- * absent (= "none") until an operator declares what the provider embeds in a
- * written statement. A Google image or TTS model is never preset as
- * SynthID-marked from its provider name.
+ * Models are not touched on purpose: `contentMarking.image` stays absent
+ * (= "none") until an operator declares what the provider embeds in a written
+ * statement. A Google image model is never preset as SynthID-marked from its
+ * provider name.
  */
 
 export const version = '244';
@@ -25,8 +25,7 @@ export async function precondition(ctx) {
 export async function up(ctx) {
   const platform = await ctx.readJson('config/platform.json');
   ctx.setDefault(platform, 'provenance.media.maxVerifyBytes', 52428800);
-  ctx.setDefault(platform, 'provenance.media.recordTts', true);
   ctx.setDefault(platform, 'provenance.media.readC2pa', true);
   await ctx.writeJson('config/platform.json', platform);
-  ctx.log('Provenance media defaults written (50 MiB uploads, TTS records on, C2PA read on)');
+  ctx.log('Provenance media defaults written (50 MiB uploads, C2PA read on)');
 }

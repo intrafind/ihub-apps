@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { atomicWriteJSON } from './atomicWrite.js';
+import { withFileLock } from './fileLock.js';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { announceConfigChange } from '../configSync.js';
@@ -235,7 +236,7 @@ export async function saveUsers(usersConfig, usersFilePath) {
  * @returns {Promise<boolean>} Whether the file was written
  */
 async function updateUsersFile(usersFilePath, change) {
-  const { cacheKey, relPath } = locateUsersFile(usersFilePath);
+  const { fullPath, cacheKey, relPath } = locateUsersFile(usersFilePath);
   const apply = current => {
     const usersConfig = current && typeof current === 'object' ? current : {};
     if (!usersConfig.users || typeof usersConfig.users !== 'object') usersConfig.users = {};
@@ -246,10 +247,18 @@ async function updateUsersFile(usersFilePath, change) {
   };
 
   if (!relPath) {
-    const usersConfig = await loadUsersFresh(usersFilePath);
-    if (change(usersConfig) === false) return false;
-    await saveUsers(usersConfig, usersFilePath);
-    return true;
+    // A file outside contents/ has no compare-and-set: the read, the change and the
+    // write run under a lock file, so two confirmations at once both land.
+    return await withFileLock(
+      `${fullPath}.lock`,
+      async () => {
+        const usersConfig = await loadUsersFresh(usersFilePath);
+        if (change(usersConfig) === false) return false;
+        await saveUsers(usersConfig, usersFilePath);
+        return true;
+      },
+      { component: 'UserManager' }
+    );
   }
 
   const { data, written } = await configStore.updateJson(relPath, apply);

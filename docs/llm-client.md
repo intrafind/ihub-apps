@@ -261,14 +261,15 @@ before the request is built. It is the only place it is added, so chat, the infe
 workflows and scheduled tasks all get it. See [EU AI Act](ai-act.md).
 
 - **Where.** The rule is the last text of the **first** system message (the only one every provider adapter
-  keeps; Anthropic drops later ones). A system message is created when there is none. Array content gets a
+  keeps; Anthropic drops later ones). When there are several system messages the **last** one ends with the
+  rule too, for adapters that forward them all. A system message is created when there is none. Array content gets a
   text part. It is idempotent, and the caller's `messages` are never mutated; the run log and usage
   estimate see what was really sent.
+- **iAssistant.** The `iassistant-conversation` adapter discards the system message, so the rule does not reach
+  that provider through it.
 - **Which models.** Chat models only; image, speech and embedding models are left alone.
-- **No off switch.** There is no setting, request field or environment variable. Only tests construct an
+- **Wording, not an off switch.** An admin can reword the rule platform-wide (`aiDisclosure.guardrail.text`, read on every call; empty = built-in). There is no setting, request field or environment variable that turns it off. Only tests construct an
   `LLMClient` with `guardrail: null` so unrelated message snapshots stay valid.
-- **iAssistant.** The `iassistant-conversation` provider never sends iHub's system message, so the rule is
-  appended to its `system_prompt_preamble` instead.
 - **Invariant.** A test fails when code outside `LLMClient` and `adapters/` calls `createCompletionRequest`.
 
 ## Testing

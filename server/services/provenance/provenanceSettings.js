@@ -12,9 +12,8 @@
  * - `verify.access` (default `authenticated`): `public` lets third parties call
  *   `POST /api/provenance/_verify` without signing in.
  * - `media` (#3328): `maxVerifyBytes` (default 50 MiB) caps an uploaded image or
- *   audio file, `recordTts` (default true) writes one record per TTS response,
- *   `readC2pa` (default true) reads the C2PA manifest of generated images and
- *   uploads.
+ *   audio file, `readC2pa` (default true) reads the C2PA manifest of generated
+ *   images and uploads.
  *
  * @module services/provenance/provenanceSettings
  */
@@ -27,7 +26,7 @@ export const DEFAULT_MAX_VERIFY_BYTES = 50 * 1024 * 1024;
 
 /**
  * @param {Object} [platform] - Platform config; default the cached one.
- * @returns {{storeRecords: boolean, retentionDays: number, verify: {access: 'authenticated'|'public'}, media: {maxVerifyBytes: number, recordTts: boolean, readC2pa: boolean}}}
+ * @returns {{storeRecords: boolean, retentionDays: number, verify: {access: 'authenticated'|'public'}, media: {maxVerifyBytes: number, readC2pa: boolean}}}
  */
 export function provenanceSettings(platform = configCache.getPlatform() || {}) {
   const raw = platform?.provenance || {};
@@ -42,7 +41,6 @@ export function provenanceSettings(platform = configCache.getPlatform() || {}) {
         Number.isFinite(maxVerifyBytes) && maxVerifyBytes > 0
           ? Math.floor(maxVerifyBytes)
           : DEFAULT_MAX_VERIFY_BYTES,
-      recordTts: raw.media?.recordTts !== false,
       readC2pa: raw.media?.readC2pa !== false
     }
   };

@@ -61,7 +61,7 @@ the hash of the final step's text, so a user who copied only the final answer st
 
 | Channel | Where |
 | --- | --- |
-| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. |
+| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens model, time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (stopped, or stored before this feature) shows no button. |
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |
 | MCP | `_meta.provenance` on an app or workflow `tools/call` result. |
 | A2A | `metadata.provenance` on the Task and on the response artifact. |
@@ -107,7 +107,7 @@ proof of human authorship.
   "retentionDays": 365,
   "storeRecords": true,
   "verify": { "access": "authenticated" },
-  "media": { "maxVerifyBytes": 52428800, "recordTts": true, "readC2pa": true }
+  "media": { "maxVerifyBytes": 52428800, "readC2pa": true }
 }
 ```
 
@@ -115,7 +115,6 @@ proof of human authorship.
 - `storeRecords`: `false` still attaches the object everywhere but keeps no records, so nothing can be looked up.
 - `verify.access`: `authenticated` (default) or `public`.
 - `media.maxVerifyBytes`: largest image or audio file `_verify` accepts (default 50 MiB, `413` above).
-- `media.recordTts`: one record per read-aloud response (default on). A long answer is read in several requests, so it can leave several small records; set `false` to keep none.
 - `media.readC2pa`: read the C2PA manifest of generated images and uploaded files (default on).
 
 Edit these in `platform.json`; migrations V243 and V244 write the defaults.
@@ -135,9 +134,9 @@ set `storeRecords` to `false` if that is not acceptable.
 one to two million records, and the daily sweep reads every document; a retention below 365 days lowers the
 bound. A database provider answers the lookup and the sweep natively.
 
-## Images and audio: provider marks (#3328)
+## Images: provider marks (#3328)
 
-iHub applies **no mark of its own** to images and audio. The providers do: Gemini images carry SynthID in
+iHub applies **no mark of its own** to images. The providers do: Gemini images carry SynthID in
 the pixels, and some models (OpenAI gpt-image, Google models on Vertex) also embed a C2PA manifest. What iHub
 does is (1) not destroy that mark, (2) record what the provider claims, (3) let anyone ask whether a file came
 from this installation and what marks it carries.
@@ -166,7 +165,7 @@ PNG over the artifact cap is recorded, sent and not stored), and on every channe
 MCP, A2A). The SSE image delta carries `provenance: { outputId, contentHash }`; the stored message descriptor
 carries `outputId`; the MCP image block carries `_meta.provenance`; the A2A artifact `metadata.provenance`.
 
-A media record is the usual provenance object with `kind: "image"` or `"audio"`, `content_hash.normalization:
+A media record is the usual provenance object with `kind: "image"`, `content_hash.normalization:
 "none"` (the hash is over the raw bytes, not the base64 text), `content_hash.bytes` and `mime_type`, plus:
 
 ```json
@@ -183,19 +182,10 @@ A media record is the usual provenance object with `kind: "image"` or `"audio"`,
   `null` (no manifest). `valid` means the signature and its binding to the file's bytes check out.
   **Trust is never evaluated**: a valid signature from an unknown signer is still `valid`, and the result
   always says `trust: "not-evaluated"`. It never says "authentic".
-- `declared` is what **you** declared for the model (`contentMarking.image` / `.audio`, see
-  [Models](models.md#output-marking-contentmarking)), never something iHub detected. SynthID has no public
+- `declared` is what **you** declared for the model (`contentMarking.image`, set in **Admin → Models**
+  under *Image marking*, see [Models](models.md#output-marking-contentmarking)), never something iHub detected. SynthID has no public
   detector: iHub can say "declared", never "there is no SynthID".
 - A record never holds the picture or audio.
-
-### Text-to-speech
-
-Read aloud streams headerless `pcm_s16le` and never stores it. The response carries `X-AI-Generated: true` and
-`X-AI-Content-Id`, and one record holds the SHA-256 of exactly the PCM streamed plus
-`container: { encoding, sample_rate, channels }`. A raw stream has no container, so no C2PA or XMP can ride
-along; any mark the provider applies is in the signal. A record exists only for a stream that finished (an
-aborted one has no complete clip). Whether such ephemeral speech needs a record at all is a legal question
-(Art. 50 guidelines, real-time content): `provenance.media.recordTts: false` turns it off.
 
 ### Verifying a file
 
@@ -225,8 +215,7 @@ curl -b cookies.txt -F "file=@picture.png" https://ihub.example.com/api/provenan
 
 - A miss is a `200` with `found: false` and no `records`; the `c2pa` read is still there, so a file generated
   elsewhere gets its manifest read. `caveats` then also holds `absence-is-not-proof`.
-- A WAV file also matches by the hash of its PCM `data` chunk (`contentHash.payloadValue`), so a clip a user
-  wrapped in a WAV header still finds the read-aloud record. An MP3 or other re-encoded clip never matches.
+- Only generated images have records. An audio file gets its C2PA read and never a hash hit.
 - `technique` names what produced evidence: `hash-lookup`, `metadata` (a C2PA manifest or XMP source type).
 - `synthid` is `declared-not-detectable` when a matching record declares SynthID, else `not-detectable`.
 - The type comes from the bytes (PNG, JPEG, WebP, GIF, BMP, TIFF, HEIC, AVIF; WAV, MP3, FLAC, OGG, M4A). SVG

@@ -7,7 +7,6 @@ import { DataTable } from '../../admin/components/data-table';
 import {
   aiAccessOf,
   hasDocumentActions,
-  isEditableItem,
   isItemReadable,
   kindIcon,
   localizedText
@@ -40,9 +39,35 @@ function isRetryable(item) {
 }
 
 /**
- * The items of a project with their status, a pinned toggle and the actions
- * that fit the status: preview the text, retry a failed picked item, refresh a
- * stale or picked one, rename, remove. The admin project editor and the user
+ * What an item is for the AI when it is not the default: a pinned item is always
+ * in the prompt, a "Not for AI" one is never given to the model. A normal item
+ * shows nothing. The setting itself is changed in the edit dialog.
+ */
+function AiAccessBadge({ item }) {
+  const { t } = useTranslation();
+  const state = aiAccessOf(item);
+  if (state === 'normal') return null;
+  const excluded = state === 'excluded';
+  return (
+    <span
+      className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+        excluded
+          ? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200'
+          : 'bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300'
+      }`}
+    >
+      {excluded
+        ? t('projects.items.aiAccess.excluded', 'Not for AI')
+        : t('projects.items.aiAccess.pinned', 'Pinned')}
+    </span>
+  );
+}
+
+/**
+ * The items of a project with their status and the actions that fit it:
+ * preview the text, retry a failed picked item, refresh a stale or picked one,
+ * edit (the name, "For the AI" and the reference of a link), remove. The admin
+ * project editor and the user
  * project page share it; a reader (`readOnly`) sees the items and may preview
  * them, nothing else.
  *
@@ -53,10 +78,6 @@ function isRetryable(item) {
  * @param {Array<{id: string, name: Object}>} props.kinds - For the kind labels.
  * @param {string|null} [props.busyItemId] - The item an action is running on.
  * @param {boolean} [props.readOnly=false] - Hide every action that changes an item.
- * @param {boolean} [props.hidePinned=false] - Leave out the pinned column (a project whose
- *   items cannot be pinned, such as a smart collection from iFinder).
- * @param {(item: Object, state: 'normal'|'pinned'|'excluded') => void} [props.onSetAiAccess] -
- *   Pinned, normal or "Not for AI": three states of one setting (#3538).
  * @param {(item: Object) => void} [props.onPreview]
  * @param {(action: 'previewDocument'|'download'|'details'|'open', item: Object) => void} [props.onDocumentAction] -
  *   The document actions of an iFinder document (`ProjectItemDocumentActions.jsx`);
@@ -65,9 +86,9 @@ function isRetryable(item) {
  *   refresh (stale, picked).
  * @param {(item: Object) => void} [props.onSchedule] - Set the refresh TTL of a file
  *   from a website or a web page.
- * @param {(item: Object) => void} [props.onRename]
- * @param {(item: Object) => void} [props.onEdit] - Change what a link item points at
- *   (offered for the kinds of `EDITABLE_ITEM_KINDS`; it covers the name too).
+ * @param {(item: Object) => void} [props.onEdit] - Change an item's name, its "For the AI"
+ *   setting (pinned, normal or "Not for AI": three states of one setting, #3538) and,
+ *   for a link item, what it points at (the kinds of `EDITABLE_ITEM_KINDS`).
  * @param {(item: Object) => void} [props.onRemove]
  * @param {(item: Object) => void} [props.onTransfer] - Move or copy into another project.
  * @param {Set<string>} [props.selectedIds] - With `onSelectionChange`, a checkbox column
@@ -82,13 +103,10 @@ function ProjectItemsTable({
   kinds,
   busyItemId = null,
   readOnly = false,
-  hidePinned = false,
-  onSetAiAccess,
   onPreview,
   onDocumentAction,
   onRefresh,
   onSchedule,
-  onRename,
   onEdit,
   onRemove,
   onTransfer,
@@ -171,6 +189,7 @@ function ProjectItemsTable({
           {item.ref?.url && (
             <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.ref.url}</div>
           )}
+          <AiAccessBadge item={item} />
           <ItemProvenance provenance={item.provenance} item={item} className="mt-0.5" />
           {item.refresh && (
             <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
@@ -195,40 +214,7 @@ function ProjectItemsTable({
             render: item => <ItemEstimate estimate={estimates[item.id]} />
           }
         ]
-      : []),
-    ...(hidePinned
-      ? []
-      : [
-          {
-            key: 'pinned',
-            header: t('projects.items.columns.aiAccess', 'For the AI'),
-            width: 'w-36',
-            render: item => {
-              const state = aiAccessOf(item);
-              return (
-                <select
-                  value={state}
-                  disabled={!canChange(onSetAiAccess) || busyItemId === item.id}
-                  onChange={event => onSetAiAccess(item, event.target.value)}
-                  aria-label={t('projects.items.aiAccessFor', 'Use of {{name}} by the AI', {
-                    name: item.name
-                  })}
-                  title={t(
-                    'projects.items.aiAccessHint',
-                    'Pinned items are always in the prompt. "Not for AI" items stay in the project for people but are never given to the model, listed or searched.'
-                  )}
-                  className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-md px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-                >
-                  <option value="normal">{t('projects.items.aiAccess.normal', 'Normal')}</option>
-                  <option value="pinned">{t('projects.items.aiAccess.pinned', 'Pinned')}</option>
-                  <option value="excluded">
-                    {t('projects.items.aiAccess.excluded', 'Not for AI')}
-                  </option>
-                </select>
-              );
-            }
-          }
-        ])
+      : [])
   ];
 
   const actions = [
@@ -282,20 +268,11 @@ function ProjectItemsTable({
       onClick: item => onSchedule(item)
     },
     {
-      id: 'rename',
-      label: t('projects.items.actions.rename', 'Rename'),
-      icon: 'pencil',
-      // An item that can be edited changes its name there.
-      hidden: item => !canChange(onRename) || (canChange(onEdit) && isEditableItem(item)),
-      disabled: item => busyItemId === item.id,
-      onClick: item => onRename(item)
-    },
-    {
       id: 'edit',
       label: t('projects.items.actions.edit', 'Edit'),
       icon: 'pencil',
       priority: 'primary',
-      hidden: item => !canChange(onEdit) || !isEditableItem(item),
+      hidden: () => !canChange(onEdit),
       disabled: item => busyItemId === item.id,
       onClick: item => onEdit(item)
     },

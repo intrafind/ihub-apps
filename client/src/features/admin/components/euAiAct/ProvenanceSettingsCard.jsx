@@ -397,16 +397,6 @@ export default function ProvenanceSettingsCard({ onSaved }) {
               />
             </Field>
             <Checkbox
-              id="provenance-recordTts"
-              checked={form.recordTts}
-              onChange={recordTts => set({ recordTts })}
-              label={t('admin.euAiAct.settings.recordTts', 'Record read-aloud audio')}
-              help={t(
-                'admin.euAiAct.settings.recordTtsHelp',
-                'One record per spoken answer, so the audio can be checked later. Default: on.'
-              )}
-            />
-            <Checkbox
               id="provenance-readC2pa"
               checked={form.readC2pa}
               onChange={readC2pa => set({ readC2pa })}

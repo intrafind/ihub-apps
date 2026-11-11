@@ -8,7 +8,7 @@ the landing page for the measures; it is not legal advice.
 | Art. 50(1): people know they are dealing with an AI | The assistant always says it is an AI when asked and never claims to be human, even in a role. A notice in the empty chat says so before the first message. | Review the notice text; keep it on unless an app is clearly not a chat. |
 | Art. 4: AI literacy, "can you show that people were told?" | A dialog before the first message asks users to confirm an AI-use statement. The confirmation is stored with the user and in the audit log. | Write the statement and the policy link; export the list when an auditor asks. |
 
-| Art. 50(2): output is marked and can be checked | Every output carries a machine-readable provenance object and gets a record (a hash, never the text), so "did this exact text come from here?" can be answered. | Declare which models are marked by their provider; set the retention; decide who may call the lookup. Images and audio keep the provider's own marks (C2PA, SynthID) untouched, are recorded, and can be checked by upload; see [Provenance Records](provenance.md#images-and-audio-provider-marks-3328). |
+| Art. 50(2): output is marked and can be checked | Every output carries a machine-readable provenance object and gets a record (a hash, never the text), so "did this exact text come from here?" can be answered. | Declare which models are marked by their provider; set the retention; decide who may call the lookup. Generated images keep the provider's own marks (C2PA, SynthID) untouched, are recorded, and can be checked by upload; see [Provenance Records](provenance.md#images-provider-marks-3328). |
 
 Further marking measures are added to this page as they ship.
 
@@ -21,9 +21,15 @@ Every call to a text model carries this rule as the last text of the system prom
 - **All channels.** It is added in `LLMClient.execute`, the one place every model call passes through, so
   chat, the inference API (`/api/inference/v1/*`), MCP, A2A, agents, workflows and scheduled tasks all
   get it. See [LLM Client](llm-client.md#ai-disclosure-guardrail).
-- **Not overridable.** There is no app setting, platform setting, request field or environment variable
-  that switches it off. An app prompt or a client-supplied `system` message cannot remove it: the rule is
-  appended after them.
+- **Wording is global, the rule is not optional.** An admin can reword it for the whole platform in
+  `aiDisclosure.guardrail.text` (`platform.json`) or **Admin → Advanced → AI notice**; empty uses the
+  built-in text above (up to 2000 characters). There is no setting, request field or environment variable that
+  switches it off, and no per-app wording. An app prompt or a client-supplied `system` message cannot remove it:
+  the rule is appended after them. A reworded rule still has to say that the assistant is an AI and never
+  claims to be human; iHub does not check that.
+- **iAssistant.** The `iassistant-conversation` provider does not use iHub's system message (its adapter
+  sends only the last user message), so the rule does not reach it that way; iAssistant handles its own
+  disclosure.
 - **A reduction, not a guarantee.** A model can still ignore a prompt rule in a strong role-play. Check
   the models you use with the question "Are you a human?".
 
@@ -41,7 +47,7 @@ Answers can be wrong, so please check important information.*
   use the platform notice (no key), a custom `text`, or `enabled: false` for this app. The platform switch
   wins: an app cannot turn the notice on when the platform has it off.
 - **Shown in:** the app chat (also above a start form). Not shown for apps that start by themselves
-  (`autoStart`), in the Office add-in panel or for `iframe` and `redirect` apps; the guardrail applies to
+  (`autoStart`), in the Office add-in panel, in compare mode or for `iframe` and `redirect` apps; the guardrail applies to
   all model calls regardless.
 
 ```json
@@ -63,7 +69,7 @@ that people were told, not a legal opinion: the wording is yours.
   admin actions, never by a settings save.
 - **What is stored.** On the user in `users.json`: `aiAcknowledgements: [{ version, textHash,
   acknowledgedAt, language }]`, one entry per version. `textHash` is the SHA-256 of the exact text the user
-  saw in that `language`, so the wording can be shown later even after the text changed. Every confirmation
+  saw in that `language`. It proves that a stored text is the one that was shown, but it cannot bring back wording that was changed or removed: keep a copy of each version's text (for example in your change history) if you need to show it later. Every confirmation
   and every admin action is also an audit entry (`resource: aiAcknowledgement`).
 - **Enforcement.** One middleware answers `428` with `code: AI_ACKNOWLEDGEMENT_REQUIRED`
   (`application/problem+json`) before any side effect on: the chat message
@@ -136,7 +142,6 @@ it; "Not found" only means there is no record, not that a person wrote it.
   | `provenance.storeRecords` | true | on/off | Off still attaches the provenance object but keeps no record. |
   | `provenance.verify.access` | `authenticated` | `authenticated`, `public` | Who may call `POST /api/provenance/_verify`. |
   | `provenance.media.maxVerifyBytes` | 52428800 (50 MiB) | 1024 bytes to 1 GiB | Largest uploaded file; the form shows MiB. |
-  | `provenance.media.recordTts` | true | on/off | One record per read-aloud answer. |
   | `provenance.media.readC2pa` | true | on/off | Read C2PA marks of images. |
   | `provenance.watermark.alpha` | 0.0001 | above 0, below 1 | False-positive limit of the text detector. |
   | `provenance.watermark.minScoredTokens` | 200 | 1 to 100000 | Shorter texts are "too short to tell". |
@@ -187,8 +192,12 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
   (text), C2PA (media), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion",
   never "not watermarked".
 
+<<<<<<< HEAD
 The other two platform settings of this feature have forms of their own on **Admin → Advanced**: the first-turn
 notice (`aiDisclosure`) and the AI-use acknowledgement (`aiAcknowledgement`).
 
 Image and audio marking is declared per model in the model editor (*Image and audio marking*).
+=======
+Image marking is declared per model in the model editor (*Image marking*, shown for image-generating models).
+>>>>>>> 44c5f64cd
 

@@ -24,12 +24,35 @@ import { onSite, siteKeyOf } from './urls.js';
 
 /** The throttle queue of every request of the sizer, and its limits. */
 export const CORPUS_THROTTLE_ID = 'website_corpus';
-export const CORPUS_CONCURRENCY = 2;
-export const CORPUS_REQUEST_DELAY_MS = 400;
-registerThrottleHints(CORPUS_THROTTLE_ID, {
-  concurrency: CORPUS_CONCURRENCY,
-  requestDelayMs: CORPUS_REQUEST_DELAY_MS
-});
+export const DEFAULT_CRAWL_CONCURRENCY = 4;
+export const MAX_CRAWL_CONCURRENCY = 16;
+export const DEFAULT_REQUEST_DELAY_MS = 400;
+export const MAX_REQUEST_DELAY_MS = 5000;
+
+const clampLimit = (value, fallback, min, max) => {
+  const number = value === null || value === '' ? NaN : Number(value);
+  return Number.isFinite(number) ? Math.min(max, Math.max(min, Math.trunc(number))) : fallback;
+};
+
+/**
+ * Set how fast the sizer fetches: requests in flight at once, and the pause
+ * after a request before the next one may start. The values come from the
+ * installation's settings and are clamped here, so a typo cannot turn the
+ * crawler into a flood. The throttler reads the hints on every request, so a
+ * changed setting applies to the next batch without a restart.
+ *
+ * @param {{crawlConcurrency?: number, requestDelayMs?: number}} [settings]
+ * @returns {{concurrency: number, requestDelayMs: number}} What is in force now
+ */
+export function configureCorpusThrottle({ crawlConcurrency, requestDelayMs } = {}) {
+  const hints = {
+    concurrency: clampLimit(crawlConcurrency, DEFAULT_CRAWL_CONCURRENCY, 1, MAX_CRAWL_CONCURRENCY),
+    requestDelayMs: clampLimit(requestDelayMs, DEFAULT_REQUEST_DELAY_MS, 0, MAX_REQUEST_DELAY_MS)
+  };
+  registerThrottleHints(CORPUS_THROTTLE_ID, hints);
+  return hints;
+}
+configureCorpusThrottle();
 
 /** Most bytes read of a page, a robots.txt, a sitemap file (also after unzipping). */
 export const MAX_PAGE_BYTES = 2 * 1024 * 1024;

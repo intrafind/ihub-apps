@@ -179,7 +179,7 @@ In the model picker of a web search app, a globe marks the models web search wor
 
 ### Multi-Step Research
 
-A chat turn allows up to 25 tool rounds, so the model can search several times and read the most
+A chat turn allows up to 50 tool rounds, so the model can search several times and read the most
 relevant pages before it answers.
 Models tend to do only what they are asked, though, so when web search is on for a turn the server
 adds a short research instruction to the end of the system prompt:

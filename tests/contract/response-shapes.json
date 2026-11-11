@@ -797,6 +797,9 @@
         "firstTurnNotice": {
           "enabled": "boolean",
           "text": "object"
+        },
+        "guardrail": {
+          "text": "string"
         }
       },
       "anonymousAuth": {
@@ -1016,8 +1019,7 @@
       "provenance": {
         "media": {
           "maxVerifyBytes": "number",
-          "readC2pa": "boolean",
-          "recordTts": "boolean"
+          "readC2pa": "boolean"
         },
         "retentionDays": "number",
         "storeRecords": "boolean",

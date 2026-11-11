@@ -708,6 +708,7 @@ function AppChat({
   }, [fileUploadHandler.selectedFile, selectedModel, models, t]);
 
   const inputRef = useRef(null);
+  const ackSubmitRef = useRef(false);
   const formRef = useRef(null);
   // The chat this page is showing. `/apps/:appId/c/:chatId` names one outright
   // — that is how the history opens a stored conversation — while `/apps/:appId`
@@ -2563,11 +2564,17 @@ function AppChat({
 
     // AI-use acknowledgement (#3326): the user confirms the notice before the
     // first message. Nothing was cleared yet, so Cancel leaves the draft as it is.
-    if (
-      aiAcknowledgement &&
-      !(await aiAcknowledgement.ensureAcknowledged({ hasPendingMessage: true }))
-    ) {
-      return;
+    // A second submit while the dialog is open waits for nothing: one send per confirmation.
+    if (aiAcknowledgement) {
+      if (ackSubmitRef.current) return;
+      ackSubmitRef.current = true;
+      let confirmed = false;
+      try {
+        confirmed = await aiAcknowledgement.ensureAcknowledged({ hasPendingMessage: true });
+      } finally {
+        ackSubmitRef.current = false;
+      }
+      if (!confirmed) return;
     }
 
     // The message is the text that was typed, and nothing else: its files go out as the

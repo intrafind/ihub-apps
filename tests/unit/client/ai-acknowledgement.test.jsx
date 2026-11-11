@@ -35,10 +35,8 @@ jest.mock('../../../client/src/utils/externalNavigation', () => ({
   openExternalUrl: (...args) => mockOpenExternalUrl(...args)
 }));
 
-import {
-  AiAcknowledgementProvider,
-  useAiAcknowledgement
-} from '../../../client/src/shared/contexts/AiAcknowledgementContext';
+import { AiAcknowledgementProvider } from '../../../client/src/shared/contexts/AiAcknowledgementContext';
+import { useAiAcknowledgement } from '../../../client/src/shared/hooks/useAiAcknowledgement';
 
 const notice = (extra = {}) => ({
   enabled: true,
