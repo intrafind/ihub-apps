@@ -47,8 +47,16 @@ test('invariant: no caller or doc uses an old acknowledgement path', () => {
     if (!fs.existsSync(start)) continue;
     for (const file of walk(start)) {
       const rel = path.relative(root, file);
-      // The release notes name the removed paths, as the route check requires.
-      if (rel === SELF || rel.startsWith('docs/releases/')) continue;
+      // The release notes name the removed paths, as the route check requires; the book and the
+      // default documentation source are generated from the docs (they carry the same text).
+      if (
+        rel === SELF ||
+        rel.startsWith('docs/releases/') ||
+        rel.startsWith('docs/book/') ||
+        rel.startsWith('server/defaults/sources/')
+      ) {
+        continue;
+      }
       const text = fs.readFileSync(file, 'utf8');
       text.split('\n').forEach((line, i) => {
         if (OLD_PATHS.some(re => re.test(line))) offenders.push(`${rel}:${i + 1}: ${line.trim()}`);
