@@ -59,6 +59,36 @@
       "max": 10000
     },
     {
+      "key": "crawlConcurrency",
+      "type": "number",
+      "title": {
+        "en": "Parallel requests per crawl",
+        "de": "Parallele Anfragen je Crawl"
+      },
+      "description": {
+        "en": "How many pages the server fetches at the same time, across all crawls. More is faster (an 800-page site takes minutes at 2, well under one minute at 8) and puts more load on the site: raise it only for sites you own or may load that heavily. A change applies to the next batch.",
+        "de": "Wie viele Seiten der Server gleichzeitig lädt, über alle Crawls zusammen. Mehr ist schneller (eine Website mit 800 Seiten braucht bei 2 Minuten, bei 8 deutlich unter einer Minute) und belastet die Website stärker: nur für Websites erhöhen, die Ihnen gehören oder die so stark belastet werden dürfen. Eine Änderung gilt ab dem nächsten Stapel."
+      },
+      "default": 4,
+      "min": 1,
+      "max": 16
+    },
+    {
+      "key": "requestDelayMs",
+      "type": "number",
+      "title": {
+        "en": "Pause between requests (ms)",
+        "de": "Pause zwischen Anfragen (ms)"
+      },
+      "description": {
+        "en": "The pause after a request finishes before the next one may start. 0 turns the pause off. Lower it together with a higher number of parallel requests for sites that can take the load.",
+        "de": "Die Pause, nachdem eine Anfrage beendet ist, bevor die nächste starten darf. 0 schaltet die Pause aus. Zusammen mit mehr parallelen Anfragen senken, wenn die Website die Last verträgt."
+      },
+      "default": 400,
+      "min": 0,
+      "max": 5000
+    },
+    {
       "key": "allowPrivateAddresses",
       "type": "boolean",
       "title": {

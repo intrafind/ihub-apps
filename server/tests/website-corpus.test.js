@@ -869,6 +869,42 @@ describe('WebsiteCorpusService', () => {
     assert.equal(last.crawled + last.failed + last.notHtml + last.blockedByRobots, 6);
   });
 
+  it('fetches as many pages at once as the installation allows', async () => {
+    const site = fakeSite({ pageCount: 20 });
+    let inFlight = 0;
+    let peak = 0;
+    const slowFetch = async (url, options) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      try {
+        return await site.fetchPage(url, options);
+      } finally {
+        inFlight -= 1;
+      }
+    };
+    for (const [crawlConcurrency, expectedPeak] of [
+      [1, 1],
+      [6, 6],
+      // Out of range: clamped to the most the crawler ever uses.
+      [500, 16],
+      // Not a number: the default.
+      ['many', 4]
+    ]) {
+      const { service } = makeService({ ...site, fetchPage: slowFetch });
+      const { corpusId } = await service.discoverSite(
+        { siteUrl: 'https://a.test' },
+        { user: USER }
+      );
+      peak = 0;
+      await service.crawlPages(
+        { corpusId, dropSelector: '' },
+        { user: USER, crawlConcurrency, requestDelayMs: 0 }
+      );
+      assert.equal(peak, Math.min(expectedPeak, 21), `crawlConcurrency ${crawlConcurrency}`);
+    }
+  });
+
   it('refuses a changed selector in the middle of a crawl unless the crawl starts over', async () => {
     const { service } = makeService(fakeSite({ pageCount: 5 }));
     const { corpusId } = await service.discoverSite({ siteUrl: 'https://a.test' }, { user: USER });
