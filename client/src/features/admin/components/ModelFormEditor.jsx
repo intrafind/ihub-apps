@@ -415,6 +415,23 @@ function ModelFormEditor({
     onChange({ ...data, sampling: next });
   };
 
+  // Output marking (EU AI Act Art. 50(2)). Only `none` and `provider` are offered:
+  // `ihub` (own text watermark) is not selectable until that feature exists, so
+  // no model can claim a mark iHub does not apply. Empty optional fields are
+  // dropped because the schema is strict about their shape.
+  const handleMarkingChange = (key, value) => {
+    const current = data.contentMarking?.text || { by: 'none' };
+    let text = key === 'by' ? { by: value } : { ...current, [key]: value };
+    if (key === 'by' && value === 'provider') {
+      text = { ...current, by: 'provider' };
+    }
+    if (text.by !== 'provider') text = { by: text.by };
+    for (const optional of ['scheme', 'statementRef']) {
+      if (text[optional] === '') delete text[optional];
+    }
+    onChange({ ...data, contentMarking: { ...data.contentMarking, text } });
+  };
+
   const handleInputChange = e => {
     const { name, value, type, checked } = e.target;
     handleChange(name, type === 'checkbox' ? checked : value);
@@ -1392,6 +1409,94 @@ function ModelFormEditor({
                             bounds={bounds}
                           />
                         ))}
+                      </div>
+                    </fieldset>
+                  </div>
+                )}
+
+                {isChat && (
+                  <div className="col-span-6">
+                    <fieldset>
+                      <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                        {t('admin.models.sections.marking', 'Output marking')}
+                      </legend>
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.models.hints.marking',
+                          'Whether this model marks the text it generates as AI generated. Choose "Provider marks the output" only when the provider confirmed that in writing; iHub cannot check it. Every output still gets a provenance record, whatever you choose here.'
+                        )}
+                      </p>
+                      <div className="mt-4 grid grid-cols-6 gap-6">
+                        <div className="col-span-6 sm:col-span-2">
+                          <label
+                            htmlFor="contentMarking.text.by"
+                            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                          >
+                            {t('admin.models.fields.markingBy', 'Marking')}
+                          </label>
+                          <select
+                            id="contentMarking.text.by"
+                            value={data.contentMarking?.text?.by || 'none'}
+                            onChange={e => handleMarkingChange('by', e.target.value)}
+                            className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          >
+                            <option value="none">
+                              {t('admin.models.marking.optionNone', 'Not marked')}
+                            </option>
+                            <option value="provider">
+                              {t(
+                                'admin.models.marking.optionProvider',
+                                'Provider marks the output'
+                              )}
+                            </option>
+                          </select>
+                        </div>
+                        {data.contentMarking?.text?.by === 'provider' && (
+                          <>
+                            <div className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor="contentMarking.text.scheme"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t('admin.models.fields.markingScheme', 'Scheme')}
+                              </label>
+                              <input
+                                id="contentMarking.text.scheme"
+                                type="text"
+                                maxLength={64}
+                                value={data.contentMarking?.text?.scheme || ''}
+                                onChange={e => handleMarkingChange('scheme', e.target.value)}
+                                placeholder="synthid"
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                            </div>
+                            <div className="col-span-6 sm:col-span-2">
+                              <label
+                                htmlFor="contentMarking.text.statementRef"
+                                className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                              >
+                                {t(
+                                  'admin.models.fields.markingStatementRef',
+                                  'Statement reference'
+                                )}
+                              </label>
+                              <input
+                                id="contentMarking.text.statementRef"
+                                type="text"
+                                maxLength={500}
+                                value={data.contentMarking?.text?.statementRef || ''}
+                                onChange={e => handleMarkingChange('statementRef', e.target.value)}
+                                className="mt-1 block w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs py-2 px-3 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                              />
+                              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                {t(
+                                  'admin.models.hints.markingStatementRef',
+                                  "A document name or URL of the provider's written statement. It is only kept as a reference, never opened."
+                                )}
+                              </p>
+                            </div>
+                          </>
+                        )}
                       </div>
                     </fieldset>
                   </div>

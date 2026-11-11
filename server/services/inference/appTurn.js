@@ -207,7 +207,8 @@ export async function executeAppTurn({
   onAttemptRejected = null,
   persistence = null,
   timeoutMs,
-  getLocalizedError
+  getLocalizedError,
+  outputId
 }) {
   const { prep, app, model, format } = prepared;
   const checked = validate && format;
@@ -240,7 +241,8 @@ export async function executeAppTurn({
     user,
     runId,
     persistence,
-    structuredOutput
+    structuredOutput,
+    ...(outputId ? { outputId } : {})
   });
   if (format) {
     const verdict = outcome.structuredOutput;

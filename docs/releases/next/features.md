@@ -1647,3 +1647,26 @@ language) and in the audit log, so you can answer "who confirmed which version, 
 
 See [EU AI Act](../../ai-act.md#ai-use-acknowledgement).
 
+
+## AI Outputs Carry a Provenance Object and Leave a Record
+
+Every AI answer now says where it came from, in a form a program can read, and iHub keeps a small record so
+"did this exact text come from us?" can be answered later. This supports the marking duty of Art. 50(2) of the EU
+AI Act.
+
+- **The object.** `provenance` has the model, the installation, a time, an output ID and a SHA-256 of the text. It
+  is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
+  `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
+  results as `metadata.provenance`.
+- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model, time, marking and content hash, with a **Copy hash** action.
+- **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
+  default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
+- **Look it up.** `POST /api/provenance/_verify` takes a text or a hash and answers "Found" with the record or
+  "Not found". Not found is not proof of human authorship. It needs a signed-in caller unless
+  `provenance.verify.access` is `public`, and has its own rate limit (**Admin → Security**).
+- **Per model.** **Admin → Models** shows an *Output marking* column ("Not marked" is only a hint) and an *Output
+  marking* section: choose "Provider marks the output" only with the provider's written statement.
+- **Upgrade.** Migration V243 writes the defaults. Workflow runs and the Slack and Teams integrations get no
+  record yet; scheduled tasks and apps called by tools do.
+
+See [Provenance Records](../../provenance.md) and [EU AI Act](../../ai-act.md#provenance-records).

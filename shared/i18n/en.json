@@ -1191,7 +1191,15 @@
       "noModelsDesc": "Get started by creating a new model.",
       "table": {
         "status": "Status",
-        "apiKey": "API key"
+        "apiKey": "API key",
+        "marking": "Output marking"
+      },
+      "marking": {
+        "none": "Not marked",
+        "provider": "Provider-marked",
+        "ihub": "iHub watermark",
+        "optionNone": "Not marked",
+        "optionProvider": "Provider marks the output"
       },
       "status": {
         "enabled": "Enabled",
@@ -1265,6 +1273,9 @@
         "thinkingLevelHigh": "High",
         "thinkingThoughts": "Show reasoning",
         "samplingTemperature": "Temperature",
+        "markingBy": "Marking",
+        "markingScheme": "Scheme",
+        "markingStatementRef": "Statement reference",
         "samplingTopP": "Top P",
         "samplingTopK": "Top K",
         "ttsVoice": "Voice",
@@ -1300,6 +1311,8 @@
         "thinkingThoughts": "Surface the reasoning to users behind the \"Show thinking\" toggle. Turn off to keep it hidden.",
         "maxOutputTokens": "Empty means the default ({{value}}), not unlimited. Reasoning models spend their thinking tokens from this limit, so keep it well above the longest answer you expect.",
         "sampling": "Optional. Leave a field empty to use the model's or provider's own default; nothing is sent for it. A value set here applies to every request to this model.",
+        "marking": "Whether this model marks the text it generates as AI generated. Choose \"Provider marks the output\" only when the provider confirmed that in writing; iHub cannot check it. Every output still gets a provenance record, whatever you choose here.",
+        "markingStatementRef": "A document name or URL of the provider's written statement. It is only kept as a reference, never opened.",
         "ttsUrl": "Speech endpoint of the provider. It stays server-side and never reaches the browser.",
         "ttsVoice": "Voice id of the provider: a Mistral preset such as en_paul_neutral, gb_jane_neutral or fr_marie_neutral, or the id of a voice saved in your Mistral account. Empty uses en_paul_neutral.",
         "ttsVoiceGoogle": "One of the prebuilt Gemini voices, such as Kore, Puck or Charon. Each speaks every language, which is detected from the text. Empty uses Kore.",
@@ -1324,6 +1337,7 @@
         "promptCaching": "Prompt Caching",
         "providerConfig": "Provider Settings",
         "sampling": "Sampling",
+        "marking": "Output marking",
         "thinking": "Reasoning"
       },
       "errors": {
@@ -2271,6 +2285,10 @@
           "inferenceApi": {
             "name": "Inference API",
             "description": "/api/inference and read aloud."
+          },
+          "provenanceVerifyApi": {
+            "name": "Provenance lookup",
+            "description": "Looking up an AI output by its text or hash (/api/provenance/_verify). Stricter on purpose: the lookup tells a caller whether a candidate text was produced here."
           }
         }
       }
@@ -6410,6 +6428,21 @@
       "missing_other": "{{count}} projects not available",
       "missingIFinder": "iFinder could not be reached, so this answer did not use it.",
       "missingOther": "This answer did not use it."
+    },
+    "provenance": {
+      "button": "AI generated: details",
+      "title": "AI generated",
+      "model": "Model",
+      "created": "Created",
+      "marking": "Marking",
+      "markingNone": "Not marked by the model",
+      "markingProvider": "Marked by the provider (declared)",
+      "markingIhub": "iHub watermark",
+      "hash": "Content hash (SHA-256)",
+      "copyHash": "Copy hash",
+      "copied": "Copied",
+      "outputId": "Output ID",
+      "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it."
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",

@@ -26,6 +26,12 @@ import { getTranscriptionProvider } from '../transcription/index.js';
 function sanitizeModelForPublic(model) {
   const clean = { ...model };
   delete clean.apiKey;
+  // The marking statement is the operator's own reference (a document name or
+  // an internal URL); the public list keeps `by` and `scheme` only.
+  if (clean.contentMarking?.text?.statementRef !== undefined) {
+    const { statementRef: _statementRef, ...text } = clean.contentMarking.text;
+    clean.contentMarking = { ...clean.contentMarking, text };
+  }
   if (clean.modelType === 'transcription' || clean.modelType === 'tts') {
     delete clean.url;
   }

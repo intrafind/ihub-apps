@@ -593,6 +593,7 @@ export function reduceRunEvent(state, envelope) {
         usage: data.usage || run.usage,
         context: data.context || run.context,
         knowledgeSources: union([], data.knowledgeSources),
+        provenance: data.provenance || run.provenance,
         toolName: data.toolName || run.toolName,
         output: data.output !== undefined ? data.output : run.output,
         error: data.error || run.error,

@@ -440,6 +440,13 @@
     },
     "policyUrl": ""
   },
+  "provenance": {
+    "retentionDays": 365,
+    "storeRecords": true,
+    "verify": {
+      "access": "authenticated"
+    }
+  },
   "aiDisclosure": {
     "guardrail": {
       "text": ""

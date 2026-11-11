@@ -81,6 +81,9 @@ import {
   textParam
 } from '../../services/inference/responsesWire.js';
 import { apiUser, numberField, platformLanguage, requestLanguage } from './shared.js';
+import { newOutputId } from '../../services/provenance/records.js';
+import { recordTextOutput } from '../../services/provenance/turnProvenance.js';
+import { applyProvenanceHeaders } from '../../services/provenance/httpProvenance.js';
 
 const COMPONENT = 'ResponsesApi';
 const APP_ID = 'inference-api';
@@ -548,12 +551,14 @@ export default function registerResponsesRoutes(
     });
 
     const runId = newRunId('chat');
+    const outputId = newOutputId();
     const assembler = new ResponseAssembler({
       res: stream ? res : null,
       base: {
         id: newResponseId(),
         created_at: Math.floor(Date.now() / 1000),
         model: prepared.label,
+        outputId,
         instructions: null,
         temperature: prepared.model?.sampling?.temperature ?? null,
         max_output_tokens: maxOutputTokens ?? null,
@@ -635,7 +640,8 @@ export default function registerResponsesRoutes(
         onAttemptRejected: () => assembler.rejectAttempt(),
         persistence,
         timeoutMs: DEFAULT_TIMEOUT,
-        getLocalizedError
+        getLocalizedError,
+        outputId
       });
       if (disconnected && !stream) return;
 
@@ -651,9 +657,13 @@ export default function registerResponsesRoutes(
       const response = assembler.complete({
         text: outcome.content || '',
         parsed: outcome.structuredOutput?.valid ? outcome.structuredOutput.value : undefined,
-        usage: outcome.usage
+        usage: outcome.usage,
+        provenance: outcome.provenance
       });
-      if (!stream) res.json(response);
+      if (!stream) {
+        if (outcome.provenance) applyProvenanceHeaders(res, outputId);
+        res.json(response);
+      }
     } finally {
       // The turn's own end releases the chat; this only matters when it
       // never got that far (a failure before or around the turn).
@@ -721,12 +731,14 @@ export default function registerResponsesRoutes(
       }
     });
     const runId = run.runId || newRunId('chat');
+    const outputId = newOutputId();
     const assembler = new ResponseAssembler({
       res: stream ? res : null,
       base: {
         id: newResponseId(),
         created_at: Math.floor(Date.now() / 1000),
         model: model.id,
+        outputId,
         instructions,
         temperature: model.sampling?.temperature ?? null,
         max_output_tokens: maxOutputTokens ?? null,
@@ -854,19 +866,31 @@ export default function registerResponsesRoutes(
         });
         throw failure;
       }
+      const provenance = await recordTextOutput({
+        outputId,
+        text: result.content || '',
+        model: { id: model.id },
+        modelConfig: model,
+        req: res.req
+      });
       await storeAnswer({
         status: 'completed',
         content: result.content || '',
         finishReason: result.finishReason || 'stop',
         usage: result.usage,
-        structuredOutput: result.structuredOutput
+        structuredOutput: result.structuredOutput,
+        ...(provenance ? { provenance } : {})
       });
       const response = assembler.complete({
         text: result.content || '',
         parsed: result.structuredOutput?.valid ? result.structuredOutput.value : undefined,
-        usage: result.usage
+        usage: result.usage,
+        provenance
       });
-      if (!stream && !disconnected) res.json(response);
+      if (!stream && !disconnected) {
+        if (provenance) applyProvenanceHeaders(res, outputId);
+        res.json(response);
+      }
     } catch (error) {
       // A claim or a store that failed before the model ran still closes the
       // ledger run; a no-op once the run was finished or failed above.

@@ -155,8 +155,8 @@ export async function invokeApp({
  * @param {Object} params.user - Acting user (req.user-like), used for permissions and the ledger
  * @param {string} [params.language] - Response language; defaults to the platform default
  * @param {number} [params.timeoutMs=60000] - Hard timeout for the model call
- * @param {(outputs: {generatedFiles: Array<Object>, images: Array<Object>}) => void} [params.onOutputs] -
- *   Receives the files and pictures the app produced (`{ id, name, mimeType, bytes, data }` /
+ * @param {(outputs: {generatedFiles: Array<Object>, images: Array<Object>, provenance: (Object|null)}) => void} [params.onOutputs] -
+ *   Receives the provenance object of the answer and the files and pictures the app produced (`{ id, name, mimeType, bytes, data }` /
  *   `{ mimeType, data, name? }`, `data` base64); the return value stays the text
  * @returns {Promise<string>} Assistant text ('' when the model produced none)
  * @throws {Error} Invalid input, unknown app, request preparation or provider failure (`err.code`)
@@ -214,7 +214,11 @@ export async function invokeAppNonStreaming({
     origin: 'mcp'
   });
   if (typeof onOutputs === 'function') {
-    onOutputs({ generatedFiles: result?.generatedFiles || [], images: result?.images || [] });
+    onOutputs({
+      generatedFiles: result?.generatedFiles || [],
+      images: result?.images || [],
+      provenance: result?.provenance || null
+    });
   }
   return text;
 }

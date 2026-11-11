@@ -222,6 +222,23 @@
                   "type": "string"
                 }
               },
+              "provenance": {
+                "type": "object",
+                "properties": {
+                  "spec": {
+                    "type": "string"
+                  },
+                  "ai_generated": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "output_id": {
+                    "type": "string"
+                  }
+                },
+                "required": ["spec", "ai_generated", "output_id"],
+                "additionalProperties": {}
+              },
               "cost": {
                 "type": "number",
                 "minimum": 0
@@ -4357,6 +4374,23 @@
                 "items": {
                   "type": "string"
                 }
+              },
+              "provenance": {
+                "type": "object",
+                "properties": {
+                  "spec": {
+                    "type": "string"
+                  },
+                  "ai_generated": {
+                    "type": "boolean",
+                    "const": true
+                  },
+                  "output_id": {
+                    "type": "string"
+                  }
+                },
+                "required": ["spec", "ai_generated", "output_id"],
+                "additionalProperties": {}
               },
               "output": {},
               "cause": {

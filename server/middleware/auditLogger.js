@@ -33,7 +33,9 @@ const EXCLUDED_SEGMENTS = new Set([
   'short-links',
   'feedback',
   'translations',
-  'pages'
+  'pages',
+  // The pasted text of a provenance lookup must never reach the audit log.
+  'provenance'
 ]);
 
 const SENSITIVE_KEY_RE =

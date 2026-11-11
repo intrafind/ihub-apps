@@ -69,6 +69,22 @@ const samplingSchema = z
   .strict();
 
 // Image generation configuration schema
+// How a model's output is marked as AI generated (EU AI Act Art. 50(2)).
+const markingSchema = z
+  .object({
+    by: z.enum(['ihub', 'provider', 'none']),
+    scheme: z.string().max(64).optional(),
+    keyId: z.string().max(64).optional(),
+    statementRef: z.string().max(500).optional()
+  })
+  .strict()
+  .refine(value => value.by !== 'ihub' || Boolean(value.scheme), {
+    message: 'contentMarking: by "ihub" requires a scheme',
+    path: ['scheme']
+  });
+
+const contentMarkingSchema = z.object({ text: markingSchema.optional() }).strict();
+
 const imageGenerationSchema = z
   .object({
     aspectRatio: z
@@ -293,6 +309,13 @@ const baseModelConfigSchema = z
     // Per-user token budget of this model per reset window — the ceiling
     // groups and users can only lower (services/quota/limitResolver.js).
     usageLimits: usageLimitBucketSchema.optional(),
+    // What the provider or iHub does to mark this model's output as AI generated
+    // (EU AI Act Art. 50(2)). `provider` is the operator's written statement that
+    // the provider marks the output (`statementRef` is a free reference, never
+    // fetched); `none` is the default. `ihub` (iHub's own text watermark) is
+    // reserved for the watermarking feature and needs a `scheme`. #3328 adds
+    // `image` and `audio` siblings.
+    contentMarking: contentMarkingSchema.optional(),
     supportsImageGeneration: z.boolean().optional().prefault(false),
     imageGeneration: imageGenerationSchema.optional(),
     // Text-to-speech settings (modelType: 'tts' only).

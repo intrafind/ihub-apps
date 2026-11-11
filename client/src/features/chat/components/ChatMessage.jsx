@@ -68,6 +68,7 @@ function ChatCheckpoint({ executionId, checkpoint }) {
   );
 }
 import AnswerSourceBadge from './AnswerSourceBadge';
+import ProvenanceInfo from './ProvenanceInfo';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
 import ConnectCards from '../../integrations/connect/ConnectCard';
@@ -229,8 +230,12 @@ function ChatMessage({
     !isError &&
     finished &&
     Boolean(message.answerSource || message.workflowResult || message.knowledgeScope);
+  // "AI generated" details from the server's provenance object (EU AI Act Art. 50(2)).
+  const showProvenance =
+    !isUser && !isError && finished && Boolean(message.provenance?.ai_generated);
   const showSourcesBlock = !isUser && finished && (hasList || hasResults);
-  const showFooterRow = !isUser && finished && (hasResults || showAnswerSourceBadge);
+  const showFooterRow =
+    !isUser && finished && (hasResults || showAnswerSourceBadge || showProvenance);
   const footerRowClass = hasList
     ? 'mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5'
     : 'flex flex-wrap items-center gap-x-2 gap-y-1.5';
@@ -1124,13 +1129,16 @@ function ChatMessage({
                   entryHidden={!finished}
                 />
               )}
-              {showAnswerSourceBadge && (
-                <div className="ms-auto flex max-w-full justify-end">
-                  <AnswerSourceBadge
-                    answerSource={message.answerSource}
-                    workflowResult={message.workflowResult}
-                    knowledgeScope={message.knowledgeScope}
-                  />
+              {(showAnswerSourceBadge || showProvenance) && (
+                <div className="ms-auto flex max-w-full items-center justify-end gap-1.5">
+                  {showAnswerSourceBadge && (
+                    <AnswerSourceBadge
+                      answerSource={message.answerSource}
+                      workflowResult={message.workflowResult}
+                      knowledgeScope={message.knowledgeScope}
+                    />
+                  )}
+                  {showProvenance && <ProvenanceInfo provenance={message.provenance} />}
                 </div>
               )}
             </div>

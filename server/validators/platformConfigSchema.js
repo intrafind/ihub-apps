@@ -147,7 +147,8 @@ const rateLimitSchema = z.object({
   authApi: rateLimitConfigSchema.partial().prefault({}),
   oauthApi: rateLimitConfigSchema.partial().prefault({}),
   oauthTokenApi: rateLimitConfigSchema.partial().prefault({}),
-  inferenceApi: rateLimitConfigSchema.partial().prefault({})
+  inferenceApi: rateLimitConfigSchema.partial().prefault({}),
+  provenanceVerifyApi: rateLimitConfigSchema.partial().prefault({})
 });
 
 // Accept either a boolean (true => mask) or a string mode ('off' | 'mask' |
@@ -559,6 +560,21 @@ export const platformConfigSchema = z
             message: 'policyUrl must be an http(s) URL or a site-relative path'
           })
           .prefault('')
+      })
+      .passthrough()
+      .prefault({}),
+    // Provenance records and metadata (EU AI Act Art. 50(2), #3327). The record
+    // store never holds output text. `retentionDays` <= 0 keeps records forever;
+    // `storeRecords: false` still attaches the provenance object but keeps no store.
+    provenance: z
+      .object({
+        retentionDays: z.number().prefault(365),
+        storeRecords: z.boolean().prefault(true),
+        // Who may call POST /api/provenance/_verify.
+        verify: z
+          .object({ access: z.enum(['authenticated', 'public']).prefault('authenticated') })
+          .passthrough()
+          .prefault({})
       })
       .passthrough()
       .prefault({}),

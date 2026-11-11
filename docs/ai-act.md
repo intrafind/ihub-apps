@@ -8,7 +8,9 @@ the landing page for the measures; it is not legal advice.
 | Art. 50(1): people know they are dealing with an AI | The assistant always says it is an AI when asked and never claims to be human, even in a role. A notice in the empty chat says so before the first message. | Review the notice text; keep it on unless an app is clearly not a chat. |
 | Art. 4: AI literacy, "can you show that people were told?" | A dialog before the first message asks users to confirm an AI-use statement. The confirmation is stored with the user and in the audit log. | Write the statement and the policy link; export the list when an auditor asks. |
 
-Marking of generated content (Art. 50(2)) is covered by later features and added to this page.
+| Art. 50(2): output is marked and can be checked | Every output carries a machine-readable provenance object and gets a record (a hash, never the text), so "did this exact text come from here?" can be answered. | Declare which models are marked by their provider; set the retention; decide who may call the lookup. |
+
+Further marking measures (a text watermark, marks on images and audio) are added to this page as they ship.
 
 ## Guardrail prompt (always on)
 
@@ -99,3 +101,20 @@ that people were told, not a legal opinion: the wording is yours.
   confirms once. Set `aiAcknowledgement.enabled` to `false` first to roll out gradually.
 - **The legacy disclaimer.** The first-visit popup from **UI → disclaimer** is a separate setting and is shown
   first; the confirmation dialog waits until it is closed.
+
+## Provenance records
+
+Every chat answer, inference API completion, MCP result and A2A result carries a `provenance` object, and a
+record of it is kept. The record holds the SHA-256 of the output, never the output. A caller can ask
+`POST /api/provenance/_verify` whether an exact text or hash is known. "Found" means this installation produced
+it; "Not found" only means there is no record, not that a person wrote it.
+
+- **Per model:** `contentMarking.text.by` is `none` (default) or `provider` (**Admin → Models**, *Output
+  marking*). Choose `provider` only with the provider's written statement; iHub cannot check it. The models
+  list shows "Not marked" as a hint, never as a block.
+- **Platform:** `provenance.retentionDays` (365), `provenance.storeRecords` (true) and
+  `provenance.verify.access` (`authenticated` or `public`) in `platform.json`.
+- **Upgrade:** migration V243 writes the defaults. Nothing changes for users; API consumers see an extra
+  `provenance` member and two headers.
+
+Details: [Provenance Records](provenance.md).

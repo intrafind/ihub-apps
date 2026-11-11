@@ -292,7 +292,22 @@ test('non-streaming — chat.completion with real usage, regenerated id, iHub mo
     { index: 0, message: { role: 'assistant', content: 'Hi' }, finish_reason: 'stop' }
   ]);
   assert.deepEqual(res.body.usage, { prompt_tokens: 9, completion_tokens: 1, total_tokens: 10 });
-  assert.deepEqual(Object.keys(res.body), ['id', 'object', 'created', 'model', 'choices', 'usage']);
+  assert.deepEqual(Object.keys(res.body), [
+    'id',
+    'object',
+    'created',
+    'model',
+    'choices',
+    'usage',
+    'provenance'
+  ]);
+  // EU AI Act Art. 50(2): the object and the two headers carry one output id.
+  assert.equal(res.body.provenance.ai_generated, true);
+  assert.equal(res.body.provenance.model.id, 'oa');
+  assert.equal(res.headers['x-ai-generated'], 'true');
+  assert.equal(res.headers['x-ai-content-id'], res.body.provenance.output_id);
+  assert.equal(res.body.provenance.content_hash.normalization, 'nfc-trim');
+  assert.equal(JSON.stringify(res.body.provenance).includes('"Hi"'), false, 'never the text');
 });
 
 test('non-streaming — a generation slower than the connect ceiling still answers', async () => {
@@ -424,7 +439,22 @@ test('streaming — content deltas: role on the first written chunk, one [DONE],
   assert.equal(res.status, 200);
   assert.equal(res.headers['content-type'], 'text/event-stream; charset=utf-8');
   assert.equal(res.headers['cache-control'], 'no-cache');
-  const events = sseEvents(res.text).map(stripIds);
+  const rawEvents = sseEvents(res.text);
+  // The provenance object rides on the chunk with `finish_reason`, and its id is
+  // the one in the header, which was sent before the first chunk.
+  const finishChunk = rawEvents.find(e => e !== '[DONE]' && e.choices[0]?.finish_reason);
+  assert.equal(finishChunk.provenance.output_id, res.headers['x-ai-content-id']);
+  assert.equal(res.headers['x-ai-generated'], 'true');
+  assert.equal(
+    rawEvents.filter(e => e !== '[DONE]' && e.provenance).length,
+    1,
+    'no other chunk carries it, and no extra chunk was added'
+  );
+  const events = rawEvents.map(stripIds).map(e => {
+    if (e === '[DONE]') return e;
+    const { provenance: _provenance, ...rest } = e;
+    return rest;
+  });
   const base = { id: '<id>', created: '<created>', object: 'chat.completion.chunk', model: 'oa' };
   assert.deepEqual(events, [
     {

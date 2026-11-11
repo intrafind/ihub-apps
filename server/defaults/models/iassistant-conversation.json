@@ -22,5 +22,10 @@
     "searchProfile": "searchprofile-standard",
     "filter": [],
     "tools": ["ifinder_search"]
+  },
+  "contentMarking": {
+    "text": {
+      "by": "none"
+    }
   }
 }

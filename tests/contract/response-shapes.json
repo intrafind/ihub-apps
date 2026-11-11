@@ -1016,6 +1016,13 @@
         },
         "tierPolicy": "string"
       },
+      "provenance": {
+        "retentionDays": "number",
+        "storeRecords": "boolean",
+        "verify": {
+          "access": "string"
+        }
+      },
       "proxyAuth": {
         "enabled": "boolean",
         "sharedSecretHeader": "string",
@@ -2070,6 +2077,7 @@
           "apiKeySet": "boolean",
           "autoDiscovery": "boolean",
           "config?": "object",
+          "contentMarking?": "object",
           "contextWindow?": "null|number",
           "default": "boolean",
           "description": "object",
@@ -2770,6 +2778,11 @@
           "limit": "number",
           "windowMs": "number"
         },
+        "provenanceVerifyApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
         "publicApi": {
           "counts": "string",
           "limit": "number",
@@ -2799,6 +2812,11 @@
           "windowMs": "number"
         },
         "oauthTokenApi": {
+          "counts": "string",
+          "limit": "number",
+          "windowMs": "number"
+        },
+        "provenanceVerifyApi": {
           "counts": "string",
           "limit": "number",
           "windowMs": "number"
@@ -3071,6 +3089,7 @@
           "concurrency": "object",
           "config": "object",
           "connectTimeoutMs": "object",
+          "contentMarking": "object",
           "contextWindow": "object",
           "default": "object",
           "description": "object",
@@ -3128,6 +3147,7 @@
           "ntlmAuth": "object",
           "oidcAuth": "object",
           "projects": "object",
+          "provenance": "object",
           "proxy": "object",
           "proxyAuth": "object",
           "rateLimit": "object",
@@ -4411,6 +4431,7 @@
           "context?": "object",
           "finishReason?": "string",
           "id": "string",
+          "provenance?": "object",
           "role": "string",
           "runId": "string",
           "ts": "string",

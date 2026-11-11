@@ -210,6 +210,8 @@ function addCompletionMetadata(extras, run, finished) {
   if (finished) {
     const answerSource = answerSourceOf(run);
     if (answerSource) extras.answerSource = answerSource;
+    // The server's provenance object: the "AI generated" details under the answer.
+    if (run.provenance) extras.provenance = run.provenance;
     if (run.finishReason !== null && run.finishReason !== undefined) {
       extras.finishReason = run.finishReason;
     }
