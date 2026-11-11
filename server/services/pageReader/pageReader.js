@@ -507,7 +507,7 @@ function readerNote(doc, slice) {
  * @param {boolean} [params.outline=true] - With a `focus`: whether the result carries an
  *   outline of the page. A caller that reads many pages (search extraction) turns it off
  * @param {string} [params.language] - The reader's language (Accept-Language)
- * @param {boolean} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
+ * @param {boolean|null} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
  * @param {string} [params.chatId] - The chat ID for action tracking
  * @returns {Promise<Object>} The window of content with the page's metadata
  * @throws {Error} If URL is missing, invalid, or content extraction fails
@@ -552,8 +552,7 @@ export async function readWebPage({
 
   // Determine SSL ignore setting: explicit parameter > global config > default false
   const platformConfig = configCache.getPlatform() || {};
-  const shouldIgnoreSSL =
-    ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
+  const shouldIgnoreSSL = ignoreSSL ?? (platformConfig.ssl?.ignoreInvalidCertificates || false);
 
   const acceptLanguage = acceptLanguageFor(resolveSearchLanguage(language));
 
