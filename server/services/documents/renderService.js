@@ -20,7 +20,12 @@ const MAX_CONCURRENT = 2;
 const MAX_QUEUED = 20;
 const WORKER_MEMORY_MB = 512;
 
-const FORMAT_LABELS = { pdf: 'PDF', docx: 'Word document', pptx: 'presentation' };
+const FORMAT_LABELS = {
+  pdf: 'PDF',
+  docx: 'Word document',
+  pptx: 'presentation',
+  pptxRestyle: 'presentation'
+};
 
 export class DocumentGenerationError extends Error {
   /**
@@ -124,7 +129,7 @@ function runWorker(format, payload, timeoutMs) {
 /**
  * Render a document in a worker thread.
  *
- * @param {'pdf'|'docx'|'pptx'} format
+ * @param {'pdf'|'docx'|'pptx'|'pptxRestyle'} format
  * @param {{ spec: Object, assets?: Object }} payload - Plain data; template
  *   files travel as buffers in `assets`.
  * @param {Object} [options]

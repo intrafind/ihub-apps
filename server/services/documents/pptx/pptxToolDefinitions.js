@@ -7,6 +7,33 @@
  * `pptxTools.js` and is loaded when the tool runs.
  */
 
+export const RESTYLE_PPTX_TOOL = {
+  id: 'restyle_pptx',
+  outputKind: 'presentation',
+  name: { en: 'Restyle presentation', de: 'Präsentation umgestalten' },
+  description: {
+    en: "Move a PowerPoint deck the user uploaded into the company design, and give it back as a download. The deck's slides are put on the document template's slide master and layouts: titles, footers and slide numbers take the template's positions, fonts and colours, text alone on a slide takes the template's content area, and pictures, charts, tables and other shapes keep their arrangement, scaled into the content area. Pictures, charts with their data, tables and speaker notes are kept. Slide backgrounds and the old master are dropped. Pass the id of the uploaded .pptx (the id attribute of its <content> tag, only when can_use_as_template=\"true\"). Use it to move an existing deck into the corporate design; use create_pptx to write a new deck or to rewrite a deck's text.",
+    de: 'Überführt eine vom Benutzer hochgeladene PowerPoint-Präsentation ins Unternehmensdesign und stellt sie als Download bereit. Die Folien werden auf den Folienmaster und die Layouts der Dokumentvorlage gelegt: Titel, Fußzeilen und Foliennummern übernehmen Positionen, Schriften und Farben der Vorlage, Text allein auf einer Folie nutzt den Inhaltsbereich der Vorlage, Bilder, Diagramme, Tabellen und andere Formen behalten ihre Anordnung und werden in den Inhaltsbereich skaliert. Bilder, Diagramme mit ihren Daten, Tabellen und Sprechernotizen bleiben erhalten. Folienhintergründe und der alte Master entfallen. Die ID der hochgeladenen .pptx übergeben (das id-Attribut ihres <content>-Tags, nur bei can_use_as_template="true"). Zum Überführen einer vorhandenen Präsentation ins Unternehmensdesign; für neue Präsentationen oder zum Umschreiben von Texten create_pptx verwenden.'
+  },
+  usesDocumentTemplate: true,
+  brandParameters: [],
+  parameters: {
+    type: 'object',
+    properties: {
+      fileId: {
+        type: 'string',
+        description:
+          'Id of the .pptx the user uploaded in this chat (the id attribute of its <content> tag, only when can_use_as_template="true").'
+      },
+      filename: {
+        type: 'string',
+        description: 'Download file name without extension, e.g. "q3-board-review-branded".'
+      }
+    },
+    required: ['fileId']
+  }
+};
+
 export const CREATE_PPTX_TOOL = {
   id: 'create_pptx',
   outputKind: 'presentation',

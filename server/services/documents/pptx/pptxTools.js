@@ -98,6 +98,77 @@ export async function createPptx(spec, { app, template, templateFile = null } = 
 }
 
 /**
+ * `restyle_pptx`: move a presentation the user uploaded onto the document
+ * template's slide master and layouts and hand the result to the chat. The
+ * deck's content is carried over, not rebuilt from text.
+ *
+ * @param {Object} params - Tool arguments plus the trusted context (`user`,
+ *   `chatId`, `appConfig`).
+ * @returns {Promise<Object>}
+ */
+export async function runRestylePptx(params) {
+  try {
+    const uploaded = await loadUploadedFileOriginal({
+      fileId: params.fileId,
+      mimeTypes: [PPTX_FILE_MIME],
+      user: params.user,
+      chatId: params.chatId,
+      parameter: 'fileId'
+    });
+    const bundle = await templateBundleFor({
+      format: 'pptx',
+      app: params.appConfig,
+      requested: params.template
+    });
+    const applied = applyTemplateToPptxSpec({ slides: [], brand: {} }, bundle);
+    const started = Date.now();
+    const { buffer, meta, warnings } = await renderInWorker('pptxRestyle', {
+      spec: {
+        brand: applied.spec.brand,
+        layouts: applied.spec.layouts,
+        footer: applied.spec.footer,
+        slideNumbers: applied.spec.slideNumbers,
+        title: uploaded.name.replace(/\.pptx$/i, ''),
+        author: applied.spec.author
+      },
+      assets: {
+        deck: uploaded.buffer,
+        powerpointTemplate: applied.assets?.powerpointTemplate,
+        logo: applied.assets?.logo
+      }
+    });
+    logger.info('Presentation restyled', {
+      component: 'PptxService',
+      slides: meta.slides,
+      bytes: buffer.length,
+      template: applied.templateId,
+      durationMs: Date.now() - started
+    });
+    const target = applied.templateId
+      ? `onto the "${applied.templateId}" document template`
+      : "onto iHub's built-in slide design";
+    const file = holdGeneratedFile({
+      user: params.user,
+      chatId: params.chatId,
+      data: buffer,
+      mimeType: PPTX_MIME,
+      name: params.filename || uploaded.name.replace(/\.pptx$/i, ''),
+      meta: { slides: meta.slides }
+    });
+    return {
+      success: true,
+      file,
+      files: [file],
+      ...(applied.templateId ? { template: applied.templateId } : {}),
+      ...(warnings.length ? { warnings } : {}),
+      message: `Moved "${uploaded.name}" (${meta.slides} slide${meta.slides === 1 ? '' : 's'}) ${target} and created "${file.name}". Pictures, charts, tables and speaker notes were kept; slide backgrounds and the old master were dropped. The user sees a download card for it in the chat — do not add a link.`
+    };
+  } catch (error) {
+    return toolFailure(error, 'The presentation could not be restyled.');
+  }
+}
+
+/**
  * `create_pptx`: build the presentation and hand it to the chat.
  *
  * @param {Object} params - Tool arguments plus the trusted context (`user`,

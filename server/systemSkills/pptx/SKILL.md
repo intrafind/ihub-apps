@@ -3,8 +3,8 @@ name: pptx
 description: Create PowerPoint presentations (.pptx) on demand — pitch decks, status updates, board and project reviews, trainings, workshop agendas, results summaries — on the company's slide template, with bullet slides, KPI metric cards, tables, native editable charts, pictures, two-column comparisons, section slides and speaker notes. Use whenever the user asks for slides, a deck, a presentation or a PowerPoint file. Do not activate only to summarize or answer questions about an uploaded .pptx (its extracted text is already in the conversation).
 metadata:
   author: IntraFind
-  version: '1.1'
-allowed-tools: create_pptx
+  version: '1.2'
+allowed-tools: create_pptx restyle_pptx
 ---
 
 # Creating presentations
@@ -29,6 +29,13 @@ If the app uses a **document template**, its slide design is applied automatical
 - Do not set colours or fonts, and do not describe the design in the slides.
 - Do not add the company name or a confidentiality note to every slide: the template's footer has it.
 - If `create_pptx` offers a `template` parameter, use `default` unless the user asks for a specific template.
+
+## Moving an existing deck into the company design
+
+When the user uploads a `.pptx` and wants **that deck itself** in the company design, keeping its pictures, charts, tables and speaker notes, call `restyle_pptx` with the id of the uploaded file (the `id` of its `<content>` tag, only when `can_use_as_template="true"`). Its slides are put on the company template's master and layouts: titles, footers and slide numbers take the template's positions, fonts and colours; text alone on a slide takes the template's content area; pictures, charts, tables and other shapes keep their arrangement and are scaled into the content area. Slide backgrounds and the old master are dropped, and colours the deck took from its old theme follow the new one.
+
+- Use `restyle_pptx` to **move a deck into the company design**; use `create_pptx` to **write a new deck** or to rewrite a deck's text (pictures of the old deck are not carried over then).
+- The result is the old deck's content on a new master, not a new design of it: formatting a shape carries itself (a fixed colour or font on a run) stays. Say so, and tell the user to look through the slides, especially those with several pictures or tight layouts. Read the tool's `warnings`.
 
 ## Workflow
 
