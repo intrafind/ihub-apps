@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="{{LANG}}">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{{TITLE}}</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f9f9f7;
+        --surface: #fcfcfb;
+        --ink: #0b0b0b;
+        --ink-2: #52514e;
+        --muted: #6f6d67;
+        --grid: #e1e0d9;
+        --baseline: #c3c2b7;
+        --border: rgba(11, 11, 11, 0.1);
+        --other: #b5b4ad;
+        --good: #006300;
+        --warning: #8a5a00;
+        --critical: #b02a2a;
+        --s1: #2a78d6;
+        --s2: #eb6834;
+        --s3: #1baf7a;
+        --s4: #eda100;
+        --s5: #e87ba4;
+        --s6: #008300;
+        --s7: #6250d6;
+        --s8: #e34948;
+        --focus: var(--brand-accent, #0f766e);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:where(:not([data-theme='light'])) {
+          color-scheme: dark;
+          --page: #0d0d0d;
+          --surface: #1a1a19;
+          --ink: #f0efec;
+          --ink-2: #c3c2b7;
+          --muted: #a4a29a;
+          --grid: #2c2c2a;
+          --baseline: #383835;
+          --border: rgba(255, 255, 255, 0.1);
+          --other: #5d5c58;
+          --good: #0ca30c;
+          --warning: #fab219;
+          --critical: #ec6b6b;
+          --s1: #3987e5;
+          --s2: #d95926;
+          --s3: #199e70;
+          --s4: #c98500;
+          --s5: #d55181;
+          --s6: #008300;
+          --s7: #9085e9;
+          --s8: #e66767;
+        }
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --page: #0d0d0d;
+        --surface: #1a1a19;
+        --ink: #f0efec;
+        --ink-2: #c3c2b7;
+        --muted: #a4a29a;
+        --grid: #2c2c2a;
+        --baseline: #383835;
+        --border: rgba(255, 255, 255, 0.1);
+        --other: #5d5c58;
+        --good: #0ca30c;
+        --warning: #fab219;
+        --critical: #ec6b6b;
+        --s1: #3987e5;
+        --s2: #d95926;
+        --s3: #199e70;
+        --s4: #c98500;
+        --s5: #d55181;
+        --s6: #008300;
+        --s7: #9085e9;
+        --s8: #e66767;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--ink);
+        font-family: var(--brand-font, system-ui, -apple-system, 'Segoe UI', sans-serif);
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      .page {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 28px 24px 56px;
+      }
+      @media (max-width: 600px) {
+        .page {
+          padding: 20px 16px 40px;
+        }
+      }
+
+      h1 {
+        margin: 0 0 12px;
+        font-size: 1.75rem;
+        line-height: 1.2;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      h2 {
+        margin: 0;
+        font-size: 1.0625rem;
+        font-weight: 600;
+      }
+      h3 {
+        margin: 0 0 4px;
+        font-size: 0.9375rem;
+        font-weight: 600;
+      }
+      p {
+        margin: 0;
+      }
+      .summary {
+        max-width: 62ch;
+        margin-bottom: 14px;
+        font-size: 1.125rem;
+      }
+      .summary strong {
+        font-weight: 650;
+      }
+      .notes {
+        max-width: 70ch;
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+      .notes p + p {
+        margin-top: 2px;
+      }
+      .head {
+        padding-bottom: 8px;
+        border-bottom: 2px solid var(--brand-primary, var(--s1));
+        margin-bottom: 24px;
+      }
+      .head .notes {
+        margin-bottom: 14px;
+      }
+
+      .kpis {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+      .kpi {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px 18px;
+      }
+      .kpi-label {
+        color: var(--ink-2);
+        font-size: 0.875rem;
+      }
+      .kpi-value {
+        margin: 6px 0 4px;
+        font-size: 2rem;
+        line-height: 1.1;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        overflow-wrap: anywhere;
+      }
+      .kpi-note {
+        color: var(--muted);
+        font-size: 0.8125rem;
+      }
+
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 18px 20px 20px;
+        margin-bottom: 20px;
+      }
+      .card-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px 16px;
+        margin-bottom: 14px;
+      }
+      .card-title {
+        min-width: 0;
+        flex: 1 1 24rem;
+      }
+      .card-desc {
+        margin-top: 4px;
+        max-width: 70ch;
+        color: var(--ink-2);
+        font-size: 0.875rem;
+      }
+      .card-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .btn {
+        font: inherit;
+        font-size: 0.8125rem;
+        color: var(--ink-2);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      .btn:hover {
+        color: var(--ink);
+        border-color: var(--baseline);
+      }
+      .btn[aria-pressed='true'] {
+        color: var(--ink);
+        background: var(--page);
+        border-color: var(--baseline);
+      }
+      :focus-visible {
+        outline: 2px solid var(--focus);
+        outline-offset: 2px;
+      }
+
+      /* Ranked bars */
+      .bars {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      /* The bars use the track minus room for the value after the longest bar (--vw). */
+      .bars-axis,
+      .bar-row {
+        display: grid;
+        grid-template-columns: minmax(7rem, 12rem) 1fr;
+        column-gap: 12px;
+        align-items: center;
+      }
+      .bars-axis {
+        min-height: 22px;
+        margin-bottom: 2px;
+      }
+      .axis-plot {
+        --vw: 8.5rem;
+        position: relative;
+        height: 22px;
+      }
+      .mark-label {
+        position: absolute;
+        bottom: 2px;
+        left: calc((100% - var(--vw)) * var(--r));
+        transform: translateX(-50%);
+        color: var(--ink-2);
+        font-size: 0.75rem;
+        white-space: nowrap;
+      }
+      .bar-row {
+        min-height: 32px;
+        border-radius: 4px;
+      }
+      .bar-row:hover {
+        background: var(--page);
+      }
+      .bar-label {
+        color: var(--ink-2);
+        font-size: 0.875rem;
+        text-align: right;
+        overflow-wrap: anywhere;
+      }
+      .bar-track {
+        --vw: 8.5rem;
+        position: relative;
+        height: 32px;
+      }
+      .bar-fill {
+        position: absolute;
+        left: 0;
+        top: 6px;
+        height: 20px;
+        width: calc((100% - var(--vw)) * var(--r));
+        border-radius: 0 4px 4px 0;
+        background: var(--s1);
+      }
+      .bar-row.is-other .bar-fill {
+        background: var(--other);
+      }
+      .bar-mark {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        left: calc((100% - var(--vw)) * var(--r));
+        width: 1px;
+        background: var(--ink-2);
+        opacity: 0.55;
+      }
+      .bar-value {
+        position: absolute;
+        top: 0;
+        left: calc((100% - var(--vw)) * var(--r) + 8px);
+        line-height: 32px;
+        font-size: 0.875rem;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      @media (max-width: 560px) {
+        .bars-axis,
+        .bar-row {
+          grid-template-columns: 1fr;
+          row-gap: 0;
+        }
+        .bars-axis .axis-spacer {
+          display: none;
+        }
+        .bar-label {
+          text-align: left;
+          padding-top: 4px;
+        }
+      }
+
+      /* Line chart */
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 18px;
+        margin-bottom: 8px;
+        font-size: 0.8125rem;
+        color: var(--ink-2);
+      }
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .key {
+        display: inline-block;
+        width: 16px;
+        height: 2px;
+        border-radius: 1px;
+      }
+      .chart-wrap {
+        position: relative;
+        width: 100%;
+      }
+      .chart-wrap svg {
+        display: block;
+        width: 100%;
+        overflow: visible;
+      }
+      .chart-wrap svg:focus-visible {
+        outline-offset: 4px;
+      }
+      .axis-text {
+        fill: var(--muted);
+        font-size: 12px;
+      }
+      .grid-line {
+        stroke: var(--grid);
+        stroke-width: 1;
+      }
+      .base-line {
+        stroke: var(--baseline);
+        stroke-width: 1;
+      }
+      .cross {
+        stroke: var(--baseline);
+        stroke-width: 1;
+      }
+
+      /* Tables */
+      .table-scroll {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.875rem;
+      }
+      th,
+      td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--grid);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        color: var(--ink-2);
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      td.num,
+      th.num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+      }
+      td.num {
+        white-space: nowrap;
+      }
+      th button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+      }
+      th button:hover {
+        color: var(--ink);
+      }
+      .sort-mark {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .more {
+        margin-top: 10px;
+      }
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+      }
+      .status-good {
+        color: var(--good);
+      }
+      .status-warning {
+        color: var(--warning);
+      }
+      .status-critical {
+        color: var(--critical);
+      }
+      .status-neutral {
+        color: var(--ink-2);
+      }
+
+      .text-block p {
+        max-width: 70ch;
+      }
+      .text-block p + p {
+        margin-top: 8px;
+      }
+
+      details {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 14px 20px;
+        margin-bottom: 20px;
+      }
+      summary {
+        cursor: pointer;
+        font-weight: 600;
+      }
+      details[open] > summary {
+        margin-bottom: 10px;
+      }
+      .method p {
+        max-width: 70ch;
+        color: var(--ink-2);
+      }
+      .method p + p {
+        margin-top: 6px;
+      }
+      .source {
+        padding: 10px 0;
+        border-top: 1px solid var(--grid);
+      }
+      .source:first-of-type {
+        border-top: 0;
+      }
+      .source p {
+        max-width: 70ch;
+        color: var(--ink-2);
+        font-size: 0.875rem;
+      }
+      .formula {
+        margin: 6px 0 0;
+        padding: 8px 10px;
+        background: var(--page);
+        border-radius: 6px;
+        font:
+          0.8125rem/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Consolas,
+          monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .tip {
+        position: fixed;
+        z-index: 10;
+        max-width: 18rem;
+        padding: 8px 10px;
+        pointer-events: none;
+        background: var(--surface);
+        color: var(--ink);
+        border: 1px solid var(--baseline);
+        border-radius: 6px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+        font-size: 0.8125rem;
+      }
+      .tip[hidden] {
+        display: none;
+      }
+      .tip-title {
+        color: var(--ink-2);
+      }
+      .tip-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .tip-value {
+        font-weight: 650;
+        font-variant-numeric: tabular-nums;
+      }
+      .tip-note {
+        color: var(--ink-2);
+        margin-top: 2px;
+      }
+      .empty {
+        color: var(--muted);
+      }
+      .error {
+        padding: 24px;
+        color: var(--critical);
+      }
+
+      @media (forced-colors: active) {
+        .bar-fill {
+          background: Highlight;
+          forced-color-adjust: none;
+        }
+        .bar-mark {
+          background: CanvasText;
+          opacity: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="app" class="page"></main>
+    <div id="tip" class="tip" role="tooltip" hidden></div>
+    <script id="dashboard-data" type="application/json">
+      {{DATA}}
+    </script>
+    <script>
+      (function () {
+        'use strict';
+
+        var SPEC = null;
+        try {
+          SPEC = JSON.parse(document.getElementById('dashboard-data').textContent);
+        } catch (e) {
+          SPEC = null;
+        }
+        var app = document.getElementById('app');
+        var tip = document.getElementById('tip');
+        if (!SPEC || typeof SPEC !== 'object') {
+          app.className = 'error';
+          app.textContent = 'The dashboard data could not be read.';
+          return;
+        }
+
+        var I18N = {
+          en: {
+            asOf: 'Data as of',
+            sources: 'Sources and formulas',
+            source: 'Source',
+            tableView: 'Table view',
+            chartView: 'Chart view',
+            showAll: 'Show all {n} rows',
+            showFewer: 'Show fewer rows',
+            item: 'Item',
+            value: 'Value',
+            share: 'Share',
+            noData: 'No data',
+            other: '{n} smaller',
+            sortBy: 'Sort by {col}',
+            method: 'How these numbers were made'
+          },
+          de: {
+            asOf: 'Datenstand',
+            sources: 'Quellen und Formeln',
+            source: 'Quelle',
+            tableView: 'Tabellenansicht',
+            chartView: 'Diagrammansicht',
+            showAll: 'Alle {n} Zeilen anzeigen',
+            showFewer: 'Weniger Zeilen anzeigen',
+            item: 'Eintrag',
+            value: 'Wert',
+            share: 'Anteil',
+            noData: 'Keine Daten',
+            other: '{n} kleinere',
+            sortBy: 'Nach {col} sortieren',
+            method: 'So sind die Zahlen entstanden'
+          }
+        };
+        var LANG = typeof SPEC.lang === 'string' && SPEC.lang ? SPEC.lang : 'en';
+        var T = Object.assign(
+          {},
+          I18N.en,
+          I18N[LANG.slice(0, 2).toLowerCase()] || {},
+          SPEC.labels || {}
+        );
+        function tpl(text, vars) {
+          return String(text).replace(/\{(\w+)\}/g, function (m, k) {
+            return vars && vars[k] !== undefined ? vars[k] : m;
+          });
+        }
+
+        function numberFormat(options) {
+          try {
+            return new Intl.NumberFormat(LANG, options);
+          } catch (e) {
+            return new Intl.NumberFormat('en', options);
+          }
+        }
+        var nf0 = numberFormat({ maximumFractionDigits: 0 });
+        var nf1 = numberFormat({ maximumFractionDigits: 1, minimumFractionDigits: 1 });
+        var nfc = numberFormat({ notation: 'compact', maximumFractionDigits: 1 });
+
+        function isNum(v) {
+          return typeof v === 'number' && isFinite(v);
+        }
+        function fmt(v, format) {
+          if (v === null || v === undefined || v === '') return '—';
+          if (!isNum(v)) return String(v);
+          if (format === 'percent') return nf1.format(v) + '%';
+          if (format === 'decimal') return nf1.format(v);
+          if (format === 'compact') return nfc.format(v);
+          return nf0.format(v);
+        }
+        function pct(part, whole) {
+          return whole > 0 ? nf1.format((part / whole) * 100) + '%' : '—';
+        }
+
+        function el(tag, cls, text) {
+          var node = document.createElement(tag);
+          if (cls) node.className = cls;
+          if (text !== undefined && text !== null) node.textContent = String(text);
+          return node;
+        }
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+        function svgEl(tag, attrs) {
+          var node = document.createElementNS(SVG_NS, tag);
+          Object.keys(attrs || {}).forEach(function (k) {
+            node.setAttribute(k, attrs[k]);
+          });
+          return node;
+        }
+        // **bold** only; every piece of text goes in through textContent.
+        function rich(node, text) {
+          String(text)
+            .split(/\*\*(.+?)\*\*/g)
+            .forEach(function (part, i) {
+              if (!part) return;
+              if (i % 2) node.appendChild(el('strong', null, part));
+              else node.appendChild(document.createTextNode(part));
+            });
+          return node;
+        }
+
+        // ---- tooltip -------------------------------------------------------------
+        function showTip(build, x, y) {
+          tip.textContent = '';
+          build(tip);
+          tip.hidden = false;
+          var r = tip.getBoundingClientRect();
+          var vw = document.documentElement.clientWidth;
+          var vh = window.innerHeight;
+          var left = x + 14;
+          var top = y + 14;
+          if (left + r.width > vw - 8) left = x - r.width - 14;
+          if (top + r.height > vh - 8) top = y - r.height - 14;
+          tip.style.left = Math.max(8, left) + 'px';
+          tip.style.top = Math.max(8, top) + 'px';
+        }
+        function hideTip() {
+          tip.hidden = true;
+        }
+        function tipOn(target, build) {
+          target.addEventListener('pointermove', function (e) {
+            showTip(build, e.clientX, e.clientY);
+          });
+          target.addEventListener('pointerleave', hideTip);
+          target.addEventListener('focus', function () {
+            var r = target.getBoundingClientRect();
+            showTip(build, r.left + Math.min(r.width, 160), r.bottom - 6);
+          });
+          target.addEventListener('blur', hideTip);
+        }
+
+        // ---- sources -------------------------------------------------------------
+        var sourcesById = {};
+        (Array.isArray(SPEC.sources) ? SPEC.sources : []).forEach(function (s) {
+          sourcesById[s.id] = s;
+        });
+        var sourcesEl = null;
+        function openSource(id) {
+          if (!sourcesEl) return;
+          sourcesEl.open = true;
+          var entry = document.getElementById('src-' + id);
+          if (entry) {
+            entry.scrollIntoView({ block: 'center' });
+            entry.focus();
+          }
+        }
+        function sourceButton(id) {
+          if (!id || !sourcesById[id]) return null;
+          var b = el('button', 'btn', T.source + ': ' + sourcesById[id].name);
+          b.type = 'button';
+          b.addEventListener('click', function () {
+            openSource(id);
+          });
+          return b;
+        }
+
+        // ---- table ---------------------------------------------------------------
+        function statusCell(td, cell) {
+          var status = cell && cell.status ? cell.status : 'neutral';
+          if (['good', 'warning', 'critical', 'neutral'].indexOf(status) < 0) status = 'neutral';
+          var icon = { good: '✓', warning: '!', critical: '✕', neutral: '–' }[status];
+          var box = el('span', 'status status-' + status);
+          box.appendChild(el('span', null, icon)).setAttribute('aria-hidden', 'true');
+          box.appendChild(el('span', null, cell && cell.text !== undefined ? cell.text : ''));
+          td.appendChild(box);
+        }
+        function cellText(v) {
+          return v && typeof v === 'object' ? String(v.text === undefined ? '' : v.text) : v;
+        }
+        function makeTable(columns, rows, opts) {
+          opts = opts || {};
+          var state = {
+            key: opts.sortKey || null,
+            dir: opts.sortDir === 'asc' ? 1 : -1,
+            all: false
+          };
+          var limit = isNum(opts.visibleRows) ? opts.visibleRows : 15;
+          var wrap = el('div');
+          var scroll = el('div', 'table-scroll');
+          scroll.tabIndex = 0;
+          scroll.setAttribute('role', 'region');
+          scroll.setAttribute('aria-label', opts.label || '');
+          var table = el('table');
+          scroll.appendChild(table);
+          wrap.appendChild(scroll);
+          var more = null;
+          if (limit > 0 && rows.length > limit) {
+            more = el('button', 'btn more');
+            more.type = 'button';
+            more.addEventListener('click', function () {
+              state.all = !state.all;
+              draw();
+            });
+            wrap.appendChild(more);
+          }
+          function isNumeric(c) {
+            return (
+              c.align === 'right' ||
+              (c.align !== 'left' &&
+                ['int', 'decimal', 'percent', 'compact'].indexOf(c.format) >= 0)
+            );
+          }
+          function sorted() {
+            var list = rows.slice();
+            if (!state.key) return list;
+            list.sort(function (a, b) {
+              var x = cellText(a[state.key]);
+              var y = cellText(b[state.key]);
+              if (isNum(x) && isNum(y)) return (x - y) * state.dir;
+              return (
+                String(x === undefined || x === null ? '' : x).localeCompare(
+                  String(y === undefined || y === null ? '' : y),
+                  LANG,
+                  { numeric: true }
+                ) * state.dir
+              );
+            });
+            return list;
+          }
+          function draw() {
+            table.textContent = '';
+            var head = el('thead').appendChild(el('tr'));
+            columns.forEach(function (c) {
+              var th = el('th', isNumeric(c) ? 'num' : '');
+              th.scope = 'col';
+              if (opts.sortable === false) {
+                th.textContent = c.label;
+              } else {
+                var b = el('button');
+                b.type = 'button';
+                b.title = tpl(T.sortBy, { col: c.label });
+                b.appendChild(el('span', null, c.label));
+                var mark = el(
+                  'span',
+                  'sort-mark',
+                  state.key === c.key ? (state.dir > 0 ? '↑' : '↓') : ''
+                );
+                mark.setAttribute('aria-hidden', 'true');
+                b.appendChild(mark);
+                b.addEventListener('click', function () {
+                  if (state.key === c.key) state.dir = -state.dir;
+                  else {
+                    state.key = c.key;
+                    state.dir = isNumeric(c) ? -1 : 1;
+                  }
+                  draw();
+                });
+                th.appendChild(b);
+                th.setAttribute(
+                  'aria-sort',
+                  state.key === c.key ? (state.dir > 0 ? 'ascending' : 'descending') : 'none'
+                );
+              }
+              head.appendChild(th);
+            });
+            table.appendChild(head.parentNode);
+            var body = el('tbody');
+            var list = sorted();
+            var shown = limit > 0 && !state.all ? list.slice(0, limit) : list;
+            shown.forEach(function (row) {
+              var tr = el('tr');
+              columns.forEach(function (c) {
+                var td = el('td', isNumeric(c) ? 'num' : '');
+                var v = row[c.key];
+                if (c.format === 'status' || (v && typeof v === 'object')) statusCell(td, v);
+                else td.textContent = fmt(v, c.format);
+                tr.appendChild(td);
+              });
+              body.appendChild(tr);
+            });
+            if (!shown.length) {
+              var tr = el('tr');
+              var td = el('td', 'empty', T.noData);
+              td.colSpan = columns.length;
+              tr.appendChild(td);
+              body.appendChild(tr);
+            }
+            table.appendChild(body);
+            if (more)
+              more.textContent = state.all ? T.showFewer : tpl(T.showAll, { n: list.length });
+          }
+          draw();
+          return wrap;
+        }
+
+        // ---- card ----------------------------------------------------------------
+        // A card with the chart and, for charts, its table twin behind a toggle.
+        function card(block, chartNode, tableBuilder) {
+          var box = el('section', 'card');
+          var head = el('div', 'card-head');
+          var titles = el('div', 'card-title');
+          if (block.title) titles.appendChild(el('h2', null, block.title));
+          if (block.description) titles.appendChild(el('p', 'card-desc', block.description));
+          head.appendChild(titles);
+          var actions = el('div', 'card-actions');
+          var body = el('div');
+          if (tableBuilder) {
+            var tableNode = null;
+            var toggle = el('button', 'btn', T.tableView);
+            toggle.type = 'button';
+            toggle.setAttribute('aria-pressed', 'false');
+            toggle.addEventListener('click', function () {
+              var on = toggle.getAttribute('aria-pressed') !== 'true';
+              toggle.setAttribute('aria-pressed', String(on));
+              toggle.textContent = on ? T.chartView : T.tableView;
+              body.textContent = '';
+              if (on) {
+                if (!tableNode) tableNode = tableBuilder();
+                body.appendChild(tableNode);
+              } else {
+                body.appendChild(chartNode);
+              }
+              hideTip();
+              if (!on && chartNode.redraw) chartNode.redraw();
+            });
+            actions.appendChild(toggle);
+          }
+          var src = sourceButton(block.source);
+          if (src) actions.appendChild(src);
+          if (actions.childNodes.length) head.appendChild(actions);
+          box.appendChild(head);
+          body.appendChild(chartNode);
+          box.appendChild(body);
+          return box;
+        }
+
+        // ---- ranked bars ---------------------------------------------------------
+        function barsBlock(b) {
+          var items = (b.items || []).map(function (i) {
+            return { label: String(i.label), value: isNum(i.value) ? i.value : 0, note: i.note };
+          });
+          var total = items.reduce(function (s, i) {
+            return s + i.value;
+          }, 0);
+          if (b.sort !== 'none')
+            items.sort(function (x, y) {
+              return y.value - x.value;
+            });
+          if (isNum(b.top) && b.top > 0 && items.length > b.top + 1) {
+            var rest = items.slice(b.top);
+            items = items.slice(0, b.top);
+            items.push({
+              label: tpl(b.otherLabel || T.other, { n: rest.length }),
+              value: rest.reduce(function (s, i) {
+                return s + i.value;
+              }, 0),
+              other: true
+            });
+          }
+          var marks = (b.marks || [])
+            .filter(function (m) {
+              return isNum(m.value);
+            })
+            .sort(function (x, y) {
+              return x.value - y.value;
+            });
+          var domain = Math.max.apply(
+            null,
+            items
+              .map(function (i) {
+                return i.value;
+              })
+              .concat(
+                marks.map(function (m) {
+                  return m.value;
+                }),
+                [1]
+              )
+          );
+          var valueText = function (i) {
+            return fmt(i.value, b.format) + (b.share ? ' · ' + pct(i.value, total) : '');
+          };
+
+          var wrap = el('div');
+          if (marks.length) {
+            var axis = el('div', 'bars-axis');
+            axis.appendChild(el('span', 'axis-spacer'));
+            var plot = el('div', 'axis-plot');
+            marks.forEach(function (m) {
+              var label = el('span', 'mark-label', m.label);
+              label.style.setProperty('--r', m.value / domain);
+              plot.appendChild(label);
+            });
+            axis.appendChild(plot);
+            wrap.appendChild(axis);
+          }
+          var list = el('ul', 'bars');
+          items.forEach(function (i) {
+            var row = el('li', 'bar-row' + (i.other ? ' is-other' : ''));
+            row.tabIndex = 0;
+            row.setAttribute('aria-label', i.label + ': ' + valueText(i));
+            row.appendChild(el('span', 'bar-label', i.label));
+            var track = el('div', 'bar-track');
+            var ratio = i.value > 0 ? Math.max(0.004, i.value / domain) : 0;
+            var fill = el('span', 'bar-fill');
+            fill.style.setProperty('--r', ratio);
+            track.appendChild(fill);
+            marks.forEach(function (m) {
+              var line = el('span', 'bar-mark');
+              line.style.setProperty('--r', m.value / domain);
+              track.appendChild(line);
+            });
+            var value = el('span', 'bar-value', valueText(i));
+            value.style.setProperty('--r', ratio);
+            track.appendChild(value);
+            row.appendChild(track);
+            tipOn(row, function (t) {
+              t.appendChild(el('div', 'tip-title', i.label));
+              t.appendChild(el('div', 'tip-value', valueText(i)));
+              if (i.note) t.appendChild(el('div', 'tip-note', i.note));
+            });
+            list.appendChild(row);
+          });
+          wrap.appendChild(list);
+
+          var asTable = function () {
+            var cols = [
+              { key: 'label', label: b.labelHeader || T.item },
+              { key: 'value', label: b.valueHeader || T.value, format: b.format || 'int' }
+            ];
+            if (b.share) cols.push({ key: 'share', label: T.share, format: 'percent' });
+            var rows = items.map(function (i) {
+              return {
+                label: i.label,
+                value: i.value,
+                share: total > 0 ? (i.value / total) * 100 : null
+              };
+            });
+            return makeTable(cols, rows, {
+              label: b.title,
+              visibleRows: 0,
+              sortKey: 'value',
+              sortDir: 'desc'
+            });
+          };
+          return card(b, wrap, asTable);
+        }
+
+        // ---- line chart ----------------------------------------------------------
+        function niceTicks(lo, hi, count) {
+          if (hi <= lo) hi = lo + 1;
+          var raw = (hi - lo) / count;
+          var pow = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10));
+          var step = [1, 2, 2.5, 5, 10]
+            .map(function (m) {
+              return m * pow;
+            })
+            .filter(function (s) {
+              return s >= raw;
+            })[0];
+          var ticks = [];
+          for (var v = Math.floor(lo / step) * step; v < hi + step * 0.999; v += step)
+            ticks.push(Math.round(v / step) * step);
+          return ticks.filter(function (v, i) {
+            return i === 0 || ticks[i - 1] < hi;
+          });
+        }
+
+        function lineBlock(b) {
+          var xs = (b.x || []).map(String);
+          var series = (b.series || []).map(function (s, i) {
+            return {
+              name: String(s.name),
+              values: (s.values || []).map(function (v) {
+                return isNum(v) ? v : null;
+              }),
+              color: 'var(--s' + (i + 1) + ')'
+            };
+          });
+          var all = [];
+          series.forEach(function (s) {
+            s.values.forEach(function (v) {
+              if (v !== null) all.push(v);
+            });
+          });
+          var lo = Math.min.apply(null, all.concat([0]));
+          var ticks = niceTicks(lo, Math.max.apply(null, all.concat([1])), 5);
+          var yMin = ticks[0];
+          var yMax = ticks[ticks.length - 1];
+          var axisFmt = function (v) {
+            return Math.abs(v) >= 10000 ? fmt(v, 'compact') : fmt(v, 'int');
+          };
+          var valFmt = function (v) {
+            return fmt(v, b.format);
+          };
+
+          var wrap = el('div');
+          if (series.length > 1) {
+            var legend = el('div', 'legend');
+            series.forEach(function (s) {
+              var item = el('span', 'legend-item');
+              var key = el('span', 'key');
+              key.style.background = s.color;
+              item.appendChild(key);
+              item.appendChild(el('span', null, s.name));
+              legend.appendChild(item);
+            });
+            wrap.appendChild(legend);
+          }
+          var holder = el('div', 'chart-wrap');
+          wrap.appendChild(holder);
+          var active = -1;
+
+          function render() {
+            holder.textContent = '';
+            var W = Math.max(280, holder.clientWidth || 640);
+            var H = W < 480 ? 240 : 300;
+            var m = { l: 52, r: 18, t: 12, b: 32 };
+            var pw = W - m.l - m.r;
+            var ph = H - m.t - m.b;
+            var xAt = function (i) {
+              return m.l + (xs.length > 1 ? (i / (xs.length - 1)) * pw : pw / 2);
+            };
+            var yAt = function (v) {
+              return m.t + ph - ((v - yMin) / (yMax - yMin)) * ph;
+            };
+            var svg = svgEl('svg', {
+              viewBox: '0 0 ' + W + ' ' + H,
+              width: W,
+              height: H,
+              role: 'img',
+              tabindex: '0'
+            });
+            svg.setAttribute(
+              'aria-label',
+              (b.title || '') +
+                ' – ' +
+                series
+                  .map(function (s) {
+                    return s.name;
+                  })
+                  .join(', ') +
+                ' – ' +
+                xs.length
+            );
+            ticks.forEach(function (t) {
+              svg.appendChild(
+                svgEl('line', {
+                  x1: m.l,
+                  x2: W - m.r,
+                  y1: yAt(t),
+                  y2: yAt(t),
+                  class: t === 0 ? 'base-line' : 'grid-line'
+                })
+              );
+              var label = svgEl('text', {
+                x: m.l - 8,
+                y: yAt(t) + 4,
+                'text-anchor': 'end',
+                class: 'axis-text'
+              });
+              label.textContent = axisFmt(t);
+              svg.appendChild(label);
+            });
+            var step = Math.ceil(xs.length / Math.max(2, Math.floor(pw / 90)));
+            xs.forEach(function (x, i) {
+              if (i % step && i !== xs.length - 1) return;
+              if (i !== xs.length - 1 && xs.length - 1 - i < step / 2) return;
+              var label = svgEl('text', {
+                x: xAt(i),
+                y: H - 8,
+                'text-anchor':
+                  i === 0 && xs.length > 1
+                    ? 'start'
+                    : i === xs.length - 1 && xs.length > 1
+                      ? 'end'
+                      : 'middle',
+                class: 'axis-text'
+              });
+              label.textContent = x;
+              svg.appendChild(label);
+            });
+            series.forEach(function (s) {
+              var d = '';
+              var pen = false;
+              s.values.forEach(function (v, i) {
+                if (v === null) {
+                  pen = false;
+                  return;
+                }
+                d += (pen ? 'L' : 'M') + xAt(i).toFixed(1) + ' ' + yAt(v).toFixed(1);
+                pen = true;
+              });
+              svg.appendChild(
+                svgEl('path', {
+                  d: d,
+                  fill: 'none',
+                  stroke: s.color,
+                  'stroke-width': 2,
+                  'stroke-linejoin': 'round',
+                  'stroke-linecap': 'round'
+                })
+              );
+              for (var i = s.values.length - 1; i >= 0; i--) {
+                if (s.values[i] === null) continue;
+                svg.appendChild(
+                  svgEl('circle', {
+                    cx: xAt(i),
+                    cy: yAt(s.values[i]),
+                    r: 6,
+                    fill: 'var(--surface)'
+                  })
+                );
+                svg.appendChild(
+                  svgEl('circle', { cx: xAt(i), cy: yAt(s.values[i]), r: 4, fill: s.color })
+                );
+                break;
+              }
+            });
+            var cross = svgEl('line', {
+              y1: m.t,
+              y2: m.t + ph,
+              class: 'cross',
+              visibility: 'hidden'
+            });
+            svg.appendChild(cross);
+            var dots = series.map(function (s) {
+              var g = svgEl('g', { visibility: 'hidden' });
+              g.appendChild(svgEl('circle', { r: 6, fill: 'var(--surface)' }));
+              g.appendChild(svgEl('circle', { r: 4, fill: s.color }));
+              svg.appendChild(g);
+              return g;
+            });
+            function select(i, cx, cy) {
+              active = Math.max(0, Math.min(xs.length - 1, i));
+              cross.setAttribute('x1', xAt(active));
+              cross.setAttribute('x2', xAt(active));
+              cross.setAttribute('visibility', 'visible');
+              dots.forEach(function (g, k) {
+                var v = series[k].values[active];
+                g.setAttribute('visibility', v === null || v === undefined ? 'hidden' : 'visible');
+                if (v !== null && v !== undefined)
+                  g.setAttribute('transform', 'translate(' + xAt(active) + ' ' + yAt(v) + ')');
+              });
+              var box = svg.getBoundingClientRect();
+              showTip(
+                function (t) {
+                  t.appendChild(el('div', 'tip-title', xs[active]));
+                  series.forEach(function (s) {
+                    var row = el('div', 'tip-row');
+                    var key = el('span', 'key');
+                    key.style.background = s.color;
+                    row.appendChild(key);
+                    row.appendChild(el('span', 'tip-value', valFmt(s.values[active])));
+                    if (series.length > 1) row.appendChild(el('span', 'tip-title', s.name));
+                    t.appendChild(row);
+                  });
+                },
+                cx !== undefined ? cx : box.left + xAt(active),
+                cy !== undefined ? cy : box.top + m.t + 20
+              );
+            }
+            function clear() {
+              cross.setAttribute('visibility', 'hidden');
+              dots.forEach(function (g) {
+                g.setAttribute('visibility', 'hidden');
+              });
+              hideTip();
+            }
+            svg.addEventListener('pointermove', function (e) {
+              var box = svg.getBoundingClientRect();
+              var rel = (e.clientX - box.left - m.l) / pw;
+              select(xs.length > 1 ? Math.round(rel * (xs.length - 1)) : 0, e.clientX, e.clientY);
+            });
+            svg.addEventListener('pointerleave', clear);
+            svg.addEventListener('blur', clear);
+            svg.addEventListener('keydown', function (e) {
+              var next = null;
+              if (e.key === 'ArrowRight') next = active < 0 ? 0 : active + 1;
+              else if (e.key === 'ArrowLeft') next = active < 0 ? xs.length - 1 : active - 1;
+              else if (e.key === 'Home') next = 0;
+              else if (e.key === 'End') next = xs.length - 1;
+              if (next === null) return;
+              e.preventDefault();
+              select(next);
+            });
+            holder.appendChild(svg);
+          }
+          wrap.redraw = render;
+          var pending = null;
+          function schedule() {
+            if (pending) cancelAnimationFrame(pending);
+            pending = requestAnimationFrame(function () {
+              pending = null;
+              if (holder.clientWidth) render();
+            });
+          }
+          if (typeof ResizeObserver === 'function') new ResizeObserver(schedule).observe(holder);
+          else window.addEventListener('resize', schedule);
+          render();
+
+          var asTable = function () {
+            var cols = [{ key: 'x', label: b.xHeader || T.item }].concat(
+              series.map(function (s, i) {
+                return { key: 's' + i, label: s.name, format: b.format || 'int' };
+              })
+            );
+            var rows = xs.map(function (x, r) {
+              var row = { x: x };
+              series.forEach(function (s, i) {
+                row['s' + i] = s.values[r];
+              });
+              return row;
+            });
+            return makeTable(cols, rows, { label: b.title, visibleRows: 0, sortable: false });
+          };
+          return card(b, wrap, asTable);
+        }
+
+        // ---- table and text blocks ----------------------------------------------
+        function tableBlock(b) {
+          var node = makeTable(b.columns || [], b.rows || [], {
+            label: b.title,
+            visibleRows: b.visibleRows,
+            sortKey: b.sort && b.sort.key,
+            sortDir: b.sort && b.sort.dir
+          });
+          return card(b, node, null);
+        }
+        function textBlock(b) {
+          var node = el('div', 'text-block');
+          (b.paragraphs || []).forEach(function (p) {
+            node.appendChild(rich(el('p'), p));
+          });
+          return card(b, node, null);
+        }
+
+        // ---- page ----------------------------------------------------------------
+        var head = el('header', 'head');
+        head.appendChild(el('h1', null, SPEC.title || ''));
+        if (SPEC.summary) head.appendChild(rich(el('p', 'summary'), SPEC.summary));
+        var notes = (Array.isArray(SPEC.notes) ? SPEC.notes : []).slice();
+        if (SPEC.asOf) notes.push(T.asOf + ': ' + SPEC.asOf);
+        if (notes.length) {
+          var notesEl = el('div', 'notes');
+          notes.forEach(function (n) {
+            notesEl.appendChild(el('p', null, n));
+          });
+          head.appendChild(notesEl);
+        }
+        app.appendChild(head);
+
+        if (Array.isArray(SPEC.kpis) && SPEC.kpis.length) {
+          var kpis = el('div', 'kpis');
+          SPEC.kpis.forEach(function (k) {
+            var tile = el('div', 'kpi');
+            tile.appendChild(el('div', 'kpi-label', k.label));
+            tile.appendChild(el('div', 'kpi-value', fmt(k.value, k.format)));
+            if (k.note) tile.appendChild(el('div', 'kpi-note', k.note));
+            kpis.appendChild(tile);
+          });
+          app.appendChild(kpis);
+        }
+
+        var builders = { bars: barsBlock, line: lineBlock, table: tableBlock, text: textBlock };
+        (Array.isArray(SPEC.blocks) ? SPEC.blocks : []).forEach(function (b) {
+          if (b && builders[b.type]) app.appendChild(builders[b.type](b));
+        });
+
+        if (SPEC.method && Array.isArray(SPEC.method.paragraphs) && SPEC.method.paragraphs.length) {
+          var method = el('details', 'method');
+          method.open = true;
+          method.appendChild(el('summary', null, SPEC.method.title || T.method || ''));
+          SPEC.method.paragraphs.forEach(function (p) {
+            method.appendChild(el('p', null, p));
+          });
+          app.appendChild(method);
+        }
+        if (Array.isArray(SPEC.sources) && SPEC.sources.length) {
+          sourcesEl = el('details');
+          sourcesEl.appendChild(el('summary', null, T.sources));
+          SPEC.sources.forEach(function (s) {
+            var entry = el('div', 'source');
+            entry.id = 'src-' + s.id;
+            entry.tabIndex = -1;
+            entry.appendChild(el('h3', null, s.name));
+            if (s.description) entry.appendChild(el('p', null, s.description));
+            if (s.formula) entry.appendChild(el('pre', 'formula', s.formula));
+            sourcesEl.appendChild(entry);
+          });
+          app.appendChild(sourcesEl);
+        }
+      })();
+    </script>
+  </body>
+</html>

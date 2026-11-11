@@ -4,6 +4,7 @@
 import { optionalString, toolFailure } from '../documentToolHelpers.js';
 import { GeneratedFileError, holdGeneratedFile, safeFileName } from '../generatedFiles.js';
 import { templateBundleFor } from '../templates/applyTemplate.js';
+import { DASHBOARD_PRESET, renderDashboard } from './dashboardPreset.js';
 
 /**
  * The tool the `web-artifacts` system skill brings (see
@@ -206,11 +207,29 @@ export function injectBrandTokens(html, brand = {}) {
  */
 export async function runCreateWebArtifact(params) {
   try {
-    const rawContent = typeof params.content === 'string' ? params.content.trim() : '';
-    if (!rawContent) {
-      throw new GeneratedFileError('Provide the HTML or SVG markup in "content".', 'invalid');
+    const preset = optionalString(params.preset, 40);
+    if (preset && preset !== DASHBOARD_PRESET) {
+      throw new GeneratedFileError(
+        `Unknown preset "${preset}". The only preset is "${DASHBOARD_PRESET}".`,
+        'invalid'
+      );
     }
-    const format = detectFormat(params.filename || params.name, params.format, rawContent);
+    // A preset is a page the server lays out from a small JSON spec; the
+    // markup of any other artifact comes from the model.
+    const rawContent = preset
+      ? renderDashboard(params.data)
+      : typeof params.content === 'string'
+        ? params.content.trim()
+        : '';
+    if (!rawContent) {
+      throw new GeneratedFileError(
+        'Provide the HTML or SVG markup in "content", or a preset with its "data".',
+        'invalid'
+      );
+    }
+    const format = preset
+      ? 'html'
+      : detectFormat(params.filename || params.name, params.format, rawContent);
     const warnings = inspectWebArtifact(rawContent, format);
 
     const bundle = await templateBundleFor({

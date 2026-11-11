@@ -36,7 +36,8 @@ The shipped system skills:
 | `docx` | `create_docx` | Create editable Word documents on request |
 | `pptx` | `create_pptx`, `restyle_pptx` | Create PowerPoint presentations on request; move an uploaded deck into the company design |
 | `xlsx` | `create_xlsx` | Create formatted Excel workbooks with live formulas on request |
-| `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (dashboards, calculators, prototypes) and SVG graphics that run in the chat's workspace pane |
+| `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (calculators, simulators, prototypes) and SVG graphics that run in the chat's workspace pane |
+| `dashboard` | `create_web_artifact` | Turn figures from tools or from the user into a dashboard page (headline, KPI tiles, bar and line charts, tables, method and sources) in the chat's workspace pane |
 | `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
 
 ### Skill access checks
@@ -152,6 +153,18 @@ Use the `files` skill for a plain `.csv` instead. Enable it like the other skill
 ## The `web-artifacts` skill
 
 `create_web_artifact` creates a single-file interactive page (`format: "html"`, the default) or a standalone vector graphic (`format: "svg"`) — a dashboard, calculator, simulator, clickable prototype, canvas visualization or diagram. The user gets a download card, and the file opens in the chat's [workspace pane](artifacts.md#the-workspace-pane) with a **Preview | Code** toggle: HTML runs in a sandboxed frame, SVG renders as a picture. The server still stores and serves both as `text/plain` (see [Artifacts](artifacts.md#kinds)), so a downloaded file is never executed by iHub itself. Enable it by adding `web-artifacts` to the app's skills.
+
+## The `dashboard` skill
+
+`dashboard` turns figures into a finished page without the model writing any HTML. The model describes the page as JSON and calls `create_web_artifact` with `preset: "dashboard"` and that JSON as `data`; the server checks it and lays it out in a fixed design (`server/systemSkills/dashboard/assets/dashboard.html`). The skill's instructions tell the model to build one **as soon as a tool run or an analysis has produced numbers worth looking at**, without being asked, and also when the user asks for a dashboard or charts of their data.
+
+- **What the page holds:** a headline sentence, up to eight KPI tiles, up to 20 blocks (ranked horizontal bars with optional limit lines, line charts of up to eight series, sortable tables with status cells, short texts), a "How these numbers were made" section and a collapsed "Sources and formulas" section that each block can open from its **Source** button. Every chart has a **Table view** with the same numbers, a tooltip on hover and focus, and keyboard access.
+- **Numbers come from the data.** The skill tells the model to copy every figure from a tool result or from the user's data. The page works out shares, order, the sum of a folded tail of small bars and table sorting itself, so the model does not add anything up.
+- **Looks:** light and dark colours from a validated chart palette, a phone layout, `--brand-primary` for the header rule and the app's `documentTemplate` brand colours and font through the same tokens as other web artifacts. Interface texts are built in for English and German (`lang`); the spec can carry `labels` for another language.
+- **Safe by construction:** the spec is checked field by field (a bad value comes back as a message naming the field, such as `blocks[1].items[3].value must be a number`), at most 1 MB, and nothing in it is read as markup: the page writes every text with `textContent`, and the JSON is escaped so it cannot close its own `<script>`. The page never fetches anything and carries the same sandbox and `text/plain` storage as every web artifact.
+- **Enable it** by adding `dashboard` to the app's skills (`"skills": ["dashboard"]`, `skillSettings.enabled: true`). It brings `create_web_artifact` itself, so `web-artifacts` need not be enabled as well; with both, the tool is offered once. A rebuilt dashboard with the same file name replaces the earlier one.
+
+The full field list the model reads is `server/systemSkills/dashboard/references/spec.md`.
 
 ## The `files` skill
 

@@ -136,7 +136,8 @@ describe('tools of system skills', () => {
       ['create_file', 'files'],
       ['create_pdf', 'pdf'],
       ['create_pptx', 'pptx'],
-      ['create_web_artifact', 'web-artifacts'],
+      // `dashboard` and `web-artifacts` bring the same tool; it is offered once, through the first.
+      ['create_web_artifact', 'dashboard'],
       ['create_xlsx', 'xlsx'],
       ['create_zip', 'files'],
       ['preview_pdf', 'pdf'],

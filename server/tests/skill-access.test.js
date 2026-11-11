@@ -98,10 +98,11 @@ describe('getSkillsForUser', () => {
 
   test('a wildcard grant sees every skill', async () => {
     const { data } = await configCache.getSkillsForUser(userWith(['*']));
-    // The installed skills, and the system skills iHub ships (`pdf`, `docx`, `pptx`, `web-artifacts`, `xlsx`).
+    // The installed skills, and the system skills iHub ships (`pdf`, `docx`, `pptx`, `dashboard`, `web-artifacts`, `xlsx`).
     assert.deepEqual(names(data), [
       'alpha',
       'beta',
+      'dashboard',
       'docx',
       'files',
       'gamma',

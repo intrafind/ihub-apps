@@ -13,6 +13,7 @@ You create live, interactive web artifacts and vector graphics with the `create_
 
 ## Choose the right format
 
+- **A dashboard of figures** that a tool or the user's data produced (KPI tiles, ranked bars, trends, tables, method and sources): activate the **`dashboard`** skill, if it is available, and let the server lay the page out from a JSON spec. Write HTML yourself only for what that cannot do.
 - **`.html` (`create_web_artifact`, `format: "html"`)**: interactive dashboards, calculators, financial/engineering simulators, sortable/filterable data explorers, clickable UI prototypes, games, and interactive HTML5 `<canvas>` / generative visualizations.
 - **`.svg` (`create_web_artifact`, `format: "svg"`)**: standalone scalable vector illustrations, architecture diagrams, custom infographics, and badges.
 - **Inline ` ```mermaid ` block in chat**: quick flowcharts, sequence diagrams, ER diagrams or state machines when the user has not asked for a downloadable file or custom visual styling.
