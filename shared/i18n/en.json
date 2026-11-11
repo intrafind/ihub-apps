@@ -6569,7 +6569,11 @@
         "xmp": "XMP digital source type",
         "json": "Show the record as JSON",
         "copy": "Copy JSON",
-        "copied": "Copied"
+        "copied": "Copied",
+        "kindText": "Text",
+        "kindImage": "Image",
+        "kindAudio": "Audio",
+        "bytes": "{{formatted}} bytes"
       }
     }
   },
@@ -6906,7 +6910,7 @@
       "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it.",
       "imageButton": "AI-generated image: details",
       "imageTitle": "AI-generated image",
-      "imageNote": "iHub keeps this hash, not the image. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it."
+      "imageNote": "The provenance record keeps this hash, not the image itself. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it."
     },
     "answerSource": {
       "llmOnly": "Based on AI knowledge",

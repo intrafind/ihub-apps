@@ -30,8 +30,13 @@ function AdminEuAiActPage() {
   // does not scroll to it by itself.
   useEffect(() => {
     if (!hash) return;
-    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
-    target?.scrollIntoView?.({ block: 'start' });
+    let id;
+    try {
+      id = decodeURIComponent(hash.slice(1));
+    } catch {
+      return; // A malformed fragment (`#%`) names no card.
+    }
+    document.getElementById(id)?.scrollIntoView?.({ block: 'start' });
   }, [hash]);
   // The master switch is off: the cards below are paused (read-only, explained).
   const paused = status?.conformity?.enabled === false;

@@ -47,6 +47,20 @@ function markingText(watermark, t) {
   return parts.join(', ');
 }
 
+/** The kind of output; a kind this version does not know is shown as stored. */
+function kindText(kind, t) {
+  switch (kind || 'text') {
+    case 'text':
+      return t('admin.euAiAct.record.kindText', 'Text');
+    case 'image':
+      return t('admin.euAiAct.record.kindImage', 'Image');
+    case 'audio':
+      return t('admin.euAiAct.record.kindAudio', 'Audio');
+    default:
+      return String(kind);
+  }
+}
+
 function yesNo(value, t) {
   if (value === true) return t('common.yes', 'Yes');
   if (value === false) return t('common.no', 'No');
@@ -92,7 +106,7 @@ export default function ProvenanceRecord({ record }) {
           {formatTime(record.created_at)}
         </Field>
         <Field label={t('admin.euAiAct.record.model', 'Model')}>{show(record.model?.id)}</Field>
-        <Field label={t('admin.euAiAct.record.kind', 'Kind')}>{show(record.kind || 'text')}</Field>
+        <Field label={t('admin.euAiAct.record.kind', 'Kind')}>{kindText(record.kind, t)}</Field>
         <Field label={t('admin.euAiAct.record.marking', 'Model marking')}>
           {markingText(record.model?.watermark, t)}
         </Field>
@@ -108,7 +122,11 @@ export default function ProvenanceRecord({ record }) {
         {hash?.mime_type && (
           <Field label={t('admin.euAiAct.record.file', 'File')}>
             {hash.mime_type}
-            {hash.bytes ? `, ${hash.bytes.toLocaleString()} bytes` : ''}
+            {hash.bytes
+              ? `, ${t('admin.euAiAct.record.bytes', '{{formatted}} bytes', {
+                  formatted: hash.bytes.toLocaleString()
+                })}`
+              : ''}
           </Field>
         )}
         {record.provider_marking && (

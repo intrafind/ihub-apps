@@ -623,6 +623,8 @@ describe('VerificationCard', () => {
     expect(details).toHaveTextContent('Google LLC');
     expect(details).toHaveTextContent('Imagen');
     expect(details).toHaveTextContent('synthid');
+    // The kind is translated, not the stored `image`.
+    expect(details).toHaveTextContent('KindImage');
     expect(details).toHaveTextContent('(trust not evaluated)');
     expect(container.textContent).not.toMatch(BANNED);
   });

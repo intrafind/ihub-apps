@@ -181,7 +181,7 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
             {isImage
               ? t(
                   'chatMessage.provenance.imageNote',
-                  'iHub keeps this hash, not the image. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it.'
+                  'The provenance record keeps this hash, not the image itself. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it.'
                 )
               : t(
                   'chatMessage.provenance.note',

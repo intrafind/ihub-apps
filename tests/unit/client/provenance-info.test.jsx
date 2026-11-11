@@ -102,7 +102,7 @@ describe('ProvenanceInfo', () => {
     fireEvent.click(button);
     const panel = screen.getByTestId('provenance-panel');
     expect(panel).toHaveTextContent('AI-generated image');
-    expect(panel).toHaveTextContent('iHub keeps this hash, not the image');
+    expect(panel).toHaveTextContent('The provenance record keeps this hash, not the image itself');
     expect(panel.className).toContain('top-full');
   });
 

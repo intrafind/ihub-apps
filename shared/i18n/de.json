@@ -743,7 +743,7 @@
       "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat.",
       "imageButton": "KI-generiertes Bild: Details",
       "imageTitle": "KI-generiertes Bild",
-      "imageNote": "iHub speichert diesen Hash, nicht das Bild. Mit ihm lässt sich die unveränderte Datei prüfen. Kennzeichnungen des Anbieters bleiben erhalten. Kein Treffer bedeutet nicht, dass ein Mensch es erstellt hat."
+      "imageNote": "Der Herkunftsnachweis speichert diesen Hash, nicht das Bild selbst. Mit ihm lässt sich die unveränderte Datei prüfen. Kennzeichnungen des Anbieters bleiben erhalten. Kein Treffer bedeutet nicht, dass ein Mensch es erstellt hat."
     },
     "answerSource": {
       "llmOnly": "Basierend auf KI-Wissen",
@@ -7001,7 +7001,11 @@
         "xmp": "XMP: digitaler Quelltyp",
         "json": "Nachweis als JSON anzeigen",
         "copy": "JSON kopieren",
-        "copied": "Kopiert"
+        "copied": "Kopiert",
+        "kindText": "Text",
+        "kindImage": "Bild",
+        "kindAudio": "Audio",
+        "bytes": "{{formatted}} Byte"
       }
     }
   },
