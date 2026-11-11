@@ -89,7 +89,7 @@ const invalid = (value, pattern) =>
 describe('dashboard preset: the page', () => {
   it('lays a valid spec into the fixed page without any sandbox warning', () => {
     const html = renderDashboard(JSON.stringify(spec()));
-    assert.match(html, /^<!DOCTYPE html>/);
+    assert.match(html, /^<!doctype html>/i);
     assert.match(html, /<html lang="de">/);
     assert.deepEqual(inspectWebArtifact(html, 'html'), []);
     const embedded = embeddedSpec(html);
