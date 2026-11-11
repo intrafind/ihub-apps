@@ -3509,6 +3509,14 @@
         "typeBindingAction": "Das Update von {{installation}} auf v{{version}} hat die Aktion „{{action}}“ umbenannt oder entfernt, die diese App noch in ihrer Einbindung {{key}} nennt: Bearbeiten Sie die Einbindung.",
         "typeBindingScope": "Das Update von {{installation}} auf v{{version}} hat den Bereich „{{scope}}“ umbenannt, den diese App noch in ihrer Einbindung {{key}} setzt: Bearbeiten Sie die Einbindung.",
         "openLog": "Migrationsprotokoll von {{installation}}"
+      },
+      "aiNotice": {
+        "title": "KI-Hinweis",
+        "help": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet.",
+        "inherit": "Hinweis der Plattform verwenden",
+        "custom": "Eigener Hinweis",
+        "off": "Kein Hinweis für diese App",
+        "text": "Hinweistext"
       }
     },
     "features": {
@@ -6441,6 +6449,18 @@
       "notFound": "Diese Dokumentationsseite gibt es in dieser Version nicht.",
       "loadError": "Die Dokumentationsseite konnte nicht geladen werden",
       "backHome": "Zur Startseite der Dokumentation"
+    },
+    "aiDisclosure": {
+      "title": "KI-Hinweis",
+      "description": "Der Hinweis erscheint nur in einem leeren Chat. Er wird nicht gespeichert und nicht an die KI gesendet. Unabhängig davon sorgt eine Regel in jedem System-Prompt dafür, dass die Assistenten auf Nachfrage sagen, dass sie ein KI-System sind; Sie können sie unten umformulieren, aber nicht abschalten.",
+      "enabled": "KI-Hinweis vor der ersten Nachricht anzeigen",
+      "text": "Hinweistext (leer verwendet den eingebauten Text)",
+      "saved": "KI-Hinweis gespeichert",
+      "saveError": "KI-Hinweis konnte nicht gespeichert werden",
+      "guardrailText": "Regel für die KI (leer verwendet die eingebaute Regel)",
+      "guardrailHint": "Für das Modell geschrieben, Englisch funktioniert am besten. Sie wird als letzte Zeile an den System-Prompt jedes Modellaufrufs angehängt (Chat, API, MCP, A2A, Agenten, Workflows). Apps und Nutzer können sie nicht ändern. Sie sollte klar festhalten, dass der Assistent eine KI ist und sich nie als Mensch ausgibt.",
+      "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+      "loadError": "KI-Hinweis-Einstellungen konnten nicht geladen werden"
     }
   },
   "cloudStorage": {
@@ -9685,7 +9705,7 @@
     "VOICES_UNSUPPORTED": "Der Anbieter dieses Modells verwaltet keine Stimmen.",
     "INVALID_AUDIO": "Die Audiodatei fehlt oder ist ungültig.",
     "UNSUPPORTED_TTS_PROVIDER": "Der Text-to-Speech-Anbieter wird nicht unterstützt.",
-    "NO_AUDIO": "Das Modell hat ohne Audio geantwortet.",
+    "NO_AUDIO": "Der Sprachdienst hat kein Audio geliefert.",
     "ANSWER_IN_PROGRESS": "Die Interaktion wird gerade beantwortet.",
     "ANSWER_IN_CHAT": "Beantworten Sie diese Freigabe im zugehörigen Chat.",
     "APPROVER_REQUIRED": "Zum Beantworten dieser Interaktion ist ein Freigebender erforderlich.",
@@ -9789,7 +9809,6 @@
     "INVALID_LANGUAGE": "Die Sprache ist ungültig.",
     "INVALID_VOICE": "Die Stimme ist für dieses Modell ungültig.",
     "NO_SPEAKABLE_TEXT": "In diesem Text gibt es nichts zum Vorlesen.",
-    "NO_AUDIO": "Der Sprachdienst hat kein Audio geliefert.",
     "TTS_NOT_CONFIGURED": "Vorlesen ist auf dieser Installation nicht eingerichtet.",
     "MODEL_DISABLED": "Dieses Modell ist ausgeschaltet.",
     "INTEGRATION_SCOPE_NOT_ALLOWED": "Sie dürfen dieses Suchprofil nicht verwenden.",
@@ -9907,5 +9926,8 @@
   },
   "smartSearch": {
     "placeholder": "Apps durchsuchen..."
+  },
+  "aiDisclosure": {
+    "firstTurnNotice": "Sie chatten mit einem KI-System, nicht mit einem Menschen. Antworten können fehlerhaft sein, bitte prüfen Sie wichtige Informationen."
   }
 }

@@ -47,6 +47,19 @@ export function dictationClientConfig(dictation) {
 }
 
 /**
+ * Client-visible slice of `platform.aiDisclosure`.
+ * @param {Object} [aiDisclosure]
+ */
+export function aiDisclosureClientConfig(aiDisclosure) {
+  const notice = aiDisclosure?.firstTurnNotice;
+  const text = {};
+  for (const [lang, value] of Object.entries(notice?.text || {})) {
+    if (typeof value === 'string' && value.trim()) text[lang] = value;
+  }
+  return { firstTurnNotice: { enabled: notice?.enabled !== false, text } };
+}
+
+/**
  * The voice mode platform settings as the client sees them: the non-secret
  * values, clamped to their ranges. The voice style instruction
  * (`systemPrompt`) stays on the server, which is the only one to use it.
@@ -890,6 +903,9 @@ export default function registerDataRoutes(app) {
       // user may use that model is the client's /api/models?type=tts list.
       // voiceMode is the platform side of the spoken conversation with an app
       // (shared/voiceMode.js resolves it against the app's own settings).
+      // First-turn AI notice (Art. 50(1)): non-secret, resolved on the client by
+      // shared/aiDisclosure.js against the app's own override.
+      aiDisclosure: aiDisclosureClientConfig(platform.aiDisclosure),
       speech: platform.speech
         ? {
             defaultService: platform.speech.defaultService,

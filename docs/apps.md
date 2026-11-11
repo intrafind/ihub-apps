@@ -1696,3 +1696,20 @@ For full details including provider setup and API keys, see **[Web Tools](web-to
 ---
 
 _This documentation follows iHub Apps best practices for app configuration. For additional examples and support, consult the community resources or refer to the example configurations in `contents/apps/`._
+
+## AI notice (`aiDisclosure`)
+
+An app can override the platform's first-turn AI notice, the line shown in the empty chat (see
+[EU AI Act](ai-act.md)):
+
+```json
+"aiDisclosure": {
+  "firstTurnNotice": { "enabled": false }
+}
+```
+
+- `enabled: false` — no notice for this app. Omit it to follow the platform.
+- `text` — `{ "en": "…", "de": "…" }`, replaces the platform text for this app.
+- The platform's `aiDisclosure.firstTurnNotice.enabled: false` hides the notice everywhere.
+- The rule in the system prompt that makes the assistant say it is an AI is not an app setting. Its wording is set platform-wide and it cannot be switched off.
+

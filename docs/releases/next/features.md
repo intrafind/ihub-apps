@@ -1599,3 +1599,32 @@ project, like a chat in your own project, and the page lists your chats.
   (`projectPrivate`) when it opens in such a project.
 
 See [Projects → Chats in a project](../../projects.md#chats-in-a-project).
+
+## Notice That You Are Chatting With an AI
+
+The empty chat now shows a short note above the message box: *You are chatting with an AI system, not a
+person. Answers can be wrong, so please check important information.* It is on by default, so installations
+see it after the upgrade.
+
+- **Passive and not stored.** It is not a message: it is not sent to the model, not saved with the chat and not
+  shown when a chat with messages is reopened. It disappears with the first message.
+- **Your wording.** Set the text per language, or switch the notice off for all apps, under
+  **Admin → Advanced → AI notice** (`aiDisclosure.firstTurnNotice` in `platform.json`). An app can use its own
+  text or no notice in the **AI notice** section of the app editor. Links in Markdown are allowed.
+- **Where.** The app chat, also above a start form. Apps that start by themselves, the Office add-in panel and
+  `iframe`/`redirect` apps do not show it.
+
+See [EU AI Act](../../ai-act.md#first-turn-notice).
+
+## Assistants Always Say They Are an AI
+
+Every call to a text model now carries the rule "You are an AI system. If asked, always say so. Never claim to
+be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
+A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
+`system` message cannot remove it, and there is no setting to switch it off. Admins can reword the rule for the
+whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
+
+Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
+still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
+
+See [EU AI Act](../../ai-act.md#guardrail-prompt-always-on).

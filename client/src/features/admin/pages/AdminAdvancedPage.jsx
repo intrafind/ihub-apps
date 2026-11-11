@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import AiNoticeSettingsCard from '../components/AiNoticeSettingsCard';
 import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
 
 function AdminAdvancedPage() {
@@ -147,6 +148,9 @@ function AdminAdvancedPage() {
           )}
           <AdminDemoAccountsAlert inline />
         </div>
+
+        {/* First-turn AI notice (EU AI Act Art. 50(1)) */}
+        <AiNoticeSettingsCard />
 
         {/* Force Refresh Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700 p-6">

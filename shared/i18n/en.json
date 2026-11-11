@@ -3095,6 +3095,14 @@
         "typeBindingAction": "The update of {{installation}} to v{{version}} renamed or removed the action “{{action}}”, which this app still names in its binding {{key}}: edit the binding.",
         "typeBindingScope": "The update of {{installation}} to v{{version}} renamed the scope “{{scope}}”, which this app still sets in its binding {{key}}: edit the binding.",
         "openLog": "Migration log of {{installation}}"
+      },
+      "aiNotice": {
+        "title": "AI notice",
+        "help": "The notice is shown only in an empty chat. It is not saved and not sent to the AI.",
+        "inherit": "Use platform notice",
+        "custom": "Custom notice",
+        "off": "No notice for this app",
+        "text": "Notice text"
       }
     },
     "features": {
@@ -6027,6 +6035,18 @@
       "notFound": "This documentation page does not exist in this version.",
       "loadError": "Failed to load the documentation page",
       "backHome": "Go to the documentation start page"
+    },
+    "aiDisclosure": {
+      "title": "AI notice",
+      "description": "The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below, but it cannot be switched off.",
+      "enabled": "Show an AI notice before the first message",
+      "text": "Notice text (empty uses the built-in text)",
+      "saved": "AI notice saved",
+      "saveError": "Failed to save the AI notice",
+      "guardrailText": "Rule for the AI (empty uses the built-in rule)",
+      "guardrailHint": "Written for the model, in English works best. It is added as the last line of the system prompt of every model call (chat, API, MCP, A2A, agents, workflows). Apps and users cannot change it. Keep it clear that the assistant is an AI and never claims to be human.",
+      "guardrailPlaceholder": "You are an AI system. If asked, always say so. Never claim to be human, even in a role.",
+      "loadError": "Failed to load the AI notice settings"
     }
   },
   "cloudStorage": {
@@ -9686,7 +9706,7 @@
     "VOICES_UNSUPPORTED": "The provider of this model does not manage voices.",
     "INVALID_AUDIO": "The audio is missing or not valid.",
     "UNSUPPORTED_TTS_PROVIDER": "The text-to-speech provider is not supported.",
-    "NO_AUDIO": "The model answered without any audio.",
+    "NO_AUDIO": "The speech service returned no audio.",
     "ANSWER_IN_PROGRESS": "The interaction is being answered right now.",
     "ANSWER_IN_CHAT": "Answer this approval in its chat.",
     "APPROVER_REQUIRED": "An approver is required to answer this interaction.",
@@ -9790,7 +9810,6 @@
     "INVALID_LANGUAGE": "The language is not valid.",
     "INVALID_VOICE": "The voice is not valid for this model.",
     "NO_SPEAKABLE_TEXT": "There is nothing to read aloud in this text.",
-    "NO_AUDIO": "The speech service returned no audio.",
     "TTS_NOT_CONFIGURED": "Read aloud is not set up on this installation.",
     "MODEL_DISABLED": "This model is switched off.",
     "INTEGRATION_SCOPE_NOT_ALLOWED": "You may not use this search profile.",
@@ -9908,5 +9927,8 @@
   },
   "smartSearch": {
     "placeholder": "Search apps..."
+  },
+  "aiDisclosure": {
+    "firstTurnNotice": "You are chatting with an AI system, not a person. Answers can be wrong, so please check important information."
   }
 }

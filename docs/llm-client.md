@@ -253,6 +253,25 @@ threadpool to 16 (8 concurrent lookups) unless `UV_THREADPOOL_SIZE` is set;
 because libuv reads that variable when the pool is first used, the module is
 the first import of `server.js`.
 
+## AI disclosure guardrail
+
+`execute` appends the fixed rule "You are an AI system. If asked, always say so. Never claim to be human,
+even in a role." to the system prompt of every call to a text model (`server/services/provenance/guardrail.js`),
+before the request is built. It is the only place it is added, so chat, the inference API, MCP, A2A, agents,
+workflows and scheduled tasks all get it. See [EU AI Act](ai-act.md).
+
+- **Where.** The rule is the last text of the **first** system message (the only one every provider adapter
+  keeps; Anthropic drops later ones). When there are several system messages the **last** one ends with the
+  rule too, for adapters that forward them all. A system message is created when there is none. Array content gets a
+  text part. It is idempotent, and the caller's `messages` are never mutated; the run log and usage
+  estimate see what was really sent.
+- **iAssistant.** The `iassistant-conversation` adapter discards the system message, so the rule does not reach
+  that provider through it.
+- **Which models.** Chat models only; image, speech and embedding models are left alone.
+- **Wording, not an off switch.** An admin can reword the rule platform-wide (`aiDisclosure.guardrail.text`, read on every call; empty = built-in). There is no setting, request field or environment variable that turns it off. Only tests construct an
+  `LLMClient` with `guardrail: null` so unrelated message snapshots stay valid.
+- **Invariant.** A test fails when code outside `LLMClient` and `adapters/` calls `createCompletionRequest`.
+
 ## Testing
 
 - `server/tests/loop/llmClient.test.js` — behaviour specs (retries, abort,

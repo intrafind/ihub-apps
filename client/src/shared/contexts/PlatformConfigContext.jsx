@@ -75,6 +75,10 @@ export function PlatformConfigProvider({ children }) {
         // history UI on it, so it has to survive this hand-assembled object.
         chats: platformCfg.chats,
 
+        // First-turn AI notice (Art. 50(1)): enabled + text, resolved by
+        // shared/aiDisclosure.js against the app's override.
+        aiDisclosure: platformCfg.aiDisclosure,
+
         // Voice input: backend switches, the Azure host / keyConfigured flag and
         // the platform-wide defaults (dictation service, transcription model)
         // that apps fall back to. Dropping it here silently broke all of them.

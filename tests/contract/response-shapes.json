@@ -777,6 +777,15 @@
   "GET /api/admin/configs/platform": {
     "status": 200,
     "shape": {
+      "aiDisclosure": {
+        "firstTurnNotice": {
+          "enabled": "boolean",
+          "text": "object"
+        },
+        "guardrail": {
+          "text": "string"
+        }
+      },
       "anonymousAuth": {
         "defaultGroups": ["string"],
         "enabled": "boolean"
@@ -2952,6 +2961,7 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
+          "aiDisclosure": "object",
           "allowEmptyContent": "object",
           "allowInheritance": "object",
           "allowUserTemplateUploads": "object",
@@ -3086,6 +3096,7 @@
         "description": "string",
         "examples": ["object"],
         "properties": {
+          "aiDisclosure": "object",
           "anonymousAuth": "object",
           "artifacts": "object",
           "audit": "object",
@@ -4665,6 +4676,12 @@
   "GET /api/configs/platform": {
     "status": 200,
     "shape": {
+      "aiDisclosure": {
+        "firstTurnNotice": {
+          "enabled": "boolean",
+          "text": "object"
+        }
+      },
       "chats": {
         "persistence": "boolean",
         "sharing": {
