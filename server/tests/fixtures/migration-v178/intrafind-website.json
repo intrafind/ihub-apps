@@ -28,8 +28,11 @@
         "url": "https://www.intrafind.com",
         "maxContentLength": 1048576
       },
-      "storage": "text",
-      "status": "pending",
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
       "provenance": {
         "origin": "linked",
         "by": {
@@ -57,8 +60,11 @@
         "url": "https://intrafind.com/en/ifinder",
         "maxContentLength": 1048576
       },
-      "storage": "text",
-      "status": "pending",
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
       "provenance": {
         "origin": "linked",
         "by": {
@@ -86,8 +92,11 @@
         "url": "https://intrafind.com/en/ifinder/features",
         "maxContentLength": 1048576
       },
-      "storage": "text",
-      "status": "pending",
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
       "provenance": {
         "origin": "linked",
         "by": {
@@ -115,8 +124,11 @@
         "url": "https://intrafind.com/en/ifinder/connectors",
         "maxContentLength": 1048576
       },
-      "storage": "text",
-      "status": "pending",
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
       "provenance": {
         "origin": "linked",
         "by": {
@@ -144,8 +156,11 @@
         "url": "https://intrafind.com/en/iassistant",
         "maxContentLength": 1048576
       },
-      "storage": "text",
-      "status": "pending",
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
       "provenance": {
         "origin": "linked",
         "by": {
@@ -173,8 +188,11 @@
         "url": "https://intrafind.com/en/ihub",
         "maxContentLength": 1048576
       },
-      "storage": "text",
-      "status": "pending",
+      "storage": "link",
+      "status": "ready",
+      "cache": {
+        "ttlSeconds": 7200
+      },
       "provenance": {
         "origin": "linked",
         "by": {

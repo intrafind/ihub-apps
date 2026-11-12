@@ -298,8 +298,8 @@ link the other projects.
    they differed, and it may write when any of them could.
 3. With **Delete the emptied projects** (on by default), the merged projects are deleted.
 
-A project that ships with iHub (the `faq`, `meeting-knowledge-base` and `intrafind-website`
-project, for example) is restored at the next server start once it is deleted, like any missing
+A project that ships with iHub (the `faq` and `meeting-knowledge-base` project, for example) is
+restored at the next server start once it is deleted, like any missing
 default file. The merge result says so for such a project; disable it then, or leave **Delete the
 emptied projects** off and disable it yourself.
 
@@ -1332,7 +1332,9 @@ note "Sources are now Projects" in the release notes.
 Every source becomes a project of its own, also when several sources belonged together (the pages
 of one website, the documents of one department). For the shipped IntraFind website sources,
 migration `V178__merge_intrafind_website_projects` does this already: the six projects become the
-one project `intrafind-website`, unless an admin changed one of them. Bring them together afterwards with
+one project `intrafind-website`, unless an admin changed one of them. iHub no longer ships that
+project (it needs internet access to fetch its pages): an installation that does not have it yet
+keeps the six projects as they are. Bring them together afterwards with
 [Moving, copying and merging](#moving-copying-and-merging): merge the projects, or move the items
 you want into one project.
 

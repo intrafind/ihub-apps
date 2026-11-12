@@ -39,8 +39,13 @@ const SHIPPED_APP_IDS = [
   'translator'
 ];
 
-/** V185 retired `ifinder-document-actions`: the migration still lists it, the server no longer ships it. */
-const STILL_SHIPPED_APP_IDS = SHIPPED_APP_IDS.filter(id => id !== 'ifinder-document-actions');
+/**
+ * Apps the migration still lists that the server no longer ships: V185 retired
+ * `ifinder-document-actions`, and the IntraFind Website Bot left the defaults with its
+ * project (#3622).
+ */
+const RETIRED_APP_IDS = new Set(['ifinder-document-actions', 'intrafind-websites-bot']);
+const STILL_SHIPPED_APP_IDS = SHIPPED_APP_IDS.filter(id => !RETIRED_APP_IDS.has(id));
 
 let baseDir = null;
 

@@ -1949,3 +1949,6 @@ longer re-read the whole site on each server process, which could exhaust the se
 - Changing the address of a web page item fetches the new page.
 - Existing web pages are converted automatically after the upgrade, in user and admin projects:
   each shows as processing until its first fetch, which takes a few minutes for large projects.
+- New installations no longer ship the **IntraFind Website** project and the **IntraFind Website
+  Bot** app: their pages need internet access, which many installations do not have. Existing
+  installations keep both.
