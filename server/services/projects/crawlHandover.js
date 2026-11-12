@@ -142,7 +142,10 @@ export async function takeCrawledPage(
   try {
     const blob = await repository.blobs.get(PROJECT_FILES_NAMESPACE, address.key);
     if (!blob?.data) return null;
-    await repository.blobs.delete(PROJECT_FILES_NAMESPACE, address.key).catch(() => false);
+    // Only the take whose delete removed the page may use it: two adds of the
+    // same page at once store it once, the other fetches it.
+    const claimed = await repository.blobs.delete(PROJECT_FILES_NAMESPACE, address.key);
+    if (claimed !== true) return null;
     const data = blob.data;
     const headerLength = data.readUInt32BE(0);
     const header = JSON.parse(data.subarray(4, 4 + headerLength).toString('utf8'));

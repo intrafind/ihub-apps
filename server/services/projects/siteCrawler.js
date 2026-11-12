@@ -381,14 +381,21 @@ function dropBody(body) {
  * aborts); the rest is dropped with the connection.
  *
  * @param {AsyncIterable<Buffer|Uint8Array|string>|null} body
- * @param {{maxBytes?: number, timeoutMs?: number, signal?: AbortSignal}} [options]
+ * @param {{maxBytes?: number, timeoutMs?: number, signal?: AbortSignal,
+ *   report?: {complete?: boolean}}} [options] - `report.complete` is set to whether
+ *   the body was read to its end (not cut by the byte limit, the time limit or
+ *   the signal).
  * @returns {Promise<Buffer>}
  */
 export async function readBoundedBytes(
   body,
-  { maxBytes = MAX_PAGE_BYTES, timeoutMs = PAGE_READ_TIMEOUT_MS, signal } = {}
+  { maxBytes = MAX_PAGE_BYTES, timeoutMs = PAGE_READ_TIMEOUT_MS, signal, report } = {}
 ) {
-  if (!body) return Buffer.alloc(0);
+  if (report) report.complete = false;
+  if (!body) {
+    if (report) report.complete = true;
+    return Buffer.alloc(0);
+  }
   const chunks = [];
   let bytes = 0;
   let timer;
@@ -398,8 +405,9 @@ export async function readBoundedBytes(
       const buffer = Buffer.from(chunk);
       chunks.push(buffer);
       bytes += buffer.length;
-      if (bytes >= maxBytes) break;
+      if (bytes > maxBytes) return;
     }
+    if (report) report.complete = true;
   })();
   // Once the timeout wins, the dropped stream rejects `read`, which nobody awaits.
   read.catch(() => {});
@@ -467,11 +475,14 @@ async function fetchHtml(url, { signal } = {}) {
     dropBody(response.body);
     return { finalUrl: finalUrl.href, contentType, html: null };
   }
-  const bytes = await readBoundedBytes(response.body, { signal });
+  const report = {};
+  const bytes = await readBoundedBytes(response.body, { signal, report });
   return {
     finalUrl: finalUrl.href,
     contentType,
     html: decodeHtml(bytes, contentType),
+    // Cut by the byte or the time limit: listed, but not kept as the page.
+    complete: report.complete === true,
     // The version read, so a page added from the crawl is refreshed conditionally.
     etag: response.headers.get('etag') || null,
     lastModified: response.headers.get('last-modified') || null
@@ -596,19 +607,35 @@ export async function crawlSite(
   // on would only fail page after page, so the crawl stops and reports the host.
   let blocked = null;
   const stopped = () => signal.aborted || now() >= deadline || blocked !== null;
-  /** Hand a page read to the add step; the HTML is not held for the listing. */
+  /**
+   * Hand a page read to the add step; the HTML is not held for the listing.
+   * Only a page read to its end is kept, and the crawl does not wait for a
+   * write past its own end: a page not kept is fetched when it is added.
+   */
   const keep = async (pageUrl, page) => {
-    if (typeof keepPage !== 'function') return;
+    if (typeof keepPage !== 'function' || page.complete === false) return;
+    let onAbort = null;
     try {
-      await keepPage({
-        url: pageUrl,
-        html: page.html,
-        contentType: page.contentType,
-        etag: page.etag || null,
-        lastModified: page.lastModified || null
+      const written = Promise.resolve().then(() =>
+        keepPage({
+          url: pageUrl,
+          html: page.html,
+          contentType: page.contentType,
+          etag: page.etag || null,
+          lastModified: page.lastModified || null
+        })
+      );
+      written.catch(() => {});
+      const ended = new Promise(resolve => {
+        onAbort = resolve;
+        if (signal.aborted) resolve();
+        else signal.addEventListener('abort', onAbort, { once: true });
       });
+      await Promise.race([written, ended]);
     } catch {
       // Not kept: the page is fetched when it is added.
+    } finally {
+      signal.removeEventListener('abort', onAbort);
     }
   };
 

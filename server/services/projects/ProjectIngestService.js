@@ -149,15 +149,23 @@ export function isWaitingForFetch(item) {
 export function fetchInput(
   kind,
   item,
-  { user = null, prefetched = null, nameFromTitle = false, scheduled = false } = {}
+  {
+    user = null,
+    prefetched = null,
+    nameFromTitle = false,
+    scheduled = false,
+    attempt = item.ingestAttempt,
+    reserve = false
+  } = {}
 ) {
   return {
     fetch: ({ signal } = {}) =>
       kind.fetch(item, { user, purpose: 'pick', signal, ...(prefetched ? { prefetched } : {}) }),
     contentType: item.ref?.mimeType,
     name: item.name,
-    attempt: item.ingestAttempt,
+    attempt,
     purpose: 'pick',
+    ...(reserve ? { reserve: true } : {}),
     ...(nameFromTitle ? { nameFromTitle: true } : {}),
     ...(scheduled ? { scheduled: true } : {})
   };
@@ -438,6 +446,15 @@ export class ProjectIngestService {
     };
     try {
       const extracting = await patch(item => {
+        // A first fetch queued for an item waiting for one (`fetchWaiting`) takes
+        // the item now, when it starts: a job waiting in a worker's queue holds
+        // no reservation another worker's reconciler could take for a crashed
+        // one. If another worker took the item meanwhile, this job does nothing.
+        if (input.reserve) {
+          if (!isWaitingForFetch(item)) return false;
+          item.ingestAttempt = input.attempt;
+          item.updatedAt = new Date().toISOString();
+        }
         if (!owns(item)) return false;
         // A refresh keeps the old snapshot readable while the new one is
         // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
@@ -869,10 +886,12 @@ export class ProjectIngestService {
   /**
    * Convert web page links to snapshots and queue the first fetch of every
    * item waiting for one (#3622): pages stored as live links before, and
-   * pages created with an admin project. Each project is changed under its
-   * lock, and an item is reserved there (`ingestAttempt`) for this worker:
-   * every worker runs the reconciler, and only the one whose reservation
-   * lands fetches the page; the others find it reserved. At most
+   * pages created with an admin project. The conversion is made under each
+   * project's lock. A queued fetch reserves its item (`ingestAttempt`) only
+   * when its job starts (`_run`, `reserve`): every worker runs the
+   * reconciler, and of several jobs queued for one item only the first to
+   * start fetches it; and an item waiting in a long queue carries no
+   * reservation another worker could take for an interrupted job. At most
    * {@link MAX_FIRST_FETCHES} per call; the rest wait for the next tick. A
    * disabled admin project or one being deleted is converted, not fetched.
    *
@@ -891,52 +910,44 @@ export class ProjectIngestService {
       isWaitingForFetch(item) && (onUse || refreshesInBackground(item, project, settings, now));
     for (const project of projects || []) {
       const fetches = !project.deleting && project.enabled !== false;
-      const candidates = (project.items || []).filter(
-        item => isLinkedWebPage(item) || (fetches && due(item, project))
-      );
-      if (!candidates.length) continue;
-      const room = fetches ? Math.max(0, max - queued) : 0;
-      const reserved = [];
-      let stored = null;
-      try {
-        stored = await this.repository.mutate(
-          project.id,
-          current => {
-            let changed = false;
-            const now = new Date().toISOString();
-            for (const item of current.items || []) {
-              if (isLinkedWebPage(item)) {
-                convertLinkedWebPage(item);
-                changed = true;
-              }
-              if (reserved.length >= room || this.isActive(item.id)) continue;
-              if (!due(item, current)) continue;
-              item.ingestAttempt = randomUUID();
-              item.updatedAt = now;
-              reserved.push(item.id);
-              changed = true;
-            }
-            return changed ? current : null;
-          },
-          { touchActivity: false, touchUpdated: false }
-        );
-      } catch (error) {
-        logger.warn('Could not queue the first fetch of project items', {
-          component: COMPONENT,
-          projectId: project.id,
-          error: error?.message
-        });
-        continue;
+      let current = project;
+      if ((project.items || []).some(isLinkedWebPage)) {
+        try {
+          current =
+            (await this.repository.mutate(
+              project.id,
+              stored => {
+                const links = (stored.items || []).filter(isLinkedWebPage);
+                links.forEach(convertLinkedWebPage);
+                return links.length ? stored : null;
+              },
+              { touchActivity: false, touchUpdated: false }
+            )) || (await this.repository.get(project.id));
+        } catch (error) {
+          logger.warn('Could not convert the web page links of a project', {
+            component: COMPONENT,
+            projectId: project.id,
+            error: error?.message
+          });
+          continue;
+        }
+        if (!current) continue;
       }
-      if (!stored) continue;
-      for (const itemId of reserved) {
-        const item = (stored.items || []).find(entry => entry.id === itemId);
-        const kind = getItemKind(item?.kind);
-        if (!item || !kind) continue;
+      if (!fetches) continue;
+      for (const item of current.items || []) {
+        if (queued >= max) break;
+        if (this.isActive(item.id) || !due(item, current)) continue;
+        const kind = getItemKind(item.kind);
+        if (!kind) continue;
         await this.start(
-          stored,
+          current,
           item,
-          fetchInput(kind, item, { nameFromTitle: item.name === item.ref?.url, scheduled: true }),
+          fetchInput(kind, item, {
+            nameFromTitle: item.name === item.ref?.url,
+            scheduled: true,
+            attempt: randomUUID(),
+            reserve: true
+          }),
           { wait: false }
         );
         queued += 1;

@@ -424,7 +424,52 @@ describe('a web page is a stored snapshot', () => {
       return entry?.status === 'ready' && entry.text?.blobKey !== first.text.blobKey ? entry : null;
     });
     assert.equal(moved.ref.url, `${base}/new`);
+    assert.equal(first.name, 'Old');
+    assert.equal(moved.name, 'New', 'a name taken from the old title follows the new page');
     assert.match((await getItemText({ id: project.id }, moved, { user: ADA })).text, /new page/);
+
+    // While its new page is being fetched, the item takes no other address.
+    await service.updateItem(project.id, item.id, { ref: { url: `${base}/old` } }, { user: ADA });
+    await assert.rejects(
+      service.updateItem(project.id, item.id, { ref: { url: `${base}/new` } }, { user: ADA }),
+      error => error.code === 'PROJECT_MISMATCH'
+    );
+    await settled(project.id, item.id);
+  });
+
+  it('turns a link not converted yet into a snapshot when its address changes', async () => {
+    servePage('/linked-new', html('Linked', 'The address it points at now.'));
+    const project = await newProject('Linked');
+    const now = new Date().toISOString();
+    const legacy = {
+      id: `itm_${crypto.randomBytes(6).toString('hex')}`,
+      kind: 'url',
+      name: 'https://example.com/old',
+      ref: { url: 'https://example.com/old' },
+      storage: 'link',
+      pinned: false,
+      status: 'ready',
+      error: null,
+      provenance: { origin: 'linked', by: null, at: now, run: null, source: null },
+      snapshotAt: null,
+      createdAt: now,
+      updatedAt: now,
+      cache: { ttlSeconds: 7200 }
+    };
+    await getProjectRepository().mutate(project.id, current => {
+      current.items = [...(current.items || []), legacy];
+      return current;
+    });
+    await service.updateItem(
+      project.id,
+      legacy.id,
+      { ref: { url: `${base}/linked-new` } },
+      { user: ADA }
+    );
+    const ready = await settled(project.id, legacy.id);
+    assert.equal(ready.storage, 'text');
+    assert.equal(ready.cache, undefined);
+    assert.equal(ready.status, 'ready', JSON.stringify(ready.error));
   });
 });
 
@@ -527,6 +572,67 @@ describe('outbound fetches honor the SSL whitelist', () => {
 });
 
 describe('a site crawl hands its pages to the add step', () => {
+  it('keeps only pages it read to the end', async () => {
+    const kept = [];
+    const crawlId = newCrawlId();
+    await crawlSite(
+      { url: 'https://site.test/', maxDepth: 1, maxPages: 5 },
+      {
+        fetchPage: async url =>
+          url === 'https://site.test/'
+            ? {
+                finalUrl: url,
+                contentType: 'text/html',
+                html: '<a href="/cut">cut</a><a href="/whole">whole</a>',
+                complete: true
+              }
+            : {
+                finalUrl: url,
+                contentType: 'text/html',
+                html: '<p>part</p>',
+                complete: !url.endsWith('/cut')
+              },
+        fetchRobots: async () => null,
+        keepPage: async page => {
+          kept.push(page.url);
+          return keepCrawledPage({ ownerId: ADA.id, crawlId, ...page });
+        }
+      }
+    );
+    assert.deepEqual(kept.sort(), ['https://site.test/', 'https://site.test/whole']);
+  });
+
+  it('does not wait for a hand-over past the end of the crawl', async () => {
+    const started = Date.now();
+    const result = await crawlSite(
+      { url: 'https://slow.test/', maxDepth: 0 },
+      {
+        fetchPage: async url => ({
+          finalUrl: url,
+          contentType: 'text/html',
+          html: '<p>x</p>',
+          complete: true
+        }),
+        fetchRobots: async () => null,
+        keepPage: () => new Promise(() => {}),
+        deadlineMs: 200
+      }
+    );
+    assert.equal(result.pages.length, 1);
+    assert.ok(Date.now() - started < 5000, 'the stuck write is left behind');
+  });
+
+  it('gives a kept page to one add only, also when two take it at once', async () => {
+    const crawlId = newCrawlId();
+    const url = `${base}/race`;
+    await keepCrawledPage({ ownerId: ADA.id, crawlId, url, html: '<p>race</p>' });
+    const taken = await Promise.all([
+      takeCrawledPage({ ownerId: ADA.id, crawlId, url }),
+      takeCrawledPage({ ownerId: ADA.id, crawlId, url })
+    ]);
+    assert.equal(taken.filter(Boolean).length, 1);
+  });
+
   it('adds a crawled page without fetching it again', async () => {
     servePage('/site/', html('Site', 'Start.', { links: ['/site/a', '/site/b'] }));
     servePage('/site/a', html('Page A', 'Alpha content.'), { etag: '"a1"' });
@@ -629,6 +735,42 @@ describe('web pages that were links before', () => {
     seen.length = 0;
     await worker().reconcile();
     assert.equal(hits('/legacy'), 0);
+  });
+
+  it('waits in the queue without a reservation another worker would expire', async () => {
+    servePage('/queued', html('Queued', 'Fetched after a long queue.'));
+    const project = await getProjectService().createUserProject({
+      owner: ADA,
+      content: { name: 'Queued' }
+    });
+    const legacy = legacyItem(`${base}/queued`);
+    await getProjectRepository().mutate(project.id, current => {
+      current.items = [...(current.items || []), legacy];
+      return current;
+    });
+    const make = () =>
+      new ProjectIngestService({
+        service: () => getProjectService(),
+        repository: () => getProjectService().repository,
+        platform: () => configCache.getPlatform(),
+        tempDir: path.join(scratch, 'uploads')
+      });
+    const busy = make();
+    // Every slot taken: the first fetch waits in this worker's queue.
+    busy.running = 99;
+    await busy.fetchWaiting([await getProjectRepository().get(project.id)]);
+    const queued = await itemOf(project.id, legacy.id);
+    assert.equal(queued.status, 'pending');
+    assert.equal(queued.ingestAttempt, undefined, 'reserved when its job starts, not before');
+    // Another worker, an hour later, does not take it for an interrupted job.
+    const other = make();
+    other.running = 99;
+    await other.reconcile({ now: Date.now() + 60 * 60 * 1000 });
+    assert.equal((await itemOf(project.id, legacy.id)).status, 'pending');
+    busy.running = 0;
+    busy._pump();
+    const ready = await settled(project.id, legacy.id);
+    assert.equal(ready.status, 'ready', JSON.stringify(ready.error));
   });
 
   it('are converted in admin project files by migration V247', async () => {

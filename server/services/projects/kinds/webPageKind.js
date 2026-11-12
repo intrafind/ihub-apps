@@ -45,6 +45,13 @@ function hostOf(url) {
   }
 }
 
+/**
+ * How long the check on add may take, the page's body included: a site that
+ * sends slowly must not hold the request that adds it. Past it, the page is
+ * added without a snapshot and its ingest job fetches it.
+ */
+const PROBE_TIMEOUT_MS = 30 * 1000;
+
 function maxPageBytes() {
   return projectSettings(configCache.getPlatform?.() || {}).limits.maxFileBytes;
 }
@@ -122,7 +129,8 @@ export const webPageKind = registerItemKind({
     const probe =
       (await probeWebUrl(ref.url, {
         language: user?.language,
-        keepPage: { maxBytes: maxPageBytes() }
+        keepPage: { maxBytes: maxPageBytes() },
+        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
       })) || documentFromUrl(ref.url);
     if (probe?.type === 'unsupported') throw unsupportedUrlError(probe);
     if (probe?.type === 'file') {

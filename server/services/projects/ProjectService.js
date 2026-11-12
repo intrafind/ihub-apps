@@ -977,14 +977,26 @@ export class ProjectService {
             if (!checkedRef || checkedRef.kind.id !== item.kind) {
               throw new ProjectError('PROJECT_MISMATCH', 'The item changed while it was edited');
             }
+            const stored = checkedRef.kind.storage.ihub === 'text';
+            // Judged before the reference changes anything: an item still
+            // being processed takes no other address.
+            const busy =
+              item.status === 'pending' || item.status === 'extracting' || item.refreshingAt;
+            if (stored && busy && JSON.stringify(checkedRef.ref) !== JSON.stringify(item.ref)) {
+              throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
+            }
+            // A name the old page's title gave follows the new page's title.
+            const titleNamed =
+              stored && patch.name === undefined && Boolean(item.title) && item.name === item.title;
             const moved = applyItemRef(item, checkedRef, {
               keepName: patch.name !== undefined,
               language: user?.language
             });
-            if (moved && checkedRef.kind.storage.ihub === 'text') {
-              if (item.status === 'pending' || item.status === 'extracting' || item.refreshingAt) {
-                throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
-              }
+            if (moved && stored) {
+              if (titleNamed) item.name = String(item.ref.url || item.name).slice(0, 300);
+              // A link not converted yet becomes the snapshot it now is.
+              item.storage = 'text';
+              delete item.cache;
               // The snapshot was of the old page: it goes, the new page is fetched.
               if (item.text?.blobKey) dropped = item.text.blobKey;
               delete item.text;
