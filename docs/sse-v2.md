@@ -42,7 +42,7 @@ reducer, `client/src/shared/run/runReducer.js`.
 | `stream/connected`     | `{ runId, lastSeq, protocol: 2 }`                                                                                             | Subscription established                                                      |
 | `stream/error`         | `{ code, message, details?, retryable, isContextWindowError? }`                                                               | The run failed; always followed by `run/ended { status: 'error' }`            |
 | `run/started`          | `{ kind, model?, parentRunId?, refs }`                                                                                        | A run began (`kind`: chat, workflow, agent, subagent, inference, utility)     |
-| `run/ended`            | `{ status, finishReason, usage?, context?, knowledgeSources?, toolName?, output?, cause?, error? }`                          | Terminal frame of a run                                                       |
+| `run/ended`            | `{ status, finishReason, usage?, context?, knowledgeSources?, answerBasis?, toolName?, output?, cause?, error? }`                       | Terminal frame of a run                                                       |
 | `run/paused`           | `{ reason: interaction \| manual \| system, interactionId? }`                                                                  | The run waits (a question, an approval)                                       |
 | `run/resumed`          | `{ interactionId? }`                                                                                                          | The run continues                                                             |
 | `step/delta`           | `{ step, kind: text \| thinking \| image, content?, image?, meta? }`                                                           | Streamed answer output of model step `step`                                   |
@@ -238,18 +238,36 @@ origin: { via, source?, worker? }, related? }` with `kind` one of `user_stop`, `
 `unknown`. The same object is on the ledger's `run/end`. Only a person's Stop (or the server)
 ends a turn: a client that merely leaves or reconnects sends nothing.
 
-`run/ended.knowledgeSources` is what the answer was based on, and the only
-thing the answer badge reads: `websearch`, `ifinder`, `sources`, `iassistant`,
-`grounding`, `email`, `file`, `audio` — or `llm` when the model answered from
-none of them (its own knowledge). A passthrough answer is the tool's output, not
-the model's, so it lists only the sources it used; a workflow's answer is badged
-by its workflow result. The server always names the list on an answered turn,
-including a stopped one that had already written part of its answer; a turn that
-failed, paused for a question or was stopped before it wrote anything carries
-none, and the client shows no badge. `tool/completed.knowledgeSource` and
-`step/completed.sources` are per-tool and per-step detail, not the answer's
-sources. The ledger's `run/end` keeps the same list, so a replayed turn is badged
-like the live one.
+`run/ended.answerBasis` is what the answer is based on, and the only thing the
+chip under the answer reads (see [Answer Sources](answer-sources.md#what-users-see)):
+`[{ kind, label? }]`, one entry per kind of source the answer used and one per
+connected system. `kind` is `project`, `web`, `ifinder`, `iassistant`,
+`documents` (sources an admin configured), `integration` (with its `label`,
+for example `Jira`; an MCP server or remote agent as well), `email`, `file`,
+`audio`, or `model` when the answer used none of them (its own knowledge), which
+then stands alone. The server decides it; the client maps no tool id. A project
+counts only when it `contributed` (see `knowledge/scope` below). A passthrough
+answer is the tool's output, not the model's, so it lists only the kinds it used
+and has none when that is nothing; a workflow's answer is named by its workflow
+result. The server names the basis on an answered turn, including a stopped one
+that had already written part of its answer; a turn that failed, paused for a
+question or was stopped before it wrote anything carries none, and the client
+shows no chip. The ledger's `run/end` keeps the same list, so a replayed turn
+shows the same chip, and the stored message keeps it as `answerBasis`.
+
+`knowledge/scope` lists the projects of the turn. Each has `contributed`: its text
+went into the prompt, or a search or read of the turn returned its documents. It is
+sent when the turn starts, with what went into the prompt, and again before
+`run/ended` when a search then made a searched project contribute; the later frame
+replaces the earlier one.
+
+`run/ended.knowledgeSources` stays the list of the ledger and analytics:
+`websearch`, `ifinder`, `project`, `sources`, `iassistant`, `grounding`,
+`email`, `file`, `audio` — or `llm` when the model answered from none of them.
+`project` is the chat's project knowledge, in the prompt or found by a
+`knowledge_*` call; `sources` is what an admin configured.
+`tool/completed.knowledgeSource` and `step/completed.sources` are per-tool and
+per-step detail, not the answer's basis.
 
 ## A workflow run on the wire
 

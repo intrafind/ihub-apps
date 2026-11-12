@@ -204,10 +204,8 @@ describe('recording what a turn did', () => {
     assert.equal(activity.searchSummary.totalHits, 12);
     assert.deepEqual(activity.searchSummary.queries, ['Windpark']);
     assert.equal(activity.searchSummary.searching, false);
-    assert.deepEqual(activity.answerSource, {
-      sources: ['websearch', 'ifinder'],
-      type: 'mixed'
-    });
+    // What the answer is based on is a field of the message (`answerBasis`), not of its activity.
+    assert.equal(activity.answerSource, undefined);
     assert.equal(isRecordingRunActivity(RUN_ID), false, 'taking the activity ends the recording');
   });
 
@@ -216,7 +214,7 @@ describe('recording what a turn did', () => {
     assert.equal(takeRunActivity(RUN_ID), null);
   });
 
-  it('keeps only the answer source of a plain answer', () => {
+  it('keeps no answer source in the activity, and nothing at all for a plain answer', () => {
     recordRunActivity(RUN_ID);
     const stream = emitter();
     stream.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', refs: {} });
@@ -224,29 +222,26 @@ describe('recording what a turn did', () => {
     stream.emit(SSE_V2_EVENTS.RUN_ENDED, {
       status: 'completed',
       finishReason: 'stop',
-      knowledgeSources: ['llm']
+      knowledgeSources: ['llm'],
+      answerBasis: [{ kind: 'model' }]
     });
-    assert.deepEqual(takeRunActivity(RUN_ID), {
-      answerSource: { sources: ['llm'], type: 'mixed' }
-    });
+    assert.equal(takeRunActivity(RUN_ID), null);
   });
 
-  it('keeps no answer source the server did not name on run/ended', () => {
-    recordRunActivity(RUN_ID);
-    const stream = emitter();
-    stream.emit(SSE_V2_EVENTS.RUN_STARTED, { kind: 'chat', refs: {} });
-    // A tool and a step that report a source are provenance, not the verdict.
-    stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
-      step: 0,
-      callId: 'call-web',
-      toolId: 'braveSearch',
-      name: 'braveSearch',
-      resultPreview: null,
-      knowledgeSource: 'websearch'
+  it('keeps whether each project of the scope contributed', () => {
+    const stored = boundStoredActivity({
+      knowledgeScope: {
+        projects: [
+          { id: 'prj_1', name: 'Case', ownership: 'user', mode: 'searched', contributed: true },
+          { id: 'faq', name: 'FAQ', ownership: 'admin', mode: 'loaded', contributed: false },
+          { id: 'prj_2', name: 'Other', ownership: 'user', mode: 'loaded', contributed: 'yes' }
+        ]
+      }
     });
-    stream.emit(SSE_V2_EVENTS.STEP_COMPLETED, { step: 0, content: '', sources: ['websearch'] });
-    stream.emit(SSE_V2_EVENTS.RUN_ENDED, { status: 'aborted', finishReason: 'connection_closed' });
-    assert.equal(takeRunActivity(RUN_ID)?.answerSource, undefined);
+    assert.deepEqual(
+      stored.knowledgeScope.projects.map(project => project.contributed),
+      [true, false, undefined]
+    );
   });
 
   it('keeps the live argument progress and the waiting line out of the stored activity', () => {
@@ -829,6 +824,64 @@ describe('the materializer stores the activity with the answer', () => {
       });
       const { messages } = await repository.getMessages(CHAT_ID);
       assert.deepEqual(messages.find(m => m.role === 'assistant').provenance, provenance);
+    });
+  });
+
+  it('stores what an answer is based on next to it, bounded to the kinds the server names', async () => {
+    await withRepository(async repository => {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'q'
+      });
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: {
+          status: 'success',
+          content: 'The answer.',
+          finishReason: 'stop',
+          answerBasis: [
+            { kind: 'project' },
+            { kind: 'integration', label: 'Jira' },
+            { kind: 'bogus' }
+          ]
+        },
+        clientConnected: true
+      });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(messages.find(m => m.role === 'assistant').answerBasis, [
+        { kind: 'project' },
+        { kind: 'integration', label: 'Jira' }
+      ]);
+    });
+  });
+
+  it('stores no basis for an answer the server named none for', async () => {
+    await withRepository(async repository => {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'q'
+      });
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: { status: 'success', content: 'The answer.', finishReason: 'stop' },
+        clientConnected: true
+      });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.equal('answerBasis' in messages.find(m => m.role === 'assistant'), false);
     });
   });
 

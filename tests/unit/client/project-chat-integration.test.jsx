@@ -8,7 +8,7 @@
  * discarded (spec 2 §5.1). The chat's own project chips are covered in
  * `chat-attached-projects.test.jsx`.
  */
-import { act, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -58,8 +58,7 @@ jest.mock('react-i18next', () => ({ useTranslation: () => mockI18n }));
 
 const ItemProvenance =
   require('../../../client/src/features/projects/components/ItemProvenance').default;
-const AnswerSourceBadge =
-  require('../../../client/src/features/chat/components/AnswerSourceBadge').default;
+const AnswerBasis = require('../../../client/src/features/chat/components/AnswerBasis').default;
 const DocumentPreviewModal =
   require('../../../client/src/features/documentPreview/components/DocumentPreviewModal').default;
 const TextPassageViewer =
@@ -85,31 +84,41 @@ beforeEach(() => {
 });
 
 describe('knowledge badge and provenance', () => {
-  test('names a single user project and links to it', () => {
+  test('names the kind of a project on the chip, and links to the project from the popover', () => {
     renderInRouter(
-      <AnswerSourceBadge
-        answerSource={{ sources: [] }}
-        knowledgeScope={{ projects: [{ id: 'prj_case', name: 'Case 2026-114', mode: 'loaded' }] }}
+      <AnswerBasis
+        answerBasis={[{ kind: 'project' }]}
+        knowledgeScope={{
+          projects: [{ id: 'prj_case', name: 'Case 2026-114', mode: 'loaded', contributed: true }]
+        }}
       />
     );
-    const link = screen.getByRole('link', { name: 'Case 2026-114 · loaded in full' });
+    // The chip says only the kind: no name, no mode.
+    const chip = screen.getByTestId('answer-basis-chip');
+    expect(chip).toHaveTextContent('Project');
+    expect(chip).not.toHaveTextContent('Case 2026-114');
+    fireEvent.click(chip);
+    const link = screen.getByRole('link', { name: 'Open project Case 2026-114' });
     expect(link).toHaveAttribute('href', '/projects/prj_case');
   });
 
-  test('counts several projects and links none', () => {
+  test('several projects are one kind on the chip, each listed in the popover, none linked unless it has a page', () => {
     renderInRouter(
-      <AnswerSourceBadge
-        answerSource={{ sources: [] }}
+      <AnswerBasis
+        answerBasis={[{ kind: 'project' }]}
         knowledgeScope={{
           projects: [
-            { id: 'faq', name: 'FAQ', mode: 'loaded' },
-            { id: 'prj_case', name: 'Case', mode: 'searched' }
+            { id: 'faq', name: 'FAQ', mode: 'loaded', contributed: true },
+            { id: 'prj_case', name: 'Case', mode: 'searched', contributed: true }
           ]
         }}
       />
     );
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
-    expect(screen.getByText(/chatMessage\.knowledgeScope\.projects/)).toBeInTheDocument();
+    expect(screen.getByTestId('answer-basis-chip')).toHaveTextContent('Project');
+    fireEvent.click(screen.getByTestId('answer-basis-chip'));
+    expect(screen.getAllByTestId('answer-basis-project')).toHaveLength(2);
+    // Only the user project has a page to open.
+    expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 
   test('shows "picked from" with the snapshot date, and "uploaded"', () => {

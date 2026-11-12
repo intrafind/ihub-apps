@@ -88,7 +88,7 @@ defaults.
   content, finishReason,    // finishReason: provider value, or 'budget_exhausted' | 'clarification' | 'tool_passthrough_complete'
   usage, runUsage,          // this segment / the whole run (promptTokens, completionTokens, totalTokens)
   iterations, messages,     // rounds used; final provider-valid transcript
-  sources, knowledgeSources, thoughtSignatures, images,   // sources: { items, queries, supports }
+  sources, knowledgeSources, integrations, thoughtSignatures, images,   // sources: { items, queries, supports }
   disabledTools, budgetExhausted, budgetReason,   // 'tools_dead' | 'tokens' | 'rounds'
   toolCalls,                // only with toolExecution: 'caller'
   pendingInteraction,       // only with status 'paused'
@@ -213,7 +213,7 @@ Seams a chat turn registers (`server/services/chat/chatSeams.js`), in order:
 
 | Seam                                      | Hooks                 | Adds                                                                                                                                                                              |
 | ----------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `knowledgeSourceSeam`                     | `postTool`, `stepEnd` | Search / source / grounding tools feed the knowledge-source badge (`tool/completed.knowledgeSource`, `run/ended.knowledgeSources`)                                                  |
+| `knowledgeSourceSeam`                     | `postTool`, `stepEnd` | Search / source / grounding tools feed the knowledge sources (`tool/completed.knowledgeSource`, `run/ended.knowledgeSources`) and name the connected systems behind `run/ended.answerBasis`                                                  |
 | `chatToolSeam`                            | `preStep`, `onChunk`, `streamEnd`, `preTool`, `postTool` | Live `tool/progress` frames while the model writes a call's arguments or shows nothing (`args`, `args.ended`, `model.waiting`; see [SSE v2](sse-v2.md)), `tool/started` / `tool/completed` frames, `tool_usage` / `tool_error` interaction logs, the error envelope handed back to the model when a tool fails |
 | `questionSeam(chatQuestionOptions)`       | `preTool`             | `ask_user` → `interaction/raised` with the persisted interaction; per-chat counter capped at `MAX_CLARIFICATIONS_PER_CONVERSATION`; the run pauses (`run/paused`)                    |
 | `passthroughSeam(chatPassthroughOptions)` | `preTool`             | Workflow tools stream their own answer as `step/delta` frames, then `tool/completed`; the turn ends with `tool_passthrough_complete`                                                |

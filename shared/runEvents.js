@@ -40,6 +40,23 @@ export const RUN_STATUSES = Object.freeze([
  */
 export const MODEL_KNOWLEDGE_SOURCE = 'llm';
 
+/**
+ * The kinds of source an answer can be based on (`run/ended.answerBasis`), in
+ * the order the footer's chip names them. `model` stands alone: nothing was used.
+ */
+export const ANSWER_BASIS_KINDS = Object.freeze([
+  'project',
+  'web',
+  'ifinder',
+  'iassistant',
+  'documents',
+  'integration',
+  'email',
+  'file',
+  'audio',
+  'model'
+]);
+
 /** RunLog (ledger) event types — one append-only JSONL stream per run. */
 export const RUN_LOG_EVENTS = Object.freeze({
   RUN_START: 'run/start',

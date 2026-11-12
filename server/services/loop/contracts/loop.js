@@ -195,6 +195,8 @@ export const loopResultSchema = z.object({
   /** Final provider-valid transcript (for callers that persist it or continue). */
   messages: z.array(z.any()).prefault([]),
   knowledgeSources: z.array(z.string()).prefault([]),
+  /** The connected systems that informed the turn, by name ('' for one without). */
+  integrations: z.array(z.string()).prefault([]),
   error: z
     .object({
       code: z.string(),

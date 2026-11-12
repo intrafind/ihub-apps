@@ -43,6 +43,7 @@ import {
   SSE_V2_EVENTS
 } from '../../../shared/runEvents.js';
 import { storedSourceSet } from '../../../shared/sources/index.js';
+import { answerBasisOf, settleKnowledgeScope } from './answerBasis.js';
 import {
   approvalSeam,
   imageLiftSeam,
@@ -377,7 +378,17 @@ class ChatService {
 
   _endLedgerRun(
     runId,
-    { status, finishReason, usage, error, knowledgeSources, cause, provenance, startedAt }
+    {
+      status,
+      finishReason,
+      usage,
+      error,
+      knowledgeSources,
+      answerBasis,
+      cause,
+      provenance,
+      startedAt
+    }
   ) {
     try {
       this.runLog.endRun(runId, {
@@ -387,6 +398,7 @@ class ChatService {
         // What `run/ended` reported, so a replay of the ledger badges the
         // answer the same way the live stream did.
         ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
+        ...(Array.isArray(answerBasis) ? { answerBasis } : {}),
         ...(provenance ? { provenance } : {}),
         // Why an aborted turn was stopped (`services/chat/abortCause.js`).
         ...(cause ? { cause } : {}),
@@ -997,6 +1009,7 @@ class ChatService {
         generatedFiles,
         generatedImages,
         promptSources,
+        knowledgeScope,
         contextTracker,
         signal: controller.signal,
         structured: outputSeam
@@ -1029,6 +1042,7 @@ class ChatService {
         usage: outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
+        answerBasis: outcome.answerBasis,
         provenance: outcome.provenance,
         cause: outcome.abortCause,
         startedAt
@@ -1189,6 +1203,7 @@ class ChatService {
     generatedFiles = [],
     generatedImages = [],
     promptSources = [],
+    knowledgeScope = null,
     contextTracker = null,
     structured = null,
     signal = null
@@ -1261,6 +1276,19 @@ class ChatService {
       return provenance;
     };
     const provenanceOf = () => (summary.provenance ? { provenance: summary.provenance } : {});
+    // What the answer is based on, from the sources the turn used and the
+    // connected systems that informed it: the kinds the footer's chip shows.
+    const answerBasisFor = (sources, { byModel = true } = {}) =>
+      answerBasisOf({ knowledgeSources: sources, integrations: result.integrations, byModel });
+    // The knowledge scope is reported when the turn starts, with what went into
+    // the prompt. A project a search of the turn then returned contributed too:
+    // said again, with that settled, just before the turn ends.
+    const reportSettledScope = () => {
+      const settled = settleKnowledgeScope(knowledgeScope, result.sources);
+      if (!settled || settled === knowledgeScope) return;
+      stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, settled);
+      this.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, settled);
+    };
     // Whether the turn wrote any answer — text or a picture — the user sees.
     const producedOutput = channel
       ? channel.state.answerOutput
@@ -1279,15 +1307,18 @@ class ChatService {
       const knowledgeSources = producedOutput
         ? this.resolveAnswerSources(loopSources, promptSources)
         : undefined;
+      const answerBasis = knowledgeSources ? answerBasisFor(knowledgeSources) : undefined;
       // Who stopped it: the reason the turn's controller was aborted with.
       const cause = causeOfSignal(signal);
       // What was generated and shown is recorded; no text, no record.
       await attachProvenance();
+      if (answerBasis) reportSettledScope();
       endRun({
         status: 'aborted',
         finishReason: 'connection_closed',
         cause,
         ...(knowledgeSources ? { knowledgeSources } : {}),
+        ...(answerBasis ? { answerBasis } : {}),
         ...provenanceOf()
       });
       return {
@@ -1295,7 +1326,8 @@ class ChatService {
         status: 'aborted',
         finishReason: 'connection_closed',
         abortCause: cause,
-        ...(knowledgeSources ? { knowledgeSources } : {})
+        ...(knowledgeSources ? { knowledgeSources } : {}),
+        ...(answerBasis ? { answerBasis } : {})
       };
     }
 
@@ -1464,14 +1496,19 @@ class ChatService {
       const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources, {
         byModel: false
       });
+      // The tool's output has a basis only when it used something.
+      const passthroughBasis = answerBasisFor(knowledgeSources, { byModel: false });
+      const answerBasis = passthroughBasis.length > 0 ? passthroughBasis : undefined;
       // A passthrough answer is tool output, but the user sees it as the AI
       // app's answer, so it is recorded with the turn's model.
       await attachProvenance();
+      reportSettledScope();
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
         ...(toolName ? { toolName: String(toolName) } : {}),
         knowledgeSources,
+        ...(answerBasis ? { answerBasis } : {}),
         ...provenanceOf()
       });
       return {
@@ -1479,6 +1516,7 @@ class ChatService {
         status: 'completed',
         toolName,
         knowledgeSources,
+        ...(answerBasis ? { answerBasis } : {}),
         ...(structuredOutput ? { structuredOutput } : {})
       };
     }
@@ -1534,11 +1572,14 @@ class ChatService {
 
     const finishReason = result.finishReason || 'stop';
     const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources);
+    const answerBasis = answerBasisFor(knowledgeSources);
     await attachProvenance();
+    reportSettledScope();
     endRun({
       status: result.status || 'completed',
       finishReason,
       knowledgeSources,
+      answerBasis,
       ...provenanceOf()
     });
     await this.logInteraction(
@@ -1552,6 +1593,7 @@ class ChatService {
       ...summary,
       finishReason,
       knowledgeSources,
+      answerBasis,
       ...(structuredOutput ? { structuredOutput } : {})
     };
   }

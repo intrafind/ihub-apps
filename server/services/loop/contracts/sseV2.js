@@ -21,6 +21,7 @@ import {
   toolCallRecordSchema,
   sourcesAddedData,
   knowledgeScopeData,
+  answerBasisSchema,
   abortCauseSchema
 } from './runLogEvents.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
@@ -74,6 +75,8 @@ export const runEndedData = z.object({
   /** Surface hints preserved from the legacy `done` event. */
   toolName: z.string().optional(),
   knowledgeSources: z.array(z.string()).optional(),
+  /** What the answer is based on: the kinds of source it used (chat turns). */
+  answerBasis: answerBasisSchema.optional(),
   /** Provenance of the answer (EU AI Act Art. 50(2)); chat turns with text. */
   provenance: provenanceContractSchema.optional(),
   /** Workflow output (chat-visible result) when the run produced one. */

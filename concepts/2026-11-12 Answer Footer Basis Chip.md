@@ -1,6 +1,6 @@
 # Answer footer: one basis chip instead of duplicate badges
 
-Status: agreed design, not yet implemented. The product, UX and UI review and the product owner's decisions are from 2026-11-12. The product owner later cut the chip down to source kinds only.
+Status: implemented (issue #3619). The product, UX and UI review and the product owner's decisions are from 2026-11-12. The product owner later cut the chip down to source kinds only.
 
 ## Problem
 

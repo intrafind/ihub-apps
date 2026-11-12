@@ -270,6 +270,9 @@ export class AgentLoop {
       iteration: 0,
       disabledTools: new Set(),
       knowledgeSources: new Set(),
+      // The connected systems that informed the turn, by name ('' for one with
+      // none): the answer's basis names each of them.
+      integrations: new Set(),
       // What the segment's producers found (tool calls, adapters, provider search).
       sources: emptySourceSet(),
       // State the run's tool calls share (services/sources/toolCallScope.js):
@@ -285,6 +288,9 @@ export class AgentLoop {
       runLog: this.runLog,
       addKnowledgeSource: source => {
         if (source) ctx.knowledgeSources.add(source);
+      },
+      addIntegration: label => {
+        ctx.integrations.add(typeof label === 'string' ? label : '');
       },
       /**
        * Report sources a producer found: merged into `ctx.sources`, written to
@@ -363,6 +369,7 @@ export class AgentLoop {
       budgetReason: forceReason,
       messages: ctx.messages,
       knowledgeSources: [...ctx.knowledgeSources],
+      integrations: [...ctx.integrations],
       maxTokens: options.maxTokens ?? model.maxOutputTokens ?? null,
       durationMs: Date.now() - startedAt,
       ...extra
