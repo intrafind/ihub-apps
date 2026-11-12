@@ -8,7 +8,7 @@ import { extractDocxMarkdown } from '../../../../../shared/documentExtraction/do
 import { extractPdfText } from '../../../../../shared/documentExtraction/pdfText.js';
 import { extractPptxText } from '../../../../../shared/documentExtraction/pptx.js';
 import { extractOdfText } from '../../../../../shared/documentExtraction/odf.js';
-import { extractXlsxText } from '../../../../../shared/documentExtraction/xlsx.js';
+import { extractXlsxText, readWorkbook } from '../../../../../shared/documentExtraction/xlsx.js';
 import {
   MIN_REAL_TEXT_CHARS,
   lastPageWithText,
@@ -1295,7 +1295,7 @@ export const processXlsxFile = async (file, progress) => {
   if (await isStructuredExtractionEnabled()) {
     try {
       const XLSX = await loadXlsx();
-      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const workbook = readWorkbook({ XLSX, data: arrayBuffer, readOptions: { type: 'array' } });
       return extractXlsxText({ XLSX, workbook });
     } catch (error) {
       // Never make an upload fail that worked before: use the plain text extraction.

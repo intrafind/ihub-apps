@@ -56,6 +56,42 @@ function withVerticalMerges(XLSX, sheet, lastRow, lastColumn = Infinity) {
   return filled;
 }
 
+/** True for a ZIP package (.xlsx): only its reader reliably sets `!fullref` when `sheetRows` cuts. */
+function isZipPackage(data) {
+  const head = ArrayBuffer.isView(data) ? data : new Uint8Array(data.buffer ?? data);
+  return head[0] === 0x50 && head[1] === 0x4b;
+}
+
+/**
+ * Reads a workbook, parsing only the rows `extractXlsxText` can use. SheetJS otherwise parses
+ * every row of every sheet (up to ~1 s of blocked event loop for 30,000 rows) and the row limit
+ * throws most of them away afterwards.
+ *
+ * `sheetRows` is the number of rows to read counted from row 1 of the sheet, header included:
+ * one more than the row limit, so a sheet that is exactly at the limit is not flagged as cut.
+ * SheetJS then shortens `!ref` and keeps the real range in `!fullref`, which
+ * `extractXlsxText` reads to report what was left out. Two cases are read in full instead, as
+ * before: a file that is not an .xlsx package (its readers do not all keep `!fullref`), and a
+ * sheet whose data starts below row 1 (the count is absolute, so leading blank rows would eat
+ * into the limit).
+ *
+ * @param {Object} args
+ * @param {Object} args.XLSX - SheetJS
+ * @param {ArrayBuffer|Uint8Array|Buffer} args.data
+ * @param {Object} [args.readOptions] - SheetJS read options (`type`, `cellDates`, …)
+ * @param {{sheetRows?: number}} [args.limits] - The limits later passed to `extractXlsxText`
+ * @returns {Object} The workbook
+ */
+export function readWorkbook({ XLSX, data, readOptions = {}, limits = {} }) {
+  if (!isZipPackage(data)) return XLSX.read(data, readOptions);
+  const rowLimit = limits.sheetRows ?? MAX_SHEET_ROWS;
+  const workbook = XLSX.read(data, { ...readOptions, sheetRows: rowLimit + 1 });
+  const shifted = Object.values(workbook.Sheets).some(
+    sheet => sheet?.['!fullref'] && XLSX.utils.decode_range(sheet['!fullref']).s.r > 0
+  );
+  return shifted ? XLSX.read(data, readOptions) : workbook;
+}
+
 /**
  * @param {Object} args
  * @param {Object} args.XLSX - SheetJS
@@ -82,6 +118,10 @@ export function extractXlsxText({ XLSX, workbook, limits = {}, report = null }) 
       // have all of them turned into rows for the few that fit the budget.
       read: () => {
         const range = XLSX.utils.decode_range(sheet['!ref']);
+        // A read that stopped at `sheetRows` keeps the real extent in `!fullref`.
+        const lastSheetRow = sheet['!fullref']
+          ? XLSX.utils.decode_range(sheet['!fullref']).e.r
+          : range.e.r;
         // Width first, then as many rows as the cell limit leaves for that width.
         const width = Math.min(range.e.c - range.s.c + 1, sheetColumns);
         const lastColumn = range.s.c + width - 1;
@@ -112,7 +152,7 @@ export function extractXlsxText({ XLSX, workbook, limits = {}, report = null }) 
           if (cell && ['n', 'd', 'b'].includes(cell.t)) typed.add(c);
         }
         const notices = lastColumn < range.e.c ? [`[… columns beyond ${width} omitted]`] : [];
-        return { rows, covered, typed, rowsBeyond: Math.max(0, range.e.r - lastRow), notices };
+        return { rows, covered, typed, rowsBeyond: Math.max(0, lastSheetRow - lastRow), notices };
       }
     });
   });

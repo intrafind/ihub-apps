@@ -289,7 +289,7 @@ Revenue up 12 %
 | Sheets (.xlsx, .xls) | `[Sheet: name]` followed by the sheet. A sheet whose first row names the columns (at least two columns, text that is not a number or date, a row of data below; a title merged across the header columns counts) is a Markdown table; any other sheet stays tab-separated |
 | Merged cells in a sheet | A cell that spans rows shows its text in each row, so every row stays complete; one that spans columns keeps it in the first column |
 | Hidden sheets | Kept, flagged `[Sheet: name (hidden)]` |
-| Large sheets | At most 2,000 rows per sheet and 300,000 characters per workbook; what is left out is said: `[… 1500 more rows omitted]`, or `[… 800 rows omitted]` for a whole sheet. A spreadsheet's text can be far larger than its file, and the file size limit does not protect the context window |
+| Large sheets | At most 2,000 rows per sheet and 300,000 characters per workbook; what is left out is said: `[… 1500 more rows omitted]`, or `[… 800 rows omitted]` for a whole sheet. A spreadsheet's text can be far larger than its file, and the file size limit does not protect the context window. An `.xlsx` is read only as far as the row limit (plus one row, to tell whether the sheet goes on), so a very large workbook no longer blocks the server while it is parsed; the omitted-rows notice and the truncated flag are the same |
 
 Formulas show the value the spreadsheet last calculated, as before; cell formatting (bold, colours) is not sent.
 
