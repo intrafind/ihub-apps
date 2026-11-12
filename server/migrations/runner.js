@@ -393,17 +393,6 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V177__merge_intrafind_website_projects.js',
     newVersion: '178',
     newFile: 'V178__merge_intrafind_website_projects.js'
-  },
-  // The document envelope etag migration (#3624) shipped on main as V247;
-  // V247 and V248 belong to the project web page migrations (#3622). An
-  // install that ran it as V247 reconciles that row to V249 instead of running
-  // it again — and instead of the row keeping the project migration's number,
-  // which would stop that one from ever running.
-  {
-    oldVersion: '247',
-    oldFile: 'V247__document_envelope_etag.js',
-    newVersion: '249',
-    newFile: 'V249__document_envelope_etag.js'
   }
 ];
 

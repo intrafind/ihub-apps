@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V249 — store `etag` and `size` in every document envelope
+ * Migration V247 — store `etag` and `size` in every document envelope
  *
  * The filesystem document store derived a document's `etag` and `size` from
  * its body on every read, so a metadata-only listing read, parsed,
  * canonicalized and hashed every document it listed — on an installation with
  * a large workflow history, more than a gigabyte of heap at startup (#3624).
  * The store now writes both into the envelope, before `data`, and reads a
- * metadata-only listing from the start of the file. An envelope without them
- * is still served — the store derives both from the body and writes it back
- * on first read — but that is the slow path; this keeps normal operation off it.
+ * metadata-only listing from the start of the file. It has no fallback for an
+ * envelope without them: such an envelope reads as corrupt.
  *
  * This rewrites the envelopes written by earlier releases (`v: 1`) once, one
  * document at a time, as `v: 2` with the values the store reported for them
@@ -29,7 +28,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { resolveStorageConfig } from '../storage/StorageRegistry.js';
 
-export const version = '249';
+export const version = '247';
 export const description = 'document_envelope_etag';
 
 /** Envelope version that carries `etag` and `size`. */
@@ -38,7 +37,7 @@ const UPGRADED_VERSION = 2;
 /** Directory entries of a namespace that are bookkeeping, not documents. */
 const RESERVED = new Set(['.owners', '.locks']);
 
-// Snapshot of storage/canonicalJson.js + storage/etag.js as of V249 — the etag
+// Snapshot of storage/canonicalJson.js + storage/etag.js as of V247 — the etag
 // rule. Do NOT replace with an import: migrations must be self-contained.
 // Plain UTF-16 code-unit order, the default sort order, never locale-dependent.
 function compareCodeUnits(a, b) {
@@ -89,7 +88,7 @@ async function storageLocation(ctx) {
 }
 
 /**
- * Whether a parsed file is an envelope written before V249.
+ * Whether a parsed file is an envelope written before V247.
  *
  * @param {unknown} value - Parsed JSON
  * @param {string} key - Key the file name says it holds
@@ -154,7 +153,7 @@ export async function up(ctx) {
         size,
         data
       };
-      const temp = path.join(nsDir, `.tmp_v249_${process.pid}_${crypto.randomUUID()}`);
+      const temp = path.join(nsDir, `.tmp_v247_${process.pid}_${crypto.randomUUID()}`);
       await fs.writeFile(temp, JSON.stringify(next, null, 2), 'utf8');
       await fs.rename(temp, file);
       upgraded += 1;

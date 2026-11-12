@@ -54,7 +54,7 @@ const COMPONENT = 'FilesystemDocumentStore';
 /**
  * Envelope schema version, so a later layout change can be detected on read.
  *
- * 2 carries `etag` and `size`, written before `data` (migration V249 upgraded
+ * 2 carries `etag` and `size`, written before `data` (migration V247 upgraded
  * the version-1 envelopes, which had neither).
  */
 const ENVELOPE_VERSION = 2;
@@ -142,7 +142,7 @@ function hasStoredDigest(envelope) {
 }
 
 /**
- * Whether an envelope is in the format of releases before migration V249: a
+ * Whether an envelope is in the format of releases before migration V247: a
  * document envelope (it has `data`, and the key it names is this one) with no
  * `etag` and no `size` at all.
  *
@@ -929,7 +929,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     }
     if (hasStoredDigest(envelope)) return envelope;
     if (isLegacyEnvelope(envelope, key)) {
-      // Derived the way releases before V249 derived it on every read — the
+      // Derived the way releases before V247 derived it on every read — the
       // same values — for this document only; the caller writes it back.
       const data = envelope.data === undefined ? null : envelope.data;
       Object.assign(envelope, documentDigest(data));
@@ -1011,7 +1011,7 @@ export class FilesystemDocumentStore extends DocumentStore {
   }
 
   /**
-   * Write envelopes read in the pre-V249 format back with their `etag` and
+   * Write envelopes read in the pre-V247 format back with their `etag` and
    * `size`, and log the outcome once.
    *
    * @param {string} ns - Namespace.
@@ -1033,7 +1033,7 @@ export class FilesystemDocumentStore extends DocumentStore {
   }
 
   /**
-   * Write one pre-V249 envelope back with the `etag` and `size` derived for it.
+   * Write one pre-V247 envelope back with the `etag` and `size` derived for it.
    *
    * Not an edit: `data`, `ownerId`, `contentType`, `createdAt` and `updatedAt`
    * are kept as they were, and no change event is published. Under the
@@ -1093,7 +1093,7 @@ export class FilesystemDocumentStore extends DocumentStore {
   }
 
   /**
-   * One warning for every pre-V249 envelope a read came across.
+   * One warning for every pre-V247 envelope a read came across.
    *
    * @param {string} ns - Namespace.
    * @param {{upgraded: number, failed: number}} upgrades - Counts.

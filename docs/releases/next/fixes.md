@@ -13,7 +13,7 @@ Listing stored data without its content — the daily workflow cleanup, counting
 configuration — no longer reads each stored document in full either: every document under `contents/data`
 now records its checksum and size at the start of its file, and those listings read only that part.
 
-The first start after the upgrade does two one-time steps: migration V249 rewrites every document under
+The first start after the upgrade does two one-time steps: migration V247 rewrites every document under
 `contents/data` once to add the checksum and size (logged as "Document envelopes: upgraded N …"; on a large
 installation this takes a few seconds), and the server builds the index of unfinished runs ("Built the index of
 unfinished workflow executions"). A document that turns up later without the checksum — restored from a backup

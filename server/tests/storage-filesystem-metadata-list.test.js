@@ -10,7 +10,7 @@
  * never parses, canonicalizes or hashes a body. On a workflow state of tens of
  * megabytes that was the whole boot spike.
  *
- * Migration V249 upgrades the stored envelopes once. One that turns up later
+ * Migration V247 upgrades the stored envelopes once. One that turns up later
  * without `etag` and `size` (a backup restored, a rollback that kept writing)
  * is served by every read and written back upgraded, once; an etag that is
  * present but malformed is still a corrupt document.
@@ -154,7 +154,7 @@ const legacyEnvelope = (key, data, stamp) => ({
   data
 });
 
-/** Write an envelope the way releases before V249 did: no etag, no size. */
+/** Write an envelope the way releases before V247 did: no etag, no size. */
 async function writeLegacy(key, data, stamp = '2026-01-02T00:00:00.000Z') {
   const dir = path.join(store.dir, 'data', 'meta-ns');
   await fs.mkdir(dir, { recursive: true });
@@ -169,7 +169,7 @@ async function readRaw(key) {
 }
 
 test('an envelope stored without etag and size is served by every read and upgraded once', async () => {
-  // E.g. restored from a backup taken before the upgrade, after V249 ran.
+  // E.g. restored from a backup taken before the upgrade, after V247 ran.
   for (const [label, read] of [
     ['get', key => store.documents.get('meta-ns', key)],
     ['list', async key => (await store.documents.list('meta-ns')).items.find(d => d.key === key)],

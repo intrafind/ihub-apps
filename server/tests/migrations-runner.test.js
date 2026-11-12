@@ -415,25 +415,6 @@ describe('Migration Runner', () => {
       expect(history.migrations[0].file).toBe('V075__add_setup_configured_flag.js');
     });
 
-    it('moves the envelope etag migration from V247 to V249, leaving V247 to its new owner', () => {
-      const history = {
-        schemaVersion: '1.0',
-        migrations: [
-          {
-            version: '247',
-            description: 'document_envelope_etag',
-            file: 'V247__document_envelope_etag.js',
-            checksum: 'abc123',
-            status: 'success'
-          }
-        ]
-      };
-
-      expect(reconcileRenamedMigrations(history)).toBe(true);
-      expect(history.migrations[0].version).toBe('249');
-      expect(history.migrations[0].file).toBe('V249__document_envelope_etag.js');
-    });
-
     it('leaves the sibling that kept its original version number untouched', () => {
       const history = {
         schemaVersion: '1.0',

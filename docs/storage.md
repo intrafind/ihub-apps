@@ -544,7 +544,7 @@ The envelope is written with `atomicWriteJSON`:
 reports the stored values, and a metadata-only read (`listMetadata`,
 `list`/`scan` with `includeData: false`, and the owner/etag check inside `put`
 and `delete`) reads only the start of the file and never parses the body.
-Migration V249 added both to the `v: 1` envelopes of earlier releases once. An
+Migration V247 added both to the `v: 1` envelopes of earlier releases once. An
 envelope that turns up later without them (a restored backup, a rollback that
 kept writing, an older release on the same volume) is read whole once, its
 `etag` and `size` derived the way earlier releases derived them, and written
