@@ -54,7 +54,7 @@ const COMPONENT = 'FilesystemDocumentStore';
 /**
  * Envelope schema version, so a later layout change can be detected on read.
  *
- * 2 carries `etag` and `size`, written before `data` (migration V247 upgraded
+ * 2 carries `etag` and `size`, written before `data` (migration V249 upgraded
  * the version-1 envelopes, which had neither).
  */
 const ENVELOPE_VERSION = 2;
@@ -116,14 +116,18 @@ function isReservedEntry(entry) {
 }
 
 /**
+ * Marks an envelope whose `etag` and `size` were derived on this read because
+ * it was stored without them; the value is the whole envelope, body included,
+ * so the caller can write the upgraded envelope back.
+ */
+const LEGACY_ENVELOPE = Symbol('legacy-envelope');
+
+/**
  * Whether an envelope's stored `etag` and `size` are usable.
  *
  * They are minted by `put` — over the canonical JSON of the body, see
  * `storage/canonicalJson.js` and {@link documentDigest} — and stored, so a
- * read never derives them again. An envelope without them (one written before
- * migration V247 that the migration did not reach, or one edited by hand) is
- * treated as a corrupt document rather than silently re-hashed: recomputing on
- * read is exactly the cost the stored values exist to remove.
+ * read never derives them again.
  *
  * @param {Object} envelope - Parsed envelope, or its head
  * @returns {boolean}
@@ -135,6 +139,45 @@ function hasStoredDigest(envelope) {
     Number.isSafeInteger(envelope.size) &&
     envelope.size >= 0
   );
+}
+
+/**
+ * Whether an envelope is in the format of releases before migration V249: a
+ * document envelope (it has `data`, and the key it names is this one) with no
+ * `etag` and no `size` at all.
+ *
+ * Such envelopes keep appearing after the migration has run — a rollback to
+ * the previous release that kept writing, a restore of `contents/data` from a
+ * backup taken before the upgrade, an older release on the same volume, a
+ * script or fixture writing files — and they hold somebody's chats, projects
+ * and runs. They are read (their etag derived the way it always was) and
+ * upgraded in place, never reported as corrupt. An envelope whose etag or size
+ * is present but malformed is something else and stays corrupt.
+ *
+ * @param {Object} envelope - Parsed envelope
+ * @param {string} key - Key the file is stored under
+ * @returns {boolean}
+ */
+function isLegacyEnvelope(envelope, key) {
+  return (
+    envelope.etag === undefined &&
+    envelope.size === undefined &&
+    Object.hasOwn(envelope, 'data') &&
+    (envelope.key === undefined || envelope.key === key)
+  );
+}
+
+/**
+ * Remember on an envelope (or its head) the full legacy envelope it came from.
+ * Non-enumerable, so it never reaches a spread copy or a serialization.
+ *
+ * @param {Object} target - Envelope or head to mark
+ * @param {Object} envelope - The full legacy envelope
+ * @returns {Object} `target`
+ */
+function markLegacy(target, envelope) {
+  Object.defineProperty(target, LEGACY_ENVELOPE, { value: envelope, enumerable: false });
+  return target;
 }
 
 /**
@@ -356,6 +399,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     assertValidKey(key);
     const envelope = await this._readEnvelope(ns, key);
     if (!envelope) return null;
+    if (envelope[LEGACY_ENVELOPE]) await this._upgradeLegacyEnvelopes(ns, [[key, envelope]]);
     return this._toDocument(ns, key, envelope, true);
   }
 
@@ -591,6 +635,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     // most of a second of strictly serialized I/O before the sidebar paints.
     let consumed = 0;
     let skipped = 0;
+    const legacy = [];
     while (consumed < keys.length && items.length < pageSize) {
       const batch = keys.slice(consumed, consumed + READ_CONCURRENCY);
       // Not `lenient`: a torn document is still skipped, but counted, so the
@@ -622,10 +667,12 @@ export class FilesystemDocumentStore extends DocumentStore {
         // same, and removing that one would hide a live document from its owner.
         if (!envelope) continue;
         if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
+        if (envelope[LEGACY_ENVELOPE]) legacy.push([key, envelope]);
         items.push(this._toDocument(ns, key, envelope, withData));
       }
       consumed += taken;
     }
+    if (legacy.length > 0) await this._upgradeLegacyEnvelopes(ns, legacy);
 
     const nextCursor =
       consumed < keys.length && items.length > 0 ? encodeCursor(items.at(-1).key) : null;
@@ -660,16 +707,29 @@ export class FilesystemDocumentStore extends DocumentStore {
     if (typeof prefix === 'string' && prefix.length > 0) {
       keys = keys.filter(key => key.startsWith(prefix));
     }
-    for (const key of keys) {
-      // Same reasoning as `list`: a missing envelope is a stale owner marker
-      // or a document deleted mid-walk, and is skipped rather than removed.
-      const envelope =
-        includeData !== false
-          ? await this._readEnvelope(ns, key, { lenient: true })
-          : await this._readEnvelopeHead(ns, key, { lenient: true });
-      if (!envelope) continue;
-      if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
-      yield this._toDocument(ns, key, envelope, includeData !== false);
+    const upgrades = { upgraded: 0, failed: 0 };
+    try {
+      for (const key of keys) {
+        // Same reasoning as `list`: a missing envelope is a stale owner marker
+        // or a document deleted mid-walk, and is skipped rather than removed.
+        const envelope =
+          includeData !== false
+            ? await this._readEnvelope(ns, key, { lenient: true })
+            : await this._readEnvelopeHead(ns, key, { lenient: true });
+        if (!envelope) continue;
+        if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
+        if (envelope[LEGACY_ENVELOPE]) {
+          if (await this._upgradeLegacyEnvelope(ns, key, envelope[LEGACY_ENVELOPE])) {
+            upgrades.upgraded += 1;
+          } else {
+            upgrades.failed += 1;
+          }
+        }
+        yield this._toDocument(ns, key, envelope, includeData !== false);
+      }
+    } finally {
+      // One line per walk, however many documents it upgraded.
+      this._logLegacyUpgrades(ns, upgrades);
     }
   }
 
@@ -867,10 +927,15 @@ export class FilesystemDocumentStore extends DocumentStore {
     if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
       return this._corrupt(ns, key, lenient, null);
     }
-    if (!hasStoredDigest(envelope)) {
-      return this._corrupt(ns, key, lenient, null, 'no valid stored etag and size');
+    if (hasStoredDigest(envelope)) return envelope;
+    if (isLegacyEnvelope(envelope, key)) {
+      // Derived the way releases before V249 derived it on every read — the
+      // same values — for this document only; the caller writes it back.
+      const data = envelope.data === undefined ? null : envelope.data;
+      Object.assign(envelope, documentDigest(data));
+      return markLegacy(envelope, envelope);
     }
-    return envelope;
+    return this._corrupt(ns, key, lenient, null, 'malformed stored etag or size');
   }
 
   /**
@@ -880,9 +945,9 @@ export class FilesystemDocumentStore extends DocumentStore {
    * `put` writes `data` last and every member before it is a primitive, so
    * the head is read from the start of the file a few kilobytes at a time and
    * the body is never decoded past its first bytes. A file that is not laid
-   * out that way (written by hand, say) is parsed whole instead — that is a
-   * question of layout, not of a missing etag: the stored etag and size are
-   * required either way, and an envelope without them is corrupt.
+   * out that way (written by hand, say) is parsed whole instead, and so is an
+   * envelope stored without `etag` and `size` (see {@link isLegacyEnvelope}):
+   * its digest has to be derived from the body this once.
    *
    * @param {string} ns - Namespace.
    * @param {string} key - Document key.
@@ -925,19 +990,123 @@ export class FilesystemDocumentStore extends DocumentStore {
       await handle.close();
     }
 
-    if (head === NOT_A_HEAD) {
-      const whole = await this._readEnvelope(ns, key, { lenient: true });
-      if (whole) {
-        const { data: _data, ...rest } = whole;
-        return rest;
+    const needsWhole =
+      head === NOT_A_HEAD || (requireDigest && head.etag === undefined && head.size === undefined);
+    if (needsWhole) {
+      let whole;
+      try {
+        whole = await this._readEnvelope(ns, key, { lenient: lenient || !requireDigest });
+      } catch (error) {
+        if (!requireDigest && error instanceof CorruptDocumentError) return null;
+        throw error;
       }
-      if (!requireDigest) return null;
-      return this._corrupt(ns, key, lenient, null);
+      if (!whole) return null;
+      const { data: _data, ...rest } = whole;
+      return whole[LEGACY_ENVELOPE] ? markLegacy(rest, whole) : rest;
     }
     if (requireDigest && !hasStoredDigest(head)) {
-      return this._corrupt(ns, key, lenient, null, 'no valid stored etag and size');
+      return this._corrupt(ns, key, lenient, null, 'malformed stored etag or size');
     }
     return head;
+  }
+
+  /**
+   * Write envelopes read in the pre-V249 format back with their `etag` and
+   * `size`, and log the outcome once.
+   *
+   * @param {string} ns - Namespace.
+   * @param {Array<[string, Object]>} entries - Keys with the envelope (or head)
+   *   each was read as.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _upgradeLegacyEnvelopes(ns, entries) {
+    const upgrades = { upgraded: 0, failed: 0 };
+    for (const [key, envelope] of entries) {
+      if (await this._upgradeLegacyEnvelope(ns, key, envelope[LEGACY_ENVELOPE] || envelope)) {
+        upgrades.upgraded += 1;
+      } else {
+        upgrades.failed += 1;
+      }
+    }
+    this._logLegacyUpgrades(ns, upgrades);
+  }
+
+  /**
+   * Write one pre-V249 envelope back with the `etag` and `size` derived for it.
+   *
+   * Not an edit: `data`, `ownerId`, `contentType`, `createdAt` and `updatedAt`
+   * are kept as they were, and no change event is published. Under the
+   * document's lock, and only if the file is still the envelope that was read
+   * — still without an etag and with the same `updatedAt` — so a write that
+   * landed in between is never overwritten. A failure is logged and otherwise
+   * ignored: the document was already returned, the next read tries again.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {Object} envelope - The legacy envelope as read, `etag`/`size` derived.
+   * @returns {Promise<boolean>} True when the upgraded envelope was written.
+   * @private
+   */
+  async _upgradeLegacyEnvelope(ns, key, envelope) {
+    try {
+      return await withFileLock(
+        this._lockPath(ns, key),
+        async () => {
+          const current = await this._readEnvelopeHead(ns, key, {
+            lenient: true,
+            requireDigest: false
+          });
+          if (
+            !current ||
+            current.etag !== undefined ||
+            current.size !== undefined ||
+            current.updatedAt !== envelope.updatedAt
+          ) {
+            return false;
+          }
+          const upgraded = {
+            v: ENVELOPE_VERSION,
+            key,
+            ownerId: envelope.ownerId ?? null,
+            ...(envelope.contentType === undefined ? {} : { contentType: envelope.contentType }),
+            createdAt: envelope.createdAt,
+            updatedAt: envelope.updatedAt,
+            etag: envelope.etag,
+            size: envelope.size,
+            data: envelope.data === undefined ? null : envelope.data
+          };
+          await atomicWriteJSON(this._docPath(ns, key), upgraded);
+          return true;
+        },
+        { component: COMPONENT }
+      );
+    } catch (error) {
+      logger.error('Could not write back a document upgraded with its etag and size', {
+        component: COMPONENT,
+        ns,
+        key,
+        error: error.message
+      });
+      return false;
+    }
+  }
+
+  /**
+   * One warning for every pre-V249 envelope a read came across.
+   *
+   * @param {string} ns - Namespace.
+   * @param {{upgraded: number, failed: number}} upgrades - Counts.
+   * @private
+   */
+  _logLegacyUpgrades(ns, { upgraded, failed }) {
+    if (upgraded + failed === 0) return;
+    logger.warn('Read documents stored without etag and size; upgraded them in place', {
+      component: COMPONENT,
+      ns,
+      upgraded,
+      ...(failed > 0 ? { notUpgraded: failed } : {})
+    });
   }
 
   /**
