@@ -633,3 +633,11 @@ settings: an integration the user had switched on, such as the website corpus, w
 assistant fell back to other tools. The same happened to API and MCP callers that send only part
 of the settings. A turn now uses the chat's stored setup (tools, model, style, output format,
 thinking, web search, image and integration settings) for everything the request leaves out.
+
+## The Cluster Primary Process Uses a Third of the Memory, and Workers Start Faster
+
+With several workers (`WORKERS` > 1) the primary process, which only starts and supervises the workers, loaded
+the whole application and used about as much memory as a worker (~400 MB RSS). It now loads only what it
+needs (~120 MB). Every worker also stopped generating the API documentation (`/api/docs`) at startup: the
+production build writes it, and the server reads it on the first request to `/api/docs`. Workers listen about
+a second and a half sooner.

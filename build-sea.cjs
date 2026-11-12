@@ -7,7 +7,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { execSync } = require('node:child_process');
+const { execSync, execFileSync } = require('node:child_process');
 const os = require('node:os');
 
 // Configuration
@@ -485,6 +485,15 @@ try {
   };
 
   copyServerFiles(serverDir, path.join(outputDir, 'server'));
+  // The OpenAPI documents of /api/docs, built once here rather than by the
+  // server at runtime (see server/utils/apiDocSpecs.js). Fails the build on a
+  // malformed @swagger block.
+  console.log('Building the API documents...');
+  execFileSync(
+    process.execPath,
+    ['scripts/build-api-docs.js', path.join(outputDir, 'server', 'generated', 'openapi')],
+    { cwd: __dirname, stdio: 'inherit' }
+  );
   // Create a package.json for the server
   const serverPackageJson = {
     name: 'ihub-apps-server',

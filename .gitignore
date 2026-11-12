@@ -98,3 +98,6 @@ server/defaults/sources/ihub-documentation.md
 
 # Boot smoke test throwaway contents dirs (scripts/smoke-boot.js)
 .smoke-contents/
+
+# OpenAPI documents written by scripts/build-api-docs.js
+server/generated/

@@ -198,7 +198,7 @@ GET /api/conversations?limit=50&cursor=eyJ…&status=active
 
 ## 9. Documenting and checking
 
-- **The OpenAPI comment of the route is the contract** (`server/routes/swagger.js` builds the document). A new or
+- **The OpenAPI comment of the route is the contract** (`server/utils/apiDocSpecs.js` builds the document; `npm run build:api-docs` fails on a malformed block). A new or
   changed endpoint documents its request, its success body, and every error code it can answer with. Write it
   _before_ the handler.
 - A test for a new endpoint asserts the status code, the body shape, and for an error `code` and
