@@ -120,7 +120,8 @@ function isoDateInTimeZone(now, timeZone) {
 
 class PromptService {
   /**
-   * Track that prompt-based sources were used for a chat
+   * Track that project knowledge went into the prompt of a chat: the answer
+   * can rest on it without a tool call.
    * @param {string} chatId - The conversation/chat ID
    */
   trackPromptSources(chatId) {
@@ -128,8 +129,8 @@ class PromptService {
     if (!promptKnowledgeSources.has(chatId)) {
       promptKnowledgeSources.set(chatId, new Set());
     }
-    promptKnowledgeSources.get(chatId).add('sources');
-    logger.info('Tracked prompt-based sources for chat', {
+    promptKnowledgeSources.get(chatId).add('project');
+    logger.info('Tracked project knowledge in the prompt of a chat', {
       component: 'PromptService',
       chatId
     });

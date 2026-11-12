@@ -58,10 +58,10 @@ describe('projectRunToMessage — streaming content', () => {
       { mimeType: 'image/png', data: 'AAA', thoughtSignature: 'sig' }
     ]);
     expect(extras.finishReason).toBeUndefined();
-    expect(extras.answerSource).toBeUndefined();
+    expect(extras.answerBasis).toBeUndefined();
   });
 
-  test('completion carries finishReason and answerSource; the iFinder id stays on the server', () => {
+  test('completion carries finishReason and answerBasis; the iFinder id stays on the server', () => {
     const run = runFrom([
       started,
       env(2, 'step/delta', { step: 0, kind: 'text', content: 'Answer' }),
@@ -77,7 +77,8 @@ describe('projectRunToMessage — streaming content', () => {
       env(5, 'run/ended', {
         status: 'completed',
         finishReason: 'stop',
-        knowledgeSources: ['websearch']
+        knowledgeSources: ['websearch'],
+        answerBasis: [{ kind: 'web' }]
       })
     ]);
     const { content, loading, extras } = projectRunToMessage(run);
@@ -85,7 +86,8 @@ describe('projectRunToMessage — streaming content', () => {
     expect(loading).toBe(false);
     expect(extras.finishReason).toBe('stop');
     // Exactly what run/ended named — a tool's own hint is not merged in.
-    expect(extras.answerSource).toEqual({ sources: ['websearch'], type: 'mixed' });
+    expect(extras.answerBasis).toEqual([{ kind: 'web' }]);
+    expect(extras.answerSource).toBeUndefined();
     expect(extras.ifinderMessageId).toBeUndefined();
   });
 

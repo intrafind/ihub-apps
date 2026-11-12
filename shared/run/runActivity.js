@@ -22,7 +22,6 @@
  *
  * @module shared/run/runActivity
  */
-import { isRunFinished } from './runReducer.js';
 import { buildToolActivity } from './toolActivity.js';
 
 /** progress/node status → chat step status (WorkflowStepIndicator vocabulary). */
@@ -90,20 +89,6 @@ export function workflowResultOf(run) {
 }
 
 /**
- * The knowledge the answer drew on, for the answer badge ("Based on web
- * search", "… iFinder", "… AI knowledge"): the list the server named on
- * `run/ended`, nothing inferred here. A run that ended without one — failed,
- * stopped before it wrote anything, or not a chat turn — has no answer source.
- *
- * @param {Object} run - RunState
- * @returns {{sources: string[], type: 'mixed'}|null}
- */
-export function answerSourceOf(run) {
-  if (!isRunFinished(run) || !run.knowledgeSources?.length) return null;
-  return { sources: run.knowledgeSources, type: 'mixed' };
-}
-
-/**
  * The tool activity kept with a stored answer: the rows, and nothing that is
  * only true while the turn runs. `reading` is the page a search is fetching
  * right now: never true of a finished run, and meaningless once stored. The
@@ -135,8 +120,6 @@ export function buildRunActivity(run, childRuns = []) {
   if (toolActivity) activity.toolActivity = toolActivity;
   if (run.searchSummary) activity.searchSummary = { ...run.searchSummary, searching: false };
   if (run.skills?.length) activity.activeSkills = run.skills;
-  const answerSource = answerSourceOf(run);
-  if (answerSource) activity.answerSource = answerSource;
   if (run.knowledgeScope?.projects?.length) activity.knowledgeScope = run.knowledgeScope;
 
   let steps = [];

@@ -104,7 +104,7 @@ function renderMessage(overrides = {}) {
 
 const follows = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 const entryOf = () => screen.queryByRole('button', { name: 'sources.resultsCount' });
-const webSearch = { answerSource: { sources: ['websearch'] } };
+const webSearch = { answerBasis: [{ kind: 'web' }] };
 
 beforeEach(() => {
   act(() => _resetSourcesStore());
@@ -115,7 +115,7 @@ test('the cited list and the results entry follow the answer, next to the badge'
   const content = screen.getByTestId('content');
   const cited = screen.getByRole('list', { name: 'Cited in this answer' });
   const entry = entryOf();
-  const badge = screen.getByText('chatMessage.answerSource.websearch');
+  const badge = screen.getByTestId('answer-basis-chip');
 
   expect(follows(content, cited)).toBe(true);
   expect(follows(cited, entry)).toBe(true);
@@ -135,7 +135,7 @@ test('the entry says how many results, not what was searched', () => {
 
 test('without a badge (a failed or older answer), the entry is still there', () => {
   renderMessage({ error: true });
-  expect(screen.queryByText('chatMessage.answerSource.websearch')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('answer-basis-chip')).not.toBeInTheDocument();
   expect(entryOf()).toBeInTheDocument();
 });
 
@@ -143,7 +143,7 @@ test('while the answer streams there is no entry, no cited list and no badge', (
   renderMessage({ ...webSearch, loading: true });
   expect(entryOf()).not.toBeInTheDocument();
   expect(screen.queryByRole('list', { name: 'Cited in this answer' })).not.toBeInTheDocument();
-  expect(screen.queryByText('chatMessage.answerSource.websearch')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('answer-basis-chip')).not.toBeInTheDocument();
 });
 
 test('while it streams the inline badges still open the panel, and it stays open after', () => {
@@ -220,7 +220,7 @@ test('an answer rendered twice (phone and desktop layout) opens one panel', () =
 test('an answer that found nothing has no divider and no entry, only its badge', () => {
   const { container } = renderMessage({ ...webSearch, sources: { queries: ['x'], items: [] } });
   expect(entryOf()).not.toBeInTheDocument();
-  expect(screen.getByText('chatMessage.answerSource.websearch')).toBeInTheDocument();
+  expect(screen.getByTestId('answer-basis-chip')).toBeInTheDocument();
   expect(container.querySelector('.border-t')).toBeNull();
 });
 
@@ -295,7 +295,7 @@ describe('an answer that cites none of its sources', () => {
     expect(screen.queryByRole('list')).not.toBeInTheDocument();
     expect(screen.queryByText('Cited in this answer')).not.toBeInTheDocument();
     expect(entryOf()).toBeInTheDocument();
-    expect(screen.getByText('chatMessage.answerSource.websearch')).toBeInTheDocument();
+    expect(screen.getByTestId('answer-basis-chip')).toBeInTheDocument();
   });
 
   test('nothing is listed while the answer streams', () => {

@@ -42,6 +42,7 @@ import logger from '../../utils/logger.js';
 import defaultInteractionService from '../loop/InteractionService.js';
 import { authorizeInteraction as defaultAuthorizeInteraction } from '../loop/runAccess.js';
 import { APPROVAL_DECISIONS, APPROVAL_GRANTS } from '../../../shared/toolApproval.js';
+import { boundCarriedBasis } from './answerBasis.js';
 
 const COMPONENT = 'ChatToolApproval';
 
@@ -493,7 +494,9 @@ async function commitChatApproval({
     // the stored call is the fallback for one that was evicted.
     args: interaction?.prompt?.displayData?.args ?? stored.call?.args ?? {},
     transcript: Array.isArray(stored.transcript) ? stored.transcript : [],
-    question: typeof stored.question === 'string' ? stored.question : null
+    question: typeof stored.question === 'string' ? stored.question : null,
+    // What the paused turn had used, for the basis of the continuation's answer.
+    basis: boundCarriedBasis(stored.basis)
   };
   // A turn refused before its loop started puts the approval back, with its
   // answer, so the same decision can be sent again.

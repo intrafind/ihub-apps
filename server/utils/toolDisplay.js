@@ -22,17 +22,12 @@
  */
 
 import { classifyToolKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
-
-const MAX_LENGTH = 120;
+import { boundedText, integrationLabelOf } from './toolIntegrationLabel.js';
 
 /** Built-in tools that read one page or document. */
 const FETCH_TOOL_IDS = new Set(['read_url', 'ifinder_getcontent', 'knowledge_read']);
 
-function text(value) {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, MAX_LENGTH) : null;
-}
+const text = boundedText;
 
 /**
  * The row a call is. A connected system — an integration, MCP server or
@@ -62,7 +57,7 @@ export function activityKindOf(toolId, source) {
  */
 export function activityScopeOf(toolId, source) {
   if (source === 'websearch') return 'web';
-  if (source === 'ifinder' || source === 'sources') return 'documents';
+  if (source === 'ifinder' || source === 'sources' || source === 'project') return 'documents';
   const id = String(toolId || '').toLowerCase();
   return id.startsWith('ifinder') || id.startsWith('source_') || id.startsWith('knowledge_')
     ? 'documents'
@@ -106,17 +101,14 @@ export function outputKindOf(toolDef) {
 export function toolDisplayOf(toolDef) {
   if (!toolDef || typeof toolDef !== 'object') return {};
   let title = null;
-  let integration = null;
+  const integration = integrationLabelOf(toolDef);
 
   if (toolDef._integration) {
     title = text(toolDef._integration.actionTitle);
-    integration = text(toolDef._integration.instanceLabel);
   } else if (toolDef._mcp) {
     title = text(toolDef._mcp.title) || text(toolDef._mcp.originalName);
-    integration = text(toolDef._mcp.serverName) || text(toolDef._mcp.serverId);
   } else if (toolDef._a2a) {
     title = text(toolDef._a2a.skillName);
-    integration = text(toolDef._a2a.agentName) || text(toolDef._a2a.agentId);
   }
 
   // Any other tool: its configured (localized) name, when it says more than its id.

@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { usePopoverPanel } from '../hooks/usePopoverPanel';
 
 /** The first and last characters of a hash, so it fits a narrow popover. */
 const shortHash = value =>
@@ -39,15 +40,6 @@ function modelLabel(modelId, models, language) {
   return name && name !== modelId ? `${name} (${modelId})` : modelId;
 }
 
-/** The nearest ancestor that clips its content (a scrolling message list), or null for the viewport. */
-function clippingAncestor(node) {
-  for (let el = node?.parentElement; el && el !== document.body; el = el.parentElement) {
-    const { overflowY } = window.getComputedStyle(el);
-    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'hidden') return el;
-  }
-  return null;
-}
-
 function Row({ label, children }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -58,87 +50,25 @@ function Row({ label, children }) {
 }
 
 /**
- * "AI generated" information under an answer or on a generated image (EU AI Act
- * Art. 50(2)): which model produced it, when, and the hash of its text or file,
- * from the provenance object the server attached (`run/ended.provenance`, an
- * image's `provenance`, or the stored message's). Nothing is inferred here. An
- * output without the object (stored before provenance existed) shows no button;
- * a stopped answer that had written text does.
+ * The record of an AI-generated output as a list: which model produced it, when,
+ * the marking and the hash of its text or file, with the note on what the hash
+ * proves. Shared by the button on a generated image and by the "Details" of an
+ * answer's "About this answer" popover.
  *
  * @param {Object} props
  * @param {Object} props.provenance - The server's provenance object
  * @param {Array<Object>} [props.models] - Model list, for the model's display name
- * @param {'top'|'bottom'} [props.placement='top'] - Where the panel prefers to open; it
- *   opens on the other side when the preferred one has no room (an answer at the top of
- *   the chat would cut the panel off and hide its first rows)
- * @param {string} [props.buttonClassName] - Replaces the button's look (on an image)
  */
-function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName }) {
+export function ProvenanceDetails({ provenance, models }) {
   const { t, i18n } = useTranslation();
-  const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const rootRef = useRef(null);
-  const buttonRef = useRef(null);
-  const panelRef = useRef(null);
-  const panelId = useId();
-  const [side, setSide] = useState(placement);
-  const [maxHeight, setMaxHeight] = useState(null);
-
-  const close = useCallback(() => {
-    setOpen(false);
-    buttonRef.current?.focus();
-  }, []);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onPointerDown = event => {
-      if (rootRef.current && !rootRef.current.contains(event.target)) setOpen(false);
-    };
-    const onKeyDown = event => {
-      if (event.key === 'Escape') close();
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open, close]);
-
-  // Measured before paint: open on the preferred side when the panel fits there
-  // inside the clipping container (or the viewport), else on the other side.
-  useLayoutEffect(() => {
-    if (!open || !panelRef.current || !buttonRef.current) return;
-    const GAP = 8;
-    // scrollHeight: the full content, also while an earlier cap is still applied.
-    const height = panelRef.current.scrollHeight + GAP;
-    const button = buttonRef.current.getBoundingClientRect();
-    const clip = clippingAncestor(rootRef.current)?.getBoundingClientRect();
-    const top = Math.max(clip ? clip.top : 0, 0);
-    const bottom = Math.min(clip ? clip.bottom : window.innerHeight, window.innerHeight);
-    const room = { top: button.top - top, bottom: bottom - button.bottom };
-    const other = placement === 'bottom' ? 'top' : 'bottom';
-    let next;
-    if (room[placement] >= height) next = placement;
-    else if (room[other] >= height) next = other;
-    // Neither side fits: the roomier one, with the panel capped to it (it scrolls).
-    else next = room.top > room.bottom ? 'top' : 'bottom';
-    setSide(next);
-    setMaxHeight(room[next] >= height ? null : Math.max(room[next] - GAP, 0));
-  }, [open, placement]);
-
-  if (!provenance?.ai_generated) return null;
-
-  const isImage = provenance.kind === 'image';
-  const hash = provenance.content_hash?.value;
-  const createdAt = provenance.created_at ? new Date(provenance.created_at) : null;
+  const isImage = provenance?.kind === 'image';
+  const hash = provenance?.content_hash?.value;
+  const createdAt = provenance?.created_at ? new Date(provenance.created_at) : null;
   const created =
     createdAt && !Number.isNaN(createdAt.getTime())
       ? createdAt.toLocaleString(i18n?.language)
       : null;
-  const label = isImage
-    ? t('chatMessage.provenance.imageButton', 'AI-generated image: details')
-    : t('chatMessage.provenance.button', 'AI generated: details');
 
   const copyHash = async () => {
     try {
@@ -149,6 +79,83 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
       // Clipboard not available (insecure context): the hash stays selectable in the panel.
     }
   };
+
+  return (
+    <>
+      <dl className="m-0 flex flex-col gap-2">
+        <Row label={t('chatMessage.provenance.model', 'Model')}>
+          <span data-testid="provenance-model">
+            {modelLabel(provenance.model?.id, models, i18n?.language)}
+          </span>
+        </Row>
+        {created && <Row label={t('chatMessage.provenance.created', 'Created')}>{created}</Row>}
+        <Row label={t('chatMessage.provenance.marking', 'Marking')}>
+          {markingLabel(provenance.model?.watermark, t)}
+        </Row>
+        {hash && (
+          <Row label={t('chatMessage.provenance.hash', 'Content hash (SHA-256)')}>
+            {/* Shortened to fit a narrow panel; the full hash is read out and copied. */}
+            <span data-testid="provenance-hash" title={hash}>
+              <span aria-hidden="true">{shortHash(hash)}</span>
+              <span className="sr-only">{hash}</span>
+            </span>
+            <button
+              type="button"
+              onClick={copyHash}
+              className="ms-2 text-indigo-600 hover:underline dark:text-indigo-400"
+            >
+              {copied
+                ? t('chatMessage.provenance.copied', 'Copied')
+                : t('chatMessage.provenance.copyHash', 'Copy hash')}
+            </button>
+          </Row>
+        )}
+        {provenance.output_id && (
+          <Row label={t('chatMessage.provenance.outputId', 'Output ID')}>
+            {provenance.output_id}
+          </Row>
+        )}
+      </dl>
+      <p className="mt-2 text-gray-500 dark:text-gray-400">
+        {isImage
+          ? t(
+              'chatMessage.provenance.imageNote',
+              'The provenance record keeps this hash, not the image itself. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it.'
+            )
+          : t(
+              'chatMessage.provenance.note',
+              'iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it.'
+            )}
+      </p>
+    </>
+  );
+}
+
+/**
+ * "AI generated" information on a generated image (EU AI Act Art. 50(2)): which
+ * model produced it, when, and the hash of its file, from the provenance object
+ * the server attached (an image's `provenance`). Nothing is inferred here. An
+ * output without the object shows no button. The details of an answer's text
+ * are part of the answer's "About this answer" popover (`AnswerBasis`).
+ *
+ * @param {Object} props
+ * @param {Object} props.provenance - The server's provenance object
+ * @param {Array<Object>} [props.models] - Model list, for the model's display name
+ * @param {'top'|'bottom'} [props.placement='top'] - Where the panel prefers to open; it
+ *   opens on the other side when the preferred one has no room
+ * @param {string} [props.buttonClassName] - Replaces the button's look (on an image)
+ */
+function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName }) {
+  const { t } = useTranslation();
+  const { open, setOpen, side, panelStyle, panelId, rootRef, buttonRef, panelRef } =
+    usePopoverPanel(placement);
+
+  if (!provenance?.ai_generated) return null;
+
+  const isImage = provenance.kind === 'image';
+  const label = isImage
+    ? t('chatMessage.provenance.imageButton', 'AI-generated image: details')
+    : t('chatMessage.provenance.button', 'AI generated: details');
 
   return (
     <div className="relative inline-flex" ref={rootRef}>
@@ -172,7 +179,7 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
         <div
           ref={panelRef}
           id={panelId}
-          style={maxHeight !== null ? { maxHeight: `${maxHeight}px` } : undefined}
+          style={panelStyle}
           role="dialog"
           aria-label={t('chatMessage.provenance.title', 'AI generated')}
           data-testid="provenance-panel"
@@ -183,49 +190,7 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
               ? t('chatMessage.provenance.imageTitle', 'AI-generated image')
               : t('chatMessage.provenance.title', 'AI generated')}
           </p>
-          <dl className="m-0 flex flex-col gap-2">
-            <Row label={t('chatMessage.provenance.model', 'Model')}>
-              <span data-testid="provenance-model">
-                {modelLabel(provenance.model?.id, models, i18n?.language)}
-              </span>
-            </Row>
-            {created && <Row label={t('chatMessage.provenance.created', 'Created')}>{created}</Row>}
-            <Row label={t('chatMessage.provenance.marking', 'Marking')}>
-              {markingLabel(provenance.model?.watermark, t)}
-            </Row>
-            {hash && (
-              <Row label={t('chatMessage.provenance.hash', 'Content hash (SHA-256)')}>
-                <span title={hash} data-testid="provenance-hash">
-                  {shortHash(hash)}
-                </span>
-                <button
-                  type="button"
-                  onClick={copyHash}
-                  className="ms-2 text-indigo-600 hover:underline dark:text-indigo-400"
-                >
-                  {copied
-                    ? t('chatMessage.provenance.copied', 'Copied')
-                    : t('chatMessage.provenance.copyHash', 'Copy hash')}
-                </button>
-              </Row>
-            )}
-            {provenance.output_id && (
-              <Row label={t('chatMessage.provenance.outputId', 'Output ID')}>
-                {provenance.output_id}
-              </Row>
-            )}
-          </dl>
-          <p className="mt-2 text-gray-500 dark:text-gray-400">
-            {isImage
-              ? t(
-                  'chatMessage.provenance.imageNote',
-                  'The provenance record keeps this hash, not the image itself. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it.'
-                )
-              : t(
-                  'chatMessage.provenance.note',
-                  'iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it.'
-                )}
-          </p>
+          <ProvenanceDetails provenance={provenance} models={models} />
         </div>
       )}
     </div>

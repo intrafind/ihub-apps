@@ -382,33 +382,32 @@ why.
 
 ## Answer Source Attribution
 
-> **Added in v5.2.12**: Each AI response now displays a badge indicating the information source used.
+> **Changed:** the colour-coded badges (AI knowledge, Web Search, Mixed, …) and the separate
+> **AI generated** button are replaced by one chip. See
+> [Answer Sources → What users see](answer-sources.md#what-users-see).
 
-When web search or other external sources are used, an **Answer Source Badge** appears on each message showing where the information came from:
+Under each finished answer, one outlined chip says what the answer is based on. It names only the
+**kinds** of source the answer used, and no more than two of them, then **+N**:
 
-| Badge | Color | Description |
-|-------|-------|-------------|
-| AI knowledge | Gray | Response generated purely from the model's knowledge |
-| Web Search | Green | Response includes information from web search results |
-| Connected systems | Sky | Response is based on an MCP server, a remote agent or an installed integration (a people directory, Jira, …) |
-| iFinder | Emerald | Response uses documents found by an iFinder search tool |
-| Sources | Purple | Response uses configured knowledge base sources |
-| iAssistant | Indigo | Response includes information from iFinder iAssistant |
-| Grounding | Teal | Response uses Google Search grounding (Gemini) |
-| Email | Amber | Response is based on the open or added email or meeting (Outlook add-in) |
-| Uploaded file | Orange | Response is based on an uploaded file or image |
-| Audio recording | Violet | Response is based on an audio recording or its transcript |
-| Mixed | Blue | Response combines multiple information sources |
+| Chip | Meaning |
+|------|---------|
+| Model knowledge | The model's own knowledge: nothing was retrieved |
+| Web | Web search results, or the provider's own search (Google Search grounding) |
+| Project | Documents of a project that went into the prompt or came back from a search |
+| iFinder, iAssistant | Documents found by an iFinder search, or iAssistant's knowledge base |
+| Documents | Knowledge base sources an admin configured |
+| Jira, Munich AD, … | An installed integration, an MCP server or a remote agent, under its own name |
+| Email, File, Recording | The open or added email or meeting (Outlook add-in), an uploaded file or image, an audio recording |
+| Workflow | The answer was produced by a workflow run |
 
-When multiple sources are used, a tooltip lists all contributing sources.
+Opening the chip shows **About this answer**: the AI-generated statement, each source by name, the
+projects that were in scope but not used, and the provenance details.
 
-The server decides the badge: it names the sources when the turn ends
-(`run/ended.knowledgeSources`, see [SSE v2](sse-v2.md#a-chat-turn-on-the-wire)), and a
-transcription session names its own. The browser only displays that list. An
-answer stopped after it started keeps the sources it had used; one without a
-list — a failed turn, one stopped before it wrote anything or cut off by a server
-restart, a notice, an answer stored before the server kept its sources — shows no
-badge.
+The server decides the chip: it names the basis when the turn ends (`run/ended.answerBasis`, see
+[SSE v2](sse-v2.md#a-chat-turn-on-the-wire)). The browser only displays it. An answer stopped after
+it started keeps the basis it had; one without a basis — a failed turn, one stopped before it wrote
+anything or cut off by a server restart, a notice, an answer stored before the server kept it —
+shows no chip.
 
 ## Search Provider Configuration
 

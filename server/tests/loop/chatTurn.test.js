@@ -204,7 +204,7 @@ function spy(impl) {
 
 /** Run ledger stub: records `startRun` / `endRun` calls, persists nothing. */
 function stubRunLog() {
-  return { startRun: spy(async () => ({})), endRun: spy(() => {}) };
+  return { startRun: spy(async () => ({})), endRun: spy(() => {}), append: spy(() => {}) };
 }
 
 /**
@@ -733,6 +733,7 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
   assert.equal(ended.status, 'completed');
   assert.equal(ended.finishReason, 'stop');
   assert.deepEqual(ended.knowledgeSources, ['websearch']);
+  assert.deepEqual(ended.answerBasis, [{ kind: 'web' }], 'the server names the kind of source');
 
   assert.equal(runTool.calls.length, 1);
   assert.equal(runTool.calls[0][0], 'webSearch');
@@ -1631,7 +1632,7 @@ test('prepareChatRequest takes the prompt sources noted for the chat with the re
     requestBuilder: builder({ success: true, data: makePrep() })
   });
   const prep = await service.prepareChatRequest({ chatId });
-  assert.deepEqual(prep.data.promptSources, ['sources']);
+  assert.deepEqual(prep.data.promptSources, ['project']);
   assert.deepEqual(PromptService.getPromptSources(chatId), [], 'nothing left for another turn');
 
   const failing = new ChatService({
@@ -1649,10 +1650,12 @@ test('prompt sources on the prep end up in run/ended.knowledgeSources and never 
   const frames = captureFrames(t, chatId);
   const { service } = makeService([textTurn('From the docs.'), textTurn('Plain.')]);
 
-  const first = await runTurn(service, { chatId, prep: makePrep({ promptSources: ['sources'] }) });
+  const first = await runTurn(service, { chatId, prep: makePrep({ promptSources: ['project'] }) });
   assertWellFormed(frames, { runId: first.runId });
-  assert.deepEqual(first.knowledgeSources, ['sources']);
-  assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['sources']);
+  assert.deepEqual(first.knowledgeSources, ['project']);
+  assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['project']);
+  assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'project' }]);
+  assert.deepEqual(first.answerBasis, [{ kind: 'project' }], 'the stored answer keeps its basis');
   assert.deepEqual(
     frame(frames, STEP_COMPLETED).data.sources,
     [],
@@ -1671,6 +1674,7 @@ test('prompt sources on the prep end up in run/ended.knowledgeSources and never 
     ['llm'],
     'no stale badge on the follow-up turn'
   );
+  assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'model' }]);
 });
 
 test('a turn superseded after it started answering keeps its own sources; the newer turn keeps the ones its request loaded', async t => {
@@ -1737,7 +1741,7 @@ test('a turn superseded after it started answering keeps its own sources; the ne
   assert.equal(stopped.status, 'aborted');
   assert.deepEqual(endedOf(stopped.runId).knowledgeSources, ['llm'], 'not the newer request’s');
   assert.equal(newer.status, 'completed');
-  assert.deepEqual(endedOf(newer.runId).knowledgeSources, ['sources']);
+  assert.deepEqual(endedOf(newer.runId).knowledgeSources, ['project']);
 });
 
 // ── MCP App views ───────────────────────────────────────────────────────────
@@ -2004,4 +2008,155 @@ test('the turn summary carries its sources: queries and pages for the stored ans
       ['https://other.example/', 'Other', undefined, false]
     ]
   );
+});
+
+// ── answer basis: the kinds of source an answer rests on ───────────────────
+
+const knowledgeSearchTool = {
+  id: 'knowledge_search',
+  name: 'knowledge_search',
+  description: 'search the projects',
+  parameters: { type: 'object', properties: { query: { type: 'string' } } }
+};
+
+const projectHit = projectId => ({
+  provider: 'project',
+  kind: 'document',
+  private: true,
+  ref: { id: `item-${projectId}`, scope: projectId },
+  title: `Doc of ${projectId}`
+});
+
+const searchedScope = () => ({
+  projects: [
+    { id: 'prj_a', name: 'Alpha', mode: 'searched', contributed: false },
+    { id: 'prj_b', name: 'Beta', mode: 'searched', contributed: false }
+  ]
+});
+
+test('answer basis: a searched project that returned content contributed; the other one did not', async t => {
+  const chatId = newChatId('basis-project-search');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService(
+    [toolTurn([{ name: 'knowledge_search', args: { query: 'x' } }]), textTurn('From Alpha.')],
+    { runTool: async () => ({ sources: [projectHit('prj_a')] }) }
+  );
+
+  const summary = await runTurn(service, {
+    chatId,
+    prep: makePrep({ tools: [knowledgeSearchTool], knowledgeScope: searchedScope() })
+  });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'project' }]);
+  assert.deepEqual(summary.answerBasis, [{ kind: 'project' }]);
+  const scopes = framesOf(frames, SSE_V2_EVENTS.KNOWLEDGE_SCOPE).map(f => f.data);
+  assert.equal(scopes.length, 2, 'said at the start, and again once the turn knows what it read');
+  assert.deepEqual(
+    scopes[0].projects.map(p => p.contributed),
+    [false, false]
+  );
+  assert.deepEqual(
+    scopes[1].projects.map(p => [p.id, p.contributed]),
+    [
+      ['prj_a', true],
+      ['prj_b', false]
+    ]
+  );
+  assert.ok(
+    frames.findIndex(f => f.data === scopes[1]) < frames.findIndex(f => f.type === RUN_ENDED),
+    'before run/ended, so the finished answer carries it'
+  );
+});
+
+test('answer basis: a project search that found nothing is not a basis; the answer is the model’s own', async t => {
+  const chatId = newChatId('basis-project-empty');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService(
+    [toolTurn([{ name: 'knowledge_search', args: { query: 'x' } }]), textTurn('I do not know.')],
+    { runTool: async () => ({ sources: [] }) }
+  );
+
+  const summary = await runTurn(service, {
+    chatId,
+    prep: makePrep({ tools: [knowledgeSearchTool], knowledgeScope: searchedScope() })
+  });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'model' }]);
+  assert.equal(
+    framesOf(frames, SSE_V2_EVENTS.KNOWLEDGE_SCOPE).length,
+    1,
+    'nothing changed, nothing said again'
+  );
+});
+
+test('answer basis: text loaded into the prompt makes a project the basis, with no tool call', async t => {
+  const chatId = newChatId('basis-project-loaded');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService([textTurn('From the project.')]);
+
+  const summary = await runTurn(service, {
+    chatId,
+    prep: makePrep({
+      promptSources: ['project'],
+      knowledgeScope: {
+        projects: [{ id: 'prj_a', name: 'Alpha', mode: 'loaded', contributed: true }]
+      }
+    })
+  });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'project' }]);
+  assert.equal(framesOf(frames, SSE_V2_EVENTS.KNOWLEDGE_SCOPE).length, 1);
+});
+
+test('answer basis: each connected system is its own entry, under its own label', async t => {
+  const chatId = newChatId('basis-integrations');
+  const frames = captureFrames(t, chatId);
+  const jira = {
+    id: 'jira__search',
+    name: 'jira__search',
+    description: 'Search Jira',
+    parameters: { type: 'object', properties: {} },
+    _integration: { definition: 'com.intrafind/jira', instanceLabel: 'Jira' }
+  };
+  const github = {
+    id: 'gh__search',
+    name: 'gh__search',
+    description: 'Search GitHub',
+    parameters: { type: 'object', properties: {} },
+    _mcp: { serverId: 'gh', serverName: 'GitHub' }
+  };
+  const { service } = makeService(
+    [
+      toolTurn([
+        { name: jira.id, args: {} },
+        { name: github.id, args: {} },
+        { name: jira.id, args: {} }
+      ]),
+      textTurn('Done.')
+    ],
+    { runTool: async () => ({ items: ['x'] }) }
+  );
+
+  const summary = await runTurn(service, { chatId, prep: makePrep({ tools: [jira, github] }) });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [
+    { kind: 'integration', label: 'Jira' },
+    { kind: 'integration', label: 'GitHub' }
+  ]);
+});
+
+test('answer basis: a plain answer is the model’s own knowledge, an aborted one with no text has no basis', async t => {
+  const chatId = newChatId('basis-model');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService([textTurn('Hello.')]);
+
+  const summary = await runTurn(service, { chatId, prep: makePrep() });
+
+  assertWellFormed(frames, { runId: summary.runId });
+  assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'model' }]);
+  assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['llm']);
 });

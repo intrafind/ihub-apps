@@ -44,6 +44,12 @@ import {
 } from '../../../shared/runEvents.js';
 import { storedSourceSet } from '../../../shared/sources/index.js';
 import {
+  answerBasisOf,
+  boundCarriedBasis,
+  carriedBasis,
+  settleKnowledgeScope
+} from './answerBasis.js';
+import {
   approvalSeam,
   imageLiftSeam,
   knowledgeSourceSeam,
@@ -377,7 +383,17 @@ class ChatService {
 
   _endLedgerRun(
     runId,
-    { status, finishReason, usage, error, knowledgeSources, cause, provenance, startedAt }
+    {
+      status,
+      finishReason,
+      usage,
+      error,
+      knowledgeSources,
+      answerBasis,
+      cause,
+      provenance,
+      startedAt
+    }
   ) {
     try {
       this.runLog.endRun(runId, {
@@ -387,6 +403,7 @@ class ChatService {
         // What `run/ended` reported, so a replay of the ledger badges the
         // answer the same way the live stream did.
         ...(Array.isArray(knowledgeSources) ? { knowledgeSources } : {}),
+        ...(Array.isArray(answerBasis) ? { answerBasis } : {}),
         ...(provenance ? { provenance } : {}),
         // Why an aborted turn was stopped (`services/chat/abortCause.js`).
         ...(cause ? { cause } : {}),
@@ -954,7 +971,9 @@ class ChatService {
           grants: toolApproval?.grants || [],
           interaction: result.pendingInteraction,
           messages: result.messages,
-          startMessage: turnStartMessage
+          startMessage: turnStartMessage,
+          // What this turn found so far: the answer after the approval rests on it too.
+          basis: carriedBasis({ prior: resume?.basis, result })
         });
         if (stored) {
           stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: result.pendingInteraction });
@@ -997,6 +1016,9 @@ class ChatService {
         generatedFiles,
         generatedImages,
         promptSources,
+        knowledgeScope,
+        // What the turn this one continues had used (an approval paused it).
+        priorBasis: resume?.basis || null,
         contextTracker,
         signal: controller.signal,
         structured: outputSeam
@@ -1029,6 +1051,7 @@ class ChatService {
         usage: outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
+        answerBasis: outcome.answerBasis,
         provenance: outcome.provenance,
         cause: outcome.abortCause,
         startedAt
@@ -1118,7 +1141,8 @@ class ChatService {
     grants,
     interaction,
     messages,
-    startMessage
+    startMessage,
+    basis = null
   }) {
     const toolCallId = interaction.source?.toolCallId;
     const transcript = toolCallId
@@ -1145,6 +1169,8 @@ class ChatService {
               transcript,
               // For an app that sends no chat history: the continuation puts it back.
               question: pausedTurnQuestion(startMessage),
+              // The sources the turn had used before it paused, for the basis of the answer.
+              ...(basis ? { basis: boundCarriedBasis(basis) } : {}),
               createdAt: new Date().toISOString()
             }
           }
@@ -1189,11 +1215,20 @@ class ChatService {
     generatedFiles = [],
     generatedImages = [],
     promptSources = [],
+    knowledgeScope = null,
+    priorBasis = null,
     contextTracker = null,
     structured = null,
     signal = null
   }) {
-    const loopSources = result.knowledgeSources || [];
+    // A continuation after an approval starts a new loop run: what the turn used
+    // before it paused is added, so the answer's basis is the whole turn's.
+    const loopSources = [
+      ...new Set([...(priorBasis?.knowledgeSources || []), ...(result.knowledgeSources || [])])
+    ];
+    const integrations = [
+      ...new Set([...(priorBasis?.integrations || []), ...(result.integrations || [])])
+    ];
     const content = result.content || '';
     const usage = wireUsage(result.usage);
     const summary = {
@@ -1261,6 +1296,23 @@ class ChatService {
       return provenance;
     };
     const provenanceOf = () => (summary.provenance ? { provenance: summary.provenance } : {});
+    // What the answer is based on, from the sources the turn used and the
+    // connected systems that informed it: the kinds the footer's chip shows.
+    const answerBasisFor = (sources, { byModel = true } = {}) =>
+      answerBasisOf({ knowledgeSources: sources, integrations, byModel });
+    // The knowledge scope is reported when the turn starts, with what went into
+    // the prompt. A project a search of the turn then returned contributed too:
+    // said again, with that settled, just before the turn ends.
+    const reportSettledScope = () => {
+      const settled = settleKnowledgeScope(
+        knowledgeScope,
+        result.sources,
+        priorBasis?.projectsRead
+      );
+      if (!settled || settled === knowledgeScope) return;
+      stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, settled);
+      this.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, settled);
+    };
     // Whether the turn wrote any answer — text or a picture — the user sees.
     const producedOutput = channel
       ? channel.state.answerOutput
@@ -1279,15 +1331,18 @@ class ChatService {
       const knowledgeSources = producedOutput
         ? this.resolveAnswerSources(loopSources, promptSources)
         : undefined;
+      const answerBasis = knowledgeSources ? answerBasisFor(knowledgeSources) : undefined;
       // Who stopped it: the reason the turn's controller was aborted with.
       const cause = causeOfSignal(signal);
       // What was generated and shown is recorded; no text, no record.
       await attachProvenance();
+      if (answerBasis) reportSettledScope();
       endRun({
         status: 'aborted',
         finishReason: 'connection_closed',
         cause,
         ...(knowledgeSources ? { knowledgeSources } : {}),
+        ...(answerBasis ? { answerBasis } : {}),
         ...provenanceOf()
       });
       return {
@@ -1295,7 +1350,8 @@ class ChatService {
         status: 'aborted',
         finishReason: 'connection_closed',
         abortCause: cause,
-        ...(knowledgeSources ? { knowledgeSources } : {})
+        ...(knowledgeSources ? { knowledgeSources } : {}),
+        ...(answerBasis ? { answerBasis } : {})
       };
     }
 
@@ -1464,14 +1520,19 @@ class ChatService {
       const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources, {
         byModel: false
       });
+      // The tool's output has a basis only when it used something.
+      const passthroughBasis = answerBasisFor(knowledgeSources, { byModel: false });
+      const answerBasis = passthroughBasis.length > 0 ? passthroughBasis : undefined;
       // A passthrough answer is tool output, but the user sees it as the AI
       // app's answer, so it is recorded with the turn's model.
       await attachProvenance();
+      reportSettledScope();
       endRun({
         status: 'completed',
         finishReason: 'tool_passthrough_complete',
         ...(toolName ? { toolName: String(toolName) } : {}),
         knowledgeSources,
+        ...(answerBasis ? { answerBasis } : {}),
         ...provenanceOf()
       });
       return {
@@ -1479,6 +1540,7 @@ class ChatService {
         status: 'completed',
         toolName,
         knowledgeSources,
+        ...(answerBasis ? { answerBasis } : {}),
         ...(structuredOutput ? { structuredOutput } : {})
       };
     }
@@ -1534,11 +1596,14 @@ class ChatService {
 
     const finishReason = result.finishReason || 'stop';
     const knowledgeSources = this.resolveAnswerSources(loopSources, promptSources);
+    const answerBasis = answerBasisFor(knowledgeSources);
     await attachProvenance();
+    reportSettledScope();
     endRun({
       status: result.status || 'completed',
       finishReason,
       knowledgeSources,
+      answerBasis,
       ...provenanceOf()
     });
     await this.logInteraction(
@@ -1552,6 +1617,7 @@ class ChatService {
       ...summary,
       finishReason,
       knowledgeSources,
+      answerBasis,
       ...(structuredOutput ? { structuredOutput } : {})
     };
   }

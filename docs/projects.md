@@ -437,7 +437,7 @@ project can be tried too.
   `@workflow` mention stays plain text.
 - **App and model.** The app picker lists the enabled chat apps, the general chat first. The model
   is picked in the chat, whatever the app says about model selection.
-- **Sources for every answer.** The chat is the normal one: each answer shows the answer badge, the
+- **Sources for every answer.** The chat is the normal one: each answer shows the basis chip, the
   knowledge searches and reads that were made and the **Sources** panel with the hits. A retrieval
   problem shows there, together with errors such as an unreachable host.
 - **Saved state.** The chat reads the project as saved. The editor saves every change at once, so
@@ -488,7 +488,7 @@ so does the default mode of an admin project (the admin project editor offers ev
 **Models without tools** (`supportsTools: "none"`) cannot call `knowledge_search`. For them `tools`
 is read as `relevant`, and an `auto` project that does not fit injects its best sections as it does
 for any model, so unpinned documents are not silently out of reach. The prompt then names no
-knowledge tool and lists no documents to read from. The answer badge says the mode was replaced.
+knowledge tool and lists no documents to read from. **About this answer** says the mode was replaced.
 
 **Not for AI.** Next to **Pinned**, an item can be marked **Not for AI** (**For the AI** in the
 item's **Edit** dialog, `excludedFromAi`). It stays in the project for people (preview, download, sharing) but is
@@ -496,7 +496,7 @@ never injected, listed to the model or searched, `knowledge_read` cannot open it
 normal and "Not for AI" are one setting: choosing one clears the other. Workflow project nodes work
 on the documents themselves and still see it.
 
-The server decides the mode; the answer badge (`knowledge/scope`) reports the mode each project was
+The server decides the mode; the answer (`knowledge/scope`, shown under **About this answer**) reports the mode each project was
 used in (`knowledgeMode`), the level that chose it (`modeSource`: `link`, `project` or
 `default`), and, when it was replaced, the mode it replaced (`modeFallback`). A `pinned` project is
 reported with `mode: "pinned"`.
@@ -636,7 +636,7 @@ Only that first part of the document is searchable: neither `knowledge_search` n
 read with `knowledge_read` reaches the rest. iHub pages and uploaded or picked documents are not
 cut this way. A cut document is marked as truncated in the tool result and in the prompt, and a
 project with such a document counts as _searched_, not _loaded in full_, in the tool descriptions
-and on the badge.
+and in **About this answer**.
 
 Set a higher limit when you add the item through the API (`POST /api/projects/:projectId/items` or
 `POST /api/admin/projects/:id/items`), for example
@@ -647,12 +647,16 @@ and add it again. Sources migrated from `config/sources.json` keep their `maxLen
 
 ### What users see
 
-- A badge on the answer says which projects it used and how: _3 projects · 2 loaded in full · 1
-  searched_. With one project it names the project and links to it when it is a user project;
-  a project the viewer may not see reads _Private project_. A searched project that also put the
-  sections matching the question into the prompt (see [Reading with the question in
-  mind](#reading-with-the-question-in-mind)) reads _searched, relevant sections loaded_; with
-  several projects the project's line in the tooltip says so.
+- A chip under the answer says that it is based on a project: **Project**, or **Project · Web**
+  when it also searched the web. It never names the project. Opening it shows **About this answer**,
+  which lists each project that contributed by name, with how it was used (_all documents read_,
+  _searched for matching passages_, _only pinned documents_), the diagnostics and, for a user
+  project, an **Open project** link; a project the viewer may not see reads _Private project_. A
+  searched project that also put the sections matching the question into the prompt (see [Reading
+  with the question in mind](#reading-with-the-question-in-mind)) reads _searched for matching
+  passages_. A project is a basis only when its text went into the prompt or a search of the turn
+  returned its documents (`contributed` on `knowledge/scope`); a project that was in scope but not
+  used is listed under **Not used**, and the chip never claims it.
 - Every search hit and every read document is an answer source in the **Sources** panel (see
   [Answer Sources](answer-sources.md)). The card shows the provenance: _Uploaded_, _Picked from
   SharePoint · text taken 12 Oct 2026_ or _Linked_. A document written by a workflow shows as
@@ -1140,8 +1144,9 @@ before creating again, as there is no way to find a duplicate.
 **When iFinder cannot be reached in a chat.** A chat that has a collection attached still answers
 when iFinder is slow or down, but without that collection. The system prompt names it with
 `mode="unavailable"` and tells the model that its documents are missing from this answer and to
-say so to the user, and the answer's badge shows an amber notice (**Contracts · not available**,
-with the reason in its tooltip) next to the badge of the projects that were used. The knowledge
+say so to the user, and the answer shows an amber chip (**Project not available**; the name and the reason are
+in its text for screen readers and under **Not used** in **About this answer**) next to the
+chip of what the answer used. The knowledge
 tools and workflow steps only see what can be read, so a search never reaches it. The notice is
 named as the user last saw the collection (an iFinder collection never seen shows as **iFinder
 collection**). A collection that was deleted in iFinder, or that is no longer the user's, is not

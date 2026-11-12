@@ -76,7 +76,8 @@ const SEARCHING_TURN = [
   env(7, 'run/ended', {
     status: 'completed',
     finishReason: 'stop',
-    knowledgeSources: ['websearch']
+    knowledgeSources: ['websearch'],
+    answerBasis: [{ kind: 'web' }]
   })
 ];
 
@@ -151,9 +152,26 @@ describe('a stored answer shows what its run did', () => {
     });
     expect(message.searchSummary).toEqual(live.searchSummary);
     expect(message.searchSummary.totalHits).toBe(7);
-    // The badge says what the answer was based on, not "AI knowledge".
-    expect(message.answerSource).toEqual(live.answerSource);
-    expect(message.answerSource.sources).toEqual(['websearch']);
+    // What the answer is based on is a field of the stored message, not of its activity.
+    expect(live.answerBasis).toEqual([{ kind: 'web' }]);
+    expect(buildRunActivity(run).answerSource).toBeUndefined();
+  });
+
+  test('the basis of the answer comes back with the message; none stored, none shown', () => {
+    const stored = { id: 'm1', role: 'assistant', content: 'The answer.', runId: 'run-1' };
+    expect(
+      transformStoredMessage({ ...stored, answerBasis: [{ kind: 'project' }, { kind: 'web' }] })
+        .answerBasis
+    ).toEqual([{ kind: 'project' }, { kind: 'web' }]);
+    // A message stored before the field existed has no basis, and nothing is mapped onto it
+    // from the old activity.
+    const clean = transformStoredMessage({
+      ...stored,
+      activity: { answerSource: { sources: ['websearch'], type: 'mixed' } }
+    });
+    expect(clean.answerBasis).toBeUndefined();
+    expect(clean.answerSource).toBeUndefined();
+    expect(transformStoredMessage({ ...stored, answerBasis: [] }).answerBasis).toBeUndefined();
   });
 
   test('the steps and the result of a workflow', () => {
@@ -172,7 +190,7 @@ describe('a stored answer shows what its run did', () => {
     const message = reopened(undefined);
     expect(message.toolActivity).toBeUndefined();
     expect(message.workflowSteps).toBeUndefined();
-    expect(message.answerSource).toBeUndefined();
+    expect(message.answerBasis).toBeUndefined();
   });
 });
 

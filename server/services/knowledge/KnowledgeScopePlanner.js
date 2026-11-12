@@ -785,7 +785,9 @@ export function renderProjectInstructions(plan) {
 }
 
 /**
- * The client-facing summary of a plan: the `knowledge/scope` event.
+ * The client-facing summary of a plan: the `knowledge/scope` event. Only a
+ * project that `contributed` counts as a basis of the answer; the others were
+ * in scope and are reported as not used.
  *
  * @param {Awaited<ReturnType<typeof planKnowledgeScope>>} plan
  * @returns {{projects: Array, budgetTokens: number}}
@@ -812,6 +814,10 @@ export function scopeSummary(plan) {
       documents: project.documents,
       tokens: project.tokens,
       pinned: project.pinned,
+      // Whether the project's text went into the prompt: the first half of "the
+      // answer rests on it". A searched project also contributes when a search
+      // of the turn returns its documents, which only the end of the turn knows.
+      contributed: Boolean(project.injected?.length),
       ...(project.mode === 'unavailable' && project.reason ? { reason: project.reason } : {}),
       ...(project.overBudget ? { overBudget: true } : {}),
       ...(project.injected?.some(entry => entry.excerpt) ? { excerpted: true } : {}),

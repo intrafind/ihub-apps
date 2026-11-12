@@ -65,7 +65,8 @@ describe('runReducer — chat turn', () => {
     env(10, 'run-a', 'run/ended', {
       status: 'completed',
       finishReason: 'stop',
-      knowledgeSources: ['websearch']
+      knowledgeSources: ['websearch'],
+      answerBasis: [{ kind: 'web' }]
     })
   ];
 
@@ -93,7 +94,7 @@ describe('runReducer — chat turn', () => {
       durationMs: 42,
       knowledgeSource: 'websearch'
     });
-    expect(run.knowledgeSources).toEqual(['websearch']); // as run/ended named them
+    expect(run.answerBasis).toEqual([{ kind: 'web' }]); // as run/ended named it
     expect(run.steps[0].completed).toBe(true);
     expect(run.steps[0].finishReason).toBe('stop');
     expect(run.status).toBe('completed');
@@ -134,7 +135,7 @@ describe('runReducer — chat turn', () => {
     expect(getRun(twoSteps, 'run-a').text).toBe('AB');
   });
 
-  test('the answer sources are the ones run/ended named — tool and step hints never add to them', () => {
+  test('the answer basis is the one run/ended named — tool and step hints never add to it', () => {
     const hinted = [
       turn[1],
       turn[5],
@@ -142,18 +143,34 @@ describe('runReducer — chat turn', () => {
       env(8, 'run-a', 'step/completed', { step: 0, content: 'Hi', sources: ['websearch', 'file'] })
     ];
     const running = getRun(fold(hinted), 'run-a');
-    expect(running.knowledgeSources).toEqual([]);
+    expect(running.answerBasis).toBeNull();
     expect(running.tools[0].knowledgeSource).toBe('websearch');
 
     const named = fold([
       ...hinted,
-      env(9, 'run-a', 'run/ended', { status: 'completed', knowledgeSources: ['llm'] })
+      env(9, 'run-a', 'run/ended', {
+        status: 'completed',
+        knowledgeSources: ['llm'],
+        answerBasis: [{ kind: 'model' }]
+      })
     ]);
-    expect(getRun(named, 'run-a').knowledgeSources).toEqual(['llm']);
+    expect(getRun(named, 'run-a').answerBasis).toEqual([{ kind: 'model' }]);
+
+    // The old list alone names nothing: it is the ledger's, not the chip's.
+    const legacy = fold([
+      ...hinted,
+      env(9, 'run-a', 'run/ended', { status: 'completed', knowledgeSources: ['websearch'] })
+    ]);
+    expect(getRun(legacy, 'run-a').answerBasis).toBeNull();
 
     // A turn that ended without naming any (failed, stopped before it wrote) has none.
     const unnamed = fold([...hinted, env(9, 'run-a', 'run/ended', { status: 'aborted' })]);
-    expect(getRun(unnamed, 'run-a').knowledgeSources).toEqual([]);
+    expect(getRun(unnamed, 'run-a').answerBasis).toBeNull();
+    const empty = fold([
+      ...hinted,
+      env(9, 'run-a', 'run/ended', { status: 'completed', answerBasis: [] })
+    ]);
+    expect(getRun(empty, 'run-a').answerBasis).toBeNull();
   });
 
   test('ignores malformed envelopes and run-scoped frames without a runId', () => {

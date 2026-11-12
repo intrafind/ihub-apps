@@ -182,6 +182,8 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'sources',
   // Provenance of an answer (EU AI Act Art. 50(2)): see services/provenance/records.js.
   'provenance',
+  // What an answer is based on — the kinds of source it used (see services/chat/answerBasis.js).
+  'answerBasis',
   // A transcription turn (see services/chat/transcriptionTurn.js): its audio is
   // not kept, so the question can be neither edited nor resent.
   'transcription'
