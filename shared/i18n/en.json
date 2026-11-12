@@ -9852,13 +9852,12 @@
       "hours_other": "{{count}} hours",
       "minutes_one": "{{count}} minute",
       "minutes_other": "{{count}} minutes",
-      "cachedFor": "Read live, kept for {{ttl}}",
       "manualOnly": "Refreshed only by hand",
       "nextAt": "Next refresh {{date}}",
       "every": "Refreshed every {{ttl}}",
       "itemTitle": "Refresh schedule",
       "projectTitle": "Refresh of files and web pages",
-      "itemLiveHint": "This web page is read live. Its read is kept this long before the page is read again.",
+      "itemPageHint": "This web page is stored as a snapshot. It is read again when this time has passed; an unchanged page keeps its text.",
       "itemFileHint": "This file was downloaded from a website. It is downloaded again when this time has passed; an unchanged file keeps its text.",
       "projectHint": "How long files downloaded from websites and web pages are taken as current in this project. Each item can set its own.",
       "label": "Refresh after",
@@ -9873,8 +9872,7 @@
       "change": "Change the refresh of files and web pages",
       "projectValue": "Files and web pages: {{ttl}}",
       "projectDefault": "Files and web pages: {{ttl}} (default)",
-      "projectDefaultUnknown": "Default of this installation",
-      "cachedManual": "Read live, kept until refreshed by hand"
+      "projectDefaultUnknown": "Default of this installation"
     }
   },
   "integrationScopes": {

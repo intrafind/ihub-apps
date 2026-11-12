@@ -43,7 +43,8 @@ let ingestService = null;
 export async function bootstrapProjects({ reconcile = true } = {}) {
   const service = getProjectService();
   setTextReader((project, item) => readText(project, item, { platform: platformOf() }));
-  // A web page added before titles were captured records its own on first read.
+  // A link item added before titles were captured (an iFinder document)
+  // records its own on first read.
   setItemInfoRecorder((project, item, info) =>
     getProjectService().recordItemInfo(project.id, item.id, info)
   );

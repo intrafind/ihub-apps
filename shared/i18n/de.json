@@ -9851,13 +9851,12 @@
       "hours_other": "{{count}} Stunden",
       "minutes_one": "{{count}} Minute",
       "minutes_other": "{{count}} Minuten",
-      "cachedFor": "Live gelesen, {{ttl}} zwischengespeichert",
       "manualOnly": "Nur von Hand aktualisiert",
       "nextAt": "Nächste Aktualisierung {{date}}",
       "every": "Alle {{ttl}} aktualisiert",
       "itemTitle": "Aktualisierung",
       "projectTitle": "Aktualisierung von Dateien und Webseiten",
-      "itemLiveHint": "Diese Webseite wird live gelesen. Das Gelesene wird so lange behalten, bevor die Seite erneut gelesen wird.",
+      "itemPageHint": "Diese Webseite ist als Momentaufnahme gespeichert. Sie wird erneut gelesen, wenn diese Zeit vergangen ist; eine unveränderte Seite behält ihren Text.",
       "itemFileHint": "Diese Datei wurde von einer Website heruntergeladen. Nach dieser Zeit wird sie erneut heruntergeladen; eine unveränderte Datei behält ihren Text.",
       "projectHint": "Wie lange von Websites heruntergeladene Dateien und Webseiten in diesem Projekt als aktuell gelten. Jedes Element kann eine eigene Zeit haben.",
       "label": "Aktualisieren nach",
@@ -9872,8 +9871,7 @@
       "change": "Aktualisierung von Dateien und Webseiten ändern",
       "projectValue": "Dateien und Webseiten: {{ttl}}",
       "projectDefault": "Dateien und Webseiten: {{ttl}} (Standard)",
-      "projectDefaultUnknown": "Standard dieser Installation",
-      "cachedManual": "Live gelesen, bis zur Aktualisierung von Hand zwischengespeichert"
+      "projectDefaultUnknown": "Standard dieser Installation"
     }
   },
   "integrationScopes": {

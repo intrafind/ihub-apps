@@ -52,15 +52,9 @@ describe('refresh TTL helpers', () => {
     expect(parseRefreshTtl('3600')).toBe(3600);
   });
 
-  it('says when a file is refreshed next, or that a page is read live', () => {
+  it('says when a file or a web page is refreshed next', () => {
     expect(takesRefreshTtl({ kind: 'url' })).toBe(true);
     expect(takesRefreshTtl({ kind: 'upload' })).toBe(false);
-    expect(refreshSummary({ refresh: { scheduled: false, ttl: 86400 } }, t, 'en')).toBe(
-      'Read live, kept for 1 days'
-    );
-    expect(refreshSummary({ refresh: { scheduled: false, ttl: REFRESH_NEVER } }, t, 'en')).toBe(
-      'Read live, kept until refreshed by hand'
-    );
     expect(refreshSummary({ refresh: { scheduled: true, ttl: REFRESH_NEVER } }, t, 'en')).toBe(
       'Refreshed only by hand'
     );

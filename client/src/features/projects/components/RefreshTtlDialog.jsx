@@ -48,7 +48,7 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
   const [error, setError] = useState(null);
   const selectRef = useRef(null);
   const changed = parseRefreshTtl(choice) !== current;
-  const live = item?.kind === 'url';
+  const page = item?.kind === 'url';
   const schedule = item?.refresh;
 
   const handleSubmit = async event => {
@@ -82,10 +82,10 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {scope === 'item'
-              ? live
+              ? page
                 ? t(
-                    'projects.refresh.itemLiveHint',
-                    'This web page is read live. Its read is kept this long before the page is read again.'
+                    'projects.refresh.itemPageHint',
+                    'This web page is stored as a snapshot. It is read again when this time has passed; an unchanged page keeps its text.'
                   )
                 : t(
                     'projects.refresh.itemFileHint',

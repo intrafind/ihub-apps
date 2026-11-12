@@ -113,9 +113,9 @@ export function formatRefreshTime(value, language) {
 }
 
 /**
- * The one line an item's card shows about its schedule: for a downloaded
- * file when it is refreshed next (or that it is refreshed only by hand), for
- * a web page how long its read is kept.
+ * The one line an item's card shows about its schedule: when a downloaded
+ * file or a web page's snapshot is refreshed next, or that it is refreshed
+ * only by hand.
  *
  * @param {{kind?: string, refresh?: Object}} item
  * @param {Function} t
@@ -125,14 +125,6 @@ export function formatRefreshTime(value, language) {
 export function refreshSummary(item, t, language) {
   const refresh = item?.refresh;
   if (!refresh) return null;
-  if (!refresh.scheduled) {
-    if (refresh.ttl === REFRESH_NEVER) {
-      return t('projects.refresh.cachedManual', 'Read live, kept until refreshed by hand');
-    }
-    return t('projects.refresh.cachedFor', 'Read live, kept for {{ttl}}', {
-      ttl: refreshTtlLabel(refresh.ttl, t)
-    });
-  }
   if (refresh.ttl === REFRESH_NEVER) {
     return t('projects.refresh.manualOnly', 'Refreshed only by hand');
   }

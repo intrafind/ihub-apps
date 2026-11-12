@@ -22,14 +22,15 @@ Admin projects are the successor of sources. An upgrade turns every source into 
 ## Documents
 
 Each document in a project is an **item**. An item either holds text that iHub extracted and
-stores, or links to content that is fetched when it is used.
+stores (uploads, web pages, files from websites, picked cloud files), or links to content that is
+fetched when it is used (iHub pages, iFinder).
 
 ### Item kinds
 
 | Kind                | What it adds                                         | Stored as           | Read with the rights of                         | Offered when                                     |
 | ------------------- | ---------------------------------------------------- | ------------------- | ----------------------------------------------- | ------------------------------------------------ |
 | `upload`            | An uploaded file, or text written in the dialog      | Extracted text      | —                                               | Project file storage is available                |
-| `url`               | A web page (HTML)                                    | Link, cached for the refresh TTL | —                                  | Always                                           |
+| `url`               | A web page (HTML)                                    | Text, snapshot refreshed on the TTL | —                               | Always                                           |
 | `web-file`          | A file linked from a website (PDF, Office, …)        | Text, downloaded    | —                                               | While `url` is                                   |
 | `page`              | An iHub page (`contents/pages`) in one language      | Link                | The reading user (the page's own access rules)  | Always                                           |
 | `ifinder-document`  | One iFinder document                                 | Link                | The reading user                                | iFinder is configured                            |
@@ -58,11 +59,11 @@ name's extension only as a hint (the same rule as for an upload):
 
 | The address serves                                                  | Item                                                         |
 | ------------------------------------------------------------------- | ------------------------------------------------------------ |
-| An HTML page                                                        | `url`: a live link, read when it is used                     |
+| An HTML page                                                        | `url`: a stored snapshot of the page (see [Web pages](#web-pages)) |
 | A type the upload extractors read: PDF, Word, PowerPoint, Excel, OpenDocument, e-mail, text, … | `web-file`: downloaded and stored like an upload |
 | Anything else (an image, an archive, `.doc`, `.xls`, `.ppt`)        | Refused with `UNSUPPORTED_TYPE`, as the same upload would be |
 | Nothing readable right now (the server is down, an error status), and the address ends in `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.odt`, `.ods` or `.odp` | `web-file`: its download fails on the item, and **Retry** downloads it once the site answers |
-| Nothing readable right now, any other address                       | `url`, as before                                             |
+| Nothing readable right now, any other address                       | `url`: its first fetch fails on the item, and **Retry** fetches it once the site answers |
 
 A **file from a website** is treated as a file uploaded to the project:
 
@@ -80,9 +81,39 @@ page reader's protections (no private addresses unless the host is in `ssl.domai
 `ssrf.allowedHosts`, every redirect checked, DNS pinned, certificate checks skipped only for
 whitelisted hosts, the proxy settings) on its own request queue, `project_download`.
 
-An existing `url` item is not changed. A web page item cannot be pointed at a file later; add the
-file as a new item. Admin projects created through the API with their items keep `url` items as
-links; files are added through the item endpoints.
+A web page item cannot be pointed at a file later; add the file as a new item. Admin projects
+created through the API with their items may hold `url` items: each is fetched once the project
+exists. Files are added through the item endpoints.
+
+### Web pages
+
+A **web page** (`url`) is a stored snapshot, like a file from a website:
+
+- **One fetch per version.** The page is fetched by its ingest job on one server process,
+  converted from HTML to Markdown once (the page reader's extraction: menus, page trees and
+  footers are left out), scanned, encrypted and stored. When the page is added, the check that
+  finds out what the address serves is that fetch: its response goes to the ingest job, so the
+  website is asked once. A page picked from the site search is not fetched again at all: the
+  search keeps every page it read (encrypted, for an hour, for the user who searched), and adding
+  it stores that read.
+- **No fetch on use.** Chats, searches and previews read the stored text. Every server process
+  builds its own search index from it; none asks the website or parses HTML.
+- **Refreshed after its TTL** (see [Refresh](#refresh)): the request is conditional, and an
+  unchanged page is neither downloaded nor converted again.
+- **Counted like a file.** The page's text counts toward `maxProjectBytes`, a page larger than
+  `maxFileBytes` is refused, and the whole page is kept up to the text limit of an upload (no
+  50,000-character cap; `ref.maxContentLength` of older items is no longer applied).
+- **A page that cannot be read** when it is added is still added, and its item shows **Failed**
+  with the reason; **Retry** fetches it again.
+- **Its title** becomes the item's name when the item was added without one, and its title and
+  meta description are what the item is about.
+- **A changed address** (edit the item) drops the old snapshot and fetches the new page.
+
+Web pages stored as links before this change are converted on their own: migration V247
+converts the items of admin project files, and the ingest reconciler converts the rest (user
+projects, and any link left) shortly after the server starts. Each converted page waits for its
+first fetch, which one server process takes under the project's lock (at most 200 pages per
+reconciler run; the rest follow 15 minutes later).
 
 ### Refresh
 
@@ -99,7 +130,7 @@ A TTL is a number of seconds (15 minutes to a year; the dialogs offer 1 hour, 6 
 and 30 days) or `never`.
 
 - **Files from websites** are refreshed on their own: every 15 minutes the ingest reconciler
-  queues the files whose last check is older than their TTL (at most 50 per run, on the
+  queues the files (and web pages) whose last check is older than their TTL (at most 50 per run, on the
   `ingest.concurrency` queue). These background refreshes wait behind every upload, pick and
   refresh someone asked for, and with more than one slot they never take the last free one, so
   an upload starts within one job's time however many files are due. The request is conditional (`If-None-Match` with the stored ETag,
@@ -109,10 +140,8 @@ and 30 days) or `never`.
   **Outdated** with the old text, and is tried again after another TTL. `never` refreshes only
   when someone chooses **Refresh**. The item shows when its text was taken and when it is
   refreshed next.
-- **Web pages** stay live links: the TTL is how long a page's read is kept before it is read
-  again (`never` keeps it for 30 days in the server's memory; a restart reads it again).
-  **Refresh** reads the page again on its next use, on every server process: the one that
-  handled it forgets the page at once, the others when the cluster message arrives.
+- **Web pages** are refreshed the same way, in the same reconciler run and with the same
+  conditional request: an unchanged page keeps its text and is not converted again.
 - **Picked cloud documents** (OneDrive / SharePoint, Google Drive, Nextcloud) are refreshed only
   by hand. Their download needs the account of the user who picked them, which a background job
   must not use: that user may have left, lost access to the file, or let the connection expire.
@@ -724,9 +753,9 @@ The **Web page (URL)** tab (in user projects and in the admin project editor) ad
 several pages of a website:
 
 - **Check** tells whether the page can be read.
-- **Preview** shows the text the model gets from the page, before it is added: the same reader
-  and the same 50,000-character limit as the item, so a page that needs JavaScript or blocks
-  automated access shows up here as an empty or short text. An address that serves a document
+- **Preview** shows the text the model gets from the page, before it is added (the page reader's
+  first 50,000 characters; the stored item keeps the whole page), so a page that needs JavaScript
+  or blocks automated access shows up here as an empty or short text. An address that serves a document
   (PDF, Office, …) is downloaded when it is added and stored like an upload, without that limit
   (see [Files from websites](#files-from-websites)).
 - **Find more pages of this website** opens the site search. **Find pages** follows the links of

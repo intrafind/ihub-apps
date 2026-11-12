@@ -3,8 +3,8 @@
 
 /**
  * How long a project item's content is taken as current (#3536): the refresh
- * TTL of a file downloaded from a website, and the cache lifetime of a web
- * page read live.
+ * TTL of a file downloaded from a website and of a web page's snapshot
+ * (#3622).
  *
  * Three levels, the most specific set one wins:
  *
@@ -12,9 +12,8 @@
  *  2. the project's `refreshTtl` (project settings, owners and editors),
  *  3. `platform.projects.refreshTtl` (admin), 86 400 seconds (a day) by default.
  *
- * A value is a number of seconds, or `'never'`: a downloaded file is then
- * refreshed only when someone asks ("Refresh now"), and a web page is kept
- * for {@link NEVER_LINK_CACHE_SECONDS} in memory (a restart reads it again).
+ * A value is a number of seconds, or `'never'`: the snapshot is then
+ * refreshed only when someone asks ("Refresh now").
  *
  * Only kinds that fetch without anybody's credentials refresh on their own
  * ({@link refreshesOnSchedule}): a picked cloud document needs the picking
@@ -39,12 +38,6 @@ export const MAX_REFRESH_TTL_SECONDS = 365 * 24 * 60 * 60;
 
 /** The built-in platform default: a day. */
 export const DEFAULT_REFRESH_TTL_SECONDS = 24 * 60 * 60;
-
-/** How long a web page set to `never` stays in the reader's memory. */
-export const NEVER_LINK_CACHE_SECONDS = 30 * 24 * 60 * 60;
-
-/** The kind whose cache lifetime follows the TTL although it is read live. */
-const LIVE_KIND = 'url';
 
 /** A TTL as the API and the stored documents take it. */
 export const zRefreshTtl = z.union([
@@ -71,7 +64,7 @@ export function normalizeRefreshTtl(value) {
 /**
  * Whether items of a kind are refreshed by the reconciler when their TTL ran
  * out: a stored snapshot (`storage: text`) the kind fetches itself, with no
- * user's credentials (`credentials: 'none'`). Today that is `web-file`.
+ * user's credentials (`credentials: 'none'`): `web-file` and `url`.
  *
  * @param {Object|null} kind - A registered kind.
  * @returns {boolean}
@@ -85,14 +78,12 @@ export function refreshesOnSchedule(kind) {
 }
 
 /**
- * Whether an item takes a TTL at all: a file refreshed on schedule, or a web
- * page whose cache lifetime the TTL sets.
+ * Whether an item takes a TTL at all: a snapshot refreshed on schedule.
  *
  * @param {{kind?: string}} item
  * @returns {boolean}
  */
 export function takesRefreshTtl(item) {
-  if (item?.kind === LIVE_KIND) return true;
   return refreshesOnSchedule(getItemKind(item?.kind));
 }
 
@@ -145,7 +136,6 @@ function lastCheckedMs(item) {
 export function refreshScheduleOf(item, project, settings) {
   if (!takesRefreshTtl(item)) return null;
   const { ttl, from } = effectiveRefreshTtl(item, project, settings);
-  if (item.kind === LIVE_KIND) return { ttl, from, scheduled: false };
   const checked = lastCheckedMs(item);
   return {
     ttl,
@@ -180,17 +170,4 @@ export function isRefreshDue(item, project, settings, now = Date.now()) {
   const checked = lastCheckedMs(item) ?? (Date.parse(item.updatedAt || '') || null);
   if (checked === null) return false;
   return now - checked >= ttl * 1000;
-}
-
-/**
- * How long a web page item's text is cached once read, in seconds.
- *
- * @param {Object} item
- * @param {Object|null} project
- * @param {Object} settings
- * @returns {number}
- */
-export function linkCacheSeconds(item, project, settings) {
-  const { ttl } = effectiveRefreshTtl(item, project, settings);
-  return ttl === REFRESH_NEVER ? NEVER_LINK_CACHE_SECONDS : ttl;
 }

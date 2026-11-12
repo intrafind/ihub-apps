@@ -21,6 +21,7 @@
  *
  * @module services/projects/ProjectIngestService
  */
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from '../../utils/logger.js';
@@ -42,7 +43,8 @@ import {
 import { storeText, evictItemKeys } from './ItemTextStore.js';
 import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
-import { isRefreshDue } from './refreshTtl.js';
+import { isRefreshDue, refreshesOnSchedule } from './refreshTtl.js';
+import { getItemKind } from './kinds/registry.js';
 
 const COMPONENT = 'ProjectIngestService';
 
@@ -67,6 +69,94 @@ const INVENTORY_PAGE_SIZE = 10000;
  * for the next tick. The queue's `ingest.concurrency` bounds how many run.
  */
 export const MAX_SCHEDULED_REFRESHES = 50;
+
+/**
+ * Most first fetches one reconciler tick queues (#3622): web pages converted
+ * from links, or created with an admin project. More than refreshes, since an
+ * item without its first snapshot is not usable at all; the queue's
+ * background slot still runs them one after the other.
+ */
+export const MAX_FIRST_FETCHES = 200;
+
+/**
+ * A web page stored as a live link before #3622 (`storage: 'link'`): the
+ * reconciler converts it to a snapshot waiting for its first fetch.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isLinkedWebPage(item) {
+  return item?.kind === 'url' && item.storage === 'link';
+}
+
+/**
+ * Turn a web page link into a snapshot waiting for its first fetch, in place:
+ * what the item is, its name, its settings (pinned, refresh TTL) stay.
+ *
+ * @param {Object} item
+ */
+export function convertLinkedWebPage(item) {
+  item.storage = 'text';
+  item.status = 'pending';
+  item.error = null;
+  item.snapshotAt = null;
+  delete item.cache;
+  delete item.checkedAt;
+  delete item.refreshingAt;
+  delete item.ingestAttempt;
+}
+
+/**
+ * Whether an item waits for its first fetch with no job reserved for it: a
+ * kind that fetches with nobody's credentials (a web page, a file from a
+ * website), `pending`, without an `ingestAttempt`. A converted link and a page
+ * created with an admin project are; an item a request added has its attempt
+ * from the start.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isWaitingForFetch(item) {
+  return (
+    item?.status === 'pending' &&
+    !item.ingestAttempt &&
+    !item.refreshingAt &&
+    item.storage === 'text' &&
+    refreshesOnSchedule(getItemKind(item.kind))
+  );
+}
+
+/**
+ * The ingest input of an item's first fetch by its kind (a picked document, a
+ * file or a page from a website): the kind's `fetch` with nobody's or the
+ * picker's credentials, fenced by the item's `ingestAttempt`.
+ *
+ * @param {Object} kind
+ * @param {Object} item - As stored, with its `ingestAttempt`.
+ * @param {{user?: Object|null, prefetched?: Object|null, nameFromTitle?: boolean,
+ *   scheduled?: boolean}} [options] - `prefetched`: the response the kind's
+ *   `prepare` already read (a web page), handed to its `fetch` instead of a new
+ *   request; `nameFromTitle`: the item takes the extracted title as its name
+ *   while it still has the one it was given; `scheduled`: a background job
+ *   nobody waits for (the reconciler).
+ * @returns {Object}
+ */
+export function fetchInput(
+  kind,
+  item,
+  { user = null, prefetched = null, nameFromTitle = false, scheduled = false } = {}
+) {
+  return {
+    fetch: ({ signal } = {}) =>
+      kind.fetch(item, { user, purpose: 'pick', signal, ...(prefetched ? { prefetched } : {}) }),
+    contentType: item.ref?.mimeType,
+    name: item.name,
+    attempt: item.ingestAttempt,
+    purpose: 'pick',
+    ...(nameFromTitle ? { nameFromTitle: true } : {}),
+    ...(scheduled ? { scheduled: true } : {})
+  };
+}
 
 /** The error code of an item whose job never finished. */
 export const INTERRUPTED = 'INTERRUPTED';
@@ -485,6 +575,11 @@ export class ProjectIngestService {
           // What the document is about, read from this text: a new version
           // replaces what the old one said.
           applyItemInfo(item, { title: extracted.title, description: extracted.description });
+          // A web page added without a name is named by its title, unless
+          // someone renamed it while it was fetched.
+          if (input.nameFromTitle && item.title && item.name === input.name) {
+            item.name = String(item.title).slice(0, 300);
+          }
           if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
             item.snapshotAt = block.extractedAt;
             item.checkedAt = block.extractedAt;
@@ -680,6 +775,8 @@ export class ProjectIngestService {
     let orphans = 0;
     for (const project of projects) {
       const stuck = (project.items || []).filter(item => {
+        // Waiting for its first fetch is not stuck: `fetchWaiting` queues it.
+        if (isWaitingForFetch(item)) return false;
         const refreshing = typeof item.refreshingAt === 'string';
         if (!refreshing && item.status !== 'pending' && item.status !== 'extracting') return false;
         if (this.isActive(item.id)) return false;
@@ -736,16 +833,90 @@ export class ProjectIngestService {
     }
     orphans += await this._sweepOrphans(projects, now, { complete });
     const refreshed = await this.refreshExpired(projects, { now });
-    if (interrupted || orphans || refreshed) {
+    const fetched = await this.fetchWaiting(projects);
+    if (interrupted || orphans || refreshed || fetched) {
       logger.info('Project ingest reconciled', {
         component: COMPONENT,
         scanned: projects.length,
         interrupted,
         orphans,
-        refreshed
+        refreshed,
+        fetched
       });
     }
-    return { scanned: projects.length, interrupted, orphans, refreshed };
+    return { scanned: projects.length, interrupted, orphans, refreshed, fetched };
+  }
+
+  /**
+   * Convert web page links to snapshots and queue the first fetch of every
+   * item waiting for one (#3622): pages stored as live links before, and
+   * pages created with an admin project. Each project is changed under its
+   * lock, and an item is reserved there (`ingestAttempt`) for this worker:
+   * every worker runs the reconciler, and only the one whose reservation
+   * lands fetches the page; the others find it reserved. At most
+   * {@link MAX_FIRST_FETCHES} per call; the rest wait for the next tick. A
+   * disabled admin project or one being deleted is converted, not fetched.
+   *
+   * @param {Object[]} projects - As inventoried; each is read again under its lock.
+   * @param {{max?: number}} [options]
+   * @returns {Promise<number>} Fetches queued.
+   */
+  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES } = {}) {
+    let queued = 0;
+    for (const project of projects || []) {
+      const fetches = !project.deleting && project.enabled !== false;
+      const candidates = (project.items || []).filter(
+        item => isLinkedWebPage(item) || (fetches && isWaitingForFetch(item))
+      );
+      if (!candidates.length) continue;
+      const room = fetches ? Math.max(0, max - queued) : 0;
+      const reserved = [];
+      let stored = null;
+      try {
+        stored = await this.repository.mutate(
+          project.id,
+          current => {
+            let changed = false;
+            const now = new Date().toISOString();
+            for (const item of current.items || []) {
+              if (isLinkedWebPage(item)) {
+                convertLinkedWebPage(item);
+                changed = true;
+              }
+              if (reserved.length >= room || this.isActive(item.id)) continue;
+              if (!isWaitingForFetch(item)) continue;
+              item.ingestAttempt = randomUUID();
+              item.updatedAt = now;
+              reserved.push(item.id);
+              changed = true;
+            }
+            return changed ? current : null;
+          },
+          { touchActivity: false, touchUpdated: false }
+        );
+      } catch (error) {
+        logger.warn('Could not queue the first fetch of project items', {
+          component: COMPONENT,
+          projectId: project.id,
+          error: error?.message
+        });
+        continue;
+      }
+      if (!stored) continue;
+      for (const itemId of reserved) {
+        const item = (stored.items || []).find(entry => entry.id === itemId);
+        const kind = getItemKind(item?.kind);
+        if (!item || !kind) continue;
+        await this.start(
+          stored,
+          item,
+          fetchInput(kind, item, { nameFromTitle: item.name === item.ref?.url, scheduled: true }),
+          { wait: false }
+        );
+        queued += 1;
+      }
+    }
+    return queued;
   }
 
   /**

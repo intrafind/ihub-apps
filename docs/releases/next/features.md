@@ -1432,8 +1432,8 @@ directly, instead of searching blindly first.
 A web address that serves a document — PDF, Word, PowerPoint, Excel, OpenDocument or any other
 type an upload accepts — is now downloaded when it is added to a project and stored like an
 uploaded file, instead of being read live. Its whole text is available, no longer cut at 50,000
-characters, and the item keeps its source address for citations and refreshes. HTML pages stay
-live links.
+characters, and the item keeps its source address for citations and refreshes. HTML pages are
+stored snapshots too (see "Projects: Web Pages Are Stored Snapshots, Fetched Once").
 
 - The download follows the upload rules: the file size and project size limits, the accepted
   types and the malware scan. An address that serves an image, an archive or a legacy Office file
@@ -1448,8 +1448,8 @@ live links.
   project's side panel) and per item (**Refresh schedule** in the item menu), or set to **Never**.
 - Files are downloaded again on their own once that time has passed. An unchanged file is
   neither downloaded nor read again and keeps its text. The item shows when its text was taken
-  and when it is refreshed next; **Refresh** still works at any time. Web pages are read again
-  after the same time, and **Refresh** on a web page applies on every server process.
+  and when it is refreshed next; **Refresh** still works at any time. Web pages are refreshed
+  the same way.
 - Uploads never wait behind scheduled refreshes.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
@@ -1882,3 +1882,22 @@ template has, and the model is told which exist, where each one sits and how muc
   whose accent 1 is grey no longer produces grey cards.
 
 See [Document templates → PowerPoint](../../document-templates.md#powerpoint).
+
+## Projects: Web Pages Are Stored Snapshots, Fetched Once
+
+A web page in a project is now stored like a file from a website instead of being read live. It
+is fetched once, converted to text once and stored encrypted; chats and searches read the stored
+text on every server process without asking the website again. Projects with many web pages no
+longer re-read the whole site on each server process, which could exhaust the server's memory.
+
+- The page is refreshed after its refresh schedule (one day by default). The website is asked
+  whether the page changed; an unchanged page keeps its text and is not converted again.
+- Adding a page asks the website once. Pages picked with **Find more pages of this website** are
+  not fetched again at all: the site search's own read is stored.
+- The whole page is kept (no longer cut at 50,000 characters), and its text counts toward the
+  project's size limit like a file.
+- A page that cannot be read when it is added shows as **Failed** with the reason; **Retry**
+  fetches it again.
+- Changing the address of a web page item fetches the new page.
+- Existing web pages are converted automatically after the upgrade, in user and admin projects:
+  each shows as processing until its first fetch, which takes a few minutes for large projects.

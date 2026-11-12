@@ -10,8 +10,9 @@
  *    here through {@link setTextReader}; until then such an item answers
  *    `TEXT_UNAVAILABLE`.
  *  - A `storage: 'link'` item is fetched at use time through today's source
- *    handlers (`URLHandler`, `PageHandler`, `IFinderHandler`) and their TTL
- *    caches. iFinder items are fetched with the **reading** user's rights;
+ *    handlers (`PageHandler`, `IFinderHandler`) and their TTL caches. A web
+ *    page is not a link any more: it is a stored snapshot (#3622), so no
+ *    reader fetches it or parses its HTML. iFinder items are fetched with the **reading** user's rights;
  *    the handler's cache is keyed per user already.
  *  - A `project-item` link reads the item of another project it stands for,
  *    after checking that the **reading** user may use that project
@@ -27,8 +28,6 @@ import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { KnowledgeError } from './types.js';
 import { PROJECT_ITEM_KIND, loadLinkedItem } from '../projects/projectItemLinks.js';
-import { projectSettings } from '../projects/projectSettings.js';
-import { linkCacheSeconds } from '../projects/refreshTtl.js';
 
 const COMPONENT = 'ItemTextService';
 
@@ -107,11 +106,11 @@ export function setItemInfoRecorder(recorder) {
 }
 
 /**
- * What a link item's source says about it: a web page its title and
- * description, an iFinder document its title field, else its file name.
+ * What a link item's source says about it: an iFinder document its title
+ * field, else its file name. (A web page's title and description come from
+ * its extraction, when its snapshot is stored.)
  */
 export function linkInfoOf(item, metadata) {
-  if (item.kind === 'url') return { title: metadata?.title, description: metadata?.description };
   if (item.kind === 'ifinder-document') {
     return { title: firstText(metadata?.title) || firstText(metadata?.filename) };
   }
@@ -154,25 +153,9 @@ export function offerItemInfo(project, item, metadata) {
 }
 
 /** The handler type and config a link item's fetch runs with. */
-function handlerCallOf(item, ctx, project = null) {
+function handlerCallOf(item, ctx) {
   const ref = item.ref || {};
   switch (item.kind) {
-    case 'url':
-      return {
-        type: 'url',
-        config: {
-          url: ref.url,
-          ...(ref.maxContentLength ? { options: { maxContentLength: ref.maxContentLength } } : {}),
-          // How long the read is kept: the item's, the project's or the
-          // platform's refresh TTL (#3536).
-          cacheTtlSeconds: linkCacheSeconds(
-            item,
-            project,
-            projectSettings(configCache.getPlatform?.() || {})
-          ),
-          chatId: ctx.chatId
-        }
-      };
     case 'page':
       return {
         type: 'page',
@@ -303,7 +286,7 @@ export async function getItemText(project, item, ctx = {}) {
     const linked = await loadLinkedItem(project, item, ctx.user);
     return getItemText(linked.project, linked.item, ctx);
   }
-  const call = handlerCallOf(item, ctx, project);
+  const call = handlerCallOf(item, ctx);
   if (!call) throw new KnowledgeError('KIND_UNKNOWN', `Unknown item kind ${item.kind}`, where);
   if (call.type === 'page') assertPageReadable(call.config.pageId, ctx.user, where);
   if (call.type === 'ifinder' && !ctx.user) {

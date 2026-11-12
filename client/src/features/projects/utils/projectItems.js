@@ -453,11 +453,13 @@ const MAX_ITEM_NAME_CHARS = 300;
 /**
  * The JSON bodies of the pages picked from a site crawl: one `url` item per
  * page, named after the page's title (the server names it after the URL
- * when there is none).
+ * when there is none). A page a site crawl read carries the crawl's id, so the
+ * server stores that read instead of fetching the page again.
  *
- * @param {Array<{url: string, title?: string}>} pages
+ * @param {Array<{url: string, title?: string, crawlId?: string}>} pages
  * @param {{pinned?: boolean}} [options]
- * @returns {Array<{kind: 'url', ref: {url: string}, name?: string, pinned: boolean}>}
+ * @returns {Array<{kind: 'url', ref: {url: string}, name?: string, pinned: boolean,
+ *   crawlId?: string}>}
  *
  * @example
  * buildUrlItemRequests([{ url: 'https://x.com/a', title: 'A' }])
@@ -474,7 +476,8 @@ export function buildUrlItemRequests(pages, { pinned = false } = {}) {
         kind: 'url',
         ref: { url: page.url.trim() },
         ...(name ? { name } : {}),
-        pinned: pinned === true
+        pinned: pinned === true,
+        ...(typeof page.crawlId === 'string' && page.crawlId ? { crawlId: page.crawlId } : {})
       };
     });
 }

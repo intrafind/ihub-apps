@@ -384,7 +384,13 @@ export const addItemSchema = z
     name: z.string().trim().min(1).max(MAX_ITEM_NAME_LENGTH).optional(),
     pinned: z.boolean().optional(),
     excludedFromAi: z.boolean().optional(),
-    text: z.string().max(MAX_ITEM_TEXT_CHARS).optional()
+    text: z.string().max(MAX_ITEM_TEXT_CHARS).optional(),
+    // The site crawl that listed a web page (`POST …/pickers/url/_crawl`): the
+    // page it read is stored instead of being fetched again (#3622).
+    crawlId: z
+      .string()
+      .regex(/^[0-9a-z]{9}[0-9a-f]{8}$/, 'Invalid crawlId')
+      .optional()
   })
   .strict();
 

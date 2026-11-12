@@ -4,10 +4,10 @@
 /**
  * Files linked from websites (#3536): a URL that serves a document becomes a
  * `web-file` item, downloaded through the page reader's guarded fetch and
- * stored like an upload (quotas, scan, extraction); HTML stays a live link.
+ * stored like an upload (quotas, scan, extraction); HTML stays a `url` item
+ * (a stored snapshot since #3622, see `projects-web-pages.test.js`).
  * The refresh TTL (platform, project, item, `never`) drives the reconciler's
- * refresh of expired files, with conditional requests, and the cache
- * lifetime of web pages.
+ * refresh of expired files, with conditional requests.
  *
  * A local HTTP(S) server plays the website. `localhost` is on
  * `ssl.domainWhitelist`, so the SSRF guard lets it through and, over HTTPS
@@ -50,17 +50,14 @@ import {
 import { ProjectIngestService } from '../services/projects/ProjectIngestService.js';
 import {
   DEFAULT_REFRESH_TTL_SECONDS,
-  NEVER_LINK_CACHE_SECONDS,
   effectiveRefreshTtl,
   isRefreshDue,
-  linkCacheSeconds,
   normalizeRefreshTtl,
   refreshScheduleOf
 } from '../services/projects/refreshTtl.js';
 import { projectSettings } from '../services/projects/projectSettings.js';
 import { serializeItem } from '../services/projects/projectView.js';
 import { crawlSite, isDocumentResponse, linkTypeOf } from '../services/projects/siteCrawler.js';
-import { createSourceManager } from '../sources/index.js';
 import * as migration from '../migrations/V237__project_refresh_ttl.js';
 import { buildDocx, p as docxP } from './helpers/docxFile.js';
 import { buildPptx, shape, slide } from './helpers/pptxFile.js';
@@ -273,7 +270,7 @@ describe('refresh TTL rules', () => {
     assert.equal(normalizeRefreshTtl('soon'), null);
   });
 
-  it('says when a file is due, never for `never`, and how long a web page is kept', () => {
+  it('says when a file or a web page is due, never for `never`', () => {
     const at = Date.parse(file.snapshotAt);
     assert.equal(isRefreshDue(file, {}, settings, at + 7199 * 1000), false);
     assert.equal(isRefreshDue(file, {}, settings, at + 7200 * 1000), true);
@@ -293,16 +290,10 @@ describe('refresh TTL rules', () => {
     assert.equal(isRefreshDue({ ...file, kind: 'office365' }, {}, settings, at + 1e12), false);
     const schedule = refreshScheduleOf(file, {}, settings);
     assert.equal(schedule.nextAt, new Date(at + 7200 * 1000).toISOString());
-    const page = { kind: 'url', status: 'ready' };
-    assert.deepEqual(refreshScheduleOf(page, { refreshTtl: 86400 }, settings), {
-      ttl: 86400,
-      from: 'project',
-      scheduled: false
-    });
-    assert.equal(
-      linkCacheSeconds({ ...page, refreshTtl: 'never' }, {}, settings),
-      NEVER_LINK_CACHE_SECONDS
-    );
+    // A web page is a snapshot refreshed on schedule like a file (#3622).
+    const page = { ...file, kind: 'url' };
+    assert.equal(refreshScheduleOf(page, { refreshTtl: 86400 }, settings).scheduled, true);
+    assert.equal(isRefreshDue(page, {}, settings, at + 7200 * 1000), true);
     assert.equal(refreshScheduleOf({ kind: 'upload' }, {}, settings), null);
     assert.equal(serializeItem(file, { refreshTtl: 3600 }, settings).refresh.ttl, 3600);
   });
@@ -464,7 +455,7 @@ describe('web files in a project', () => {
     assert.equal(documentFromUrl('https://x.example/a/old.doc'), null);
   });
 
-  it('keeps an HTML page a live link and refuses a type nothing reads', async () => {
+  it('keeps an HTML page a web page item and refuses a type nothing reads', async () => {
     serve(
       '/page',
       '<html><head><title>A page</title></head><body><main>Hello</main></body></html>',
@@ -478,8 +469,8 @@ describe('web files in a project', () => {
     const project = await newProject('Links');
     const { item } = await addUrl(project, `${base}/page`);
     assert.equal(item.kind, 'url');
-    assert.equal(item.storage, 'link');
-    assert.equal(item.name, 'A page');
+    assert.equal(item.storage, 'text');
+    assert.equal((await settled(project.id, item.id)).name, 'A page');
     await assert.rejects(
       addUrl(project, `${base}/photo.png`),
       error => error.code === 'UNSUPPORTED_TYPE'
@@ -662,66 +653,6 @@ describe('web files in a project', () => {
       service.updateItem(project.id, upload.id, { refreshTtl: 3600 }, { user: ADA }),
       error => error.code === 'INVALID_REF'
     );
-  });
-
-  it('gives a web page the same TTL as its cache lifetime, and refreshes it by hand', async () => {
-    serve(
-      '/live',
-      '<html><head><title>Live</title></head><body><main>Live one</main></body></html>',
-      {
-        'content-type': 'text/html'
-      }
-    );
-    const project = await newProject('Live');
-    await service.updateProject(project.id, { refreshTtl: 3600 }, { actor: ADA });
-    const { item } = await addUrl(project, `${base}/live`);
-    const handler = createSourceManager().getHandler('url');
-    const read = async () =>
-      getItemText(await getProjectRepository().get(project.id), await itemOf(project.id, item.id), {
-        user: ADA
-      });
-    assert.match((await read()).text, /Live one/);
-    const cached = [...handler.cache.values()].find(
-      entry => entry.data?.metadata?.url === `${base}/live`
-    );
-    assert.equal(cached.ttl, 3600 * 1000, 'kept for the project TTL');
-    // Another reader with a shorter lifetime judges the same entry by its own.
-    const { forgetCachedPage } = await import('../services/pageCache.js');
-    const config = { url: `${base}/live`, cacheTtlSeconds: 1 };
-    cached.timestamp -= 2000;
-    // The page reader's own 10-minute cache sits below; real TTLs (15 min and
-    // up) outlast it, the 1 s of this test does not.
-    forgetCachedPage(`${base}/live`);
-    serve(
-      '/live',
-      '<html><head><title>Live</title></head><body><main>Live short</main></body></html>',
-      {
-        'content-type': 'text/html'
-      }
-    );
-    assert.match((await handler.getCachedContent(config)).content, /Live short/);
-    serve(
-      '/live',
-      '<html><head><title>Live</title></head><body><main>Live one</main></body></html>',
-      {
-        'content-type': 'text/html'
-      }
-    );
-    handler.forget(`${base}/live`);
-    forgetCachedPage(`${base}/live`);
-    assert.match((await read()).text, /Live one/);
-
-    serve(
-      '/live',
-      '<html><head><title>Live</title></head><body><main>Live two</main></body></html>',
-      {
-        'content-type': 'text/html'
-      }
-    );
-    assert.match((await read()).text, /Live one/, 'still the cached read');
-    const { item: refreshed } = await service.refreshItem(project.id, item.id, { user: ADA });
-    assert.ok(refreshed.checkedAt);
-    assert.match((await read()).text, /Live two/, 'read again after "Refresh now"');
   });
 });
 

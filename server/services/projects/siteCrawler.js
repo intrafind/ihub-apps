@@ -7,7 +7,9 @@
  * so a user can pick several pages of a website at once instead of adding
  * each URL by hand.
  *
- * The crawl only lists pages; nothing is stored. Every fetch goes through the
+ * The crawl lists pages, and may hand each page it read to the add step
+ * (`keepPage`, #3622): a page picked from the list is then stored from that
+ * read instead of being fetched again. Every fetch goes through the
  * page reader's `fetchWebPage` (SSRF guard on every redirect hop, DNS pinned,
  * SSL whitelist) on its own throttle queue, the site's `robots.txt` is
  * honored, and the crawl is bounded in pages, depth, bytes per page and total
@@ -24,7 +26,7 @@ import {
 } from '../pageReader/botProtection.js';
 import { dropRawTextElements } from '../pageReader/pageContent.js';
 import { HTML_MIME, acceptedTypeOf } from './extractText.js';
-import { DOCUMENT_EXTENSIONS } from './webFileDownload.js';
+import { DOCUMENT_EXTENSIONS, decodeHtml } from './webFileDownload.js';
 
 /** Defaults and upper bounds of a crawl request. */
 export const CRAWL_DEFAULT_MAX_PAGES = 50;
@@ -416,41 +418,11 @@ export async function readBoundedBytes(
   return Buffer.concat(chunks).subarray(0, maxBytes);
 }
 
-/** The charset a response declares in its content type, or in the page's first bytes. */
-function charsetOf(contentType, bytes) {
-  const declared = /charset=["']?([\w.:-]+)/i.exec(String(contentType || '').replace(/\s/g, ''));
-  if (declared) return declared[1];
-  const head = bytes.subarray(0, 1024).toString('latin1');
-  return /<meta[^>]{0,200}?charset=["']?([\w.:-]+)/i.exec(head)?.[1] || '';
-}
-
 /**
- * The text of an HTML page in the charset it declares; without one, UTF-8, or
- * Windows-1252 for bytes that are not UTF-8 (older pages). A character the
- * byte limit cut in half is dropped, not turned into the whole page's
- * fallback.
- *
- * @param {Buffer} bytes
- * @param {string} [contentType]
- * @returns {string}
+ * The text of an HTML page in the charset it declares (defined with the
+ * download, which hands a page's snapshot on as UTF-8).
  */
-export function decodeHtml(bytes, contentType) {
-  const label = charsetOf(contentType, bytes)
-    .toLowerCase()
-    .replace(/^utf8$/, 'utf-8');
-  if (label) {
-    try {
-      return new TextDecoder(label).decode(bytes, { stream: true });
-    } catch {
-      // A label TextDecoder does not know: guess below.
-    }
-  }
-  try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(bytes, { stream: true });
-  } catch {
-    return new TextDecoder('windows-1252').decode(bytes);
-  }
-}
+export { decodeHtml };
 
 /**
  * Whether a response that is not HTML is a document a project can take: a
@@ -496,7 +468,14 @@ async function fetchHtml(url, { signal } = {}) {
     return { finalUrl: finalUrl.href, contentType, html: null };
   }
   const bytes = await readBoundedBytes(response.body, { signal });
-  return { finalUrl: finalUrl.href, contentType, html: decodeHtml(bytes, contentType) };
+  return {
+    finalUrl: finalUrl.href,
+    contentType,
+    html: decodeHtml(bytes, contentType),
+    // The version read, so a page added from the crawl is refreshed conditionally.
+    etag: response.headers.get('etag') || null,
+    lastModified: response.headers.get('last-modified') || null
+  };
 }
 
 /**
@@ -566,6 +545,11 @@ function stoppedError() {
  *   contentType: string, html: string|null}>} [deps.fetchPage] - Test seam
  * @param {(origin: string, options: {signal: AbortSignal}) => Promise<string|null>}
  *   [deps.fetchRobots] - Test seam
+ * @param {(page: {url: string, html: string, contentType: string, etag: string|null,
+ *   lastModified: string|null}) => Promise<unknown>} [deps.keepPage] - Called with
+ *   every HTML page read, under the address it is listed by, before its links
+ *   are parsed (`crawlHandover.js`); a failure only means the page is fetched
+ *   again when it is added
  * @param {() => number} [deps.now] - Test seam
  * @param {number} [deps.deadlineMs] - Test seam
  * @returns {Promise<{pages: Array<{url: string, title: string, depth: number,
@@ -590,6 +574,7 @@ export async function crawlSite(
   {
     fetchPage = fetchHtml,
     fetchRobots = fetchRobotsTxt,
+    keepPage = null,
     now = Date.now,
     deadlineMs = CRAWL_DEADLINE_MS
   } = {}
@@ -611,6 +596,21 @@ export async function crawlSite(
   // on would only fail page after page, so the crawl stops and reports the host.
   let blocked = null;
   const stopped = () => signal.aborted || now() >= deadline || blocked !== null;
+  /** Hand a page read to the add step; the HTML is not held for the listing. */
+  const keep = async (pageUrl, page) => {
+    if (typeof keepPage !== 'function') return;
+    try {
+      await keepPage({
+        url: pageUrl,
+        html: page.html,
+        contentType: page.contentType,
+        etag: page.etag || null,
+        lastModified: page.lastModified || null
+      });
+    } catch {
+      // Not kept: the page is fetched when it is added.
+    }
+  };
 
   try {
     // The start page answers for the crawl: if it cannot be read, nothing can.
@@ -633,6 +633,7 @@ export async function crawlSite(
       }
       throw new Error(`The page is not a web page (${first.contentType || 'unknown type'})`);
     }
+    await keep(firstUrl, first);
     const firstPage = extractPageLinks(first.html, firstUrl);
     const scope = crawlScope(firstUrl, { samePath, links: firstPage.links });
     const listed = [{ url: firstUrl, title: firstPage.title, depth: 0, type: 'page' }];
@@ -702,6 +703,7 @@ export async function crawlSite(
           if (!isDocumentResponse(page.contentType, finalUrl)) return null;
           return { finalUrl, title: fileNameOf(finalUrl), links: [], document: true };
         }
+        await keep(finalUrl, page);
         return { finalUrl, ...extractPageLinks(page.html, finalUrl) };
       } catch (error) {
         // Only the crawled site's own refusal ends the crawl: a link that
