@@ -28,12 +28,17 @@ import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { KnowledgeError } from './types.js';
 import { PROJECT_ITEM_KIND, loadLinkedItem } from '../projects/projectItemLinks.js';
+import { itemTextCacheBytes } from '../../utils/cacheBudgets.js';
 
 const COMPONENT = 'ItemTextService';
 
-/** Decrypted texts kept per process, and the bytes they may add up to. */
+/**
+ * Decrypted texts kept per process, and the bytes they may add up to — a share
+ * of this process's heap limit (utils/cacheBudgets.js).
+ */
 const TEXT_CACHE_ENTRIES = 64;
-const TEXT_CACHE_BYTES = 96 * 1024 * 1024;
+export const ITEM_TEXT_CACHE_BYTES = itemTextCacheBytes();
+const TEXT_CACHE_BYTES = ITEM_TEXT_CACHE_BYTES;
 
 const textCache = new Map();
 let textCacheBytes = 0;
