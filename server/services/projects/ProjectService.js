@@ -1036,7 +1036,8 @@ export class ProjectService {
         fetchInput(refetch.kind, item, {
           user,
           prefetched: refetch.prepared?.prefetched,
-          nameFromTitle: isNamedAfterUrl(item)
+          // A name sent with the new address is the user's, whatever it reads.
+          nameFromTitle: patch.name === undefined && isNamedAfterUrl(item)
         }),
         { user, wait: false }
       );

@@ -458,6 +458,25 @@ describe('a web page is a stored snapshot', () => {
     assert.equal(moved.name, 'Longer');
   });
 
+  it('keeps a name sent with the new address, even when it is the address', async () => {
+    servePage('/chosen', html('Chosen title', 'A page.'));
+    servePage('/chosen-next', html('Next title', 'Another page.'));
+    const project = await newProject('Chosen');
+    const { item } = await addUrl(project, `${base}/chosen`);
+    await settled(project.id, item.id);
+    await service.updateItem(
+      project.id,
+      item.id,
+      { ref: { url: `${base}/chosen-next` }, name: `${base}/chosen-next` },
+      { user: ADA }
+    );
+    const moved = await waitFor(async () => {
+      const entry = await itemOf(project.id, item.id);
+      return entry?.status === 'ready' && entry.title === 'Next title' ? entry : null;
+    });
+    assert.equal(moved.name, `${base}/chosen-next`, 'the name the user sent stays');
+  });
+
   it('turns a link not converted yet into a snapshot when its address changes', async () => {
     servePage('/linked-new', html('Linked', 'The address it points at now.'));
     const project = await newProject('Linked');
