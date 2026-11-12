@@ -532,6 +532,11 @@ API documentation configuration.
 - **enabled** (boolean) – Enable Swagger API documentation. Default: `true`
 - **requireAuth** (boolean) – Require authentication to access Swagger UI. Default: `true`
 
+The three OpenAPI documents (`/api/docs/{normal,admin,openai}/swagger.json`) are generated from the route
+files by the production build (`npm run build:api-docs`, part of `build:server`, the Docker image and the
+binary) into `server/generated/openapi/`, and read on the first `/api/docs` request. Without those files —
+a development checkout — the first request builds them, once per process. Nothing is built at startup.
+
 ### **refreshSalt**
 Cache invalidation mechanism (automatically managed).
 

@@ -3,7 +3,7 @@
 
 /**
  * Every `@swagger` block under `server/routes` is valid YAML. The API docs
- * (`server/routes/swagger.js`) are built at startup without `failOnErrors`, so
+ * (`server/utils/apiDocSpecs.js`) are built on first use without `failOnErrors`, so
  * a broken block only logs "Error in <file>: YAMLSemanticError …" and its
  * endpoint is missing from /api/docs. A value such as
  * `description: e.g. {"a": true}` is the usual cause: it reads as a nested
@@ -14,7 +14,7 @@ import assert from 'node:assert/strict';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import swaggerJSDoc from 'swagger-jsdoc';
-import { apiDocGlobs } from '../routes/swagger.js';
+import { apiDocGlobs } from '../utils/apiDocSpecs.js';
 
 const routesDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'routes');
 
