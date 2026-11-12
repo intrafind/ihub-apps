@@ -1,5 +1,25 @@
 # Fixes — Unreleased
 
+## Server Startup No Longer Reads the Whole Workflow History
+
+On every start, one worker read every stored workflow run in full (`contents/data/workflow-state`) to find
+the few that were still unfinished, and once more to repair execution records. With a large history this
+took more than a gigabyte of memory within seconds of the start and could get the container killed for
+running out of memory before it served a request. The server now keeps a small index of the unfinished runs
+(`contents/data/workflow-active`) and reads only those; the repair of execution records runs once and is not
+repeated. A run waiting for an approval stays resumable however old it is.
+
+Listing stored data without its content — the daily workflow cleanup, counting a user's chats, listing
+configuration — no longer reads each stored document in full either: every document under `contents/data`
+now records its checksum and size at the start of its file, and those listings read only that part.
+
+The first start after the upgrade does two one-time steps: migration V247 rewrites every document under
+`contents/data` once to add the checksum and size (logged as "Document envelopes: upgraded N …"; on a large
+installation this takes a few seconds), and the server builds the index of unfinished runs ("Built the index of
+unfinished workflow executions"). Do not run this release and an older one against the same `contents/data` at
+the same time (for example during a rolling update with a shared volume): a document an older release writes
+afterwards lacks the checksum and is reported as unreadable until it is saved again.
+
 ## Uploaded Pictures Keep Their Original Bytes When No Resize Is Needed
 
 Every picture a user attached was re-encoded to JPEG in the browser, which dropped its embedded provenance

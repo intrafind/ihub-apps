@@ -1,5 +1,18 @@
 # Features — Unreleased
 
+## Workers and Their Memory Follow the Container's Memory Limit
+
+In a container with a memory limit, iHub no longer starts four workers that each size their memory as if they
+had the whole container to themselves. When `WORKERS` (or `NUM_WORKERS`) is not set, the server starts as
+many workers as fit into the memory limit (768 MB each after 160 MB for the primary), at most one per CPU and
+never more than four, and gives each worker a heap limit of its share, so memory is reclaimed before the
+container is killed. A 2 GB container now runs 2 workers instead of 4; a 1 GB container runs a single process.
+Without a memory limit nothing changes (4 workers).
+
+An explicit `WORKERS` and an explicit `--max-old-space-size` in `NODE_OPTIONS` still win. The decision is
+logged at startup ("Worker sizing: …"), and the container start banner no longer claims a worker count the
+server does not use. See [Scaling with Multiple Workers](../../scaling.md#sizing-from-the-container).
+
 ## Interactive Artifacts Can Use Chart and UI Libraries
 
 HTML artifacts — the interactive pages, dashboards and calculators the `web-artifacts` skill builds — can now

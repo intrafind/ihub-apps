@@ -1329,7 +1329,7 @@ spec prescribes, so clients can recover on their own:
 
 Session state lives in the process memory of the worker that opened the
 session. Within one iHub instance that is not a problem: connections are
-spread across workers round-robin (`WORKERS` defaults to 4), so a client's
+spread across workers round-robin (`WORKERS` defaults to 4, or to what the container memory limit fits), so a client's
 `initialize` and its follow-up `tools/call` usually reach different workers,
 and the workers share which sessions exist. A request for a session another
 worker holds is served on the worker that received it, `DELETE /mcp` is

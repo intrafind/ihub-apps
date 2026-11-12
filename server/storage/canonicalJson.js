@@ -47,6 +47,19 @@ export function canonicalJson(data) {
 }
 
 /**
+ * Order two keys by UTF-16 code units — exactly what `Array.prototype.sort`
+ * does without a comparator, written out so it is visibly locale-independent.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareCodeUnits(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
+/**
  * `JSON.stringify` replacer that hands back plain objects with sorted keys.
  *
  * Runs after the value's own `toJSON()`, which is what makes a `Date` (and
@@ -61,7 +74,7 @@ export function canonicalJson(data) {
 function replacer(_key, value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
   const sorted = {};
-  for (const key of Object.keys(value).sort()) sorted[key] = value[key];
+  for (const key of Object.keys(value).sort(compareCodeUnits)) sorted[key] = value[key];
   return sorted;
 }
 
