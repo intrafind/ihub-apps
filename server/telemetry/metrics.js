@@ -391,12 +391,12 @@ function attachIndexCacheObservers() {
  * @param {number} [count=1]
  */
 export function recordIndexCacheEvent(outcome, count = 1) {
-  const counter =
-    outcome === 'hit'
-      ? indexCacheHitsCounter
-      : outcome === 'miss'
-        ? indexCacheMissesCounter
-        : indexCacheEvictionsCounter;
+  const counters = {
+    hit: indexCacheHitsCounter,
+    miss: indexCacheMissesCounter,
+    eviction: indexCacheEvictionsCounter
+  };
+  const counter = counters[outcome];
   if (counter && count > 0) counter.add(count);
 }
 

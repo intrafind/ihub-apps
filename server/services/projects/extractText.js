@@ -953,8 +953,8 @@ function formatLabel(type) {
 
 async function extractTextOf(
   { bytes, contentType, name },
-  { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows, speakerNotes } = {},
-  onFormat = () => {}
+  { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows, speakerNotes },
+  onFormat
 ) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
     throw new ExtractionError('NO_TEXT', `${name || 'The file'} is empty`);

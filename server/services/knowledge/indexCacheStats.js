@@ -47,7 +47,7 @@ export function countIndexCacheMiss() {
 }
 
 export function countIndexCacheEvictions(count) {
-  if (!(count > 0)) return;
+  if (!Number.isFinite(count) || count <= 0) return;
   stats.evictions += count;
   recordIndexCacheEvent('eviction', count);
 }
