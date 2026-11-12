@@ -12,7 +12,7 @@ Access & Identity is iHub's control plane: who can sign in (Authentication), who
 The biggest problems:
 - **Lockout trap.** If `/admin/auth` fails to load, it shows built-in defaults (Proxy mode, local sign-in off) as "All valid" with Save enabled; one click locks the admin out (ID-B1).
 - **No guards on users.** Nothing stops demoting or disabling the last admin, and saving any edit to a disabled user silently re-enables them (ID-B2, ID-B3).
-- **Permissions only add up, and the UI says otherwise.** Every signed-in user carries the built-in `authenticated` group, which grants all apps and models, so "a group limited to 2 apps" is impossible while the editor claims it works (ID-B5).
+- **Permissions only add up, and the UI says otherwise.** Every signed-in user carries the built-in `authenticated` group, which by default grants all apps and models. With that shipped wildcard in place, "a group limited to 2 apps" is impossible, yet the editor claims it works (ID-B5). Admins can narrow `authenticated` itself, but nothing in the UI tells them that is the lever.
 - **No answer to "why can't user X see app Y?"** (ID-PM1).
 - **Machine OAuth clients default to every app and model**, explained with the wrong security model (ID-B6).
 
@@ -221,7 +221,7 @@ Renaming `/api/admin/auth/users` to `/api/admin/users` is a breaking API change;
 **W1 — Secure this installation** (a checklist with inline actions, not a linear wizard; §10)
 - Starts: demo-accounts banner, Overview "Getting started", and a new last step of `/setup` (`SetupWizard.jsx:50`). Who: every admin, day 1. Builds on what exists: the Overview checklist (`AdminOverview.jsx:82-120`) already has "Admin account ready" (hard-coded done) and "Connect identity provider (optional)"; extend it rather than adding a new surface.
 - Steps: 1. Change the `admin` password (inline, Generate + Copy). 2. Demo `user`: disable, delete or set a password. 3. Hide demo accounts. 4. Anonymous access: keep or turn off. 5. Review lockout and session settings.
-- End: server verifies a working sign-in method for the current admin; the Overview item turns green only when passwords differ from the shipped ones (replacing the hard-coded `done`, ID-B30). Replaces ~12 actions on 4 pages.
+- End: server verifies a working sign-in method for the current admin; the Overview item turns green only when every shipped demo account (`admin`, `user`) is either deleted, disabled, or no longer uses its shipped password (replacing the hard-coded `done`, ID-B30). Replaces ~12 actions on 4 pages.
 
 **W2 — Connect an identity provider (OIDC)**
 - Starts: Authentication → "Add sign-in method → Single sign-on"; Overview "Connect identity provider". Who: admins connecting Entra ID, Keycloak, Okta, Google, ADFS or generic OIDC, once per company.
@@ -235,7 +235,7 @@ Renaming `/api/admin/auth/users` to `/api/admin/users` is a breaking API change;
 
 **W4 — Register a machine integration (service client)**
 - Starts: API access → New client → "Who will call iHub?" (server/script → this wizard; app acting for users → auth-code form; a person → Personal API keys). Who: admins wiring CI jobs, n8n, other backends.
-- Steps: 1. If clients are off: inline "Turn on OAuth clients" with confirm. 2. Name, description. 3. Apps, models, prompts — **nothing preselected**, at least one required. 4. Token lifetime, bounded by the server maximum. 5. Credentials sheet: client ID, secret (once), token URL, ready `curl`, `.env` download, "Test token".
+- Steps: 1. If clients are off: inline "Turn on OAuth clients" with confirm. 2. Name, description. 3. Apps, models, prompts — **nothing preselected**, at least one app required. Each resource type has an explicit "All" choice that writes `["*"]` and a "None" state that must stay none. Today the server turns an empty list into `["*"]` (`server/routes/admin/oauthClients.js:264-268`, ID-B6), so an untouched models or prompts list grants everything. The server must store and enforce an empty array as no access, and write `["*"]` only when the admin picked "All". The wizard sends `[]` for "None", never omits the field. 4. Token lifetime, bounded by the server maximum. 5. Credentials sheet: client ID, secret (once), token URL, ready `curl`, `.env` download, "Test token".
 - End: validates a token can be issued with the selected grant. Replaces the single form for this case and the curl-first docs.
 
 **Where a wizard would be wrong.** LDAP (presets + "Test a login" already work; add a bind-only "Test connection"). Editing an existing group or user (power users need the dense form, improved per §6). Authorization Server settings. The Users list. Proxy/JWT needs a **tester** ("paste a sample header/JWT → resolved user and groups"), not a wizard.
