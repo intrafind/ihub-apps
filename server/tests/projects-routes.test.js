@@ -481,7 +481,7 @@ describe('user projects', () => {
     const added = await drive(route.addItem, {
       user: ADA,
       params: { projectId: project.id },
-      body: { kind: 'url', ref: { url: 'https://example.com/private' }, pinned: true }
+      body: { kind: 'page', ref: { pageId: 'private' }, pinned: true }
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     const params = { projectId: project.id, itemId: added.body.id };
@@ -621,7 +621,7 @@ describe('user projects', () => {
     const added = await drive(route.addItem, {
       user: ADA,
       params: { projectId: project.id },
-      body: { kind: 'url', ref: { url: 'https://example.com/policy' }, pinned: true }
+      body: { kind: 'page', ref: { pageId: 'policy' }, pinned: true }
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     assert.equal(added.body.status, 'ready');
@@ -735,7 +735,7 @@ describe('documents linked from another project', () => {
     const original = await drive(route.addItem, {
       user: ADA,
       params: { projectId: source.id },
-      body: { kind: 'url', ref: { url: 'https://example.com/install' }, name: 'Install guide' }
+      body: { kind: 'page', ref: { pageId: 'install' }, name: 'Install guide' }
     });
     const target = await create(ADA, { name: 'iHub' });
 
@@ -783,7 +783,7 @@ describe('documents linked from another project', () => {
     const original = await drive(route.addItem, {
       user: ADA,
       params: { projectId: source.id },
-      body: { kind: 'url', ref: { url: 'https://example.com/notes' } }
+      body: { kind: 'page', ref: { pageId: 'notes' } }
     });
     const ref = { projectId: source.id, itemId: original.body.id };
     for (const user of [GRACE, ROOT]) {
@@ -804,7 +804,7 @@ describe('documents linked from another project', () => {
     const original = await drive(route.addItem, {
       user: ADA,
       params: { projectId: shared.id },
-      body: { kind: 'url', ref: { url: 'https://example.com/shared' } }
+      body: { kind: 'page', ref: { pageId: 'shared' } }
     });
     await setMembers(ADA, shared.id, [{ type: 'user', id: GRACE.id, role: 'editor' }]);
     const target = await create(GRACE, { name: 'Grace space' });
@@ -857,7 +857,7 @@ describe('documents linked from another project', () => {
     const original = await drive(route.addItem, {
       user: ADA,
       params: { projectId: source.id },
-      body: { kind: 'url', ref: { url: 'https://example.com/handbook' } }
+      body: { kind: 'page', ref: { pageId: 'handbook' } }
     });
     const target = await create(ADA, { name: 'Team space' });
     await addLink(ADA, target.id, { projectId: source.id, itemId: original.body.id });
@@ -910,7 +910,7 @@ describe('the project catalog', () => {
     const original = await drive(route.addItem, {
       user: ADA,
       params: { projectId: source.id },
-      body: { kind: 'url', ref: { url: 'https://example.com/published' } }
+      body: { kind: 'page', ref: { pageId: 'published' } }
     });
     await publish(ADA, source.id);
     const link = (user, projectId) =>
@@ -1353,45 +1353,47 @@ describe('admin projects', () => {
     const added = await drive(route.adminAddItem, {
       user: EDITOR,
       params: { id: 'web' },
-      body: { kind: 'url', ref: { url: 'https://example.com/old', maxContentLength: 1000 } }
+      // An iHub page: a web page is a stored snapshot whose new address is
+      // fetched again (#3622, projects-web-pages.test.js).
+      body: { kind: 'page', ref: { pageId: 'old', language: 'de' } }
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     const { id: itemId, name } = added.body;
-    assert.equal(name, 'https://example.com/old');
+    assert.equal(name, 'old');
 
     // An item still named after its address follows the new one.
     const moved = await drive(route.adminUpdateItem, {
       user: EDITOR,
       params: { id: 'web', itemId },
-      body: { ref: { url: 'https://example.com/new' } }
+      body: { ref: { pageId: 'new' } }
     });
     assert.equal(moved.statusCode, 200, JSON.stringify(moved.body));
-    assert.equal(moved.body.ref.url, 'https://example.com/new');
-    assert.equal(moved.body.name, 'https://example.com/new');
-    assert.equal(moved.body.provenance.source.url, 'https://example.com/new');
+    assert.equal(moved.body.ref.pageId, 'new');
+    assert.equal(moved.body.name, 'new');
+    assert.equal(moved.body.provenance.source.url, '/pages/new');
     assert.equal(moved.body.status, 'ready');
     const stored = await getProjectRepository().get('web');
-    assert.equal(stored.items[0].ref.url, 'https://example.com/new');
-    // The reference is replaced as sent: a limit that was not sent is gone.
-    assert.equal(stored.items[0].ref.maxContentLength, undefined);
+    assert.equal(stored.items[0].ref.pageId, 'new');
+    // The reference is replaced as sent: a language that was not sent is the default.
+    assert.equal(stored.items[0].ref.language, 'en');
 
     // A name somebody chose stays, also when the address changes in the same request.
     const renamed = await drive(route.adminUpdateItem, {
       user: EDITOR,
       params: { id: 'web', itemId },
-      body: { name: 'Handbook', ref: { url: 'https://example.com/third' } }
+      body: { name: 'Handbook', ref: { pageId: 'third' } }
     });
     assert.equal(renamed.body.name, 'Handbook');
     const kept = await drive(route.adminUpdateItem, {
       user: EDITOR,
       params: { id: 'web', itemId },
-      body: { ref: { url: 'https://example.com/fourth' } }
+      body: { ref: { pageId: 'fourth' } }
     });
     assert.equal(kept.body.name, 'Handbook');
-    assert.equal(kept.body.ref.url, 'https://example.com/fourth');
+    assert.equal(kept.body.ref.pageId, 'fourth');
 
     // The reference is checked against the item's own kind.
-    for (const ref of [{ url: 'ftp://example.com/x' }, { pageId: 'faq' }, {}]) {
+    for (const ref of [{ pageId: '../x' }, { url: 'https://example.com/x' }, {}]) {
       const refused = await drive(route.adminUpdateItem, {
         user: EDITOR,
         params: { id: 'web', itemId },
@@ -1399,16 +1401,13 @@ describe('admin projects', () => {
       });
       assert.equal(refused.statusCode, 400, JSON.stringify(ref));
     }
-    assert.equal(
-      (await getProjectRepository().get('web')).items[0].ref.url,
-      'https://example.com/fourth'
-    );
+    assert.equal((await getProjectRepository().get('web')).items[0].ref.pageId, 'fourth');
 
     // Only a content admin may.
     const denied = await drive(route.adminUpdateItem, {
       user: ADA,
       params: { id: 'web', itemId },
-      body: { ref: { url: 'https://example.com/x' } }
+      body: { ref: { pageId: 'x' } }
     });
     assert.equal(denied.statusCode, 403);
   });
@@ -1418,23 +1417,20 @@ describe('admin projects', () => {
     const added = await drive(route.adminAddItem, {
       user: EDITOR,
       params: { id: 'off' },
-      body: { kind: 'url', ref: { url: 'https://example.com/a' } }
+      body: { kind: 'page', ref: { pageId: 'a' } }
     });
     assert.equal(added.statusCode, 201, JSON.stringify(added.body));
     const { id: itemId } = added.body;
-    setProjectSettings({ kinds: { url: false } });
+    setProjectSettings({ kinds: { page: false } });
     try {
       const refused = await drive(route.adminUpdateItem, {
         user: EDITOR,
         params: { id: 'off', itemId },
-        body: { ref: { url: 'https://other.example/b' } }
+        body: { ref: { pageId: 'b' } }
       });
       assert.ok(refused.statusCode >= 400, JSON.stringify(refused.body));
       assert.match(JSON.stringify(refused.body), /KIND_DISABLED|not available/);
-      assert.equal(
-        (await getProjectRepository().get('off')).items[0].ref.url,
-        'https://example.com/a'
-      );
+      assert.equal((await getProjectRepository().get('off')).items[0].ref.pageId, 'a');
       // A name or a pin is not a new reference.
       const renamed = await drive(route.adminUpdateItem, {
         user: EDITOR,
@@ -1612,12 +1608,14 @@ describe('admin projects', () => {
     assert.equal(built.statusCode, 201, JSON.stringify(built.body));
     const [item] = built.body.items;
     assert.equal(item.id, 'policy');
-    assert.equal(item.storage, 'link');
-    assert.equal(item.status, 'ready');
+    // A web page is a stored snapshot (#3622): it waits for its first fetch,
+    // which the ingest job runs once the project exists.
+    assert.equal(item.storage, 'text');
+    assert.equal(item.status, 'pending');
     assert.equal(item.pinned, true);
-    assert.equal(item.provenance.origin, 'linked');
+    assert.equal(item.provenance.origin, 'picked');
     assert.equal(item.provenance.by.id, EDITOR.id);
-    assert.deepEqual(item.cache, { ttlSeconds: 7200 });
+    assert.equal(item.cache, undefined);
     assert.equal(item.text, null);
     assert.equal(
       (await drive(route.adminDelete, { user: EDITOR, params: { id: 'built' } })).statusCode,

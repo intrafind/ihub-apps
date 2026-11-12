@@ -335,9 +335,15 @@ describe('a web page is a stored snapshot', () => {
 
     const later = Date.parse(first.checkedAt) + (DEFAULT_REFRESH_TTL_SECONDS + 1) * 1000;
     assert.equal(await ingest.refreshExpired([current], { now: later }), 1);
+    // Settled, and its job off this worker's queue (a busy item is not refreshed).
     const unchanged = await waitFor(async () => {
       const entry = await itemOf(project.id, item.id);
-      return entry && !entry.refreshingAt && entry.checkedAt !== first.checkedAt ? entry : null;
+      return entry &&
+        !entry.refreshingAt &&
+        entry.checkedAt !== first.checkedAt &&
+        !ingest.isActive(item.id)
+        ? entry
+        : null;
     });
     assert.equal(hits('/ttl'), 1, 'one request per TTL');
     assert.equal(seen.at(-1).headers['if-none-match'], '"v1"', 'asked conditionally');

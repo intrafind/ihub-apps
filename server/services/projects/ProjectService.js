@@ -316,7 +316,8 @@ export class ProjectService {
       items.push(
         buildItem(kind, prepared?.ref || ref, input, {
           user: actor,
-          origin: 'linked',
+          // A fetched snapshot is `picked`, as when it is added later.
+          origin: kind.storage.ihub === 'link' ? 'linked' : 'picked',
           prepared
         })
       );
