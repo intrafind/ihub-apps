@@ -6885,7 +6885,17 @@
           "aboveExclusive": "Geben Sie eine Zahl größer als {{min}} ein.",
           "belowExclusive": "Geben Sie eine Zahl kleiner als {{max}} ein.",
           "invalid": "Dieser Wert ist nicht zulässig."
-        }
+        },
+        "recordUser": "Wen ein Nachweis nennt",
+        "recordUserHelp": "Gilt für Nachweise, die ab jetzt geschrieben werden. Nur Administratoren sehen den Wert bei der Prüfung einer Ausgabe; er ist nie Teil dessen, was Benutzer oder API-Aufrufer erhalten. Beim Löschen eines Benutzers werden seine ID und sein Fingerabdruck aus den Nachweisen entfernt.",
+        "recordUserNone": "Niemanden",
+        "recordUserNoneHelp": "Der Nachweis beschreibt nur die Ausgabe. Standard.",
+        "recordUserAnonymous": "Anonym (gehashter Benutzer)",
+        "recordUserAnonymousHelp": "Ein Einweg-Fingerabdruck des Benutzers (usr_…): Dieselbe Person hat immer denselben Wert, er lässt sich aber nicht in eine Benutzer-ID zurückverwandeln.",
+        "recordUserPseudonymous": "Pseudonym (Unterhaltung)",
+        "recordUserPseudonymousHelp": "Ein Fingerabdruck der Unterhaltung (conv_…): Ausgaben eines Chats gehören zusammen, über Chats hinweg nicht.",
+        "recordUserIdentified": "Identifiziert (Benutzer-ID)",
+        "recordUserIdentifiedHelp": "Die Benutzer-ID, nie Name oder E-Mail. Die Nachweise enthalten dann personenbezogene Daten: Berücksichtigen Sie das in Ihrer Datenschutzdokumentation."
       },
       "master": {
         "title": "EU AI Act-Funktionen",
@@ -7005,7 +7015,11 @@
         "kindText": "Text",
         "kindImage": "Bild",
         "kindAudio": "Audio",
-        "bytes": "{{formatted}} Byte"
+        "bytes": "{{formatted}} Byte",
+        "user": "Benutzer",
+        "userIdentified": "Benutzer-ID",
+        "userPseudonymous": "Fingerabdruck der Unterhaltung",
+        "userAnonymous": "Fingerabdruck des Benutzers"
       }
     }
   },

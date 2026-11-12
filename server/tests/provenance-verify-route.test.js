@@ -39,7 +39,9 @@ function buildApp() {
   server.use(express.json({ limit: '2mb' }));
   server.use((req, _res, next) => {
     const id = req.headers['x-test-user'];
-    req.user = id ? { id } : { id: 'anonymous', groups: ['anonymous'] };
+    req.user = id
+      ? { id, ...(req.headers['x-test-admin'] ? { isAdmin: true } : {}) }
+      : { id: 'anonymous', groups: ['anonymous'] };
     next();
   });
   registerProvenanceRoutes(server);
@@ -81,6 +83,29 @@ describe('POST /api/eu-ai-act/provenance/_verify', () => {
     // No look-up URL in the answer: the client builds it from the API path.
     expect(res.body.records[0].verify).toBeUndefined();
     expect(res.headers['cache-control']).toBe('no-store');
+  });
+
+  test('names the recorded user to admins only (provenance.recordUser)', async () => {
+    platform.provenance.recordUser = 'identified';
+    try {
+      await recordTextOutput({
+        text: 'An answer with a recorded user.',
+        model: { id: 'model-a' },
+        user: { id: 'writer-1', email: 'writer@example.com' },
+        conversationId: 'chat-9'
+      });
+    } finally {
+      delete platform.provenance.recordUser;
+    }
+    const body = { text: 'An answer with a recorded user.' };
+    const user = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify')).send(body);
+    expect(user.body.found).toBe(true);
+    expect(user.body.records[0].user).toBeUndefined();
+    const admin = await signedIn(request(app).post('/api/eu-ai-act/provenance/_verify'))
+      .set('x-test-admin', '1')
+      .send(body);
+    expect(admin.body.records[0].user).toEqual({ mode: 'identified', id: 'writer-1' });
+    expect(JSON.stringify(admin.body)).not.toContain('writer@example.com');
   });
 
   test('finds an output by hash', async () => {

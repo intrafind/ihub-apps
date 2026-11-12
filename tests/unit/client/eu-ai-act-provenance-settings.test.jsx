@@ -153,12 +153,25 @@ describe('ProvenanceSettingsCard', () => {
     expect(options.body.provenance).toEqual({
       retentionDays: 400,
       storeRecords: true,
+      recordUser: 'none',
       verify: { access: 'authenticated' },
       media: { maxVerifyBytes: 52428800, readC2pa: true },
       watermark: { alpha: null, minScoredTokens: 300, detectorTimeoutMs: null }
     });
     expect(onSaved).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  test('who a record names: four choices, "Nobody" by default, saved as recordUser', async () => {
+    setup();
+    await screen.findByLabelText(/Keep records for/);
+    expect(screen.getByLabelText('Nobody')).toBeChecked();
+    fireEvent.click(screen.getByLabelText('Identified (user id)'));
+    expect(screen.getByLabelText('Identified (user id)')).toBeChecked();
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByText(/Settings saved/);
+    const [[, options]] = posts();
+    expect(options.body.provenance.recordUser).toBe('identified');
   });
 
   test('lowering the retention asks first, names the days and the irreversibility; Cancel saves nothing', async () => {

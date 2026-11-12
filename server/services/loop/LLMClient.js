@@ -277,7 +277,11 @@ export class ResultAccumulator {
       // delay the stream. Awaited before the call ends (`settleMedia`).
       this._mediaRecords.push(
         new Promise(resolve => setImmediate(resolve)).then(() =>
-          recordGeneratedImage(image, { model: this.meta.model })
+          recordGeneratedImage(image, {
+            model: this.meta.model,
+            user: this.meta.user || null,
+            conversationId: this.meta.conversationId || null
+          })
         )
       );
     }
@@ -908,7 +912,10 @@ export class LLMClient {
       request,
       startedAt,
       stream: effectiveStream,
-      marking: request.marking ?? null
+      marking: request.marking ?? null,
+      // Who a generated image's provenance record may name (`provenance.recordUser`).
+      user: options.user || telemetry.user || telemetry.reportUser || null,
+      conversationId: telemetry.chatId || telemetry.executionId || telemetry.runId || null
     };
 
     this._recordRequestHeader({

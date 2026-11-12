@@ -1740,7 +1740,7 @@ AI Act.
   `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
   results as `metadata.provenance`.
 - **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model (name and id), time, marking and content hash, with a **Copy hash** action. Every generated picture has the same button next to download and share.
-- **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
+- **The record never holds the text**, only its hash, and names no user unless `provenance.recordUser` says so. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
 - **Look it up.** `POST /api/eu-ai-act/provenance/_verify` takes a text or a hash and answers "Found" with the record or
   "Not found". Not found is not proof of human authorship. It needs a signed-in caller unless
@@ -1795,7 +1795,9 @@ config files.
   or run the self-test per model. **Make active** on a retired key rolls back to it; the
   confirmation says that the current key is retired, that vLLM's `--watermark-config` must follow
   and that self-test results turn outdated until then.
-- **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who may
+- **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who a
+  record names (nobody by default; a user fingerprint, a conversation fingerprint or the user id,
+  shown to admins only and removed when the user is deleted; migration V246), who may
   check an output (signed-in users or anyone), the size limit of checked files (in MiB), C2PA reading and the text detector's false-positive limit, shortest judged text and
   time limit are a form with defaults and units. Values are checked in the browser and on the
   server against the same bounds. Lowering the retention or opening the check to the public asks

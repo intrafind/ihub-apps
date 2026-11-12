@@ -344,3 +344,100 @@ describe('recordTextOutput', () => {
     assert.equal(found[0].output_id, p.output_id);
   });
 });
+
+describe('who a record names (provenance.recordUser)', () => {
+  let storage;
+  let configCache;
+  let recordedUser;
+  let recordForCaller;
+  let fingerprint;
+  let fingerprintConversation;
+  before(async () => {
+    storage = await startTestStorage({ prefix: 'ihub-provenance-user-' });
+    ({ default: configCache } = await import('../configCache.js'));
+    ({ recordedUser, recordForCaller } = await import('../services/provenance/provenanceUser.js'));
+    ({ fingerprint, fingerprintConversation } = await import('../services/UserFingerprint.js'));
+  });
+  after(async () => {
+    configCache.setCacheEntry('config/platform.json', {});
+    await storage.stop();
+  });
+
+  const alice = { id: 'alice', name: 'Alice Example', email: 'alice@example.com' };
+
+  it('names nobody by default and for "none"', async () => {
+    configCache.setCacheEntry('config/platform.json', {});
+    assert.equal(await recordedUser({ user: alice, conversationId: 'chat-1' }), null);
+    assert.equal(await recordedUser({ user: alice }, 'none'), null);
+    assert.equal(await recordedUser({ user: null }, 'identified'), null);
+  });
+
+  it('identified is the user id, never the name or email', async () => {
+    const named = await recordedUser({ user: alice, conversationId: 'chat-1' }, 'identified');
+    assert.deepEqual(named, { mode: 'identified', id: 'alice' });
+  });
+
+  it('anonymous is the user fingerprint', async () => {
+    const named = await recordedUser({ user: alice, conversationId: 'chat-1' }, 'anonymous');
+    assert.deepEqual(named, { mode: 'anonymous', id: await fingerprint('alice') });
+    assert.match(named.id, /^usr_[0-9a-f]{16}$/);
+  });
+
+  it('pseudonymous is a conversation fingerprint, never an id that embeds the user', async () => {
+    const named = await recordedUser(
+      { user: alice, conversationId: 'inference:alice' },
+      'pseudonymous'
+    );
+    assert.equal(named.id, await fingerprintConversation('inference:alice'));
+    assert.ok(!named.id.includes('alice'));
+    const outside = await recordedUser({ user: alice }, 'pseudonymous');
+    assert.equal(outside.id, await fingerprint('alice'));
+  });
+
+  it('stores the user in the record only, never in the returned object', async () => {
+    configCache.setCacheEntry('config/platform.json', { provenance: { recordUser: 'identified' } });
+    const p = await recordTextOutput({
+      text: 'an answer naming its user',
+      model: { id: 'm1' },
+      user: alice,
+      conversationId: 'chat-1'
+    });
+    assert.equal(p.user, undefined);
+    const [stored] = await getProvenanceStore().findByHash(hashText('an answer naming its user'));
+    assert.deepEqual(stored.user, { mode: 'identified', id: 'alice' });
+    assert.ok(!JSON.stringify(stored).includes('alice@example.com'));
+  });
+
+  it('shows the user to admins only', () => {
+    const record = { output_id: 'x', user: { mode: 'identified', id: 'alice' } };
+    assert.deepEqual(recordForCaller(record, true), record);
+    assert.deepEqual(recordForCaller(record, false), { output_id: 'x' });
+  });
+
+  it('forgets a deleted user (id and fingerprint) and keeps the records', async () => {
+    const store = new ProvenanceStore({ documents: storage.provider.documents });
+    const make = (text, user) => ({
+      ...buildProvenance({
+        outputId: newOutputId(),
+        text,
+        model: { id: 'm' },
+        installationId: 'inst_t',
+        version: '1.0.0'
+      }),
+      ...(user ? { user } : {})
+    });
+    const hashed = await fingerprint('bob');
+    await store.record(make('bob by id', { mode: 'identified', id: 'bob' }));
+    await store.record(make('bob by hash', { mode: 'anonymous', id: hashed }));
+    await store.record(make('carol by id', { mode: 'identified', id: 'carol' }));
+    const result = await store.forgetUser(['bob', hashed]);
+    assert.equal(result.changedRecords, 2);
+    const [byId] = await store.findByHash(hashText('bob by id'));
+    const [byHash] = await store.findByHash(hashText('bob by hash'));
+    const [carol] = await store.findByHash(hashText('carol by id'));
+    assert.equal(byId.user, undefined);
+    assert.equal(byHash.user, undefined);
+    assert.ok(byId.output_id, 'the record itself stays');
+    assert.equal(carol.user.id, 'carol');
+  });
+});

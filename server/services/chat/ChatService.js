@@ -980,6 +980,7 @@ class ChatService {
       outcome = await this._finishTurn({
         result,
         outputId,
+        user,
         runId,
         chatId,
         streaming,
@@ -1171,6 +1172,7 @@ class ChatService {
   async _finishTurn({
     result,
     outputId,
+    user = null,
     runId,
     chatId,
     streaming,
@@ -1252,7 +1254,9 @@ class ChatService {
         finalText: result.answerText,
         model: { id: model?.id },
         modelConfig: model,
-        marking: result.marking?.text
+        marking: result.marking?.text,
+        user,
+        conversationId: chatId || runId
       });
       if (provenance) summary.provenance = provenance;
       return provenance;
@@ -1784,7 +1788,9 @@ class ChatService {
         finalText: result.answerText,
         model: { id: model.id },
         modelConfig: model,
-        marking: result.marking?.text
+        marking: result.marking?.text,
+        user,
+        conversationId: chatId || runId
       });
       this._endLedgerRun(runId, {
         status: result.status,

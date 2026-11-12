@@ -16,6 +16,7 @@ import logger from '../../utils/logger.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { getProvenanceStore } from './ProvenanceStore.js';
 import { provenanceSettings } from './provenanceSettings.js';
+import { recordedUser } from './provenanceUser.js';
 import { buildProvenance, hashText, normalizeText, newOutputId } from './records.js';
 
 const COMPONENT = 'TurnProvenance';
@@ -35,6 +36,10 @@ const COMPONENT = 'TurnProvenance';
  *   fields below.
  * @param {boolean} [input.watermarkApplied] - Explicit override (tests, media).
  * @param {string} [input.keyId] - Watermark key id used.
+ * @param {Object|null} [input.user] - The acting user; named in the stored record
+ *   only as `provenance.recordUser` says, never in the returned object.
+ * @param {string|null} [input.conversationId] - Chat, run or execution id
+ *   (`pseudonymous` mode).
  * @returns {Promise<Object|null>} The object, or null for an output without text and tool calls.
  */
 export async function recordTextOutput({
@@ -45,7 +50,9 @@ export async function recordTextOutput({
   modelConfig,
   marking,
   watermarkApplied,
-  keyId
+  keyId,
+  user,
+  conversationId
 }) {
   // EU AI Act master switch off: no record, no object (callers are null-safe).
   if (!isEuAiActEnabled()) return null;
@@ -72,7 +79,8 @@ export async function recordTextOutput({
           ? [hashText(finalText)]
           : [];
       try {
-        await store.record(provenance, { extraHashes });
+        const named = await recordedUser({ user, conversationId });
+        await store.record(named ? { ...provenance, user: named } : provenance, { extraHashes });
       } catch (error) {
         logger.warn('Could not store a provenance record', {
           component: COMPONENT,

@@ -47,6 +47,20 @@ function markingText(watermark, t) {
   return parts.join(', ');
 }
 
+/** How the record names the user (`provenance.recordUser` when it was written). */
+function userModeText(mode, t) {
+  switch (mode) {
+    case 'identified':
+      return t('admin.euAiAct.record.userIdentified', 'user id');
+    case 'pseudonymous':
+      return t('admin.euAiAct.record.userPseudonymous', 'conversation fingerprint');
+    case 'anonymous':
+      return t('admin.euAiAct.record.userAnonymous', 'user fingerprint');
+    default:
+      return String(mode || '–');
+  }
+}
+
 /** The kind of output; a kind this version does not know is shown as stored. */
 function kindText(kind, t) {
   switch (kind || 'text') {
@@ -106,6 +120,14 @@ export default function ProvenanceRecord({ record }) {
           {formatTime(record.created_at)}
         </Field>
         <Field label={t('admin.euAiAct.record.model', 'Model')}>{show(record.model?.id)}</Field>
+        {record.user?.id && (
+          <Field label={t('admin.euAiAct.record.user', 'User')} mono>
+            {record.user.id}{' '}
+            <span className="font-sans text-gray-600 dark:text-gray-400">
+              ({userModeText(record.user.mode, t)})
+            </span>
+          </Field>
+        )}
         <Field label={t('admin.euAiAct.record.kind', 'Kind')}>{kindText(record.kind, t)}</Field>
         <Field label={t('admin.euAiAct.record.marking', 'Model marking')}>
           {markingText(record.model?.watermark, t)}

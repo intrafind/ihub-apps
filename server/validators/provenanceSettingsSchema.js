@@ -10,7 +10,11 @@
  * @module validators/provenanceSettingsSchema
  */
 import { z } from 'zod';
-import { PROVENANCE_BOUNDS, VERIFY_ACCESS_VALUES } from '../../shared/provenanceSettings.js';
+import {
+  PROVENANCE_BOUNDS,
+  RECORD_USER_VALUES,
+  VERIFY_ACCESS_VALUES
+} from '../../shared/provenanceSettings.js';
 
 const B = PROVENANCE_BOUNDS;
 
@@ -18,6 +22,7 @@ export const provenanceSettingsSaveSchema = z
   .object({
     retentionDays: z.number().int().min(B.retentionDays.min).max(B.retentionDays.max).optional(),
     storeRecords: z.boolean().optional(),
+    recordUser: z.enum(RECORD_USER_VALUES).optional(),
     verify: z
       .object({ access: z.enum(VERIFY_ACCESS_VALUES).optional() })
       .passthrough()

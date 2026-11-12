@@ -443,6 +443,7 @@
   "provenance": {
     "retentionDays": 365,
     "storeRecords": true,
+    "recordUser": "none",
     "verify": {
       "access": "authenticated"
     },

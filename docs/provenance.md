@@ -109,6 +109,7 @@ proof of human authorship.
 "provenance": {
   "retentionDays": 365,
   "storeRecords": true,
+  "recordUser": "none",
   "verify": { "access": "authenticated" },
   "media": { "maxVerifyBytes": 52428800, "readC2pa": true }
 }
@@ -116,18 +117,41 @@ proof of human authorship.
 
 - `retentionDays`: records older than this are removed by a daily sweep. `0` or less keeps them forever.
 - `storeRecords`: `false` still attaches the object everywhere but keeps no records, so nothing can be looked up.
+- `recordUser`: who a stored record names; see [Who a record names](#who-a-record-names). `none` (default),
+  `anonymous`, `pseudonymous` or `identified`.
 - `verify.access`: `authenticated` (default) or `public`.
 - `media.maxVerifyBytes`: largest image or audio file `_verify` accepts (default 50 MiB, `413` above).
 - `media.readC2pa`: read the C2PA manifest of generated images and uploaded files (default on).
 
-Edit these in `platform.json`; migrations V243 and V244 write the defaults.
+Edit these in **Admin → EU AI Act → Provenance settings** or in `platform.json`; migrations V243, V244 and
+V246 write the defaults.
 
 ## What is stored
 
 One document per content hash in the `provenance-records` namespace of the [storage provider](storage.md),
 holding up to the 20 newest records for that hash (the same text answered many times, such as "Yes", must not
 grow a document without bound). Each record is the provenance object: spec, generator, model,
-`output_id`, `created_at`, `content_hash`. **No text, prompt, user, chat or run ID.**
+`output_id`, `created_at`, `content_hash`, and `user` only when `recordUser` asks for it (below). **No text,
+prompt, name, email, chat or run ID.**
+
+### Who a record names
+
+`provenance.recordUser` uses the identity modes of usage tracking and feedback, plus `none`:
+
+| Mode | `user` in the record | |
+| --- | --- | --- |
+| `none` (default) | absent | The record describes the output only. |
+| `anonymous` | `{ "mode": "anonymous", "id": "usr_<16 hex>" }` | A salted one-way fingerprint of the user id (the pepper in `contents/.usage-pepper`, shared with usage tracking and the pseudonymized run ledger). The same person always has the same value; it cannot be turned back into an id. |
+| `pseudonymous` | `{ "mode": "pseudonymous", "id": "conv_<16 hex>" }` | A fingerprint of the conversation (chat id; the run or execution id where there is no chat). Outputs of one chat belong together, across chats they do not. Without any conversation, the user fingerprint. |
+| `identified` | `{ "mode": "identified", "id": "<user id>" }` | The user id, never name, email or groups. The records then hold personal data. |
+
+- **Only in the stored record.** The provenance object in a chat message, an API response, an MCP or A2A
+  result never carries `user`. `POST /api/eu-ai-act/provenance/_verify` returns it to admins only (the
+  verification card on the EU AI Act page shows it); any other caller gets the record without it.
+- **Applies from the moment it is saved.** Records already stored keep what they had.
+- **Deleting a user** removes `user` from every record that names their id or their fingerprint (cleanup step
+  `provenanceRecords`); the records themselves stay. A conversation fingerprint is not linked to a user and stays.
+- Machine callers (API keys, OAuth clients) are named by the id they act as; an anonymous visitor by the guest id.
 
 A short text's hash can be guessed by someone with disk access. They learn only that this installation once
 produced that string, with no attribution. With `chats.enabled: false` the store is the only trace of outputs;

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -39,6 +39,15 @@ function modelLabel(modelId, models, language) {
   return name && name !== modelId ? `${name} (${modelId})` : modelId;
 }
 
+/** The nearest ancestor that clips its content (a scrolling message list), or null for the viewport. */
+function clippingAncestor(node) {
+  for (let el = node?.parentElement; el && el !== document.body; el = el.parentElement) {
+    const { overflowY } = window.getComputedStyle(el);
+    if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'hidden') return el;
+  }
+  return null;
+}
+
 function Row({ label, children }) {
   return (
     <div className="flex flex-col gap-0.5">
@@ -59,7 +68,9 @@ function Row({ label, children }) {
  * @param {Object} props
  * @param {Object} props.provenance - The server's provenance object
  * @param {Array<Object>} [props.models] - Model list, for the model's display name
- * @param {'top'|'bottom'} [props.placement='top'] - Where the panel opens
+ * @param {'top'|'bottom'} [props.placement='top'] - Where the panel prefers to open; it
+ *   opens on the other side when the preferred one has no room (an answer at the top of
+ *   the chat would cut the panel off and hide its first rows)
  * @param {string} [props.buttonClassName] - Replaces the button's look (on an image)
  */
 function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName }) {
@@ -68,7 +79,9 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
   const [copied, setCopied] = useState(false);
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
+  const panelRef = useRef(null);
   const panelId = useId();
+  const [side, setSide] = useState(placement);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -90,6 +103,22 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
       document.removeEventListener('keydown', onKeyDown);
     };
   }, [open, close]);
+
+  // Measured before paint: open on the preferred side when the panel fits there
+  // inside the clipping container (or the viewport), else on the other side.
+  useLayoutEffect(() => {
+    if (!open || !panelRef.current || !buttonRef.current) return;
+    const height = panelRef.current.offsetHeight + 8;
+    const button = buttonRef.current.getBoundingClientRect();
+    const clip = clippingAncestor(rootRef.current)?.getBoundingClientRect();
+    const top = Math.max(clip ? clip.top : 0, 0);
+    const bottom = Math.min(clip ? clip.bottom : window.innerHeight, window.innerHeight);
+    const roomAbove = button.top - top;
+    const roomBelow = bottom - button.bottom;
+    const fitsPreferred = placement === 'bottom' ? roomBelow >= height : roomAbove >= height;
+    if (fitsPreferred) setSide(placement);
+    else setSide(placement === 'bottom' ? 'top' : 'bottom');
+  }, [open, placement]);
 
   if (!provenance?.ai_generated) return null;
 
@@ -134,11 +163,12 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
       </button>
       {open && (
         <div
+          ref={panelRef}
           id={panelId}
           role="dialog"
           aria-label={t('chatMessage.provenance.title', 'AI generated')}
           data-testid="provenance-panel"
-          className={`absolute ${placement === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} end-0 z-20 w-72 max-w-[85vw] rounded-lg border border-gray-200 bg-white p-3 text-start text-xs shadow-lg dark:border-gray-700 dark:bg-gray-900`}
+          className={`absolute ${side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} end-0 z-20 w-72 max-h-[70vh] overflow-y-auto max-w-[85vw] rounded-lg border border-gray-200 bg-white p-3 text-start text-xs shadow-lg dark:border-gray-700 dark:bg-gray-900`}
         >
           <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
             {isImage

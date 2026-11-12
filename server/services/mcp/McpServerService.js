@@ -503,7 +503,12 @@ export async function buildMcpServer({ user, platform }) {
             );
             const answer = workflowAnswerParts(result);
             const provenance = answer.ok
-              ? await recordTextOutput({ text: answer.text, model: { id: `workflow:${wf.id}` } })
+              ? await recordTextOutput({
+                  text: answer.text,
+                  model: { id: `workflow:${wf.id}` },
+                  user,
+                  conversationId: context.chatId || null
+                })
               : null;
             return workflowToolResult(result, provenance);
           } catch (err) {

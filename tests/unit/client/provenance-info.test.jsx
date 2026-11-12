@@ -106,6 +106,35 @@ describe('ProvenanceInfo', () => {
     expect(panel.className).toContain('top-full');
   });
 
+  // jsdom lays nothing out: give the panel a height so "room" means something.
+  const realOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+      configurable: true,
+      get: () => 300
+    });
+  });
+  afterAll(() => {
+    if (realOffsetHeight)
+      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', realOffsetHeight);
+  });
+
+  it('opens below when there is no room above (an answer at the top of the chat)', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    button.getBoundingClientRect = () => ({ top: 40, bottom: 64, left: 0, right: 24 });
+    fireEvent.click(button);
+    expect(screen.getByTestId('provenance-panel').className).toContain('top-full');
+  });
+
+  it('opens above when there is room above', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    button.getBoundingClientRect = () => ({ top: 600, bottom: 624, left: 0, right: 24 });
+    fireEvent.click(button);
+    expect(screen.getByTestId('provenance-panel').className).toContain('bottom-full');
+  });
+
   it('closes on Escape and on a click outside', () => {
     render(
       <div>

@@ -26,6 +26,7 @@ import EuAiActStateNote from './EuAiActStateNote';
 
 const FIELD_ORDER = [
   'retentionDays',
+  'recordUser',
   'verifyAccess',
   'maxVerifyBytes',
   'alpha',
@@ -174,7 +175,12 @@ export default function ProvenanceSettingsCard({ onSaved }) {
 
   const focusFirst = problems => {
     const first = FIELD_ORDER.find(field => problems[field]);
-    const id = first === 'verifyAccess' ? 'provenance-verifyAccess-authenticated' : INPUT_ID(first);
+    const id =
+      first === 'verifyAccess'
+        ? 'provenance-verifyAccess-authenticated'
+        : first === 'recordUser'
+          ? 'provenance-recordUser-none'
+          : INPUT_ID(first);
     if (first) document.getElementById(id)?.focus();
   };
 
@@ -318,6 +324,83 @@ export default function ProvenanceSettingsCard({ onSaved }) {
                 className={INPUT}
               />
             </Field>
+            <div role="radiogroup" aria-labelledby="provenance-recordUser-label">
+              <p
+                id="provenance-recordUser-label"
+                className="text-sm font-medium text-gray-900 dark:text-gray-100"
+              >
+                {t('admin.euAiAct.settings.recordUser', 'Who a record names')}
+              </p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                {t(
+                  'admin.euAiAct.settings.recordUserHelp',
+                  'Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. Deleting a user removes their id and fingerprint from the records.'
+                )}
+              </p>
+              {[
+                [
+                  'none',
+                  t('admin.euAiAct.settings.recordUserNone', 'Nobody'),
+                  t(
+                    'admin.euAiAct.settings.recordUserNoneHelp',
+                    'The record describes the output only. Default.'
+                  )
+                ],
+                [
+                  'anonymous',
+                  t('admin.euAiAct.settings.recordUserAnonymous', 'Anonymous (hashed user)'),
+                  t(
+                    'admin.euAiAct.settings.recordUserAnonymousHelp',
+                    'A one-way fingerprint of the user (usr_…): the same person always has the same value, but it cannot be turned back into a user id.'
+                  )
+                ],
+                [
+                  'pseudonymous',
+                  t('admin.euAiAct.settings.recordUserPseudonymous', 'Pseudonymous (conversation)'),
+                  t(
+                    'admin.euAiAct.settings.recordUserPseudonymousHelp',
+                    'A fingerprint of the conversation (conv_…): outputs of one chat belong together, across chats they do not.'
+                  )
+                ],
+                [
+                  'identified',
+                  t('admin.euAiAct.settings.recordUserIdentified', 'Identified (user id)'),
+                  t(
+                    'admin.euAiAct.settings.recordUserIdentifiedHelp',
+                    'The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation.'
+                  )
+                ]
+              ].map(([value, label, help]) => (
+                <div key={value} className="mt-2 flex items-start gap-3">
+                  <input
+                    id={`provenance-recordUser-${value}`}
+                    type="radio"
+                    name="provenance-recordUser"
+                    className="mt-1 h-4 w-4 border-gray-300"
+                    checked={form.recordUser === value}
+                    onChange={() => set({ recordUser: value }, 'recordUser')}
+                    aria-describedby={`provenance-recordUser-${value}-help`}
+                  />
+                  <div>
+                    <label
+                      htmlFor={`provenance-recordUser-${value}`}
+                      className="block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {label}
+                    </label>
+                    <p
+                      id={`provenance-recordUser-${value}-help`}
+                      className="text-xs text-gray-600 dark:text-gray-400"
+                    >
+                      {help}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              {errors.recordUser && (
+                <p className="mt-1 text-sm text-red-700 dark:text-red-300">{errors.recordUser}</p>
+              )}
+            </div>
           </Group>
 
           <Group title={t('admin.euAiAct.settings.verification', 'Checking outputs')}>

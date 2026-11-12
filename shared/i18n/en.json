@@ -6453,7 +6453,17 @@
           "aboveExclusive": "Enter a number greater than {{min}}.",
           "belowExclusive": "Enter a number less than {{max}}.",
           "invalid": "This value is not allowed."
-        }
+        },
+        "recordUser": "Who a record names",
+        "recordUserHelp": "Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. Deleting a user removes their id and fingerprint from the records.",
+        "recordUserNone": "Nobody",
+        "recordUserNoneHelp": "The record describes the output only. Default.",
+        "recordUserAnonymous": "Anonymous (hashed user)",
+        "recordUserAnonymousHelp": "A one-way fingerprint of the user (usr_…): the same person always has the same value, but it cannot be turned back into a user id.",
+        "recordUserPseudonymous": "Pseudonymous (conversation)",
+        "recordUserPseudonymousHelp": "A fingerprint of the conversation (conv_…): outputs of one chat belong together, across chats they do not.",
+        "recordUserIdentified": "Identified (user id)",
+        "recordUserIdentifiedHelp": "The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation."
       },
       "master": {
         "title": "EU AI Act features",
@@ -6573,7 +6583,11 @@
         "kindText": "Text",
         "kindImage": "Image",
         "kindAudio": "Audio",
-        "bytes": "{{formatted}} bytes"
+        "bytes": "{{formatted}} bytes",
+        "user": "User",
+        "userIdentified": "user id",
+        "userPseudonymous": "conversation fingerprint",
+        "userAnonymous": "user fingerprint"
       }
     }
   },

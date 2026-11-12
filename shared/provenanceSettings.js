@@ -16,11 +16,18 @@ export const MIB = 1024 * 1024;
 
 export const VERIFY_ACCESS_VALUES = ['authenticated', 'public'];
 
+/**
+ * Who a stored record names (`provenance.recordUser`): nobody, or the user in
+ * one of the usage-tracking modes (fingerprint, conversation, user id).
+ */
+export const RECORD_USER_VALUES = ['none', 'anonymous', 'pseudonymous', 'identified'];
+
 /** What the server uses when a setting is absent (see the settings readers). */
 export const PROVENANCE_DEFAULTS = Object.freeze({
   retentionDays: 365,
   storeRecords: true,
   verifyAccess: 'authenticated',
+  recordUser: 'none',
   maxVerifyBytes: 50 * MIB,
   readC2pa: true,
   alpha: 1e-4,

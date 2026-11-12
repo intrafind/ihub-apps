@@ -4,6 +4,7 @@
 import {
   MIB,
   PROVENANCE_DEFAULTS,
+  RECORD_USER_VALUES,
   validateProvenanceValues
 } from '../../../../../../shared/provenanceSettings.js';
 
@@ -17,6 +18,7 @@ import {
 export const SERVER_FIELD = {
   retentionDays: 'retentionDays',
   storeRecords: 'storeRecords',
+  recordUser: 'recordUser',
   'verify.access': 'verifyAccess',
   'media.maxVerifyBytes': 'maxVerifyBytes',
   'media.readC2pa': 'readC2pa',
@@ -46,6 +48,7 @@ export function toForm(block = {}) {
       Number.isFinite(block.retentionDays) ? block.retentionDays : d.retentionDays
     ),
     storeRecords: block.storeRecords !== false,
+    recordUser: RECORD_USER_VALUES.includes(block.recordUser) ? block.recordUser : d.recordUser,
     verifyAccess: block.verify?.access === 'public' ? 'public' : 'authenticated',
     maxVerifyMib: bytesToMib(bytes),
     readC2pa: block.media?.readC2pa !== false,
@@ -94,6 +97,7 @@ export function buildBody(form) {
   return {
     retentionDays: v.retentionDays,
     storeRecords: form.storeRecords,
+    recordUser: form.recordUser,
     verify: { access: v.verifyAccess },
     media: { maxVerifyBytes: v.maxVerifyBytes, readC2pa: form.readC2pa },
     watermark: {

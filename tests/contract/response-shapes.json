@@ -1021,6 +1021,7 @@
           "maxVerifyBytes": "number",
           "readC2pa": "boolean"
         },
+        "recordUser": "string",
         "retentionDays": "number",
         "storeRecords": "boolean",
         "verify": {

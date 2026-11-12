@@ -31,6 +31,7 @@ import { getProvenanceStore } from './ProvenanceStore.js';
 import { provenanceSettings } from './provenanceSettings.js';
 import { readC2pa } from './c2paReader.js';
 import { sniffMedia } from './mediaSniff.js';
+import { recordedUser } from './provenanceUser.js';
 import {
   HASH_ALG,
   NORMALIZATION_NONE,
@@ -222,9 +223,11 @@ export function buildMediaRecord({
  * @param {Object} image - A stamped image (`data` base64, `mimeType`, `provenance`).
  * @param {Object} context
  * @param {Object} context.model - Model config (`id`, `contentMarking`).
+ * @param {Object|null} [context.user] - The acting user (`provenance.recordUser`).
+ * @param {string|null} [context.conversationId] - Chat, run or execution id.
  * @returns {Promise<Object|null>} The stored object, or null.
  */
-export async function recordGeneratedImage(image, { model }) {
+export async function recordGeneratedImage(image, { model, user, conversationId } = {}) {
   try {
     if (!isEuAiActEnabled()) return null;
     const stamp = image?.provenance;
@@ -251,6 +254,8 @@ export async function recordGeneratedImage(image, { model }) {
       createdAt: stamp.createdAt,
       installationId: await store.installationId()
     });
+    const named = await recordedUser({ user, conversationId });
+    if (named) record.user = named;
     await store.record(record);
     return record;
   } catch (error) {

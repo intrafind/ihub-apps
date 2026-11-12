@@ -871,7 +871,10 @@ export default function registerResponsesRoutes(
         text: result.content || '',
         model: { id: model.id },
         modelConfig: model,
-        marking: result.marking?.text
+        marking: result.marking?.text,
+        user,
+        // A stored conversation, else the run: the fallback chat id names the user.
+        conversationId: chat ? chat.id : runId
       });
       await storeAnswer({
         status: 'completed',

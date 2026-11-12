@@ -719,7 +719,9 @@ async function runTask({
       answerData = parts.json;
       provenance = await recordTextOutput({
         text: answer,
-        model: { id: `workflow:${skill._id}` }
+        model: { id: `workflow:${skill._id}` },
+        user,
+        conversationId: inbound?.chatId || `a2a-${task.id}`
       });
     }
     if (controller.signal.aborted) throw new A2aError(A2A_ERRORS.INTERNAL, 'Task cancelled');
