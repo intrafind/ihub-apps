@@ -342,8 +342,8 @@ The panel converged on re-cutting `/admin/ui` by job, not by `ui.json` section. 
 **W3 · Share an app (short-link builder)** (M). One guided screen, not multi-step (UI and TW agree).
 - **Starts from:** `/admin/shortlinks` "New short link", a "Share link…" action on app rows, and, as the same component, the end-user Share panel.
 - **Steps:**
-  1. App: a single searchable select.
-  2. Start with: prefilled prompt, variables from the app definition, Send automatically, optional model.
+  1. Link to: App · Page · External URL (the same segmented choice as §7). App opens a single searchable select; Page lists the content pages; External URL takes a URL that must be on the allowlist.
+  2. For an app target, start with: prefilled prompt, variables from the app definition, Send automatically, optional model.
   3. Link: code (auto, editable, validated inline) and expiry presets (never / 7 d / 30 d / date).
   4. Result: the short URL *with base path*, the resolved target, Copy, QR and Test.
 - **At the end:** it validates that the target resolves and that an external host is allow-listed.
@@ -480,7 +480,7 @@ The panel converged on re-cutting `/admin/ui` by job, not by `ui.json` section. 
 - Start Page "Default apps": rename to "Pinned apps".
 - Rate-limit errors:
   - Current: "Request failed with status code 429".
-  - Proposed: "Too many requests. Wait a minute and reload. Your unsaved changes are kept."
+  - Proposed: "Too many requests. Wait a minute, then save again. Don't reload the page, or you lose your unsaved changes." (Once drafts are kept across reloads, this can be shortened.)
 
 ## 10. Where the panel disagreed
 
@@ -507,7 +507,7 @@ The panel converged on re-cutting `/admin/ui` by job, not by `ui.json` section. 
 
 | # | Recommendation | Why | Impact H/M/L | Effort S/M/L | Type |
 |---|---|---|---|---|---|
-| 1 | **Fix short links end-to-end.** Rebuild `url` on every update unless "Custom target" is chosen (CU-B1). Apply params whenever given and drop "Include Params" (CU-B2). Use `buildPath()` in Copy, Test, the popup and Pages View, and prefix the redirect `Location` (CU-B9, B10). Fix the expiry time zone (CU-B19). Then replace JSON with Prefill / Send automatically / Variables fields and a live target preview. | Task 6 fails silently. Links copied under a base path 404. | H | S (fixes) / M (fields) | fix |
+| 1 | **Fix short links end-to-end.** Rebuild `url` on every update unless "Custom target" is chosen (CU-B1). Apply params whenever given and drop "Include Params" (CU-B2). Use `buildPath()` in Copy, Test, the popup and Pages View, and prefix the redirect `Location` with the base path only for local targets (paths starting with `/` that don't already start with the base path); leave allow-listed external URLs unchanged (CU-B9, B10). Fix the expiry time zone (CU-B19). Then replace JSON with Prefill / Send automatically / Variables fields and a live target preview. | Task 6 fails silently. Links copied under a base path 404. | H | S (fixes) / M (fields) | fix |
 | 2 | **Make /admin/ui safe.** Add `useUnsavedChanges` and a sticky "N unsaved · Discard · Save" bar, and guards on Translation overrides and the Template editor (CU-B4). Show no form and no Save after a failed load (CU-B5). Add ETag/`If-Match` on `ui.json`, and have the server keep `pages` from disk, so a stale save can't delete pages (CU-B3). The `useUnsavedChanges` hook already exists (10 admin editors use it), and `configCache` already computes ETags (`server/utils/etag.js`, used for conditional GETs in `routes/admin/apps.js:303`); no route checks `If-Match` yet. | Silent loss of work and of pages, in normal flows. | H | M | fix |
 | 3 | **Ship `AdminInput` / `AdminSelect` / `AdminTextarea` (roadmap 3B-3)** with a border, focus ring and bound labels. Migrate the Short link editor, Page editor and Localization first. Quick fix today: `INPUT_CLASS` / `LABEL_CLASS` in `formStyles.js` already carry the border and padding and are used in 54 files; these editors just don't use them. Move `/admin/ui` onto `AdminTabs` (overflow, ARIA, no emoji). | Fixes CU-B6, B17, B18 and B27 in one pass. Today the fields are invisible. | H | S–M | UI |
 | 4 | **Fix translation overrides.** Search all keys whenever a query is typed (CU-B7). Key drafts by language (CU-B8). Show language names in the overrides language select (the default-language card already does, via `languages.<code>`, `AdminLocalizationPage.jsx:52-53`). Then show one row per key with EN/DE columns, grouped by area. | Task 3 dead-ends on first use and can write English into `de.json`. | H | S | fix |
