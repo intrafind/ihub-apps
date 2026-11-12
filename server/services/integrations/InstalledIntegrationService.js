@@ -440,12 +440,12 @@ export class InstalledIntegrationService {
    * more than once, so it must be synchronous and derive everything from that
    * config; do any async work and validation of the payload before calling.
    * Return {@link SKIP} to leave the file as it is. Resolves to what `mutate`
-   * returned. The in-process `_serialize` queue stays: it also orders the
+   * returned, or null when it left the file as it is. The in-process `_serialize` queue stays: it also orders the
    * credential and notification steps around a change.
    */
   async _updateConfig(mutate) {
     let outcome;
-    await configStore.updateJson(INTEGRATIONS_FILE, current => {
+    const { written } = await configStore.updateJson(INTEGRATIONS_FILE, current => {
       const config = this._readConfigForWrite(current);
       outcome = mutate(config);
       if (outcome === SKIP) return undefined;
@@ -459,7 +459,8 @@ export class InstalledIntegrationService {
       }
       return result.data;
     });
-    if (outcome !== SKIP) await configCache.refreshCacheEntry?.(INTEGRATIONS_FILE);
+    if (!written) return null;
+    await configCache.refreshCacheEntry?.(INTEGRATIONS_FILE);
     return outcome;
   }
 
@@ -922,13 +923,13 @@ export class InstalledIntegrationService {
    */
   recordActionBaseline(id, fingerprints) {
     return this._serialize(async () => {
-      const instance = await this._updateConfig(config => {
+      // Null when the baseline already exists and nothing was written.
+      return this._updateConfig(config => {
         const instance = config.installed.find(inst => inst.id === id);
         if (!instance || instance.actions?.fingerprints) return SKIP;
         instance.actions = { ...instance.actions, fingerprints: sortedRecord(fingerprints) };
         return instance;
       });
-      return instance === SKIP ? null : instance;
     });
   }
 
