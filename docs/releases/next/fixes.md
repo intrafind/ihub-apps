@@ -711,3 +711,22 @@ writing a config file now takes the same lock, in this process and across worker
   it starts empty.
 - Two change-history snapshots of one resource saved in the same millisecond no longer overwrite each
   other.
+
+## Groups, Credentials and Providers: Two Saves at Once No Longer Lose a Change
+
+Creating, editing or deleting a group, a credential or a provider read the whole file, changed the copy
+and wrote it back, so two admins (or two workers) saving at the same moment could drop one of the
+changes — a group created a second earlier, an encrypted credential, a provider's API key or enabled
+flag. Each of these routes now checks and changes the file under one lock.
+
+- A content-access grant (Admin › Content access) is no longer reverted by a group edit that ran at the
+  same time, and the other way round. Rolling a group back from the change history takes the same lock.
+- Two admins removing `adminAccess` from the last two admin groups at once can no longer lock everyone
+  out: the "last admin group" check runs on the groups as they are when the change is applied, so the
+  second request is refused.
+- Two requests creating the same credential or provider id now give exactly one success and one
+  conflict instead of both passing the check.
+- Editing a provider no longer reverts another provider's change when this server's cached copy is
+  behind the file, and the first-run setup writes its API key to the stored list instead of the cache.
+- Installing, editing and removing integrations changes `integrations.json` and the managed
+  credentials in `credentials.json` under the same lock, next to the credentials routes.

@@ -100,13 +100,20 @@ async function readStore() {
 }
 
 /**
- * Atomically persist the credential store and refresh the in-memory cache.
- * @param {{ credentials: Record<string, object> }} store
+ * Change the credential store as one locked read-change-write step and refresh
+ * the in-memory cache. `mutate` gets the store as stored (an absent file reads
+ * as `{ credentials: {} }`, a corrupt one throws) and may run more than once,
+ * so it must derive everything from that store. Throwing from it writes nothing.
+ * @param {(store: { credentials: Record<string, object> }) => object|undefined} mutate
  * @returns {Promise<void>}
  */
-async function writeStore(store) {
-  await configStore.writeJson(CREDENTIALS_FILE, store);
-  await configCache.refreshCredentialsCache();
+async function updateStore(mutate) {
+  const { written } = await configStore.updateJson(CREDENTIALS_FILE, current => {
+    const store =
+      current && typeof current === 'object' && current.credentials ? current : { credentials: {} };
+    return mutate(store);
+  });
+  if (written) await configCache.refreshCredentialsCache();
 }
 
 /**
@@ -153,19 +160,21 @@ export default function registerAdminCredentialsRoutes(app) {
     }
     const profile = validation.data;
 
-    const store = await readStore();
-    if (store.credentials?.[profile.id]) {
-      throw new ServiceError('CONFLICT', 'Credential id already exists');
-    }
-
-    // Encrypt secret fields before writing.
+    // Encrypt secret fields before the locked step, so it stays free of side effects.
     const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
     for (const field of secretFields) {
       if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
     }
 
-    store.credentials = { ...store.credentials, [profile.id]: profile };
-    await writeStore(store);
+    // The duplicate check and the write share one locked step, so two creates
+    // of the same id yield exactly one 409 and no create drops another.
+    await updateStore(store => {
+      if (store.credentials?.[profile.id]) {
+        throw new ServiceError('CONFLICT', 'Credential id already exists');
+      }
+      store.credentials = { ...store.credentials, [profile.id]: profile };
+      return store;
+    });
 
     await logAudit({
       req,
@@ -190,41 +199,44 @@ export default function registerAdminCredentialsRoutes(app) {
     const { id } = req.params;
     assertValidId(id, 'credential');
 
-    const store = await readStore();
-    const existing = store.credentials?.[id];
-    if (!existing) throw new ServiceError('NOT_FOUND', 'Credential not found');
-
     // Force the path id onto the body so it cannot be changed via the payload.
     const incoming = { ...req.body, id };
+    let profile;
 
-    // Restore redacted secrets from the existing (encrypted) profile before
-    // validation, so the redaction marker never reaches disk and unchanged
-    // secrets are preserved without re-typing.
-    const incomingSecretFields = SECRET_FIELDS_BY_TYPE[incoming.type] || [];
-    for (const field of incomingSecretFields) {
-      if (incoming[field] === REDACTED) {
-        // Only restore when the type is unchanged (the field maps cleanly).
-        incoming[field] = existing.type === incoming.type ? existing[field] : undefined;
+    await updateStore(store => {
+      const existing = store.credentials?.[id];
+      if (!existing) throw new ServiceError('NOT_FOUND', 'Credential not found');
+
+      // Restore redacted secrets from the existing (encrypted) profile before
+      // validation, so the redaction marker never reaches disk and unchanged
+      // secrets are preserved without re-typing.
+      const candidate = { ...incoming };
+      const incomingSecretFields = SECRET_FIELDS_BY_TYPE[candidate.type] || [];
+      for (const field of incomingSecretFields) {
+        if (candidate[field] === REDACTED) {
+          // Only restore when the type is unchanged (the field maps cleanly).
+          candidate[field] = existing.type === candidate.type ? existing[field] : undefined;
+        }
       }
-    }
 
-    const validation = validateCredential(incoming);
-    if (!validation.success) {
-      throw new ServiceError('VALIDATION_FAILED', 'Invalid credential configuration', {
-        details: validation.errors
-      });
-    }
-    const profile = validation.data;
+      const validation = validateCredential(candidate);
+      if (!validation.success) {
+        throw new ServiceError('VALIDATION_FAILED', 'Invalid credential configuration', {
+          details: validation.errors
+        });
+      }
+      profile = validation.data;
 
-    // Re-encrypt any changed (plaintext) secret fields. Values restored from
-    // disk are already ENC[...] and skipped by the guard.
-    const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
-    for (const field of secretFields) {
-      if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
-    }
+      // Re-encrypt any changed (plaintext) secret fields. Values restored from
+      // disk are already ENC[...] and skipped by the guard.
+      const secretFields = SECRET_FIELDS_BY_TYPE[profile.type] || [];
+      for (const field of secretFields) {
+        if (profile[field]) profile[field] = encryptIfNeeded(profile[field]);
+      }
 
-    store.credentials[id] = profile;
-    await writeStore(store);
+      store.credentials[id] = profile;
+      return store;
+    });
 
     await logAudit({
       req,
@@ -249,11 +261,11 @@ export default function registerAdminCredentialsRoutes(app) {
     const { id } = req.params;
     assertValidId(id, 'credential');
 
-    const store = await readStore();
-    if (!store.credentials?.[id]) throw new ServiceError('NOT_FOUND', 'Credential not found');
-
-    delete store.credentials[id];
-    await writeStore(store);
+    await updateStore(store => {
+      if (!store.credentials?.[id]) throw new ServiceError('NOT_FOUND', 'Credential not found');
+      delete store.credentials[id];
+      return store;
+    });
 
     await logAudit({
       req,

@@ -32,6 +32,13 @@ jest.unstable_mockModule('../../services/config/ConfigStore.js', () => {
     writeJson: async (rel, data) => {
       files.set(rel, structuredClone(data));
     },
+    updateJson: async function (rel, mutate) {
+      const current = read(rel);
+      const next = await mutate(current);
+      if (next === undefined) return { data: current, written: false };
+      await this.writeJson(rel, next);
+      return { data: next, written: true };
+    },
     listDocuments: async ns =>
       [...files.keys()]
         .filter(rel => rel.startsWith(`${ns}/`))

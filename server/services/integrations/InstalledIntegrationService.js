@@ -34,6 +34,9 @@ import { ServiceError } from '../../utils/ServiceError.js';
 
 export const INTEGRATIONS_FILE = 'config/integrations.json';
 const CREDENTIALS_FILE = 'config/credentials.json';
+/** Returned by a `_updateConfig` change to leave the file as it is. */
+const SKIP = Symbol('skip');
+
 const COMPONENT = 'InstalledIntegrationService';
 const RESERVED_INSTANCE_IDS = new Set(['a2a', 'app', 'workflow', 'knowledge']);
 /**
@@ -372,8 +375,7 @@ export class InstalledIntegrationService {
    * The file for a change. An invalid file is an error here, not an empty
    * configuration: writing the fallback back would erase every installation.
    */
-  _readConfigForWrite() {
-    const data = configCache.get(INTEGRATIONS_FILE)?.data;
+  _readConfigForWrite(data = configCache.get(INTEGRATIONS_FILE)?.data) {
     if (!data) return this._withBuiltIns(emptyConfig());
     const result = validateIntegrationsConfig(data);
     if (!result.success) {
@@ -430,6 +432,35 @@ export class InstalledIntegrationService {
     await configStore.writeJson(INTEGRATIONS_FILE, result.data);
     await configCache.refreshCacheEntry?.(INTEGRATIONS_FILE);
     return result.data;
+  }
+
+  /**
+   * Change the stored file as one locked read-change-write step. `mutate` gets
+   * the config as stored (an invalid file throws before it runs) and may run
+   * more than once, so it must be synchronous and derive everything from that
+   * config; do any async work and validation of the payload before calling.
+   * Return {@link SKIP} to leave the file as it is. Resolves to what `mutate`
+   * returned. The in-process `_serialize` queue stays: it also orders the
+   * credential and notification steps around a change.
+   */
+  async _updateConfig(mutate) {
+    let outcome;
+    await configStore.updateJson(INTEGRATIONS_FILE, current => {
+      const config = this._readConfigForWrite(current);
+      outcome = mutate(config);
+      if (outcome === SKIP) return undefined;
+      const result = validateIntegrationsConfig(config);
+      if (!result.success) {
+        throw new IntegrationError('Invalid integrations configuration', {
+          status: 500,
+          code: 'INVALID_CONFIG',
+          details: result.errors
+        });
+      }
+      return result.data;
+    });
+    if (outcome !== SKIP) await configCache.refreshCacheEntry?.(INTEGRATIONS_FILE);
+    return outcome;
   }
 
   list() {
@@ -593,21 +624,25 @@ export class InstalledIntegrationService {
 
   async _storeSecrets(secretsToStore, language = 'en') {
     if (!secretsToStore.length) return;
-    // One read-modify-write of the credential store for all of them: each
-    // secret lands in the same file.
-    const store = (await configStore.readJsonStrict(CREDENTIALS_FILE)) || { credentials: {} };
-    if (!store.credentials) store.credentials = {};
-    for (const { id, value, instance, definition, secretField } of secretsToStore) {
+    // One locked read-change-write of the credential store for all of them:
+    // each secret lands in the same file, next to whatever the credentials
+    // routes wrote meanwhile. The encryption happens before the lock.
+    const records = secretsToStore.map(({ id, value, instance, definition, secretField }) => {
       const field = definition.install.find(f => f.key === secretField);
-      store.credentials[id] = {
+      return {
         id,
         type: 'secret',
         name: `${instanceLabel(definition, instance, language)}: ${localized(field?.title, language, secretField)}`,
         description: `Managed by the installed integration "${instance.id}"`,
         value: tokenStorageService.encryptString(value)
       };
-    }
-    await configStore.writeJson(CREDENTIALS_FILE, store);
+    });
+    await configStore.updateJson(CREDENTIALS_FILE, current => {
+      const store = current || { credentials: {} };
+      if (!store.credentials) store.credentials = {};
+      for (const record of records) store.credentials[record.id] = record;
+      return store;
+    });
     await configCache.refreshCredentialsCache?.();
   }
 
@@ -615,12 +650,12 @@ export class InstalledIntegrationService {
     const ref = instance?.auth?.credentialRef;
     if (!ref?.startsWith(`integration-${instance.id}-`)) return;
     try {
-      const store = (await configStore.readJsonStrict(CREDENTIALS_FILE)) || { credentials: {} };
-      if (store.credentials?.[ref]) {
-        delete store.credentials[ref];
-        await configStore.writeJson(CREDENTIALS_FILE, store);
-        await configCache.refreshCredentialsCache?.();
-      }
+      const { written } = await configStore.updateJson(CREDENTIALS_FILE, current => {
+        if (!current?.credentials?.[ref]) return undefined;
+        delete current.credentials[ref];
+        return current;
+      });
+      if (written) await configCache.refreshCredentialsCache?.();
     } catch (error) {
       logger.warn('Could not remove the managed credential of an integration', {
         component: COMPONENT,
@@ -655,15 +690,15 @@ export class InstalledIntegrationService {
       }
       const { instance, secretsToStore } = await this._prepare(payload);
       await this._storeSecrets(secretsToStore, language);
-      const config = this._readConfigForWrite();
-      if (config.installed.some(inst => inst.id === instance.id)) {
-        throw new IntegrationError(`An integration with id "${instance.id}" exists`, {
-          status: 409,
-          code: 'DUPLICATE_ID'
-        });
-      }
-      config.installed.push(instance);
-      await this.writeConfig(config);
+      await this._updateConfig(config => {
+        if (config.installed.some(inst => inst.id === instance.id)) {
+          throw new IntegrationError(`An integration with id "${instance.id}" exists`, {
+            status: 409,
+            code: 'DUPLICATE_ID'
+          });
+        }
+        config.installed.push(instance);
+      });
       await this._afterChange(instance.id, { before: null, after: instance });
       return instance;
     });
@@ -715,14 +750,14 @@ export class InstalledIntegrationService {
       this._assertSavable(existing);
       const { instance, secretsToStore } = await this._prepare({ ...payload, id }, { existing });
       await this._storeSecrets(secretsToStore, language);
-      const config = this._readConfigForWrite();
-      const index = config.installed.findIndex(inst => inst.id === id);
-      if (index < 0)
-        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-      keepActionReview(instance, config.installed[index]);
-      keepGuidance(instance, config.installed[index], payload);
-      config.installed[index] = instance;
-      await this.writeConfig(config);
+      await this._updateConfig(config => {
+        const index = config.installed.findIndex(inst => inst.id === id);
+        if (index < 0)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        keepActionReview(instance, config.installed[index]);
+        keepGuidance(instance, config.installed[index], payload);
+        config.installed[index] = instance;
+      });
       // Only once the file points elsewhere: a failed write must leave the
       // credential the file still names.
       if (
@@ -760,15 +795,16 @@ export class InstalledIntegrationService {
         if (cleaned.actions && Object.keys(cleaned.actions).length === 0) delete cleaned.actions;
         if (!cleaned.default && !cleaned.actions && !cleaned.newOrChanged) cleaned = null;
       }
-      const config = this._readConfigForWrite();
-      const instance = config.installed.find(inst => inst.id === id);
-      if (!instance)
-        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-      const before = { ...instance };
-      if (cleaned) instance.approval = cleaned;
-      else delete instance.approval;
-      instance.updatedAt = nowIso();
-      await this.writeConfig(config);
+      const { instance, before } = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        const before = { ...instance };
+        if (cleaned) instance.approval = cleaned;
+        else delete instance.approval;
+        instance.updatedAt = nowIso();
+        return { instance, before };
+      });
       await this._afterChange(instance.id, { before, after: instance });
       return instance;
     });
@@ -791,40 +827,41 @@ export class InstalledIntegrationService {
       if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
         throw new IntegrationError('The override must be an object', { code: 'INVALID_OVERRIDE' });
       }
-      const config = this._readConfigForWrite();
-      const instance = config.installed.find(inst => inst.id === id);
-      if (!instance)
-        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-      const merged = { ...(instance.actions?.overrides?.[actionName] || {}) };
-      for (const key of ['description', 'guidance', 'examples', 'sideEffect', 'dataFlow']) {
-        if (!Object.hasOwn(patch, key)) continue;
-        const value =
-          key === 'examples' && Array.isArray(patch[key])
-            ? patch[key].map(withoutEmptyTexts).filter(Boolean)
-            : key === 'description' || key === 'guidance'
-              ? withoutEmptyTexts(patch[key])
-              : patch[key];
-        const empty =
-          value === null ||
-          value === '' ||
-          (Array.isArray(value) && value.length === 0 && key !== 'examples');
-        if (empty) delete merged[key];
-        else merged[key] = value;
-      }
-      const parsed = actionOverrideSchema.strict().safeParse(merged);
-      if (!parsed.success) {
-        throw new IntegrationError('Invalid action override', {
-          code: 'INVALID_OVERRIDE',
-          details: parsed.error.issues
-        });
-      }
-      const before = structuredClone(instance);
-      const overrides = { ...(instance.actions?.overrides || {}) };
-      if (Object.keys(parsed.data).length) overrides[actionName] = parsed.data;
-      else delete overrides[actionName];
-      instance.actions = { ...instance.actions, overrides };
-      instance.updatedAt = nowIso();
-      await this.writeConfig(config);
+      const { instance, before, overrides } = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        const merged = { ...(instance.actions?.overrides?.[actionName] || {}) };
+        for (const key of ['description', 'guidance', 'examples', 'sideEffect', 'dataFlow']) {
+          if (!Object.hasOwn(patch, key)) continue;
+          const value =
+            key === 'examples' && Array.isArray(patch[key])
+              ? patch[key].map(withoutEmptyTexts).filter(Boolean)
+              : key === 'description' || key === 'guidance'
+                ? withoutEmptyTexts(patch[key])
+                : patch[key];
+          const empty =
+            value === null ||
+            value === '' ||
+            (Array.isArray(value) && value.length === 0 && key !== 'examples');
+          if (empty) delete merged[key];
+          else merged[key] = value;
+        }
+        const parsed = actionOverrideSchema.strict().safeParse(merged);
+        if (!parsed.success) {
+          throw new IntegrationError('Invalid action override', {
+            code: 'INVALID_OVERRIDE',
+            details: parsed.error.issues
+          });
+        }
+        const before = structuredClone(instance);
+        const overrides = { ...(instance.actions?.overrides || {}) };
+        if (Object.keys(parsed.data).length) overrides[actionName] = parsed.data;
+        else delete overrides[actionName];
+        instance.actions = { ...instance.actions, overrides };
+        instance.updatedAt = nowIso();
+        return { instance, before, overrides };
+      });
       await this._afterChange(instance.id, { before, after: instance });
       return { instance, override: overrides[actionName] || null };
     });
@@ -857,15 +894,16 @@ export class InstalledIntegrationService {
             : Object.fromEntries(Object.entries(parsed.data).filter(([, text]) => text.trim()));
         if (typeof cleaned === 'object' && Object.keys(cleaned).length === 0) cleaned = null;
       }
-      const config = this._readConfigForWrite();
-      const instance = config.installed.find(inst => inst.id === id);
-      if (!instance)
-        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-      const before = structuredClone(instance);
-      if (cleaned) instance.instructions = cleaned;
-      else delete instance.instructions;
-      instance.updatedAt = nowIso();
-      await this.writeConfig(config);
+      const { instance, before } = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        const before = structuredClone(instance);
+        if (cleaned) instance.instructions = cleaned;
+        else delete instance.instructions;
+        instance.updatedAt = nowIso();
+        return { instance, before };
+      });
       await this._afterChange(instance.id, { before, after: instance });
       return instance;
     });
@@ -884,12 +922,13 @@ export class InstalledIntegrationService {
    */
   recordActionBaseline(id, fingerprints) {
     return this._serialize(async () => {
-      const config = this._readConfigForWrite();
-      const instance = config.installed.find(inst => inst.id === id);
-      if (!instance || instance.actions?.fingerprints) return null;
-      instance.actions = { ...instance.actions, fingerprints: sortedRecord(fingerprints) };
-      await this.writeConfig(config);
-      return instance;
+      const instance = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance || instance.actions?.fingerprints) return SKIP;
+        instance.actions = { ...instance.actions, fingerprints: sortedRecord(fingerprints) };
+        return instance;
+      });
+      return instance === SKIP ? null : instance;
     });
   }
 
@@ -918,20 +957,21 @@ export class InstalledIntegrationService {
           details: { actions: names }
         });
       }
-      const config = this._readConfigForWrite();
-      const instance = config.installed.find(inst => inst.id === id);
-      if (!instance)
-        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-      const accepted = { ...(instance.actions?.fingerprints || {}) };
-      for (const name of reviewed) accepted[name] = current[name];
-      const reviewedAt = nowIso();
-      instance.actions = {
-        ...instance.actions,
-        fingerprints: sortedRecord(accepted),
-        reviewedAt
-      };
-      instance.updatedAt = reviewedAt;
-      await this.writeConfig(config);
+      const instance = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        const accepted = { ...(instance.actions?.fingerprints || {}) };
+        for (const name of reviewed) accepted[name] = current[name];
+        const reviewedAt = nowIso();
+        instance.actions = {
+          ...instance.actions,
+          fingerprints: sortedRecord(accepted),
+          reviewedAt
+        };
+        instance.updatedAt = reviewedAt;
+        return instance;
+      });
       return { instance, reviewed: reviewed.sort(compareCodeUnits) };
     });
   }
@@ -944,14 +984,15 @@ export class InstalledIntegrationService {
           { code: 'ALWAYS_INSTALLED' }
         );
       }
-      const config = this._readConfigForWrite();
-      const instance = config.installed.find(inst => inst.id === id);
-      if (!instance)
-        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-      const before = { ...instance };
-      instance.enabled = Boolean(enabled);
-      instance.updatedAt = nowIso();
-      await this.writeConfig(config);
+      const { instance, before } = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        const before = { ...instance };
+        instance.enabled = Boolean(enabled);
+        instance.updatedAt = nowIso();
+        return { instance, before };
+      });
       await this._afterChange(instance.id, { before, after: instance });
       return instance;
     });
@@ -964,12 +1005,13 @@ export class InstalledIntegrationService {
           code: 'ALWAYS_INSTALLED'
         });
       }
-      const config = this._readConfigForWrite();
-      const instance = config.installed.find(inst => inst.id === id);
-      if (!instance)
-        throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
-      config.installed = config.installed.filter(inst => inst.id !== id);
-      await this.writeConfig(config);
+      const instance = await this._updateConfig(config => {
+        const instance = config.installed.find(inst => inst.id === id);
+        if (!instance)
+          throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
+        config.installed = config.installed.filter(inst => inst.id !== id);
+        return instance;
+      });
       await this._removeManagedCredential(instance);
       await this._afterChange(instance.id, { before: instance, after: null });
       return instance;
