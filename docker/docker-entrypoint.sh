@@ -77,7 +77,7 @@ display_startup_info() {
     log_info "Node.js version: $(node --version)"
     log_info "Environment: ${NODE_ENV:-development}"
     log_info "Port: ${PORT:-3000}"
-    log_info "Workers: ${WORKERS:-1}"
+    log_info "Workers: ${WORKERS:-${NUM_WORKERS:-not set (the server sizes them from the container memory limit and logs the decision)}}"
     log_info "User: $(whoami) (UID: $(id -u))"
     log_info "Working directory: $(pwd)"
     log_info "========================================"

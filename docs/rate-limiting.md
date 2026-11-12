@@ -219,7 +219,7 @@ All rate limiters inherit from the `default` configuration. You only need to spe
 
 ### Several worker processes
 
-iHub runs several worker processes (`WORKERS`, 4 by default) and spreads connections across them.
+iHub runs several worker processes (`WORKERS`; 4 by default, or sized from the container memory limit) and spreads connections across them.
 
 - **Auth API, OAuth API and OAuth token API** limits count across all workers: the primary process holds the counters and every worker asks it. A limit of 30 means 30 attempts per window, whichever worker each attempt reaches. If the primary does not answer within half a second, a worker counts on its own for that request.
 - **Public, admin, inference and default** limits count per worker, so a client can make up to `WORKERS ×` the configured number of requests per window. Size them accordingly, or enforce them at the ingress.
