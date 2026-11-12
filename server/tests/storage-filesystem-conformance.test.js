@@ -165,16 +165,15 @@ describe('filesystem storage provider: create-only writes (filesystem-specific)'
     }
   });
 
-  it('lets only one create-only write win even when the advisory lock is not held', async () => {
+  it('fails closed instead of writing when the advisory lock cannot be had', async () => {
     const { provider, cleanup } = await createProvider();
     await provider.initialize();
     try {
-      // `withFileLock` runs its critical section anyway once its wait expires
-      // rather than failing, which is right for its other callers and fatal
-      // here: create-only is a read followed by a write, so two writers that
-      // both give up waiting both see "absent" and both write. Holding the
-      // lock from outside puts both writers in that state without a second
-      // process, at the cost of the lock's full 5 s wait budget.
+      // `withFileLock` used to run its critical section anyway once its wait
+      // expired: two create-only writers both read "absent" and both wrote.
+      // It now throws `LockTimeoutError` (503), so neither writes. Holding the
+      // lock from outside puts both writers there without a second process, at
+      // the cost of the lock's full 5 s wait budget.
       const lockPath = path.join(provider.baseDir, 'chats', '.locks', 'contended.lock');
       await fs.mkdir(path.dirname(lockPath), { recursive: true });
       await fs.writeFile(lockPath, JSON.stringify({ pid: -1, at: new Date().toISOString() }));
@@ -203,6 +202,35 @@ describe('filesystem storage provider: create-only writes (filesystem-specific)'
         await fs.rm(lockPath, { force: true });
       }
 
+      assert.deepEqual(
+        settled.map(r => r.status === 'rejected' && r.reason?.code),
+        ['LOCK_TIMEOUT', 'LOCK_TIMEOUT'],
+        'both writers fail closed'
+      );
+      assert.equal(await provider.documents.get('chats', 'contended'), null, 'nothing was written');
+      for (const ownerId of ['ann', 'bob']) {
+        assert.deepEqual(
+          await provider.documents
+            .list('chats', { ownerId })
+            .then(page => page.items.map(item => item.key)),
+          [],
+          `and the owner index of ${ownerId} claims nothing`
+        );
+      }
+    } finally {
+      await provider.shutdown();
+      await cleanup();
+    }
+  });
+
+  it('lets only one of two concurrent create-only writes win', async () => {
+    const { provider, cleanup } = await createProvider();
+    await provider.initialize();
+    try {
+      const settled = await Promise.allSettled([
+        provider.documents.put('chats', 'race', { by: 'first' }, { etag: null, ownerId: 'ann' }),
+        provider.documents.put('chats', 'race', { by: 'second' }, { etag: null, ownerId: 'bob' })
+      ]);
       const created = settled.filter(r => r.status === 'fulfilled');
       assert.equal(
         created.length,
@@ -214,16 +242,8 @@ describe('filesystem storage provider: create-only writes (filesystem-specific)'
         'ETAG_MISMATCH',
         'and the other is told the document already exists'
       );
-
-      const stored = await provider.documents.get('chats', 'contended');
+      const stored = await provider.documents.get('chats', 'race');
       assert.equal(stored.data.by, created[0].value.data.by, 'the winner is what is on disk');
-      assert.deepEqual(
-        await provider.documents
-          .list('chats', { ownerId: created[0].value.ownerId === 'ann' ? 'bob' : 'ann' })
-          .then(page => page.items.map(item => item.key)),
-        [],
-        "and the refused creator's owner index does not claim the winner's document"
-      );
     } finally {
       await provider.shutdown();
       await cleanup();

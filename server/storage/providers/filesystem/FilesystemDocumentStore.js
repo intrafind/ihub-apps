@@ -484,10 +484,11 @@ export class FilesystemDocumentStore extends DocumentStore {
           // O_EXCL decides the create, not the read above, for two reasons
           // that the read cannot cover on its own.
           //
-          // `withFileLock` runs its critical section anyway once its 5 s wait
-          // expires, so two concurrent creates can both read "absent" and both
-          // write, and the second silently replaces the first — with both told
-          // they created it.
+          // The advisory lock is the first line of defence, but it is advisory
+          // and single-machine (a lease taken over from a stalled holder, a
+          // shared volume whose O_EXCL is not honoured): if two creates ever
+          // both read "absent", they would both write, and the second would
+          // silently replace the first — with both told they created it.
           //
           // And `_readEnvelope` answers null for a file that exists but does
           // not parse, so a create-only write over a truncated document would

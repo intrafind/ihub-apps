@@ -329,10 +329,10 @@ export class RawDocumentStore extends DocumentStore {
 
         await fs.mkdir(this._dirs.get(ns), { recursive: true });
         if (expectedEtag === null) {
-          // O_EXCL decides a create, not the read above. `withFileLock` runs
-          // its critical section anyway once its 5 s wait expires — sound for
-          // its other callers, fatal here: two admins POSTing the same app id
-          // would both read "absent" and both write, and the second would
+          // O_EXCL decides a create, not the read above. The advisory lock
+          // fails closed on timeout now, but it stays advisory: a lease taken
+          // over from a stalled holder would let two admins POSTing the same
+          // app id both read "absent" and both write, and the second would
           // silently replace the first with no conflict reported to either.
           // That is the exact race `atomicCreateJSON` was written to close,
           // and this store took over from it. `wx` is the same syscall pair

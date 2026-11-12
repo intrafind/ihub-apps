@@ -27,13 +27,15 @@
 import { promises as fs, existsSync, readFileSync, statfsSync } from 'node:fs';
 import { createWriteStream } from 'node:fs';
 import { basename, extname, isAbsolute, join, resolve, sep } from 'node:path';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { pipeline } from 'node:stream/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getRootDir } from '../pathUtils.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 import { httpFetch } from '../utils/httpConfig.js';
+import { acquireLease, releaseLease, startLeaseRenewal } from '../utils/fileLock.js';
+import { LockTimeoutError } from '../storage/errors.js';
 import { getContentsPath } from '../utils/contentsPath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import {
@@ -363,54 +365,49 @@ export async function getUpdateStatusAnywhere() {
 /**
  * Acquire update lock to prevent concurrent operations. The lock is a file in
  * the installation root, so it also holds across cluster workers and against
- * the CLI.
+ * the CLI. It is the shared lease from `utils/fileLock.js`: created exclusively,
+ * renewed by a heartbeat while the operation runs, taken over only by one
+ * waiter (`rename`) once the heartbeat stopped, and released only while it is
+ * still ours. Never waits: a held lock is a 409 at once.
+ *
+ * @returns {Promise<{lockPath: string, owner: string, stop: () => void}>} Handle for {@link releaseLock}
  */
 async function acquireLock() {
   const lockPath = join(getRootDir(), UPDATE_LOCK_FILE);
-  const lockContent = () => JSON.stringify({ timestamp: Date.now(), pid: process.pid });
-  // Exclusive create ('wx'): two workers, or a worker and the CLI, can never
-  // both get it. Staleness is the file's mtime, which the heartbeat touches:
-  // reading the content raced with a rewrite in progress (an empty file
-  // parsed as "stale"), and a rewrite could recreate a just-released lock.
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await fs.writeFile(lockPath, lockContent(), { flag: 'wx' });
-      break;
-    } catch (error) {
-      if (error.code !== 'EEXIST' || attempt > 0) {
-        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
-      }
-      let stat;
-      try {
-        stat = await fs.stat(lockPath);
-      } catch (statError) {
-        if (statError.code === 'ENOENT') continue; // released meanwhile: try once more
-        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
-      }
-      if (Date.now() - stat.mtimeMs < LOCK_STALE_MS) {
-        throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
-      }
-      logger.warn('Removing stale update lock', { component: 'UpdateService' });
-      await fs.rm(lockPath, { force: true });
+  const owner = randomUUID();
+  try {
+    await acquireLease(lockPath, owner, {
+      ttlMs: LOCK_STALE_MS,
+      waitMs: 0,
+      pollMs: 0,
+      name: UPDATE_LOCK_FILE,
+      component: 'UpdateService'
+    });
+  } catch (error) {
+    if (error instanceof LockTimeoutError) {
+      throw new UpdateRequestError('Another update operation is in progress', { status: 409 });
     }
+    throw error;
   }
   // Long operations (a slow upload being staged, a large extraction) keep it
-  // fresh. utimes never creates the file, so a late tick cannot revive it.
-  const heartbeat = setInterval(() => {
-    const now = new Date();
-    fs.utimes(lockPath, now, now).catch(() => {});
-  }, 60 * 1000);
-  heartbeat.unref();
-  return heartbeat;
+  // fresh; the heartbeat opens the file `r+` and checks the owner, so a late
+  // tick can neither revive a released lock nor refresh someone else's.
+  const stop = startLeaseRenewal(
+    lockPath,
+    owner,
+    LOCK_STALE_MS,
+    60 * 1000,
+    UPDATE_LOCK_FILE,
+    undefined,
+    'UpdateService'
+  );
+  return { lockPath, owner, stop };
 }
 
-async function releaseLock(heartbeat) {
-  if (heartbeat) clearInterval(heartbeat);
-  try {
-    await fs.unlink(join(getRootDir(), UPDATE_LOCK_FILE));
-  } catch {
-    // ignore
-  }
+async function releaseLock(lock) {
+  if (!lock) return;
+  lock.stop();
+  await releaseLease(lock.lockPath, lock.owner, UPDATE_LOCK_FILE, 'UpdateService');
 }
 
 // ------------------------------------------------------- GitHub source ----
