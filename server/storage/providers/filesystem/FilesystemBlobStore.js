@@ -38,6 +38,9 @@ import { assertValidKey, assertValidNamespace, containedPath } from './paths.js'
 /** Directory holding every blob namespace, relative to the provider's base. */
 export const BLOB_DIR = 'blobs';
 
+/** Name prefix of a blob being deleted (renamed aside, then unlinked); never a key. */
+const DELETING_PREFIX = '.deleting_';
+
 const DEFAULT_LIMIT = 100;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 1000;
@@ -156,12 +159,22 @@ export class FilesystemBlobStore extends BlobStore {
     }
   }
 
-  /** @inheritdoc */
+  /**
+   * @inheritdoc
+   *
+   * The blob is first renamed aside, then unlinked: of two concurrent
+   * deletes only one rename succeeds. `unlink` alone is no such claim — on
+   * macOS (APFS) two unlinks of the same file racing each other both report
+   * success.
+   */
   async delete(ns, key) {
     const file = this._path(ns, key);
+    const claimed = path.join(
+      path.dirname(file),
+      `${DELETING_PREFIX}${crypto.randomBytes(8).toString('hex')}`
+    );
     try {
-      await fs.unlink(file);
-      return true;
+      await fs.rename(file, claimed);
     } catch (error) {
       if (error.code === 'ENOENT') return false;
       throw new StorageError(`Failed to delete blob ${ns}/${key}`, {
@@ -169,6 +182,18 @@ export class FilesystemBlobStore extends BlobStore {
         cause: error
       });
     }
+    try {
+      await fs.unlink(claimed);
+    } catch (error) {
+      // The blob is gone from its key either way; a leftover is skipped by `list`.
+      if (error.code !== 'ENOENT') {
+        throw new StorageError(`Failed to delete blob ${ns}/${key}`, {
+          code: 'IO_ERROR',
+          cause: error
+        });
+      }
+    }
+    return true;
   }
 
   /** @inheritdoc */
@@ -183,7 +208,7 @@ export class FilesystemBlobStore extends BlobStore {
       if (error.code === 'ENOENT') return { items: [], nextCursor: null };
       throw new StorageError(`Failed to list blobs in ${ns}`, { code: 'IO_ERROR', cause: error });
     }
-    let keys = names.sort(compareKeys);
+    let keys = names.filter(name => !name.startsWith(DELETING_PREFIX)).sort(compareKeys);
     if (typeof prefix === 'string' && prefix.length > 0) {
       keys = keys.filter(key => key.startsWith(prefix));
     }
