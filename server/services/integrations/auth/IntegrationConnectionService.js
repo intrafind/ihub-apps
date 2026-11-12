@@ -263,9 +263,11 @@ export class IntegrationConnectionService {
   /**
    * Write a connection record (validated; an invalid one is logged and not written).
    * @param {Object} record
+   * @param {{etag?: string}} [options] - `etag`: write only over the document with this etag
+   *   (throws `ETAG_MISMATCH` when it changed meanwhile)
    * @returns {Promise<Object|null>} The stored record
    */
-  async putConnection(record) {
+  async putConnection(record, { etag } = {}) {
     const now = this._iso();
     const candidate = {
       issuer: null,
@@ -291,7 +293,10 @@ export class IntegrationConnectionService {
     }
     const stored = parsed.data;
     const ownerId = stored.principal.type === 'user' ? stored.principal.id : 'system';
-    await this._docs().put(CONNECTIONS_NAMESPACE, stored.id, stored, { ownerId });
+    await this._docs().put(CONNECTIONS_NAMESPACE, stored.id, stored, {
+      ownerId,
+      ...(etag ? { etag } : {})
+    });
     return stored;
   }
 
@@ -342,11 +347,25 @@ export class IntegrationConnectionService {
     }
   }
 
-  /** Merge fields into a record; no-op when there is none. */
+  /**
+   * Merge fields into a record; no-op when there is none.
+   *
+   * The merge is written only over the document it was computed from (etag
+   * compare-and-set), retried on a fresh read when another worker wrote first:
+   * a `lastUsedAt` touch computed from an old copy used to overwrite a status
+   * (`expired`, revoked, an error) that had just been written.
+   */
   async updateConnection(id, patch) {
-    const existing = await this.getConnection(id);
-    if (!existing) return null;
-    return this.putConnection({ ...existing, ...patch });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const doc = await this._docs().get(CONNECTIONS_NAMESPACE, id);
+      if (!doc?.data) return null;
+      try {
+        return await this.putConnection({ ...doc.data, ...patch }, { etag: doc.etag });
+      } catch (error) {
+        if (error?.code !== 'ETAG_MISMATCH') throw error;
+      }
+    }
+    throw Object.assign(new Error('Connection record kept changing'), { code: 'ETAG_MISMATCH' });
   }
 
   async _deleteConnection(id) {
