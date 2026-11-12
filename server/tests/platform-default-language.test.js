@@ -44,7 +44,7 @@ describe('platform.defaultLanguage', () => {
 
   it('is named in the admin save merge, so a save is not silently reverted', async () => {
     const source = await routeSource();
-    const merge = /const mergedConfig = \{([\s\S]*?)\n    \};/.exec(source);
+    const merge = /mergedConfig = \{([\s\S]*?)\n\s+\};/.exec(source);
     assert.ok(merge, 'could not locate mergedConfig in routes/admin/configs.js');
     assert.match(
       merge[1],

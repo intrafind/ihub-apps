@@ -50,6 +50,15 @@ jest.unstable_mockModule('../configCache.js', () => ({
 
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
+    // Same read-change-write the real store does for updateJson.
+    updateJson: async (_path, mutate) => {
+      const current = state.platform;
+      const next = await mutate(current === null ? null : structuredClone(current));
+      if (next === undefined) return { data: current, written: false };
+      state.writes.push(next);
+      state.platform = next;
+      return { data: next, written: true };
+    },
     readJsonStrict: async () => JSON.parse(JSON.stringify(state.platform)),
     writeJson: async (_file, data) => {
       state.writes.push(data);

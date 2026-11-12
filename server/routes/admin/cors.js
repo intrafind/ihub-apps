@@ -6,7 +6,7 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import configStore from '../../services/config/ConfigStore.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const DEFAULT_CORS_CONFIG = {
   origin: [],
@@ -132,12 +132,9 @@ export default function registerAdminCorsRoutes(app) {
       }
     }
 
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
-    platformConfig.cors = { origin, credentials, maxAge, methods, allowedHeaders };
-
-    await configStore.writeJson('config/platform.json', platformConfig);
+    const { data: platformConfig } = await updatePlatform({
+      cors: { origin, credentials, maxAge, methods, allowedHeaders }
+    });
     await configCache.refreshCacheEntry('config/platform.json');
 
     logger.info('CORS configuration updated', {

@@ -3,7 +3,6 @@
 
 import { z } from 'zod';
 import config from '../../config.js';
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -11,6 +10,7 @@ import { logAudit } from '../../services/AuditLogService.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import logger from '../../utils/logger.js';
 import { LLM_TIMEOUT_KEYS, LLM_TIMEOUT_MAX_MS } from '../../services/llmProviders.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 /**
  * Admin → Providers → "Timeouts for all providers": read and change the
@@ -138,14 +138,14 @@ export default function registerAdminLlmTimeoutRoutes(app) {
 
     // The stored file, not the cache: the cache holds env overrides and
     // decrypted secrets, which must not be written back.
-    const stored = (await configStore.readJsonStrict(PLATFORM_FILE)) || {};
-    const llm = { ...stored.llm };
-    for (const [key, value] of changes) {
-      if (value === null) delete llm[key];
-      else llm[key] = value;
-    }
-    stored.llm = llm;
-    await configStore.writeJson(PLATFORM_FILE, stored);
+    await updatePlatform(stored => {
+      const llm = { ...stored.llm };
+      for (const [key, value] of changes) {
+        if (value === null) delete llm[key];
+        else llm[key] = value;
+      }
+      stored.llm = llm;
+    });
     await configCache.refreshCacheEntry(PLATFORM_FILE);
 
     const summary = changes.map(([key, value]) => `${key}=${value ?? 'default'}`).join(', ');

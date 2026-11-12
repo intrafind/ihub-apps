@@ -24,7 +24,6 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { assertValidId } from '../../utils/pathSecurity.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
-import configStore from '../../services/config/ConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
 import { isStorageReady } from '../../storage/bootstrap.js';
@@ -37,6 +36,7 @@ import * as tasks from '../../services/scheduler/tasks/taskService.js';
 import { getScheduler } from '../../services/scheduler/SchedulerService.js';
 import { getScheduledTaskRepository } from '../../services/scheduler/tasks/ScheduledTaskRepository.js';
 import { requestLanguage, runDeletionFromQuery } from '../scheduledTasks.js';
+import { updatePlatform, SKIP } from '../../utils/platformConfigStore.js';
 
 const int = (min, max) => z.number().int().min(min).max(max);
 
@@ -154,17 +154,19 @@ export default function registerAdminScheduledTaskRoutes(app) {
    */
   app.put(`${base}/settings`, adminAuth, async (req, res) => {
     const parsed = { data: settingsBodySchema.parse(req.body || {}) };
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
-    const current = scheduledTaskSettings(platformConfig);
-    const changed = [];
-    for (const [key, value] of Object.entries(parsed.data)) {
-      if (current[key] === value) continue;
-      platformConfig.scheduledTasks = { ...platformConfig.scheduledTasks, [key]: value };
-      changed.push(`scheduledTasks.${key}`);
-    }
+    // Compared with the stored file under the update lock; reruns on conflict.
+    let changed = [];
+    const { data: platformConfig } = await updatePlatform(platformConfig => {
+      const current = scheduledTaskSettings(platformConfig);
+      changed = [];
+      for (const [key, value] of Object.entries(parsed.data)) {
+        if (current[key] === value) continue;
+        platformConfig.scheduledTasks = { ...platformConfig.scheduledTasks, [key]: value };
+        changed.push(`scheduledTasks.${key}`);
+      }
+      if (changed.length === 0) return SKIP;
+    });
     if (changed.length > 0) {
-      await configStore.writeJson('config/platform.json', platformConfig);
       await configCache.refreshCacheEntry('config/platform.json');
       logAudit({
         req,

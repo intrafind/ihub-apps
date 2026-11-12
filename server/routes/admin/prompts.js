@@ -32,6 +32,7 @@ import {
   describeInstalledIntegrations
 } from '../../services/appGenerator.js';
 import { sendCreated, segment } from '../../utils/created.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 /**
  * The file a prompt id lives in.
@@ -613,16 +614,15 @@ export default function registerAdminPromptsRoutes(app) {
 
   app.put(buildServerPath('/api/admin/prompts/user-settings'), adminAuth, async (req, res) => {
     const settings = userPromptSettingsBodySchema.parse(req.body || {});
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
     const { sharing, ...rest } = settings;
-    const stored = platformConfig.userPrompts || {};
-    platformConfig.userPrompts = {
-      ...stored,
-      ...rest,
-      sharing: { ...stored.sharing, ...sharing }
-    };
-    await configStore.writeJson('config/platform.json', platformConfig);
+    const { data: platformConfig } = await updatePlatform(platformConfig => {
+      const stored = platformConfig.userPrompts || {};
+      platformConfig.userPrompts = {
+        ...stored,
+        ...rest,
+        sharing: { ...stored.sharing, ...sharing }
+      };
+    });
     await configCache.refreshCacheEntry('config/platform.json');
     await logAudit({
       req,

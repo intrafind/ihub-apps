@@ -24,6 +24,15 @@ jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
 }));
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
+    // Same read-change-write the real store does for updateJson.
+    updateJson: async (_path, mutate) => {
+      if (state.readError) throw state.readError;
+      const current = state.platform;
+      const next = await mutate(current === null ? null : structuredClone(current));
+      if (next === undefined) return { data: current, written: false };
+      state.written = next;
+      return { data: next, written: true };
+    },
     readJsonStrict: async () => {
       if (state.readError) throw state.readError;
       return state.platform;

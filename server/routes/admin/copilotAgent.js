@@ -5,7 +5,6 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { ZipArchive } from 'archiver';
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { getRootDir } from '../../pathUtils.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -35,6 +34,7 @@ import {
   isGuid,
   validateCopilotAgentConfig
 } from '../../utils/copilotAgentPackage.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 /**
  * Admin routes for the Microsoft 365 Copilot agent (see
@@ -67,9 +67,7 @@ const PLATFORM_FILE = 'config/platform.json';
  * @returns {Promise<void>}
  */
 async function updateStoredPlatform(mutate) {
-  const stored = (await configStore.readJsonStrict(PLATFORM_FILE)) || {};
-  mutate(stored);
-  await configStore.writeJson(PLATFORM_FILE, stored);
+  await updatePlatform(mutate);
   await configCache.refreshCacheEntry(PLATFORM_FILE);
 }
 

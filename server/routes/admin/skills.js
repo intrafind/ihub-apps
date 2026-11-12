@@ -27,7 +27,6 @@ import {
 } from '../../services/skillLoader.js';
 import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import configStore from '../../services/config/ConfigStore.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { loadUsers } from '../../utils/userManager.js';
@@ -49,6 +48,7 @@ import {
   MAX_SKILL_DESCRIPTION_LENGTH,
   updateSkillOverride
 } from '../../services/skills/skillOverrides.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 /** `PUT /api/admin/skills/:name`: the settings an administrator may change. */
 const skillSettingsBodySchema = z
@@ -580,16 +580,15 @@ export default function registerAdminSkillsRoutes(app) {
 
   app.put(buildServerPath('/api/admin/user-skills/settings'), adminAuth, async (req, res) => {
     const settings = userSkillSettingsSchema.parse(req.body || {});
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
     const { sharing, ...rest } = settings;
-    const stored = platformConfig.userSkills || {};
-    platformConfig.userSkills = {
-      ...stored,
-      ...rest,
-      sharing: { ...stored.sharing, ...sharing }
-    };
-    await configStore.writeJson('config/platform.json', platformConfig);
+    const { data: platformConfig } = await updatePlatform(platformConfig => {
+      const stored = platformConfig.userSkills || {};
+      platformConfig.userSkills = {
+        ...stored,
+        ...rest,
+        sharing: { ...stored.sharing, ...sharing }
+      };
+    });
     await configCache.refreshCacheEntry('config/platform.json');
     await logAudit({
       req,

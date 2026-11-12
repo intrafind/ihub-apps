@@ -21,7 +21,6 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { runRollups } from '../../services/UsageAggregator.js';
 import { readDayEvents, flushQueue } from '../../services/UsageEventLog.js';
@@ -38,6 +37,7 @@ import {
 import { readFeedbackPage } from '../../feedbackStorage.js';
 import { queryCalls } from '../../services/usage/callLog.js';
 import { escapeCsvField } from '../../utils/csv.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -220,10 +220,8 @@ export default function registerAdminUsageRoutes(app) {
     // read or parsed makes `updateJson` throw: readJson cannot tell that from
     // "missing", and writing a file built from `{}` over it would wipe every
     // other platform setting on a transient read error.
-    await configStore.updateJson('config/platform.json', current => {
-      const platform = current && typeof current === 'object' ? current : {};
+    await updatePlatform(platform => {
       platform.features = { ...(platform.features || {}), usageTrackingMode: trackingMode };
-      return platform;
     });
     await configCache.refreshCacheEntry('config/platform.json');
     res.json({ trackingMode });

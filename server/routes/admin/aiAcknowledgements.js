@@ -14,7 +14,6 @@
  * off, the actions that delete or reset acknowledgements answer 403 FEATURE_DISABLED
  * (the acknowledgements stay as evidence); the read-only export stays available.
  */
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -29,6 +28,7 @@ import {
   buildCsvRows,
   usersFilePath
 } from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const PLATFORM_FILE = 'config/platform.json';
 
@@ -39,8 +39,7 @@ const PLATFORM_FILE = 'config/platform.json';
  */
 async function updateAcknowledgementState(change) {
   let result;
-  await configStore.updateJson(PLATFORM_FILE, platform => {
-    const current = platform && typeof platform === 'object' ? platform : {};
+  await updatePlatform(current => {
     const block =
       current.aiAcknowledgement && typeof current.aiAcknowledgement === 'object'
         ? current.aiAcknowledgement

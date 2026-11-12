@@ -58,9 +58,11 @@ jest.unstable_mockModule('../configCache.js', () => ({
 
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
-    writeJson: async () => {
+    updateJson: async (_path, mutate) => {
       state.calls.push('platform');
       if (state.platformError) throw state.platformError;
+      const next = await mutate({});
+      return { data: next, written: true };
     }
   }
 }));

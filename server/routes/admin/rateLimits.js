@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { z } from 'zod';
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { RATE_LIMITER_KEYS, resolveRateLimitConfigs } from '../../middleware/rateLimiting.js';
@@ -10,6 +9,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 /**
  * Admin → Security → Rate limits: read and change the limits in the
@@ -163,19 +163,19 @@ export default function registerAdminRateLimitRoutes(app) {
 
     // The stored file, not the cache: the cache holds env overrides and
     // decrypted secrets, which must not be written back.
-    const stored = (await configStore.readJsonStrict(PLATFORM_FILE)) || {};
-    const rateLimit = { ...stored.rateLimit };
-    for (const [key, { windowMs, limit, counts }] of changes) {
-      rateLimit[key] = {
-        ...rateLimit[key],
-        windowMs,
-        limit,
-        skipSuccessfulRequests: counts === 'failed',
-        skipFailedRequests: counts === 'successful'
-      };
-    }
-    stored.rateLimit = rateLimit;
-    await configStore.writeJson(PLATFORM_FILE, stored);
+    await updatePlatform(stored => {
+      const rateLimit = { ...stored.rateLimit };
+      for (const [key, { windowMs, limit, counts }] of changes) {
+        rateLimit[key] = {
+          ...rateLimit[key],
+          windowMs,
+          limit,
+          skipSuccessfulRequests: counts === 'failed',
+          skipFailedRequests: counts === 'successful'
+        };
+      }
+      stored.rateLimit = rateLimit;
+    });
     await configCache.refreshCacheEntry(PLATFORM_FILE);
 
     const keys = changes.map(([key]) => key);

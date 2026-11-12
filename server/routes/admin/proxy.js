@@ -34,6 +34,7 @@ import {
   redactUrlSecrets,
   shouldIgnoreSSLForURL
 } from '../../utils/httpConfig.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const PLATFORM_FILE = 'config/platform.json';
 
@@ -462,30 +463,31 @@ export default function registerAdminProxyRoutes(app) {
       );
     }
 
-    // readJsonStrict, not readJson: a read that fails must not be mistaken for
-    // "there was nothing here" and turn this save into a full file replacement.
-    const platformConfig = await configStore.readJsonStrict(PLATFORM_FILE);
-    if (!platformConfig) throw new Error(`${PLATFORM_FILE} is missing`);
-    const existing = platformConfig.proxy || {};
+    // updatePlatform reads the stored file strictly: a read that fails must not
+    // be mistaken for "there was nothing here" and turn this save into a full
+    // file replacement.
+    let nextProxy;
+    await updatePlatform(platformConfig => {
+      const existing = platformConfig.proxy || {};
 
-    // Masked passwords come back from the UI unchanged; put the stored one back
-    // before anything is written or encrypted.
-    const http = restoreProxyUrlSecret(parsed.data.http.trim(), decryptStored(existing.http));
-    const https = restoreProxyUrlSecret(parsed.data.https.trim(), decryptStored(existing.https));
+      // Masked passwords come back from the UI unchanged; put the stored one back
+      // before anything is written or encrypted.
+      const http = restoreProxyUrlSecret(parsed.data.http.trim(), decryptStored(existing.http));
+      const https = restoreProxyUrlSecret(parsed.data.https.trim(), decryptStored(existing.https));
 
-    const nextProxy = {
-      ...existing,
-      enabled: parsed.data.enabled,
-      http: encryptForStorage(http),
-      https: encryptForStorage(https),
-      // Stored as sent: a comma-separated string and an array are both valid,
-      // and getProxyConfig() normalizes either one to an array.
-      noProxy: parsed.data.noProxy,
-      urlPatterns: parsed.data.urlPatterns
-    };
+      nextProxy = {
+        ...existing,
+        enabled: parsed.data.enabled,
+        http: encryptForStorage(http),
+        https: encryptForStorage(https),
+        // Stored as sent: a comma-separated string and an array are both valid,
+        // and getProxyConfig() normalizes either one to an array.
+        noProxy: parsed.data.noProxy,
+        urlPatterns: parsed.data.urlPatterns
+      };
 
-    platformConfig.proxy = nextProxy;
-    await configStore.writeJson(PLATFORM_FILE, platformConfig);
+      platformConfig.proxy = nextProxy;
+    });
     await configCache.refreshCacheEntry(PLATFORM_FILE);
 
     const response = buildConfigResponse(nextProxy);
