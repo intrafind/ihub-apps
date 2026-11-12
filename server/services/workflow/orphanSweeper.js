@@ -9,7 +9,7 @@
  * state is left with `status: "running"` and the execution registry shows the
  * workflow as still active forever.
  *
- * On every boot we walk the stored workflow states and rewrite any orphaned
+ * On every boot we walk the unfinished workflow states and rewrite any orphaned
  * executions to `status: "failed"` with `reason: "server_restart"` so users see
  * a final state in the UI and "My Executions" stops listing dead runs as
  * running.
@@ -97,11 +97,12 @@ export async function sweepOrphanedExecutions({
   }
 
   const store = repository || getWorkflowStateRepository();
-  // Metadata only: the guard below rejects most candidates without ever
-  // needing the state, and a state can carry a whole workflow definition.
+  // Only the unfinished executions, from the repository's index of them: a
+  // finished run can never be orphaned, so the workflow history — states that
+  // can carry a whole workflow definition each — is never opened.
   const items = [];
   for (const prefix of ORPHAN_ID_PREFIXES) {
-    const page = await store.listSummaries({ prefix });
+    const page = await store.listActive({ prefix });
     if (page.truncated) {
       logger.warn('Orphan sweep stopped scanning at the cap', {
         component: 'OrphanSweeper',
@@ -125,8 +126,10 @@ export async function sweepOrphanedExecutions({
     if (stateManager.activeStates?.has(executionId)) continue;
 
     const state = await store.read(executionId);
-    if (!state) continue;
+    if (!(await store.confirmActive(executionId, state))) continue;
 
+    // `paused` is unfinished too — a run waiting for a person's approval —
+    // and is left alone however old it is.
     if (!ORPHAN_STATUSES.has(state.status)) continue;
 
     // A chat's workflow runs on the worker that took the chat's request, not

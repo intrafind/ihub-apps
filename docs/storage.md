@@ -27,8 +27,9 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
+| `workflow-active`           | the executions whose last checkpoint is unfinished (running, pending, paused), so the resume and the orphan sweep at startup read only those; kept on every checkpoint write, built once from `workflow-state` on the first start | – | [Workflows](workflows.md) |
 | `integration-conversations` | the iAssistant conversation a chat maps to                   | –                           | –                                        |
-| `runtime-imports`           | markers saying a one-time import (migration V219, the connection re-index) has already run | –            | [Run Ledger](run-ledger.md)              |
+| `runtime-imports`           | markers saying a one-time job (migration V219, the connection re-index, the `workflow-active` build, the execution-record backfill) has already run | –            | [Run Ledger](run-ledger.md)              |
 | `provenance-records`        | one document per content hash with its newest provenance records (never the text), removed after `provenance.retentionDays` | – | [Provenance Records](provenance.md) |
 | `provenance-meta`           | the installation ID, minted once                              | –                           | [Provenance Records](provenance.md) |
 | `a2a-tasks`                 | tasks of the inbound A2A endpoint, kept 24 hours after they finish | the calling principal | [MCP Integration](mcp-integration.md) |
@@ -526,18 +527,26 @@ The envelope is written with `atomicWriteJSON`:
 
 ```
 {
-  "v": 1,
+  "v": 2,
   "key": "…",
   "ownerId": "…" | null,
   "contentType": "application/json",
   "createdAt": "ISO",
   "updatedAt": "ISO",
+  "etag": "<sha256 hex of the canonical JSON of data>",
+  "size": 123,
   "data": {}
 }
 ```
 
-`etag` and `size` are recomputed on every read, never stored, so they cannot
-drift from the data.
+`etag` and `size` are minted by `put` over the canonical serialization of
+`data` (the value the contract defines) and stored before `data`. Every read
+reports the stored values, and a metadata-only read (`listMetadata`,
+`list`/`scan` with `includeData: false`, and the owner/etag check inside `put`
+and `delete`) reads only the start of the file and never parses the body. An
+envelope without a valid stored `etag`/`size` is reported as corrupt (logged,
+counted in a page's `skipped`), never re-hashed. Migration V247 added both to
+the `v: 1` envelopes of earlier releases once.
 
 **Why documents are flat and owners are an index.** The design sketch had
 `contents/data/<ns>/[<ownerId>/]<key>.json`, but `get(ns, key)` takes no

@@ -96,15 +96,13 @@ import { NotSupportedError } from './errors.js';
  * @property {boolean} [includeData=true] - When false, `data` is omitted from
  *   every returned document while the metadata stays complete.
  *
- *   It saves the caller bytes, not the provider work. `etag` and `size` are
- *   mandatory on every document, and both are derived from the body — so the
- *   provider still reads, parses and hashes each one. On the filesystem
- *   provider that means counting a thousand chats costs a thousand transcript
- *   reads and a thousand sha256s, for an integer. A provider that can answer
- *   `etag` and `size` from an index (a SQL column, object-store metadata) is
- *   free to skip the read; none of them may skip the fields. A caller that
- *   only wants keys is better served by a method that only returns keys, and
- *   should say so rather than assume this flag is it.
+ *   `etag` and `size` are mandatory on every document and derived from the
+ *   body, but a provider may answer them from what it stored at write time
+ *   rather than re-reading the body — the filesystem provider stores both in
+ *   the envelope, before the body, and a metadata-only page reads only the
+ *   start of each file. What a provider may not do is skip the fields.
+ *   {@link DocumentStore#listMetadata} is the same listing under a name that
+ *   says so.
  */
 
 /**
@@ -224,6 +222,29 @@ export class DocumentStore {
    */
   async list(_ns, _opts = {}) {
     throw new NotSupportedError('DocumentStore.list is not implemented');
+  }
+
+  /**
+   * List a namespace's document metadata, one page at a time, without bodies.
+   *
+   * Exactly {@link DocumentStore#list} with `includeData: false`: the same
+   * ordering, paging, owner filter, `skipped` count and complete metadata —
+   * `ns`, `key`, `ownerId`, `contentType`, `createdAt`, `updatedAt`, `etag`,
+   * `size` — and never `data`. It exists so a caller that only wants metadata
+   * says so, and so a provider that keeps metadata apart from bodies has one
+   * obvious place to serve it from without reading a body.
+   *
+   * The base implementation delegates to `list`, so every provider has it; a
+   * provider overrides it only to make it cheaper, never to change it.
+   *
+   * @param {string} ns - Namespace.
+   * @param {Omit<ListOptions, 'includeData'>} [opts] - Owner filter, prefix, paging.
+   * @returns {Promise<ListResult>} One page of metadata plus the next cursor.
+   * @throws {InvalidKeyError} When `ns` is not a usable identifier.
+   * @throws {StorageError} Code `INVALID_CURSOR` for a cursor this store did not issue.
+   */
+  async listMetadata(ns, opts = {}) {
+    return this.list(ns, { ...(opts || {}), includeData: false });
   }
 
   /**
