@@ -21,6 +21,7 @@
  *
  * @module services/projects/ProjectIngestService
  */
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from '../../utils/logger.js';
@@ -42,7 +43,8 @@ import {
 import { storeText, evictItemKeys } from './ItemTextStore.js';
 import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
-import { isRefreshDue } from './refreshTtl.js';
+import { isRefreshDue, isRefreshExpired, refreshesOnSchedule } from './refreshTtl.js';
+import { getItemKind } from './kinds/registry.js';
 
 const COMPONENT = 'ProjectIngestService';
 
@@ -67,6 +69,124 @@ const INVENTORY_PAGE_SIZE = 10000;
  * for the next tick. The queue's `ingest.concurrency` bounds how many run.
  */
 export const MAX_SCHEDULED_REFRESHES = 50;
+
+/**
+ * Most first fetches one reconciler tick queues (#3622): web pages converted
+ * from links, or created with an admin project. More than refreshes, since an
+ * item without its first snapshot is not usable at all; the queue's
+ * background slot still runs them one after the other.
+ */
+export const MAX_FIRST_FETCHES = 200;
+
+/**
+ * A web page stored as a live link before #3622 (`storage: 'link'`): the
+ * reconciler converts it to a snapshot waiting for its first fetch.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isLinkedWebPage(item) {
+  return item?.kind === 'url' && item.storage === 'link';
+}
+
+/**
+ * Turn a web page link into a snapshot waiting for its first fetch, in place:
+ * what the item is, its name, its settings (pinned, refresh TTL) stay.
+ *
+ * @param {Object} item
+ */
+export function convertLinkedWebPage(item) {
+  item.storage = 'text';
+  item.status = 'pending';
+  item.error = null;
+  item.snapshotAt = null;
+  delete item.cache;
+  delete item.checkedAt;
+  delete item.refreshingAt;
+  delete item.ingestAttempt;
+}
+
+/**
+ * Whether an item waits for its first fetch with no job reserved for it: a
+ * kind that fetches with nobody's credentials (a web page, a file from a
+ * website), `pending`, without an `ingestAttempt`. A converted link and a page
+ * created with an admin project are; an item a request added has its attempt
+ * from the start.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isWaitingForFetch(item) {
+  return (
+    item?.status === 'pending' &&
+    !item.ingestAttempt &&
+    !item.refreshingAt &&
+    item.storage === 'text' &&
+    refreshesOnSchedule(getItemKind(item.kind))
+  );
+}
+
+/** The longest item name stored (`ProjectService`, the item schema). */
+const MAX_ITEM_NAME_CHARS = 300;
+
+/**
+ * Whether an item is still named after its address (as it is until its page's
+ * title names it): its name is the URL, cut to the length a name is stored at.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isNamedAfterUrl(item) {
+  const url = typeof item?.ref?.url === 'string' ? item.ref.url : '';
+  return Boolean(url) && item.name === url.slice(0, MAX_ITEM_NAME_CHARS);
+}
+
+/**
+ * The ingest input of an item's first fetch by its kind (a picked document, a
+ * file or a page from a website): the kind's `fetch` with nobody's or the
+ * picker's credentials, fenced by the item's `ingestAttempt`.
+ *
+ * @param {Object} kind
+ * @param {Object} item - As stored, with its `ingestAttempt`.
+ * @param {{user?: Object|null, prefetched?: Object|null, nameFromTitle?: boolean,
+ *   scheduled?: boolean}} [options] - `prefetched`: the response the kind's
+ *   `prepare` already read (a web page), handed to its `fetch` instead of a new
+ *   request; `nameFromTitle`: the item takes the extracted title as its name
+ *   while it still has the one it was given; `scheduled`: a background job
+ *   nobody waits for (the reconciler).
+ * @returns {Object}
+ */
+export function fetchInput(
+  kind,
+  item,
+  {
+    user = null,
+    prefetched = null,
+    nameFromTitle = false,
+    scheduled = false,
+    attempt = item.ingestAttempt,
+    reserve = false
+  } = {}
+) {
+  return {
+    fetch: ({ signal } = {}) =>
+      kind.fetch(item, { user, purpose: 'pick', signal, ...(prefetched ? { prefetched } : {}) }),
+    contentType: item.ref?.mimeType,
+    name: item.name,
+    attempt,
+    purpose: 'pick',
+    ...(reserve ? { reserve: true } : {}),
+    ...(nameFromTitle ? { nameFromTitle: true } : {}),
+    ...(scheduled ? { scheduled: true } : {})
+  };
+}
+
+/**
+ * How often one worker refreshes a project on use (`refreshOnUse`): every turn
+ * of a chat reads its projects, and the check of a project is a scan of its
+ * items, so it runs at most once a minute per project and worker.
+ */
+const USE_REFRESH_INTERVAL_MS = 60 * 1000;
 
 /** The error code of an item whose job never finished. */
 export const INTERRUPTED = 'INTERRUPTED';
@@ -186,6 +306,8 @@ export class ProjectIngestService {
     this.running = 0;
     /** Background jobs (scheduled refreshes) running now. */
     this.runningBackground = 0;
+    /** Project id → when this worker last refreshed it on use. */
+    this.usedAt = new Map();
   }
 
   get service() {
@@ -332,8 +454,23 @@ export class ProjectIngestService {
         );
       }
     };
+    // A first fetch whose item another worker took while it waited: it does
+    // nothing (`patchItem` answers the item unchanged, so this is tracked).
+    let declined = false;
     try {
       const extracting = await patch(item => {
+        // A first fetch queued for an item waiting for one (`fetchWaiting`) takes
+        // the item now, when it starts: a job waiting in a worker's queue holds
+        // no reservation another worker's reconciler could take for a crashed
+        // one. If another worker took the item meanwhile, this job does nothing.
+        if (input.reserve) {
+          if (!isWaitingForFetch(item)) {
+            declined = true;
+            return false;
+          }
+          item.ingestAttempt = input.attempt;
+          item.updatedAt = new Date().toISOString();
+        }
         if (!owns(item)) return false;
         // A refresh keeps the old snapshot readable while the new one is
         // fetched (spec 3 §4): the status stays, `refreshingAt` marks the run.
@@ -344,7 +481,8 @@ export class ProjectIngestService {
         else item.status = 'extracting';
         item.error = null;
       });
-      if (!extracting) return null; // The item was removed while queued.
+      // The item was removed while queued, or another worker took it.
+      if (!extracting || declined) return null;
       assertOwned();
 
       // 1. Bytes: from the temp file, the picker's fetch, or handed in.
@@ -364,14 +502,21 @@ export class ProjectIngestService {
         // If-None-Match first, and a changed ETag with an unchanged
         // Last-Modified (an edit within the second, a kept mtime) is a change.
         const bothTagged = Boolean(input.previousEtag) && Boolean(fetched.etag);
+        // The bytes decide when both sides have their hash (#3622): the
+        // same bytes are the same document whatever the source says about
+        // its version, and changed bytes are a new one even under an old
+        // Last-Modified (a page that named no version when it was stored).
+        const bothHashed = Boolean(input.previousSha256) && Boolean(fetched.source?.sha256);
         const sameVersion =
           refresh &&
           (fetched.notModified === true ||
-            (bothTagged
-              ? fetched.etag === input.previousEtag
-              : Boolean(previousVersion) &&
-                Boolean(job.lastModified) &&
-                Date.parse(job.lastModified) <= Date.parse(previousVersion)));
+            (bothHashed
+              ? fetched.source.sha256 === input.previousSha256
+              : bothTagged
+                ? fetched.etag === input.previousEtag
+                : Boolean(previousVersion) &&
+                  Boolean(job.lastModified) &&
+                  Date.parse(job.lastModified) <= Date.parse(previousVersion)));
         if (sameVersion) {
           // Keep the text, clear `stale`, note the check.
           const checkedAt = new Date().toISOString();
@@ -458,6 +603,42 @@ export class ProjectIngestService {
         });
       }
 
+      // 4b. The same text as stored (#3622): a page whose HTML changes on
+      //     every request (a token, a nonce, a timestamp) while its content
+      //     does not. The download and the conversion could not be avoided,
+      //     everything after them is: the blob stays, no reader's cache or
+      //     index is dropped. Only the check and the source's version are
+      //     recorded, as for an unchanged source.
+      if (refresh) {
+        const textSha256 = createHash('sha256').update(extracted.text, 'utf8').digest('hex');
+        const storedText = (project.items || []).find(entry => entry.id === itemId)?.text;
+        if (
+          storedText?.blobKey === input.previousBlobKey &&
+          storedText.sha256 === textSha256 &&
+          Boolean(storedText.truncated) === Boolean(extracted.truncated)
+        ) {
+          const checkedAt = new Date().toISOString();
+          const unchanged = await patch(item => {
+            if (!owns(item) || item.text?.sha256 !== textSha256) return false;
+            item.status = 'ready';
+            item.error = null;
+            item.checkedAt = checkedAt;
+            if (job.source) {
+              item.provenance = {
+                ...(item.provenance || {}),
+                source: { ...(item.provenance?.source || {}), ...job.source }
+              };
+            }
+            delete item.refreshingAt;
+            delete item.ingestAttempt;
+          });
+          assertOwned();
+          if (unchanged?.text?.sha256 === textSha256 && !unchanged.refreshingAt) {
+            return { item: unchanged, unchanged: true };
+          }
+        }
+      }
+
       // 5. Encrypt and store; then the item, under the lock.
       const block = await storeText({
         projectId,
@@ -485,6 +666,11 @@ export class ProjectIngestService {
           // What the document is about, read from this text: a new version
           // replaces what the old one said.
           applyItemInfo(item, { title: extracted.title, description: extracted.description });
+          // A web page added without a name is named by its title, unless
+          // someone renamed it while it was fetched.
+          if (input.nameFromTitle && item.title && item.name === input.name) {
+            item.name = String(item.title).slice(0, 300);
+          }
           if (input.purpose === 'pick' || input.purpose === 'refresh' || job.lastModified) {
             item.snapshotAt = block.extractedAt;
             item.checkedAt = block.extractedAt;
@@ -680,6 +866,8 @@ export class ProjectIngestService {
     let orphans = 0;
     for (const project of projects) {
       const stuck = (project.items || []).filter(item => {
+        // Waiting for its first fetch is not stuck: `fetchWaiting` queues it.
+        if (isWaitingForFetch(item)) return false;
         const refreshing = typeof item.refreshingAt === 'string';
         if (!refreshing && item.status !== 'pending' && item.status !== 'extracting') return false;
         if (this.isActive(item.id)) return false;
@@ -691,38 +879,44 @@ export class ProjectIngestService {
       for (const item of stuck) {
         let settled = false;
         try {
-          await this.service.patchItem(project.id, item.id, entry => {
-            // The decision above was taken on the inventory; under the lock
-            // the item must still be the one inventoried. A changed
-            // reservation or update means another worker settled it, its job
-            // moved on, or a new refresh owns it now: leave it alone.
-            if (entry.refreshingAt !== item.refreshingAt || entry.updatedAt !== item.updatedAt) {
-              return false;
-            }
-            if (typeof entry.refreshingAt === 'string') {
+          await this.service.patchItem(
+            project.id,
+            item.id,
+            entry => {
+              // The decision above was taken on the inventory; under the lock
+              // the item must still be the one inventoried. A changed
+              // reservation or update means another worker settled it, its job
+              // moved on, or a new refresh owns it now: leave it alone.
+              if (entry.refreshingAt !== item.refreshingAt || entry.updatedAt !== item.updatedAt) {
+                return false;
+              }
+              if (typeof entry.refreshingAt === 'string') {
+                settled = true;
+                // An interrupted refresh: the old snapshot is still there. Its
+                // attempt goes with it, so a job still running somewhere can
+                // no longer install or fail it.
+                delete entry.refreshingAt;
+                delete entry.ingestAttempt;
+                entry.status = entry.text ? 'stale' : 'failed';
+                entry.error = {
+                  code: INTERRUPTED,
+                  message: 'The server restarted during the refresh. Refresh the document again.'
+                };
+                return;
+              }
+              if (entry.status !== 'pending' && entry.status !== 'extracting') return false;
               settled = true;
-              // An interrupted refresh: the old snapshot is still there. Its
-              // attempt goes with it, so a job still running somewhere can
-              // no longer install or fail it.
-              delete entry.refreshingAt;
+              // Its attempt goes too: a job still running elsewhere is fenced out.
               delete entry.ingestAttempt;
-              entry.status = entry.text ? 'stale' : 'failed';
+              entry.status = 'failed';
               entry.error = {
                 code: INTERRUPTED,
-                message: 'The server restarted during the refresh. Refresh the document again.'
+                message: 'The server restarted during extraction. Upload the file again.'
               };
-              return;
-            }
-            if (entry.status !== 'pending' && entry.status !== 'extracting') return false;
-            settled = true;
-            // Its attempt goes too: a job still running elsewhere is fenced out.
-            delete entry.ingestAttempt;
-            entry.status = 'failed';
-            entry.error = {
-              code: INTERRUPTED,
-              message: 'The server restarted during extraction. Upload the file again.'
-            };
-          });
+              // The reconciler is nobody using the project (#3622).
+            },
+            { touchActivity: false, touchUpdated: false }
+          );
           if (settled) interrupted += 1;
         } catch (error) {
           logger.warn('Could not mark an interrupted item', {
@@ -736,16 +930,90 @@ export class ProjectIngestService {
     }
     orphans += await this._sweepOrphans(projects, now, { complete });
     const refreshed = await this.refreshExpired(projects, { now });
-    if (interrupted || orphans || refreshed) {
+    const fetched = await this.fetchWaiting(projects);
+    if (interrupted || orphans || refreshed || fetched) {
       logger.info('Project ingest reconciled', {
         component: COMPONENT,
         scanned: projects.length,
         interrupted,
         orphans,
-        refreshed
+        refreshed,
+        fetched
       });
     }
-    return { scanned: projects.length, interrupted, orphans, refreshed };
+    return { scanned: projects.length, interrupted, orphans, refreshed, fetched };
+  }
+
+  /**
+   * Convert web page links to snapshots and queue the first fetch of every
+   * item waiting for one (#3622): pages stored as live links before, and
+   * pages created with an admin project. The conversion is made under each
+   * project's lock. A queued fetch reserves its item (`ingestAttempt`) only
+   * when its job starts (`_run`, `reserve`): every worker runs the
+   * reconciler, and of several jobs queued for one item only the first to
+   * start fetches it; and an item waiting in a long queue carries no
+   * reservation another worker could take for an interrupted job. At most
+   * {@link MAX_FIRST_FETCHES} per call; the rest wait for the next tick. A
+   * disabled admin project or one being deleted is converted, not fetched.
+   *
+   * A first fetch runs in the background whatever the refresh mode and however
+   * long nobody used the project: the mode decides when an outdated snapshot
+   * is refreshed, and a page without one has nothing to answer from until it
+   * is fetched.
+   *
+   * @param {Object[]} projects - As inventoried; each is read again under its lock.
+   * @param {{max?: number}} [options]
+   * @returns {Promise<number>} Fetches queued.
+   */
+  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES } = {}) {
+    let queued = 0;
+    const due = item => isWaitingForFetch(item);
+    for (const project of projects || []) {
+      const fetches = !project.deleting && project.enabled !== false;
+      let current = project;
+      if ((project.items || []).some(isLinkedWebPage)) {
+        try {
+          current =
+            (await this.repository.mutate(
+              project.id,
+              stored => {
+                const links = (stored.items || []).filter(isLinkedWebPage);
+                links.forEach(convertLinkedWebPage);
+                return links.length ? stored : null;
+              },
+              { touchActivity: false, touchUpdated: false }
+            )) || (await this.repository.get(project.id));
+        } catch (error) {
+          logger.warn('Could not convert the web page links of a project', {
+            component: COMPONENT,
+            projectId: project.id,
+            error: error?.message
+          });
+          continue;
+        }
+        if (!current) continue;
+      }
+      if (!fetches) continue;
+      for (const item of current.items || []) {
+        if (queued >= max) break;
+        if (this.isActive(item.id) || !due(item)) continue;
+        const kind = getItemKind(item.kind);
+        if (!kind) continue;
+        await this.start(
+          current,
+          item,
+          fetchInput(kind, item, {
+            nameFromTitle: isNamedAfterUrl(item),
+            scheduled: true,
+            attempt: randomUUID(),
+            reserve: true
+          }),
+          { wait: false }
+        );
+        queued += 1;
+      }
+    }
+    return queued;
   }
 
   /**
@@ -785,6 +1053,60 @@ export class ProjectIngestService {
       }
     }
     return queued;
+  }
+
+  /**
+   * A project is being used (a chat, a search, a workflow, an app or an MCP
+   * client reads its knowledge; `projectUse.js`): refresh what is outdated and fetch what
+   * waits for its first fetch, whatever the refresh mode (#3622). An item set
+   * to `never` is left alone. Readers get the stored snapshot meanwhile; a
+   * job reserves its item under the project's lock, so of several workers
+   * that see the same use only one fetches each page. At most once a minute
+   * per project and worker.
+   *
+   * @param {Object} project
+   * @param {{now?: number}} [options]
+   * @returns {Promise<{refreshed: number, fetched: number}>}
+   */
+  async refreshOnUse(project, { now = Date.now() } = {}) {
+    const none = { refreshed: 0, fetched: 0 };
+    if (!project?.id || project.deleting || project.enabled === false) return none;
+    const last = this.usedAt.get(project.id) || 0;
+    if (now - last < USE_REFRESH_INTERVAL_MS) return none;
+    const settings = this.settings();
+    const items = project.items || [];
+    const outdated = items.filter(
+      item => !this.isActive(item.id) && isRefreshExpired(item, project, settings, now)
+    );
+    const waiting = items.some(item => isLinkedWebPage(item) || isWaitingForFetch(item));
+    if (!outdated.length && !waiting) return none;
+    this.usedAt.set(project.id, now);
+    if (this.usedAt.size > 10000) this.usedAt.clear();
+    let refreshed = 0;
+    for (const item of outdated) {
+      try {
+        await this.service.refreshItem(project.id, item.id, { scheduled: true, wait: false });
+        refreshed += 1;
+      } catch (error) {
+        if (error?.code === 'PROJECT_MISMATCH' || error?.code === 'ITEM_NOT_FOUND') continue;
+        logger.warn('Could not refresh a project item on use', {
+          component: COMPONENT,
+          projectId: project.id,
+          itemId: item.id,
+          error: error?.message
+        });
+      }
+    }
+    const fetched = waiting ? await this.fetchWaiting([project]) : 0;
+    if (refreshed || fetched) {
+      logger.info('Refreshing a project on use', {
+        component: COMPONENT,
+        projectId: project.id,
+        refreshed,
+        fetched
+      });
+    }
+    return { refreshed, fetched };
   }
 
   /**

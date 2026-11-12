@@ -19,8 +19,13 @@ import {
   version
 } from '../migrations/V178__merge_intrafind_website_projects.js';
 
+// The project as it shipped when V178 was written: iHub no longer ships it
+// (#3622), and a migration's test must not depend on the current defaults.
 const SHIPPED = JSON.parse(
-  await fs.readFile(new URL('../defaults/projects/intrafind-website.json', import.meta.url), 'utf8')
+  await fs.readFile(
+    new URL('./fixtures/migration-v178/intrafind-website.json', import.meta.url),
+    'utf8'
+  )
 );
 
 let baseDir;

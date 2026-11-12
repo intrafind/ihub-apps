@@ -2,14 +2,22 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The refresh TTL of project items in the UI (#3536): the choices the dialogs
- * offer, how a TTL reads, and the line an item card shows about its schedule.
+ * The refresh TTL (#3536) and mode (#3622) of project items in the UI: the
+ * choices the dialogs offer, how a TTL reads, and the line an item card shows
+ * about its schedule.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RefreshTtlDialog from '../../../client/src/features/projects/components/RefreshTtlDialog';
 import {
+  hasActiveItems,
+  isAwaitingRefresh
+} from '../../../client/src/features/projects/utils/projectItems';
+import {
   REFRESH_NEVER,
+  parseRefreshIdleDays,
+  parseRefreshMode,
   parseRefreshTtl,
+  refreshModeLabel,
   refreshSummary,
   refreshTtlChoices,
   refreshTtlLabel,
@@ -52,15 +60,9 @@ describe('refresh TTL helpers', () => {
     expect(parseRefreshTtl('3600')).toBe(3600);
   });
 
-  it('says when a file is refreshed next, or that a page is read live', () => {
+  it('says when a file or a web page is refreshed next', () => {
     expect(takesRefreshTtl({ kind: 'url' })).toBe(true);
     expect(takesRefreshTtl({ kind: 'upload' })).toBe(false);
-    expect(refreshSummary({ refresh: { scheduled: false, ttl: 86400 } }, t, 'en')).toBe(
-      'Read live, kept for 1 days'
-    );
-    expect(refreshSummary({ refresh: { scheduled: false, ttl: REFRESH_NEVER } }, t, 'en')).toBe(
-      'Read live, kept until refreshed by hand'
-    );
     expect(refreshSummary({ refresh: { scheduled: true, ttl: REFRESH_NEVER } }, t, 'en')).toBe(
       'Refreshed only by hand'
     );
@@ -92,7 +94,7 @@ describe('RefreshTtlDialog', () => {
     expect(screen.getByRole('option', { name: 'Project setting (1 days)' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Refresh after'), { target: { value: 'never' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith('never'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ refreshTtl: 'never' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
@@ -109,7 +111,78 @@ describe('RefreshTtlDialog', () => {
     );
     fireEvent.change(screen.getByLabelText('Refresh after'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(null));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ refreshTtl: null }));
     expect(await screen.findByRole('alert')).toBeTruthy();
+  });
+
+  it('sets the refresh mode, and turns it off for a TTL of never', async () => {
+    const onSave = jest.fn().mockResolvedValue(true);
+    render(
+      <RefreshTtlDialog
+        scope="project"
+        value={null}
+        inherited={86400}
+        mode={null}
+        inheritedMode="auto"
+        onClose={() => {}}
+        onSave={onSave}
+      />
+    );
+    expect(
+      screen.getByRole('option', {
+        name: 'Default of this installation (Automatically, while the project is used)'
+      })
+    ).toBeTruthy();
+    const mode = screen.getByLabelText('Refresh');
+    fireEvent.change(mode, { target: { value: 'onDemand' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ refreshMode: 'onDemand' }));
+
+    fireEvent.change(screen.getByLabelText('Refresh after'), { target: { value: 'never' } });
+    expect(mode.disabled).toBe(true);
+    expect(screen.getByText('Set to never: refreshed only by hand.')).toBeTruthy();
+  });
+});
+
+describe('refresh when used (#3622)', () => {
+  const outdated = {
+    refresh: {
+      scheduled: true,
+      ttl: 86400,
+      background: false,
+      expired: true,
+      outdatedAt: '2026-11-01T08:00:00.000Z'
+    }
+  };
+
+  it('says when an on-demand item is refreshed', () => {
+    expect(refreshSummary(outdated, t, 'en')).toMatch(/^Outdated since .+, refreshed when used$/);
+    expect(refreshSummary({ refresh: { ...outdated.refresh, expired: false } }, t, 'en')).toMatch(
+      /^Refreshed when used after /
+    );
+    expect(refreshModeLabel('onDemand', t)).toBe('When the project is used');
+    expect(parseRefreshMode('')).toBeNull();
+    expect(parseRefreshMode('auto')).toBe('auto');
+  });
+
+  it('reads the idle days, and an emptied field as nothing rather than 0', () => {
+    expect(parseRefreshIdleDays('')).toBeNull();
+    expect(parseRefreshIdleDays('  ')).toBeNull();
+    expect(parseRefreshIdleDays('0')).toBe(0);
+    expect(parseRefreshIdleDays('14')).toBe(14);
+    expect(parseRefreshIdleDays('1.5')).toBeNull();
+    expect(parseRefreshIdleDays('3651')).toBeNull();
+  });
+
+  it('tells an outdated item waiting for its refresh on use from one being processed', () => {
+    expect(isAwaitingRefresh(outdated)).toBe(true);
+    expect(isAwaitingRefresh({ ...outdated, refreshingAt: '2026-11-12T08:00:00.000Z' })).toBe(
+      false
+    );
+    expect(
+      isAwaitingRefresh({ ...outdated, refresh: { ...outdated.refresh, background: true } })
+    ).toBe(false);
+    // Waiting is not processing: the page does not poll for it.
+    expect(hasActiveItems([{ status: 'ready', ...outdated }])).toBe(false);
   });
 });

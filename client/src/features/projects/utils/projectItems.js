@@ -106,10 +106,23 @@ export function localizedText(value, language = 'en') {
 // --- status ---------------------------------------------------------------------
 
 /**
+ * Whether an item is outdated and waits for the refresh that using the
+ * project starts (#3622): refreshed when used (on demand, or a project nobody
+ * used lately), past its refresh time, not being refreshed yet. Opening the
+ * project page is no use: the next chat or search starts the refresh.
+ *
+ * @param {{refresh?: Object, refreshingAt?: string}|null|undefined} item
+ * @returns {boolean}
+ */
+export function isAwaitingRefresh(item) {
+  return item?.refresh?.expired === true && item.refresh.background === false && !item.refreshingAt;
+}
+
+/**
  * Whether the server is still extracting the text of any item: a new item
- * (`pending` / `extracting`), or a picked document being refreshed — that one
- * keeps its `ready` / `stale` status (the old snapshot stays readable) and
- * carries `refreshingAt` until the new snapshot is stored.
+ * (`pending` / `extracting`), or a picked document or web page being
+ * refreshed — that one keeps its `ready` / `stale` status (the old snapshot
+ * stays readable) and carries `refreshingAt` until the new snapshot is stored.
  *
  * @param {Array<{status: string, refreshingAt?: string}>|undefined} items
  * @returns {boolean}
@@ -453,11 +466,13 @@ const MAX_ITEM_NAME_CHARS = 300;
 /**
  * The JSON bodies of the pages picked from a site crawl: one `url` item per
  * page, named after the page's title (the server names it after the URL
- * when there is none).
+ * when there is none). A page a site crawl read carries the crawl's id, so the
+ * server stores that read instead of fetching the page again.
  *
- * @param {Array<{url: string, title?: string}>} pages
+ * @param {Array<{url: string, title?: string, crawlId?: string}>} pages
  * @param {{pinned?: boolean}} [options]
- * @returns {Array<{kind: 'url', ref: {url: string}, name?: string, pinned: boolean}>}
+ * @returns {Array<{kind: 'url', ref: {url: string}, name?: string, pinned: boolean,
+ *   crawlId?: string}>}
  *
  * @example
  * buildUrlItemRequests([{ url: 'https://x.com/a', title: 'A' }])
@@ -474,7 +489,8 @@ export function buildUrlItemRequests(pages, { pinned = false } = {}) {
         kind: 'url',
         ref: { url: page.url.trim() },
         ...(name ? { name } : {}),
-        pinned: pinned === true
+        pinned: pinned === true,
+        ...(typeof page.crawlId === 'string' && page.crawlId ? { crawlId: page.crawlId } : {})
       };
     });
 }

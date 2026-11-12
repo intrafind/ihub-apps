@@ -3,8 +3,9 @@
 
 /**
  * The link kinds: items whose content stays where it is and is fetched at
- * use time with a TTL cache — today's `url`, `page` and `ifinder` source
- * handlers behind the kind registry (spec 1 §4, spec 2 §3).
+ * use time with a TTL cache — the `page` and `ifinder` source handlers behind
+ * the kind registry (spec 1 §4, spec 2 §3). A web page (`url`) is a stored
+ * snapshot since #3622 (`webPageKind.js`).
  *
  * This module registers the references and their descriptions. The fetch
  * side (the handlers' `getCachedContent`) is wired by the knowledge provider
@@ -13,93 +14,21 @@
  * @module services/projects/kinds/linkKinds
  */
 import { z } from 'zod';
-import { zSafeId, isHttpUrl } from '../../../validators/common.js';
+import { zSafeId } from '../../../validators/common.js';
 import { registerItemKind } from './registry.js';
 import { isIFinderConfigured } from '../../integrations/ifinderConfig.js';
 import { ProjectError } from '../projectErrors.js';
-import { cleanItemInfo } from '../itemInfo.js';
 import configCache from '../../../configCache.js';
+import { webPageKind } from './webPageKind.js';
 
-/** Default cache lifetime of a link item's text, in seconds (the URL handler's). */
-export const DEFAULT_LINK_TTL_SECONDS = 7200;
+/** The web page kind, registered with the link kinds it was one of before #3622. */
+export const urlKind = webPageKind;
 
 const LANGUAGE_CODE = /^[a-z]{2}(-[A-Z]{2})?$/;
 
 function ifinderConfigured() {
   return isIFinderConfigured();
 }
-
-function hostOf(url) {
-  try {
-    return new URL(url).host;
-  } catch {
-    return '';
-  }
-}
-
-export const urlKind = registerItemKind({
-  id: 'url',
-  name: { en: 'Web page (URL)', de: 'Webseite (URL)' },
-  icon: 'link',
-  storage: { ihub: 'link' },
-  credentials: 'none',
-  picker: { type: 'url' },
-  refSchema: z
-    .object({
-      url: z.string().trim().max(2048).refine(isHttpUrl, 'Only http(s) URLs are allowed'),
-      maxContentLength: z.number().int().positive().max(5_000_000).optional()
-    })
-    .strict(),
-  describe: ref => ({ name: ref.url, url: ref.url, site: hostOf(ref.url) }),
-  // What the address serves decides the item (#3536): a document the upload
-  // extractors read (PDF, Office, OpenDocument, text, …) is handed to the
-  // `web-file` kind and downloaded like an upload; a type nothing reads is
-  // refused like an unsupported upload; a web page stays a live link.
-  // `kindChange: false` (an admin project created with its items, a changed
-  // reference) keeps the link without asking.
-  //
-  // For a page, its title becomes the item's name, unless the caller named
-  // it, and its title and description what the item is about (`info`,
-  // #3539). The read lands in the page reader's cache, so the item's first
-  // use does not fetch again. A page that cannot be read now is still added,
-  // named by its URL, and records what it is about on its first read.
-  async prepare(ref, { name, kindChange = true, user } = {}) {
-    if (kindChange) {
-      const { documentFromUrl, probeWebUrl, unsupportedUrlError } =
-        await import('../webFileDownload.js');
-      // An address that cannot be checked now (a timeout, a 429 or 503) and
-      // names a document by its extension is still a file: its download
-      // then fails on the item, which can be retried, instead of leaving a
-      // live link that cannot be turned into a file later.
-      const probe =
-        (await probeWebUrl(ref.url, { language: user?.language })) || documentFromUrl(ref.url);
-      if (probe?.type === 'unsupported') throw unsupportedUrlError(probe);
-      if (probe?.type === 'file') {
-        return {
-          kind: 'web-file',
-          ref: {
-            url: ref.url,
-            ...(probe.contentType ? { contentType: probe.contentType } : {}),
-            ...(probe.name ? { fileName: probe.name } : {}),
-            ...(Number.isFinite(probe.size) ? { size: probe.size } : {})
-          },
-          ...(!name && probe.name ? { name: probe.name } : {})
-        };
-      }
-    }
-    try {
-      const { readWebPage } = await import('../../pageReader/pageReader.js');
-      const page = await readWebPage({ url: ref.url, maxLength: 1 });
-      const info = cleanItemInfo({ title: page?.title, description: page?.description });
-      const prepared = {};
-      if (!name && info.title) prepared.name = info.title;
-      if (info.title || info.description) prepared.info = info;
-      return Object.keys(prepared).length ? prepared : null;
-    } catch {
-      return null;
-    }
-  }
-});
 
 /**
  * An iHub page's title as the page configuration (`ui.json` → `pages`) has it
@@ -218,4 +147,4 @@ export const ifinderQueryKind = registerItemKind({
 });
 
 /** Every link kind, for callers that register them explicitly. */
-export const LINK_KINDS = Object.freeze([urlKind, pageKind, ifinderDocumentKind, ifinderQueryKind]);
+export const LINK_KINDS = Object.freeze([pageKind, ifinderDocumentKind, ifinderQueryKind]);

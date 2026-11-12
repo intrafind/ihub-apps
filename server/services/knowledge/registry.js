@@ -9,6 +9,7 @@
  */
 import { LocalKnowledgeProvider } from './LocalKnowledgeProvider.js';
 import { KnowledgeError } from './types.js';
+import { noteProjectUse } from '../projects/projectUse.js';
 
 const providers = new Map();
 
@@ -23,7 +24,10 @@ export function registerKnowledgeProvider(tier, provider) {
 }
 
 /**
- * The provider for a project.
+ * The provider for a project. Every reader of a project's knowledge comes here
+ * (chats, the knowledge tools, workflow nodes, MCP resources), so this is
+ * where a use is reported: what is outdated in the project is refreshed in
+ * the background (`projectUse.js`, #3622).
  *
  * @param {Object} project
  * @returns {import('./KnowledgeProvider.js').KnowledgeProvider}
@@ -32,6 +36,7 @@ export function registerKnowledgeProvider(tier, provider) {
 export function providerFor(project) {
   const tier = project?.tier || 'ihub';
   const provider = providers.get(tier);
+  noteProjectUse(project);
   if (!provider) {
     throw new KnowledgeError('NOT_SUPPORTED', `No knowledge provider for tier "${tier}"`, {
       projectId: project?.id

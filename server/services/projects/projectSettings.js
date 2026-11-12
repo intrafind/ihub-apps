@@ -32,7 +32,13 @@ export const PROJECTS_FEATURE = 'projects';
 /** Feature flag gating projects users create themselves. */
 export const USER_PROJECTS_FEATURE = 'userProjects';
 
-import { DEFAULT_REFRESH_TTL_SECONDS, normalizeRefreshTtl } from './refreshTtl.js';
+import {
+  DEFAULT_REFRESH_IDLE_DAYS,
+  DEFAULT_REFRESH_MODE,
+  DEFAULT_REFRESH_TTL_SECONDS,
+  normalizeRefreshMode,
+  normalizeRefreshTtl
+} from './refreshTtl.js';
 import {
   MAX_FILES_CEILING,
   MAX_MEMBERS,
@@ -65,6 +71,8 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   // How long a downloaded file or a web page is taken as current (#3536):
   // seconds, or 'never'. A project and an item may set their own.
   refreshTtl: DEFAULT_REFRESH_TTL_SECONDS,
+  refreshMode: DEFAULT_REFRESH_MODE,
+  refreshIdleDays: DEFAULT_REFRESH_IDLE_DAYS,
   kinds: Object.freeze({}),
   encryption: Object.freeze({ keyProvider: 'local-file' }),
   scan: Object.freeze({ provider: 'none', command: '', timeoutMs: 30000, onError: 'reject' }),
@@ -100,7 +108,8 @@ function readPositive(value, fallback) {
  * @returns {{tierPolicy: string, defaultAppId: string, limits: {maxFiles: number, maxFileBytes: number,
  *   maxProjectBytes: number, maxProjectsPerUser: number}, sharing: {allowUsers: boolean,
  *   allowGroups: boolean, allowEveryone: boolean, allowCatalog: boolean}, retentionDays: number,
- *   loadAllMaxTokens: number, knowledgeModes: string[], refreshTtl: number|'never', kinds: Object<string, boolean>, encryption: {keyProvider: string},
+ *   loadAllMaxTokens: number, knowledgeModes: string[], refreshTtl: number|'never',
+ *   refreshMode: 'auto'|'onDemand', refreshIdleDays: number, kinds: Object<string, boolean>, encryption: {keyProvider: string},
  *   scan: {provider: string, command: string, timeoutMs: number, onError: string},
  *   ingest: {concurrency: number, staleAfterMinutes: number}}}
  */
@@ -140,6 +149,12 @@ export function projectSettings(platformConfig) {
     loadAllMaxTokens: readPositive(block.loadAllMaxTokens, defaults.loadAllMaxTokens),
     knowledgeModes: allowedKnowledgeModes(block.knowledgeModes),
     refreshTtl: normalizeRefreshTtl(block.refreshTtl) ?? defaults.refreshTtl,
+    refreshMode: normalizeRefreshMode(block.refreshMode) ?? defaults.refreshMode,
+    // 0 turns the idle rule off: `auto` projects refresh in the background always.
+    refreshIdleDays:
+      Number.isInteger(block.refreshIdleDays) && block.refreshIdleDays >= 0
+        ? Math.min(block.refreshIdleDays, 3650)
+        : defaults.refreshIdleDays,
     kinds:
       block.kinds && typeof block.kinds === 'object' && !Array.isArray(block.kinds)
         ? { ...block.kinds }
@@ -265,6 +280,7 @@ export function projectsClientConfig(
     sharing: settings.sharing,
     retentionDays: settings.retentionDays,
     knowledgeModes: settings.knowledgeModes,
-    refreshTtl: settings.refreshTtl
+    refreshTtl: settings.refreshTtl,
+    refreshMode: settings.refreshMode
   };
 }

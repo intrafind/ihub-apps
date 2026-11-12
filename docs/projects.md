@@ -22,14 +22,15 @@ Admin projects are the successor of sources. An upgrade turns every source into 
 ## Documents
 
 Each document in a project is an **item**. An item either holds text that iHub extracted and
-stores, or links to content that is fetched when it is used.
+stores (uploads, web pages, files from websites, picked cloud files), or links to content that is
+fetched when it is used (iHub pages, iFinder).
 
 ### Item kinds
 
 | Kind                | What it adds                                         | Stored as           | Read with the rights of                         | Offered when                                     |
 | ------------------- | ---------------------------------------------------- | ------------------- | ----------------------------------------------- | ------------------------------------------------ |
 | `upload`            | An uploaded file, or text written in the dialog      | Extracted text      | —                                               | Project file storage is available                |
-| `url`               | A web page (HTML)                                    | Link, cached for the refresh TTL | —                                  | Always                                           |
+| `url`               | A web page (HTML)                                    | Text, snapshot refreshed on the TTL | —                               | Always                                           |
 | `web-file`          | A file linked from a website (PDF, Office, …)        | Text, downloaded    | —                                               | While `url` is                                   |
 | `page`              | An iHub page (`contents/pages`) in one language      | Link                | The reading user (the page's own access rules)  | Always                                           |
 | `ifinder-document`  | One iFinder document                                 | Link                | The reading user                                | iFinder is configured                            |
@@ -58,11 +59,11 @@ name's extension only as a hint (the same rule as for an upload):
 
 | The address serves                                                  | Item                                                         |
 | ------------------------------------------------------------------- | ------------------------------------------------------------ |
-| An HTML page                                                        | `url`: a live link, read when it is used                     |
+| An HTML page                                                        | `url`: a stored snapshot of the page (see [Web pages](#web-pages)) |
 | A type the upload extractors read: PDF, Word, PowerPoint, Excel, OpenDocument, e-mail, text, … | `web-file`: downloaded and stored like an upload |
 | Anything else (an image, an archive, `.doc`, `.xls`, `.ppt`)        | Refused with `UNSUPPORTED_TYPE`, as the same upload would be |
 | Nothing readable right now (the server is down, an error status), and the address ends in `.pdf`, `.docx`, `.pptx`, `.xlsx`, `.odt`, `.ods` or `.odp` | `web-file`: its download fails on the item, and **Retry** downloads it once the site answers |
-| Nothing readable right now, any other address                       | `url`, as before                                             |
+| Nothing readable right now, any other address                       | `url`: its first fetch fails on the item, and **Retry** fetches it once the site answers |
 
 A **file from a website** is treated as a file uploaded to the project:
 
@@ -80,9 +81,40 @@ page reader's protections (no private addresses unless the host is in `ssl.domai
 `ssrf.allowedHosts`, every redirect checked, DNS pinned, certificate checks skipped only for
 whitelisted hosts, the proxy settings) on its own request queue, `project_download`.
 
-An existing `url` item is not changed. A web page item cannot be pointed at a file later; add the
-file as a new item. Admin projects created through the API with their items keep `url` items as
-links; files are added through the item endpoints.
+A web page item cannot be pointed at a file later; add the file as a new item. Admin projects
+created through the API with their items may hold `url` items: each is fetched once the project
+exists. Files are added through the item endpoints.
+
+### Web pages
+
+A **web page** (`url`) is a stored snapshot, like a file from a website:
+
+- **One fetch per version.** The page is fetched by its ingest job on one server process,
+  converted from HTML to Markdown once (the page reader's extraction: menus, page trees and
+  footers are left out), scanned, encrypted and stored. When the page is added, the check that
+  finds out what the address serves is that fetch: its response goes to the ingest job, so the
+  website is asked once. A page picked from the site search is not fetched again at all: the
+  search keeps every page it read (encrypted, for an hour, for the user who searched), and adding
+  it stores that read.
+- **No fetch on use.** Chats, searches and previews read the stored text. Every server process
+  builds its own search index from it; none asks the website or parses HTML.
+- **Refreshed after its TTL** (see [Refresh](#refresh)): the request is conditional, and an
+  unchanged page is neither downloaded nor converted again.
+- **Counted like a file.** The page's text counts toward `maxProjectBytes`, a page larger than
+  `maxFileBytes` is refused, and the whole page is kept up to the text limit of an upload (no
+  50,000-character cap; `ref.maxContentLength` of older items is no longer applied).
+- **A page that cannot be read** when it is added is still added, and its item shows **Failed**
+  with the reason; **Retry** fetches it again.
+- **Its title** becomes the item's name when the item was added without one, and its title and
+  meta description are what the item is about.
+- **A changed address** (edit the item) drops the old snapshot and fetches the new page.
+
+Web pages stored as links before this change are converted on their own: migration V248
+converts the items of admin project files, and the ingest reconciler converts the rest (user
+projects, and any link left) shortly after the server starts. Each converted page waits for its
+first fetch, which one server process takes under the project's lock (at most 200 pages per
+reconciler run; the rest follow 15 minutes later). A first fetch runs in the background in every
+refresh mode (see [Refresh](#refresh)): a page without a snapshot has nothing to answer from.
 
 ### Refresh
 
@@ -93,26 +125,54 @@ three levels; the most specific one that is set applies:
 2. the project (**Refresh** in the project's side panel; owners and editors, and admins for admin
    projects),
 3. the installation: `platform.projects.refreshTtl` (**Admin → Projects → Project settings**),
-   one day by default.
+   seven days by default.
 
 A TTL is a number of seconds (15 minutes to a year; the dialogs offer 1 hour, 6 hours, 1 day, 7 days
 and 30 days) or `never`.
 
-- **Files from websites** are refreshed on their own: every 15 minutes the ingest reconciler
-  queues the files whose last check is older than their TTL (at most 50 per run, on the
-  `ingest.concurrency` queue). These background refreshes wait behind every upload, pick and
-  refresh someone asked for, and with more than one slot they never take the last free one, so
-  an upload starts within one job's time however many files are due. The request is conditional (`If-None-Match` with the stored ETag,
-  `If-Modified-Since` with the stored `Last-Modified`): an unchanged file is neither downloaded
-  nor extracted again and keeps its text. A changed file replaces the text once the new one is
-  stored; until then the old one stays readable. A refresh that fails leaves the item
-  **Outdated** with the old text, and is tried again after another TTL. `never` refreshes only
-  when someone chooses **Refresh**. The item shows when its text was taken and when it is
-  refreshed next.
-- **Web pages** stay live links: the TTL is how long a page's read is kept before it is read
-  again (`never` keeps it for 30 days in the server's memory; a restart reads it again).
-  **Refresh** reads the page again on its next use, on every server process: the one that
-  handled it forgets the page at once, the others when the cluster message arrives.
+When an outdated file or page is refreshed is its **refresh mode**, set on the same three levels
+(`refreshMode` on the item and the project, `platform.projects.refreshMode` for the
+installation):
+
+| Mode | What happens to an outdated snapshot |
+| ---- | ------------------------------------ |
+| **Always, in the background** (`always`) | Refreshed in the background (below), whether the project is used or not. |
+| **Automatically, while the project is used** (`auto`, default) | Refreshed in the background (below). A project nobody used for `platform.projects.refreshIdleDays` days (7 by default; 0 turns this off; **Admin → Projects → Project settings**) is refreshed only when it is used again, like `onDemand`. |
+| **When the project is used** (`onDemand`) | Outdated snapshots are not refreshed in the background (a first fetch still is). Using the project refreshes them. |
+| TTL `never` | Refreshed only when someone chooses **Refresh**, in any mode. |
+
+A project is **used** when a chat, a search, a workflow, an app or an MCP client reads its
+knowledge, or when it is attached to a chat. Opening the project page is not a use. A use is
+recorded as the project's `lastUsedAt` (at most once an hour per project and server process), which
+the idle rule reads; a project not used since this was recorded counts from its last activity.
+Nothing the server does by itself is a use: a background refresh never keeps a project active. A use
+also queues a refresh of every outdated file and page of the project (at most once a minute per
+project and server process) and the first fetch of pages still waiting for one; the answer of that
+turn uses the stored text. The project page shows **Refreshing N outdated
+documents** while it runs, the item card **Outdated since …, refreshed when used**, and **About this
+answer** in a chat says how many outdated documents the answer read.
+
+- **Files from websites** are refreshed on their own (in mode `always`, and in mode `auto` while
+  the project is used):
+  every 15 minutes the ingest reconciler queues the files (and web pages) whose last check is older
+  than their TTL (at most 50 per run, on the `ingest.concurrency` queue). These background refreshes
+  wait behind every upload, pick and refresh someone asked for, and with more than one slot they
+  never take the last free one, so an upload starts within one job's time however many files are
+  due. The request is conditional (`If-None-Match` with the stored ETag, `If-Modified-Since` with
+  the stored `Last-Modified`): an unchanged file is neither downloaded nor extracted again and keeps
+  its text. A changed file replaces the text once the new one is stored; until then the old one
+  stays readable. A refresh that fails leaves the item **Outdated** with the old text, and is tried
+  again after another TTL. `never` refreshes only when someone chooses **Refresh**. The item shows
+  when its text was taken and when it is refreshed next.
+- **Web pages** are refreshed the same way, in the same reconciler run and with the same
+  conditional request: an unchanged page keeps its text and is not converted again.
+- **A source that ignores the conditional request** and answers in full is not downloaded either
+  when its headers name the stored version (the same ETag, or a `Last-Modified` no later than
+  the stored one). **A source that names no version** (no ETag, no `Last-Modified`) is compared by
+  a SHA-256 of what it sends: the same bytes are not converted again. **New bytes with the same
+  text** (a page that sends a fresh token, nonce or timestamp on every request) are converted, but
+  the result is compared with the stored text: the same text keeps its stored copy, and no search
+  index or cache is rebuilt.
 - **Picked cloud documents** (OneDrive / SharePoint, Google Drive, Nextcloud) are refreshed only
   by hand. Their download needs the account of the user who picked them, which a background job
   must not use: that user may have left, lost access to the file, or let the connection expire.
@@ -269,8 +329,8 @@ link the other projects.
    they differed, and it may write when any of them could.
 3. With **Delete the emptied projects** (on by default), the merged projects are deleted.
 
-A project that ships with iHub (the `faq`, `meeting-knowledge-base` and `intrafind-website`
-project, for example) is restored at the next server start once it is deleted, like any missing
+A project that ships with iHub (the `faq` and `meeting-knowledge-base` project, for example) is
+restored at the next server start once it is deleted, like any missing
 default file. The merge result says so for such a project; disable it then, or leave **Delete the
 emptied projects** off and disable it yourself.
 
@@ -728,9 +788,9 @@ The **Web page (URL)** tab (in user projects and in the admin project editor) ad
 several pages of a website:
 
 - **Check** tells whether the page can be read.
-- **Preview** shows the text the model gets from the page, before it is added: the same reader
-  and the same 50,000-character limit as the item, so a page that needs JavaScript or blocks
-  automated access shows up here as an empty or short text. An address that serves a document
+- **Preview** shows the text the model gets from the page, before it is added (the page reader's
+  first 50,000 characters; the stored item keeps the whole page), so a page that needs JavaScript
+  or blocks automated access shows up here as an empty or short text. An address that serves a document
   (PDF, Office, …) is downloaded when it is added and stored like an upload, without that limit
   (see [Files from websites](#files-from-websites)).
 - **Find more pages of this website** opens the site search. **Find pages** follows the links of
@@ -1203,7 +1263,9 @@ would go past it.
 | `retentionDays`             | `0`                 | Days without activity after which a user project is deleted; 0 keeps them.                               |
 | `loadAllMaxTokens`          | `50000`             | Upper bound of the load-all budget (also capped at 40 % of the model's context window).                  |
 | `knowledgeModes`            | all five            | The [knowledge modes](#knowledge-modes) users may choose for a project: a list of `auto`, `context`, `relevant`, `tools`, `pinned`; `auto` is always offered. **Admin → Projects → Project settings**. |
-| `refreshTtl`                | `86400` (1 day)     | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
+| `refreshTtl`                | `604800` (7 days)   | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
+| `refreshMode`               | `auto`              | When an outdated file or page is refreshed: `always`, `auto` or `onDemand` (see [Refresh](#refresh)). Projects and items may set their own. **Admin → Projects → Project settings**. |
+| `refreshIdleDays`           | `7`                 | Days without use after which a project in mode `auto` is refreshed only when it is used; 0 never counts a project as idle. **Admin → Projects → Project settings**. |
 | `kinds`                     | `{}`                | Item kinds to switch off, `{ "<kind>": false }`.                                                         |
 | `scan.provider`             | `none`              | `none` (no scan) or `command` (run a scanner on every upload and picked file before extraction).         |
 | `scan.command`              | `""`                | The scanner command; `{path}` is replaced by the file, or the path is appended. Exit code 0 is clean, 1 infected, anything else an error. |
@@ -1303,7 +1365,9 @@ note "Sources are now Projects" in the release notes.
 Every source becomes a project of its own, also when several sources belonged together (the pages
 of one website, the documents of one department). For the shipped IntraFind website sources,
 migration `V178__merge_intrafind_website_projects` does this already: the six projects become the
-one project `intrafind-website`, unless an admin changed one of them. Bring them together afterwards with
+one project `intrafind-website`, unless an admin changed one of them. iHub no longer ships that
+project (it needs internet access to fetch its pages): an installation that does not have it yet
+keeps the six projects as they are. Bring them together afterwards with
 [Moving, copying and merging](#moving-copying-and-merging): merge the projects, or move the items
 you want into one project.
 

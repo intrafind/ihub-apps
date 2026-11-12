@@ -187,6 +187,7 @@
           "iassistant?": "object",
           "icon": "string",
           "id": "string",
+          "iframeConfig?": "object",
           "inheritanceLevel?": "number",
           "inputMode?": "object",
           "integrations?": "object",
@@ -225,6 +226,7 @@
       "allowEmptyContent": "boolean",
       "allowInheritance": "boolean",
       "autoStart": "boolean",
+      "category": "string",
       "color": "string",
       "description": {
         "de": "string",
@@ -233,6 +235,14 @@
       "disallowModelSelection": "boolean",
       "enabled": "boolean",
       "ephemeral": "boolean",
+      "features": {
+        "magicPrompt": {
+          "enabled": "boolean",
+          "model": "string",
+          "prompt": "string"
+        },
+        "shortLinks": "boolean"
+      },
       "greeting": {
         "de": {
           "subtitle": "string",
@@ -245,19 +255,6 @@
       },
       "icon": "string",
       "id": "string",
-      "inputMode": {
-        "microphone": {
-          "enabled": "boolean",
-          "mode": "string",
-          "showTranscript": "boolean"
-        },
-        "rows": "number",
-        "type": "string"
-      },
-      "messagePlaceholder": {
-        "de": "string",
-        "en": "string"
-      },
       "name": {
         "de": "string",
         "en": "string"
@@ -265,52 +262,16 @@
       "order": "number",
       "preferredOutputFormat": "string",
       "preferredStyle": "string",
-      "projects": [
-        {
-          "id": "string",
-          "mode": "string",
-          "write": "boolean"
-        }
-      ],
       "sendChatHistory": "boolean",
-      "settings": {
-        "chatHistory": {
-          "enabled": "boolean"
-        },
-        "enabled": "boolean",
-        "model": {
-          "enabled": "boolean"
-        },
-        "outputFormat": {
-          "enabled": "boolean"
-        },
-        "style": {
-          "enabled": "boolean"
-        }
+      "skillSettings": {
+        "enabled": "boolean"
       },
+      "skills": ["string"],
       "system": {
         "de": "string",
         "en": "string"
       },
-      "type": "string",
-      "upload": {
-        "allowMultiple": "boolean",
-        "enabled": "boolean",
-        "fileUpload": {
-          "comments": "string",
-          "enabled": "boolean",
-          "maxFileSizeMB": "number",
-          "speakerNotes": "string",
-          "supportedFormats": "array",
-          "trackedChanges": "string"
-        },
-        "imageUpload": {
-          "enabled": "boolean",
-          "maxFileSizeMB": "number",
-          "resizeImages": "boolean",
-          "supportedFormats": "array"
-        }
-      }
+      "type": "string"
     }
   },
   "GET /api/admin/apps/:appId/inheritance": {
@@ -320,6 +281,7 @@
         "allowEmptyContent": "boolean",
         "allowInheritance": "boolean",
         "autoStart": "boolean",
+        "category": "string",
         "color": "string",
         "description": {
           "de": "string",
@@ -328,21 +290,16 @@
         "disallowModelSelection": "boolean",
         "enabled": "boolean",
         "ephemeral": "boolean",
+        "features": {
+          "magicPrompt": "object",
+          "shortLinks": "boolean"
+        },
         "greeting": {
           "de": "object",
           "en": "object"
         },
         "icon": "string",
         "id": "string",
-        "inputMode": {
-          "microphone": "object",
-          "rows": "number",
-          "type": "string"
-        },
-        "messagePlaceholder": {
-          "de": "string",
-          "en": "string"
-        },
         "name": {
           "de": "string",
           "en": "string"
@@ -350,26 +307,16 @@
         "order": "number",
         "preferredOutputFormat": "string",
         "preferredStyle": "string",
-        "projects": ["object"],
         "sendChatHistory": "boolean",
-        "settings": {
-          "chatHistory": "object",
-          "enabled": "boolean",
-          "model": "object",
-          "outputFormat": "object",
-          "style": "object"
+        "skillSettings": {
+          "enabled": "boolean"
         },
+        "skills": ["string"],
         "system": {
           "de": "string",
           "en": "string"
         },
-        "type": "string",
-        "upload": {
-          "allowMultiple": "boolean",
-          "enabled": "boolean",
-          "fileUpload": "object",
-          "imageUpload": "object"
-        }
+        "type": "string"
       },
       "children": [],
       "parent": "null"
@@ -2508,6 +2455,7 @@
           "ownership": "string",
           "permissions": "object",
           "published": "boolean",
+          "refreshMode": "null",
           "refreshTtl": "null",
           "role": "string",
           "tags": "[]|array",
@@ -2573,6 +2521,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshMode": "null",
       "refreshTtl": "null",
       "role": "string",
       "tags": [],
@@ -2598,6 +2547,7 @@
         "maxProjectsPerUser": "number"
       },
       "loadAllMaxTokens": "number",
+      "refreshMode": "string",
       "refreshTtl": "number",
       "scan": {
         "provider": "string"
@@ -2646,6 +2596,8 @@
         "maxProjectsPerUser": "number"
       },
       "maxFilesCeiling": "number",
+      "refreshIdleDays": "number",
+      "refreshMode": "string",
       "refreshTtl": "number",
       "sharing": {
         "allowCatalog": "boolean",
@@ -2662,8 +2614,7 @@
       "admin": {
         "byKind": {
           "page": "number",
-          "upload": "number",
-          "url": "number"
+          "upload": "number"
         },
         "disabled": "number",
         "enabled": "number",
@@ -3436,7 +3387,7 @@
           "limitCores": "null",
           "loadAverage": "array",
           "model": "string",
-          "utilizationPercent": "null"
+          "utilizationPercent": "null|number"
         },
         "hostname": "string",
         "memory": {
@@ -3456,11 +3407,11 @@
         {
           "cpuPercent": "number",
           "current": "boolean",
-          "eventLoopDelayMs": "null",
+          "eventLoopDelayMs": "null|object",
           "memory": "object",
           "pid": "number",
           "role": "string",
-          "sampledAt": "null",
+          "sampledAt": "null|string",
           "uptimeSeconds": "number",
           "workerIndex": "null"
         }
@@ -4257,6 +4208,7 @@
       "allowEmptyContent": "boolean",
       "allowInheritance": "boolean",
       "autoStart": "boolean",
+      "category": "string",
       "color": "string",
       "description": {
         "de": "string",
@@ -4265,6 +4217,14 @@
       "disallowModelSelection": "boolean",
       "enabled": "boolean",
       "ephemeral": "boolean",
+      "features": {
+        "magicPrompt": {
+          "enabled": "boolean",
+          "model": "string",
+          "prompt": "string"
+        },
+        "shortLinks": "boolean"
+      },
       "greeting": {
         "de": {
           "subtitle": "string",
@@ -4277,19 +4237,6 @@
       },
       "icon": "string",
       "id": "string",
-      "inputMode": {
-        "microphone": {
-          "enabled": "boolean",
-          "mode": "string",
-          "showTranscript": "boolean"
-        },
-        "rows": "number",
-        "type": "string"
-      },
-      "messagePlaceholder": {
-        "de": "string",
-        "en": "string"
-      },
       "name": {
         "de": "string",
         "en": "string"
@@ -4297,52 +4244,16 @@
       "order": "number",
       "preferredOutputFormat": "string",
       "preferredStyle": "string",
-      "projects": [
-        {
-          "id": "string",
-          "mode": "string",
-          "write": "boolean"
-        }
-      ],
       "sendChatHistory": "boolean",
-      "settings": {
-        "chatHistory": {
-          "enabled": "boolean"
-        },
-        "enabled": "boolean",
-        "model": {
-          "enabled": "boolean"
-        },
-        "outputFormat": {
-          "enabled": "boolean"
-        },
-        "style": {
-          "enabled": "boolean"
-        }
+      "skillSettings": {
+        "enabled": "boolean"
       },
+      "skills": ["string"],
       "system": {
         "de": "string",
         "en": "string"
       },
-      "type": "string",
-      "upload": {
-        "allowMultiple": "boolean",
-        "enabled": "boolean",
-        "fileUpload": {
-          "comments": "string",
-          "enabled": "boolean",
-          "maxFileSizeMB": "number",
-          "speakerNotes": "string",
-          "supportedFormats": "array",
-          "trackedChanges": "string"
-        },
-        "imageUpload": {
-          "enabled": "boolean",
-          "maxFileSizeMB": "number",
-          "resizeImages": "boolean",
-          "supportedFormats": "array"
-        }
-      }
+      "type": "string"
     }
   },
   "GET /api/apps/:appId/chat/:chatId": {
@@ -4889,6 +4800,7 @@
           "maxProjectBytes": "number",
           "maxProjectsPerUser": "number"
         },
+        "refreshMode": "string",
         "refreshTtl": "number",
         "retentionDays": "number",
         "sharing": {
@@ -5744,6 +5656,7 @@
           "ownership": "string",
           "permissions": "object",
           "published?": "boolean",
+          "refreshMode": "null",
           "refreshTtl": "null",
           "role": "string",
           "subscribed?": "boolean",
@@ -5812,6 +5725,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshMode": "null",
       "refreshTtl": "null",
       "role": "string",
       "tags": ["string"],
@@ -5946,6 +5860,7 @@
         "maxProjectBytes": "number",
         "maxProjectsPerUser": "number"
       },
+      "refreshMode": "string",
       "refreshTtl": "number",
       "retentionDays": "number",
       "sharing": {

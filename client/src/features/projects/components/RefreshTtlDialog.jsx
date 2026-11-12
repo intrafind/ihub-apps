@@ -6,8 +6,12 @@ import { useTranslation } from 'react-i18next';
 import Modal from '../../../shared/components/Modal';
 import { projectErrorMessage } from '../utils/projectErrors';
 import {
+  REFRESH_MODES,
+  REFRESH_NEVER,
   formatRefreshTime,
+  parseRefreshMode,
   parseRefreshTtl,
+  refreshModeLabel,
   refreshTtlChoices,
   refreshTtlLabel
 } from '../utils/refreshTtl';
@@ -20,9 +24,12 @@ import {
 } from './item-dialog/dialogStyles';
 
 /**
- * Sets a refresh TTL (#3536): a project's default, or one item's own. The
- * first choice keeps the inherited one (the platform's for a project, the
- * project's for an item), shown with its value.
+ * Sets a refresh TTL (#3536) and a refresh mode (#3622): a project's default,
+ * or one item's own. The first choice of each keeps the inherited one (the
+ * platform's for a project, the project's for an item), shown with its value.
+ * The mode says when an outdated snapshot is refreshed: automatically while
+ * the project is used, or only when it is used; a TTL of `never` refreshes
+ * only by hand, in either mode.
  *
  * For an item it also shows when the snapshot was taken, when its source was
  * last checked and when it is checked next.
@@ -33,22 +40,41 @@ import {
  * @param {'project'|'item'} props.scope
  * @param {number|'never'|null|undefined} props.value - The TTL set at this level, or null.
  * @param {number|'never'|null|undefined} [props.inherited] - What applies without one.
+ * @param {'always'|'auto'|'onDemand'|null|undefined} [props.mode] - The mode set at this level, or null.
+ * @param {'always'|'auto'|'onDemand'|null|undefined} [props.inheritedMode] - The mode without one.
  * @param {Object} [props.item] - The item (scope `item`), for its schedule.
  * @param {() => void} props.onClose
- * @param {(ttl: number|'never'|null) => Promise<boolean>} props.onSave - Resolves `true` on
- *   success; a rejection is shown in the dialog.
+ * @param {(changes: {refreshTtl?: number|'never'|null, refreshMode?: string|null}) =>
+ *   Promise<boolean>} props.onSave - Gets what changed; resolves `true` on success; a
+ *   rejection is shown in the dialog.
  * @returns {JSX.Element}
  */
-function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose, onSave }) {
+function RefreshTtlDialog({
+  scope,
+  value,
+  inherited = null,
+  mode = null,
+  inheritedMode = null,
+  item = null,
+  onClose,
+  onSave
+}) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const current = value ?? null;
+  const currentMode = mode ?? null;
   const [choice, setChoice] = useState(current === null ? '' : String(current));
+  const [modeChoice, setModeChoice] = useState(currentMode ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const selectRef = useRef(null);
-  const changed = parseRefreshTtl(choice) !== current;
-  const live = item?.kind === 'url';
+  const ttlChanged = parseRefreshTtl(choice) !== current;
+  const modeChanged = parseRefreshMode(modeChoice) !== currentMode;
+  const changed = ttlChanged || modeChanged;
+  // `never` refreshes only by hand: the mode does not apply then.
+  const effectiveTtl = parseRefreshTtl(choice) ?? inherited;
+  const manualOnly = effectiveTtl === REFRESH_NEVER;
+  const page = item?.kind === 'url';
   const schedule = item?.refresh;
 
   const handleSubmit = async event => {
@@ -58,7 +84,10 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
     setError(null);
     let ok = false;
     try {
-      ok = await onSave(parseRefreshTtl(choice));
+      ok = await onSave({
+        ...(ttlChanged ? { refreshTtl: parseRefreshTtl(choice) } : {}),
+        ...(modeChanged ? { refreshMode: parseRefreshMode(modeChoice) } : {})
+      });
     } catch (err) {
       setError(projectErrorMessage(err, t));
     }
@@ -82,10 +111,10 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             {scope === 'item'
-              ? live
+              ? page
                 ? t(
-                    'projects.refresh.itemLiveHint',
-                    'This web page is read live. Its read is kept this long before the page is read again.'
+                    'projects.refresh.itemPageHint',
+                    'This web page is stored as a snapshot. It is read again when this time has passed; an unchanged page keeps its text.'
                   )
                 : t(
                     'projects.refresh.itemFileHint',
@@ -97,6 +126,50 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
                 )}
           </p>
           <div>
+            <label htmlFor="refresh-mode-select" className={LABEL_CLASS}>
+              {t('projects.refresh.modeLabel', 'Refresh')}
+            </label>
+            <select
+              id="refresh-mode-select"
+              value={modeChoice}
+              onChange={e => setModeChoice(e.target.value)}
+              disabled={manualOnly || saving}
+              aria-describedby="refresh-mode-hint"
+              className={INPUT_CLASS}
+            >
+              <option value="">
+                {scope === 'item'
+                  ? t('projects.refresh.inheritProject', 'Project setting ({{ttl}})', {
+                      ttl: inheritedMode
+                        ? refreshModeLabel(inheritedMode, t)
+                        : t('projects.refresh.default', 'default')
+                    })
+                  : t(
+                      'projects.refresh.inheritPlatform',
+                      'Default of this installation ({{ttl}})',
+                      {
+                        ttl: inheritedMode
+                          ? refreshModeLabel(inheritedMode, t)
+                          : t('projects.refresh.default', 'default')
+                      }
+                    )}
+              </option>
+              {REFRESH_MODES.map(entry => (
+                <option key={entry} value={entry}>
+                  {refreshModeLabel(entry, t)}
+                </option>
+              ))}
+            </select>
+            <p id="refresh-mode-hint" className={HINT_CLASS}>
+              {manualOnly
+                ? t('projects.refresh.modeNeverHint', 'Set to never: refreshed only by hand.')
+                : t(
+                    'projects.refresh.modeHint',
+                    'Always: refreshed in the background, used or not. Automatically: refreshed in the background while the project is used; a project nobody used for a while is refreshed when it is used again. When the project is used: refreshed then, by a chat or a search; answers use the stored text until it is done.'
+                  )}
+            </p>
+          </div>
+          <div>
             <label htmlFor="refresh-ttl-select" className={LABEL_CLASS}>
               {t('projects.refresh.label', 'Refresh after')}
             </label>
@@ -105,6 +178,7 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
               ref={selectRef}
               value={choice}
               onChange={e => setChoice(e.target.value)}
+              disabled={saving}
               className={INPUT_CLASS}
             >
               <option value="">
@@ -145,9 +219,15 @@ function RefreshTtlDialog({ scope, value, inherited = null, item = null, onClose
                 {t('projects.refresh.nextAtLabel', 'Next refresh')}
               </dt>
               <dd className="text-gray-800 dark:text-gray-200">
-                {schedule.ttl === 'never'
+                {schedule.ttl === REFRESH_NEVER
                   ? t('projects.refresh.manualOnly', 'Refreshed only by hand')
-                  : formatRefreshTime(schedule.nextAt, language) || '—'}
+                  : schedule.background === false
+                    ? schedule.expired
+                      ? t('projects.refresh.onUseNow', 'The next time the project is used')
+                      : t('projects.refresh.onUseAfter', 'Refreshed when used after {{date}}', {
+                          date: formatRefreshTime(schedule.outdatedAt, language) || '—'
+                        })
+                    : formatRefreshTime(schedule.nextAt, language) || '—'}
               </dd>
             </dl>
           )}

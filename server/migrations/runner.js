@@ -393,6 +393,20 @@ const RENAMED_MIGRATIONS = [
     oldFile: 'V177__merge_intrafind_website_projects.js',
     newVersion: '178',
     newFile: 'V178__merge_intrafind_website_projects.js'
+  },
+  // The #3622 web page snapshots were written as V247-V248 and moved to
+  // V248-V249 when main took V247 (document envelope etag, #3625).
+  {
+    oldVersion: '247',
+    oldFile: 'V247__project_web_pages_stored.js',
+    newVersion: '248',
+    newFile: 'V248__project_web_pages_stored.js'
+  },
+  {
+    oldVersion: '248',
+    oldFile: 'V248__project_refresh_week.js',
+    newVersion: '249',
+    newFile: 'V249__project_refresh_week.js'
   }
 ];
 

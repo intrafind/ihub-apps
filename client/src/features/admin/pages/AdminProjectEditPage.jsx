@@ -555,6 +555,7 @@ function AdminProjectEditPageContent({ id }) {
                 project={project}
                 onSaved={setProject}
                 platformRefreshTtl={config?.refreshTtl ?? null}
+                platformRefreshMode={config?.refreshMode ?? null}
               />
             }
           />
@@ -597,9 +598,15 @@ function AdminProjectEditPageContent({ id }) {
                 config?.refreshTtl ??
                 (scheduleTarget.refresh?.from !== 'item' ? scheduleTarget.refresh?.ttl : null)
               }
+              mode={scheduleTarget.refreshMode ?? null}
+              inheritedMode={
+                project?.refreshMode ??
+                config?.refreshMode ??
+                (scheduleTarget.refresh?.modeFrom !== 'item' ? scheduleTarget.refresh?.mode : null)
+              }
               onClose={() => setScheduleTarget(null)}
-              onSave={async refreshTtl => {
-                replaceItem(await updateAdminProjectItem(id, scheduleTarget.id, { refreshTtl }));
+              onSave={async changes => {
+                replaceItem(await updateAdminProjectItem(id, scheduleTarget.id, changes));
                 return true;
               }}
             />

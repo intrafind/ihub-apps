@@ -506,9 +506,16 @@ export function registerProjectPickerRoutes(app) {
     });
     try {
       const { crawlSite } = await import('../services/projects/siteCrawler.js');
-      const result = await crawlSite({ ...parsed.data, signal: controller.signal });
+      const { keepCrawledPage, newCrawlId } = await import('../services/projects/crawlHandover.js');
+      // Every page the crawl reads is kept for the add step (#3622): a picked
+      // page added with this `crawlId` is stored without another fetch.
+      const crawlId = newCrawlId();
+      const result = await crawlSite(
+        { ...parsed.data, signal: controller.signal },
+        { keepPage: page => keepCrawledPage({ ownerId: userId, crawlId, ...page }) }
+      );
       // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result
-      if (!controller.signal.aborted) res.json({ ok: true, ...result });
+      if (!controller.signal.aborted) res.json({ ok: true, ...result, crawlId });
     } catch (error) {
       if (!controller.signal.aborted) {
         // api-guidelines-ignore: a URL check, preview or crawl answers 200 with its outcome (`ok`): that it failed is the result

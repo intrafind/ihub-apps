@@ -236,12 +236,15 @@ describe('settings', () => {
 });
 
 describe('item kinds', () => {
-  it('registers the four link kinds with their references', () => {
-    for (const id of ['url', 'page', 'ifinder-document', 'ifinder-query']) {
+  it('registers the three link kinds and the web page kind with their references', () => {
+    for (const id of ['page', 'ifinder-document', 'ifinder-query']) {
       const kind = getItemKind(id);
       assert.ok(kind, id);
       assert.equal(kind.storage.ihub, 'link');
     }
+    // A web page is a stored snapshot (#3622), fetched without anybody's credentials.
+    assert.equal(getItemKind('url').storage.ihub, 'text');
+    assert.equal(getItemKind('url').credentials, 'none');
     assert.equal(
       getItemKind('url').refSchema.safeParse({ url: 'https://example.com' }).success,
       true

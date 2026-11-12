@@ -17,7 +17,7 @@ import { useProjectChatApps } from './ProjectAppSelect';
 import ProjectFormFields from './ProjectFormFields';
 import ProjectPanelRow, { ROW_ACTION } from './ProjectPanelRow';
 import RefreshTtlDialog from './RefreshTtlDialog';
-import { refreshTtlLabel } from '../utils/refreshTtl';
+import { refreshModeLabel, refreshTtlLabel } from '../utils/refreshTtl';
 import { knowledgeModeLabel } from '../utils/knowledgeModes';
 import { PRIMARY_BUTTON, SECONDARY_BUTTON } from './item-dialog/dialogStyles';
 
@@ -48,6 +48,8 @@ const SAVED_NOTICE_MS = 4000;
  *   project's files from websites and web pages (#3536).
  * @param {number|'never'|null} [props.platformRefreshTtl] - The installation's
  *   default, shown while the project sets none.
+ * @param {'always'|'auto'|'onDemand'|null} [props.platformRefreshMode] - The installation's
+ *   default refresh mode (#3622), shown while the project sets none.
  * @returns {JSX.Element}
  */
 function ProjectSettingsCard({
@@ -56,7 +58,8 @@ function ProjectSettingsCard({
   onSaved,
   nameLocked = false,
   showRefresh = false,
-  platformRefreshTtl = null
+  platformRefreshTtl = null,
+  platformRefreshMode = null
 }) {
   const { t, i18n } = useTranslation();
   const { choices, loading: appsLoading } = useProjectChatApps();
@@ -302,6 +305,9 @@ function ProjectSettingsCard({
                   })
                 : t('projects.refresh.projectDefaultUnknown', 'Default of this installation')}
           </p>
+          <p className="text-gray-600 dark:text-gray-400">
+            {refreshModeLabel(project.refreshMode || platformRefreshMode, t)}
+          </p>
         </ProjectPanelRow>
       )}
       {schedulingRefresh && (
@@ -309,9 +315,11 @@ function ProjectSettingsCard({
           scope="project"
           value={project.refreshTtl ?? null}
           inherited={platformRefreshTtl}
+          mode={project.refreshMode ?? null}
+          inheritedMode={platformRefreshMode}
           onClose={() => setSchedulingRefresh(false)}
-          onSave={async refreshTtl => {
-            const saved = await updateProject(project.id, { refreshTtl });
+          onSave={async changes => {
+            const saved = await updateProject(project.id, changes);
             onSaved(saved);
             setMessage({ ok: true, text: t('projects.settings.saved', 'Saved.') });
             return true;

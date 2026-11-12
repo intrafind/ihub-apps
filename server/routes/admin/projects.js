@@ -253,20 +253,31 @@ export default function registerAdminProjectsRoutes(app) {
       scan: { provider: settings.scan.provider },
       limits: settings.limits,
       loadAllMaxTokens: settings.loadAllMaxTokens,
-      refreshTtl: settings.refreshTtl
+      refreshTtl: settings.refreshTtl,
+      refreshMode: settings.refreshMode
     });
   });
 
   /** The part of the effective `platform.projects` block the settings panel edits. */
   const editableSettings = platformConfig => {
-    const { sharing, tierPolicy, defaultAppId, limits, refreshTtl, knowledgeModes } =
-      projectSettings(platformConfig);
+    const {
+      sharing,
+      tierPolicy,
+      defaultAppId,
+      limits,
+      refreshTtl,
+      refreshMode,
+      refreshIdleDays,
+      knowledgeModes
+    } = projectSettings(platformConfig);
     return {
       sharing,
       tierPolicy,
       defaultAppId,
       limits,
       refreshTtl,
+      refreshMode,
+      refreshIdleDays,
       knowledgeModes,
       maxFilesCeiling: MAX_FILES_CEILING
     };
@@ -287,7 +298,11 @@ export default function registerAdminProjectsRoutes(app) {
    *       `MAX_FILES_CEILING`; bytes per file and per project; projects per
    *       user, 0 for no cap) and `refreshTtl` (seconds or `never`: how long
    *       files downloaded from websites and web pages are current, unless a
-   *       project or an item sets its own). Full admins only.
+   *       project or an item sets its own) and `refreshMode` (`always`: in the
+   *       background, `auto`: in the background while a project is used,
+   *       `onDemand`: when it is used) and
+   *       `refreshIdleDays` (days without use after which an `auto` project is
+   *       refreshed only when used; 0 never). Full admins only.
    *     tags: [Admin Projects]
    *   put:
    *     summary: Change the sharing audiences, the tier policy, the default app and the limits
@@ -322,6 +337,10 @@ export default function registerAdminProjectsRoutes(app) {
             ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {}),
             ...(body.limits ? { limits: { ...stored.limits, ...body.limits } } : {}),
             ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
+            ...(body.refreshMode !== undefined ? { refreshMode: body.refreshMode } : {}),
+            ...(body.refreshIdleDays !== undefined
+              ? { refreshIdleDays: body.refreshIdleDays }
+              : {}),
             ...(body.knowledgeModes ? { knowledgeModes: [...new Set(body.knowledgeModes)] } : {})
           }
         };
@@ -338,6 +357,8 @@ export default function registerAdminProjectsRoutes(app) {
         ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
         ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId || '(none)' } : {}),
         ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
+        ...(body.refreshMode !== undefined ? { refreshMode: body.refreshMode } : {}),
+        ...(body.refreshIdleDays !== undefined ? { refreshIdleDays: body.refreshIdleDays } : {}),
         ...(body.knowledgeModes ? { knowledgeModes: body.knowledgeModes.join('|') } : {}),
         ...body.limits
       })
@@ -544,7 +565,8 @@ export default function registerAdminProjectsRoutes(app) {
         ...(body.knowledgeMode !== undefined ? { knowledgeMode: body.knowledgeMode } : {}),
         // The refresh TTL is set on its own (PATCH): a document without it,
         // as the settings form sends it, keeps the stored one.
-        ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {})
+        ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
+        ...(body.refreshMode !== undefined ? { refreshMode: body.refreshMode } : {})
       },
       { actor: req.user }
     );

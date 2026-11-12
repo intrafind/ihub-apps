@@ -199,6 +199,15 @@ export function projectDiagnostics(project, t) {
     lines.push(t('chatMessage.knowledgeScope.noTools', 'the model cannot call tools'));
   }
   if (project.overBudget) lines.push(t('chatMessage.knowledgeScope.overBudget', 'over budget'));
+  if (project.outdated) {
+    lines.push(
+      t(
+        'chatMessage.answerBasis.outdated',
+        '{{count}} outdated documents are being refreshed; this answer used their stored text',
+        { count: project.outdated }
+      )
+    );
+  }
   return lines;
 }
 

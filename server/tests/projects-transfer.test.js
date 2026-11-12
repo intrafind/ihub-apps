@@ -70,10 +70,11 @@ async function addText(projectId, name, text) {
   return item;
 }
 
-async function addLink(projectId, name, url) {
+/** A link item: an iHub page (a web page is a stored snapshot since #3622). */
+async function addLink(projectId, name, pageId) {
   const { item } = await service.addItem(
     projectId,
-    { kind: 'url', ref: { url }, name },
+    { kind: 'page', ref: { pageId }, name },
     { user: ADMIN }
   );
   return item;
@@ -126,7 +127,7 @@ describe('transferring items', () => {
     await createProject('copy-from');
     await createProject('copy-to');
     const doc = await addText('copy-from', 'handbook.md', 'The handbook says hello.');
-    const link = await addLink('copy-from', 'Website', 'https://example.com/');
+    const link = await addLink('copy-from', 'Website', 'website');
 
     const result = await service.transferItems('copy-from', [doc.id, link.id], 'copy-to', {
       mode: 'copy',
@@ -149,7 +150,7 @@ describe('transferring items', () => {
     assert.equal(await textOf('copy-to', copied.id), 'The handbook says hello.');
     assert.equal(await textOf('copy-from', doc.id), 'The handbook says hello.');
     const copiedLink = target.items.find(entry => entry.name === 'Website');
-    assert.equal(copiedLink.ref.url, 'https://example.com/');
+    assert.equal(copiedLink.ref.pageId, 'website');
   });
 
   it('moves a text: the target reads it, the source and its blob are gone', async () => {
@@ -469,7 +470,7 @@ describe('merging projects', () => {
     await createProject('site-a');
     await createProject('site-b');
     const a = await addText('site-a', 'a.md', 'page a');
-    const b = await addLink('site-b', 'Page B', 'https://example.com/b');
+    const b = await addLink('site-b', 'Page B', 'page-b');
     await writeLinked();
 
     const result = await service.mergeProjects(['site-a', 'site-b'], 'site', {
@@ -487,7 +488,7 @@ describe('merging projects', () => {
     const target = await repository.get('site');
     assert.deepEqual(target.items.map(entry => entry.name).sort(), ['Page B', 'a.md']);
     assert.equal(await textOf('site', a.id), 'page a');
-    assert.equal(target.items.find(entry => entry.id === b.id).ref.url, 'https://example.com/b');
+    assert.equal(target.items.find(entry => entry.id === b.id).ref.pageId, 'page-b');
     assert.equal(await repository.get('site-a'), null);
     assert.equal(await repository.get('site-b'), null);
 

@@ -3,22 +3,40 @@
 
 /**
  * How long a project item's content is taken as current (#3536): the refresh
- * TTL of a file downloaded from a website, and the cache lifetime of a web
- * page read live.
+ * TTL of a file downloaded from a website and of a web page's snapshot
+ * (#3622).
  *
  * Three levels, the most specific set one wins:
  *
  *  1. the item's `refreshTtl` (item menu),
  *  2. the project's `refreshTtl` (project settings, owners and editors),
- *  3. `platform.projects.refreshTtl` (admin), 86 400 seconds (a day) by default.
+ *  3. `platform.projects.refreshTtl` (admin), 604 800 seconds (a week) by default.
  *
- * A value is a number of seconds, or `'never'`: a downloaded file is then
- * refreshed only when someone asks ("Refresh now"), and a web page is kept
- * for {@link NEVER_LINK_CACHE_SECONDS} in memory (a restart reads it again).
+ * A value is a number of seconds, or `'never'`: the snapshot is then
+ * refreshed only when someone asks ("Refresh now").
  *
  * Only kinds that fetch without anybody's credentials refresh on their own
  * ({@link refreshesOnSchedule}): a picked cloud document needs the picking
  * user's connection, which a background job must not use, so it stays manual.
+ *
+ * When an outdated snapshot is refreshed is its **refresh mode**, on the same
+ * three levels (`refreshMode`, #3622):
+ *
+ *  - `always`: the reconciler refreshes it in the background, used or not;
+ *  - `auto` (the default): the reconciler refreshes it in the background while
+ *    the project is used; a project nobody used for
+ *    `platform.projects.refreshIdleDays` (7 by default) is refreshed when it
+ *    is used again, like `onDemand`;
+ *  - `onDemand`: nothing runs in the background; using the project refreshes
+ *    what is outdated, and readers get the stored snapshot meanwhile.
+ *
+ * Using a project is reading its knowledge — a chat, a search, a workflow, an
+ * app or an MCP client (`projectUse.js`) — or attaching it to a chat; it is
+ * recorded as the project's `lastUsedAt`. Opening the project page is not a
+ * use, and neither is anything the server does by itself: a background
+ * refresh never keeps a project active.
+ *
+ * `never` stays the TTL's: such an item is refreshed only by hand, in any mode.
  *
  * @module services/projects/refreshTtl
  */
@@ -37,14 +55,98 @@ export const MIN_REFRESH_TTL_SECONDS = 15 * 60;
 /** Longest TTL in seconds (a year); beyond that, `never` says it better. */
 export const MAX_REFRESH_TTL_SECONDS = 365 * 24 * 60 * 60;
 
-/** The built-in platform default: a day. */
-export const DEFAULT_REFRESH_TTL_SECONDS = 24 * 60 * 60;
+/** The built-in platform default: a week. */
+export const DEFAULT_REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
-/** How long a web page set to `never` stays in the reader's memory. */
-export const NEVER_LINK_CACHE_SECONDS = 30 * 24 * 60 * 60;
+/** The refresh modes (see the module description). */
+export const REFRESH_MODES = Object.freeze(['always', 'auto', 'onDemand']);
 
-/** The kind whose cache lifetime follows the TTL although it is read live. */
-const LIVE_KIND = 'url';
+/** The built-in platform default: in the background while the project is used. */
+export const DEFAULT_REFRESH_MODE = 'auto';
+
+/** Days without use after which an `auto` project is refreshed only when used. */
+export const DEFAULT_REFRESH_IDLE_DAYS = 7;
+
+/** A refresh mode as the API and the stored documents take it. */
+export const zRefreshMode = z.enum(REFRESH_MODES);
+
+/**
+ * A stored refresh mode, or null when it is absent or not one: the next level
+ * then applies.
+ *
+ * @param {unknown} value
+ * @returns {'always'|'auto'|'onDemand'|null}
+ */
+export function normalizeRefreshMode(value) {
+  return REFRESH_MODES.includes(value) ? value : null;
+}
+
+/**
+ * The refresh mode that applies to an item, and where it comes from.
+ *
+ * @param {Object} item
+ * @param {Object|null} project
+ * @param {{refreshMode?: string}} settings - `projectSettings(platform)`.
+ * @returns {{mode: 'always'|'auto'|'onDemand', from: 'item'|'project'|'platform'}}
+ */
+export function effectiveRefreshMode(item, project, settings) {
+  const own = normalizeRefreshMode(item?.refreshMode);
+  if (own) return { mode: own, from: 'item' };
+  const inherited = normalizeRefreshMode(project?.refreshMode);
+  if (inherited) return { mode: inherited, from: 'project' };
+  return {
+    mode: normalizeRefreshMode(settings?.refreshMode) || DEFAULT_REFRESH_MODE,
+    from: 'platform'
+  };
+}
+
+/**
+ * When a project was last used: its `lastUsedAt`, else — a project not used
+ * since uses were recorded — its last activity, else its creation.
+ *
+ * @param {Object|null} project
+ * @returns {number|null} Milliseconds, or null when nothing parses.
+ */
+export function lastUsedMs(project) {
+  for (const value of [project?.lastUsedAt, project?.lastActivityAt, project?.createdAt]) {
+    const at = Date.parse(value || '');
+    if (Number.isFinite(at)) return at;
+  }
+  return null;
+}
+
+/**
+ * Whether nobody used a project for `refreshIdleDays` ({@link lastUsedMs}).
+ * 0 days never counts as idle.
+ *
+ * @param {Object|null} project
+ * @param {{refreshIdleDays?: number}} settings
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+export function isProjectIdle(project, settings, now = Date.now()) {
+  const days = Number(settings?.refreshIdleDays ?? DEFAULT_REFRESH_IDLE_DAYS);
+  if (!Number.isFinite(days) || days <= 0) return false;
+  const at = lastUsedMs(project);
+  return at !== null && now - at >= days * 24 * 60 * 60 * 1000;
+}
+
+/**
+ * Whether an item's outdated snapshot is refreshed in the background (by the
+ * reconciler), rather than when the project is used: mode `always`, or mode
+ * `auto` in a project that is not idle.
+ *
+ * @param {Object} item
+ * @param {Object|null} project
+ * @param {Object} settings
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+export function refreshesInBackground(item, project, settings, now = Date.now()) {
+  const { mode } = effectiveRefreshMode(item, project, settings);
+  if (mode === 'always') return true;
+  return mode === 'auto' && !isProjectIdle(project, settings, now);
+}
 
 /** A TTL as the API and the stored documents take it. */
 export const zRefreshTtl = z.union([
@@ -71,7 +173,7 @@ export function normalizeRefreshTtl(value) {
 /**
  * Whether items of a kind are refreshed by the reconciler when their TTL ran
  * out: a stored snapshot (`storage: text`) the kind fetches itself, with no
- * user's credentials (`credentials: 'none'`). Today that is `web-file`.
+ * user's credentials (`credentials: 'none'`): `web-file` and `url`.
  *
  * @param {Object|null} kind - A registered kind.
  * @returns {boolean}
@@ -85,14 +187,12 @@ export function refreshesOnSchedule(kind) {
 }
 
 /**
- * Whether an item takes a TTL at all: a file refreshed on schedule, or a web
- * page whose cache lifetime the TTL sets.
+ * Whether an item takes a TTL at all: a snapshot refreshed on schedule.
  *
  * @param {{kind?: string}} item
  * @returns {boolean}
  */
 export function takesRefreshTtl(item) {
-  if (item?.kind === LIVE_KIND) return true;
   return refreshesOnSchedule(getItemKind(item?.kind));
 }
 
@@ -131,40 +231,50 @@ function lastCheckedMs(item) {
 }
 
 /**
- * The refresh schedule of an item as the client shows it: the TTL, where it
- * comes from, and — for a file refreshed on schedule — when its source was
- * last checked and when it is checked next (`null` for `never`).
+ * The refresh schedule of an item as the client shows it: the TTL and the
+ * mode with where each comes from, when its source was last checked, when the
+ * snapshot is outdated (`outdatedAt`, `expired` once passed), and when the
+ * background refresh takes it (`nextAt`; `null` for `never`, and for a
+ * snapshot refreshed when the project is used: `background: false`, with
+ * `idle` when that is because nobody used the project lately).
  *
  * @param {Object} item
  * @param {Object|null} project
  * @param {Object} settings - `projectSettings(platform)`.
- * @returns {{ttl: number|'never', from: string, scheduled: boolean,
- *   checkedAt?: string|null, nextAt?: string|null}|null} `null` for an item
- *   that takes no TTL.
+ * @param {number} [now]
+ * @returns {{ttl: number|'never', from: string, mode: string, modeFrom: string,
+ *   scheduled: boolean, background: boolean, idle: boolean, expired: boolean,
+ *   checkedAt: string|null, outdatedAt: string|null, nextAt: string|null}|null}
+ *   `null` for an item that takes no TTL.
  */
-export function refreshScheduleOf(item, project, settings) {
+export function refreshScheduleOf(item, project, settings, now = Date.now()) {
   if (!takesRefreshTtl(item)) return null;
   const { ttl, from } = effectiveRefreshTtl(item, project, settings);
-  if (item.kind === LIVE_KIND) return { ttl, from, scheduled: false };
+  const { mode, from: modeFrom } = effectiveRefreshMode(item, project, settings);
+  const idle = mode === 'auto' && isProjectIdle(project, settings, now);
+  const background = (mode === 'always' || (mode === 'auto' && !idle)) && ttl !== REFRESH_NEVER;
   const checked = lastCheckedMs(item);
+  const outdated = ttl === REFRESH_NEVER || checked === null ? null : checked + ttl * 1000;
   return {
     ttl,
     from,
+    mode,
+    modeFrom,
     scheduled: true,
+    background,
+    idle,
+    expired: outdated !== null && now >= outdated,
     checkedAt: checked === null ? null : new Date(checked).toISOString(),
-    nextAt:
-      ttl === REFRESH_NEVER || checked === null
-        ? null
-        : new Date(checked + ttl * 1000).toISOString()
+    outdatedAt: outdated === null ? null : new Date(outdated).toISOString(),
+    nextAt: background && outdated !== null ? new Date(outdated).toISOString() : null
   };
 }
 
 /**
- * Whether the reconciler should refresh an item now: a file refreshed on
- * schedule, not set to `never`, not being processed, whose last check is
- * older than its TTL. A file that never got a snapshot (its first download
- * failed) counts from its last attempt, so a broken link is retried once per
- * TTL, not on every tick.
+ * Whether the reconciler should refresh an item now: an outdated snapshot
+ * ({@link isRefreshExpired}) refreshed in the background
+ * ({@link refreshesInBackground}). Any other outdated snapshot waits until its
+ * project is used (`ProjectIngestService.refreshOnUse`).
  *
  * @param {Object} item
  * @param {Object|null} project
@@ -173,6 +283,29 @@ export function refreshScheduleOf(item, project, settings) {
  * @returns {boolean}
  */
 export function isRefreshDue(item, project, settings, now = Date.now()) {
+  return (
+    isRefreshExpired(item, project, settings, now) &&
+    refreshesInBackground(item, project, settings, now)
+  );
+}
+
+/**
+ * Whether an item's snapshot is outdated and may be refreshed now: a kind
+ * refreshed on schedule, not set to `never`, not being processed, whose last
+ * check is older than its TTL. A file that never got a snapshot (its first
+ * download failed) counts from its last attempt, so a broken link is retried
+ * once per TTL, not on every tick or every use.
+ *
+ * @param {Object} item
+ * @param {Object|null} project
+ * @param {Object} settings
+ * @param {number} [now]
+ * @returns {boolean}
+ */
+export function isRefreshExpired(item, project, settings, now = Date.now()) {
+  // A web page link not converted yet has no snapshot to refresh: the
+  // conversion fetches it (`ProjectIngestService.fetchWaiting`).
+  if (item?.storage === 'link') return false;
   if (!refreshesOnSchedule(getItemKind(item?.kind))) return false;
   if (item.refreshingAt || !['ready', 'stale', 'failed'].includes(item.status)) return false;
   const { ttl } = effectiveRefreshTtl(item, project, settings);
@@ -180,17 +313,4 @@ export function isRefreshDue(item, project, settings, now = Date.now()) {
   const checked = lastCheckedMs(item) ?? (Date.parse(item.updatedAt || '') || null);
   if (checked === null) return false;
   return now - checked >= ttl * 1000;
-}
-
-/**
- * How long a web page item's text is cached once read, in seconds.
- *
- * @param {Object} item
- * @param {Object|null} project
- * @param {Object} settings
- * @returns {number}
- */
-export function linkCacheSeconds(item, project, settings) {
-  const { ttl } = effectiveRefreshTtl(item, project, settings);
-  return ttl === REFRESH_NEVER ? NEVER_LINK_CACHE_SECONDS : ttl;
 }

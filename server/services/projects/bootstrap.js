@@ -14,6 +14,7 @@
  */
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { setProjectUseListener } from './projectUse.js';
 import { evictItemText, setItemInfoRecorder, setTextReader } from '../knowledge/ItemTextService.js';
 import { evictProjectIndex } from '../knowledge/LocalKnowledgeProvider.js';
 import { evictItemKeys, readText } from './ItemTextStore.js';
@@ -43,7 +44,8 @@ let ingestService = null;
 export async function bootstrapProjects({ reconcile = true } = {}) {
   const service = getProjectService();
   setTextReader((project, item) => readText(project, item, { platform: platformOf() }));
-  // A web page added before titles were captured records its own on first read.
+  // A link item added before titles were captured (an iFinder document)
+  // records its own on first read.
   setItemInfoRecorder((project, item, info) =>
     getProjectService().recordItemInfo(project.id, item.id, info)
   );
@@ -72,6 +74,11 @@ export async function bootstrapProjects({ reconcile = true } = {}) {
     });
   }
   service.ingest = ingestService;
+  // Using a project records the use, which keeps it active, and refreshes
+  // what is outdated in it (#3622).
+  setProjectUseListener(project =>
+    Promise.all([service.noteUse(project.id), ingestService.refreshOnUse(project)])
+  );
   if (reconcile) {
     try {
       const removed = await ingestService.cleanTempDir();

@@ -403,6 +403,7 @@ function ProjectPageContent({ projectId }) {
                 editable={editable}
                 showRefresh
                 platformRefreshTtl={config?.refreshTtl ?? null}
+                platformRefreshMode={config?.refreshMode ?? null}
                 onSaved={saved => {
                   setProject(saved);
                   // The list and the chats' project labels show the name too.

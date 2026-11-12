@@ -1445,8 +1445,8 @@ directly, instead of searching blindly first.
 A web address that serves a document — PDF, Word, PowerPoint, Excel, OpenDocument or any other
 type an upload accepts — is now downloaded when it is added to a project and stored like an
 uploaded file, instead of being read live. Its whole text is available, no longer cut at 50,000
-characters, and the item keeps its source address for citations and refreshes. HTML pages stay
-live links.
+characters, and the item keeps its source address for citations and refreshes. HTML pages are
+stored snapshots too (see "Projects: Web Pages Are Stored Snapshots, Fetched Once").
 
 - The download follows the upload rules: the file size and project size limits, the accepted
   types and the malware scan. An address that serves an image, an archive or a legacy Office file
@@ -1457,12 +1457,12 @@ live links.
 - An address that ends in `.pdf`, `.docx` and the like is added as a file even when the website
   does not answer at that moment; **Retry** downloads it later.
 - How long a file from a website or a web page counts as current is set per installation
-  (**Admin → Projects → Project settings**, one day by default), per project (**Refresh** in the
+  (**Admin → Projects → Project settings**, seven days by default), per project (**Refresh** in the
   project's side panel) and per item (**Refresh schedule** in the item menu), or set to **Never**.
 - Files are downloaded again on their own once that time has passed. An unchanged file is
   neither downloaded nor read again and keeps its text. The item shows when its text was taken
-  and when it is refreshed next; **Refresh** still works at any time. Web pages are read again
-  after the same time, and **Refresh** on a web page applies on every server process.
+  and when it is refreshed next; **Refresh** still works at any time. Web pages are refreshed
+  the same way.
 - Uploads never wait behind scheduled refreshes.
 - Files picked from OneDrive, SharePoint, Google Drive or Nextcloud are still refreshed only by
   hand, because that needs the account of the user who picked them.
@@ -1943,3 +1943,39 @@ chat's own project knowledge now reports `project` in `knowledgeSources` instead
 keeps its admin-configured meaning.
 
 See [Answer Sources](../../answer-sources.md#what-users-see).
+
+## Projects: Web Pages Are Stored Snapshots, Fetched Once
+
+A web page in a project is now stored like a file from a website instead of being read live. It
+is fetched once, converted to text once and stored encrypted; chats and searches read the stored
+text on every server process without asking the website again. Projects with many web pages no
+longer re-read the whole site on each server process, which could exhaust the server's memory.
+
+- The page is refreshed after its refresh schedule (seven days by default). The website is asked
+  whether the page changed; an unchanged page keeps its text and is not converted again. A website
+  that ignores that question is not downloaded either when it names the same version, and a page
+  that names no version is compared by its content. A page whose text is unchanged keeps its
+  stored copy even when the rest of its HTML differs on every request.
+- **Choose when outdated pages and files are refreshed:** **Always, in the background** refreshes
+  them as soon as they are outdated, used or not. **Automatically, while the project is used**
+  (the default) does the same, but a project nobody used for 7 days is refreshed only when it is
+  used again. **When the project is used** never refreshes them in the background. **Never**
+  refreshes only by hand. Set it per installation (**Admin → Projects → Project settings**, with
+  the number of idle days), per project and per item.
+- A project is used when a chat, a search, a workflow, an app or an MCP client reads it, or when it
+  is attached to a chat; opening the project page is not a use, and background refreshes never
+  keep a project active. Using a project refreshes what is outdated in it. Answers use the
+  stored text meanwhile; the project page shows **Refreshing N outdated documents**, and **About
+  this answer** in a chat says when an answer read outdated documents.
+- Adding a page asks the website once. Pages picked with **Find more pages of this website** are
+  not fetched again at all: the site search's own read is stored.
+- The whole page is kept (no longer cut at 50,000 characters), and its text counts toward the
+  project's size limit like a file.
+- A page that cannot be read when it is added shows as **Failed** with the reason; **Retry**
+  fetches it again.
+- Changing the address of a web page item fetches the new page.
+- Existing web pages are converted automatically after the upgrade, in user and admin projects:
+  each shows as processing until its first fetch, which takes a few minutes for large projects.
+- New installations no longer ship the **IntraFind Website** project and the **IntraFind Website
+  Bot** app: their pages need internet access, which many installations do not have. Existing
+  installations keep both.

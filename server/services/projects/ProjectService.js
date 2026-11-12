@@ -36,7 +36,13 @@ import './kinds/uploadKind.js';
 import './kinds/cloudKinds.js';
 import './kinds/projectItemKind.js';
 import './kinds/webFileKind.js';
-import { normalizeRefreshTtl, takesRefreshTtl } from './refreshTtl.js';
+import {
+  normalizeRefreshMode,
+  normalizeRefreshTtl,
+  refreshesOnSchedule,
+  takesRefreshTtl
+} from './refreshTtl.js';
+import { fetchInput, isNamedAfterUrl } from './ProjectIngestService.js';
 import { setProjectViewSettings } from './projectView.js';
 import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
@@ -53,6 +59,13 @@ const COMPONENT = 'ProjectService';
 setProjectViewSettings(() => projectSettings(configCache.getPlatform?.() || {}));
 /** How often one project's activity is refreshed by chat turns at most. */
 export const ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
+
+/**
+ * How often one worker records a use of one project at most (`lastUsedAt`,
+ * #3622): idleness is counted in days, so an hour is exact enough and keeps a
+ * busy project from being rewritten on every search.
+ */
+export const USE_THROTTLE_MS = 60 * 60 * 1000;
 
 export { ProjectError, STATUS_BY_CODE } from './projectErrors.js';
 
@@ -163,6 +176,7 @@ export class ProjectService {
     this.onItemAdded = [];
     /** projectId -> when a chat turn last refreshed its activity. */
     this.activityTouched = new Map();
+    this.useNoted = new Map();
   }
 
   settings() {
@@ -288,10 +302,12 @@ export class ProjectService {
     // name and whether it is pinned; storage, status and provenance are the
     // kind's. Content that has to be fetched and extracted (uploads, picked
     // documents) goes through the item endpoints, which run the ingestion.
+    // A web page is fetched by its own ingest job once the project exists
+    // (#3622): it is created waiting for that fetch (see `fetchWaiting`).
     const items = [];
     for (const input of project.items || []) {
       const { kind, ref } = this._checkKindRef(input.kind, input.ref);
-      if (kind.storage.ihub !== 'link') {
+      if (kind.storage.ihub !== 'link' && !refreshesOnSchedule(kind)) {
         throw new ProjectError(
           'INVALID_REF',
           `Items of kind "${kind.id}" are added through the item endpoints after the project exists`
@@ -313,16 +329,26 @@ export class ProjectService {
       items.push(
         buildItem(kind, prepared?.ref || ref, input, {
           user: actor,
-          origin: 'linked',
+          // A fetched snapshot is `picked`, as when it is added later.
+          origin: kind.storage.ihub === 'link' ? 'linked' : 'picked',
           prepared
         })
       );
     }
+    let created = null;
     try {
-      return await this.repository.createAdmin({ ...project, items }, { actor: actorOf(actor) });
+      created = await this.repository.createAdmin({ ...project, items }, { actor: actorOf(actor) });
     } catch (error) {
       throw translateError(error);
     }
+    if (this.ingest && items.some(item => item.status === 'pending')) {
+      // Its pages are fetched now: a first snapshot is fetched in any refresh mode.
+      await attempt(() => this.ingest.fetchWaiting([created]), 'the first fetch of its pages', {
+        component: COMPONENT,
+        projectId: created.id
+      });
+    }
+    return created;
   }
 
   /**
@@ -346,9 +372,18 @@ export class ProjectService {
           'tags',
           'defaultAppId',
           'knowledgeMode',
-          'refreshTtl'
+          'refreshTtl',
+          'refreshMode'
         ]
-      : ['name', 'description', 'instructions', 'defaultAppId', 'knowledgeMode', 'refreshTtl'];
+      : [
+          'name',
+          'description',
+          'instructions',
+          'defaultAppId',
+          'knowledgeMode',
+          'refreshTtl',
+          'refreshMode'
+        ];
     try {
       return await this.repository.mutate(
         projectId,
@@ -527,7 +562,10 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {{kind: string, ref?: Object, name?: string, pinned?: boolean, text?: string,
+   *   crawlId?: string,
    *   file?: {path: string, contentType?: string, name?: string, bytes?: number, cleanupDir?: string}}} input
+   *   `crawlId`: the site crawl that listed a web page; the page it read is stored
+   *   instead of a new fetch (`crawlHandover.js`).
    * @param {{user: Object, authorize?: Function, origin?: string, run?: Object, wait?: boolean}} options
    *   `wait`: `true` waits for any text kind, `false` never waits (not even for
    *   `text`), omitted waits for `text` only (see `ProjectIngestService.start`).
@@ -538,7 +576,12 @@ export class ProjectService {
     let { kind } = checked;
     const prepared =
       typeof kind.prepare === 'function'
-        ? await kind.prepare(checked.ref, { user, projectId, name: input.name })
+        ? await kind.prepare(checked.ref, {
+            user,
+            projectId,
+            name: input.name,
+            ...(input.crawlId ? { crawlId: input.crawlId } : {})
+          })
         : null;
     let ref = prepared?.ref || checked.ref;
     if (prepared?.kind && prepared.kind !== kind.id) {
@@ -637,13 +680,11 @@ export class ProjectService {
               attempt: storedItem.ingestAttempt,
               purpose: origin === 'written' ? 'write' : 'text'
             }
-          : {
-              fetch: ({ signal } = {}) => kind.fetch(storedItem, { user, purpose: 'pick', signal }),
-              contentType: ref.mimeType,
-              name: storedItem.name,
-              attempt: storedItem.ingestAttempt,
-              purpose: 'pick'
-            };
+          : fetchInput(kind, storedItem, {
+              user,
+              prefetched: prepared?.prefetched,
+              nameFromTitle: prepared?.nameFromTitle === true
+            });
       const result = await this.ingest.start(stored, storedItem, ingestInput, { user, wait });
       if (result) {
         if (!result.item) {
@@ -665,8 +706,10 @@ export class ProjectService {
    * stored, and a source that did not change since `snapshotAt` leaves the
    * item as it was.
    *
-   * A web page (`url`) is read live: its refresh drops the cached read, so
-   * the next use reads the page again, and records when (`checkedAt`).
+   * A web page (`url`) is a stored snapshot like a file from a website
+   * (#3622): its refresh asks the website with the stored version, and an
+   * unchanged page is not converted again. An item whose first fetch failed
+   * is fetched as a new one.
    *
    * @param {string} projectId
    * @param {string} itemId
@@ -679,9 +722,6 @@ export class ProjectService {
    *   processed, a refresh included
    */
   async refreshItem(projectId, itemId, { user, authorize, wait = false, scheduled = false }) {
-    const current = await this.repository.get(projectId);
-    const existing = (current?.items || []).find(entry => entry.id === itemId);
-    if (existing?.kind === 'url') return this._refreshLink(projectId, itemId, { user, authorize });
     if (!this.ingest) {
       throw new ProjectError(
         'INGEST_UNAVAILABLE',
@@ -703,10 +743,17 @@ export class ProjectService {
               'Only picked documents, files from websites and web pages can be refreshed'
             );
           }
-          if (item.status === 'pending' || item.status === 'extracting' || item.refreshingAt) {
+          // A page waiting for its first fetch (pending, no job reserved)
+          // is not being processed: a refresh fetches it now.
+          if (isBeingProcessed(item)) {
             throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
           }
           this._checkKindRef(item.kind, item.ref, { admin: true });
+          // A web page link not converted yet becomes the snapshot it now is.
+          if (item.storage !== 'text') {
+            item.storage = 'text';
+            delete item.cache;
+          }
           // The old snapshot stays readable until the new one is stored, so
           // the status is left alone. `refreshingAt` is reserved here, under
           // the project's lock and before the job is queued: a second refresh
@@ -746,6 +793,8 @@ export class ProjectService {
         // and the end of extraction is not mistaken for "unchanged".
         previousLastModified: storedItem.provenance?.source?.lastModified || null,
         previousEtag: storedItem.provenance?.source?.etag || null,
+        // A hash of what was fetched last, for a source that names no version.
+        previousSha256: storedItem.provenance?.source?.sha256 || null,
         attempt: storedItem.ingestAttempt,
         purpose: 'refresh',
         scheduled
@@ -754,45 +803,6 @@ export class ProjectService {
     );
     if (result?.error) throw new ProjectError(result.error.code, result.error.message);
     return { project: stored, item: result?.item || storedItem };
-  }
-
-  /**
-   * "Refresh now" of a web page: its cached read is dropped (in this process;
-   * another worker's cache runs out with its TTL) and the time recorded.
-   */
-  async _refreshLink(projectId, itemId, { user, authorize }) {
-    let target = null;
-    let stored = null;
-    try {
-      stored = await this.repository.mutate(
-        projectId,
-        project => {
-          const item = (project.items || []).find(entry => entry.id === itemId);
-          if (!item) throw new ProjectError('ITEM_NOT_FOUND', 'Item not found');
-          if (item.kind !== 'url') throw new ProjectError('PROJECT_MISMATCH', 'The item changed');
-          const now = nowIso();
-          item.checkedAt = now;
-          item.error = null;
-          item.status = 'ready';
-          item.updatedAt = now;
-          target = item;
-          return project;
-        },
-        { actor: actorOf(user), authorize }
-      );
-    } catch (error) {
-      throw translateError(error);
-    }
-    if (!stored) throw new ProjectError('PROJECT_NOT_FOUND', 'Project not found');
-    await attempt(
-      async () => {
-        const { forgetCachedUrl } = await import('../../sources/URLHandler.js');
-        await forgetCachedUrl(target.ref?.url);
-      },
-      'the page cache',
-      { component: COMPONENT, projectId, itemId }
-    );
-    return { project: stored, item: target };
   }
 
   /**
@@ -881,12 +891,14 @@ export class ProjectService {
   }
 
   /**
-   * Rename or pin an item, or — for a link item (URL, iHub page, iFinder
-   * document or search) — change what it points at. The new reference is checked
-   * like a new item's; an item still named after its old reference takes the
-   * new one's name. The kind never changes, and neither does the reference of
-   * an uploaded, written or cloud document or of a document linked from another
-   * project (`INVALID_REF`).
+   * Rename or pin an item, or — for a link item (iHub page, iFinder document
+   * or search) or a web page — change what it points at. The new reference is
+   * checked like a new item's; an item still named after its old reference
+   * takes the new one's name. A web page then holds no text until the new page
+   * is fetched: its old snapshot goes, and a job fetches the new one (#3622).
+   * The kind never changes, and neither does the reference of an uploaded,
+   * written or cloud document or of a document linked from another project
+   * (`INVALID_REF`).
    *
    * @param {string} projectId
    * @param {string} itemId
@@ -902,6 +914,9 @@ export class ProjectService {
         ? null
         : await this._checkItemRefChange(projectId, itemId, patch.ref, user);
     let stored = null;
+    /** A web page pointed elsewhere: its new page is fetched, its old text dropped. */
+    let refetch = null;
+    let dropped = null;
     try {
       stored = await this.repository.mutate(
         projectId,
@@ -950,16 +965,67 @@ export class ProjectService {
               changed = true;
             }
           }
+          if (patch.refreshMode !== undefined) {
+            if (!takesRefreshTtl(item)) {
+              throw new ProjectError(
+                'INVALID_REF',
+                `Items of kind "${item.kind}" have no refresh schedule`
+              );
+            }
+            // null goes back to the project's setting.
+            const mode =
+              patch.refreshMode === null ? null : normalizeRefreshMode(patch.refreshMode);
+            if (mode === null && item.refreshMode !== undefined) {
+              delete item.refreshMode;
+              changed = true;
+            } else if (mode !== null && mode !== item.refreshMode) {
+              item.refreshMode = mode;
+              changed = true;
+            }
+          }
           if (patch.ref !== undefined) {
             // The item changed kind or was replaced between the check and the lock.
             if (!checkedRef || checkedRef.kind.id !== item.kind) {
               throw new ProjectError('PROJECT_MISMATCH', 'The item changed while it was edited');
             }
-            changed =
-              applyItemRef(item, checkedRef, {
-                keepName: patch.name !== undefined,
-                language: user?.language
-              }) || changed;
+            const stored = checkedRef.kind.storage.ihub === 'text';
+            // Judged before the reference changes anything: an item still
+            // being processed takes no other address.
+            const busy = isBeingProcessed(item);
+            const otherRef = JSON.stringify(checkedRef.ref) !== JSON.stringify(item.ref);
+            if (stored && busy && otherRef) {
+              throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
+            }
+            // Without the ingest pipeline the new page could not be fetched:
+            // the old snapshot stays.
+            if (stored && otherRef && !this.ingest) {
+              throw new ProjectError(
+                'INGEST_UNAVAILABLE',
+                'Changing the address of a stored page is not available on this installation'
+              );
+            }
+            // A name the old page's title gave follows the new page's title.
+            const titleNamed =
+              stored && patch.name === undefined && Boolean(item.title) && item.name === item.title;
+            const moved = applyItemRef(item, checkedRef, {
+              keepName: patch.name !== undefined,
+              language: user?.language
+            });
+            if (moved && stored) {
+              if (titleNamed) item.name = String(item.ref.url || item.name).slice(0, 300);
+              // A link not converted yet becomes the snapshot it now is.
+              item.storage = 'text';
+              delete item.cache;
+              // The snapshot was of the old page: it goes, the new page is fetched.
+              if (item.text?.blobKey) dropped = item.text.blobKey;
+              delete item.text;
+              delete item.checkedAt;
+              item.snapshotAt = null;
+              item.status = 'pending';
+              item.ingestAttempt = randomUUID();
+              refetch = checkedRef;
+            }
+            changed = moved || changed;
           }
           if (!changed) return null;
           item.updatedAt = nowIso();
@@ -973,7 +1039,31 @@ export class ProjectService {
       throw translateError(error);
     }
     if (!stored) return null;
-    return { project: stored, item: stored.items.find(entry => entry.id === itemId) };
+    let item = stored.items.find(entry => entry.id === itemId);
+    if (dropped) {
+      await attempt(
+        () => this.repository.blobs?.delete(PROJECT_FILES_NAMESPACE, dropped),
+        'the old snapshot',
+        { component: COMPONENT, projectId, itemId }
+      );
+      evictItemKeys(dropped);
+    }
+    if (refetch && item && this.ingest) {
+      await this.ingest.start(
+        stored,
+        item,
+        fetchInput(refetch.kind, item, {
+          user,
+          prefetched: refetch.prepared?.prefetched,
+          // A name sent with the new address is the user's, whatever it reads.
+          nameFromTitle: patch.name === undefined && isNamedAfterUrl(item)
+        }),
+        { user, wait: false }
+      );
+      item =
+        (await this.repository.get(projectId))?.items?.find(entry => entry.id === itemId) || item;
+    }
+    return { project: stored, item };
   }
 
   /**
@@ -999,7 +1089,8 @@ export class ProjectService {
     // refused the same way, or an editor could point a URL item at any host
     // after the admin turned URL fetching off.
     const checked = this._checkKindRef(existing.kind, ref);
-    if (checked.kind.storage.ihub !== 'link' || checked.kind.id === PROJECT_ITEM_KIND) {
+    const editable = checked.kind.storage.ihub === 'link' || checked.kind.refEditable === true;
+    if (!editable || checked.kind.id === PROJECT_ITEM_KIND) {
       throw new ProjectError(
         'INVALID_REF',
         `The reference of an item of kind "${existing.kind}" cannot be changed`
@@ -1536,7 +1627,13 @@ export class ProjectService {
       // A delete that lists the markers just before this one leaves the chat with a
       // container that no longer exists, which a chat's scope skips like any missing project.
       if (!project || project.deleting === true) return false;
-      return this.repository.addChatMarker(projectId, chatId, { ownerId, private: true });
+      const added = await this.repository.addChatMarker(projectId, chatId, {
+        ownerId,
+        private: true
+      });
+      // Attaching a project to a chat is a use (#3622).
+      if (added) this.noteUse(projectId).catch(() => {});
+      return added;
     }
     // Under the project's lock, so a deletion that lists the markers cannot
     // slip between the existence check and the marker; a project that is
@@ -1548,7 +1645,8 @@ export class ProjectService {
         projectId,
         async project => {
           await this.repository.addChatMarker(projectId, chatId, { ownerId });
-          return project;
+          // Attaching a project to a chat is a use (#3622).
+          return { ...project, lastUsedAt: nowIso() };
         },
         { authorize, touchActivity: true, touchUpdated: false }
       );
@@ -1566,11 +1664,14 @@ export class ProjectService {
     return this.repository.removeChatMarker(projectId, chatId);
   }
 
-  /** Touch a project's `lastActivityAt` (a chat turn ran inside it). */
+  /**
+   * Touch a project's `lastActivityAt` (a chat turn ran inside it), which is
+   * also a use (`lastUsedAt`).
+   */
   touchActivity(projectId) {
     return attempt(
       () =>
-        this.repository.mutate(projectId, project => ({ ...project }), {
+        this.repository.mutate(projectId, project => ({ ...project, lastUsedAt: nowIso() }), {
           touchActivity: true,
           touchUpdated: false
         }),
@@ -1596,13 +1697,65 @@ export class ProjectService {
     this.activityTouched.set(projectId, at);
     const touched = await this.touchActivity(projectId);
     if (!touched) this.activityTouched.delete(projectId);
+    else this.useNoted.set(projectId, at);
     return Boolean(touched);
+  }
+
+  /**
+   * The project's knowledge is being used — a chat, a search, a workflow, an
+   * app or an MCP client read it (`projectUse.js`): record it as `lastUsedAt`,
+   * which keeps a project in refresh mode `auto` refreshed in the background
+   * (#3622). At most once per {@link USE_THROTTLE_MS} per project and worker.
+   * Neither `updatedAt` nor `lastActivityAt` change: a use is not an edit.
+   * Never throws.
+   *
+   * @param {string} projectId
+   * @returns {Promise<boolean>} Whether the use was recorded.
+   */
+  async noteUse(projectId) {
+    if (!projectId || !this.repository.isAvailable()) return false;
+    const last = this.useNoted.get(projectId) || 0;
+    const at = Date.now();
+    if (at - last < USE_THROTTLE_MS) return false;
+    this.useNoted.set(projectId, at);
+    let stored = null;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        project => ({ ...project, lastUsedAt: new Date(at).toISOString() }),
+        { touchActivity: false, touchUpdated: false }
+      );
+    } catch (error) {
+      logger.warn('Could not record a project use', {
+        component: COMPONENT,
+        projectId,
+        error: error.message
+      });
+    }
+    if (!stored) this.useNoted.delete(projectId);
+    return Boolean(stored);
   }
 }
 
 /**
  * Run one cascade step without letting it strand the rest.
  */
+/**
+ * Whether a job is working on an item: extracting, being refreshed, or
+ * pending with its job reserved (`ingestAttempt`). A page waiting for its
+ * first fetch is pending without one: nothing works on it yet (#3622).
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+function isBeingProcessed(item) {
+  return (
+    (item.status === 'pending' && Boolean(item.ingestAttempt)) ||
+    item.status === 'extracting' ||
+    Boolean(item.refreshingAt)
+  );
+}
+
 /** The origins whose stored text an editor may replace in the dialog. */
 export const EDITABLE_TEXT_ORIGINS = Object.freeze(['written', 'uploaded', 'imported']);
 
