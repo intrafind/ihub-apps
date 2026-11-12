@@ -73,10 +73,9 @@ export class LockManager {
    *   `fn`'s rejection is rethrown unchanged (no wrapping), so a caller's own
    *   error handling still works through the lock.
    * - When the lock is held elsewhere, wait up to `waitMs` and then throw
-   *   {@link LockTimeoutError}. **Never run `fn` without the lock.** Note that
-   *   `utils/fileLock.js#withFileLock` deliberately does the opposite (it
-   *   continues after its timeout with a warning), so it cannot back this
-   *   method directly.
+   *   {@link LockTimeoutError}. **Never run `fn` without the lock.**
+   *   `utils/fileLock.js#withFileLock` honours the same rule and shares the
+   *   lease primitives with the filesystem implementation.
    * - A lease is refreshed while `fn` runs, so it only ages out once its holder
    *   stops refreshing it — a crash, or an event loop wedged for longer than
    *   `ttlMs`. A waiter that finds a lease older than `ttlMs` takes it over. A

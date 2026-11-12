@@ -652,6 +652,22 @@ capped at its old size; the web page cache also keeps at most 256 pages per sour
 first. On a small worker, a project read again after a while may be loaded from storage again instead of
 from memory.
 
+## Config Locks No Longer Let Two Workers Write at Once
+
+Under load, or after a worker crashed while holding a lock, several workers could change the same
+file (users, OAuth clients, refresh tokens, short links, document templates, config files) at the
+same time, and one change silently overwrote the other. File locks now stay held for as long as
+their holder is working, a crashed holder's lock is taken over by exactly one worker, and a worker
+whose lock expired no longer removes the lock of the worker that took over.
+
+- A lock that cannot be obtained within its wait no longer lets the change run anyway: the request
+  fails with `503` (`LOCK_TIMEOUT`) and can be retried. Nothing is written.
+- The iFinder sign-in refresh gives up after 10 seconds if the identity provider does not answer,
+  instead of holding the refresh lock. A waiting request used to refresh with the already used
+  refresh token, which the provider rejected and which deleted the user's stored tokens.
+- The `.update-lock` of the in-product updater is renewed and released only by the operation that
+  created it.
+
 ## Creating, Editing and Deleting Users No Longer Loses Concurrent Changes
 
 Creating, editing or deleting a user in Admin → Users read `users.json` and wrote it back without a lock, and so

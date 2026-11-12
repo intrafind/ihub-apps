@@ -367,6 +367,44 @@ describe('refresh', () => {
     assert.deepEqual(await getLoginTokenStatus(USER.id, PROVIDER), { authorized: false });
   });
 
+  it('a hung token endpoint aborts the refresh, keeps the tokens and releases the lock', async () => {
+    await storeFor(USER, { accessToken: 'old-at', refreshToken: 'rt-1', expiresIn: 1 });
+    // A provider that accepts the connection and never answers. Without a request
+    // timeout the refresh holds the lock past the waiters' budget, and a waiter
+    // that gave up and refreshed anyway would redeem the single-use refresh
+    // token a second time, get invalid_grant and wipe the stored tokens.
+    const hung = http.createServer(() => {});
+    await new Promise(resolve => hung.listen(0, '127.0.0.1', resolve));
+    const hungURL = `http://127.0.0.1:${hung.address().port}/oauth/v2/token`;
+    const hungPlatform = exchangePlatform();
+    hungPlatform.oidcAuth.providers[0].tokenURL = hungURL;
+    platform = hungPlatform;
+    try {
+      const started = Date.now();
+      await assert.rejects(getAuthorizationHeader(USER), error => {
+        assert.equal(error.code, 'integration_unavailable');
+        return true;
+      });
+      assert.ok(Date.now() - started < 14_000, 'gave up well inside the lock wait');
+      assert.equal(
+        (await getLoginTokenStatus(USER.id, PROVIDER)).authorized,
+        true,
+        'a timeout is not a terminal failure: the tokens stay'
+      );
+
+      // The lock was released: the next attempt is not blocked behind a dead one.
+      platform = exchangePlatform();
+      tokenServer.handler = params =>
+        params.grant_type === 'refresh_token'
+          ? { json: { access_token: 'new-at', refresh_token: 'rt-2', expires_in: 3600 } }
+          : { json: { access_token: 'ifinder-at', expires_in: 600 } };
+      assert.equal(await getAuthorizationHeader(USER), 'Bearer ifinder-at');
+    } finally {
+      hung.closeAllConnections?.();
+      hung.close();
+    }
+  });
+
   it('a temporary refresh failure keeps the stored tokens', async () => {
     await storeFor(USER, { accessToken: 'old-at', refreshToken: 'rt-1', expiresIn: 1 });
     tokenServer.handler = () => ({ status: 503, json: {} });

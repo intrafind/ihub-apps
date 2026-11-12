@@ -34,6 +34,7 @@ import { tokenStorageIdFor } from './auth/tokenSecrets.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { withFileLock } from '../../utils/fileLock.js';
+import { LockTimeoutError } from '../../storage/errors.js';
 import { publish, subscribe } from '../../clusterBus.js';
 import logger from '../../utils/logger.js';
 import {
@@ -401,9 +402,20 @@ function resolveClientSecret(ref) {
   return secret;
 }
 
+/**
+ * Upper bound for one token-endpoint round trip. It must stay well under the
+ * refresh lock's wait (`REFRESH_LOCK_TIMEOUT_MS`): a hung provider otherwise
+ * keeps the lock past the waiters' budget, and a waiter that gave up and
+ * refreshed anyway would redeem the single-use refresh token a second time.
+ */
+const TOKEN_REQUEST_TIMEOUT_MS = 10_000;
+const REFRESH_LOCK_TIMEOUT_MS = 15_000;
+const REFRESH_LOCK_STALE_MS = 30_000;
+
 async function postForm(url, params) {
   const response = await httpFetch(url, {
     method: 'POST',
+    signal: AbortSignal.timeout(TOKEN_REQUEST_TIMEOUT_MS),
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       Accept: 'application/json'
@@ -472,77 +484,94 @@ async function refreshUnderLock(user, settings, staleAccessToken) {
   const lockPath = tokenFile.replace(/\.json$/, '.lock');
   const clientSecret = resolveClientSecret(settings.clientSecretRef);
 
-  return withFileLock(
-    lockPath,
-    async () => {
-      let current;
-      try {
-        current = await tokenStorageService.getUserTokens(
+  try {
+    return await withFileLock(
+      lockPath,
+      async () => {
+        let current;
+        try {
+          current = await tokenStorageService.getUserTokens(
+            storageId,
+            OIDC_LOGIN_TOKEN_SERVICE,
+            settings.providerName
+          );
+        } catch (error) {
+          // Deleted meanwhile (revoked, or another worker's terminal refresh).
+          if (/not authenticated/i.test(error?.message || '')) {
+            throw missingLoginTokenError(user, settings);
+          }
+          throw error;
+        }
+        const expired = await tokenStorageService.areTokensExpired(
           storageId,
           OIDC_LOGIN_TOKEN_SERVICE,
           settings.providerName
         );
-      } catch (error) {
-        // Deleted meanwhile (revoked, or another worker's terminal refresh).
-        if (/not authenticated/i.test(error?.message || '')) {
-          throw missingLoginTokenError(user, settings);
+        if (current.accessToken !== staleAccessToken && !expired) {
+          return current.accessToken;
         }
-        throw error;
-      }
-      const expired = await tokenStorageService.areTokensExpired(
-        storageId,
-        OIDC_LOGIN_TOKEN_SERVICE,
-        settings.providerName
-      );
-      if (current.accessToken !== staleAccessToken && !expired) {
-        return current.accessToken;
-      }
 
-      try {
-        if (!current.refreshToken) {
-          throw new OAuthRefreshError('No refresh token stored', REFRESH_ERROR_CODES.MISSING);
-        }
-        const refreshed = await refreshLoginTokens(settings, current.refreshToken, clientSecret);
-        await tokenStorageService.storeUserTokens(
-          storageId,
-          OIDC_LOGIN_TOKEN_SERVICE,
-          {
-            accessToken: refreshed.accessToken,
-            // Providers that do not rotate answer without a new refresh token.
-            refreshToken: refreshed.refreshToken || current.refreshToken,
-            expiresIn: lifetimeSeconds(refreshed.expiresIn, refreshed.accessToken),
-            authorizedAt: current.authorizedAt
-          },
-          settings.providerName
-        );
-        logger.info('Refreshed the OIDC sign-in tokens for iFinder', {
-          component: COMPONENT,
-          userId: user.id,
-          providerName: settings.providerName
-        });
-        return refreshed.accessToken;
-      } catch (error) {
-        if (isTerminalRefreshError(error)) {
-          logger.warn('OIDC sign-in can no longer be refreshed; stored tokens deleted', {
+        try {
+          if (!current.refreshToken) {
+            throw new OAuthRefreshError('No refresh token stored', REFRESH_ERROR_CODES.MISSING);
+          }
+          const refreshed = await refreshLoginTokens(settings, current.refreshToken, clientSecret);
+          await tokenStorageService.storeUserTokens(
+            storageId,
+            OIDC_LOGIN_TOKEN_SERVICE,
+            {
+              accessToken: refreshed.accessToken,
+              // Providers that do not rotate answer without a new refresh token.
+              refreshToken: refreshed.refreshToken || current.refreshToken,
+              expiresIn: lifetimeSeconds(refreshed.expiresIn, refreshed.accessToken),
+              authorizedAt: current.authorizedAt
+            },
+            settings.providerName
+          );
+          logger.info('Refreshed the OIDC sign-in tokens for iFinder', {
+            component: COMPONENT,
+            userId: user.id,
+            providerName: settings.providerName
+          });
+          return refreshed.accessToken;
+        } catch (error) {
+          if (isTerminalRefreshError(error)) {
+            logger.warn('OIDC sign-in can no longer be refreshed; stored tokens deleted', {
+              component: COMPONENT,
+              userId: user.id,
+              providerName: settings.providerName,
+              code: error.code
+            });
+            await deleteLoginTokens(user.id, settings.providerName);
+            throw reauthorizationError(settings, error);
+          }
+          logger.error('Refreshing the OIDC sign-in for iFinder failed', {
             component: COMPONENT,
             userId: user.id,
             providerName: settings.providerName,
-            code: error.code
+            error
           });
-          await deleteLoginTokens(user.id, settings.providerName);
-          throw reauthorizationError(settings, error);
+          throw createUnavailableError(`The sign-in provider ${settings.displayName}`, error);
         }
-        logger.error('Refreshing the OIDC sign-in for iFinder failed', {
-          component: COMPONENT,
-          userId: user.id,
-          providerName: settings.providerName,
-          error
-        });
-        throw createUnavailableError(`The sign-in provider ${settings.displayName}`, error);
-      }
-    },
-    { component: COMPONENT, timeoutMs: 15_000, staleMs: 30_000 }
-  );
+      },
+      { component: COMPONENT, timeoutMs: REFRESH_LOCK_TIMEOUT_MS, staleMs: REFRESH_LOCK_STALE_MS }
+    );
+  } catch (error) {
+    // Fail closed: never refresh without the lock. The holder's refresh is
+    // still in flight (or its lease has not aged out yet), and a second
+    // redemption of the same single-use refresh token would come back as
+    // `invalid_grant` and wipe the stored tokens. The user is not signed out;
+    // the request can simply be retried.
+    if (error instanceof LockTimeoutError) {
+      logger.warn('Timed out waiting for the OIDC sign-in refresh lock', {
+        component: COMPONENT,
+        userId: user.id,
+        providerName: settings.providerName
+      });
+      throw createUnavailableError(`The sign-in provider ${settings.displayName}`, error);
+    }
+    throw error;
+  }
 }
 
 /**
