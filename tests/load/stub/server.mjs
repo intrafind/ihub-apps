@@ -40,7 +40,15 @@ const WORDS = (
   'and data sources are available to which groups of users in the organisation'
 ).split(' ');
 
-const stats = { requests: 0, inflight: 0, maxInflight: 0, errors: 0, promptChars: [] };
+const stats = {
+  requests: 0,
+  inflight: 0,
+  maxInflight: 0,
+  errors: 0,
+  promptChars: [],
+  promptTokens: 0,
+  genTokens: 0
+};
 const jitter = v => Math.max(0, v * (1 + (Math.random() * 2 - 1) * JITTER));
 
 function promptChars(body) {
@@ -63,6 +71,22 @@ const llm = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(
       JSON.stringify({ object: 'list', data: [{ id: 'loadtest-stub-model', object: 'model' }] })
+    );
+    return;
+  }
+  if (req.method === 'GET' && req.url.startsWith('/metrics')) {
+    // vLLM-style metrics, so stub runs exercise the same observer as gpu-01.
+    res.writeHead(200, { 'content-type': 'text/plain; version=0.0.4' });
+    res.end(
+      [
+        `vllm:num_requests_running{model_name="loadtest-stub-model"} ${stats.inflight}`,
+        `vllm:num_requests_waiting{model_name="loadtest-stub-model"} 0`,
+        `vllm:kv_cache_usage_perc{model_name="loadtest-stub-model"} ${Math.min(1, stats.inflight / 256)}`,
+        `vllm:prompt_tokens_total{model_name="loadtest-stub-model"} ${stats.promptTokens}`,
+        `vllm:generation_tokens_total{model_name="loadtest-stub-model"} ${stats.genTokens}`,
+        `vllm:num_preemptions_total{model_name="loadtest-stub-model"} 0`,
+        ''
+      ].join('\n')
     );
     return;
   }
@@ -110,6 +134,8 @@ const llm = http.createServer((req, res) => {
       completion_tokens: n,
       total_tokens: Math.ceil(pc / 4) + n
     };
+    stats.promptTokens += usage.prompt_tokens;
+    stats.genTokens += n;
     const id = `chatcmpl-${Date.now()}`;
     const model = body.model || 'loadtest-stub-model';
     let finished = false;

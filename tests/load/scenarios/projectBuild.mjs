@@ -27,7 +27,8 @@ import {
 export default async function projectBuild(ctx) {
   const s = ctx.config.scenarios.projectBuild;
   const { client, metrics } = ctx;
-  const topicFiles = ctx.fixtures.filter(f => f.buffer.length <= s.maxFileBytes);
+  // No scans: a project cannot use a file without a text layer (NO_TEXT).
+  const topicFiles = ctx.fixtures.filter(f => f.buffer.length <= s.maxFileBytes && !f.noText);
   const project = await createProject(client, {
     name: `LT-build ${ctx.user.username} ${randomUUID().slice(0, 8)}`,
     description: 'loadtest build scenario',

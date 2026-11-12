@@ -14,6 +14,15 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+/** Output of tools/generate-corpus.mjs (git-ignored); used when present. */
+export const CORPUS_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  'fixtures',
+  'corpus'
+);
 
 export const TOPICS = [
   {
@@ -90,13 +99,34 @@ export const TOPICS = [
   }
 ];
 
-const FILLER = (
-  'The organisation reviews this guideline regularly and aligns it with legal requirements, ' +
-  'internal audits and feedback from the departments that apply it in daily work. Managers are ' +
-  'responsible for communicating changes to their teams, and employees are expected to read the ' +
-  'current version before they act on it. Exceptions are documented in the ticket system together ' +
-  'with the reason, the approver and the date of approval. '
-).repeat(1);
+// Business vocabulary for varied, non-repeating prose (natural compression ratio,
+// realistic BM25 statistics) — deterministic per seed.
+const SUBJECTS = (
+  'the department|each manager|the project team|every employee|the controlling unit|' +
+  'the works council|the service desk|the data protection officer|external partners|the steering committee|' +
+  'the finance team|the regional office|the product owner|the auditor|new colleagues'
+).split('|');
+const VERBS = (
+  'reviews|approves|documents|escalates|updates|checks|coordinates|reports|archives|validates|' +
+  'prioritises|monitors|plans|clarifies|signs off'
+).split('|');
+const OBJECTS = (
+  'the quarterly budget|all open requests|the risk register|exceptions to this rule|the supplier list|' +
+  'the access rights|the training records|travel bookings|the incident log|purchase orders|the release plan|' +
+  'customer feedback|the service levels|contract renewals|the onboarding checklist'
+).split('|');
+const TAILS = (
+  'within five working days|before the end of the month|in the central ticket system|' +
+  'together with the responsible lead|according to the current guideline|after consulting the legal team|' +
+  'unless the board decides otherwise|for every location in Germany and Austria|as part of the annual audit|' +
+  'with a short written justification|in line with GDPR requirements|before any payment is released'
+).split('|');
+
+function sentence(rand) {
+  const p = list => list[Math.floor(rand() * list.length)];
+  const s = `${p(SUBJECTS)} ${p(VERBS)} ${p(OBJECTS)} ${p(TAILS)}`;
+  return `${s[0].toUpperCase()}${s.slice(1)}.`;
+}
 
 /** Deterministic pseudo-random generator so every run uploads the same bytes. */
 function rng(seed) {
@@ -118,9 +148,11 @@ export function topicText(topic, bytes, seed = 1) {
   while (size < bytes) {
     const fact = topic.facts[Math.floor(rand() * topic.facts.length)];
     const kw = topic.keywords[Math.floor(rand() * topic.keywords.length)];
+    const para = () =>
+      Array.from({ length: 3 + Math.floor(rand() * 4) }, () => sentence(rand)).join(' ');
     const block =
-      `Section ${section}: ${kw}\n\n${fact} ${FILLER}` +
-      `In section ${section} the rules about ${kw} are explained in detail. ${FILLER}\n\n`;
+      `Section ${section}: ${kw}\n\n${fact} ${para()}\n\n` +
+      `The rules about ${kw} apply to all units. ${para()}\n\n`;
     parts.push(block);
     size += block.length;
     section += 1;
@@ -292,20 +324,52 @@ export function generateFixtures() {
 
 /** Files of a directory with a supported extension (not recursive). */
 export function readFixtureDir(dir) {
+  // A manifest (written by tools/generate-corpus.mjs) carries topic and no-text flags.
+  let manifest = {};
+  const manifestFile = path.join(dir, 'manifest.json');
+  if (fs.existsSync(manifestFile)) {
+    manifest = Object.fromEntries(
+      JSON.parse(fs.readFileSync(manifestFile, 'utf8')).map(m => [m.name, m])
+    );
+  }
   return fs
     .readdirSync(dir)
-    .filter(name => MIME[path.extname(name).toLowerCase()])
+    .filter(name => name !== 'manifest.json' && MIME[path.extname(name).toLowerCase()])
     .map(name => ({
       name,
       mime: MIME[path.extname(name).toLowerCase()],
       buffer: fs.readFileSync(path.join(dir, name)),
-      topic: null
+      topic: manifest[name]?.topic ?? TOPICS.find(t => name.startsWith(`${t.id}-`))?.id ?? null,
+      // A scan without a text layer: realistic for chat uploads (pdfium renders
+      // it), but it cannot feed a project.
+      noText: Boolean(manifest[name]?.noText)
     }));
 }
 
+/**
+ * The documents a run uploads:
+ * - `dir` given: exactly the files in it (your own customer-like documents);
+ * - else the generated corpus (tests/load/fixtures/corpus, from
+ *   `npm run loadtest:corpus`) plus small generated Markdown/HTML/CSV/JSON files;
+ * - else only the small generated set (simple PDFs included).
+ */
 export function loadFixtures(dir) {
-  const files = dir ? readFixtureDir(dir) : generateFixtures();
+  let files;
+  let source;
+  if (dir) {
+    files = readFixtureDir(dir);
+    source = dir;
+  } else if (fs.existsSync(CORPUS_DIR) && fs.readdirSync(CORPUS_DIR).length > 1) {
+    const small = generateFixtures().filter(f => !/\.(pdf|txt)$/.test(f.name));
+    files = [...readFixtureDir(CORPUS_DIR), ...small];
+    source = 'generated corpus + small text files';
+  } else {
+    files = generateFixtures();
+    source =
+      'simple generated files — run `npm run loadtest:corpus` for realistic Office/PDF documents';
+  }
   if (files.length === 0) throw new Error(`No supported fixture files in ${dir}`);
+  files.source = source;
   return files;
 }
 

@@ -145,6 +145,8 @@ async function upsertModel(model) {
 
 const v1 = url => `${url.replace(/\/+$/, '').replace(/\/v1(\/chat\/completions)?$/, '')}/v1`;
 
+// The stub mirrors the GPU model's context window so project chats inject the same amount.
+let discoveredContext = null;
 if (cfg.setup.gpu?.url && !flags['skip-models']) {
   const g = cfg.setup.gpu;
   let modelName = g.modelName;
@@ -163,6 +165,7 @@ if (cfg.setup.gpu?.url && !flags['skip-models']) {
       process.exit(2);
     }
     modelName = res.body.models[0].id;
+    discoveredContext = res.body.models.find(m => m.id === modelName)?.contextWindow || null;
     log(`GPU serves: ${res.body.models.map(m => m.id).join(', ')} → using ${modelName}`);
   }
   await upsertModel({
@@ -172,7 +175,7 @@ if (cfg.setup.gpu?.url && !flags['skip-models']) {
     description: { en: 'Real LLM for load tests' },
     url: `${v1(g.url)}/chat/completions`,
     provider: g.provider,
-    contextWindow: g.contextWindow,
+    contextWindow: discoveredContext || g.contextWindow,
     maxOutputTokens: g.maxOutputTokens,
     supportsTools: g.supportsTools,
     concurrency: g.concurrency,
@@ -190,7 +193,7 @@ if (cfg.setup.stub?.url && !flags['skip-models']) {
     description: { en: 'Paced fake LLM for capacity tests of iHub itself' },
     url: `${v1(s.url)}/chat/completions`,
     provider: 'local',
-    contextWindow: s.contextWindow,
+    contextWindow: discoveredContext || s.contextWindow,
     maxOutputTokens: s.maxOutputTokens,
     supportsTools: 'none',
     concurrency: 100,
@@ -234,15 +237,24 @@ if (!flags['skip-users']) {
 }
 
 // --- 5. log in, acknowledge ----------------------------------------------------
-const clients = [];
-for (let i = 0; i < users; i++) {
-  const username = userName(cfg, i);
-  const { client } = await withRetry(
-    () => login({ baseUrl: cfg.baseUrl, username, password: cfg.users.password }),
-    {
-      label: `login ${username}`
-    }
-  );
+// Logins in parallel (bcrypt on the server); acknowledgements one at a time,
+// because each one rewrites users.json.
+const clients = new Array(users);
+await mapLimit(
+  Array.from({ length: users }, (_, i) => i),
+  cfg.loginConcurrency,
+  async i => {
+    const username = userName(cfg, i);
+    const { client } = await withRetry(
+      () => login({ baseUrl: cfg.baseUrl, username, password: cfg.users.password }),
+      { label: `login ${username}` }
+    );
+    clients[i] = { username, client };
+  }
+);
+log(`logged in ${users} users`);
+let acknowledged = 0;
+for (const { client } of clients) {
   const me = await client.get('/api/eu-ai-act/acknowledgements/me');
   if (me.status === 200 && me.body?.enabled && me.body?.enforce && !me.body?.acknowledged) {
     await client.request('POST', '/api/eu-ai-act/acknowledgements/me', {
@@ -253,14 +265,16 @@ for (let i = 0; i < users; i++) {
       },
       expect: [200, 201]
     });
+    acknowledged += 1;
   }
-  clients.push({ username, client });
-  if ((i + 1) % 50 === 0) log(`logged in / acknowledged: ${i + 1}/${users}`);
 }
+if (acknowledged) log(`confirmed the AI-use notice for ${acknowledged} users`);
 
 // --- 6. LT-chat projects -----------------------------------------------------
 if (!flags['skip-projects'] && (cfg.mix.projectChat > 0 || flags['force-projects'])) {
-  const fixtures = loadFixtures(cfg.fixtures.dir).filter(f => f.buffer.length <= 5_000_000);
+  const fixtures = loadFixtures(cfg.fixtures.dir).filter(
+    f => f.buffer.length <= 5_000_000 && !f.noText
+  );
   const docsFor = topicId => {
     const own = fixtures.filter(f => f.topic === topicId);
     const rest = fixtures.filter(f => f.topic !== topicId);
@@ -299,7 +313,8 @@ if (!flags['skip-projects'] && (cfg.mix.projectChat > 0 || flags['force-projects
     tasks.push(() => ensureProject(owner, `LT-chat ${topic.id} shared-${s + 1}`, topic.id, true));
   }
   if (cfg.setup.ownProjects) {
-    clients.forEach((owner, i) => {
+    // Own projects for the first N users only; the rest chat in the shared ones.
+    clients.slice(0, cfg.setup.ownProjectsMax ?? clients.length).forEach((owner, i) => {
       const topic = TOPICS[i % TOPICS.length];
       tasks.push(() =>
         ensureProject(owner, `LT-chat ${topic.id} ${owner.username}`, topic.id, false)

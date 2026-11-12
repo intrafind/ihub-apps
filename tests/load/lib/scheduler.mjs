@@ -50,6 +50,9 @@ function targetAt(timeline, elapsed) {
  * @param {(vuIndex:number, isActive:() => boolean) => Promise<void>} opts.runVu  runs sessions until isActive() is false
  * @param {number} [opts.gracefulStopSec]
  * @param {(info:object) => void} [opts.onTick]
+ * @param {(stageIndex:number) => Promise<boolean>|boolean} [opts.shouldStop]
+ *   asked when a hold phase ends; true ends the run there (open-ended capacity
+ *   ramps stop after the first load level that broke an SLO)
  */
 export async function runSchedule({
   stages,
@@ -58,19 +61,28 @@ export async function runSchedule({
   metrics,
   runVu,
   gracefulStopSec = 120,
-  onTick = () => {}
+  onTick = () => {},
+  shouldStop = () => false
 }) {
   const timeline = buildTimeline(stages);
   const startedAt = Date.now();
   const running = new Map(); // vuIndex -> Promise
   let target = 0;
   let lastStage = null;
+  let stoppedAfter = null;
 
   const isActiveFor = i => () => i < target;
 
   for (;;) {
     const elapsed = Date.now() - startedAt;
     const now = targetAt(timeline, elapsed);
+    // A hold phase just ended (or the run did): may stop here.
+    if (lastStage !== null && /^\d+$/.test(lastStage) && (!now || now.stage !== lastStage)) {
+      if (now && (await shouldStop(Number(lastStage)))) {
+        stoppedAfter = Number(lastStage);
+        break;
+      }
+    }
     if (!now) break;
     target = now.vus;
     if (now.stage !== lastStage) {
@@ -100,5 +112,11 @@ export async function runSchedule({
     all.then(() => false),
     delay(gracefulStopSec * 1000).then(() => true)
   ]);
-  return { timeline, startedAt, endedAt: Date.now(), abandonedVus: timedOut ? running.size : 0 };
+  return {
+    timeline: stoppedAfter === null ? timeline : timeline.slice(0, stoppedAfter + 1),
+    stoppedAfter,
+    startedAt,
+    endedAt: Date.now(),
+    abandonedVus: timedOut ? running.size : 0
+  };
 }

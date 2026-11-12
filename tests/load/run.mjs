@@ -25,7 +25,9 @@ import { loadFixtures } from './lib/fixtures.mjs';
 import { listProjects } from './lib/projects.mjs';
 import { runSchedule, buildTimeline } from './lib/scheduler.mjs';
 import { startSamplers } from './lib/sampler.mjs';
-import { renderMarkdown, timelineCsv } from './lib/report.mjs';
+import { renderMarkdown, timelineCsv, stageStats, checkSlo } from './lib/report.mjs';
+import { RateTracker } from './lib/ratelimits.mjs';
+import { pageLoad } from './scenarios/pageLoad.mjs';
 import {
   between,
   pick,
@@ -49,6 +51,7 @@ const cfg = loadConfig();
 const { index: shardIndex, count: shardCount } = cfg.shard;
 const metrics = new Metrics();
 const outDir = path.join(cfg.results.dir, cfg.runId);
+const rateTracker = new RateTracker(metrics, new URL(cfg.baseUrl).pathname);
 
 for (const name of Object.keys(cfg.mix)) {
   if (cfg.mix[name] > 0 && !SCENARIOS[name]) throw new Error(`Unknown scenario in mix: ${name}`);
@@ -76,7 +79,7 @@ log(`server ${health.body?.version || '?'} healthy`);
 
 const fixtures = loadFixtures(cfg.fixtures.dir);
 log(
-  `fixtures: ${fixtures.length} files, ${(fixtures.reduce((a, f) => a + f.buffer.length, 0) / 1048576).toFixed(1)} MB${cfg.fixtures.dir ? ` from ${cfg.fixtures.dir}` : ' (generated)'}`
+  `fixtures: ${fixtures.length} files, ${(fixtures.reduce((a, f) => a + f.buffer.length, 0) / 1048576).toFixed(1)} MB (${fixtures.source})`
 );
 
 // --- log in this shard's users before the clock starts -------------------
@@ -96,6 +99,7 @@ async function loginUser(idx) {
     { label: `login ${username}` }
   );
   client.metrics = metrics;
+  client.rate = { tracker: rateTracker, user: username };
   let projects = { own: [], shared: [] };
   try {
     const items = (await listProjects(client)).filter(p => String(p.name).startsWith('LT-chat'));
@@ -140,6 +144,15 @@ if (shardIndex === 0 && cfg.sampling.server) {
 }
 const samplers = startSamplers({ cfg, metrics, adminClient });
 
+// Configured limits and proxy trust, for the rate-limit section of the report.
+const serverLimits = {};
+if (adminClient) {
+  const rl = await adminClient.get('/api/admin/rate-limits').catch(() => null);
+  if (rl?.status === 200) serverLimits.rateLimits = rl.body.running || rl.body.limiters;
+  const pc = await adminClient.get('/api/admin/configs/platform').catch(() => null);
+  if (pc?.status === 200) serverLimits.trustProxy = pc.body.trustProxy ?? null;
+}
+
 // --- virtual users --------------------------------------------------------
 const crawlGate = new Semaphore(cfg.scenarios.projectBuild?.crawl?.maxConcurrent || 2);
 
@@ -164,6 +177,8 @@ async function runVu(vuIndex, isActive) {
     const name = pickWeighted(cfg.mix);
     const t0 = performance.now();
     try {
+      // Opening iHub in a tab or navigating loads config, apps, models … first.
+      if (Math.random() < cfg.pageLoadProbability) await pageLoad(ctx);
       await SCENARIOS[name](ctx);
       metrics.count(`session.${name}.ok`);
       metrics.trend(`session.${name}.duration`, performance.now() - t0);
@@ -184,7 +199,31 @@ async function runVu(vuIndex, isActive) {
 }
 
 let lastLog = 0;
+// Open-ended capacity runs: evaluate the level that just finished and stop
+// after the first one that broke an SLO. A shard without server samples judges
+// by latency and errors only.
+async function shouldStop(stageIndex) {
+  if (!cfg.stopOnFailure) return false;
+  const view = {
+    meta: { config: publicConfig(cfg), timeline: buildTimeline(cfg.stages) },
+    metrics: metrics.toJSON()
+  };
+  const stat = stageStats(view)[stageIndex];
+  const violations = stat ? checkSlo(stat, cfg.slo) : [];
+  if (violations.length) {
+    log(`stage ${stat.name} (${stat.vus} VUs) broke the SLOs: ${violations.join('; ')}`);
+    failedStages += 1;
+    if (failedStages >= (cfg.failuresBeforeStop || 1)) {
+      log('stopping the ramp here — the previous level is the capacity');
+      return true;
+    }
+  }
+  return false;
+}
+let failedStages = 0;
+
 const result = await runSchedule({
+  shouldStop,
   stages: cfg.stages,
   shardIndex,
   shardCount,
@@ -210,6 +249,8 @@ const result = await runSchedule({
   }
 });
 samplers.stop();
+rateTracker.flush();
+rateTracker.stop();
 if (result.abandonedVus)
   log(`warning: ${result.abandonedVus} VUs still busy after the graceful stop`);
 
@@ -223,7 +264,9 @@ const shardResult = {
     startedAt: result.startedAt,
     endedAt: result.endedAt,
     timeline: result.timeline,
-    serverInfo: samplers.serverInfo
+    stoppedAfterStage: result.stoppedAfter,
+    serverInfo: samplers.serverInfo,
+    serverLimits
   },
   metrics: metrics.toJSON()
 };

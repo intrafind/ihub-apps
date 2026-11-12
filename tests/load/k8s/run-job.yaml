@@ -10,8 +10,8 @@ metadata:
   namespace: ihub-loadtest
 spec:
   completionMode: Indexed
-  completions: 4
-  parallelism: 4
+  completions: 8
+  parallelism: 8
   backoffLimit: 0
   ttlSecondsAfterFinished: 172800
   template:

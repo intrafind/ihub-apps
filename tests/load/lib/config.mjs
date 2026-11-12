@@ -20,12 +20,22 @@ export const DEFAULTS = {
   baseUrl: 'http://localhost:3000',
   appId: 'chat',
   modelId: null,
+  // Reasoning models (Qwen3): true/false sends thinkingEnabled; null = model default.
+  thinking: null,
   language: 'en',
   answerLengthHint: 'Answer in about 120 words.',
   users: { prefix: 'lt-', password: 'LoadTest-2026!', count: null, group: 'users' },
   admin: { username: 'admin', password: 'password123' },
   stages: [{ name: 'smoke', vus: 2, rampSec: 10, holdSec: 60 }],
   gracefulStopSec: 120,
+  // Open-ended capacity runs: end the ramp after this many failing load levels.
+  stopOnFailure: false,
+  failuresBeforeStop: 1,
+  // Share of sessions that start with a page load (new tab / reload).
+  pageLoadProbability: 0.3,
+  // Rate-limit recommendation: how many concurrent users may share one client
+  // IP (corporate NAT / proxy without X-Forwarded-For). null = target or capacity.
+  rateLimitUsersPerIp: null,
   thinkTimeSec: [20, 60],
   sessionPauseSec: [10, 40],
   turnTimeoutSec: 300,
@@ -34,12 +44,12 @@ export const DEFAULTS = {
   mix: { chat: 45, chatFile: 15, projectChat: 30, projectBuild: 5, browse: 5, inference: 0 },
   scenarios: {
     chat: { turns: [2, 5], ephemeral: false },
-    chatFile: { turns: [2, 4], maxFileBytes: 2_500_000, ephemeral: false },
+    chatFile: { turns: [2, 4], maxFileBytes: 10_000_000, ephemeral: false },
     projectChat: { turns: [3, 6], preferShared: 0.5, ephemeral: false },
     projectBuild: {
       files: [3, 8],
       uploadParallel: 2,
-      maxFileBytes: 5_000_000,
+      maxFileBytes: 12_000_000,
       ingestTimeoutSec: 600,
       chatTurns: 2,
       deleteAfter: true,
@@ -57,6 +67,8 @@ export const DEFAULTS = {
     enableFeatures: true,
     sharedProjects: 5,
     ownProjects: true,
+    // Cap: at 2,000 users one project each would mean 12,000 uploads before the test.
+    ownProjectsMax: 200,
     docsPerProject: 6,
     // Real LLM: registered as model `loadtest-gpu` when `url` is set. The model
     // name is discovered from the server's /v1/models unless `modelName` is given.
@@ -66,8 +78,11 @@ export const DEFAULTS = {
       modelName: null,
       apiKey: null,
       provider: 'local',
-      contextWindow: 32768,
-      maxOutputTokens: 1024,
+      // gpu-01 serves Qwen/Qwen3.6-35B-A3B-FP8 with max_model_len 173184; setup
+      // takes the discovered value when the server reports one.
+      contextWindow: 173184,
+      // Room for Qwen3's thinking tokens before the answer.
+      maxOutputTokens: 4096,
       // 'auto' lets project chats call the knowledge_* tools (vLLM must run with
       // --enable-auto-tool-choice); 'none' keeps every turn a single LLM call.
       supportsTools: 'auto',
@@ -76,11 +91,28 @@ export const DEFAULTS = {
       concurrency: 100
     },
     // Paced fake LLM (stub/server.mjs) for measuring iHub itself: model `loadtest-stub`.
-    stub: { id: 'loadtest-stub', url: null, contextWindow: 32768, maxOutputTokens: 1024 }
+    // Same context window as the GPU model, so project chats inject as much text.
+    stub: { id: 'loadtest-stub', url: null, contextWindow: 173184, maxOutputTokens: 4096 }
   },
   llm: { expectedTtftMs: null },
   server: { workers: null, vcpus: null },
-  sampling: { intervalSec: 5, server: true, stubStatsUrl: null },
+  sampling: {
+    intervalSec: 5,
+    server: true,
+    stubStatsUrl: null,
+    // vLLM's own /metrics. "auto" = <setup.gpu.url>/metrics when the run uses loadtest-gpu.
+    vllmMetricsUrl: 'auto',
+    // Prometheus, or Grafana's datasource proxy:
+    //   https://grafana.example/api/datasources/proxy/uid/<prometheus-uid>  + service account token
+    prometheus: {
+      url: null,
+      token: null,
+      namespace: 'ihub',
+      podRegex: 'ihub.*',
+      gpuSelector: '',
+      queries: {}
+    }
+  },
   slo: {
     ttftP95Ms: null,
     ttftOverheadP95Ms: 1500,
@@ -152,7 +184,12 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
     }
   }
   const profileName = args.profile || env.LT_PROFILE || 'smoke';
-  let cfg = deepMerge(DEFAULTS, loadProfile(profileName));
+  const profile = loadProfile(profileName);
+  let cfg = deepMerge(structuredClone(DEFAULTS), profile);
+  // A profile's mix is the whole mix: scenarios it leaves out do not run.
+  if (profile.mix) {
+    cfg.mix = { ...Object.fromEntries(Object.keys(DEFAULTS.mix).map(k => [k, 0])), ...profile.mix };
+  }
 
   const set = (pathKeys, value) => {
     if (value === undefined || value === null || value === '') return;
@@ -164,6 +201,8 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
   set(['baseUrl'], args['base-url'] || env.LT_BASE_URL);
   set(['appId'], args.app || env.LT_APP_ID);
   set(['modelId'], args.model || env.LT_MODEL_ID);
+  if (env.LT_THINKING === 'on' || env.LT_THINKING === 'true') cfg.thinking = true;
+  if (env.LT_THINKING === 'off' || env.LT_THINKING === 'false') cfg.thinking = false;
   set(['users', 'prefix'], env.LT_USER_PREFIX);
   set(['users', 'password'], env.LT_USER_PASSWORD);
   set(['users', 'count'], num(args.users || env.LT_USER_COUNT));
@@ -183,6 +222,15 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
   set(['server', 'workers'], num(args.workers || env.LT_SERVER_WORKERS));
   set(['server', 'vcpus'], num(env.LT_SERVER_VCPUS));
   set(['sampling', 'stubStatsUrl'], env.LT_STUB_STATS_URL);
+  set(['sampling', 'vllmMetricsUrl'], env.LT_VLLM_METRICS_URL);
+  set(['sampling', 'prometheus', 'url'], env.LT_PROM_URL);
+  set(['sampling', 'prometheus', 'token'], env.LT_PROM_TOKEN);
+  set(['sampling', 'prometheus', 'namespace'], env.LT_PROM_IHUB_NAMESPACE);
+  set(['sampling', 'prometheus', 'podRegex'], env.LT_PROM_IHUB_POD_REGEX);
+  set(['sampling', 'prometheus', 'gpuSelector'], env.LT_PROM_GPU_SELECTOR);
+  if (env.LT_STOP_ON_FAILURE)
+    cfg.stopOnFailure = env.LT_STOP_ON_FAILURE === '1' || env.LT_STOP_ON_FAILURE === 'true';
+  set(['rateLimitUsersPerIp'], num(env.LT_USERS_PER_IP));
   set(['sizing', 'targetConcurrentUsers'], num(args.target || env.LT_TARGET_CONCURRENT_USERS));
   set(['setup', 'stub', 'url'], args['stub-url'] || env.LT_STUB_MODEL_URL);
   set(['setup', 'gpu', 'url'], args['llm-url'] || env.LT_LLM_URL);
@@ -193,6 +241,7 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
   set(['setup', 'gpu', 'contextWindow'], num(env.LT_LLM_CONTEXT_WINDOW));
   set(['setup', 'docsPerProject'], num(env.LT_DOCS_PER_PROJECT));
   set(['setup', 'sharedProjects'], num(env.LT_SHARED_PROJECTS));
+  set(['setup', 'ownProjectsMax'], num(env.LT_OWN_PROJECTS_MAX));
   set(['scenarios', 'projectBuild', 'crawl', 'maxConcurrent'], num(env.LT_CRAWL_MAX_CONCURRENT));
   // LT_LLM_URL= (empty) or "none" skips registering the GPU model.
   if (args['llm-url'] === 'none' || env.LT_LLM_URL === '' || env.LT_LLM_URL === 'none')
@@ -212,6 +261,16 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
     cfg.stages = cfg.stages.map(s => ({ ...s, vus: Math.max(1, Math.round(s.vus * scale)) }));
 
   cfg.baseUrl = cfg.baseUrl.replace(/\/+$/, '');
+  if (cfg.sampling.vllmMetricsUrl === 'auto') {
+    const gpu = cfg.setup.gpu?.url;
+    const stubStats = cfg.sampling.stubStatsUrl;
+    if (gpu && cfg.modelId === cfg.setup.gpu.id) {
+      cfg.sampling.vllmMetricsUrl = `${gpu.replace(/\/+$/, '').replace(/\/v1(\/chat\/completions)?$/, '')}/metrics`;
+    } else if (stubStats && cfg.modelId === cfg.setup.stub?.id) {
+      // The stub publishes the same vLLM metric names.
+      cfg.sampling.vllmMetricsUrl = stubStats.replace(/\/__stats$/, '/metrics');
+    } else cfg.sampling.vllmMetricsUrl = null;
+  } else if (cfg.sampling.vllmMetricsUrl === 'none') cfg.sampling.vllmMetricsUrl = null;
   cfg.maxVus = Math.max(...cfg.stages.map(s => s.vus));
   if (!cfg.users.count) cfg.users.count = cfg.maxVus;
   if (!cfg.runId)
@@ -230,6 +289,13 @@ export function publicConfig(cfg) {
   return {
     ...rest,
     setup: { ...setup, gpu: { ...setup.gpu, apiKey: setup.gpu?.apiKey ? '***' : null } },
+    sampling: {
+      ...rest.sampling,
+      prometheus: {
+        ...rest.sampling.prometheus,
+        token: rest.sampling.prometheus?.token ? '***' : null
+      }
+    },
     users: { prefix: users.prefix, count: users.count },
     admin: { username: admin.username }
   };

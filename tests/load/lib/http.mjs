@@ -76,6 +76,8 @@ export class Client {
       redirect: 'manual'
     });
     this.storeCookies(res);
+    // Rate-limit demand accounting (set by run.mjs: { tracker, user }).
+    this.rate?.tracker.record(this.rate.user, method, this.url(path), res.status);
     return res;
   }
 

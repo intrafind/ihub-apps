@@ -1,21 +1,27 @@
 # iHub load test and sizing harness
 
-Simulates real users. They chat with a real or fake LLM, upload documents into chats, build projects (upload, ingestion, website crawl) and run multi-turn chats inside projects. Alongside that, the harness samples the server's CPU, memory, event loop and disk. The output is a report that answers: **how many concurrent users can one worker carry, and how many workers, vCPU and how much RAM a target needs.**
+Simulates real users. They chat with a real or fake LLM, upload documents into chats, build projects (upload, ingestion, website crawl) and run multi-turn chats inside projects. Alongside that, the harness samples the server's CPU, memory, event loop and disk, the LLM server's queue (vLLM metrics) and, optionally, GPU and pod metrics from Prometheus. The output is a report that answers:
+
+- How many concurrent users one worker carries.
+- Where the load breaks it, and which resource gives out first.
+- How many workers, vCPU and how much RAM a target needs.
+- Whether the rate limits fit real usage.
 
 The test plan, the sizing method and what we expect to find are in [`concepts/2026-11-12 Load Test and Sizing Plan.md`](../../concepts/2026-11-12%20Load%20Test%20and%20Sizing%20Plan.md).
 
 The harness is plain Node 20+ with no dependencies. It runs the same way on a laptop and as a Kubernetes Job.
 
-| File                 | What it is                                                                                                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `setup.mjs`          | Prepares an instance (idempotent): preflight checks, the `userProjects` flag, models `loadtest-gpu` / `loadtest-stub`, users `lt-0001…`, and "LT-chat" projects with documents |
-| `run.mjs`            | The load generator: one shard per process                                                                                                                                      |
-| `report.mjs`         | Merges shard results and writes `report.md`, `summary.json` and `timeline.csv`                                                                                                 |
-| `teardown.mjs`       | Deletes test chats and projects (with `--delete-users`, also the users)                                                                                                        |
-| `stub/server.mjs`    | Paced fake LLM (OpenAI-compatible) and a synthetic website for crawls                                                                                                          |
-| `profiles/*.json`    | One per experiment: `smoke`, `capacity-stub`, `capacity-gpu`, `ingest`, `soak`, `spike`                                                                                        |
-| `docker-compose.yml` | Local sizing lab: iHub with a fixed CPU/RAM budget, plus the stubs                                                                                                             |
-| `k8s/`               | Stubs Deployment, setup Job, Indexed runner Job, `collect.sh`                                                                                                                  |
+| File                        | What it is                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `setup.mjs`                 | Prepares an instance (idempotent): preflight checks, the `userProjects` flag, models `loadtest-gpu` / `loadtest-stub`, users `lt-0001…`, and "LT-chat" projects with documents |
+| `run.mjs`                   | The load generator: one shard per process                                                                                                                                      |
+| `report.mjs`                | Merges shard results and writes `report.md`, `summary.json` and `timeline.csv`                                                                                                 |
+| `teardown.mjs`              | Deletes test chats and projects (with `--delete-users`, also the users)                                                                                                        |
+| `stub/server.mjs`           | Paced fake LLM (OpenAI-compatible, with vLLM-style `/metrics`) and a synthetic website for crawls                                                                              |
+| `tools/generate-corpus.mjs` | Generates 42 realistic Word, PowerPoint, Excel and PDF files (`npm run loadtest:corpus`)                                                                                       |
+| `profiles/*.json`           | One per experiment: `smoke`, `capacity-stub`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                                          |
+| `docker-compose.yml`        | Local sizing lab: iHub with a fixed CPU/RAM budget, plus the stubs                                                                                                             |
+| `k8s/`                      | Stubs Deployment, setup Job, Indexed runner Job, `collect.sh`                                                                                                                  |
 
 ## What a virtual user does
 
@@ -28,11 +34,13 @@ A VU is one **concurrently active** user. It loops over sessions, picked by the 
 | `projectChat`  | 3–6 turns with `projectId` in an own or shared LT-chat project                                                              | project text injection (BM25/whole corpus), knowledge tools, decryption |
 | `projectBuild` | create a project → upload 3–8 files → poll until `ready` → crawl a site → add 10 pages as URL items → 2 chat turns → delete | ingestion queue, CPU-bound extraction, outbound fetches                 |
 | `browse`       | app list, chat history, project list                                                                                        | non-LLM API latency                                                     |
+| page load      | before 30% of sessions: auth status, configs, translations, styles, apps, models, prompts, AI notice                        | the per-user request rate a browser produces (rate limits)              |
 | `inference`    | `/api/inference/v1/chat/completions`, streamed                                                                              | pure LLM path (off by default)                                          |
 
 Measured per turn:
 
-- **TTFT**: time to the first text token after the POST.
+- **TTFT**: time to the first visible answer token after the POST.
+- **First token**: time to the first token of any kind, thinking included (Qwen3 thinks first).
 - **Turn duration.**
 - **Answer speed.**
 - **Prompt tokens**: shows how much project context was injected.
@@ -41,6 +49,34 @@ Measured per turn:
 - **Error codes.**
 
 Resource samples come from `GET /api/admin/system/resources` every 5 s. They cover CPU %, RSS, heap and event-loop delay for every worker and for the primary, plus host CPU/RAM and the data volume.
+
+Every request is also classified by the rate limiter it counts against, and counted per user and per runner IP per minute. That feeds the report's rate-limit section.
+
+## Documents
+
+```bash
+npm run loadtest:corpus
+```
+
+This writes 42 files (80 MB) to `tests/load/fixtures/corpus/`, which is git-ignored. It uses the server's own `docx`, `pptxgenjs`, `xlsx` and `pdf-lib` libraries, so run `npm run install:all` once first.
+
+- **Word:** policies and 40-page handbooks with tables and images.
+- **PowerPoint:** decks of 16–40 slides with images and speaker notes.
+- **Excel:** registers, a budget, and a 30,000-row inventory with formulas.
+- **PDF:** 12- to 250-page documents with drawn tables and images, plus one scanned PDF without a text layer. The scan goes only into chat uploads, where iHub renders it with pdfium; projects can't use it.
+
+iHub extracts these files in 50 ms to 1.6 s each, on the event loop. That is the cost the corpus exists to reproduce.
+
+`run.mjs` and `setup.mjs` use the corpus automatically, plus small generated Markdown, HTML, CSV and JSON files. Without it they fall back to simple generated files and say so. `LT_FIXTURES_DIR=/path` uses your own documents instead.
+
+## Observability during a run
+
+- **vLLM (gpu-01):** for runs with `loadtest-gpu`, the runner scrapes `https://gpu-01.local.intrafind.io/metrics`, vLLM's own endpoint on its API port. It reports running and waiting requests, KV-cache use, prompt and generation tokens/s, and preemptions. Waiting requests and a full KV cache are the evidence that the GPU, not iHub, is the limit. The stub publishes the same metric names. Override the address with `LT_VLLM_METRICS_URL`; for a private CA, start the runner with `NODE_EXTRA_CA_CERTS=/path/ca.pem`.
+- **Prometheus or Grafana (optional):** set `LT_PROM_URL` to Prometheus, or to Grafana's datasource proxy (`https://grafana…/api/datasources/proxy/uid/<prometheus-uid>`), with `LT_PROM_TOKEN` (a Grafana service-account token with Viewer access). The runner then records:
+  - GPU utilisation and memory (DCGM exporter; select gpu-01 with `LT_PROM_GPU_SELECTOR`, e.g. `Hostname="gpu-01"`);
+  - CPU cores, **CPU throttling**, memory and ready pods of the iHub pod (cAdvisor and kube-state-metrics; `LT_PROM_IHUB_NAMESPACE`, `LT_PROM_IHUB_POD_REGEX`).
+
+  The queries are in `lib/observers.mjs`; override them per profile under `sampling.prometheus.queries`. Throttling above about 20% means the pod's CPU limit is below what `WORKERS` uses.
 
 ## On your machine
 
@@ -69,6 +105,8 @@ node tests/load/setup.mjs --profile capacity-stub
 
 ### 3. Smoke test, then the real runs
 
+The capacity profiles are **open-ended**: they keep stepping up (to 2,000 VUs with the stub, 300 with the GPU) and stop after the first level that breaks an SLO. The level before it is the capacity. Set `LT_STOP_ON_FAILURE=false` to run every stage anyway.
+
 ```bash
 LT_BASE_URL=http://localhost:3000 LT_MODEL_ID=loadtest-stub LT_EXPECTED_LLM_TTFT_MS=700 \
 LT_CRAWL_URL=http://loadtest-stubs:8980/docs/ LT_STUB_STATS_URL=http://localhost:8979/__stats \
@@ -83,6 +121,17 @@ node tests/load/run.mjs --profile capacity-stub
 
 ```bash
 LT_BASE_URL=http://localhost:3000 node tests/load/run.mjs --profile capacity-gpu
+```
+
+```bash
+LT_BASE_URL=http://localhost:3000 LT_THINKING=off node tests/load/run.mjs --profile capacity-gpu
+```
+
+The rate-limit run goes against an instance with the **shipped limits**, where only `authApi` is lifted so the runner can log its users in:
+
+```bash
+LT_BASE_URL=http://localhost:3000 LT_STUB_STATS_URL=http://localhost:8979/__stats LT_USERS_PER_IP=300 \
+node tests/load/run.mjs --profile ratelimits
 ```
 
 The report lands in `tests/load/results/<runId>/report.md`. A laptop runner manages roughly 300–500 VUs. The report's "Load generator health" section tells you when the runner itself was the limit. Beyond that, run more shards: `LT_SHARD_COUNT=2 LT_SHARD_INDEX=0|1`, same `LT_RUN_ID`, then `node tests/load/report.mjs tests/load/results/<runId>`.
@@ -101,7 +150,11 @@ docker compose -f tests/load/docker-compose.yml down -v
 
 ## In the cluster
 
-1. Build the runner image and push it:
+1. Generate the corpus, so the image carries it. Then build the runner image and push it:
+
+   ```bash
+   npm run loadtest:corpus
+   ```
 
    ```bash
    docker build -t ghcr.io/intrafind/ihub-loadtest:latest tests/load
@@ -159,36 +212,44 @@ docker compose -f tests/load/docker-compose.yml down -v
    kubectl -n ihub-loadtest delete job loadtest-run
    ```
 
-With several iHub replicas, the resource sampler sees only the replica that answered. Use the Prometheus metrics (telemetry on, port 9464) or `kubectl top pods` for all of them.
+The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU limit to `WORKERS` + 1 (the primary relays SSE between workers), and repeat `capacity-stub` for `WORKERS` 1, 2, 4, 8 and 12. Comparing users per worker across those runs shows where more workers stop helping. Keep `STICKY_SESSIONS` off: it routes by client address and would pin all VUs of a runner to one worker.
 
 ## Settings (environment)
 
-| Variable                                                 | Default                             | Meaning                                                                 |
-| -------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
-| `LT_BASE_URL`                                            | `http://localhost:3000`             | iHub base URL, including a subpath such as `/ihub`                      |
-| `LT_PROFILE`                                             | `smoke`                             | Name in `profiles/` or a path to a JSON file                            |
-| `LT_MODEL_ID`                                            | profile                             | Model for the chats: `loadtest-stub`, `loadtest-gpu` or an existing one |
-| `LT_APP_ID`                                              | `chat`                              | App the chats use                                                       |
-| `LT_STAGES`                                              | profile                             | Override, e.g. `10:60:300,20:60:300` (VUs:ramp s:hold s, …)             |
-| `LT_VU_SCALE`                                            | 1                                   | Multiplies every stage's VUs                                            |
-| `LT_MIX`                                                 | profile                             | e.g. `chat=50,projectChat=50` (others become 0)                         |
-| `LT_USER_COUNT` / `--users`                              | max VUs                             | Users to create and use (`lt-0001`…)                                    |
-| `LT_USER_PASSWORD`, `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD` | see `lib/config.mjs`                | Credentials                                                             |
-| `LT_LLM_URL`                                             | `https://gpu-01.local.intrafind.io` | GPU base URL for `loadtest-gpu`; `none` skips it                        |
-| `LT_LLM_MODEL_NAME`, `LT_LLM_API_KEY`                    | discovered / none                   | Served model name, key                                                  |
-| `LT_LLM_SUPPORTS_TOOLS`                                  | `auto`                              | `none` if vLLM runs without `--enable-auto-tool-choice`                 |
-| `LT_LLM_CONCURRENCY`                                     | 100                                 | iHub's queue limit for the model (1–100)                                |
-| `LT_STUB_MODEL_URL`                                      | –                                   | Stub as iHub reaches it; registers `loadtest-stub`                      |
-| `LT_EXPECTED_LLM_TTFT_MS`                                | profile                             | Stub TTFT; the report subtracts it as "iHub overhead"                   |
-| `LT_CRAWL_URL`                                           | `https://intrafind.com/de`          | Site for `projectBuild` crawls                                          |
-| `LT_CRAWL_MAX_CONCURRENT`                                | 2                                   | Concurrent crawls per shard (protects a real website)                   |
-| `LT_FIXTURES_DIR`                                        | generated                           | Folder of real PDF/DOCX/PPTX/XLSX… to upload instead                    |
-| `LT_SHARD_COUNT`, `LT_SHARD_INDEX`                       | 1, 0                                | Sharding (`JOB_COMPLETION_INDEX` in Kubernetes)                         |
-| `LT_RUN_ID`                                              | profile + time                      | Same value on every shard of one run                                    |
-| `LT_TARGET_CONCURRENT_USERS`                             | –                                   | Adds a workers / vCPU / RAM recommendation to the report                |
-| `LT_SERVER_WORKERS`                                      | sampled                             | Worker count when the sampler cannot see it                             |
-| `LT_STUB_STATS_URL`                                      | –                                   | `…:8979/__stats` for stub in-flight and prompt sizes                    |
-| `LT_RESULTS_DIR`, `LT_RESULT_TO_STDOUT`                  | `tests/load/results`, off           | Output                                                                  |
+| Variable                                                                   | Default                             | Meaning                                                                 |
+| -------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
+| `LT_BASE_URL`                                                              | `http://localhost:3000`             | iHub base URL, including a subpath such as `/ihub`                      |
+| `LT_PROFILE`                                                               | `smoke`                             | Name in `profiles/` or a path to a JSON file                            |
+| `LT_MODEL_ID`                                                              | profile                             | Model for the chats: `loadtest-stub`, `loadtest-gpu` or an existing one |
+| `LT_APP_ID`                                                                | `chat`                              | App the chats use                                                       |
+| `LT_STAGES`                                                                | profile                             | Override, e.g. `10:60:300,20:60:300` (VUs:ramp s:hold s, …)             |
+| `LT_VU_SCALE`                                                              | 1                                   | Multiplies every stage's VUs                                            |
+| `LT_MIX`                                                                   | profile                             | e.g. `chat=50,projectChat=50` (others become 0)                         |
+| `LT_USER_COUNT` / `--users`                                                | max VUs                             | Users to create and use (`lt-0001`…)                                    |
+| `LT_USER_PASSWORD`, `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD`                   | see `lib/config.mjs`                | Credentials                                                             |
+| `LT_LLM_URL`                                                               | `https://gpu-01.local.intrafind.io` | GPU base URL for `loadtest-gpu`; `none` skips it                        |
+| `LT_LLM_MODEL_NAME`, `LT_LLM_API_KEY`                                      | discovered / none                   | Served model name, key                                                  |
+| `LT_LLM_SUPPORTS_TOOLS`                                                    | `auto`                              | gpu-01 supports tools; `none` makes every turn a single LLM call        |
+| `LT_LLM_CONCURRENCY`                                                       | 100                                 | iHub's queue limit for the model (1–100)                                |
+| `LT_STUB_MODEL_URL`                                                        | –                                   | Stub as iHub reaches it; registers `loadtest-stub`                      |
+| `LT_EXPECTED_LLM_TTFT_MS`                                                  | profile                             | Stub TTFT; the report subtracts it as "iHub overhead"                   |
+| `LT_CRAWL_URL`                                                             | `https://intrafind.com/de`          | Site for `projectBuild` crawls                                          |
+| `LT_CRAWL_MAX_CONCURRENT`                                                  | 2                                   | Concurrent crawls per shard (protects a real website)                   |
+| `LT_FIXTURES_DIR`                                                          | corpus if generated                 | Folder of your own PDF/DOCX/PPTX/XLSX… to upload instead                |
+| `LT_SHARD_COUNT`, `LT_SHARD_INDEX`                                         | 1, 0                                | Sharding (`JOB_COMPLETION_INDEX` in Kubernetes)                         |
+| `LT_RUN_ID`                                                                | profile + time                      | Same value on every shard of one run                                    |
+| `LT_TARGET_CONCURRENT_USERS`                                               | –                                   | Adds a workers / vCPU / RAM recommendation to the report                |
+| `LT_SERVER_WORKERS`                                                        | sampled                             | Worker count when the sampler cannot see it                             |
+| `LT_STUB_STATS_URL`                                                        | –                                   | `…:8979/__stats` for stub in-flight and prompt sizes                    |
+| `LT_RESULTS_DIR`, `LT_RESULT_TO_STDOUT`                                    | `tests/load/results`, off           | Output                                                                  |
+| `LT_STOP_ON_FAILURE`                                                       | profile                             | End the ramp after the first level that breaks an SLO                   |
+| `LT_THINKING`                                                              | model default                       | `on` / `off`: sends `thinkingEnabled` (Qwen3 on gpu-01)                 |
+| `LT_LLM_CONTEXT_WINDOW`                                                    | discovered (173184)                 | Context window registered for the test models                           |
+| `LT_OWN_PROJECTS_MAX`, `LT_SHARED_PROJECTS`, `LT_DOCS_PER_PROJECT`         | 200, profile, 6                     | Projects setup prepares for `projectChat`                               |
+| `LT_USERS_PER_IP`                                                          | target or capacity                  | Users assumed behind one IP for the rate-limit recommendation           |
+| `LT_VLLM_METRICS_URL`                                                      | auto                                | vLLM `/metrics`; `none` disables it                                     |
+| `LT_PROM_URL`, `LT_PROM_TOKEN`                                             | –                                   | Prometheus or Grafana datasource proxy, bearer token                    |
+| `LT_PROM_IHUB_NAMESPACE`, `LT_PROM_IHUB_POD_REGEX`, `LT_PROM_GPU_SELECTOR` | `ihub`, `ihub.*`, empty             | Label selectors for the PromQL queries                                  |
 
 Stub tuning (`stub/server.mjs`): `STUB_TTFT_MS` (700), `STUB_TOKENS` (250), `STUB_TOKENS_PER_SEC` (40), `STUB_JITTER` (0.25), `STUB_SITE_PAGES` (300), `STUB_SITE_LATENCY_MS` (80).
 
@@ -199,6 +260,7 @@ Stub tuning (`stub/server.mjs`): `STUB_TTFT_MS` (700), `STUB_TOKENS` (250), `STU
 - **Per-IP rate limits.** All VUs of one runner share an IP; the limits are per worker. `HTTP_429` in the report means the run measured the limiter, not iHub.
 - **The LLM throttle.** `requestConcurrency` (default 5) applies per model unless the model sets `concurrency`. Setup gives both test models 100.
 - **`userProjects` off.** A `projectId` on the chat is then ignored without an error. Setup turns the flag on.
-- **No session affinity across replicas.** The report shows "stream misses" (the POST was answered without streaming).
+- **No session affinity across replicas** (only if you ever run more than one). The report shows "stream misses" (the POST was answered without streaming).
+- **The stub model's context window.** iHub injects up to 40% of it as project context. Setup copies gpu-01's discovered window (173k) to the stub, so stub runs send the same 50–60k-token project prompts.
 - **The crawl target.** intrafind.com is our production website: one Apache/Drupal server, about 0.6 s per page. Keep `LT_CRAWL_MAX_CONCURRENT` low, run outside business hours, and use the stub site (`LT_CRAWL_URL=http://loadtest-stubs…:8980/docs/`) for repeated or ingestion-heavy runs.
 - **The GPU is shared.** Tell the people using gpu-01 before a `capacity-gpu` run. Its numbers are the GPU's limit, not iHub's.

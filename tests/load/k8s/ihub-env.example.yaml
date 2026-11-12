@@ -14,10 +14,10 @@
 - { name: IHUB_PLATFORM__SSL__IGNORE_INVALID_CERTIFICATES, value: 'true' }
 - { name: IHUB_PLATFORM__PROJECTS__INGEST__CONCURRENCY, value: '2' }
 - { name: IHUB_PLATFORM__PROJECTS__LIMITS__MAX_PROJECTS_PER_USER, value: '50' }
-# Prometheus on :9464 for per-pod CPU/memory/event loop when running >1 replica.
+# iHub's own Prometheus metrics on :9464 (optional; pod CPU/memory come from cAdvisor).
 - { name: IHUB_PLATFORM__TELEMETRY__ENABLED, value: 'true' }
 - { name: IHUB_PLATFORM__TELEMETRY__PROVIDER, value: 'prometheus' }
-# With >1 replica the ingress needs cookie affinity (docs/scaling.md):
+# Only if you ever run >1 replica: shared RWX contents volume + cookie affinity (docs/scaling.md):
 #   nginx.ingress.kubernetes.io/affinity: cookie
 #   nginx.ingress.kubernetes.io/proxy-buffering: "off"
 #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"

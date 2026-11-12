@@ -48,6 +48,8 @@ export function stageStats(result) {
       [...TTFT_LABELS, 'inference'].map(l => [l, summarize(values(trends, `${l}.ttft`, k))])
     );
     const duration = summarize(TTFT_LABELS.flatMap(l => values(trends, `${l}.duration`, k)));
+    const firstToken = summarize(TTFT_LABELS.flatMap(l => values(trends, `${l}.firstToken`, k)));
+    const g = re => gaugeValues(gauges, re, k);
     const api = summarize(
       Object.keys(trends)
         .filter(n => n.startsWith('http.browse.'))
@@ -114,7 +116,27 @@ export function stageStats(result) {
         eldP99Max: max(gaugeValues(gauges, /^runner\.eldP99$/, k)),
         cpuMax: max(gaugeValues(gauges, /^runner\.cpuPercent$/, k))
       },
-      stubInflightMax: max(gaugeValues(gauges, /^stub\.inflight$/, k))
+      stubInflightMax: max(gaugeValues(gauges, /^stub\.inflight$/, k)),
+      firstToken,
+      llm: {
+        runningAvg: avg(g(/^llm\.running$/)),
+        runningMax: max(g(/^llm\.running$/)),
+        waitingAvg: avg(g(/^llm\.waiting$/)),
+        waitingMax: max(g(/^llm\.waiting$/)),
+        kvCacheMax: max(g(/^llm\.kvCachePct$/)),
+        genTokPerSec: avg(g(/^llm\.genTokPerSec$/)),
+        promptTokPerSec: avg(g(/^llm\.promptTokPerSec$/)),
+        preemptionsPerMin: avg(g(/^llm\.preemptionsPerSec$/)) * 60 || null,
+        gpuUtilAvg: avg(g(/^prom\.gpuUtilPct$/)),
+        gpuMemMax: max(g(/^prom\.gpuMemUsedPct$/))
+      },
+      pod: {
+        cpuCoresAvg: avg(g(/^prom\.ihubCpuCores$/)),
+        cpuCoresMax: max(g(/^prom\.ihubCpuCores$/)),
+        throttledPctAvg: avg(g(/^prom\.ihubCpuThrottledPct$/)),
+        memoryMbMax: max(g(/^prom\.ihubMemoryMb$/)),
+        podsReady: max(g(/^prom\.ihubPodsReady$/))
+      }
     };
   });
 }
@@ -160,12 +182,16 @@ function bottleneckHint(stat) {
     return 'Storage lock timeouts (503): filesystem persistence contention — check disk/NFS latency; more CPU will not help.';
   if (stat.runner.eldP99Max > 100)
     return 'The load generator itself is saturated (event-loop p99 > 100 ms) — add runner shards; these numbers are not trustworthy.';
+  if (stat.llm.waitingAvg > 1 || stat.llm.kvCacheMax > 95)
+    return `GPU saturated: vLLM queues requests (waiting avg ${fmt(stat.llm.waitingAvg, 1)}, KV cache max ${fmt(stat.llm.kvCacheMax)}%) — the LLM is the limit, not iHub. More GPU capacity, smaller project context or fewer thinking tokens.`;
+  if (stat.pod.throttledPctAvg > 20)
+    return `CPU throttling ${fmt(stat.pod.throttledPctAvg)}% of periods: the pod's CPU limit is below what its workers use — set WORKERS to the CPU limit (or raise the limit).`;
   if (stat.server.workerCpuAvg > 80)
     return 'Workers are CPU-bound — capacity scales with more workers / vCPU.';
   if (stat.server.eldMax > 150 && (stat.server.workerCpuAvg ?? 0) < 80)
     return 'Event-loop stalls without full CPU: blocking work (text extraction, corpus index rebuild, large JSON) — check projectBuild/chatFile share and ingest concurrency.';
   if (stat.server.primaryCpuAvg > 80)
-    return 'Primary process near a full core: the cross-worker SSE relay is the bottleneck — prefer more replicas with fewer workers each.';
+    return 'Primary process near a full core: it relays the tokens of every chat whose stream sits on another worker, so more workers in this pod add no capacity. Beyond this point only a second replica helps (needs a shared RWX contents volume and cookie affinity).';
   if (stat.streamMiss > 0)
     return 'Stream misses: GET and POST reached different replicas — enable cookie session affinity on the ingress.';
   if (stat.ttftOverheadP95 !== null && stat.ttftOverheadP95 > 0)
@@ -207,18 +233,17 @@ export function analyze(result) {
     if (target) {
       const headroom = cfg.sizing.headroom ?? 0.7;
       const need = Math.ceil(target / (perWorker * headroom));
-      const perPod = 4;
       sizing.target = {
         concurrentUsers: target,
         namedUsersApprox: cfg.sizing.concurrencyRatio
           ? Math.round(target / cfg.sizing.concurrencyRatio)
           : null,
         workers: need,
-        vcpu: need + (need > 4 ? 1 : 0),
+        // One replica: the primary process (cluster manager + SSE relay) needs a core of its own.
+        vcpu: need + 1,
         ramGb: rssMb
           ? round((need * rssMb * 1.3 + (capacity.server.rssPrimaryMaxMb || 150) + 1024) / 1024, 1)
           : null,
-        replicasAt4Workers: Math.ceil(need / perPod),
         headroom
       };
     }
@@ -310,7 +335,7 @@ export function renderMarkdown(result) {
     const t = a.sizing.target;
     if (t) {
       L.push(
-        `- For **${t.concurrentUsers} concurrent users**${t.namedUsersApprox ? ` (≈ ${t.namedUsersApprox} named users at ${cfg.sizing.concurrencyRatio * 100}% peak concurrency)` : ''} with ${t.headroom * 100}% target utilisation: **${t.workers} workers ≈ ${t.vcpu} vCPU, ${t.ramGb ?? '?'} GiB RAM**, e.g. ${t.replicasAt4Workers} replica(s) × 4 workers (multi-replica needs cookie affinity + shared contents volume).`
+        `- For **${t.concurrentUsers} concurrent users**${t.namedUsersApprox ? ` (≈ ${t.namedUsersApprox} named users at ${cfg.sizing.concurrencyRatio * 100}% peak concurrency)` : ''} with ${t.headroom * 100}% target utilisation: **one pod with WORKERS=${t.workers}, ${t.vcpu} vCPU (workers + 1 for the primary), ${t.ramGb ?? '?'} GiB RAM**. Valid only up to the worker count where the worker sweep still scaled; beyond it the primary's SSE relay caps a single pod.`
       );
     } else {
       L.push(
@@ -331,6 +356,8 @@ export function renderMarkdown(result) {
     L.push(`- First failing level: ${a.firstFail.stat.name} (${a.firstFail.stat.vus} VUs).`);
   if (a.hint) L.push(`- **Likely bottleneck:** ${a.hint}`);
   L.push('');
+  L.push(...renderLlmAndPod(a));
+  L.push(...renderRateLimits(result, a));
   L.push('## Errors by stage');
   L.push('');
   for (const s of a.stats) {
@@ -365,4 +392,143 @@ export function timelineCsv(result) {
   for (const [t, slot] of rows)
     lines.push([new Date(Number(t)).toISOString(), ...[...cols].map(c => slot[c] || 0)].join(','));
   return lines.join('\n');
+}
+
+const has = v => v !== null && v !== undefined && !Number.isNaN(v);
+
+function renderLlmAndPod(a) {
+  const L = [];
+  if (a.stats.some(s => s.firstToken || has(s.llm.runningMax) || has(s.llm.gpuUtilAvg))) {
+    L.push('### LLM / GPU');
+    L.push('');
+    L.push(
+      '| Stage | First token p95 | Answer TTFT p95 | vLLM running avg / max | waiting avg / max | KV cache max | Gen tok/s | Prompt tok/s | Preemptions/min | GPU util avg | GPU mem max |'
+    );
+    L.push('|---|---:|---:|---|---|---:|---:|---:|---:|---:|---:|');
+    for (const s of a.stats) {
+      const l = s.llm;
+      L.push(
+        `| ${s.name} | ${fmt(s.firstToken?.p95)} | ${fmt(s.ttft?.p95)} | ${fmt(l.runningAvg, 1)} / ${fmt(l.runningMax)} | ${fmt(l.waitingAvg, 1)} / ${fmt(l.waitingMax)} | ${fmt(l.kvCacheMax)}% | ${fmt(l.genTokPerSec)} | ${fmt(l.promptTokPerSec)} | ${fmt(l.preemptionsPerMin, 1)} | ${fmt(l.gpuUtilAvg)}% | ${fmt(l.gpuMemMax)}% |`
+      );
+    }
+    L.push('');
+    L.push(
+      '"First token" counts thinking tokens; "Answer TTFT" waits for visible answer text. A growing `waiting` count or KV cache near 100% means vLLM is queueing: the GPU is the limit.'
+    );
+    L.push('');
+  }
+  if (a.stats.some(s => has(s.pod.cpuCoresAvg) || has(s.pod.memoryMbMax))) {
+    L.push('### iHub pod (Prometheus)');
+    L.push('');
+    L.push('| Stage | CPU cores avg / max | CPU throttled | Memory max | Pods ready |');
+    L.push('|---|---|---:|---:|---:|');
+    for (const s of a.stats) {
+      const p = s.pod;
+      L.push(
+        `| ${s.name} | ${fmt(p.cpuCoresAvg, 2)} / ${fmt(p.cpuCoresMax, 2)} | ${fmt(p.throttledPctAvg)}% | ${fmt(p.memoryMbMax)} MB | ${fmt(p.podsReady)} |`
+      );
+    }
+    L.push('');
+  }
+  return L;
+}
+
+/** Limiters counted in one store for the whole cluster (others count per worker). */
+const CLUSTER_WIDE = new Set(['authApi', 'oauthApi']);
+
+export function rateLimitAnalysis(result, a) {
+  const { trends, counts } = result.metrics;
+  const cfg = result.meta.config;
+  const limits = result.meta.serverLimits?.rateLimits || {};
+  const workers = a.sizing.workers || 1;
+  const keys = a.stats.map(s => String(s.index));
+  const collect = name => keys.flatMap(k => trends[name]?.[k] || []);
+  const total = name => Object.values(counts[name] || {}).reduce((x, y) => x + y, 0);
+  const usersPerIp =
+    cfg.rateLimitUsersPerIp ||
+    cfg.sizing?.targetConcurrentUsers ||
+    a.capacity?.vus ||
+    Math.max(...a.stats.map(s => s.vus));
+  const rows = [];
+  for (const cls of ['publicApi', 'inferenceApi', 'adminApi', 'oauthApi', 'unlimited']) {
+    const perUser = summarize(collect(`rl.${cls}.perUserMin`));
+    const perRunner = summarize(collect(`rl.${cls}.perRunnerMin`));
+    if (!perUser && !perRunner) continue;
+    const lim = limits[cls];
+    const perMin = lim ? (lim.limit * 60000) / lim.windowMs : null;
+    const spread = CLUSTER_WIDE.has(cls) ? 1 : workers;
+    // One client IP is spread over the workers round robin, each counting alone.
+    const ipBudgetPerMin = perMin !== null ? perMin * spread : null;
+    const userRate = perUser ? Math.max(perUser.p99, 1) : null;
+    const fit = ipBudgetPerMin !== null && userRate ? Math.floor(ipBudgetPerMin / userRate) : null;
+    // 2x headroom for bursts (page loads, many tabs) and uneven worker spread.
+    const neededPerMin = userRate ? Math.ceil((userRate * usersPerIp * 2) / spread) : null;
+    const recommended =
+      neededPerMin !== null && lim ? Math.ceil((neededPerMin * lim.windowMs) / 60000) : null;
+    rows.push({
+      cls,
+      lim,
+      perUser,
+      perRunner,
+      fit,
+      recommended,
+      n429: total(`rl.${cls}.429`),
+      requests: total(`rl.${cls}.total`),
+      spread
+    });
+  }
+  return { rows, usersPerIp, workers, trustProxy: result.meta.serverLimits?.trustProxy };
+}
+
+function renderRateLimits(result, a) {
+  const r = rateLimitAnalysis(result, a);
+  if (!r.rows.length) return [];
+  const L = ['## Rate limits: real demand vs configured limits', ''];
+  L.push(
+    `Requests per **active user per minute** as this workload produced them (page loads included), set against the limits the server ran with. Per-worker limiters are multiplied by ${r.workers} worker(s), because one client IP is spread over all workers. Recommendation: enough for **${r.usersPerIp} concurrent users behind one IP** (corporate NAT, or a proxy whose hops \`trustProxy\` does not cover) with 2× headroom.`
+  );
+  L.push('');
+  L.push(
+    '| Limiter | Configured | Scope | Per user/min p50 / p99 / max | Per runner IP/min max | Users per IP before 429 | 429s in run | Recommended `limit` |'
+  );
+  L.push('|---|---|---|---|---:|---:|---:|---|');
+  for (const row of r.rows) {
+    const conf = row.lim
+      ? `${row.lim.limit} / ${Math.round(row.lim.windowMs / 60000)} min`
+      : row.cls === 'unlimited'
+        ? 'none'
+        : '?';
+    const verdict =
+      row.recommended === null || !row.lim
+        ? '–'
+        : row.recommended <= row.lim.limit
+          ? `keep (${row.lim.limit} ≥ ${row.recommended})`
+          : `**raise to ≥ ${row.recommended}**`;
+    L.push(
+      `| ${row.cls} | ${conf} | ${row.spread > 1 ? 'per IP, per worker' : row.cls === 'unlimited' ? '–' : 'per IP, cluster-wide'} | ${fmt(row.perUser?.p50)} / ${fmt(row.perUser?.p99)} / ${fmt(row.perUser?.max)} | ${fmt(row.perRunner?.max)} | ${row.fit === null ? '–' : fmt(row.fit)} | ${row.n429} | ${verdict} |`
+    );
+  }
+  L.push('');
+  const auth = (result.meta.serverLimits?.rateLimits || {}).authApi;
+  if (auth) {
+    const wantAuth = Math.ceil(r.usersPerIp * 1.2);
+    L.push(
+      `- **authApi** (${auth.limit} per ${Math.round(auth.windowMs / 60000)} min, cluster-wide) counts only credential POSTs (local, LDAP, NTLM login); OIDC sign-in is exempt. With local/LDAP login, ${r.usersPerIp} users behind one IP logging in within one window need **≥ ${wantAuth}**${auth.limit >= wantAuth ? ' — the current value is enough.' : ` — **the current ${auth.limit} locks out everyone after the ${auth.limit}th login of the window** (e.g. the morning wave of an office behind NAT).`} Failed-login protection does not depend on this limit: accounts lock after 5 failures.`
+    );
+  }
+  if (
+    r.trustProxy === undefined ||
+    r.trustProxy === null ||
+    r.trustProxy === false ||
+    r.trustProxy === 0
+  ) {
+    L.push(
+      `- **trustProxy is ${JSON.stringify(r.trustProxy ?? 'unset')}**: behind an ingress or reverse proxy every request then carries the proxy's address, so *all users share one counter* and the limits above apply to the whole user base, not per user. Set \`trustProxy\` to the number of proxy hops (docs/rate-limiting.md).`
+    );
+  }
+  L.push(
+    '- These numbers come from simulated users; calibrate with production access logs (requests per user per minute at peak) before changing defaults.'
+  );
+  L.push('');
+  return L;
 }

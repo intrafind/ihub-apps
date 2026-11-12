@@ -1,18 +1,95 @@
 {
   "name": "capacity-stub",
-  "description": "SIZING. Step ramp against the paced fake LLM so the limit found is iHub's (CPU, event loop, storage, relay), not the GPU's. Run once per WORKERS/vCPU setting (1, 2, 4) and compare users per worker. ~55 min.",
+  "description": "SIZING. Open-ended step ramp against the paced fake LLM, so the limit found is iHub's (CPU, event loop, storage, primary relay), not the GPU's. Stops after the first level that breaks an SLO; the level before it is the capacity. Run once per WORKERS setting (1, 2, 4, 8, 12) with the pod CPU limit = WORKERS + 1. Up to ~85 min.",
   "modelId": "loadtest-stub",
-  "llm": { "expectedTtftMs": 700 },
+  "llm": {
+    "expectedTtftMs": 700
+  },
   "stages": [
-    { "name": "L1-10", "vus": 10, "rampSec": 60, "holdSec": 300 },
-    { "name": "L2-25", "vus": 25, "rampSec": 60, "holdSec": 300 },
-    { "name": "L3-50", "vus": 50, "rampSec": 60, "holdSec": 300 },
-    { "name": "L4-75", "vus": 75, "rampSec": 60, "holdSec": 300 },
-    { "name": "L5-100", "vus": 100, "rampSec": 60, "holdSec": 300 },
-    { "name": "L6-150", "vus": 150, "rampSec": 60, "holdSec": 300 },
-    { "name": "L7-200", "vus": 200, "rampSec": 60, "holdSec": 300 },
-    { "name": "L8-300", "vus": 300, "rampSec": 60, "holdSec": 300 },
-    { "name": "L9-400", "vus": 400, "rampSec": 60, "holdSec": 300 }
+    {
+      "name": "L1-25",
+      "vus": 25,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L2-50",
+      "vus": 50,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L3-100",
+      "vus": 100,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L4-150",
+      "vus": 150,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L5-200",
+      "vus": 200,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L6-300",
+      "vus": 300,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L7-400",
+      "vus": 400,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L8-500",
+      "vus": 500,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L9-650",
+      "vus": 650,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L10-800",
+      "vus": 800,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L11-1000",
+      "vus": 1000,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L12-1250",
+      "vus": 1250,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L13-1500",
+      "vus": 1500,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "L14-2000",
+      "vus": 2000,
+      "rampSec": 60,
+      "holdSec": 300
+    }
   ],
   "thinkTimeSec": [20, 60],
   "sessionPauseSec": [10, 40],
@@ -32,5 +109,11 @@
     "workerCpuAvgPct": 80,
     "eventLoopDelayMaxMs": 150,
     "ingestReadyP95Sec": 180
+  },
+  "stopOnFailure": true,
+  "setup": {
+    "sharedProjects": 20,
+    "docsPerProject": 6,
+    "ownProjectsMax": 200
   }
 }

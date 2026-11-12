@@ -15,11 +15,15 @@
  */
 
 import { monitorEventLoopDelay, performance } from 'node:perf_hooks';
+import { createVllmObserver, createPrometheusObserver } from './observers.mjs';
+import { log } from './util.mjs';
 
 export function startSamplers({ cfg, metrics, adminClient }) {
   const timers = [];
   const intervalMs = cfg.sampling.intervalSec * 1000;
   const serverInfo = { workers: null, host: null };
+  // Outside observers once per run, not once per shard.
+  const firstShard = (cfg.shard?.index ?? 0) === 0;
 
   if (adminClient && cfg.sampling.server) {
     const tick = async () => {
@@ -79,7 +83,7 @@ export function startSamplers({ cfg, metrics, adminClient }) {
     timers.push(setInterval(tick, intervalMs));
   }
 
-  if (cfg.sampling.stubStatsUrl) {
+  if (firstShard && cfg.sampling.stubStatsUrl) {
     const tick = async () => {
       try {
         const res = await fetch(cfg.sampling.stubStatsUrl, { signal: AbortSignal.timeout(5000) });
@@ -92,6 +96,19 @@ export function startSamplers({ cfg, metrics, adminClient }) {
       }
     };
     timers.push(setInterval(tick, intervalMs));
+  }
+
+  if (firstShard && cfg.sampling.vllmMetricsUrl) {
+    const tick = createVllmObserver({ url: cfg.sampling.vllmMetricsUrl, metrics, log });
+    tick();
+    timers.push(setInterval(tick, intervalMs));
+  }
+
+  if (firstShard && cfg.sampling.prometheus?.url) {
+    const tick = createPrometheusObserver({ prom: cfg.sampling.prometheus, metrics, log });
+    tick();
+    // PromQL rates span 1 min; sampling faster than 15 s adds nothing.
+    timers.push(setInterval(tick, Math.max(intervalMs, 15_000)));
   }
 
   // Runner health

@@ -1,0 +1,71 @@
+{
+  "name": "ratelimits",
+  "description": "RATE LIMITS. Run against an instance with the shipped default limits (only authApi lifted so the runner can log its users in) from ONE runner IP \u2014 the corporate-NAT case. The report shows per-user demand per limiter, where 429s start and which limits to change. Also run the capacity profiles: their report has the same section, from the lifted-limit runs.",
+  "modelId": "loadtest-stub",
+  "llm": {
+    "expectedTtftMs": 700
+  },
+  "stopOnFailure": false,
+  "stages": [
+    {
+      "name": "R1-10",
+      "vus": 10,
+      "rampSec": 30,
+      "holdSec": 180
+    },
+    {
+      "name": "R2-25",
+      "vus": 25,
+      "rampSec": 30,
+      "holdSec": 180
+    },
+    {
+      "name": "R3-50",
+      "vus": 50,
+      "rampSec": 30,
+      "holdSec": 180
+    },
+    {
+      "name": "R4-100",
+      "vus": 100,
+      "rampSec": 30,
+      "holdSec": 180
+    },
+    {
+      "name": "R5-150",
+      "vus": 150,
+      "rampSec": 30,
+      "holdSec": 180
+    },
+    {
+      "name": "R6-200",
+      "vus": 200,
+      "rampSec": 30,
+      "holdSec": 180
+    },
+    {
+      "name": "R7-300",
+      "vus": 300,
+      "rampSec": 30,
+      "holdSec": 180
+    }
+  ],
+  "thinkTimeSec": [20, 60],
+  "sessionPauseSec": [10, 40],
+  "pageLoadProbability": 0.5,
+  "mix": {
+    "chat": 45,
+    "chatFile": 15,
+    "projectChat": 30,
+    "projectBuild": 0,
+    "browse": 10,
+    "inference": 0
+  },
+  "slo": {
+    "ttftOverheadP95Ms": null,
+    "workerCpuAvgPct": null,
+    "eventLoopDelayMaxMs": null,
+    "ingestReadyP95Sec": null,
+    "httpErrorPct": 0.1
+  }
+}

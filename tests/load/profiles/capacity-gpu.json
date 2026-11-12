@@ -1,16 +1,87 @@
 {
   "name": "capacity-gpu",
-  "description": "End to end with the real LLM (model loadtest-gpu on gpu-01). Finds how many concurrent users the GPU serves before TTFT degrades, and validates iHub with real tool calls and real answer lengths. ~40 min.",
+  "description": "End to end with the real LLM (loadtest-gpu = Qwen/Qwen3.6-35B-A3B-FP8 on gpu-01, 173k context). Open-ended ramp: finds how many concurrent users the GPU serves before TTFT degrades, with real tool calls, thinking and project context. vLLM metrics are scraped from gpu-01 automatically. Stops after the first failing level.",
   "modelId": "loadtest-gpu",
   "answerLengthHint": "Answer in about 120 words.",
   "stages": [
-    { "name": "G1-5", "vus": 5, "rampSec": 30, "holdSec": 300 },
-    { "name": "G2-10", "vus": 10, "rampSec": 30, "holdSec": 300 },
-    { "name": "G3-20", "vus": 20, "rampSec": 60, "holdSec": 300 },
-    { "name": "G4-40", "vus": 40, "rampSec": 60, "holdSec": 300 },
-    { "name": "G5-60", "vus": 60, "rampSec": 60, "holdSec": 300 },
-    { "name": "G6-80", "vus": 80, "rampSec": 60, "holdSec": 300 },
-    { "name": "G7-120", "vus": 120, "rampSec": 60, "holdSec": 300 }
+    {
+      "name": "G1-5",
+      "vus": 5,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G2-10",
+      "vus": 10,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G3-20",
+      "vus": 20,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G4-30",
+      "vus": 30,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G5-40",
+      "vus": 40,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G6-60",
+      "vus": 60,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G7-80",
+      "vus": 80,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G8-100",
+      "vus": 100,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G9-130",
+      "vus": 130,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G10-160",
+      "vus": 160,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G11-200",
+      "vus": 200,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G12-250",
+      "vus": 250,
+      "rampSec": 60,
+      "holdSec": 300
+    },
+    {
+      "name": "G13-300",
+      "vus": 300,
+      "rampSec": 60,
+      "holdSec": 300
+    }
   ],
   "thinkTimeSec": [20, 60],
   "sessionPauseSec": [10, 40],
@@ -31,5 +102,11 @@
     "workerCpuAvgPct": 80,
     "eventLoopDelayMaxMs": 150,
     "ingestReadyP95Sec": 180
+  },
+  "stopOnFailure": true,
+  "setup": {
+    "sharedProjects": 20,
+    "docsPerProject": 6,
+    "ownProjectsMax": 200
   }
 }

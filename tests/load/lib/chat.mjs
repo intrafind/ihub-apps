@@ -9,7 +9,8 @@
  *   4. read `step/delta` … `run/ended` from the stream
  *
  * Metrics per turn (prefix = scenario label):
- *   <label>.ttft          send → first text delta (ms)
+ *   <label>.ttft          send → first answer-text delta (ms)
+ *   <label>.firstToken    send → first delta of any kind, thinking included (ms)
  *   <label>.duration      send → run/ended (ms)
  *   <label>.charsPerSec   streamed answer speed after the first token
  *   <label>.outputChars   answer length
@@ -102,6 +103,7 @@ export class ChatSession {
       outputFormat: 'markdown',
       sendChatHistory: true,
       ...(config.modelId ? { modelId: config.modelId } : {}),
+      ...(typeof config.thinking === 'boolean' ? { thinkingEnabled: config.thinking } : {}),
       ...body
     };
 
@@ -121,6 +123,8 @@ export class ChatSession {
       .then(() => ({ postSettled: true }));
 
     let ttft = null;
+    let firstAny = null;
+    let thinkingChars = 0;
     let firstAt = null;
     let chars = 0;
     let tools = 0;
@@ -178,6 +182,11 @@ export class ChatSession {
       const data = ev.data?.data ?? {};
       switch (ev.event) {
         case 'step/delta':
+          // Any streamed content (thinking included) ends the blank wait.
+          if (firstAny === null) firstAny = performance.now() - tSend;
+          if (data.kind === 'thinking' && typeof data.content === 'string') {
+            thinkingChars += data.content.length;
+          }
           if (data.kind === 'text' && typeof data.content === 'string') {
             if (ttft === null) {
               firstAt = performance.now();
@@ -222,6 +231,8 @@ export class ChatSession {
 
     metrics.count(`${label}.turn.ok`);
     if (ttft !== null) metrics.trend(`${label}.ttft`, ttft);
+    if (firstAny !== null) metrics.trend(`${label}.firstToken`, firstAny);
+    if (thinkingChars) metrics.trend(`${label}.thinkingChars`, thinkingChars);
     metrics.trend(`${label}.duration`, tEnd - tSend);
     metrics.trend(`${label}.outputChars`, chars);
     metrics.trend(`${label}.tools`, tools);
