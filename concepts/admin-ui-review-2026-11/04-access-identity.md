@@ -219,7 +219,7 @@ Renaming `/api/admin/auth/users` to `/api/admin/users` is a breaking API change;
 ## 8. Wizards to add
 
 **W1 — Secure this installation** (a checklist with inline actions, not a linear wizard; §10)
-- Starts: demo-accounts banner, Overview "Getting started", and a new last step of `/setup` (`SetupWizard.jsx:50`). Who: every admin, day 1.
+- Starts: demo-accounts banner, Overview "Getting started", and a new last step of `/setup` (`SetupWizard.jsx:50`). Who: every admin, day 1. Builds on what exists: the Overview checklist (`AdminOverview.jsx:82-120`) already has "Admin account ready" (hard-coded done) and "Connect identity provider (optional)"; extend it rather than adding a new surface.
 - Steps: 1. Change the `admin` password (inline, Generate + Copy). 2. Demo `user`: disable, delete or set a password. 3. Hide demo accounts. 4. Anonymous access: keep or turn off. 5. Review lockout and session settings.
 - End: server verifies a working sign-in method for the current admin; the Overview item turns green only when passwords differ from the shipped ones (replacing the hard-coded `done`, ID-B30). Replaces ~12 actions on 4 pages.
 
@@ -326,3 +326,28 @@ Structural problems: `admin-ui.md` has **no Authentication or OAuth section**, t
 | 10 | **Secure this installation checklist (W1)** + self-service password change + `lastActiveDate` for local users (ID-B17) + LDAP self-signup toggle (ID-B20) | Day-1 hardening is spread over 4 pages; stale local accounts can't be found | M | S–M | wizard |
 
 Next after the top 10: API access consolidation (§6.7), the Admin role select (§10), the i18n sweep with a CI key check (ID-TW3), Cmd+K keywords and create actions (ID-UX9).
+
+## Appendix — verification log
+
+No row of section 4 was refuted. Corrections and narrowed claims elsewhere in the report:
+
+- §9 "Why can't X see Y — none": **Refuted.** `docs/troubleshooting.md:359-410` has a "Permission Denied (403)" section; it is jq-only and stale, so the gap stands but the rating is now "stale / JSON-only".
+- §9 "search 'Entra ID' finds no OIDC page": **Refuted.** `oidc-authentication.md:146` and :459 mention Entra ID (Microsoft Apps integration, tenant logout URL); the real gap (groups claim, GUIDs, overage, tenant authorize URL) stands.
+- §7 "'Who can use this?' on app and model pages": **Already exists for apps.** `ContentAccessSection.jsx` ("Group access") is on the app, prompt, skill and workflow editors (`docs/admin-ui.md:281`); narrowed to model pages.
+- ID-PM9 "`/setup`'s four steps are about LLM providers": **Partly wrong.** The steps are Welcome, Sign in, Connect an AI provider, Done; the conclusion (no security step) stands.
+- ID-UI1 "extract `AdminTabsHeader` from `ModelsTabsHeader`": **Already done for the tab bar.** `AdminTabs.jsx` is shared by `ModelsTabsHeader` and `OAuthTabsHeader`; narrowed to a shared page header.
+- §9 machine-client docs: `oauth-authorization-code.md:49-66` has the same stale `"oauth": {"enabled": true}` + restart text as `oauth-integration-guide.md` (added). `ihub-as-oidc-idp.md` was missing from the doc table (added).
+- Wrong `path:line` fixed: ID-B1 (:117-122, :263), ID-B14 (9 call sites, :404 added), ID-B28 (`AdminAuthPage.jsx:191-192`, `OidcProvidersSection.jsx:560`), ID-B30 (`AdminSidebarNavData.js:185`, `App.jsx:707-726`), ID-B31 (`AdminUserViewPage.jsx:50-68`), ID-B5 (`inheritedGrants` lives in `utils/groupIntegrationAccess.js:127`).
+- Status changes: ID-B4 code-only → Confirmed live; ID-B31 Suspected → Confirmed (harmless while OAuth is off). ID-B22 stays partly Suspected (`/common` rejection by single-tenant Entra apps not reproducible here).
+
+### Adversarial verification
+
+Scripts and output in `scratchpad/access-identity/verify/`.
+
+- **Live, browser** (`v1.js`, `v2.js`, output `v1.out`, `v2.out`): ID-B1 (platform-config GET answered 429 by route interception; non-GET requests were blocked so nothing could be saved), ID-B7 (email input `border-top-width: 0px`, `padding-left: 0px`), ID-B8 (cold load with a dark OS: no `dark` class on `/admin/users` and `/admin/groups`, `dark` on `/admin/auth`), ID-B11 (changed a number field on `/admin/auth`, clicked Users in the sidebar: navigated, no dialog), ID-B13 (typed `users-sales`: value `users`, input disabled), ID-B14 (create while clients are off), ID-B16 (users list GET answered 500: error and "No users found / Create your first user" both shown).
+- **Live, API** (`b4.sh`, `b4.out`, `b31.out`): ID-B4 (orphaned inheritance freezes the group cache; group create also answered 200, not 201, confirming part of ID-B30), ID-B31.
+- **Code re-read** for every other row: ID-B2 (`auth.js:500-560` PUT has no `isLastAdmin`; DELETE checks it at :647), ID-B3 (`AdminUserEditPage.jsx:237-282`: loaded user has no `enabled`, save sends `active: data.enabled !== false`), ID-B5 (shipped `authenticated` grants `apps`/`models` `*`; empty-state strings at `GroupFormEditor.jsx:383,449-489`), ID-B6 (`AdminOAuthClientEditPage.jsx:38-40` defaults `['*']`, `oauthClients.js:264-268` empty → `['*']`), ID-B9/B10/B12/B15/B17-B21/B23-B30 at the cited lines; ID-B10 also from `ui/crops/m_users.png`.
+- **Already implemented?** Searched `client/src` and `server/routes` for `SecretRevealDialog`, `AdminInput`/`AdminButton`/`AdminCheckbox`, an explain-access or effective-permissions route, a group members view, slugified group IDs, a self-service password route, OIDC/group/service-client wizards (only `SetupWizard` and `AppCreationWizard` exist), a server-side auth lockout check, and `docs/releases/next/` entries for this area: none found, so recommendations 1-10 and W1-W4 stand (with the narrowing above).
+- **Docs** (§9): grepped `docs/` for Entra ID, sub-admin (0 hits), CIMD, Connections, bulk operations (`admin-ui.md:255` confirmed), unsaved changes (`admin-ui.md:513` confirmed), troubleshooting, and the stale `oauth` block.
+- **Cleanup**: deleted leftover group `zz-access-identity-limited` (no members, no children); all verifier groups `zz-access-identity-v*` deleted; no `zz-` users or OAuth clients remain.
+

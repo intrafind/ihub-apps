@@ -370,7 +370,7 @@ The panel converged on re-cutting `/admin/ui` by job, not by `ui.json` section. 
 - **Outdated:**
   - `docs/customization.md:29-76` teaches label changes by hand-editing `contents/locales/{lang}.json` and never mentions the editor.
   - `docs/content-management.md` (112 lines, 0 admin-UI mentions) shows pages inline in `ui.json` and mixes in RAG "content guidelines".
-- **Missing:** Short links (no doc page at all). `includeParams` appears nowhere in `docs/`; `prefill` only in `auto-send-feature.md` and `apps.md`.
+- **Missing:** Short links (no doc page at all; only passing mentions, e.g. the Share panel in `admin-ui.md:207` and the `shortLinks` flag in `platform.md`). `includeParams` appears nowhere in `docs/`; `prefill` only in `auto-send-feature.md` and `apps.md`.
 - **Wrong:** see CU-B23.
 - **Navigation:** `admin-ui.md` has a section only for UI Customization (`:349-355`). In `SUMMARY.md` the customization topics are scattered: Configuration, line 32, line 65 and line 99.
 
@@ -516,7 +516,7 @@ The panel converged on re-cutting `/admin/ui` by job, not by `ui.json` section. 
 | 7 | **Branding tab with `AssetPicker`, `ColorField` and one Product name.** A `ColorField` (native picker plus hex input) already exists, private to `AdminDocumentTemplateEditPage.jsx:75`; extract it rather than writing a new one, and fix its black fallback (CU-B20) on the way. Dissolve the Content tab and move the Disclaimer beside the AI notice (§6). | The name is in 3 places, colour in 4, and every image takes 5 copy-paste steps. | H | M–L | IA |
 | 8 | **Brand iHub wizard (W1)** on a server-side draft, with preview in the admin's own session and Publish with a diff. Optionally apply the brand to the default document template. | Task 1's "preview before publishing" is impossible today. It is the day-1 job of every install. | H | L | wizard |
 | 9 | **Connect pages to navigation.**<br>• W2 legal-page templates (including a shipped Impressum skeleton) with "Show in footer", created in one server call.<br>• A link-target picker in header and footer links.<br>• Show the URL and a save toast.<br>• Reference-aware delete (CU-B14).<br>• Monaco plus preview, with Content Type first. | Task 4 takes 15 steps on 2 pages with guessed URLs. Imprint is a legal must in DE/AT. | M–H | M | UX |
-| 10 | **i18n sweep for this part.** Add the 206 missing admin keys to `en.json` and `de.json`, replace the hard-coded literals, and extend the translation-key test to `features/admin` (CU-B22). | German admins see half-English screens, and the override editor can't fix them. | M | M | fix |
+| 10 | **i18n sweep for this part.** Add the 206 missing admin keys to `en.json` and `de.json`, replace the hard-coded literals, and extend the translation-key test to `features/admin` (CU-B22; `tests/unit/client/translation-keys-exist.test.jsx:19` skips that folder today). | German admins see half-English screens, and the override editor can't fix them. | M | M | fix |
 
 Next after the top 10:
 - Categories editor and language-selector toggle (CU-PM3).
