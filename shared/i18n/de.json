@@ -722,6 +722,8 @@
       "notUsed": "Nicht verwendet",
       "notUsedReason": "Es war im Umfang, aber nichts daraus ist in diese Antwort eingeflossen.",
       "details": "Details",
+      "detailsText": "Text",
+      "detailsImage": "Bild {{number}}",
       "openProject": "Projekt öffnen",
       "openProjectNamed": "Projekt {{name}} öffnen",
       "openExecution": "Workflow-Ausführung öffnen",
@@ -775,8 +777,6 @@
       "outdated_other": "{{count}} veraltete Dokumente werden aktualisiert; diese Antwort hat ihren gespeicherten Text verwendet"
     },
     "provenance": {
-      "button": "KI-generiert: Details",
-      "title": "KI-generiert",
       "model": "Modell",
       "created": "Erstellt",
       "marking": "Kennzeichnung",
@@ -788,8 +788,6 @@
       "copied": "Kopiert",
       "outputId": "Ausgabe-ID",
       "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat.",
-      "imageButton": "KI-generiertes Bild: Details",
-      "imageTitle": "KI-generiertes Bild",
       "imageNote": "Der Herkunftsnachweis speichert diesen Hash, nicht das Bild selbst. Mit ihm lässt sich die unveränderte Datei prüfen. Kennzeichnungen des Anbieters bleiben erhalten. Kein Treffer bedeutet nicht, dass ein Mensch es erstellt hat."
     },
     "imageTooLargeToStore": "Dieses Bild war größer als von dieser Installation gespeichert wird und wurde daher nicht aufbewahrt.",

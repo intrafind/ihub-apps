@@ -1072,13 +1072,7 @@ function ChatMessage({
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
             {message.images.map((image, idx) => (
-              <GeneratedImage
-                key={image.id || idx}
-                image={image}
-                chatId={chatId}
-                index={idx}
-                models={models}
-              />
+              <GeneratedImage key={image.id || idx} image={image} chatId={chatId} index={idx} />
             ))}
           </div>
         )}
@@ -1144,6 +1138,7 @@ function ChatMessage({
                   workflowResult={message.workflowResult}
                   knowledgeScope={message.knowledgeScope}
                   provenance={message.provenance}
+                  images={message.images}
                   models={models}
                   newest={isLatestAssistantMessage}
                 />

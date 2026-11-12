@@ -162,11 +162,33 @@ function NotUsedList({ projects, t }) {
 }
 
 /**
+ * The AI-generated records of the answer: its text's and one per picture, each as the
+ * server sent it. A picture without the object (stored before it existed) has none.
+ *
+ * @returns {Array<{key: string, kind: 'text'|'image', number?: number, provenance: Object}>}
+ */
+function provenanceRecords(provenance, images) {
+  const records = [];
+  if (provenance?.ai_generated) records.push({ key: 'text', kind: 'text', provenance });
+  (Array.isArray(images) ? images : []).forEach((image, index) => {
+    if (image?.provenance?.ai_generated) {
+      records.push({
+        key: `image-${index}`,
+        kind: 'image',
+        number: index + 1,
+        provenance: image.provenance
+      });
+    }
+  });
+  return records;
+}
+
+/**
  * "About this answer": what the answer is, what it is based on, what was left
  * out, and the record of it. A non-modal dialog like the other disclosures:
  * Escape closes it and returns the focus to the chip.
  */
-function BasisPopover({ entries, scope, workflowResult, provenance, models, panelProps }) {
+function BasisPopover({ entries, scope, workflowResult, provenance, images, models, panelProps }) {
   const { t, i18n } = useTranslation();
   const { panelRef } = panelProps;
   // The popover is a dialog, so opening it moves the focus into it: a keyboard or screen
@@ -177,6 +199,7 @@ function BasisPopover({ entries, scope, workflowResult, provenance, models, pane
     panelRef.current?.focus({ preventScroll: true });
   }, [panelRef]);
   const { used, unused } = splitScope(scope);
+  const records = provenanceRecords(provenance, images);
   const titleId = useId();
   const modelOnly = isModelOnly(entries);
   const isWorkflow = entries.length === 1 && entries[0].kind === 'workflow';
@@ -239,12 +262,28 @@ function BasisPopover({ entries, scope, workflowResult, provenance, models, pane
         </Section>
       )}
 
-      {provenance?.ai_generated && (
+      {records.length > 0 && (
         <Section
           title={t('chatMessage.answerBasis.details', 'Details')}
           testId="answer-basis-details"
         >
-          <ProvenanceDetails provenance={provenance} models={models} />
+          {/* One record per output. Named only when there is more than one to tell apart. */}
+          <div className="flex flex-col gap-3">
+            {records.map(record => (
+              <div key={record.key} data-testid={`answer-basis-record-${record.kind}`}>
+                {records.length > 1 && (
+                  <p className="m-0 mb-1 font-medium text-gray-900 dark:text-gray-100">
+                    {record.kind === 'image'
+                      ? t('chatMessage.answerBasis.detailsImage', 'Image {{number}}', {
+                          number: record.number
+                        })
+                      : t('chatMessage.answerBasis.detailsText', 'Text')}
+                  </p>
+                )}
+                <ProvenanceDetails provenance={record.provenance} models={models} />
+              </div>
+            ))}
+          </div>
         </Section>
       )}
     </div>
@@ -256,7 +295,7 @@ function BasisPopover({ entries, scope, workflowResult, provenance, models, pane
  * used, and nothing else (no names, modes or prefix). Opening it shows "About
  * this answer".
  */
-function BasisChip({ entries, scope, workflowResult, provenance, models, className = '' }) {
+function BasisChip({ entries, scope, workflowResult, provenance, images, models, className = '' }) {
   const { t, i18n } = useTranslation();
   const popover = usePopoverPanel('top');
   const { open, setOpen, panelId, rootRef, buttonRef } = popover;
@@ -309,6 +348,7 @@ function BasisChip({ entries, scope, workflowResult, provenance, models, classNa
           scope={scope}
           workflowResult={workflowResult}
           provenance={provenance}
+          images={images}
           models={models}
           panelProps={popover}
         />
@@ -361,6 +401,8 @@ function UnavailableChip({ projects, newest, t }) {
  * @param {Object} [props.workflowResult] - Set when a workflow run produced the answer
  * @param {Object} [props.knowledgeScope] - `knowledge/scope`: the projects and what each contributed
  * @param {Object} [props.provenance] - The server's provenance object, for the popover's details
+ * @param {Array<Object>} [props.images] - The pictures of the answer, each with its own
+ *   `provenance`: their details are in the same popover
  * @param {Array<Object>} [props.models] - Model list, for the model's display name
  * @param {boolean} [props.newest=false] - Whether this is the newest answer of the chat
  */
@@ -369,6 +411,7 @@ function AnswerBasis({
   workflowResult,
   knowledgeScope,
   provenance,
+  images,
   models,
   newest = false,
   className = ''
@@ -388,6 +431,7 @@ function AnswerBasis({
           scope={knowledgeScope}
           workflowResult={workflowResult}
           provenance={provenance}
+          images={images}
           models={models}
         />
       )}

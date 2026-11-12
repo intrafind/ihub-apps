@@ -7,7 +7,6 @@ import Icon from '../../../shared/components/Icon';
 import { fetchChatArtifact } from '../../../api';
 import { useArtifactFetcher } from '../contexts/ArtifactFetchContext';
 import { useArtifactViewer } from '../contexts/ArtifactViewerContext';
-import ProvenanceInfo from './ProvenanceInfo';
 
 /**
  * One image an assistant turn produced.
@@ -27,6 +26,10 @@ import ProvenanceInfo from './ProvenanceInfo';
  * - **Unavailable** — a descriptor with `unavailable`. There is nothing to
  *   show, so the component says so rather than rendering a broken picture.
  *
+ * The picture carries no "AI generated" control of its own: what the server
+ * recorded about it (`image.provenance`, EU AI Act Art. 50(2)) is shown with the
+ * answer's other provenance, in the "About this answer" chip under the message.
+ *
  * Fetched through `apiClient` rather than pointed at by an `<img src>`: the URL
  * is credentialed, and a bearer token kept in `localStorage` only travels on a
  * request the client makes itself.
@@ -36,10 +39,9 @@ import ProvenanceInfo from './ProvenanceInfo';
  *   a stored artifact descriptor, or one marked unavailable.
  * @param {string} [props.chatId] - Chat the image belongs to; required to fetch a stored one.
  * @param {number} props.index - Position in the message, for the alt text.
- * @param {Array<Object>} [props.models] - Model list, for the "AI generated" details.
  * @returns {JSX.Element|null}
  */
-function GeneratedImage({ image, chatId, index, models }) {
+function GeneratedImage({ image, chatId, index }) {
   // A shared chat serves its images through the share rather than the
   // owner's chat route; the page providing that route says so via context.
   const customFetch = useArtifactFetcher();
@@ -216,16 +218,6 @@ function GeneratedImage({ image, chatId, index, models }) {
           />
         )}
         <div className="absolute top-2 right-2 flex gap-2">
-          {/* "AI generated" details of the picture (EU AI Act Art. 50(2)), from
-              the provenance object the server attached to it. */}
-          {image?.provenance?.ai_generated && (
-            <ProvenanceInfo
-              provenance={image.provenance}
-              models={models}
-              placement="bottom"
-              buttonClassName="inline-flex items-center justify-center bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
-            />
-          )}
           {canShare && (
             <button
               type="button"

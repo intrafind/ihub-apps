@@ -156,6 +156,102 @@ describe('the chip names the kinds of source, nothing else', () => {
   });
 });
 
+describe('the details of generated pictures are in the same chip (EU AI Act Art. 50(2))', () => {
+  const IMAGE = {
+    mimeType: 'image/png',
+    provenance: {
+      ai_generated: true,
+      kind: 'image',
+      model: { id: 'gemini-image', watermark: { by: 'provider', applied: true } },
+      content_hash: { alg: 'sha-256', value: 'b'.repeat(64) },
+      output_id: '01JC1111111111111111111111'
+    }
+  };
+
+  it("an image-only answer: Details carry the picture's record, without a heading to tell apart", () => {
+    renderBasis({ answerBasis: [{ kind: 'model' }], images: [IMAGE] });
+    open();
+    expect(headings()).toEqual(['About this answer', 'AI-generated', 'Details']);
+    const details = screen.getByTestId('answer-basis-details');
+    expect(within(details).getByTestId('provenance-model')).toHaveTextContent('gemini-image');
+    expect(within(details).getByText('01JC1111111111111111111111')).toBeInTheDocument();
+    expect(within(details).getByText(/not the image itself/)).toBeInTheDocument();
+    expect(within(details).queryByText('Image 1')).not.toBeInTheDocument();
+  });
+
+  it('text and pictures: one record each, named so they can be told apart', () => {
+    renderBasis({
+      answerBasis: [{ kind: 'model' }],
+      provenance: PROVENANCE,
+      images: [IMAGE, { mimeType: 'image/png' }, IMAGE]
+    });
+    open();
+    const details = screen.getByTestId('answer-basis-details');
+    expect(within(details).getByTestId('answer-basis-record-text')).toHaveTextContent('Text');
+    // The middle picture has no record (stored before it existed): the numbers stay the message's.
+    const images = within(details).getAllByTestId('answer-basis-record-image');
+    expect(images.map(node => node.querySelector('p')?.textContent)).toEqual([
+      'Image 1',
+      'Image 3'
+    ]);
+  });
+
+  it('pictures without a record leave out the details, not the AI statement', () => {
+    renderBasis({ answerBasis: [{ kind: 'model' }], images: [{ mimeType: 'image/png' }] });
+    open();
+    expect(headings()).toEqual(['About this answer', 'AI-generated']);
+  });
+
+  it('names the picture in German', () => {
+    mockLanguage = 'de';
+    renderBasis({ answerBasis: [{ kind: 'model' }], provenance: PROVENANCE, images: [IMAGE] });
+    open();
+    expect(screen.getByText('Bild 1')).toBeInTheDocument();
+  });
+});
+
+describe('the panel finds room (it opens on the side that has it)', () => {
+  // jsdom lays nothing out: give the panel a height so "room" means something.
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => 300
+    });
+  });
+  afterAll(() => {
+    delete HTMLElement.prototype.scrollHeight;
+    window.innerHeight = 768;
+  });
+
+  const openAt = rect => {
+    chip().getBoundingClientRect = () => rect;
+    open();
+    return panel();
+  };
+
+  it('opens below when there is no room above (an answer at the top of the chat)', () => {
+    renderBasis({ answerBasis: [{ kind: 'model' }] });
+    expect(openAt({ top: 40, bottom: 64, left: 0, right: 24 }).className).toContain('top-full');
+  });
+
+  it('opens above when there is room above', () => {
+    renderBasis({ answerBasis: [{ kind: 'model' }] });
+    expect(openAt({ top: 600, bottom: 624, left: 0, right: 24 }).className).toContain(
+      'bottom-full'
+    );
+  });
+
+  it('caps the panel to the roomier side when neither side fits', () => {
+    renderBasis({ answerBasis: [{ kind: 'model' }] });
+    // A 300 px panel in a 400 px viewport: 150 px above, 226 px below. Neither fits,
+    // so it opens below and is capped to that room minus the gap.
+    window.innerHeight = 400;
+    const opened = openAt({ top: 150, bottom: 174, left: 0, right: 24 });
+    expect(opened.className).toContain('top-full');
+    expect(opened.style.maxHeight).toBe('218px');
+  });
+});
+
 describe('a narrow pane drops the nouns, not the information', () => {
   it('two or more kinds keep their icons and drop the nouns under a narrow container', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });

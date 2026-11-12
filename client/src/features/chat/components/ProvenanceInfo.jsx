@@ -3,9 +3,7 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
-import { usePopoverPanel } from '../hooks/usePopoverPanel';
 
 /** The first and last characters of a hash, so it fits a narrow popover. */
 const shortHash = value =>
@@ -52,8 +50,10 @@ function Row({ label, children }) {
 /**
  * The record of an AI-generated output as a list: which model produced it, when,
  * the marking and the hash of its text or file, with the note on what the hash
- * proves. Shared by the button on a generated image and by the "Details" of an
- * answer's "About this answer" popover.
+ * proves. Rendered in the "Details" of an answer's "About this answer" popover, for
+ * the answer's text and for each picture it produced (EU AI Act Art. 50(2)): one place
+ * for all of it, the chip under the answer. Nothing is inferred here; an output without
+ * the server's object has no record to show.
  *
  * @param {Object} props
  * @param {Object} props.provenance - The server's provenance object
@@ -130,71 +130,3 @@ export function ProvenanceDetails({ provenance, models }) {
     </>
   );
 }
-
-/**
- * "AI generated" information on a generated image (EU AI Act Art. 50(2)): which
- * model produced it, when, and the hash of its file, from the provenance object
- * the server attached (an image's `provenance`). Nothing is inferred here. An
- * output without the object shows no button. The details of an answer's text
- * are part of the answer's "About this answer" popover (`AnswerBasis`).
- *
- * @param {Object} props
- * @param {Object} props.provenance - The server's provenance object
- * @param {Array<Object>} [props.models] - Model list, for the model's display name
- * @param {'top'|'bottom'} [props.placement='top'] - Where the panel prefers to open; it
- *   opens on the other side when the preferred one has no room
- * @param {string} [props.buttonClassName] - Replaces the button's look (on an image)
- */
-function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName }) {
-  const { t } = useTranslation();
-  const { open, setOpen, side, panelStyle, panelId, rootRef, buttonRef, panelRef } =
-    usePopoverPanel(placement);
-
-  if (!provenance?.ai_generated) return null;
-
-  const isImage = provenance.kind === 'image';
-  const label = isImage
-    ? t('chatMessage.provenance.imageButton', 'AI-generated image: details')
-    : t('chatMessage.provenance.button', 'AI generated: details');
-
-  return (
-    <div className="relative inline-flex" ref={rootRef}>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => setOpen(value => !value)}
-        aria-expanded={open}
-        aria-controls={open ? panelId : undefined}
-        aria-label={label}
-        title={label}
-        data-testid="provenance-button"
-        className={
-          buttonClassName ||
-          'inline-flex items-center justify-center min-h-6 min-w-6 rounded-full border border-gray-300 text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 dark:border-gray-600 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
-        }
-      >
-        <Icon name="information-circle" className="w-4 h-4" />
-      </button>
-      {open && (
-        <div
-          ref={panelRef}
-          id={panelId}
-          style={panelStyle}
-          role="dialog"
-          aria-label={t('chatMessage.provenance.title', 'AI generated')}
-          data-testid="provenance-panel"
-          className={`absolute ${side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} end-0 z-20 w-72 max-h-[70vh] overflow-y-auto max-w-[85vw] rounded-lg border border-gray-200 bg-white p-3 text-start text-xs shadow-lg dark:border-gray-700 dark:bg-gray-900`}
-        >
-          <p className="mb-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-            {isImage
-              ? t('chatMessage.provenance.imageTitle', 'AI-generated image')
-              : t('chatMessage.provenance.title', 'AI generated')}
-          </p>
-          <ProvenanceDetails provenance={provenance} models={models} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-export default ProvenanceInfo;
