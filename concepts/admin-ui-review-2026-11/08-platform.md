@@ -28,7 +28,7 @@ There are good patterns to copy. The EU AI Act page has an honest configuration 
   It also holds Azure Speech credentials and a test bench (microphone check, live dictation, record-and-transcribe). One Save, placed mid-page under the Azure card, saves all of it. The endpoints themselves live under Models. The admin uses this page once at setup.
 - **Security** (`/admin/security`): one `AdminSettingsPage` with a left section nav and 8 sections: SSL/TLS, Cookies, CORS, Rate limits, SSRF allowlist, Tool approval, Outbound proxy and the Value Encryption tool. There are 7 independent Save buttons with 5 different labels (`AdminSecurityPage.jsx:267-318`). The admin uses it on day 1 to get outbound traffic working, then rarely.
 - **EU AI Act** (`/admin/eu-ai-act`): 8 stacked cards (about 4,740px). They hold the master switch with a recorded reason, a configuration check with "Open settings →" fix links, the AI notice, the acknowledgement settings, acknowledgement records with CSV export, watermark keys, provenance settings, and an output verification form. The admin uses it once at setup and again during audits.
-- **Backup & Restore** (`/admin/backup`): two buttons. "Export Configuration" downloads a ZIP of the whole `contents/` folder (`server/routes/admin/backup.js:120`). "Import Configuration" replaces it. The admin uses it before every update and, rarely, during an incident.
+- **Backup & Restore** (`/admin/backup`): two buttons. "Export Configuration" downloads a ZIP of `contents/` without `contents/.backups`, so the pre-import snapshots are not in it (`getConfigurationFiles`, `server/routes/admin/backup.js:119-121`). "Import Configuration" replaces it. The admin uses it before every update and, rarely, during an incident.
 - **Updates** (`/admin/updates`): version tiles and an "Update Available" banner. For binary installs only, there is also download → verify → apply → restart detection, plus Install from file and Rollback. The admin checks it monthly.
 - **Advanced** (`/admin/advanced`): two unrelated cards. "Don't show the onboarding" saves on click; "Force Client Refresh" reloads every connected client. The admin rarely uses it.
 
@@ -240,7 +240,7 @@ Breakages are in §4 and are not repeated here.
 - **Who:** an admin in an incident or a migration. Rare, and catastrophic if done wrong.
 - **Steps:**
   1. Choose a source: uploaded ZIP, an automatic pre-import snapshot, or an update snapshot.
-  2. Preview: iHub version, source host, export date, file count, and a change summary (apps +3/−1, platform.json changed, users replaced). Warn "⚠ the encryption key differs: secrets will not decrypt".
+  2. Preview: iHub version, source host, export date, file count, and a change summary (apps +3/−1, platform.json changed, users replaced). Restore replaces the destination's key with the key in the backup, so the check compares the backup's secrets with the backup's own key, not with the destination's current key. Warn ("⚠ some secrets in this backup cannot be decrypted with its key") only when they do not match, or when the backup has no key and its secrets were encrypted with a different one.
   3. "Download the current state first" (on by default; a snapshot is also taken automatically).
   4. Type the instance name or RESTORE.
   5. Progress → result → "Reload admin", with an "Undo (restore the snapshot just taken)" button.
@@ -345,7 +345,7 @@ Also fix `docs/releases/next/breaking-changes.md:874` (PL-B28), and add screensh
 **Help text to rewrite (current → proposed)**
 - **SSL toggle.** Current: "Ignore Invalid SSL Certificates — When enabled, allows connections to services with self-signed or invalid SSL certificates." Proposed: "**Skip certificate checks for these hosts.** Use only when you can't make the server trust your company CA. Every host not listed is still verified, and listed hosts may also resolve to private addresses. Recommended instead: trust your CA → Learn more."
 - **Cookies.** Current: "Disable Secure Cookie Flag — When enabled, removes the 'secure' flag…". Proposed: "**Allow sign-in over plain HTTP (not recommended).** Turn this on only for internal installations without HTTPS. Anyone on the network can then read session cookies."
-- **Backup.** Current: "All data and source files". Proposed: "Everything in `contents/`: configuration, users and password hashes, encryption and signing keys, audit log, chats and uploads. **Anyone with this file can decrypt your stored secrets.**"
+- **Backup.** Current: "All data and source files". Proposed: "Everything in `contents/` except the pre-import snapshots in `.backups`: configuration, users and password hashes, encryption and signing keys, audit log, chats and uploads. **Anyone with this file can decrypt your stored secrets.**"
 - **Force refresh.** Current: "…New salt: {{salt}}. All clients will refresh on their next page load." Proposed: "Refresh sent. Signed-in users reload on their next page load."
 - **Rate limits.** Current: "…(trustProxy in platform.json)…". Proposed: a real "Trusted proxy hops" field. Until it exists: "Set only in platform.json (`trustProxy`) → Learn more."
 - **Voice title.** Current: "Voice Input (Speech-to-Text)". Proposed: "Voice & speech", with the subtitle "Dictation, read aloud and voice mode". Write the Azure placeholder as "e.g. westeurope".
