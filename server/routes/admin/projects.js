@@ -298,8 +298,9 @@ export default function registerAdminProjectsRoutes(app) {
    *       `MAX_FILES_CEILING`; bytes per file and per project; projects per
    *       user, 0 for no cap) and `refreshTtl` (seconds or `never`: how long
    *       files downloaded from websites and web pages are current, unless a
-   *       project or an item sets its own) and `refreshMode` (`auto`: in the
-   *       background while a project is used, `onDemand`: when it is used) and
+   *       project or an item sets its own) and `refreshMode` (`always`: in the
+   *       background, `auto`: in the background while a project is used,
+   *       `onDemand`: when it is used) and
    *       `refreshIdleDays` (days without use after which an `auto` project is
    *       refreshed only when used; 0 never). Full admins only.
    *     tags: [Admin Projects]

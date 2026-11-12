@@ -125,7 +125,7 @@ three levels; the most specific one that is set applies:
 2. the project (**Refresh** in the project's side panel; owners and editors, and admins for admin
    projects),
 3. the installation: `platform.projects.refreshTtl` (**Admin → Projects → Project settings**),
-   one day by default.
+   seven days by default.
 
 A TTL is a number of seconds (15 minutes to a year; the dialogs offer 1 hour, 6 hours, 1 day, 7 days
 and 30 days) or `never`.
@@ -134,22 +134,26 @@ When an outdated file or page is refreshed is its **refresh mode**, set on the s
 (`refreshMode` on the item and the project, `platform.projects.refreshMode` for the
 installation):
 
-| Mode                                                      | What happens to an outdated snapshot                                                                                                                                                                       |
-| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Automatically, while the project is used** (`auto`, default) | Refreshed in the background (below). A project nobody used for `platform.projects.refreshIdleDays` days (14 by default; 0 turns this off) is refreshed only when it is used again, like `onDemand`. |
-| **When the project is used** (`onDemand`)                  | Outdated snapshots are not refreshed in the background (a first fetch still is). Using the project refreshes them.                                                                                  |
-| TTL `never`                                               | Refreshed only when someone chooses **Refresh**, in either mode.                                                                                                                                     |
+| Mode | What happens to an outdated snapshot |
+| ---- | ------------------------------------ |
+| **Always, in the background** (`always`) | Refreshed in the background (below), whether the project is used or not. |
+| **Automatically, while the project is used** (`auto`, default) | Refreshed in the background (below). A project nobody used for `platform.projects.refreshIdleDays` days (7 by default; 0 turns this off; **Admin → Projects → Project settings**) is refreshed only when it is used again, like `onDemand`. |
+| **When the project is used** (`onDemand`) | Outdated snapshots are not refreshed in the background (a first fetch still is). Using the project refreshes them. |
+| TTL `never` | Refreshed only when someone chooses **Refresh**, in any mode. |
 
-A project is **used** when a chat, a search, a workflow or an MCP client reads its knowledge, or
-when someone opens it. A use queues a refresh of every outdated file and page of the project (at
-most once a minute per project and server process) and the first fetch of pages still waiting for
-one; the answer of that turn uses the stored text. For the idle rule only a chat turn in the project
-or a change of its items counts (`lastActivityAt`): a project that only an app reads counts as idle,
-and is refreshed on each use after its TTL. The project page shows **Refreshing N outdated
+A project is **used** when a chat, a search, a workflow, an app or an MCP client reads its
+knowledge, or when it is attached to a chat. Opening the project page is not a use. A use is
+recorded as the project's `lastUsedAt` (at most once an hour per project and server process), which
+the idle rule reads; a project not used since this was recorded counts from its last activity.
+Nothing the server does by itself is a use: a background refresh never keeps a project active. A use
+also queues a refresh of every outdated file and page of the project (at most once a minute per
+project and server process) and the first fetch of pages still waiting for one; the answer of that
+turn uses the stored text. The project page shows **Refreshing N outdated
 documents** while it runs, the item card **Outdated since …, refreshed when used**, and **About this
 answer** in a chat says how many outdated documents the answer read.
 
-- **Files from websites** are refreshed on their own (in mode `auto`, while the project is used):
+- **Files from websites** are refreshed on their own (in mode `always`, and in mode `auto` while
+  the project is used):
   every 15 minutes the ingest reconciler queues the files (and web pages) whose last check is older
   than their TTL (at most 50 per run, on the `ingest.concurrency` queue). These background refreshes
   wait behind every upload, pick and refresh someone asked for, and with more than one slot they
@@ -1256,7 +1260,9 @@ would go past it.
 | `retentionDays`             | `0`                 | Days without activity after which a user project is deleted; 0 keeps them.                               |
 | `loadAllMaxTokens`          | `50000`             | Upper bound of the load-all budget (also capped at 40 % of the model's context window).                  |
 | `knowledgeModes`            | all five            | The [knowledge modes](#knowledge-modes) users may choose for a project: a list of `auto`, `context`, `relevant`, `tools`, `pinned`; `auto` is always offered. **Admin → Projects → Project settings**. |
-| `refreshTtl`                | `86400` (1 day)     | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
+| `refreshTtl`                | `604800` (7 days)   | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
+| `refreshMode`               | `auto`              | When an outdated file or page is refreshed: `always`, `auto` or `onDemand` (see [Refresh](#refresh)). Projects and items may set their own. **Admin → Projects → Project settings**. |
+| `refreshIdleDays`           | `7`                 | Days without use after which a project in mode `auto` is refreshed only when it is used; 0 never counts a project as idle. **Admin → Projects → Project settings**. |
 | `kinds`                     | `{}`                | Item kinds to switch off, `{ "<kind>": false }`.                                                         |
 | `scan.provider`             | `none`              | `none` (no scan) or `command` (run a scanner on every upload and picked file before extraction).         |
 | `scan.command`              | `""`                | The scanner command; `{path}` is replaced by the file, or the path is appended. Exit code 0 is clean, 1 infected, anything else an error. |

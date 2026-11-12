@@ -836,38 +836,44 @@ export class ProjectIngestService {
       for (const item of stuck) {
         let settled = false;
         try {
-          await this.service.patchItem(project.id, item.id, entry => {
-            // The decision above was taken on the inventory; under the lock
-            // the item must still be the one inventoried. A changed
-            // reservation or update means another worker settled it, its job
-            // moved on, or a new refresh owns it now: leave it alone.
-            if (entry.refreshingAt !== item.refreshingAt || entry.updatedAt !== item.updatedAt) {
-              return false;
-            }
-            if (typeof entry.refreshingAt === 'string') {
+          await this.service.patchItem(
+            project.id,
+            item.id,
+            entry => {
+              // The decision above was taken on the inventory; under the lock
+              // the item must still be the one inventoried. A changed
+              // reservation or update means another worker settled it, its job
+              // moved on, or a new refresh owns it now: leave it alone.
+              if (entry.refreshingAt !== item.refreshingAt || entry.updatedAt !== item.updatedAt) {
+                return false;
+              }
+              if (typeof entry.refreshingAt === 'string') {
+                settled = true;
+                // An interrupted refresh: the old snapshot is still there. Its
+                // attempt goes with it, so a job still running somewhere can
+                // no longer install or fail it.
+                delete entry.refreshingAt;
+                delete entry.ingestAttempt;
+                entry.status = entry.text ? 'stale' : 'failed';
+                entry.error = {
+                  code: INTERRUPTED,
+                  message: 'The server restarted during the refresh. Refresh the document again.'
+                };
+                return;
+              }
+              if (entry.status !== 'pending' && entry.status !== 'extracting') return false;
               settled = true;
-              // An interrupted refresh: the old snapshot is still there. Its
-              // attempt goes with it, so a job still running somewhere can
-              // no longer install or fail it.
-              delete entry.refreshingAt;
+              // Its attempt goes too: a job still running elsewhere is fenced out.
               delete entry.ingestAttempt;
-              entry.status = entry.text ? 'stale' : 'failed';
+              entry.status = 'failed';
               entry.error = {
                 code: INTERRUPTED,
-                message: 'The server restarted during the refresh. Refresh the document again.'
+                message: 'The server restarted during extraction. Upload the file again.'
               };
-              return;
-            }
-            if (entry.status !== 'pending' && entry.status !== 'extracting') return false;
-            settled = true;
-            // Its attempt goes too: a job still running elsewhere is fenced out.
-            delete entry.ingestAttempt;
-            entry.status = 'failed';
-            entry.error = {
-              code: INTERRUPTED,
-              message: 'The server restarted during extraction. Upload the file again.'
-            };
-          });
+              // The reconciler is nobody using the project (#3622).
+            },
+            { touchActivity: false, touchUpdated: false }
+          );
           if (settled) interrupted += 1;
         } catch (error) {
           logger.warn('Could not mark an interrupted item', {
@@ -1007,8 +1013,8 @@ export class ProjectIngestService {
   }
 
   /**
-   * A project is being used (a chat, a search or a workflow reads its
-   * knowledge, or someone opens it): refresh what is outdated and fetch what
+   * A project is being used (a chat, a search, a workflow, an app or an MCP
+   * client reads its knowledge; `projectUse.js`): refresh what is outdated and fetch what
    * waits for its first fetch, whatever the refresh mode (#3622). An item set
    * to `never` is left alone. Readers get the stored snapshot meanwhile; a
    * job reserves its item under the project's lock, so of several workers

@@ -60,6 +60,13 @@ setProjectViewSettings(() => projectSettings(configCache.getPlatform?.() || {}))
 /** How often one project's activity is refreshed by chat turns at most. */
 export const ACTIVITY_THROTTLE_MS = 5 * 60 * 1000;
 
+/**
+ * How often one worker records a use of one project at most (`lastUsedAt`,
+ * #3622): idleness is counted in days, so an hour is exact enough and keeps a
+ * busy project from being rewritten on every search.
+ */
+export const USE_THROTTLE_MS = 60 * 60 * 1000;
+
 export { ProjectError, STATUS_BY_CODE } from './projectErrors.js';
 
 function actorOf(user) {
@@ -169,6 +176,7 @@ export class ProjectService {
     this.onItemAdded = [];
     /** projectId -> when a chat turn last refreshed its activity. */
     this.activityTouched = new Map();
+    this.useNoted = new Map();
   }
 
   settings() {
@@ -1610,7 +1618,13 @@ export class ProjectService {
       // A delete that lists the markers just before this one leaves the chat with a
       // container that no longer exists, which a chat's scope skips like any missing project.
       if (!project || project.deleting === true) return false;
-      return this.repository.addChatMarker(projectId, chatId, { ownerId, private: true });
+      const added = await this.repository.addChatMarker(projectId, chatId, {
+        ownerId,
+        private: true
+      });
+      // Attaching a project to a chat is a use (#3622).
+      if (added) this.noteUse(projectId).catch(() => {});
+      return added;
     }
     // Under the project's lock, so a deletion that lists the markers cannot
     // slip between the existence check and the marker; a project that is
@@ -1622,7 +1636,8 @@ export class ProjectService {
         projectId,
         async project => {
           await this.repository.addChatMarker(projectId, chatId, { ownerId });
-          return project;
+          // Attaching a project to a chat is a use (#3622).
+          return { ...project, lastUsedAt: nowIso() };
         },
         { authorize, touchActivity: true, touchUpdated: false }
       );
@@ -1640,11 +1655,14 @@ export class ProjectService {
     return this.repository.removeChatMarker(projectId, chatId);
   }
 
-  /** Touch a project's `lastActivityAt` (a chat turn ran inside it). */
+  /**
+   * Touch a project's `lastActivityAt` (a chat turn ran inside it), which is
+   * also a use (`lastUsedAt`).
+   */
   touchActivity(projectId) {
     return attempt(
       () =>
-        this.repository.mutate(projectId, project => ({ ...project }), {
+        this.repository.mutate(projectId, project => ({ ...project, lastUsedAt: nowIso() }), {
           touchActivity: true,
           touchUpdated: false
         }),
@@ -1670,7 +1688,43 @@ export class ProjectService {
     this.activityTouched.set(projectId, at);
     const touched = await this.touchActivity(projectId);
     if (!touched) this.activityTouched.delete(projectId);
+    else this.useNoted.set(projectId, at);
     return Boolean(touched);
+  }
+
+  /**
+   * The project's knowledge is being used — a chat, a search, a workflow, an
+   * app or an MCP client read it (`projectUse.js`): record it as `lastUsedAt`,
+   * which keeps a project in refresh mode `auto` refreshed in the background
+   * (#3622). At most once per {@link USE_THROTTLE_MS} per project and worker.
+   * Neither `updatedAt` nor `lastActivityAt` change: a use is not an edit.
+   * Never throws.
+   *
+   * @param {string} projectId
+   * @returns {Promise<boolean>} Whether the use was recorded.
+   */
+  async noteUse(projectId) {
+    if (!projectId || !this.repository.isAvailable()) return false;
+    const last = this.useNoted.get(projectId) || 0;
+    const at = Date.now();
+    if (at - last < USE_THROTTLE_MS) return false;
+    this.useNoted.set(projectId, at);
+    let stored = null;
+    try {
+      stored = await this.repository.mutate(
+        projectId,
+        project => ({ ...project, lastUsedAt: new Date(at).toISOString() }),
+        { touchActivity: false, touchUpdated: false }
+      );
+    } catch (error) {
+      logger.warn('Could not record a project use', {
+        component: COMPONENT,
+        projectId,
+        error: error.message
+      });
+    }
+    if (!stored) this.useNoted.delete(projectId);
+    return Boolean(stored);
   }
 }
 

@@ -10,7 +10,7 @@
  *
  *  1. the item's `refreshTtl` (item menu),
  *  2. the project's `refreshTtl` (project settings, owners and editors),
- *  3. `platform.projects.refreshTtl` (admin), 86 400 seconds (a day) by default.
+ *  3. `platform.projects.refreshTtl` (admin), 604 800 seconds (a week) by default.
  *
  * A value is a number of seconds, or `'never'`: the snapshot is then
  * refreshed only when someone asks ("Refresh now").
@@ -22,13 +22,19 @@
  * When an outdated snapshot is refreshed is its **refresh mode**, on the same
  * three levels (`refreshMode`, #3622):
  *
+ *  - `always`: the reconciler refreshes it in the background, used or not;
  *  - `auto` (the default): the reconciler refreshes it in the background while
  *    the project is used; a project nobody used for
- *    `platform.projects.refreshIdleDays` (14 by default) is refreshed when it
+ *    `platform.projects.refreshIdleDays` (7 by default) is refreshed when it
  *    is used again, like `onDemand`;
- *  - `onDemand`: nothing runs in the background; using the project (a chat, a
- *    search, a workflow reading it, opening it) refreshes what is outdated,
- *    and readers get the stored snapshot meanwhile.
+ *  - `onDemand`: nothing runs in the background; using the project refreshes
+ *    what is outdated, and readers get the stored snapshot meanwhile.
+ *
+ * Using a project is reading its knowledge — a chat, a search, a workflow, an
+ * app or an MCP client (`projectUse.js`) — or attaching it to a chat; it is
+ * recorded as the project's `lastUsedAt`. Opening the project page is not a
+ * use, and neither is anything the server does by itself: a background
+ * refresh never keeps a project active.
  *
  * `never` stays the TTL's: such an item is refreshed only by hand, in any mode.
  *
@@ -49,17 +55,17 @@ export const MIN_REFRESH_TTL_SECONDS = 15 * 60;
 /** Longest TTL in seconds (a year); beyond that, `never` says it better. */
 export const MAX_REFRESH_TTL_SECONDS = 365 * 24 * 60 * 60;
 
-/** The built-in platform default: a day. */
-export const DEFAULT_REFRESH_TTL_SECONDS = 24 * 60 * 60;
+/** The built-in platform default: a week. */
+export const DEFAULT_REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /** The refresh modes (see the module description). */
-export const REFRESH_MODES = Object.freeze(['auto', 'onDemand']);
+export const REFRESH_MODES = Object.freeze(['always', 'auto', 'onDemand']);
 
 /** The built-in platform default: in the background while the project is used. */
 export const DEFAULT_REFRESH_MODE = 'auto';
 
 /** Days without use after which an `auto` project is refreshed only when used. */
-export const DEFAULT_REFRESH_IDLE_DAYS = 14;
+export const DEFAULT_REFRESH_IDLE_DAYS = 7;
 
 /** A refresh mode as the API and the stored documents take it. */
 export const zRefreshMode = z.enum(REFRESH_MODES);
@@ -69,7 +75,7 @@ export const zRefreshMode = z.enum(REFRESH_MODES);
  * then applies.
  *
  * @param {unknown} value
- * @returns {'auto'|'onDemand'|null}
+ * @returns {'always'|'auto'|'onDemand'|null}
  */
 export function normalizeRefreshMode(value) {
   return REFRESH_MODES.includes(value) ? value : null;
@@ -81,7 +87,7 @@ export function normalizeRefreshMode(value) {
  * @param {Object} item
  * @param {Object|null} project
  * @param {{refreshMode?: string}} settings - `projectSettings(platform)`.
- * @returns {{mode: 'auto'|'onDemand', from: 'item'|'project'|'platform'}}
+ * @returns {{mode: 'always'|'auto'|'onDemand', from: 'item'|'project'|'platform'}}
  */
 export function effectiveRefreshMode(item, project, settings) {
   const own = normalizeRefreshMode(item?.refreshMode);
@@ -95,8 +101,23 @@ export function effectiveRefreshMode(item, project, settings) {
 }
 
 /**
- * Whether nobody used a project for `refreshIdleDays`: no chat turn in it and
- * no change of its items (`lastActivityAt`). 0 days never counts as idle.
+ * When a project was last used: its `lastUsedAt`, else — a project not used
+ * since uses were recorded — its last activity, else its creation.
+ *
+ * @param {Object|null} project
+ * @returns {number|null} Milliseconds, or null when nothing parses.
+ */
+export function lastUsedMs(project) {
+  for (const value of [project?.lastUsedAt, project?.lastActivityAt, project?.createdAt]) {
+    const at = Date.parse(value || '');
+    if (Number.isFinite(at)) return at;
+  }
+  return null;
+}
+
+/**
+ * Whether nobody used a project for `refreshIdleDays` ({@link lastUsedMs}).
+ * 0 days never counts as idle.
  *
  * @param {Object|null} project
  * @param {{refreshIdleDays?: number}} settings
@@ -106,17 +127,14 @@ export function effectiveRefreshMode(item, project, settings) {
 export function isProjectIdle(project, settings, now = Date.now()) {
   const days = Number(settings?.refreshIdleDays ?? DEFAULT_REFRESH_IDLE_DAYS);
   if (!Number.isFinite(days) || days <= 0) return false;
-  for (const value of [project?.lastActivityAt, project?.updatedAt, project?.createdAt]) {
-    const at = Date.parse(value || '');
-    if (Number.isFinite(at)) return now - at >= days * 24 * 60 * 60 * 1000;
-  }
-  return false;
+  const at = lastUsedMs(project);
+  return at !== null && now - at >= days * 24 * 60 * 60 * 1000;
 }
 
 /**
  * Whether an item's outdated snapshot is refreshed in the background (by the
- * reconciler), rather than when the project is used: mode `auto`, project not
- * idle.
+ * reconciler), rather than when the project is used: mode `always`, or mode
+ * `auto` in a project that is not idle.
  *
  * @param {Object} item
  * @param {Object|null} project
@@ -125,10 +143,9 @@ export function isProjectIdle(project, settings, now = Date.now()) {
  * @returns {boolean}
  */
 export function refreshesInBackground(item, project, settings, now = Date.now()) {
-  return (
-    effectiveRefreshMode(item, project, settings).mode === 'auto' &&
-    !isProjectIdle(project, settings, now)
-  );
+  const { mode } = effectiveRefreshMode(item, project, settings);
+  if (mode === 'always') return true;
+  return mode === 'auto' && !isProjectIdle(project, settings, now);
 }
 
 /** A TTL as the API and the stored documents take it. */
@@ -235,7 +252,7 @@ export function refreshScheduleOf(item, project, settings, now = Date.now()) {
   const { ttl, from } = effectiveRefreshTtl(item, project, settings);
   const { mode, from: modeFrom } = effectiveRefreshMode(item, project, settings);
   const idle = mode === 'auto' && isProjectIdle(project, settings, now);
-  const background = mode === 'auto' && !idle && ttl !== REFRESH_NEVER;
+  const background = (mode === 'always' || (mode === 'auto' && !idle)) && ttl !== REFRESH_NEVER;
   const checked = lastCheckedMs(item);
   const outdated = ttl === REFRESH_NEVER || checked === null ? null : checked + ttl * 1000;
   return {

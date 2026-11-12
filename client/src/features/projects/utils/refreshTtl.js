@@ -15,20 +15,22 @@
 export const REFRESH_NEVER = 'never';
 
 /**
- * When an outdated snapshot is refreshed (#3622): `auto` in the background
- * while the project is used (a project nobody used lately is refreshed when it
- * is used again), `onDemand` only when the project is used.
+ * When an outdated snapshot is refreshed (#3622): `always` in the background,
+ * used or not; `auto` in the background while the project is used (a project
+ * nobody used lately is refreshed when it is used again); `onDemand` only when
+ * the project is used.
  */
-export const REFRESH_MODES = Object.freeze(['auto', 'onDemand']);
+export const REFRESH_MODES = Object.freeze(['always', 'auto', 'onDemand']);
 
 /**
  * A refresh mode in words.
  *
- * @param {'auto'|'onDemand'|null|undefined} mode
+ * @param {'always'|'always'|'auto'|'onDemand'|null|undefined} mode
  * @param {Function} t
  * @returns {string}
  */
 export function refreshModeLabel(mode, t) {
+  if (mode === 'always') return t('projects.refresh.modeAlways', 'Always, in the background');
   return mode === 'onDemand'
     ? t('projects.refresh.modeOnDemand', 'When the project is used')
     : t('projects.refresh.modeAuto', 'Automatically, while the project is used');
@@ -52,7 +54,7 @@ export function parseRefreshIdleDays(value) {
  * A mode select's value back to a mode: `''` is "inherit" (null).
  *
  * @param {string|null|undefined} value
- * @returns {'auto'|'onDemand'|null}
+ * @returns {'always'|'always'|'auto'|'onDemand'|null}
  */
 export function parseRefreshMode(value) {
   return REFRESH_MODES.includes(value) ? value : null;

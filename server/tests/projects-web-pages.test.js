@@ -51,6 +51,7 @@ import { ProjectIngestService } from '../services/projects/ProjectIngestService.
 import {
   DEFAULT_REFRESH_TTL_SECONDS,
   effectiveRefreshMode,
+  isProjectIdle,
   isRefreshDue,
   isRefreshExpired,
   refreshScheduleOf
@@ -331,6 +332,9 @@ describe('a web page is a stored snapshot', () => {
   it('refreshes after the TTL only: an unchanged page is not converted again', async () => {
     servePage('/ttl', html('Policy', 'Version one of the policy.'), { etag: '"v1"' });
     const project = await newProject('TTL');
+    // The checks below look a TTL ahead, past the idle days: refreshed in
+    // the background whether used or not.
+    await getProjectService().updateProject(project.id, { refreshMode: 'always' }, { actor: ADA });
     const { item } = await addUrl(project, `${base}/ttl`);
     const first = await settled(project.id, item.id);
     const ingest = getIngestService();
@@ -917,7 +921,7 @@ describe('web pages that were links before', () => {
   });
 });
 
-describe('refresh modes: automatically, when used, never', () => {
+describe('refresh modes: always, automatically, when used, never', () => {
   const DAY = 24 * 60 * 60 * 1000;
   const service = () => getProjectService();
   const newProject = name => service().createUserProject({ owner: ADA, content: { name } });
@@ -925,7 +929,7 @@ describe('refresh modes: automatically, when used, never', () => {
     service().addItem(project.id, { kind: 'url', ref: { url } }, { user: ADA });
 
   /** Make an item's snapshot `days` old, and the project's last use `idleDays` ago. */
-  async function age(projectId, itemId, { days = 2, idleDays = 0 } = {}) {
+  async function age(projectId, itemId, { days = 8, idleDays = 0 } = {}) {
     const at = new Date(Date.now() - days * DAY).toISOString();
     await getProjectRepository().mutate(
       projectId,
@@ -972,7 +976,7 @@ describe('refresh modes: automatically, when used, never', () => {
     const item = {
       kind: 'url',
       status: 'ready',
-      checkedAt: new Date(now - 2 * DAY).toISOString()
+      checkedAt: new Date(now - 8 * DAY).toISOString()
     };
     const active = { lastActivityAt: new Date(now - DAY).toISOString() };
     const idle = { lastActivityAt: new Date(now - 30 * DAY).toISOString() };
@@ -1028,7 +1032,7 @@ describe('refresh modes: automatically, when used, never', () => {
     await settled(project.id, fixed.id);
     await service().updateItem(project.id, fixed.id, { refreshTtl: 'never' }, { user: ADA });
     await age(project.id, fixed.id, { days: 400, idleDays: 30 });
-    const old = await age(project.id, item.id, { days: 2, idleDays: 30 });
+    const old = await age(project.id, item.id, { days: 8, idleDays: 30 });
     const ingest = getIngestService();
 
     seen.length = 0;
@@ -1045,6 +1049,123 @@ describe('refresh modes: automatically, when used, never', () => {
     });
     assert.equal(hits('/idle'), 1);
     assert.equal(hits('/fixed'), 0);
+  });
+
+  it('refreshes in the background always, used or not', () => {
+    const settings = projectSettings({});
+    const now = Date.now();
+    const item = { kind: 'url', status: 'ready', checkedAt: new Date(now - 8 * DAY).toISOString() };
+    const idle = { refreshMode: 'always', lastUsedAt: new Date(now - 300 * DAY).toISOString() };
+    assert.equal(isRefreshDue(item, idle, settings, now), true);
+    const schedule = refreshScheduleOf(item, idle, settings, now);
+    assert.equal(schedule.mode, 'always');
+    assert.equal(schedule.background, true);
+    assert.equal(schedule.idle, false);
+    assert.ok(schedule.nextAt);
+    // Not before the TTL ran out, and never with `never`.
+    assert.equal(
+      isRefreshDue({ ...item, checkedAt: new Date(now - DAY).toISOString() }, idle, settings, now),
+      false
+    );
+    assert.equal(isRefreshDue({ ...item, refreshTtl: 'never' }, idle, settings, now), false);
+  });
+
+  it('defaults to a week and to seven idle days', () => {
+    const settings = projectSettings({});
+    assert.equal(DEFAULT_REFRESH_TTL_SECONDS, 7 * 24 * 60 * 60);
+    assert.equal(settings.refreshTtl, 7 * 24 * 60 * 60);
+    assert.equal(settings.refreshIdleDays, 7);
+    const now = Date.now();
+    assert.equal(
+      isProjectIdle({ lastUsedAt: new Date(now - 6 * DAY).toISOString() }, settings, now),
+      false
+    );
+    assert.equal(
+      isProjectIdle({ lastUsedAt: new Date(now - 7 * DAY).toISOString() }, settings, now),
+      true
+    );
+    // The setting is the installation's.
+    const longer = projectSettings({ projects: { refreshIdleDays: 30 } });
+    assert.equal(
+      isProjectIdle({ lastUsedAt: new Date(now - 20 * DAY).toISOString() }, longer, now),
+      false
+    );
+  });
+
+  it('counts the last use, not the last change, once a use was recorded', () => {
+    const settings = projectSettings({});
+    const now = Date.now();
+    const changedLately = {
+      lastUsedAt: new Date(now - 30 * DAY).toISOString(),
+      lastActivityAt: new Date(now - DAY).toISOString()
+    };
+    assert.equal(isProjectIdle(changedLately, settings, now), true);
+    // A project not used since uses are recorded counts from its activity.
+    assert.equal(
+      isProjectIdle({ lastActivityAt: changedLately.lastActivityAt }, settings, now),
+      false
+    );
+  });
+
+  it('records reading the project, by a chat, an app or anything else, as a use', async () => {
+    const project = await newProject('Used by an app');
+    await getProjectRepository().mutate(
+      project.id,
+      current => ({ ...current, lastActivityAt: new Date(Date.now() - 30 * DAY).toISOString() }),
+      { touchActivity: false, touchUpdated: false }
+    );
+    const before = await getProjectRepository().get(project.id);
+    assert.equal(isProjectIdle(before, projectSettings({})), true);
+
+    // What an app, a chat, a search or a workflow does to read the project.
+    providerFor(before);
+    const used = await waitFor(async () => {
+      const current = await getProjectRepository().get(project.id);
+      return current.lastUsedAt ? current : null;
+    });
+    assert.equal(isProjectIdle(used, projectSettings({})), false);
+    // A use is no edit.
+    assert.equal(used.updatedAt, before.updatedAt);
+    assert.equal(used.lastActivityAt, before.lastActivityAt);
+    // Recorded at most once an hour per worker.
+    assert.equal(await service().noteUse(project.id), false);
+  });
+
+  it('records attaching the project to a chat as a use', async () => {
+    const project = await newProject('Attached');
+    assert.equal((await getProjectRepository().get(project.id)).lastUsedAt, undefined);
+    await service().attachChat(project.id, `chat_${crypto.randomBytes(4).toString('hex')}`, {
+      ownerId: ADA.id
+    });
+    assert.ok((await getProjectRepository().get(project.id)).lastUsedAt);
+  });
+
+  it('does not keep a project active by refreshing it in the background', async () => {
+    servePage('/always', html('Always', 'Version one.'), { etag: '"a1"' });
+    const project = await newProject('Always');
+    await service().updateProject(project.id, { refreshMode: 'always' }, { actor: ADA });
+    const { item } = await addUrl(project, `${base}/always`);
+    await settled(project.id, item.id);
+    const old = await age(project.id, item.id, { days: 8, idleDays: 30 });
+    assert.equal(isProjectIdle(old, projectSettings({})), true);
+    const ingest = getIngestService();
+
+    servePage('/always', html('Always', 'Version two.'), { etag: '"a2"' });
+    seen.length = 0;
+    assert.equal(await ingest.refreshExpired([old]), 1, 'refreshed although nobody used it');
+    await waitFor(async () => {
+      const entry = await itemOf(project.id, item.id);
+      return entry?.provenance?.source?.etag === '"a2"' &&
+        !entry.refreshingAt &&
+        !ingest.isActive(item.id)
+        ? entry
+        : null;
+    });
+    assert.equal(hits('/always'), 1);
+    const after = await getProjectRepository().get(project.id);
+    assert.equal(after.lastActivityAt, old.lastActivityAt, 'the refresh is no activity');
+    assert.equal(after.lastUsedAt, undefined, 'and no use');
+    assert.equal(isProjectIdle(after, projectSettings({})), true);
   });
 
   /** A page waiting for its first fetch, stored straight into a project. */

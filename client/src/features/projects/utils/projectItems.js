@@ -109,7 +109,7 @@ export function localizedText(value, language = 'en') {
  * Whether an item is outdated and waits for the refresh that using the
  * project starts (#3622): refreshed when used (on demand, or a project nobody
  * used lately), past its refresh time, not being refreshed yet. Opening the
- * project is such a use, so the refresh normally starts within moments.
+ * project page is no use: the next chat or search starts the refresh.
  *
  * @param {{refresh?: Object, refreshingAt?: string}|null|undefined} item
  * @returns {boolean}
@@ -132,24 +132,6 @@ export function hasActiveItems(items) {
     item => ACTIVE_ITEM_STATUSES.includes(item?.status) || Boolean(item?.refreshingAt)
   );
 }
-
-/**
- * Whether any item is outdated and waits for the refresh that using the
- * project starts ({@link isAwaitingRefresh}).
- *
- * @param {Array<Object>|undefined} items
- * @returns {boolean}
- */
-export function hasAwaitingItems(items) {
-  return (items || []).some(isAwaitingRefresh);
-}
-
-/**
- * Polls a page makes for outdated items whose refresh on use has not started
- * yet: enough for opening the project to start it, not forever where nothing
- * will (an admin view, which is no use; a disabled project).
- */
-export const AWAITING_REFRESH_POLLS = 10;
 
 /**
  * Whether an item's text can be previewed.

@@ -48,7 +48,7 @@ const SAVED_NOTICE_MS = 4000;
  *   project's files from websites and web pages (#3536).
  * @param {number|'never'|null} [props.platformRefreshTtl] - The installation's
  *   default, shown while the project sets none.
- * @param {'auto'|'onDemand'|null} [props.platformRefreshMode] - The installation's
+ * @param {'always'|'auto'|'onDemand'|null} [props.platformRefreshMode] - The installation's
  *   default refresh mode (#3622), shown while the project sets none.
  * @returns {JSX.Element}
  */

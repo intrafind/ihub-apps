@@ -117,8 +117,9 @@ const fetchItemText = (...args) => fetchProjectItemText(...args);
 /**
  * What is being refreshed in the project, and what is outdated (#3622): web
  * pages and files from websites refreshed when the project is used are read
- * again in the background while it is open; answers use the stored text
- * until then. Nothing shows while everything is current.
+ * again the next time a chat or a search uses it (opening the page is no
+ * use); answers use the stored text until then. Nothing shows while
+ * everything is current.
  *
  * @param {{items?: Array<Object>}} props
  * @returns {JSX.Element|null}
@@ -143,7 +144,7 @@ function RefreshNotice({ items }) {
             )
           : t(
               'projects.refresh.outdatedNotice',
-              '{{count}} documents are outdated. They are refreshed now because the project is in use; answers use the stored text until then.',
+              '{{count}} documents are outdated. They are refreshed the next time the project is used in a chat or a search; answers use the stored text until then.',
               { count: awaiting }
             )}
       </span>

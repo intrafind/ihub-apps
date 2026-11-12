@@ -74,8 +74,11 @@ export async function bootstrapProjects({ reconcile = true } = {}) {
     });
   }
   service.ingest = ingestService;
-  // Using a project refreshes what is outdated in it (#3622).
-  setProjectUseListener(project => ingestService.refreshOnUse(project));
+  // Using a project records the use, which keeps it active, and refreshes
+  // what is outdated in it (#3622).
+  setProjectUseListener(project =>
+    Promise.all([service.noteUse(project.id), ingestService.refreshOnUse(project)])
+  );
   if (reconcile) {
     try {
       const removed = await ingestService.cleanTempDir();

@@ -329,12 +329,13 @@ function ProjectSharingSettingsPanel() {
             >
               {t(
                 'admin.projects.refreshMode.help',
-                'Automatically: refreshed in the background while a project is used. When the project is used: outdated ones are not refreshed in the background; using the project (a chat, a search, opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own.'
+                'Always: refreshed in the background, used or not. Automatically: refreshed in the background while a project is used. When the project is used: outdated ones are not refreshed in the background; using the project (a chat, a search, an app or a workflow reading it, attaching it to a chat; not opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own.'
               )}
             </p>
           </div>
         )}
-        {draft.refreshIdleDays !== undefined && draft.refreshMode !== 'onDemand' && (
+        {/* Shown in every mode: a project or an item may set "Automatically" itself. */}
+        {draft.refreshIdleDays !== undefined && (
           <div className="space-y-1">
             <label
               htmlFor="project-settings-refresh-idle-days"
@@ -362,7 +363,7 @@ function ProjectSharingSettingsPanel() {
             >
               {t(
                 'admin.projects.refreshIdleDays.help',
-                'A project nobody used for this many days is no longer refreshed in the background, only when it is used again. 0 always refreshes in the background.'
+                'For "Automatically, while the project is used": a project nobody used for this many days is no longer refreshed in the background, only when it is used again. 0 always refreshes in the background.'
               )}
             </p>
           </div>

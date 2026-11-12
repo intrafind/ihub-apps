@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * "This project is being used": a chat, a search, a workflow or an MCP client
- * reads its knowledge (`services/knowledge/registry.js` → `providerFor`), or
- * someone opens it. The ingest pipeline listens and refreshes what is
- * outdated (`ProjectIngestService.refreshOnUse`, #3622), which is how a project
+ * "This project is being used": a chat, a search, a workflow, an app or an
+ * MCP client reads its knowledge (`services/knowledge/registry.js` →
+ * `providerFor`). Opening the project page is not a use. The listener records
+ * the use (`ProjectService.noteUse`, which keeps a project in refresh mode
+ * `auto` refreshed in the background) and refreshes what is outdated
+ * (`ProjectIngestService.refreshOnUse`, #3622), which is how a project
  * refreshed on demand, or one nobody used lately, gets current again.
  *
  * A module of its own so the knowledge layer can report a use without

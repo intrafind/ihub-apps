@@ -556,6 +556,9 @@ describe('web files in a project', () => {
   it('refreshes after the TTL: an unchanged ETag keeps the text, a changed file replaces it', async () => {
     serve('/policy.txt', 'Policy version one.', { 'content-type': 'text/plain' }, { etag: '"v1"' });
     const project = await newProject('Refresh');
+    // The checks below look a TTL ahead, past the idle days: refreshed in
+    // the background whether used or not.
+    await service.updateProject(project.id, { refreshMode: 'always' }, { actor: ADA });
     const { item } = await addUrl(project, `${base}/policy.txt`);
     const first = await settled(project.id, item.id);
     assert.equal(first.provenance.source.etag, '"v1"');

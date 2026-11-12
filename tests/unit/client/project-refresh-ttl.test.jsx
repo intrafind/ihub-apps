@@ -10,7 +10,6 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RefreshTtlDialog from '../../../client/src/features/projects/components/RefreshTtlDialog';
 import {
   hasActiveItems,
-  hasAwaitingItems,
   isAwaitingRefresh
 } from '../../../client/src/features/projects/utils/projectItems';
 import {
@@ -180,11 +179,10 @@ describe('refresh when used (#3622)', () => {
     expect(isAwaitingRefresh({ ...outdated, refreshingAt: '2026-11-12T08:00:00.000Z' })).toBe(
       false
     );
-    expect(hasAwaitingItems([{ status: 'ready', ...outdated }])).toBe(true);
-    // Waiting is not processing: the page polls for it only a few times.
-    expect(hasActiveItems([{ status: 'ready', ...outdated }])).toBe(false);
     expect(
-      hasAwaitingItems([{ status: 'ready', refresh: { ...outdated.refresh, background: true } }])
+      isAwaitingRefresh({ ...outdated, refresh: { ...outdated.refresh, background: true } })
     ).toBe(false);
+    // Waiting is not processing: the page does not poll for it.
+    expect(hasActiveItems([{ status: 'ready', ...outdated }])).toBe(false);
   });
 });

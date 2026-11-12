@@ -1444,7 +1444,7 @@ stored snapshots too (see "Projects: Web Pages Are Stored Snapshots, Fetched Onc
 - An address that ends in `.pdf`, `.docx` and the like is added as a file even when the website
   does not answer at that moment; **Retry** downloads it later.
 - How long a file from a website or a web page counts as current is set per installation
-  (**Admin → Projects → Project settings**, one day by default), per project (**Refresh** in the
+  (**Admin → Projects → Project settings**, seven days by default), per project (**Refresh** in the
   project's side panel) and per item (**Refresh schedule** in the item menu), or set to **Never**.
 - Files are downloaded again on their own once that time has passed. An unchanged file is
   neither downloaded nor read again and keeps its text. The item shows when its text was taken
@@ -1938,16 +1938,19 @@ is fetched once, converted to text once and stored encrypted; chats and searches
 text on every server process without asking the website again. Projects with many web pages no
 longer re-read the whole site on each server process, which could exhaust the server's memory.
 
-- The page is refreshed after its refresh schedule (one day by default). The website is asked
+- The page is refreshed after its refresh schedule (seven days by default). The website is asked
   whether the page changed; an unchanged page keeps its text and is not converted again. A website
   that ignores that question is not downloaded either when it names the same version, and a page
   that names no version is compared by its content.
-- **Choose when outdated pages and files are refreshed:** **Automatically, while the project is
-  used** (the default) refreshes them in the background, but a project nobody used for 14 days
-  is refreshed only when it is used again. **When the project is used** never refreshes them in
-  the background. **Never** refreshes only by hand. Set it per installation (**Admin → Projects →
-  Project settings**, with the number of idle days), per project and per item.
-- Using a project (a chat, a search, opening it) refreshes what is outdated in it. Answers use the
+- **Choose when outdated pages and files are refreshed:** **Always, in the background** refreshes
+  them as soon as they are outdated, used or not. **Automatically, while the project is used**
+  (the default) does the same, but a project nobody used for 7 days is refreshed only when it is
+  used again. **When the project is used** never refreshes them in the background. **Never**
+  refreshes only by hand. Set it per installation (**Admin → Projects → Project settings**, with
+  the number of idle days), per project and per item.
+- A project is used when a chat, a search, a workflow, an app or an MCP client reads it, or when it
+  is attached to a chat; opening the project page is not a use, and background refreshes never
+  keep a project active. Using a project refreshes what is outdated in it. Answers use the
   stored text meanwhile; the project page shows **Refreshing N outdated documents**, and **About
   this answer** in a chat says when an answer read outdated documents.
 - Adding a page asks the website once. Pages picked with **Find more pages of this website** are

@@ -6001,11 +6001,11 @@
       },
       "refreshMode": {
         "label": "Veraltete Dateien und Webseiten aktualisieren",
-        "help": "Automatisch: wird im Hintergrund aktualisiert, solange ein Projekt genutzt wird. Wenn das Projekt genutzt wird: veraltete werden nicht im Hintergrund aktualisiert; die Nutzung des Projekts (ein Chat, eine Suche, das Öffnen) aktualisiert, was veraltet ist, und Antworten verwenden bis dahin den gespeicherten Text. Projekte und Elemente können eine eigene Einstellung festlegen."
+        "help": "Immer: wird im Hintergrund aktualisiert, ob genutzt oder nicht. Automatisch: wird im Hintergrund aktualisiert, solange ein Projekt genutzt wird. Wenn das Projekt genutzt wird: veraltete werden nicht im Hintergrund aktualisiert; die Nutzung des Projekts (ein Chat, eine Suche, eine App oder ein Workflow, die es lesen, das Anhängen an einen Chat; nicht das Öffnen) aktualisiert, was veraltet ist, und Antworten verwenden bis dahin den gespeicherten Text. Projekte und Elemente können eine eigene Einstellung festlegen."
       },
       "refreshIdleDays": {
         "label": "Nur bei Nutzung aktualisieren nach (Tage ohne Nutzung)",
-        "help": "Ein Projekt, das so viele Tage niemand genutzt hat, wird nicht mehr im Hintergrund aktualisiert, sondern erst, wenn es wieder genutzt wird. 0 aktualisiert immer im Hintergrund."
+        "help": "Für „Automatisch, solange das Projekt genutzt wird“: Ein Projekt, das so viele Tage niemand genutzt hat, wird nicht mehr im Hintergrund aktualisiert, sondern erst, wenn es wieder genutzt wird. 0 aktualisiert immer im Hintergrund."
       }
     },
     "updates": {
@@ -9911,9 +9911,10 @@
       "projectDefault": "Dateien und Webseiten: {{ttl}} (Standard)",
       "projectDefaultUnknown": "Standard dieser Installation",
       "modeLabel": "Aktualisieren",
+      "modeAlways": "Immer, im Hintergrund",
       "modeAuto": "Automatisch, solange das Projekt genutzt wird",
       "modeOnDemand": "Wenn das Projekt genutzt wird",
-      "modeHint": "Automatisch: wird im Hintergrund aktualisiert, solange das Projekt genutzt wird; ein Projekt, das eine Weile niemand genutzt hat, wird aktualisiert, wenn es wieder genutzt wird. Wenn das Projekt genutzt wird: wird dann aktualisiert; Antworten verwenden bis dahin den gespeicherten Text.",
+      "modeHint": "Immer: wird im Hintergrund aktualisiert, ob genutzt oder nicht. Automatisch: wird im Hintergrund aktualisiert, solange das Projekt genutzt wird; ein Projekt, das eine Weile niemand genutzt hat, wird aktualisiert, wenn es wieder genutzt wird. Wenn das Projekt genutzt wird: wird dann aktualisiert, durch einen Chat oder eine Suche; Antworten verwenden bis dahin den gespeicherten Text.",
       "modeNeverHint": "Auf „Nie“ gesetzt: wird nur von Hand aktualisiert.",
       "onUse": "Wird aktualisiert, wenn das Projekt genutzt wird",
       "onUseAfter": "Wird bei Nutzung nach {{date}} aktualisiert",
@@ -9921,8 +9922,8 @@
       "outdatedSince": "Veraltet seit {{date}}, wird bei Nutzung aktualisiert",
       "refreshingNotice_one": "{{count}} veraltetes Dokument wird aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
       "refreshingNotice_other": "{{count}} veraltete Dokumente werden aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
-      "outdatedNotice_one": "{{count}} Dokument ist veraltet. Es wird jetzt aktualisiert, weil das Projekt genutzt wird; Antworten verwenden bis dahin den gespeicherten Text.",
-      "outdatedNotice_other": "{{count}} Dokumente sind veraltet. Sie werden jetzt aktualisiert, weil das Projekt genutzt wird; Antworten verwenden bis dahin den gespeicherten Text."
+      "outdatedNotice_one": "{{count}} Dokument ist veraltet. Es wird aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text.",
+      "outdatedNotice_other": "{{count}} Dokumente sind veraltet. Sie werden aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text."
     }
   },
   "integrationScopes": {

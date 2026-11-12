@@ -213,7 +213,7 @@ function AdminProjectSettingsDialog({ project, section, onClose, onSaved }) {
  * @param {Object} props.project - As `GET /api/admin/projects/:id` returns it.
  * @param {(project: Object) => void} props.onSaved - The project as saved.
  * @param {number|'never'|null} [props.platformRefreshTtl] - The installation's TTL default.
- * @param {'auto'|'onDemand'|null} [props.platformRefreshMode] - Its refresh mode (#3622).
+ * @param {'always'|'auto'|'onDemand'|null} [props.platformRefreshMode] - Its refresh mode (#3622).
  * @returns {JSX.Element}
  */
 function AdminProjectSettingsPanel({

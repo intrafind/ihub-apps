@@ -40,8 +40,8 @@ import {
  * @param {'project'|'item'} props.scope
  * @param {number|'never'|null|undefined} props.value - The TTL set at this level, or null.
  * @param {number|'never'|null|undefined} [props.inherited] - What applies without one.
- * @param {'auto'|'onDemand'|null|undefined} [props.mode] - The mode set at this level, or null.
- * @param {'auto'|'onDemand'|null|undefined} [props.inheritedMode] - The mode without one.
+ * @param {'always'|'auto'|'onDemand'|null|undefined} [props.mode] - The mode set at this level, or null.
+ * @param {'always'|'auto'|'onDemand'|null|undefined} [props.inheritedMode] - The mode without one.
  * @param {Object} [props.item] - The item (scope `item`), for its schedule.
  * @param {() => void} props.onClose
  * @param {(changes: {refreshTtl?: number|'never'|null, refreshMode?: string|null}) =>
@@ -165,7 +165,7 @@ function RefreshTtlDialog({
                 ? t('projects.refresh.modeNeverHint', 'Set to never: refreshed only by hand.')
                 : t(
                     'projects.refresh.modeHint',
-                    'Automatically: refreshed in the background while the project is used; a project nobody used for a while is refreshed when it is used again. When the project is used: refreshed then; answers use the stored text until it is done.'
+                    'Always: refreshed in the background, used or not. Automatically: refreshed in the background while the project is used; a project nobody used for a while is refreshed when it is used again. When the project is used: refreshed then, by a chat or a search; answers use the stored text until it is done.'
                   )}
             </p>
           </div>
