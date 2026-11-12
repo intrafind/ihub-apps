@@ -82,6 +82,7 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
   const panelRef = useRef(null);
   const panelId = useId();
   const [side, setSide] = useState(placement);
+  const [maxHeight, setMaxHeight] = useState(null);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -108,16 +109,22 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
   // inside the clipping container (or the viewport), else on the other side.
   useLayoutEffect(() => {
     if (!open || !panelRef.current || !buttonRef.current) return;
-    const height = panelRef.current.offsetHeight + 8;
+    const GAP = 8;
+    // scrollHeight: the full content, also while an earlier cap is still applied.
+    const height = panelRef.current.scrollHeight + GAP;
     const button = buttonRef.current.getBoundingClientRect();
     const clip = clippingAncestor(rootRef.current)?.getBoundingClientRect();
     const top = Math.max(clip ? clip.top : 0, 0);
     const bottom = Math.min(clip ? clip.bottom : window.innerHeight, window.innerHeight);
-    const roomAbove = button.top - top;
-    const roomBelow = bottom - button.bottom;
-    const fitsPreferred = placement === 'bottom' ? roomBelow >= height : roomAbove >= height;
-    if (fitsPreferred) setSide(placement);
-    else setSide(placement === 'bottom' ? 'top' : 'bottom');
+    const room = { top: button.top - top, bottom: bottom - button.bottom };
+    const other = placement === 'bottom' ? 'top' : 'bottom';
+    let next;
+    if (room[placement] >= height) next = placement;
+    else if (room[other] >= height) next = other;
+    // Neither side fits: the roomier one, with the panel capped to it (it scrolls).
+    else next = room.top > room.bottom ? 'top' : 'bottom';
+    setSide(next);
+    setMaxHeight(room[next] >= height ? null : Math.max(room[next] - GAP, 96));
   }, [open, placement]);
 
   if (!provenance?.ai_generated) return null;
@@ -165,6 +172,7 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
         <div
           ref={panelRef}
           id={panelId}
+          style={maxHeight ? { maxHeight: `${maxHeight}px` } : undefined}
           role="dialog"
           aria-label={t('chatMessage.provenance.title', 'AI generated')}
           data-testid="provenance-panel"

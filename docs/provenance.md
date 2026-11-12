@@ -154,9 +154,11 @@ prompt, name, email, chat or run ID.**
   protection documentation.
 - Machine callers (API keys, OAuth clients) are named by the id they act as; every anonymous visitor is `anonymous`.
 
-A short text's hash can be guessed by someone with disk access. They learn only that this installation once
-produced that string, with no attribution. With `chats.enabled: false` the store is the only trace of outputs;
-set `storeRecords` to `false` if that is not acceptable.
+A short text's hash can be guessed by someone with disk access. With `recordUser: none` they learn only that
+this installation once produced that string, with no attribution. With `pseudonymous` or `identified` the record
+also tells them who produced it (directly, or by hashing a known user id); hiding `user` from non-admin verify
+callers does not protect the stored records against disk access. With `chats.enabled: false` the store is the
+only trace of outputs; set `storeRecords` to `false` if that is not acceptable.
 
 **Scale.** The filesystem provider keeps one file per hash in one directory. That is comfortable to roughly
 one to two million records, and the daily sweep reads every document; a retention below 365 days lowers the

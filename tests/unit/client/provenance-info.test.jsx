@@ -107,16 +107,17 @@ describe('ProvenanceInfo', () => {
   });
 
   // jsdom lays nothing out: give the panel a height so "room" means something.
-  const realOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+  const realScrollHeight = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight');
   beforeAll(() => {
-    Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
       configurable: true,
       get: () => 300
     });
   });
   afterAll(() => {
-    if (realOffsetHeight)
-      Object.defineProperty(HTMLElement.prototype, 'offsetHeight', realOffsetHeight);
+    delete HTMLElement.prototype.scrollHeight;
+    if (realScrollHeight)
+      Object.defineProperty(Element.prototype, 'scrollHeight', realScrollHeight);
   });
 
   it('opens below when there is no room above (an answer at the top of the chat)', () => {
@@ -125,6 +126,20 @@ describe('ProvenanceInfo', () => {
     button.getBoundingClientRect = () => ({ top: 40, bottom: 64, left: 0, right: 24 });
     fireEvent.click(button);
     expect(screen.getByTestId('provenance-panel').className).toContain('top-full');
+  });
+
+  it('caps the panel to the roomier side when neither side fits', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    // A 300 px panel in a 400 px viewport: 150 px above, 226 px below. Neither fits,
+    // so it opens below and is capped to that room minus the gap.
+    window.innerHeight = 400;
+    button.getBoundingClientRect = () => ({ top: 150, bottom: 174, left: 0, right: 24 });
+    fireEvent.click(button);
+    const panel = screen.getByTestId('provenance-panel');
+    expect(panel.className).toContain('top-full');
+    expect(panel.style.maxHeight).toBe('218px');
+    window.innerHeight = 768;
   });
 
   it('opens above when there is room above', () => {
