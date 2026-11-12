@@ -652,6 +652,15 @@ capped at its old size; the web page cache also keeps at most 256 pages per sour
 first. On a small worker, a project read again after a while may be loaded from storage again instead of
 from memory.
 
+## Creating, Editing and Deleting Users No Longer Loses Concurrent Changes
+
+Creating, editing or deleting a user in Admin → Users read `users.json` and wrote it back without a lock, and so
+did the first sign-in of an external user (OIDC, LDAP, NTLM, proxy, Teams) and the daily "last active" update. Two
+of these at the same time — two admins, a bulk import through the API, or an admin next to a first login — both
+answered success while one change silently disappeared. They now run under the same lock as the other writers of
+`users.json`, and the check for an existing username happens against the freshly read file, so two creates of the
+same name at once end with one `409` instead of two users.
+
 ## Storage Locks Hold Under Contention Between Workers
 
 With several workers or replicas on one data volume, taking over an expired storage lock could rarely let two workers hold it at once (the same work done twice, or one worker's lock released by another); a takeover now elects exactly one.
