@@ -39,23 +39,35 @@ const RESUMABLE_STATUSES = new Set(['running', 'pending']);
 const RESUMABLE_ID_PREFIX = 'wf-exec-';
 
 /**
- * Scan for runs that are eligible to resume (status `running` or `pending`).
+ * Find the runs that are eligible to resume (status `running` or `pending`).
+ *
+ * Only the unfinished executions are considered, from the repository's index
+ * of them, and only their states are read — a finished run can never become
+ * resumable, so the installation's workflow history is never opened. Each
+ * candidate's own stored status decides, not the index; an entry whose state
+ * turns out to be finished or gone is dropped from the index. A run paused for
+ * approval is unfinished and stays indexed (and resumable through its
+ * checkpoint) however old it is — it is just not resumed here.
  *
  * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [repository]
  *   Store to scan; the shared, provider-backed one when omitted.
  * @returns {Promise<Array<{ executionId: string, state: Object }>>}
  */
 export async function findResumableExecutions(repository = getWorkflowStateRepository()) {
-  const { items, truncated } = await repository.list({ prefix: RESUMABLE_ID_PREFIX });
+  const { items, truncated } = await repository.listActive({ prefix: RESUMABLE_ID_PREFIX });
   if (truncated) {
     logger.warn({
       component: 'ResumeManager',
-      message: `Stopped scanning for resumable runs at the cap; ${items.length} states examined`
+      message: `Stopped scanning for resumable runs at the cap; ${items.length} executions examined`
     });
   }
-  return items
-    .filter(({ state }) => RESUMABLE_STATUSES.has(state.status))
-    .map(({ executionId, state }) => ({ executionId, state }));
+  const found = [];
+  for (const { executionId } of items) {
+    const state = await repository.read(executionId);
+    if (!(await repository.confirmActive(executionId, state))) continue;
+    if (RESUMABLE_STATUSES.has(state.status)) found.push({ executionId, state });
+  }
+  return found;
 }
 
 /**

@@ -189,6 +189,13 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   interactions: 'interactions',
   /** Workflow execution state and checkpoints. */
   workflowState: 'workflow-state',
+  /**
+   * The workflow executions whose last stored state is not terminal, one tiny
+   * document per execution (its status), kept by `WorkflowStateRepository` on
+   * every state write. Lets the boot jobs that look for unfinished runs read a
+   * handful of states instead of an installation's whole workflow history.
+   */
+  workflowActive: 'workflow-active',
   /** Conversation state for the integration adapters. */
   integrationConversations: 'integration-conversations',
   /**

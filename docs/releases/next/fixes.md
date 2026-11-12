@@ -1,5 +1,17 @@
 # Fixes — Unreleased
 
+## Server Startup No Longer Reads the Whole Workflow History
+
+On every start, one worker read every stored workflow run in full (`contents/data/workflow-state`) to find
+the few that were still unfinished, and once more to repair execution records. With a large history this
+took more than a gigabyte of memory within seconds of the start and could get the container killed for
+running out of memory before it served a request. The server now keeps a small index of the unfinished runs
+(`contents/data/workflow-active`) and reads only those; the repair of execution records runs once and is not
+repeated. A run waiting for an approval stays resumable however old it is.
+
+The first start after the upgrade builds the index from the stored runs once, one run at a time, and logs
+"Built the index of unfinished workflow executions".
+
 ## Uploaded Pictures Keep Their Original Bytes When No Resize Is Needed
 
 Every picture a user attached was re-encoded to JPEG in the browser, which dropped its embedded provenance

@@ -21,8 +21,9 @@
  * addresses, OIDC subjects) that are not path-safe; the raw ownerId stays
  * readable inside every envelope.
  *
- * `etag` and `size` are derived on read from `JSON.stringify(data)` and never
- * stored, so they can never drift away from the bytes they describe.
+ * `etag` and `size` are derived on read from the canonical serialization of
+ * `data` and never stored, so they can never drift away from the bytes they
+ * describe.
  *
  * @module storage/providers/filesystem/FilesystemDocumentStore
  */
@@ -33,7 +34,7 @@ import { withFileLock, removeIfExists, tryCreateExclusive } from '../../../utils
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
 import { DocumentStore } from '../../DocumentStore.js';
-import { documentEtag, serializeDocument } from '../../etag.js';
+import { documentDigest } from '../../etag.js';
 import {
   CorruptDocumentError,
   EtagMismatchError,
@@ -98,23 +99,24 @@ function isReservedEntry(entry) {
 }
 
 /**
- * The stored body of an envelope together with its canonical JSON, the single
- * source for both `etag` and `size`.
+ * The stored body of an envelope together with its `etag` and `size`.
  *
- * Canonical rather than `JSON.stringify`: the etag is contracted to depend on
- * the data alone, and `JSON.stringify` emits keys in insertion order, so this
- * provider was reporting a digest that depended on the order the *writer*
- * built the object in. It survived only because the JSON text is persisted and
- * re-parsed, which preserves that order by accident — a backend that stores
- * bodies structurally does not. See `storage/canonicalJson.js`.
+ * Both are taken over the canonical JSON of the body rather than
+ * `JSON.stringify`: the etag is contracted to depend on the data alone, and
+ * `JSON.stringify` emits keys in insertion order, so this provider was
+ * reporting a digest that depended on the order the *writer* built the object
+ * in. It survived only because the JSON text is persisted and re-parsed, which
+ * preserves that order by accident — a backend that stores bodies structurally
+ * does not. See `storage/canonicalJson.js`.
  *
- * `size` follows the same bytes. Sorting keys cannot change the length, so the
- * value is the same either way; taking both from one serialization is what
- * stops them drifting apart later.
+ * `size` follows the same bytes, and both come from one streamed pass
+ * ({@link documentDigest}) so they cannot drift apart — and so neither the
+ * canonical string nor a key-sorted copy of the body is built just to hash it,
+ * which on a metadata-only listing of large documents was most of the cost.
  */
 function envelopeBody(envelope) {
   const data = envelope.data === undefined ? null : envelope.data;
-  return { data, json: serializeDocument(data) };
+  return { data, ...documentDigest(data) };
 }
 
 /** Serialize document data, rejecting anything JSON cannot represent. */
@@ -289,7 +291,7 @@ export class FilesystemDocumentStore extends DocumentStore {
           if (!existing) {
             throw new EtagMismatchError(`Document ${ns}/${key} does not exist`);
           }
-          if (documentEtag(envelopeBody(existing).json) !== expectedEtag) {
+          if (envelopeBody(existing).etag !== expectedEtag) {
             throw new EtagMismatchError(`Etag mismatch for document ${ns}/${key}`);
           }
         }
@@ -764,7 +766,7 @@ export class FilesystemDocumentStore extends DocumentStore {
 
   /** Project a stored envelope into the public Document shape. @private */
   _toDocument(ns, key, envelope, includeData) {
-    const { data, json } = envelopeBody(envelope);
+    const { data, etag, size } = envelopeBody(envelope);
     const document = {
       ns,
       key,
@@ -775,8 +777,8 @@ export class FilesystemDocumentStore extends DocumentStore {
           : DEFAULT_CONTENT_TYPE,
       createdAt: envelope.createdAt,
       updatedAt: envelope.updatedAt,
-      etag: documentEtag(json),
-      size: Buffer.byteLength(json, 'utf8')
+      etag,
+      size
     };
     // Left off entirely rather than set to undefined, so a metadata-only page
     // is distinguishable with a plain `in` check.

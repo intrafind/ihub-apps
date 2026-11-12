@@ -70,6 +70,12 @@ const AGENT_PRINCIPAL_PREFIX = 'agent:';
 const CHILD_EXECUTION_PREFIX = 'wf-child-';
 
 /**
+ * Marker recording that the one-time recovery of executions that exist only
+ * as a stored state has completed (see {@link ExecutionRegistry#loadFromDisk}).
+ */
+export const REGISTRY_BACKFILL_MARKER = 'execution-registry-backfill';
+
+/**
  * Run kinds this registry owns. The `runs` namespace also holds chat and
  * inference runs written by the ledger; those are not executions and must
  * never reach a workflow listing.
@@ -384,6 +390,15 @@ export class ExecutionRegistry {
      * @private
      */
     this._writes = new Map();
+
+    /**
+     * Whether the last checkpoint scan saw every state and could decide each
+     * one, which is what lets {@link ExecutionRegistry#loadFromDisk} record
+     * the backfill as done.
+     * @type {boolean}
+     * @private
+     */
+    this._lastScanComplete = false;
 
     /** @private */
     this.logger = options.logger || logger;
@@ -1057,11 +1072,30 @@ export class ExecutionRegistry {
    * the run) so it only ever creates a record that does not exist; it never
    * overwrites one.
    *
+   * A one-time backfill, not a boot step. Every execution the engine starts
+   * gets its summary from `register`, so a state without one is a leftover
+   * from before the registry moved into the `runs` namespace (or an import of
+   * even older checkpoints). Walking every state on every boot to find those
+   * was the bulk of the scheduler-lock owner's boot cost (#3624); a marker
+   * records that the walk completed, and later boots skip it.
+   *
    * @returns {Promise<void>}
    */
   async loadFromDisk() {
     try {
+      const states = this._states || getWorkflowStateRepository();
+      if (await states.hasMarker(REGISTRY_BACKFILL_MARKER)) {
+        this.logger.info('Registry loaded', {
+          component: COMPONENT,
+          recoveredFromCheckpoints: 0,
+          backfill: 'done earlier'
+        });
+        return;
+      }
       const recovered = await this._scanCheckpointDirectories();
+      if (this._lastScanComplete) {
+        await states.writeMarker(REGISTRY_BACKFILL_MARKER, { recovered });
+      }
       this.logger.info('Registry loaded', {
         component: COMPONENT,
         recoveredFromCheckpoints: recovered
@@ -1085,6 +1119,7 @@ export class ExecutionRegistry {
   async _scanCheckpointDirectories() {
     const states = this._states || getWorkflowStateRepository();
     const { items, truncated } = await states.listSummaries();
+    this._lastScanComplete = !truncated;
     if (truncated) {
       this.logger.warn('Workflow state scan hit its bound; recovery is incomplete', {
         component: COMPONENT,
@@ -1096,7 +1131,24 @@ export class ExecutionRegistry {
     for (const { executionId } of items) {
       // A sub-workflow belongs to its parent's run and is never listed.
       if (executionId.startsWith(CHILD_EXECUTION_PREFIX)) continue;
-      if (await this.get(executionId)) continue;
+      if (this.executions.has(executionId)) continue;
+      // Any summary at all means there is nothing to recover — including the
+      // chat-kind summary the ledger writes for a workflow launched from a
+      // chat, which `get` does not report as an execution. Asking `get` here
+      // re-read those states and counted them as recovered on every boot,
+      // while the write below (rightly) never replaced the summary.
+      try {
+        if (await this._repo().get(executionId)) continue;
+      } catch (error) {
+        // Unknown is not "absent": leave it for the next boot's backfill.
+        this._lastScanComplete = false;
+        this.logger.warn('Could not read execution from storage', {
+          component: COMPONENT,
+          executionId,
+          error: error.message
+        });
+        continue;
+      }
 
       const state = await states.read(executionId);
       if (!state) continue;
@@ -1128,8 +1180,13 @@ export class ExecutionRegistry {
         // Re-checked under the write queue: a run registered while the scan
         // was reading the state must not be overwritten by the degraded copy
         // the checkpoint yields.
-        if (await store.get(executionId)) return;
-        await store.put(toNewSummary(execution));
+        try {
+          if (await store.get(executionId)) return;
+          await store.put(toNewSummary(execution));
+        } catch (error) {
+          this._lastScanComplete = false;
+          throw error;
+        }
       });
       recovered += 1;
 

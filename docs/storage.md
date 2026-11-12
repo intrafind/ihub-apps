@@ -27,8 +27,9 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
+| `workflow-active`           | the executions whose last checkpoint is unfinished (running, pending, paused), so the resume and the orphan sweep at startup read only those; kept on every checkpoint write, built once from `workflow-state` on the first start | – | [Workflows](workflows.md) |
 | `integration-conversations` | the iAssistant conversation a chat maps to                   | –                           | –                                        |
-| `runtime-imports`           | markers saying a one-time import (migration V219, the connection re-index) has already run | –            | [Run Ledger](run-ledger.md)              |
+| `runtime-imports`           | markers saying a one-time job (migration V219, the connection re-index, the `workflow-active` build, the execution-record backfill) has already run | –            | [Run Ledger](run-ledger.md)              |
 | `provenance-records`        | one document per content hash with its newest provenance records (never the text), removed after `provenance.retentionDays` | – | [Provenance Records](provenance.md) |
 | `provenance-meta`           | the installation ID, minted once                              | –                           | [Provenance Records](provenance.md) |
 | `a2a-tasks`                 | tasks of the inbound A2A endpoint, kept 24 hours after they finish | the calling principal | [MCP Integration](mcp-integration.md) |

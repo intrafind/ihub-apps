@@ -27,6 +27,28 @@ const COMPONENT = 'WorkflowStateRepository';
 export const WORKFLOW_STATE_NAMESPACE = RUNTIME_NAMESPACES.workflowState;
 
 /**
+ * Namespace of the active-execution index: one small document per execution
+ * whose last stored status is not terminal, keyed by the execution id.
+ */
+export const WORKFLOW_ACTIVE_NAMESPACE = RUNTIME_NAMESPACES.workflowActive;
+
+/** Namespace of the one-time markers (shared with the runtime imports). */
+const MARKER_NAMESPACE = RUNTIME_NAMESPACES.runtimeImports;
+
+/** Marker recording that the active-execution index has been built. */
+export const ACTIVE_INDEX_MARKER = 'workflow-active-index';
+
+/**
+ * Statuses a run never leaves. Everything else — `running`, `pending`, and
+ * `paused` for a run waiting on a person, however long ago — is unfinished and
+ * kept in the active index.
+ */
+const TERMINAL_STATUSES = new Set(['completed', 'failed', 'cancelled']);
+
+/** Documents read per page while the active index is rebuilt without `scan`. */
+const REBUILD_PAGE_SIZE = 10;
+
+/**
  * Hard ceiling on how many states one scan considers.
  *
  * A scan that tried to hold an unbounded directory in memory would fail on the
@@ -100,6 +122,17 @@ function isStorableId(executionId) {
 }
 
 /**
+ * Whether a stored status means the run is unfinished.
+ *
+ * @param {unknown} status - `state.status`.
+ * @returns {boolean} True for any status but a terminal one; false for a
+ *   state without a status, which nothing can resume or sweep either.
+ */
+export function isActiveStatus(status) {
+  return typeof status === 'string' && status.length > 0 && !TERMINAL_STATUSES.has(status);
+}
+
+/**
  * Milliseconds since the epoch for a timestamp that may be missing or junk.
  *
  * @param {unknown} value - ISO timestamp or anything else.
@@ -129,6 +162,46 @@ export class WorkflowStateRepository {
     this.documents = documents;
     this.locks = locks || null;
     this.logger = log || logger;
+
+    /**
+     * Status this process last recorded in the active index, per execution,
+     * so a run checkpointing every node writes its index entry once per status
+     * change rather than once per checkpoint. Entries leave with the run.
+     * @type {Map<string, string>}
+     * @private
+     */
+    this._indexed = new Map();
+
+    /**
+     * Tail of the pending write chain per execution, so a state and its index
+     * entry are updated in the order the writes were made.
+     * @type {Map<string, Promise<void>>}
+     * @private
+     */
+    this._chains = new Map();
+  }
+
+  /**
+   * Run `fn` after the writes already queued for this execution.
+   *
+   * @param {string} executionId - Execution identifier.
+   * @param {() => Promise<T>} fn - The write.
+   * @returns {Promise<T>}
+   * @template T
+   * @private
+   */
+  _serialize(executionId, fn) {
+    const previous = this._chains.get(executionId) || Promise.resolve();
+    const run = previous.then(fn);
+    const settled = run.then(
+      () => undefined,
+      () => undefined
+    );
+    this._chains.set(executionId, settled);
+    void settled.then(() => {
+      if (this._chains.get(executionId) === settled) this._chains.delete(executionId);
+    });
+    return run;
   }
 
   /**
@@ -178,8 +251,16 @@ export class WorkflowStateRepository {
         `Invalid executionId for workflow state: ${String(executionId).slice(0, 64)}`
       );
     }
-    await this.documents.put(WORKFLOW_STATE_NAMESPACE, executionId, state, {
-      ownerId: typeof ownerId === 'string' && ownerId.length > 0 ? ownerId : null
+    const status = state?.status;
+    await this._serialize(executionId, async () => {
+      // An unfinished run enters the index before its state is stored, and a
+      // finished one leaves it only after: a crash in between leaves an entry
+      // too many, which the readers prune, never a run the index cannot see.
+      if (isActiveStatus(status)) await this._markActive(executionId, status);
+      await this.documents.put(WORKFLOW_STATE_NAMESPACE, executionId, state, {
+        ownerId: typeof ownerId === 'string' && ownerId.length > 0 ? ownerId : null
+      });
+      if (!isActiveStatus(status)) await this._clearActive(executionId);
     });
   }
 
@@ -197,25 +278,263 @@ export class WorkflowStateRepository {
       });
       return false;
     }
+    return this._serialize(executionId, async () => {
+      let removed;
+      try {
+        removed = Boolean(await this.documents.delete(WORKFLOW_STATE_NAMESPACE, executionId));
+      } catch (error) {
+        this.logger.warn('Could not remove workflow state document', {
+          component: COMPONENT,
+          executionId,
+          error: error.message
+        });
+        return false;
+      }
+      await this._clearActive(executionId);
+      return removed;
+    });
+  }
+
+  /**
+   * The executions whose last stored state is unfinished, from the active
+   * index — without reading or listing a single state.
+   *
+   * The index is built from a full walk of the states the first time it is
+   * asked for on an installation (see {@link WorkflowStateRepository#ensureActiveIndex}),
+   * and kept by every {@link WorkflowStateRepository#write} and
+   * {@link WorkflowStateRepository#remove} after that. It is a superset, never
+   * a subset: a crash between a state write and its index update leaves an
+   * entry whose state is already terminal. Callers read the state of each
+   * entry anyway and hand the stale ones to
+   * {@link WorkflowStateRepository#forgetActive}.
+   *
+   * There is no age cut-off: a run paused for a person's approval stays here
+   * until it finishes, however long that takes.
+   *
+   * @param {Object} [options]
+   * @param {string} [options.prefix] - Keep only ids starting with this.
+   * @param {number} [options.max] - Hard record bound.
+   * @returns {Promise<{items: Array<{executionId: string, status: string|null}>,
+   *   truncated: boolean}>}
+   */
+  async listActive({ prefix = null, max = MAX_SCAN_STATES } = {}) {
+    await this.ensureActiveIndex();
+    const bound = Number.isFinite(max) && max > 0 ? max : MAX_SCAN_STATES;
+    const items = [];
+    let cursor = null;
+    do {
+      const page = await this.documents.list(WORKFLOW_ACTIVE_NAMESPACE, {
+        limit: 1000,
+        ...(prefix ? { prefix } : {}),
+        ...(cursor ? { cursor } : {})
+      });
+      for (const doc of page.items) {
+        if (!isStorableId(doc.key)) continue;
+        const status = typeof doc.data?.status === 'string' ? doc.data.status : null;
+        items.push({ executionId: doc.key, status });
+      }
+      cursor = page.nextCursor;
+    } while (cursor && items.length < bound);
+    return { items, truncated: Boolean(cursor) };
+  }
+
+  /**
+   * Check an entry of {@link WorkflowStateRepository#listActive} against the
+   * state a caller has just read for it, and drop the entry when the state
+   * shows the run is finished, or is gone.
+   *
+   * A state that is present but could not be read keeps its entry: "could
+   * not read it" is not evidence that the run is finished.
+   *
+   * @param {string} executionId - Execution identifier.
+   * @param {Object|null} state - What {@link WorkflowStateRepository#read} returned.
+   * @returns {Promise<boolean>} True when the run is still unfinished.
+   */
+  async confirmActive(executionId, state) {
+    if (state && isActiveStatus(state.status)) return true;
+    if (!isStorableId(executionId)) return false;
+    if (!state && (await this._stateMayExist(executionId))) return false;
+    await this._serialize(executionId, () => this._clearActive(executionId));
+    return false;
+  }
+
+  /**
+   * Whether a state document is (or may be) stored for this execution.
+   *
+   * @param {string} executionId - Execution identifier.
+   * @returns {Promise<boolean>} False only when the store says it is absent.
+   * @private
+   */
+  async _stateMayExist(executionId) {
     try {
-      return Boolean(await this.documents.delete(WORKFLOW_STATE_NAMESPACE, executionId));
+      return Boolean(await this.documents.get(WORKFLOW_STATE_NAMESPACE, executionId));
+    } catch {
+      return true;
+    }
+  }
+
+  /**
+   * Build the active index once per installation.
+   *
+   * States written before the index existed — or carried in by migration
+   * V219 straight into the namespace — never went through
+   * {@link WorkflowStateRepository#write}, so the first listing walks every
+   * state once, one document at a time, and records the unfinished ones. A
+   * marker then says it is done; from there on the index is kept by the
+   * writes. The walk is idempotent, so two processes racing to build it only
+   * do the same work twice.
+   *
+   * @returns {Promise<void>}
+   * @throws {Error} When the walk fails; the marker is then not written and
+   *   the next call tries again.
+   */
+  async ensureActiveIndex() {
+    if (await this.hasMarker(ACTIVE_INDEX_MARKER)) return;
+    const started = Date.now();
+    let scanned = 0;
+    let indexed = 0;
+    for await (const doc of this._walkStates()) {
+      scanned += 1;
+      if (RESERVED_KEYS.has(doc.key) || !isStorableId(doc.key)) continue;
+      if (!isWorkflowState(doc.data) || !isActiveStatus(doc.data.status)) continue;
+      await this._serialize(doc.key, () => this._markActive(doc.key, doc.data.status));
+      indexed += 1;
+    }
+    await this.writeMarker(ACTIVE_INDEX_MARKER, { scanned, indexed });
+    this.logger.info('Built the index of unfinished workflow executions', {
+      component: COMPONENT,
+      scanned,
+      indexed,
+      durationMs: Date.now() - started
+    });
+  }
+
+  /**
+   * Whether a one-time job has recorded itself as done.
+   *
+   * @param {string} name - Marker key.
+   * @returns {Promise<boolean>}
+   */
+  async hasMarker(name) {
+    const marker = await this.documents.get(MARKER_NAMESPACE, name);
+    return Boolean(marker?.data?.completedAt);
+  }
+
+  /**
+   * Record a one-time job as done.
+   *
+   * @param {string} name - Marker key.
+   * @param {Object} [details] - Stored with the marker, for an operator.
+   * @returns {Promise<void>}
+   */
+  async writeMarker(name, details = {}) {
+    await this.documents.put(MARKER_NAMESPACE, name, {
+      completedAt: new Date().toISOString(),
+      ...details
+    });
+  }
+
+  /**
+   * Every stored state, one at a time, so a walk holds one state in memory
+   * rather than a page of them.
+   *
+   * @returns {AsyncGenerator<Object>} Documents with data.
+   * @private
+   */
+  async *_walkStates() {
+    if (this.documents.supportsScan) {
+      yield* this.documents.scan(WORKFLOW_STATE_NAMESPACE);
+      return;
+    }
+    let cursor = null;
+    do {
+      const page = await this.documents.list(WORKFLOW_STATE_NAMESPACE, {
+        limit: REBUILD_PAGE_SIZE,
+        ...(cursor ? { cursor } : {})
+      });
+      yield* page.items;
+      cursor = page.nextCursor;
+    } while (cursor);
+  }
+
+  /**
+   * Record an execution as unfinished in the index.
+   *
+   * A failure here is logged, not thrown: the state write it accompanies
+   * must not fail for it. The index marker is dropped instead, so the next
+   * boot rebuilds the index from the states and finds this run anyway.
+   *
+   * @param {string} executionId - Execution identifier.
+   * @param {string} status - The non-terminal status being stored.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _markActive(executionId, status) {
+    if (this._indexed.get(executionId) === status) return;
+    try {
+      await this.documents.put(WORKFLOW_ACTIVE_NAMESPACE, executionId, {
+        status,
+        updatedAt: new Date().toISOString()
+      });
+      this._indexed.set(executionId, status);
     } catch (error) {
-      this.logger.warn('Could not remove workflow state document', {
+      this._indexed.delete(executionId);
+      this.logger.error('Could not record an unfinished workflow execution in its index', {
         component: COMPONENT,
         executionId,
         error: error.message
       });
-      return false;
+      await this._invalidateIndex();
+    }
+  }
+
+  /**
+   * Remove an execution from the index.
+   *
+   * @param {string} executionId - Execution identifier.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _clearActive(executionId) {
+    this._indexed.delete(executionId);
+    try {
+      await this.documents.delete(WORKFLOW_ACTIVE_NAMESPACE, executionId);
+    } catch (error) {
+      // A stale entry costs one state read at the next boot, which prunes it.
+      this.logger.warn('Could not remove a finished workflow execution from its index', {
+        component: COMPONENT,
+        executionId,
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Forget that the index is complete, so the next listing rebuilds it.
+   *
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _invalidateIndex() {
+    try {
+      await this.documents.delete(MARKER_NAMESPACE, ACTIVE_INDEX_MARKER);
+    } catch (error) {
+      this.logger.error('Could not invalidate the index of unfinished workflow executions', {
+        component: COMPONENT,
+        error: error.message
+      });
     }
   }
 
   /**
    * Every known execution, as metadata only.
    *
-   * Cheap enough to run over the whole namespace: document bodies are not
-   * read, so a state carrying a whole workflow definition costs one directory
-   * entry rather than hundreds of kilobytes. Callers that then need the state
-   * itself read only the entries they care about.
+   * Document bodies are not returned, so the caller does not hold them. They
+   * are still read: the store owes every listed document an `etag` and a
+   * `size`, and the filesystem provider derives both from the body. A walk of
+   * this namespace therefore costs a read and a parse of every state — callers
+   * that only want the unfinished runs use
+   * {@link WorkflowStateRepository#listActive} instead.
    *
    * @param {Object} [options]
    * @param {string} [options.prefix] - Keep only ids starting with this.
