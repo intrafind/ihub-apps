@@ -62,8 +62,8 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `DNS_LOOKUP_TIMEOUT_MS`    | Longest an outbound connection waits for a hostname lookup before failing with a DNS error. `0` disables the limit. See [Outbound DNS guard](llm-client.md#outbound-dns-guard). | `5000`                                           |
 | `DNS_NEGATIVE_CACHE_MS`    | How long a failed or overdue hostname lookup is remembered so new requests to that host fail immediately instead of queueing another lookup. `0` disables it. | `30000`                                          |
 | `LLM_DEBUG_DUMP_ALL`       | Set to `1` to write every outbound LLM request body to `contents/data/debug/llm-request/` (auth headers and URL keys redacted). Diagnostics only. | –                                                |
-| `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`). Set to `1` to disable clustering. See [Scaling with Multiple Workers](scaling.md). | `4`                                              |
-| `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | `4`                                              |
+| `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`). Set to `1` to disable clustering. Unset: sized from the container memory limit, `4` without one. See [Scaling with Multiple Workers](scaling.md#sizing-from-the-container). | derived (`4` without a memory limit) |
+| `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | derived (`4` without a memory limit) |
 | `OPENAI_API_KEY`           | API key for OpenAI models                                         | –                                                |
 | `ANTHROPIC_API_KEY`        | API key for Anthropic models                                      | –                                                |
 | `MISTRAL_API_KEY`          | API key for Mistral models                                        | –                                                |
@@ -272,7 +272,8 @@ Run the production build with four workers on port 8080:
 PORT=8080 HOST=127.0.0.1 WORKERS=4 npm run start:prod
 ```
 
-Four workers is now the default; set `WORKERS=1` to fall back to a single
+Four workers is the default without a container memory limit (in a container,
+the count and each worker's heap follow the memory limit); set `WORKERS=1` to fall back to a single
 process (recommended in development because hot reloaders and breakpoints
 behave badly across forked children). See
 [Scaling with Multiple Workers](scaling.md) for details on the sticky-session

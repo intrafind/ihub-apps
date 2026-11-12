@@ -16,7 +16,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { canonicalJson } from '../storage/canonicalJson.js';
-import { documentEtag, serializeDocument } from '../storage/etag.js';
+import { documentDigest, documentEtag, serializeDocument } from '../storage/etag.js';
 
 const sha256 = value => crypto.createHash('sha256').update(value, 'utf8').digest('hex');
 
@@ -107,4 +107,91 @@ test('the two document shapes reach the same digest by different routes', () => 
     raw,
     'and they differ, which is what lets a raw compare-and-set notice a hand edit'
   );
+});
+
+test('documentDigest reports the etag and size of the canonical serialization', () => {
+  // The digest is taken without building the canonical string (or the
+  // key-sorted copy of every object `canonicalJson` builds on the way), so it
+  // is checked against that serialization rather than against itself.
+  const nested = { z: [3, { y: 'ü', x: null }], a: { d: 1.5, c: -0, b: [[], {}] } };
+  const parsed = JSON.parse('{"__proto__":{"x":1},"b":"\\ud800 lone","a":"\\u2028"}');
+  for (const data of [
+    null,
+    0,
+    -0,
+    1e21,
+    Number.NaN,
+    Infinity,
+    true,
+    '',
+    'quote " backslash \\ newline \n tab \t \u0001',
+    'unicode: äöü 😀 \ud83d',
+    [],
+    {},
+    [undefined, () => {}, Symbol('s'), 1],
+    { a: undefined, b: 1, c: () => {} },
+    { when: new Date(0), nested: { toJSON: () => ({ b: 1, a: 2 }) } },
+    nested,
+    parsed,
+    { 'key "quoted"': 1, 'b\nkey': 2, ä: 3, A: 4, 10: 5, 9: 6 },
+    { 4294967294: 1, 4294967295: 2, '01': 3, 2: 4, '-1': 5, 1.5: 6 },
+    { list: Array.from({ length: 5000 }, (_, i) => ({ i, s: 'x'.repeat(i % 50), t: i % 2 === 0 })) }
+  ]) {
+    const json = serializeDocument(data);
+    assert.deepEqual(
+      documentDigest(data),
+      { etag: documentEtag(json), size: Buffer.byteLength(json, 'utf8') },
+      String(json).slice(0, 60)
+    );
+  }
+});
+
+test('documentDigest agrees with the serializer on random JSON', () => {
+  let seed = 3624;
+  const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const keyPool = ['a', 'B', '_', 'ä', '10', '9', '0', '007', 'é', 'z z', '"', '\\', '😀'];
+  const make = depth => {
+    const pick = random();
+    if (depth > 3 || pick < 0.3) {
+      const leaf = random();
+      if (leaf < 0.2) return null;
+      if (leaf < 0.4) return random() < 0.5;
+      if (leaf < 0.7) return Math.round((random() - 0.5) * 1e6) / 100;
+      return keyPool[Math.floor(random() * keyPool.length)].repeat(1 + Math.floor(random() * 3));
+    }
+    if (pick < 0.6) return Array.from({ length: Math.floor(random() * 4) }, () => make(depth + 1));
+    const object = {};
+    for (let i = Math.floor(random() * 5); i > 0; i -= 1) {
+      object[keyPool[Math.floor(random() * keyPool.length)]] = make(depth + 1);
+    }
+    return object;
+  };
+  for (let i = 0; i < 500; i += 1) {
+    // Round-tripped, as every stored body is.
+    const data = JSON.parse(JSON.stringify(make(0)));
+    const json = serializeDocument(data);
+    assert.deepEqual(
+      documentDigest(data),
+      { etag: documentEtag(json), size: Buffer.byteLength(json, 'utf8') },
+      json
+    );
+  }
+});
+
+test('documentDigest never serializes an object in one piece', () => {
+  // The point of the streaming digest: a metadata-only listing of a document
+  // carrying megabytes of state must not materialize a second, sorted copy of
+  // it. JSON.stringify may still be used for one primitive at a time.
+  const original = JSON.stringify;
+  const objectCalls = [];
+  JSON.stringify = function (value, ...rest) {
+    if (value !== null && typeof value === 'object') objectCalls.push(value);
+    return original.call(this, value, ...rest);
+  };
+  try {
+    documentDigest({ b: { c: [1, 2, { d: 'x' }] }, a: 'y' });
+  } finally {
+    JSON.stringify = original;
+  }
+  assert.deepEqual(objectCalls, []);
 });

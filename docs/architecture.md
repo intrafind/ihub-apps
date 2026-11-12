@@ -238,7 +238,10 @@ server/
 ### Clustering and Process Management
 
 The server scales across CPU cores with a sticky-session Node.js cluster
-(default: 4 workers; dev scripts pin `WORKERS=1`). The primary process owns
+(default: 4 workers, or as many as the container's memory limit fits, each
+with a V8 heap limit of its share — see
+[Sizing from the container](scaling.md#sizing-from-the-container); dev scripts
+pin `WORKERS=1`). The primary process owns
 the public TCP socket, hashes each connection's source address to a worker,
 and forwards the paused handle over IPC. This keeps every chat session
 pinned to a single worker so the per-process SSE state in
@@ -246,7 +249,7 @@ pinned to a single worker so the per-process SSE state in
 cross-worker coordination.
 
 ```javascript
-const workerCount = config.WORKERS; // default 4; set WORKERS=1 to disable
+const workerCount = config.WORKERS; // WORKERS, else from the memory limit, else 4; 1 disables
 
 if (cluster.isPrimary && workerCount > 1) {
   const workers = [];

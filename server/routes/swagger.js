@@ -1,118 +1,82 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import swaggerJSDoc from 'swagger-jsdoc';
 import swaggerUi from 'swagger-ui-express';
 import { authRequired } from '../middleware/authRequired.js';
 import { loadJson } from '../configLoader.js';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
+import {
+  API_DOC_SETS,
+  buildApiDocSpecs,
+  readApiDocSpecs,
+  withServerUrl
+} from '../utils/apiDocSpecs.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/** The documents of this process, once loaded or built. */
+let specsPromise = null;
 
 /**
- * The route files each API document is built from, as glob patterns.
+ * The three API documents, loaded on first use and kept for the life of the
+ * process.
  *
- * swagger-jsdoc expands `apis` with glob, which takes `/` only: a Windows `\`
- * reads as an escape character, so a pattern built with `path.join` matches
- * nothing there and /api/docs comes up empty. Build the patterns with `/`.
+ * Read from the files the production build writes; built from the route files
+ * when those are missing (development). Never at boot: the routes cannot
+ * change while the server runs, so there is nothing to gain from building
+ * them before somebody opens the docs, and the build costs every worker ~70 MB
+ * of heap and a quarter of a second (#3624).
  *
- * @param {string} routesDir - Absolute path of `server/routes`, in the platform's own form
- * @param {string} [sep] - The separator used in `routesDir` (defaults to the platform's)
- * @returns {{normal: string[], admin: string[], openai: string[]}}
+ * @returns {Promise<{normal: Object, admin: Object, openai: Object}>}
  */
-export function apiDocGlobs(routesDir, sep = path.sep) {
-  const base = routesDir.split(sep).join('/');
-  const at = rel => path.posix.join(base, rel);
-  return {
-    normal: [
-      'generalRoutes.js',
-      'modelRoutes.js',
-      'appSessionRoutes.js',
-      'pageRoutes.js',
-      'magicPromptRoutes.js',
-      'shortLinkRoutes.js',
-      'auth.js',
-      'scheduledTasks.js',
-      'chat/**/*.js',
-      'chats.js',
-      'integrations/*.js',
-      'oauth.js',
-      'oauthRegister.js',
-      'projectRoutes.js',
-      'promptRoutes.js',
-      'runs.js',
-      'usageRoutes.js',
-      'userSkillRoutes.js',
-      'wellKnown.js',
-      'workflow/*.js'
-    ].map(at),
-    admin: ['adminRoutes.js', 'admin/**/*.js'].map(at),
-    openai: ['openaiProxy.js', 'inference/*.js'].map(at)
-  };
+export function loadApiDocSpecs() {
+  if (!specsPromise) {
+    specsPromise = (async () => {
+      const prebuilt = await readApiDocSpecs();
+      if (prebuilt) {
+        logger.info('Loaded the prebuilt API documents', { component: 'Swagger' });
+        return prebuilt;
+      }
+      const started = Date.now();
+      const built = await buildApiDocSpecs();
+      logger.info('Built the API documents from the route files', {
+        component: 'Swagger',
+        durationMs: Date.now() - started,
+        ...Object.fromEntries(
+          Object.entries(built).map(([name, spec]) => [
+            `${name}Paths`,
+            Object.keys(spec.paths || {}).length
+          ])
+        )
+      });
+      return built;
+    })().catch(error => {
+      // A failed load is retried on the next request rather than cached.
+      specsPromise = null;
+      throw error;
+    });
+  }
+  return specsPromise;
+}
+
+/** Forget the loaded documents (tests). */
+export function resetApiDocSpecsForTests() {
+  specsPromise = null;
 }
 
 /**
- * Creates the base Swagger configuration
- * @param {string} title - API documentation title
- * @param {string} description - API documentation description
- * @param {string} version - API version
- * @param {Array} paths - Array of file paths to scan for documentation
- * @returns {Object} Swagger configuration object
+ * One document as served: the installation's base path in `servers`.
+ *
+ * @param {'normal'|'admin'|'openai'} name - Document
+ * @returns {Promise<Object>}
  */
-function createSwaggerConfig(title, description, version, paths) {
-  return {
-    definition: {
-      openapi: '3.0.0',
-      info: {
-        title,
-        description,
-        version,
-        contact: {
-          name: 'iHub Apps',
-          url: 'https://github.com/intrafind/ihub-apps'
-        }
-      },
-      servers: [
-        {
-          url: buildServerPath('/api'),
-          description: 'API Server'
-        }
-      ],
-      components: {
-        securitySchemes: {
-          bearerAuth: {
-            type: 'http',
-            scheme: 'bearer',
-            bearerFormat: 'JWT'
-          },
-          sessionAuth: {
-            type: 'apiKey',
-            in: 'cookie',
-            name: 'connect.sid'
-          }
-        }
-      },
-      security: [
-        {
-          bearerAuth: []
-        },
-        {
-          sessionAuth: []
-        }
-      ]
-    },
-    apis: paths
-  };
+async function servedSpec(name) {
+  const specs = await loadApiDocSpecs();
+  return withServerUrl(specs[name], buildServerPath('/api'));
 }
 
 /**
  * Registers Swagger documentation routes
  * @param {Object} app - Express application instance
- * @param {string} basePath - Base path for route registration
  */
 export default async function registerSwaggerRoutes(app) {
   // Check if Swagger is enabled in platform configuration
@@ -137,76 +101,9 @@ export default async function registerSwaggerRoutes(app) {
     return;
   }
 
-  logger.info('📚 Setting up Swagger documentation routes...', { component: 'Swagger' });
-
   // Apply authentication middleware if required
   const middleware = requireAuth ? [authRequired] : [];
   const basePath = buildServerPath('/'); // Get base path without leading slash for config
-
-  const globs = apiDocGlobs(__dirname);
-
-  // Normal/Chat APIs Documentation
-  const normalApiConfig = createSwaggerConfig(
-    'iHub Apps - Chat & General APIs',
-    'APIs for chat functionality, models, tools, sessions, and general application features',
-    '1.0.0',
-    globs.normal
-  );
-
-  // Admin APIs Documentation
-  const adminApiConfig = createSwaggerConfig(
-    'iHub Apps - Admin APIs',
-    'Administrative APIs for managing configurations, users, groups, and system settings',
-    '1.0.0',
-    globs.admin
-  );
-
-  // OpenAI Compatible APIs Documentation
-  const openaiApiConfig = createSwaggerConfig(
-    'iHub Apps - OpenAI Compatible APIs',
-    'OpenAI-compatible inference APIs: chat completions, responses, conversations and model listings, for models and iHub apps',
-    '1.0.0',
-    globs.openai
-  );
-
-  // Generate Swagger specs
-  const normalApiSpec = swaggerJSDoc(normalApiConfig);
-  const adminApiSpec = swaggerJSDoc(adminApiConfig);
-  const openaiApiSpec = swaggerJSDoc(openaiApiConfig);
-
-  // Debug logging
-  logger.info('📚 Generated API specs:', { component: 'Swagger' });
-  logger.info('Normal API paths count', {
-    component: 'Swagger',
-    count: Object.keys(normalApiSpec.paths || {}).length
-  });
-  logger.info('Admin API paths count', {
-    component: 'Swagger',
-    count: Object.keys(adminApiSpec.paths || {}).length
-  });
-  logger.info('OpenAI API paths count', {
-    component: 'Swagger',
-    count: Object.keys(openaiApiSpec.paths || {}).length
-  });
-
-  if (Object.keys(normalApiSpec.paths || {}).length > 0) {
-    logger.info('Normal API paths', {
-      component: 'Swagger',
-      paths: Object.keys(normalApiSpec.paths || {}).join(', ')
-    });
-  }
-  if (Object.keys(adminApiSpec.paths || {}).length > 0) {
-    logger.info('Admin API paths', {
-      component: 'Swagger',
-      paths: Object.keys(adminApiSpec.paths || {}).join(', ')
-    });
-  }
-  if (Object.keys(openaiApiSpec.paths || {}).length > 0) {
-    logger.info('OpenAI API paths', {
-      component: 'Swagger',
-      paths: Object.keys(openaiApiSpec.paths || {}).join(', ')
-    });
-  }
 
   // Swagger UI options
   const swaggerOptions = {
@@ -233,74 +130,28 @@ export default async function registerSwaggerRoutes(app) {
   app.use(buildServerPath('/api/docs'), ...middleware, swaggerUi.serve);
   app.get(buildServerPath('/api/docs'), ...middleware, swaggerUi.setup(null, swaggerOptions));
 
-  // Individual API documentation routes (JSON only)
-  app.get(buildServerPath('/api/docs/normal/swagger.json'), ...middleware, (req, res) => {
-    res.json(normalApiSpec);
-  });
+  for (const name of Object.keys(API_DOC_SETS)) {
+    // Individual API documentation routes (JSON only)
+    app.get(buildServerPath(`/api/docs/${name}/swagger.json`), ...middleware, async (req, res) => {
+      res.json(await servedSpec(name));
+    });
 
-  app.get(buildServerPath('/api/docs/admin/swagger.json'), ...middleware, (req, res) => {
-    res.json(adminApiSpec);
-  });
-
-  app.get(buildServerPath('/api/docs/openai/swagger.json'), ...middleware, (req, res) => {
-    res.json(openaiApiSpec);
-  });
-
-  // Create specific UI for each API set using query parameters
-  app.get(buildServerPath('/api/docs/normal'), ...middleware, (req, res) => {
-    const customOptions = {
-      explorer: false,
-      customSiteTitle: 'iHub Apps - Chat & General APIs',
-      swaggerOptions: {
-        url: buildServerPath('/api/docs/normal/swagger.json', basePath)
-      }
-    };
-    res.send(swaggerUi.generateHTML(normalApiSpec, customOptions));
-  });
-
-  app.get(buildServerPath('/api/docs/admin'), ...middleware, (req, res) => {
-    const customOptions = {
-      explorer: false,
-      customSiteTitle: 'iHub Apps - Admin APIs',
-      swaggerOptions: {
-        url: buildServerPath('/api/docs/admin/swagger.json', basePath)
-      }
-    };
-    res.send(swaggerUi.generateHTML(adminApiSpec, customOptions));
-  });
-
-  app.get(buildServerPath('/api/docs/openai'), ...middleware, (req, res) => {
-    const customOptions = {
-      explorer: false,
-      customSiteTitle: 'iHub Apps - OpenAI Compatible APIs',
-      swaggerOptions: {
-        url: buildServerPath('/api/docs/openai/swagger.json', basePath)
-      }
-    };
-    res.send(swaggerUi.generateHTML(openaiApiSpec, customOptions));
-  });
-
-  logger.info('📚 Swagger documentation available at:', { component: 'Swagger' });
-  logger.info('Swagger docs - All APIs', {
-    component: 'Swagger',
-    url: buildServerPath('/api/docs')
-  });
-  logger.info('Swagger docs - Chat & General', {
-    component: 'Swagger',
-    url: buildServerPath('/api/docs/normal', basePath)
-  });
-  logger.info('Swagger docs - Admin', {
-    component: 'Swagger',
-    url: buildServerPath('/api/docs/admin', basePath)
-  });
-  logger.info('Swagger docs - OpenAI Compatible', {
-    component: 'Swagger',
-    url: buildServerPath('/api/docs/openai', basePath)
-  });
-
-  if (requireAuth) {
-    logger.info('🔐 Authentication required for Swagger access', { component: 'Swagger' });
-  } else {
-    logger.info('🌐 Swagger accessible without authentication', { component: 'Swagger' });
+    // Specific UI for each API set
+    app.get(buildServerPath(`/api/docs/${name}`), ...middleware, async (req, res) => {
+      const customOptions = {
+        explorer: false,
+        customSiteTitle: API_DOC_SETS[name].title,
+        swaggerOptions: {
+          url: buildServerPath(`/api/docs/${name}/swagger.json`, basePath)
+        }
+      };
+      res.send(swaggerUi.generateHTML(await servedSpec(name), customOptions));
+    });
   }
+
+  logger.info('📚 Swagger documentation available', {
+    component: 'Swagger',
+    url: buildServerPath('/api/docs'),
+    authentication: requireAuth ? 'required' : 'not required'
+  });
 }

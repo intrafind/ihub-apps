@@ -16,6 +16,7 @@ import { initSystemResources } from '../services/systemResources.js';
 import { shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import config from '../config.js';
 import { prepareContents, bootstrapStorageOrExit } from './bootstrap.js';
+import { describeWorkerSizing, workerExecArgv } from '../utils/workerSizing.js';
 
 /**
  * Start the cluster primary: seed and migrate `contents/`, check the storage
@@ -26,6 +27,7 @@ import { prepareContents, bootstrapStorageOrExit } from './bootstrap.js';
  * @param {{workerCount: number, stickyRouting: boolean}} options
  */
 export async function startPrimary({ workerCount, stickyRouting }) {
+  logger.info(describeWorkerSizing(config.WORKER_SIZING));
   logger.info({
     component: 'Server',
     message: `Primary process ${process.pid} starting ${workerCount} workers`,
@@ -71,8 +73,16 @@ export async function startPrimary({ workerCount, stickyRouting }) {
   // itself to the admin System resources page alongside the workers.
   initSystemResources();
 
+  // Each worker gets its share of the container's memory as its V8 heap limit,
+  // unless one was given explicitly (see utils/workerSizing.js), so V8 collects
+  // before the container is killed. The count goes along as `WORKERS`: a worker
+  // reads it to know how many peers to wait for.
+  cluster.setupPrimary({ execArgv: workerExecArgv(config.WORKER_SIZING) });
+  const forkWorker = workerIndex =>
+    cluster.fork({ WORKER_INDEX: String(workerIndex), WORKERS: String(workerCount) });
+
   for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
-    workers[workerIndex] = cluster.fork({ WORKER_INDEX: String(workerIndex) });
+    workers[workerIndex] = forkWorker(workerIndex);
   }
 
   // Workers that die while a just-applied update is still unconfirmed. If the
@@ -124,7 +134,7 @@ export async function startPrimary({ workerCount, stickyRouting }) {
       signal,
       slot
     });
-    const replacement = cluster.fork({ WORKER_INDEX: String(slot >= 0 ? slot : workers.length) });
+    const replacement = forkWorker(slot >= 0 ? slot : workers.length);
     if (slot >= 0) {
       workers[slot] = replacement;
     } else {
