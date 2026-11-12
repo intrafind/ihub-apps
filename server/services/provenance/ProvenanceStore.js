@@ -54,7 +54,9 @@ export const ALLOWED_RECORD_KEYS = Object.freeze([
   'kind',
   'content_hash',
   // Media records (#3328): what the provider embedded.
-  'provider_marking'
+  'provider_marking',
+  // Who produced it, when `provenance.recordUser` asks for it (provenanceUser.js).
+  'user'
 ]);
 
 function createdAtMs(record) {
@@ -183,21 +185,26 @@ export class ProvenanceStore {
         if (!(error instanceof EtagMismatchError)) throw error;
       }
     };
+    await this._eachDocument(handle);
+    return result;
+  }
+
+  /** Visit every record document (scan when the provider can, else pages). */
+  async _eachDocument(handle) {
     if (this.documents.supportsScan) {
       for await (const doc of this.documents.scan(PROVENANCE_RECORDS_NAMESPACE)) await handle(doc);
-    } else {
-      let cursor;
-      do {
-        const page = await this.documents.list(PROVENANCE_RECORDS_NAMESPACE, {
-          limit: LIST_PAGE_SIZE,
-          cursor,
-          includeData: true
-        });
-        for (const doc of page.items) await handle(doc);
-        cursor = page.nextCursor;
-      } while (cursor);
+      return;
     }
-    return result;
+    let cursor;
+    do {
+      const page = await this.documents.list(PROVENANCE_RECORDS_NAMESPACE, {
+        limit: LIST_PAGE_SIZE,
+        cursor,
+        includeData: true
+      });
+      for (const doc of page.items) await handle(doc);
+      cursor = page.nextCursor;
+    } while (cursor);
   }
 
   /**

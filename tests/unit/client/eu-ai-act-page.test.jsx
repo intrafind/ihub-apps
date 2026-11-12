@@ -546,6 +546,89 @@ describe('VerificationCard', () => {
     expect(screen.getByText(/\(llama\)/)).toBeInTheDocument();
   });
 
+  test('text: a found record is shown in full, field by field and as JSON', async () => {
+    const record = {
+      spec: 'intrafind-provenance/1.0',
+      ai_generated: true,
+      generator: { product: 'iHub Apps', version: '5.7.0', installation_id: 'inst_abc' },
+      model: { id: 'gpt-x', watermark: { by: 'none', applied: false } },
+      output_id: '01JC8M2T6V0Q4W7R9XK3B5N1ZD',
+      created_at: '2026-11-01T10:00:00Z',
+      content_hash: { alg: 'sha-256', normalization: 'nfc-trim', value: 'f'.repeat(64) }
+    };
+    mockApi.verifyText.mockResolvedValue({ found: true, records: [record] });
+    render(<VerificationCard />);
+    fireEvent.change(screen.getByLabelText('Text to check'), { target: { value: 'exact' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    const details = await screen.findByTestId('provenance-record');
+    expect(screen.getByText('Provenance record')).toBeInTheDocument();
+    expect(details).toHaveTextContent('01JC8M2T6V0Q4W7R9XK3B5N1ZD');
+    expect(details).toHaveTextContent('gpt-x');
+    expect(details).toHaveTextContent('iHub Apps 5.7.0');
+    expect(details).toHaveTextContent('inst_abc');
+    expect(details).toHaveTextContent('f'.repeat(64));
+    expect(JSON.parse(screen.getByTestId('provenance-record-json').textContent)).toEqual(record);
+  });
+
+  test('file: a found image record shows the C2PA signer, claim generator and signing time', async () => {
+    mockApi.verifyFile.mockResolvedValue({
+      found: true,
+      kind: 'image',
+      contentHash: { alg: 'sha-256', value: 'ab' },
+      records: [
+        {
+          output_id: 'OUT1',
+          kind: 'image',
+          model: {
+            id: 'gemini-image',
+            watermark: { by: 'provider', scheme: 'synthid', applied: true }
+          },
+          content_hash: {
+            alg: 'sha-256',
+            normalization: 'none',
+            value: 'ab',
+            mime_type: 'image/png'
+          },
+          provider_marking: {
+            c2pa: {
+              present: true,
+              status: 'present',
+              valid: true,
+              issuer: 'Google LLC',
+              claimGenerator: 'Imagen',
+              signedAt: '2026-11-11T09:00:01Z',
+              trust: 'not-evaluated'
+            },
+            xmp: { digitalSourceType: null },
+            declared: 'synthid'
+          }
+        }
+      ],
+      c2pa: {
+        present: true,
+        status: 'present',
+        valid: true,
+        issuer: 'Google LLC',
+        claimGenerator: 'Imagen',
+        signedAt: '2026-11-11T09:00:01Z'
+      }
+    });
+    const { container } = render(<VerificationCard />);
+    fireEvent.click(screen.getByLabelText('Image or audio file'));
+    const file = new File(['png'], 'a.png', { type: 'image/png' });
+    fireEvent.change(document.getElementById('verify-file'), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    const details = await screen.findByTestId('provenance-record');
+    expect(screen.getByText(/Made with: Imagen\./)).toBeInTheDocument();
+    expect(details).toHaveTextContent('Google LLC');
+    expect(details).toHaveTextContent('Imagen');
+    expect(details).toHaveTextContent('synthid');
+    // The kind is translated, not the stored `image`.
+    expect(details).toHaveTextContent('KindImage');
+    expect(details).toHaveTextContent('(trust not evaluated)');
+    expect(container.textContent).not.toMatch(BANNED);
+  });
+
   test('file: sends the file with its kind and shows C2PA as "valid (trust not evaluated)"', async () => {
     mockApi.verifyFile.mockResolvedValue({
       found: false,

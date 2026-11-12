@@ -20,6 +20,7 @@ without reverse-engineering the codebase.
 | Usage daily rollups | Yes | `contents/data/usage-daily/*.json`; **365 d** default | `usageTracking.dailyRetentionDays` |
 | Usage monthly rollups | Yes | `contents/data/usage-monthly/*.json`; **indefinite** default | `usageTracking.monthlyRetentionDays` |
 | Usage-limit counters | Yes (when a user calls a model) | `contents/data/quota-usage.json`; users unseen for 400 d are removed | See [Usage Limits](usage-limits.md) |
+| Provenance records (hash of each AI output, EU AI Act) | Yes; **no user** unless `provenance.recordUser` names one | `provenance-records` storage namespace; **365 d** default | `provenance.storeRecords`, `provenance.retentionDays`; `provenance.recordUser` (`none` default, or `anonymous` (keyed hash) / `pseudonymous` (plain hash) / `identified` to name the user; admins only; kept on user deletion until retention ends). See [Provenance Records](provenance.md#who-a-record-names) |
 | Feedback (rating + 300-char snippet + comment) | Only when a user rates | `contents/data/feedback.jsonl`; **indefinite** default | `features.feedbackTracking: false`, **`usageTracking.feedbackRetentionDays`** (new) |
 | Structured log lines | Yes (stdout) | Console always; optional file `logs/app.log` | `logging.level`, `logging.file.enabled` |
 | Logger IP context | Yes (merged into every line) | Same as above | **`logging.anonymizeIp`** (new) |

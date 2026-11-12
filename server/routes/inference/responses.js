@@ -871,7 +871,8 @@ export default function registerResponsesRoutes(
         text: result.content || '',
         model: { id: model.id },
         modelConfig: model,
-        marking: result.marking?.text
+        marking: result.marking?.text,
+        user
       });
       await storeAnswer({
         status: 'completed',

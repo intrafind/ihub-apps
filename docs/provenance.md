@@ -61,7 +61,7 @@ the hash of the final step's text, so a user who copied only the final answer st
 
 | Channel | Where |
 | --- | --- |
-| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens model, time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) shows no button; a stopped answer that had already written text does show it. |
+| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer an **AI generated: details** button (an info icon beside the "based on…" badge) opens the model (its display name and id), time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) shows no button; a stopped answer that had already written text does show it. |
 > **Master switch.** While the [EU AI Act features are switched off](ai-act.md#switching-the-features-off) no record is made, no `provenance` member or `X-AI-*` header is sent and `_verify` answers `403 FEATURE_DISABLED`. Existing records are kept, expire on schedule and answer again after switching on.
 
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |
@@ -109,6 +109,7 @@ proof of human authorship.
 "provenance": {
   "retentionDays": 365,
   "storeRecords": true,
+  "recordUser": "none",
   "verify": { "access": "authenticated" },
   "media": { "maxVerifyBytes": 52428800, "readC2pa": true }
 }
@@ -116,22 +117,48 @@ proof of human authorship.
 
 - `retentionDays`: records older than this are removed by a daily sweep. `0` or less keeps them forever.
 - `storeRecords`: `false` still attaches the object everywhere but keeps no records, so nothing can be looked up.
+- `recordUser`: who a stored record names; see [Who a record names](#who-a-record-names). `none` (default),
+  `anonymous`, `pseudonymous` or `identified`.
 - `verify.access`: `authenticated` (default) or `public`.
 - `media.maxVerifyBytes`: largest image or audio file `_verify` accepts (default 50 MiB, `413` above).
 - `media.readC2pa`: read the C2PA manifest of generated images and uploaded files (default on).
 
-Edit these in `platform.json`; migrations V243 and V244 write the defaults.
+Edit these in **Admin → EU AI Act → Provenance settings** or in `platform.json`; migrations V243, V244 and
+V246 write the defaults.
 
 ## What is stored
 
 One document per content hash in the `provenance-records` namespace of the [storage provider](storage.md),
 holding up to the 20 newest records for that hash (the same text answered many times, such as "Yes", must not
 grow a document without bound). Each record is the provenance object: spec, generator, model,
-`output_id`, `created_at`, `content_hash`. **No text, prompt, user, chat or run ID.**
+`output_id`, `created_at`, `content_hash`, and `user` only when `recordUser` asks for it (below). **No text,
+prompt, name, email, chat or run ID.**
 
-A short text's hash can be guessed by someone with disk access. They learn only that this installation once
-produced that string, with no attribution. With `chats.enabled: false` the store is the only trace of outputs;
-set `storeRecords` to `false` if that is not acceptable.
+### Who a record names
+
+`provenance.recordUser`:
+
+| Mode | `user` in the record | |
+| --- | --- | --- |
+| `none` (default) | absent | The record describes the output only. |
+| `anonymous` | `{ "mode": "anonymous", "id": "usr_<16 hex>" }` | A secured hash: the user id hashed with a secret only the server holds (the installation pepper `contents/.usage-pepper`, never shown in any UI or API). Records of one person share the value; the user cannot be determined from it. It is the same value usage tracking (`anonymous` mode) and the pseudonymized run ledger use for that user, so provenance records can be joined with those data per person, still without naming them. |
+| `pseudonymous` | `{ "mode": "pseudonymous", "id": "<64 hex>" }` | A plain SHA-256 of the user id. Whoever knows a user id can compute it and attribute the record; the id cannot be read from it. |
+| `identified` | `{ "mode": "identified", "id": "<user id>" }` | The user id, never name, email or groups. The records then hold personal data. |
+
+- **Only in the stored record.** The provenance object in a chat message, an API response, an MCP or A2A
+  result never carries `user`. `POST /api/eu-ai-act/provenance/_verify` returns it to admins only (the
+  verification card on the EU AI Act page shows it); any other caller gets the record without it.
+- **Applies from the moment it is saved.** Records already stored keep what they had.
+- **Kept when a user is deleted**, like the rest of the record, until the retention period ends. With
+  `pseudonymous` or `identified` the records hold personal data for that time: cover them in your data
+  protection documentation.
+- Machine callers (API keys, OAuth clients) are named by the id they act as; every anonymous visitor is `anonymous`.
+
+A short text's hash can be guessed by someone with disk access. With `recordUser: none` they learn only that
+this installation once produced that string, with no attribution. With `pseudonymous` or `identified` the record
+also tells them who produced it (directly, or by hashing a known user id); hiding `user` from non-admin verify
+callers does not protect the stored records against disk access. With `chats.enabled: false` the store is the
+only trace of outputs; set `storeRecords` to `false` if that is not acceptable.
 
 **Scale.** The filesystem provider keeps one file per hash in one directory. That is comfortable to roughly
 one to two million records, and the daily sweep reads every document; a retention below 365 days lowers the
@@ -165,8 +192,14 @@ of a SynthID signal. A picture that is already within the upload size limit (`ma
 
 Each generated image gets one record the moment it arrives, whether or not the artifact store keeps it (a 4K
 PNG over the artifact cap is recorded, sent and not stored), and on every channel (chat, agents, workflows,
-MCP, A2A). The SSE image delta carries `provenance: { outputId, contentHash }`; the stored message descriptor
-carries `outputId`; the MCP image block carries `_meta.provenance`; the A2A artifact `metadata.provenance`.
+MCP, A2A). The SSE image delta and the stored message descriptor carry `provenance`, the object of a text
+answer with `kind: "image"`, the model, the time and the hash of the raw bytes (the installation and the
+provider marking are in the stored record, which is read after the picture was sent); the descriptor also
+carries `outputId`. The MCP image block carries `_meta.provenance`; the A2A artifact `metadata.provenance`.
+
+In the chat every generated picture has an **AI-generated image: details** button (an info icon next to
+download and share) that opens the model, time, declared marking, a shortened hash with **Copy hash** and
+the output ID, the same as under a text answer. A picture stored before this change has no button.
 
 A media record is the usual provenance object with `kind: "image"`, `content_hash.normalization:
 "none"` (the hash is over the raw bytes, not the base64 text), `content_hash.bytes` and `mime_type`, plus:

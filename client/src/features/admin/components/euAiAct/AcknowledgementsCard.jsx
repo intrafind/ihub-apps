@@ -63,12 +63,12 @@ export default function AcknowledgementsCard({ acknowledgements, onChanged, paus
           <Badge tone="neutral" icon={<Icon name="minus-circle" size="sm" />}>
             {t('admin.euAiAct.ack.off', 'Acknowledgement is switched off')}
           </Badge>
-          <Link
-            to="/admin/advanced"
+          <a
+            href="#ai-acknowledgement"
             className="text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:underline"
           >
             {t('admin.euAiAct.fix.openAdvanced', 'Open settings')}
-          </Link>
+          </a>
         </div>
       ) : (
         <>

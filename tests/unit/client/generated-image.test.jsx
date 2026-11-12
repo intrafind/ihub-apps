@@ -225,3 +225,34 @@ describe('the "download it or lose it" note', () => {
     expect(screen.queryByText(/not persisted when you navigate away/i)).not.toBeInTheDocument();
   });
 });
+
+describe('the "AI generated" details of a picture (EU AI Act Art. 50(2))', () => {
+  const provenance = {
+    spec: 'intrafind-provenance/1.0',
+    ai_generated: true,
+    kind: 'image',
+    model: { id: 'gemini-image', watermark: { by: 'provider', scheme: 'synthid', applied: true } },
+    output_id: '01JC8M2T6V0Q4W7R9XK3B5N1ZD',
+    created_at: '2026-11-11T09:00:00Z',
+    content_hash: { alg: 'sha-256', normalization: 'none', value: 'a'.repeat(64) }
+  };
+
+  it('offers the details button on a picture the server attached provenance to', () => {
+    render(
+      <GeneratedImage
+        image={{ mimeType: 'image/png', data: 'iVBORw0KGgo=', provenance }}
+        index={0}
+        models={[{ id: 'gemini-image', name: { en: 'Gemini Image' } }]}
+      />
+    );
+    expect(screen.getByTestId('provenance-button')).toHaveAttribute(
+      'aria-label',
+      'AI-generated image: details'
+    );
+  });
+
+  it('shows no button on a picture without provenance (stored before it existed)', () => {
+    render(<GeneratedImage image={{ mimeType: 'image/png', data: 'iVBORw0KGgo=' }} index={0} />);
+    expect(screen.queryByTestId('provenance-button')).not.toBeInTheDocument();
+  });
+});

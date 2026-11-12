@@ -24,7 +24,7 @@ Every call to a text model carries this rule as the last text of the system prom
   chat, the inference API (`/api/inference/v1/*`), MCP, A2A, agents, workflows and scheduled tasks all
   get it. See [LLM Client](llm-client.md#ai-disclosure-guardrail).
 - **Wording is global, the rule is not optional.** An admin can reword it for the whole platform in
-  `aiDisclosure.guardrail.text` (`platform.json`) or **Admin → Advanced → AI notice**; empty uses the
+  `aiDisclosure.guardrail.text` (`platform.json`) or **Admin → EU AI Act → AI notice**; empty uses the
   built-in text above (up to 2000 characters). There is no app setting, request field, environment variable or
   per-feature switch for it, and no per-app wording. The only way to turn it off is the audited
   [master switch](#switching-the-features-off), which records who, when and why. An app prompt or a client-supplied `system` message cannot remove it:
@@ -43,7 +43,7 @@ Answers can be wrong, so please check important information.*
 
 - It is interface only: never a message, never sent to the model, never stored. A stored chat with
   messages does not show it; an empty chat shows it again.
-- **Platform:** `aiDisclosure.firstTurnNotice` in `platform.json`, or **Admin → Advanced → AI notice**.
+- **Platform:** `aiDisclosure.firstTurnNotice` in `platform.json`, or **Admin → EU AI Act → AI notice**.
   `enabled: false` hides it in every app. `text` is `{ "en": "…", "de": "…" }`; an empty map uses the
   built-in text in the user's language. Inline Markdown (links) is allowed.
 - **Per app:** `aiDisclosure.firstTurnNotice` in the app, or the *AI notice* section of the app editor:
@@ -62,12 +62,13 @@ Answers can be wrong, so please check important information.*
 Before their first chat message, users confirm a short statement about using AI. It is the evidence
 that people were told, not a legal opinion: the wording is yours.
 
-- **Platform:** `aiAcknowledgement` in `platform.json`, or **Admin → Advanced → AI acknowledgement**.
+- **Platform:** `aiAcknowledgement` in `platform.json`, or **Admin → EU AI Act → AI acknowledgement**.
   `enabled` switches the whole feature, `enforce` decides whether the server refuses messages without
   a confirmation (`true`, the default) or the dialog only asks (`false`). `text` is `{ "en": "…", "de": "…" }`
   in plain text (never HTML); `policyUrl` is an `https://` URL or a `/path`, shown as a link in the dialog.
 - **Versioning.** A confirmation is valid when the user confirmed a version at or above
-  `requiredVersion`. Editing the text never asks anyone again; **Request again** raises the version by one
+  `requiredVersion`. Editing the text never asks anyone again; **Request again** (on the
+  *Acknowledgements* card and on Admin → Users) raises the version by one
   and everybody is asked at their next message. `requiredVersion` and `resetAt` are written only by the
   admin actions, never by a settings save.
 - **What is stored.** On the user in `users.json`: `aiAcknowledgements: [{ version, textHash,
@@ -186,6 +187,7 @@ it; "Not found" only means there is no record, not that a person wrote it.
   |---|---|---|---|
   | `provenance.retentionDays` | 365 | 0 to 36500 | Days records are kept; 0 keeps them forever. |
   | `provenance.storeRecords` | true | on/off | Off still attaches the provenance object but keeps no record. |
+  | `provenance.recordUser` | `none` | `none`, `anonymous`, `pseudonymous`, `identified` | Who a stored record names: nobody, a secured (keyed) hash, a plain hash of the user id, or the user id. Only admins see it when checking; kept when the user is deleted; see [Who a record names](provenance.md#who-a-record-names). |
   | `provenance.verify.access` | `authenticated` | `authenticated`, `public` | Who may call `POST /api/eu-ai-act/provenance/_verify`. |
   | `provenance.media.maxVerifyBytes` | 52428800 (50 MiB) | 1024 bytes to 1 GiB | Largest uploaded file; the form shows MiB. |
   | `provenance.media.readC2pa` | true | on/off | Read C2PA marks of images. |
@@ -195,7 +197,7 @@ it; "Not found" only means there is no record, not that a person wrote it.
 
   All of them apply at once; no restart is needed. The watermark tunables are optional: empty in the form
   removes the key and the default applies.
-- **Upgrade:** migration V243 writes the defaults. Nothing changes for users; API consumers see an extra
+- **Upgrade:** migrations V243 and V246 write the defaults. Nothing changes for users; API consumers see an extra
   `provenance` member and two headers.
 
 Details: [Provenance Records](provenance.md).
@@ -211,7 +213,8 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
 
 ## Admin page
 
-**Admin → EU AI Act** (`/admin/eu-ai-act`) is the one place to see and operate the measures above. Five cards:
+**Admin → EU AI Act** (`/admin/eu-ai-act`) is the one place to see and operate the measures above. Below the
+master switch, these cards:
 
 - **Configuration check.** One row per check with a level (OK, Attention, Failing) and a link to where it is fixed.
   The server decides every level (`GET /api/admin/eu-ai-act/status`, admin only, never a key or token). Failing is
@@ -221,7 +224,12 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
   without limit" and is OK. Detectors are probed with a throwaway key (3 s timeout, cached 30 s; *Check again*
   probes again) through the SSL whitelist and proxy. **Green means "configured as designed", not "legally
   compliant".** Disabled models are not checked.
-- **Acknowledgements.** Counts for registered users and the same actions as the Users page (shared component).
+- **AI notice** (`#ai-notice`). The first-turn notice (on/off, text per language) and the wording of the
+  guardrail rule; see [First-turn notice](#first-turn-notice) and [Guardrail prompt](#guardrail-prompt).
+- **AI acknowledgement** (`#ai-acknowledgement`). On/off, enforcement, text per language, policy link and the
+  current version; see [AI-use acknowledgement](#ai-use-acknowledgement).
+- **Acknowledgements.** Counts for registered users and the same actions as the Users page (shared component),
+  including **Request again**.
 - **Watermark keys.** Generate, add, reveal, delete retired keys and **Make active** on a retired key
   (rollback, for example when vLLM was not updated in time). Making a key active retires the current one,
   asks you to update vLLM's `--watermark-config` (the printed option can be shown again, which is audited) and
@@ -235,11 +243,14 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
   the consequence. Every change is written to the audit log (resource `provenanceSettings`, old and new values),
   and the configuration check refreshes after saving.
 - **Verification.** Text or image/audio upload against `POST /api/eu-ai-act/provenance/_verify`. Rows: output record, watermark
-  (text), C2PA (media), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion",
-  never "not watermarked".
+  (text), C2PA (media: signer, claim generator, signing time, digital source type, signature intact; trust not
+  evaluated), SynthID "declared, not detectable". Too short or detector unreachable is "no conclusion", never
+  "not watermarked". A match shows the full stored provenance record field by field (output ID, time, model,
+  marking, generator and installation, hash, for images the C2PA manifest as read at generation), and as JSON
+  with **Copy JSON**.
 
-The other two platform settings of this feature have forms of their own on **Admin → Advanced**: the first-turn
-notice (`aiDisclosure`) and the AI-use acknowledgement (`aiAcknowledgement`).
+The fix links of the configuration check jump to the card that fixes them (`/admin/eu-ai-act#ai-notice`,
+`#ai-acknowledgement`, `#watermark-keys`).
 
 Image marking is declared per model in the model editor (*Image marking*, shown for image-generating models).
 

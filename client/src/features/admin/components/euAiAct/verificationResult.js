@@ -12,7 +12,7 @@
  * `info` (nothing to conclude: not checked, declared only).
  *
  * @param {Object} result - The response body
- * @returns {{headline: 'match'|'none'|'inconclusive', rows: Array<Object>, caveats: string[]}}
+ * @returns {{headline: 'match'|'none'|'inconclusive', rows: Array<Object>, records: Array<Object>, caveats: string[]}}
  */
 export function summarizeVerification(result) {
   const rows = [];
@@ -60,6 +60,8 @@ export function summarizeVerification(result) {
         state: 'present',
         valid: c2pa.valid === true,
         issuer: c2pa.issuer || null,
+        claimGenerator: c2pa.claimGenerator || null,
+        signedAt: c2pa.signedAt || null,
         digitalSourceType: c2pa.digitalSourceType || c2pa.xmpDigitalSourceType || null
       });
     } else if (c2pa.status === 'absent') {
@@ -77,6 +79,8 @@ export function summarizeVerification(result) {
   return {
     headline: positive ? 'match' : inconclusive ? 'inconclusive' : 'none',
     rows,
+    // The stored records, newest first: shown in full under the rows.
+    records: Array.isArray(result.records) ? result.records : [],
     caveats: Array.isArray(result.caveats) ? result.caveats : []
   };
 }

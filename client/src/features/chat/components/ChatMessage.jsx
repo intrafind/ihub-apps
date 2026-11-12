@@ -1070,7 +1070,13 @@ function ChatMessage({
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
             {message.images.map((image, idx) => (
-              <GeneratedImage key={image.id || idx} image={image} chatId={chatId} index={idx} />
+              <GeneratedImage
+                key={image.id || idx}
+                image={image}
+                chatId={chatId}
+                index={idx}
+                models={models}
+              />
             ))}
           </div>
         )}
@@ -1138,7 +1144,9 @@ function ChatMessage({
                       knowledgeScope={message.knowledgeScope}
                     />
                   )}
-                  {showProvenance && <ProvenanceInfo provenance={message.provenance} />}
+                  {showProvenance && (
+                    <ProvenanceInfo provenance={message.provenance} models={models} />
+                  )}
                 </div>
               )}
             </div>

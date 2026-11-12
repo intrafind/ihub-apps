@@ -271,13 +271,16 @@ export class ResultAccumulator {
    */
   _stampImages(images) {
     for (const image of images) {
-      const stamp = stampGeneratedImage(image);
+      const stamp = stampGeneratedImage(image, { model: this.meta.model });
       if (!stamp?.created || !this.meta.model) continue;
       // After the current chunk has been delivered: the manifest read must not
       // delay the stream. Awaited before the call ends (`settleMedia`).
       this._mediaRecords.push(
         new Promise(resolve => setImmediate(resolve)).then(() =>
-          recordGeneratedImage(image, { model: this.meta.model })
+          recordGeneratedImage(image, {
+            model: this.meta.model,
+            user: this.meta.user || null
+          })
         )
       );
     }
@@ -908,7 +911,9 @@ export class LLMClient {
       request,
       startedAt,
       stream: effectiveStream,
-      marking: request.marking ?? null
+      marking: request.marking ?? null,
+      // Who a generated image's provenance record may name (`provenance.recordUser`).
+      user: options.user || telemetry.user || telemetry.reportUser || null
     };
 
     this._recordRequestHeader({

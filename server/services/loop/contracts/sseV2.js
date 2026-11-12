@@ -102,8 +102,12 @@ export const stepDeltaData = z.object({
     .object({
       mimeType: z.string(),
       data: z.string(),
-      /** Output id and raw-bytes hash (EU AI Act Art. 50(2), #3328). */
-      provenance: z.object({ outputId: z.string(), contentHash: z.string() }).optional(),
+      /**
+       * Provenance object of the picture (EU AI Act Art. 50(2), #3328): the
+       * spec-shaped object of a text answer with `kind: image` and the hash of
+       * the raw bytes.
+       */
+      provenance: provenanceContractSchema.optional(),
       thoughtSignature: z.string().optional()
     })
     .optional(),

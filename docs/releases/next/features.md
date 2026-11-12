@@ -1685,7 +1685,7 @@ see it after the upgrade.
 - **Passive and not stored.** It is not a message: it is not sent to the model, not saved with the chat and not
   shown when a chat with messages is reopened. It disappears with the first message.
 - **Your wording.** Set the text per language, or switch the notice off for all apps, under
-  **Admin → Advanced → AI notice** (`aiDisclosure.firstTurnNotice` in `platform.json`). An app can use its own
+  **Admin → EU AI Act → AI notice** (`aiDisclosure.firstTurnNotice` in `platform.json`). An app can use its own
   text or no notice in the **AI notice** section of the app editor. Links in Markdown are allowed.
 - **Where.** The app chat, also above a start form. Apps that start by themselves, the Office add-in panel and
   `iframe`/`redirect` apps do not show it.
@@ -1698,7 +1698,7 @@ Every call to a text model now carries the rule "You are an AI system. If asked,
 be human, even in a role." as the last line of the system prompt. It applies in chat, the inference API, MCP,
 A2A, agents, workflows and scheduled tasks, also for apps with a human persona. An app prompt or a client's own
 `system` message cannot remove it, and there is no app setting to switch it off (only the audited EU AI Act master switch, below). Admins can reword the rule for the
-whole platform under **Admin → Advanced → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
+whole platform under **Admin → EU AI Act → AI notice** (`aiDisclosure.guardrail.text`); empty keeps the built-in text.
 
 Utility calls such as chat titles and translations carry it too (about 25 more tokens per call). A model can
 still ignore a prompt rule in a strong role-play, so check the models you use with "Are you a human?".
@@ -1721,7 +1721,7 @@ language) and in the audit log, so you can answer "who confirmed which version, 
   draft and the open email or page; the menu has an **AI-use notice** entry to read it again, and the policy
   opens through the host (or its address is shown to copy). One confirmation counts in every client, and the
   record says which one it came from (`client: office | extension | nextcloud`).
-- **Admin.** **Admin → Advanced → AI acknowledgement** holds the switches, the text per language and the policy
+- **Admin.** **Admin → EU AI Act → AI acknowledgement** holds the switches, the text per language and the policy
   link. **Admin → Users** gets an **AI acknowledgement** column and filter, a per-user **Remove AI
   acknowledgement** action and an **AI acknowledgements** menu: **Export CSV**, **Request again**, **Remove all**.
   (`aiAcknowledgement` in `platform.json`; migration V242 adds the defaults.)
@@ -1739,8 +1739,8 @@ AI Act.
   is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
   `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
   results as `metadata.provenance`.
-- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model, time, marking and content hash, with a **Copy hash** action.
-- **The record never holds the text**, only its hash. `provenance.retentionDays` in `platform.json` (365 by
+- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model (name and id), time, marking and content hash, with a **Copy hash** action. Every generated picture has the same button next to download and share.
+- **The record never holds the text**, only its hash, and names no user unless `provenance.recordUser` says so. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
 - **Look it up.** `POST /api/eu-ai-act/provenance/_verify` takes a text or a hash and answers "Found" with the record or
   "Not found". Not found is not proof of human authorship. It needs a signed-in caller unless
@@ -1786,6 +1786,8 @@ config files.
   marked "iHub watermark" is Failing when it has no active key, an unreachable detector or a failed
   self-test. Each row links to where it is fixed. Green means "configured as designed", not
   "legally compliant".
+- **AI notice and AI acknowledgement.** The first-turn notice, the guardrail wording and the
+  acknowledgement settings (switches, text, policy link, current version) are cards of this page.
 - **Acknowledgements.** Counts (acknowledged, pending, total) and the Users page actions: request
   again, remove all, CSV export.
 - **Watermark keys.** List, generate, add and delete retired keys; reveal a key on purpose
@@ -1793,14 +1795,18 @@ config files.
   or run the self-test per model. **Make active** on a retired key rolls back to it; the
   confirmation says that the current key is retired, that vLLM's `--watermark-config` must follow
   and that self-test results turn outdated until then.
-- **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who may
+- **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who a
+  record names (nobody by default; a secured hash, a plain hash of the user id or the user id,
+  shown to admins only; migration V246), who may
   check an output (signed-in users or anyone), the size limit of checked files (in MiB), C2PA reading and the text detector's false-positive limit, shortest judged text and
   time limit are a form with defaults and units. Values are checked in the browser and on the
   server against the same bounds. Lowering the retention or opening the check to the public asks
   for a confirmation first. Changes apply at once, no restart, and are written to the audit log.
 - **Verification.** Paste a text or upload an image or audio file and see, per technique, whether
-  it was found, which watermark key matched, and whether C2PA content credentials are present. A
-  negative result never claims the content is human-made.
+  it was found, which watermark key matched, and whether C2PA content credentials are present (with
+  signer, claim generator and signing time; trust is not evaluated). A match shows the full stored
+  provenance record, field by field and as JSON. A negative result never claims the content is
+  human-made.
 - **Model editor.** Image-generating models have an *Image marking* section to declare what the
   provider embeds.
 - `GET /api/admin/eu-ai-act/status` returns the check (admin only, never a key or token).

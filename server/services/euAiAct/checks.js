@@ -39,7 +39,9 @@ const fixModel = modelId => ({
   href: `/admin/models/${encodeURIComponent(modelId)}`,
   labelKey: `${FIX}.openModel`
 });
-const FIX_ADVANCED = { href: '/admin/advanced', labelKey: `${FIX}.openAdvanced` };
+// The AI notice and the acknowledgement settings are cards of the EU AI Act page.
+const FIX_NOTICE = { href: '/admin/eu-ai-act#ai-notice', labelKey: `${FIX}.openAdvanced` };
+const FIX_ACK = { href: '/admin/eu-ai-act#ai-acknowledgement', labelKey: `${FIX}.openAdvanced` };
 const FIX_KEYS = { href: '/admin/eu-ai-act#watermark-keys', labelKey: `${FIX}.openKeys` };
 
 /** The marking of a model for one kind, normalised. */
@@ -80,10 +82,10 @@ export function platformChecks({ platform, acknowledgements, provenance }) {
   out.push(
     noticeOn
       ? check('notice.enabled', LEVEL.OK, 'notice.ok', 'The first-message notice is on.', {
-          fix: FIX_ADVANCED
+          fix: FIX_NOTICE
         })
       : check('notice.enabled', LEVEL.WARN, 'notice.off', 'The first-message notice is off.', {
-          fix: FIX_ADVANCED
+          fix: FIX_NOTICE
         })
   );
 
@@ -94,7 +96,7 @@ export function platformChecks({ platform, acknowledgements, provenance }) {
         LEVEL.WARN,
         'ack.off',
         'The AI-use acknowledgement is off. It is optional, but it is the evidence that people were told.',
-        { fix: FIX_ADVANCED }
+        { fix: FIX_ACK }
       )
     );
   } else {
@@ -122,7 +124,7 @@ export function platformChecks({ platform, acknowledgements, provenance }) {
             LEVEL.WARN,
             'ack.notEnforced',
             'Enforcement is off: users are asked, but not blocked.',
-            { fix: FIX_ADVANCED }
+            { fix: FIX_ACK }
           )
     );
   }

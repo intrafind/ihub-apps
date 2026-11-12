@@ -34,7 +34,7 @@ import { createChatChannel } from '../services/chat/chatChannel.js';
 import { storeGeneratedArtifacts } from '../services/chat/chatMaterializer.js';
 import { stepDeltaData } from '../services/loop/contracts/sseV2.js';
 import { readC2pa } from '../services/provenance/c2paReader.js';
-import { hashBytes } from '../services/provenance/mediaMarking.js';
+import { hashBytes, publicImageProvenance } from '../services/provenance/mediaMarking.js';
 import registerChatRoutes from '../routes/chats.js';
 import errorHandler from '../middleware/errorHandler.js';
 import { flipByte, readSignedJpeg } from './helpers/mediaFixtures.js';
@@ -129,8 +129,14 @@ describe('a generated image keeps its bytes from the provider to the download', 
     const delta = frames.find(f => f.data?.kind === 'image').data;
     assert.equal(delta.image.data, base64);
     assert.equal(hashBytes(Buffer.from(delta.image.data, 'base64')), originalHash);
-    assert.deepEqual(delta.image.provenance, image.provenance);
-    assert.deepEqual(stepDeltaData.parse(delta).image.provenance, image.provenance);
+    assert.deepEqual(delta.image.provenance, publicImageProvenance(image.provenance));
+    assert.equal(delta.image.provenance.ai_generated, true);
+    assert.equal(delta.image.provenance.kind, 'image');
+    assert.equal(delta.image.provenance.output_id, image.provenance.outputId);
+    assert.equal(delta.image.provenance.content_hash.value, originalHash);
+    assert.equal(delta.image.provenance.model.id, MODEL.id);
+    assert.equal(delta.image.provenance.model.watermark.by, 'provider');
+    assert.deepEqual(stepDeltaData.parse(delta).image.provenance, delta.image.provenance);
 
     // 3. The artifact store.
     await getChatRepository().ensureChat({
@@ -147,6 +153,7 @@ describe('a generated image keeps its bytes from the provider to the download', 
     });
     assert.equal(descriptor.sha256, originalHash, 'the store records the same hash');
     assert.equal(descriptor.outputId, image.provenance.outputId);
+    assert.deepEqual(descriptor.provenance, delta.image.provenance, 'a reopened chat shows it');
 
     // 4. The serve route.
     const served = await getArtifact('chat-bytes', descriptor.id);
@@ -161,6 +168,7 @@ describe('a generated image keeps its bytes from the provider to the download', 
     const records = await getProvenanceStore().findByHash(originalHash);
     assert.equal(records.length, 1);
     assert.equal(records[0].output_id, image.provenance.outputId);
+    assert.equal(records[0].created_at, delta.image.provenance.created_at, 'one time');
     assert.equal(records[0].kind, 'image');
     assert.equal(records[0].content_hash.normalization, 'none');
     assert.equal(records[0].content_hash.bytes, original.length);

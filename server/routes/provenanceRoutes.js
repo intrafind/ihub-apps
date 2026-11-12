@@ -24,6 +24,8 @@ import { ServiceError } from '../utils/ServiceError.js';
 import { isStorageReady } from '../storage/bootstrap.js';
 import { getProvenanceStore } from '../services/provenance/ProvenanceStore.js';
 import { provenanceSettings } from '../services/provenance/provenanceSettings.js';
+import { recordForCaller } from '../services/provenance/provenanceUser.js';
+import { isAdmin } from '../utils/authorization.js';
 import { detectWatermark } from '../services/provenance/watermark/detect.js';
 import {
   isJsonRequest,
@@ -169,6 +171,10 @@ export default function registerProvenanceRoutes(app) {
             provenanceSettings().media.maxVerifyBytes
           );
           const result = await verifyMediaFile(buffer, { kind });
+          // Who produced it (`provenance.recordUser`) is for admins only.
+          if (result.records) {
+            result.records = result.records.map(r => recordForCaller(r, isAdmin(req.user)));
+          }
           res.setHeader('Cache-Control', 'no-store');
           return res.json(result);
         }
@@ -192,7 +198,12 @@ export default function registerProvenanceRoutes(app) {
           }
           return res.json(body);
         }
-        return res.json({ found: true, normalization, records });
+        // Who produced it (`provenance.recordUser`) is for admins only.
+        return res.json({
+          found: true,
+          normalization,
+          records: records.map(r => recordForCaller(r, isAdmin(req.user)))
+        });
       } catch (error) {
         return next(error);
       }

@@ -13,6 +13,7 @@
  */
 import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
+import { publicImageProvenance } from '../provenance/mediaMarking.js';
 
 function thoughtToDelta(thought) {
   if (typeof thought === 'string') return { content: thought };
@@ -74,6 +75,7 @@ export function createChatChannel({ chatId, runId = null, stream }) {
         for (const image of chunk.images) {
           if (!image?.mimeType || !image?.data) continue;
           state.answerOutput = true;
+          const provenance = publicImageProvenance(image.provenance);
           emit(SSE_V2_EVENTS.STEP_DELTA, {
             step,
             kind: 'image',
@@ -81,16 +83,10 @@ export function createChatChannel({ chatId, runId = null, stream }) {
               mimeType: String(image.mimeType),
               data: String(image.data),
               // Stamped once in `ResultAccumulator.push` (EU AI Act Art. 50(2)):
-              // the output id and the hash of the raw bytes. The server decides,
-              // the client renders; `data` is never touched.
-              ...(image.provenance?.outputId
-                ? {
-                    provenance: {
-                      outputId: String(image.provenance.outputId),
-                      contentHash: String(image.provenance.contentHash)
-                    }
-                  }
-                : {}),
+              // the provenance object of the picture (model, time, output id,
+              // hash of the raw bytes). The server decides, the client renders
+              // the "AI generated" details from it; `data` is never touched.
+              ...(provenance ? { provenance } : {}),
               ...(image.thoughtSignature
                 ? { thoughtSignature: String(image.thoughtSignature) }
                 : {})

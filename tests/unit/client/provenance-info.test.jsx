@@ -69,6 +69,98 @@ describe('ProvenanceInfo', () => {
     expect(panel.textContent).not.toMatch(/authentic|human-written/i);
   });
 
+  it('names the model by its display name and id when the model list has it', () => {
+    render(
+      <ProvenanceInfo
+        provenance={provenance}
+        models={[{ id: 'gpt-x', name: { en: 'GPT X', de: 'GPT X' } }]}
+      />
+    );
+    fireEvent.click(screen.getByTestId('provenance-button'));
+    expect(screen.getByTestId('provenance-model')).toHaveTextContent('GPT X (gpt-x)');
+  });
+
+  it('keeps the bare id for a model that is not in the list', () => {
+    render(<ProvenanceInfo provenance={provenance} models={[]} />);
+    fireEvent.click(screen.getByTestId('provenance-button'));
+    expect(screen.getByTestId('provenance-model')).toHaveTextContent(/^gpt-x$/);
+  });
+
+  it('speaks of an image for an image provenance object', () => {
+    render(
+      <ProvenanceInfo
+        provenance={{
+          ...provenance,
+          kind: 'image',
+          content_hash: { alg: 'sha-256', normalization: 'none', value: HASH }
+        }}
+        placement="bottom"
+      />
+    );
+    const button = screen.getByTestId('provenance-button');
+    expect(button).toHaveAttribute('aria-label', 'AI-generated image: details');
+    fireEvent.click(button);
+    const panel = screen.getByTestId('provenance-panel');
+    expect(panel).toHaveTextContent('AI-generated image');
+    expect(panel).toHaveTextContent('The provenance record keeps this hash, not the image itself');
+    expect(panel.className).toContain('top-full');
+  });
+
+  // jsdom lays nothing out: give the panel a height so "room" means something.
+  const realScrollHeight = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollHeight');
+  beforeAll(() => {
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => 300
+    });
+  });
+  afterAll(() => {
+    delete HTMLElement.prototype.scrollHeight;
+    if (realScrollHeight)
+      Object.defineProperty(Element.prototype, 'scrollHeight', realScrollHeight);
+  });
+
+  it('opens below when there is no room above (an answer at the top of the chat)', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    button.getBoundingClientRect = () => ({ top: 40, bottom: 64, left: 0, right: 24 });
+    fireEvent.click(button);
+    expect(screen.getByTestId('provenance-panel').className).toContain('top-full');
+  });
+
+  it('caps the panel to the roomier side when neither side fits', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    // A 300 px panel in a 400 px viewport: 150 px above, 226 px below. Neither fits,
+    // so it opens below and is capped to that room minus the gap.
+    window.innerHeight = 400;
+    button.getBoundingClientRect = () => ({ top: 150, bottom: 174, left: 0, right: 24 });
+    fireEvent.click(button);
+    const panel = screen.getByTestId('provenance-panel');
+    expect(panel.className).toContain('top-full');
+    expect(panel.style.maxHeight).toBe('218px');
+    window.innerHeight = 768;
+  });
+
+  it('never caps the panel above the room there is, however small', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    // 80 px on each side in a 184 px viewport: capped to 72 px, not to a fixed floor.
+    window.innerHeight = 184;
+    button.getBoundingClientRect = () => ({ top: 80, bottom: 104, left: 0, right: 24 });
+    fireEvent.click(button);
+    expect(screen.getByTestId('provenance-panel').style.maxHeight).toBe('72px');
+    window.innerHeight = 768;
+  });
+
+  it('opens above when there is room above', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    button.getBoundingClientRect = () => ({ top: 600, bottom: 624, left: 0, right: 24 });
+    fireEvent.click(button);
+    expect(screen.getByTestId('provenance-panel').className).toContain('bottom-full');
+  });
+
   it('closes on Escape and on a click outside', () => {
     render(
       <div>

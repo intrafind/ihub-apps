@@ -6,6 +6,7 @@
  * shape and watermark matrix, the record store (including the "store contains
  * no text" guarantee), the retention sweep and the installation id.
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { describe, it, before, after, beforeEach } from 'node:test';
@@ -342,5 +343,82 @@ describe('recordTextOutput', () => {
     });
     const found = await getProvenanceStore().findByHash(hashText('The answer is 42.'));
     assert.equal(found[0].output_id, p.output_id);
+  });
+});
+
+describe('who a record names (provenance.recordUser)', () => {
+  let storage;
+  let configCache;
+  let recordedUser;
+  let recordForCaller;
+  let pseudonymOf;
+  let fingerprint;
+  before(async () => {
+    storage = await startTestStorage({ prefix: 'ihub-provenance-user-' });
+    ({ default: configCache } = await import('../configCache.js'));
+    ({ recordedUser, recordForCaller, pseudonymOf } =
+      await import('../services/provenance/provenanceUser.js'));
+    ({ fingerprint } = await import('../services/UserFingerprint.js'));
+  });
+  after(async () => {
+    configCache.setCacheEntry('config/platform.json', {});
+    await storage.stop();
+  });
+
+  const alice = { id: 'alice', name: 'Alice Example', email: 'alice@example.com' };
+
+  it('names nobody by default and for "none"', async () => {
+    configCache.setCacheEntry('config/platform.json', {});
+    assert.equal(await recordedUser({ user: alice }), null);
+    assert.equal(await recordedUser({ user: alice }, 'none'), null);
+    assert.equal(await recordedUser({ user: null }, 'identified'), null);
+  });
+
+  it('identified is the user id, never the name or email', async () => {
+    assert.deepEqual(await recordedUser({ user: alice }, 'identified'), {
+      mode: 'identified',
+      id: 'alice'
+    });
+  });
+
+  it('pseudonymous is the plain SHA-256 of the user id: anyone who knows the id can match it', async () => {
+    const named = await recordedUser({ user: alice }, 'pseudonymous');
+    assert.equal(named.mode, 'pseudonymous');
+    assert.equal(named.id, createHash('sha256').update('alice').digest('hex'));
+    assert.equal(named.id, pseudonymOf('alice'));
+  });
+
+  it('anonymous is a keyed hash: not the plain hash, stable for one user', async () => {
+    const named = await recordedUser({ user: alice }, 'anonymous');
+    assert.equal(named.id, await fingerprint('alice'));
+    assert.match(named.id, /^usr_[0-9a-f]{16}$/);
+    assert.ok(!pseudonymOf('alice').startsWith(named.id.slice(4)));
+    assert.deepEqual(await recordedUser({ user: alice }, 'anonymous'), named);
+  });
+
+  it('every anonymous visitor is "anonymous"', async () => {
+    assert.deepEqual(await recordedUser({ user: { id: 'anonymous' } }, 'identified'), {
+      mode: 'identified',
+      id: 'anonymous'
+    });
+  });
+
+  it('stores the user in the record only, never in the returned object', async () => {
+    configCache.setCacheEntry('config/platform.json', { provenance: { recordUser: 'identified' } });
+    const p = await recordTextOutput({
+      text: 'an answer naming its user',
+      model: { id: 'm1' },
+      user: alice
+    });
+    assert.equal(p.user, undefined);
+    const [stored] = await getProvenanceStore().findByHash(hashText('an answer naming its user'));
+    assert.deepEqual(stored.user, { mode: 'identified', id: 'alice' });
+    assert.ok(!JSON.stringify(stored).includes('alice@example.com'));
+  });
+
+  it('shows the user to admins only', () => {
+    const record = { output_id: 'x', user: { mode: 'identified', id: 'alice' } };
+    assert.deepEqual(recordForCaller(record, true), record);
+    assert.deepEqual(recordForCaller(record, false), { output_id: 'x' });
   });
 });

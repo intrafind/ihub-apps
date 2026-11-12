@@ -68,6 +68,7 @@ function effective(block) {
   return {
     retentionDays: p.retentionDays,
     storeRecords: p.storeRecords,
+    recordUser: p.recordUser,
     'verify.access': p.verify.access,
     'media.maxVerifyBytes': p.media.maxVerifyBytes,
     'media.readC2pa': p.media.readC2pa,
