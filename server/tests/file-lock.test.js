@@ -14,9 +14,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, before, describe, it } from 'node:test';
+import { after, before, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { withFileLock } from '../utils/fileLock.js';
+import { touchLease, withFileLock } from '../utils/fileLock.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const STEAL_WORKER = path.join(
@@ -245,5 +245,31 @@ describe('withFileLock', () => {
     );
     assert.ok(!fsSync.existsSync(lockPath));
     assert.equal(await withFileLock(lockPath, async () => 'ok'), 'ok');
+  });
+
+  it('keeps renewing after a transient read error instead of treating the lease as lost', async () => {
+    const lockPath = lockPathFor();
+    await fs.writeFile(lockPath, JSON.stringify({ owner: 'me', at: new Date().toISOString() }));
+    const realOpen = fs.open;
+    // A handle whose read fails once, as a hiccup on a network volume would.
+    mock.method(fs, 'open', async (...args) => {
+      const handle = await realOpen(...args);
+      handle.readFile = async () => {
+        throw Object.assign(new Error('read failed'), { code: 'EIO' });
+      };
+      return handle;
+    });
+    try {
+      assert.equal(
+        await touchLease(lockPath, 'me', 1000, 'test', undefined),
+        true,
+        'a failed read is not evidence that the lease was taken over'
+      );
+    } finally {
+      mock.restoreAll();
+    }
+    // A readable lease of another owner is still reported as lost.
+    await fs.writeFile(lockPath, JSON.stringify({ owner: 'someone-else' }));
+    assert.equal(await touchLease(lockPath, 'me', 1000, 'test', undefined), false);
   });
 });

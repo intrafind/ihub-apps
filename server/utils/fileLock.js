@@ -377,9 +377,14 @@ export async function touchLease(lockPath, owner, ttlMs, name, token, component 
     return false;
   }
   try {
+    // The read stays outside the parse guard: a failed read says nothing about
+    // who owns the lease, so it must reach the transient-error handler below
+    // (keep renewing). Treating it as "not ours" would stop the heartbeat for
+    // good while the section is still running.
+    const current = await handle.readFile('utf8');
     let parsed = null;
     try {
-      parsed = JSON.parse(await handle.readFile('utf8'));
+      parsed = JSON.parse(current);
     } catch {
       parsed = null;
     }
