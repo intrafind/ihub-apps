@@ -1,5 +1,22 @@
 # Fixes — Unreleased
 
+## Revoking an OAuth Connection Now Sticks, and Several Small Stores Stop Losing Changes
+
+Disconnecting an OAuth client, deleting a user or revoking a client while one of its refresh tokens was being
+exchanged for a new one could be undone: the exchange stored a fresh 30-day token after the revoke had found
+nothing to delete. The old token now stays in the store until the new one replaces it in one locked step, so a
+revoke arriving in between deletes it and no new token is issued (the client gets `invalid_grant`). A server crash
+in the middle of an exchange no longer loses the connection either: the old token works again after two minutes.
+
+The same class of lost update is closed in the OAuth consent store (grants, revokes and "last used" stamps could
+overwrite each other, and an unreadable file was replaced by an empty one), the agent memory and inbox files
+(concurrent runs of one agent passed the same version check and overwrote each other), marketplace installs,
+updates and removals and the registry list (two at once lost one entry, leaving its files untracked), the
+integration connection status, the anonymised-usage pepper (two workers starting together could each use their
+own), stored user tokens (now written atomically, mode 0600) and the feedback retention cleanup (atomic rewrite).
+After a restart of one worker, workflow runs that are still live on another worker are no longer marked failed or
+resumed a second time. No action is needed after the upgrade.
+
 ## Saving Two Admin Settings Pages at Once No Longer Loses One of Them
 
 Almost every admin page that stores a setting (CORS, SSL, SSRF allow-list, rate limits, LLM timeouts, logging,
