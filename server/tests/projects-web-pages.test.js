@@ -48,7 +48,13 @@ import {
   evictProjectIndex
 } from '../services/knowledge/LocalKnowledgeProvider.js';
 import { ProjectIngestService } from '../services/projects/ProjectIngestService.js';
-import { DEFAULT_REFRESH_TTL_SECONDS, refreshScheduleOf } from '../services/projects/refreshTtl.js';
+import {
+  DEFAULT_REFRESH_TTL_SECONDS,
+  effectiveRefreshMode,
+  isRefreshDue,
+  refreshScheduleOf
+} from '../services/projects/refreshTtl.js';
+import { providerFor } from '../services/knowledge/registry.js';
 import { projectSettings } from '../services/projects/projectSettings.js';
 import { crawlSite } from '../services/projects/siteCrawler.js';
 import {
@@ -669,5 +675,205 @@ describe('web pages that were links before', () => {
     written.length = 0;
     await migration.up(ctx);
     assert.deepEqual(written, []);
+  });
+});
+
+describe('refresh modes: automatically, when used, never', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const service = () => getProjectService();
+  const newProject = name => service().createUserProject({ owner: ADA, content: { name } });
+  const addUrl = (project, url) =>
+    service().addItem(project.id, { kind: 'url', ref: { url } }, { user: ADA });
+
+  /** Make an item's snapshot `days` old, and the project's last use `idleDays` ago. */
+  async function age(projectId, itemId, { days = 2, idleDays = 0 } = {}) {
+    const at = new Date(Date.now() - days * DAY).toISOString();
+    await getProjectRepository().mutate(
+      projectId,
+      project => {
+        const item = project.items.find(entry => entry.id === itemId);
+        item.checkedAt = at;
+        item.snapshotAt = at;
+        project.lastActivityAt = new Date(Date.now() - idleDays * DAY).toISOString();
+        return project;
+      },
+      { touchActivity: false, touchUpdated: false }
+    );
+    return getProjectRepository().get(projectId);
+  }
+
+  it('takes the mode from the item, the project or the platform', () => {
+    const settings = projectSettings({ projects: { refreshMode: 'onDemand' } });
+    assert.deepEqual(effectiveRefreshMode({}, {}, projectSettings({})), {
+      mode: 'auto',
+      from: 'platform'
+    });
+    assert.deepEqual(effectiveRefreshMode({}, {}, settings), {
+      mode: 'onDemand',
+      from: 'platform'
+    });
+    assert.deepEqual(effectiveRefreshMode({}, { refreshMode: 'auto' }, settings), {
+      mode: 'auto',
+      from: 'project'
+    });
+    assert.deepEqual(
+      effectiveRefreshMode({ refreshMode: 'onDemand' }, { refreshMode: 'auto' }, settings),
+      { mode: 'onDemand', from: 'item' }
+    );
+    // Junk falls through to the next level.
+    assert.deepEqual(effectiveRefreshMode({ refreshMode: 'often' }, {}, projectSettings({})), {
+      mode: 'auto',
+      from: 'platform'
+    });
+  });
+
+  it('refreshes in the background only automatically and while the project is used', () => {
+    const settings = projectSettings({});
+    const now = Date.now();
+    const item = {
+      kind: 'url',
+      status: 'ready',
+      checkedAt: new Date(now - 2 * DAY).toISOString()
+    };
+    const active = { lastActivityAt: new Date(now - DAY).toISOString() };
+    const idle = { lastActivityAt: new Date(now - 30 * DAY).toISOString() };
+    assert.equal(isRefreshDue(item, active, settings, now), true);
+    assert.equal(isRefreshDue(item, idle, settings, now), false, 'idle: refreshed when used');
+    assert.equal(isRefreshDue(item, { ...active, refreshMode: 'onDemand' }, settings, now), false);
+    const schedule = refreshScheduleOf(item, idle, settings, now);
+    assert.equal(schedule.mode, 'auto');
+    assert.equal(schedule.background, false);
+    assert.equal(schedule.idle, true);
+    assert.equal(schedule.expired, true);
+    assert.equal(schedule.nextAt, null, 'no background refresh is planned');
+    assert.ok(schedule.outdatedAt);
+    assert.equal(refreshScheduleOf(item, active, settings, now).background, true);
+  });
+
+  it('leaves an on-demand project alone in the background and refreshes it when used', async () => {
+    servePage('/demand', html('Demand', 'Version one.'), { etag: '"d1"' });
+    const project = await newProject('On demand');
+    await service().updateProject(project.id, { refreshMode: 'onDemand' }, { actor: ADA });
+    const { item } = await addUrl(project, `${base}/demand`);
+    await settled(project.id, item.id);
+    const old = await age(project.id, item.id);
+    const ingest = getIngestService();
+
+    seen.length = 0;
+    assert.equal(await ingest.refreshExpired([old]), 0, 'the reconciler does not refresh it');
+    assert.equal(hits('/demand'), 0);
+
+    // Reading the project's knowledge is a use: its outdated pages are refreshed.
+    servePage('/demand', html('Demand', 'Version two.'), { etag: '"d2"' });
+    providerFor(old);
+    const fresh = await waitFor(async () => {
+      const entry = await itemOf(project.id, item.id);
+      return entry?.provenance?.source?.etag === '"d2"' && !entry.refreshingAt ? entry : null;
+    });
+    assert.match((await getItemText({ id: project.id }, fresh, { user: ADA })).text, /two/);
+    assert.equal(hits('/demand'), 1);
+
+    // A second use soon after asks nothing: the page is current again.
+    seen.length = 0;
+    await ingest.refreshOnUse(await getProjectRepository().get(project.id));
+    assert.equal(hits('/demand'), 0);
+  });
+
+  it('refreshes an idle project only when it is used, and never an item set to never', async () => {
+    servePage('/idle', html('Idle', 'Idle page.'), { etag: '"i1"' });
+    servePage('/fixed', html('Fixed', 'Fixed page.'), { etag: '"f1"' });
+    const project = await newProject('Idle');
+    const { item } = await addUrl(project, `${base}/idle`);
+    const { item: fixed } = await addUrl(project, `${base}/fixed`);
+    await settled(project.id, item.id);
+    await settled(project.id, fixed.id);
+    await service().updateItem(project.id, fixed.id, { refreshTtl: 'never' }, { user: ADA });
+    await age(project.id, fixed.id, { days: 400, idleDays: 30 });
+    const old = await age(project.id, item.id, { days: 2, idleDays: 30 });
+    const ingest = getIngestService();
+
+    seen.length = 0;
+    assert.equal(
+      await ingest.refreshExpired([old]),
+      0,
+      'idle for 30 days: nothing in the background'
+    );
+    const used = await ingest.refreshOnUse(old);
+    assert.equal(used.refreshed, 1, 'the outdated page, not the one set to never');
+    await waitFor(async () => {
+      const entry = await itemOf(project.id, item.id);
+      return entry && !entry.refreshingAt && !ingest.isActive(item.id) ? entry : null;
+    });
+    assert.equal(hits('/idle'), 1);
+    assert.equal(hits('/fixed'), 0);
+  });
+
+  it('fetches a converted page of an on-demand project when it is used, not before', async () => {
+    servePage('/later-page', html('Later', 'Fetched on use.'));
+    const project = await newProject('Waiting');
+    await service().updateProject(project.id, { refreshMode: 'onDemand' }, { actor: ADA });
+    const now = new Date().toISOString();
+    const waiting = {
+      id: `itm_${crypto.randomBytes(6).toString('hex')}`,
+      kind: 'url',
+      name: `${base}/later-page`,
+      ref: { url: `${base}/later-page` },
+      storage: 'text',
+      pinned: false,
+      status: 'pending',
+      error: null,
+      provenance: { origin: 'linked', by: null, at: now, run: null, source: null },
+      snapshotAt: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    await getProjectRepository().mutate(project.id, current => {
+      current.items = [...(current.items || []), waiting];
+      return current;
+    });
+    const ingest = getIngestService();
+    seen.length = 0;
+    await ingest.reconcile();
+    assert.equal(hits('/later-page'), 0, 'not fetched in the background');
+    assert.equal((await itemOf(project.id, waiting.id)).status, 'pending', 'and not stuck either');
+
+    const used = await ingest.refreshOnUse(await getProjectRepository().get(project.id));
+    assert.equal(used.fetched, 1);
+    const ready = await settled(project.id, waiting.id);
+    assert.equal(ready.status, 'ready', JSON.stringify(ready.error));
+    assert.equal(ready.name, 'Later', 'named after its title');
+  });
+
+  it('sets and clears the mode of a project and an item', async () => {
+    servePage('/modes', html('Modes', 'Modes.'));
+    const project = await newProject('Modes');
+    const { item } = await addUrl(project, `${base}/modes`);
+    await settled(project.id, item.id);
+    const updated = await service().updateProject(
+      project.id,
+      { refreshMode: 'onDemand' },
+      { actor: ADA }
+    );
+    assert.equal(updated.refreshMode, 'onDemand');
+    const { item: own } = await service().updateItem(
+      project.id,
+      item.id,
+      { refreshMode: 'auto' },
+      { user: ADA }
+    );
+    assert.equal(own.refreshMode, 'auto');
+    const { item: back } = await service().updateItem(
+      project.id,
+      item.id,
+      { refreshMode: null },
+      { user: ADA }
+    );
+    assert.equal(back.refreshMode, undefined);
+    const cleared = await service().updateProject(
+      project.id,
+      { refreshMode: null },
+      { actor: ADA }
+    );
+    assert.equal(cleared.refreshMode, undefined);
   });
 });

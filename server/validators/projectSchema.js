@@ -16,7 +16,7 @@ import {
   IFINDER_PROJECT_ID_PREFIX,
   PROJECT_TIERS
 } from '../services/projects/projectConstants.js';
-import { zRefreshTtl } from '../services/projects/refreshTtl.js';
+import { zRefreshMode, zRefreshTtl } from '../services/projects/refreshTtl.js';
 
 /** One of the knowledge modes (`shared/knowledgeModes.js`). */
 export const knowledgeModeSchema = z.enum(KNOWLEDGE_MODES);
@@ -191,6 +191,8 @@ export const projectItemSchema = z
     cache: z.object({ ttlSeconds: z.number().int().positive() }).strict().optional(),
     /** The item's own refresh TTL (#3536); absent takes the project's. */
     refreshTtl: zRefreshTtl.optional(),
+    // When an outdated snapshot is refreshed: in the background or on use (#3622).
+    refreshMode: zRefreshMode.optional(),
     /** When the source of a fetched or live item was last checked. */
     checkedAt: z.string().nullable().optional(),
     provenance: itemProvenanceSchema,
@@ -243,6 +245,8 @@ export const adminProjectSchema = z
     knowledgeMode: knowledgeModeSchema.optional(),
     // How long its files from websites and web pages are current (#3536).
     refreshTtl: zRefreshTtl.optional(),
+    // When an outdated snapshot is refreshed: in the background or on use (#3622).
+    refreshMode: zRefreshMode.optional(),
     items: z.array(projectItemSchema).max(MAX_FILES_CEILING).prefault([]),
     createdAt: z.string().optional(),
     updatedAt: z.string().optional(),
@@ -355,7 +359,9 @@ export const userProjectUpdateSchema = z
     // How the project reaches the model; null goes back to `auto` (#3538).
     knowledgeMode: knowledgeModeSchema.nullable().optional(),
     // Seconds or 'never'; null goes back to the platform's (#3536).
-    refreshTtl: zRefreshTtl.nullable().optional()
+    refreshTtl: zRefreshTtl.nullable().optional(),
+    // `auto` or `onDemand`; null goes back to the platform's (#3622).
+    refreshMode: zRefreshMode.nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
@@ -372,7 +378,9 @@ export const adminProjectUpdateSchema = z
     tags: z.array(z.string().max(100)).optional(),
     defaultAppId: zSafeId.min(1).max(100).nullable().optional(),
     knowledgeMode: knowledgeModeSchema.nullable().optional(),
-    refreshTtl: zRefreshTtl.nullable().optional()
+    refreshTtl: zRefreshTtl.nullable().optional(),
+    // `auto` or `onDemand`; null goes back to the platform's (#3622).
+    refreshMode: zRefreshMode.nullable().optional()
   })
   .strict();
 
@@ -419,7 +427,9 @@ export const itemUpdateSchema = z
     excludedFromAi: z.boolean().optional(),
     ref: z.record(z.string(), z.unknown()).optional(),
     // A file from a website or a web page: its own refresh TTL, null for the project's.
-    refreshTtl: zRefreshTtl.nullable().optional()
+    refreshTtl: zRefreshTtl.nullable().optional(),
+    // Its own refresh mode, null for the project's (#3622).
+    refreshMode: zRefreshMode.nullable().optional()
   })
   .strict()
   .refine(body => Object.keys(body).length > 0, 'Nothing to change');
@@ -575,6 +585,10 @@ export const projectSharingSettingsSchema = z
       .optional(),
     // How long files from websites and web pages are current (#3536).
     refreshTtl: zRefreshTtl.optional(),
+    // When outdated snapshots are refreshed, and after how many idle days an
+    // `auto` project is refreshed only when used (0: never idle) (#3622).
+    refreshMode: zRefreshMode.optional(),
+    refreshIdleDays: z.number().int().min(0).max(3650).optional(),
     // The knowledge modes users may choose (#3538); `auto` is always offered.
     knowledgeModes: z.array(knowledgeModeSchema).min(1).max(KNOWLEDGE_MODES.length).optional()
   })
@@ -586,6 +600,11 @@ export const projectSharingSettingsSchema = z
       body.defaultAppId !== undefined ||
       body.limits !== undefined ||
       body.refreshTtl !== undefined ||
+      body.refreshMode !== undefined ||
+      body.refreshIdleDays !== undefined ||
       body.knowledgeModes !== undefined,
-    { message: 'Send sharing, tierPolicy, defaultAppId, limits, refreshTtl or knowledgeModes' }
+    {
+      message:
+        'Send sharing, tierPolicy, defaultAppId, limits, refreshTtl, refreshMode, refreshIdleDays or knowledgeModes'
+    }
   );

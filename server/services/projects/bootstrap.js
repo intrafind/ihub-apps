@@ -14,6 +14,7 @@
  */
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
+import { setProjectUseListener } from './projectUse.js';
 import { evictItemText, setItemInfoRecorder, setTextReader } from '../knowledge/ItemTextService.js';
 import { evictProjectIndex } from '../knowledge/LocalKnowledgeProvider.js';
 import { evictItemKeys, readText } from './ItemTextStore.js';
@@ -73,6 +74,8 @@ export async function bootstrapProjects({ reconcile = true } = {}) {
     });
   }
   service.ingest = ingestService;
+  // Using a project refreshes what is outdated in it (#3622).
+  setProjectUseListener(project => ingestService.refreshOnUse(project));
   if (reconcile) {
     try {
       const removed = await ingestService.cleanTempDir();

@@ -5,7 +5,13 @@ import { z } from 'zod';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { usageLimitBucketSchema } from './common.js';
 import { KNOWLEDGE_MODES, MAX_FILES_CEILING } from '../services/projects/projectConstants.js';
-import { DEFAULT_REFRESH_TTL_SECONDS, zRefreshTtl } from '../services/projects/refreshTtl.js';
+import {
+  DEFAULT_REFRESH_IDLE_DAYS,
+  DEFAULT_REFRESH_MODE,
+  DEFAULT_REFRESH_TTL_SECONDS,
+  zRefreshMode,
+  zRefreshTtl
+} from '../services/projects/refreshTtl.js';
 import { APPROVAL_MODES } from '../../shared/toolApproval.js';
 import {
   VOICE_LISTENING_STYLES,
@@ -828,6 +834,11 @@ export const platformConfigSchema = z
         // downloaded again, and how long a web page's read is cached (#3536):
         // seconds, or 'never'. Projects and items may set their own.
         refreshTtl: zRefreshTtl.prefault(DEFAULT_REFRESH_TTL_SECONDS),
+        // When outdated snapshots are refreshed (#3622): `auto` in the background
+        // while a project is used, `onDemand` only when it is used; and the days
+        // without use after which an `auto` project counts as idle (0: never).
+        refreshMode: zRefreshMode.prefault(DEFAULT_REFRESH_MODE),
+        refreshIdleDays: z.number().int().min(0).max(3650).prefault(DEFAULT_REFRESH_IDLE_DAYS),
         kinds: z.record(z.string(), z.boolean()).prefault({}),
         encryption: z
           .object({ keyProvider: z.string().prefault('local-file') })

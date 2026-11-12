@@ -36,7 +36,12 @@ import './kinds/uploadKind.js';
 import './kinds/cloudKinds.js';
 import './kinds/projectItemKind.js';
 import './kinds/webFileKind.js';
-import { normalizeRefreshTtl, refreshesOnSchedule, takesRefreshTtl } from './refreshTtl.js';
+import {
+  normalizeRefreshMode,
+  normalizeRefreshTtl,
+  refreshesOnSchedule,
+  takesRefreshTtl
+} from './refreshTtl.js';
 import { fetchInput } from './ProjectIngestService.js';
 import { setProjectViewSettings } from './projectView.js';
 import { projectSettings } from './projectSettings.js';
@@ -329,10 +334,15 @@ export class ProjectService {
       throw translateError(error);
     }
     if (this.ingest && items.some(item => item.status === 'pending')) {
-      await attempt(() => this.ingest.fetchWaiting([created]), 'the first fetch of its pages', {
-        component: COMPONENT,
-        projectId: created.id
-      });
+      // Creating it is a use: its pages are fetched now, whatever the refresh mode.
+      await attempt(
+        () => this.ingest.fetchWaiting([created], { onUse: true }),
+        'the first fetch of its pages',
+        {
+          component: COMPONENT,
+          projectId: created.id
+        }
+      );
     }
     return created;
   }
@@ -358,9 +368,18 @@ export class ProjectService {
           'tags',
           'defaultAppId',
           'knowledgeMode',
-          'refreshTtl'
+          'refreshTtl',
+          'refreshMode'
         ]
-      : ['name', 'description', 'instructions', 'defaultAppId', 'knowledgeMode', 'refreshTtl'];
+      : [
+          'name',
+          'description',
+          'instructions',
+          'defaultAppId',
+          'knowledgeMode',
+          'refreshTtl',
+          'refreshMode'
+        ];
     try {
       return await this.repository.mutate(
         projectId,
@@ -932,6 +951,24 @@ export class ProjectService {
               changed = true;
             } else if (next !== null && next !== item.refreshTtl) {
               item.refreshTtl = next;
+              changed = true;
+            }
+          }
+          if (patch.refreshMode !== undefined) {
+            if (!takesRefreshTtl(item)) {
+              throw new ProjectError(
+                'INVALID_REF',
+                `Items of kind "${item.kind}" have no refresh schedule`
+              );
+            }
+            // null goes back to the project's setting.
+            const mode =
+              patch.refreshMode === null ? null : normalizeRefreshMode(patch.refreshMode);
+            if (mode === null && item.refreshMode !== undefined) {
+              delete item.refreshMode;
+              changed = true;
+            } else if (mode !== null && mode !== item.refreshMode) {
+              item.refreshMode = mode;
               changed = true;
             }
           }

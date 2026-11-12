@@ -43,7 +43,12 @@ import {
 import { storeText, evictItemKeys } from './ItemTextStore.js';
 import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
-import { isRefreshDue, refreshesOnSchedule } from './refreshTtl.js';
+import {
+  isRefreshDue,
+  isRefreshExpired,
+  refreshesInBackground,
+  refreshesOnSchedule
+} from './refreshTtl.js';
 import { getItemKind } from './kinds/registry.js';
 
 const COMPONENT = 'ProjectIngestService';
@@ -157,6 +162,13 @@ export function fetchInput(
     ...(scheduled ? { scheduled: true } : {})
   };
 }
+
+/**
+ * How often one worker refreshes a project on use (`refreshOnUse`): every turn
+ * of a chat reads its projects, and the check of a project is a scan of its
+ * items, so it runs at most once a minute per project and worker.
+ */
+const USE_REFRESH_INTERVAL_MS = 60 * 1000;
 
 /** The error code of an item whose job never finished. */
 export const INTERRUPTED = 'INTERRUPTED';
@@ -276,6 +288,8 @@ export class ProjectIngestService {
     this.running = 0;
     /** Background jobs (scheduled refreshes) running now. */
     this.runningBackground = 0;
+    /** Project id → when this worker last refreshed it on use. */
+    this.usedAt = new Map();
   }
 
   get service() {
@@ -862,16 +876,23 @@ export class ProjectIngestService {
    * {@link MAX_FIRST_FETCHES} per call; the rest wait for the next tick. A
    * disabled admin project or one being deleted is converted, not fetched.
    *
+   * In the background (`onUse` false) only items refreshed in the background
+   * are fetched (`refreshesInBackground`): a page of a project refreshed on
+   * demand, or of one nobody used lately, waits until the project is used.
+   *
    * @param {Object[]} projects - As inventoried; each is read again under its lock.
-   * @param {{max?: number}} [options]
+   * @param {{max?: number, onUse?: boolean, now?: number}} [options]
    * @returns {Promise<number>} Fetches queued.
    */
-  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES } = {}) {
+  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES, onUse = false, now = Date.now() } = {}) {
     let queued = 0;
+    const settings = this.settings();
+    const due = (item, project) =>
+      isWaitingForFetch(item) && (onUse || refreshesInBackground(item, project, settings, now));
     for (const project of projects || []) {
       const fetches = !project.deleting && project.enabled !== false;
       const candidates = (project.items || []).filter(
-        item => isLinkedWebPage(item) || (fetches && isWaitingForFetch(item))
+        item => isLinkedWebPage(item) || (fetches && due(item, project))
       );
       if (!candidates.length) continue;
       const room = fetches ? Math.max(0, max - queued) : 0;
@@ -889,7 +910,7 @@ export class ProjectIngestService {
                 changed = true;
               }
               if (reserved.length >= room || this.isActive(item.id)) continue;
-              if (!isWaitingForFetch(item)) continue;
+              if (!due(item, current)) continue;
               item.ingestAttempt = randomUUID();
               item.updatedAt = now;
               reserved.push(item.id);
@@ -961,6 +982,60 @@ export class ProjectIngestService {
       }
     }
     return queued;
+  }
+
+  /**
+   * A project is being used (a chat, a search or a workflow reads its
+   * knowledge, or someone opens it): refresh what is outdated and fetch what
+   * waits for its first fetch, whatever the refresh mode (#3622). An item set
+   * to `never` is left alone. Readers get the stored snapshot meanwhile; a
+   * job reserves its item under the project's lock, so of several workers
+   * that see the same use only one fetches each page. At most once a minute
+   * per project and worker.
+   *
+   * @param {Object} project
+   * @param {{now?: number}} [options]
+   * @returns {Promise<{refreshed: number, fetched: number}>}
+   */
+  async refreshOnUse(project, { now = Date.now() } = {}) {
+    const none = { refreshed: 0, fetched: 0 };
+    if (!project?.id || project.deleting || project.enabled === false) return none;
+    const last = this.usedAt.get(project.id) || 0;
+    if (now - last < USE_REFRESH_INTERVAL_MS) return none;
+    const settings = this.settings();
+    const items = project.items || [];
+    const outdated = items.filter(
+      item => !this.isActive(item.id) && isRefreshExpired(item, project, settings, now)
+    );
+    const waiting = items.some(item => isLinkedWebPage(item) || isWaitingForFetch(item));
+    if (!outdated.length && !waiting) return none;
+    this.usedAt.set(project.id, now);
+    if (this.usedAt.size > 10000) this.usedAt.clear();
+    let refreshed = 0;
+    for (const item of outdated) {
+      try {
+        await this.service.refreshItem(project.id, item.id, { scheduled: true, wait: false });
+        refreshed += 1;
+      } catch (error) {
+        if (error?.code === 'PROJECT_MISMATCH' || error?.code === 'ITEM_NOT_FOUND') continue;
+        logger.warn('Could not refresh a project item on use', {
+          component: COMPONENT,
+          projectId: project.id,
+          itemId: item.id,
+          error: error?.message
+        });
+      }
+    }
+    const fetched = waiting ? await this.fetchWaiting([project], { onUse: true, now }) : 0;
+    if (refreshed || fetched) {
+      logger.info('Refreshing a project on use', {
+        component: COMPONENT,
+        projectId: project.id,
+        refreshed,
+        fetched
+      });
+    }
+    return { refreshed, fetched };
   }
 
   /**

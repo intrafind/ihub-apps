@@ -38,6 +38,7 @@ import runLog from '../services/loop/RunLog.js';
 import { resolveShares } from './promptRoutes.js';
 import { getProjectRepository, isUserProjectId } from '../services/projects/ProjectRepository.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
+import { noteProjectUse } from '../services/projects/projectUse.js';
 import {
   addUploadedItem,
   isMultipart,
@@ -650,6 +651,10 @@ export default function registerProjectRoutes(app) {
     authenticatedOnly,
     projectAccessRequired('use'),
     async (req, res) => {
+      // Opening a project is a use: what is outdated in it is refreshed in
+      // the background (#3622); this answer shows it as being refreshed on the
+      // next poll.
+      noteProjectUse(req.project);
       const body = serializeFor(req.project, req.user, req.projectContext);
       if (subscribable(req.project, req.projectPermissions)) {
         body.subscribed = await getProjectRepository().isSubscribed(
