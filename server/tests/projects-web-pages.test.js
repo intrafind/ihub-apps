@@ -89,8 +89,17 @@ function setPlatform(overrides = {}) {
 
 function answer(req, res) {
   const url = new URL(req.url, 'http://localhost');
-  seen.push({ path: url.pathname, headers: req.headers });
   const page = pages.get(url.pathname);
+  // `delayMs`: a site that answers slowly, so an item stays in progress.
+  if (page?.delayMs) {
+    setTimeout(() => respond(req, res, url, page), page.delayMs);
+    return;
+  }
+  respond(req, res, url, page);
+}
+
+function respond(req, res, url, page) {
+  seen.push({ path: url.pathname, headers: req.headers });
   if (!page) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found');
@@ -429,7 +438,8 @@ describe('a web page is a stored snapshot', () => {
     assert.match((await getItemText({ id: project.id }, moved, { user: ADA })).text, /new page/);
 
     // While its new page is being fetched, the item takes no other address.
-    await service.updateItem(project.id, item.id, { ref: { url: `${base}/old` } }, { user: ADA });
+    servePage('/slow', html('Slow', 'A slow page.'), { delayMs: 1500 });
+    await service.updateItem(project.id, item.id, { ref: { url: `${base}/slow` } }, { user: ADA });
     await assert.rejects(
       service.updateItem(project.id, item.id, { ref: { url: `${base}/new` } }, { user: ADA }),
       error => error.code === 'PROJECT_MISMATCH'
