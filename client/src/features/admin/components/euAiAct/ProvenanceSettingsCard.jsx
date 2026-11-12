@@ -334,7 +334,7 @@ export default function ProvenanceSettingsCard({ onSaved }) {
               <p className="text-xs text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.euAiAct.settings.recordUserHelp',
-                  'Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. Deleting a user removes their id and fingerprint from the records.'
+                  'Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. It stays in the record when the user is deleted.'
                 )}
               </p>
               {[
@@ -348,18 +348,21 @@ export default function ProvenanceSettingsCard({ onSaved }) {
                 ],
                 [
                   'anonymous',
-                  t('admin.euAiAct.settings.recordUserAnonymous', 'Anonymous (hashed user)'),
+                  t('admin.euAiAct.settings.recordUserAnonymous', 'Anonymous (secured hash)'),
                   t(
                     'admin.euAiAct.settings.recordUserAnonymousHelp',
-                    'A one-way fingerprint of the user (usr_…): the same person always has the same value, but it cannot be turned back into a user id.'
+                    'A hash keyed with a secret only the server holds (usr_…). Records of one person share the value, but the user cannot be determined from it.'
                   )
                 ],
                 [
                   'pseudonymous',
-                  t('admin.euAiAct.settings.recordUserPseudonymous', 'Pseudonymous (conversation)'),
+                  t(
+                    'admin.euAiAct.settings.recordUserPseudonymous',
+                    'Pseudonymous (hash of the user id)'
+                  ),
                   t(
                     'admin.euAiAct.settings.recordUserPseudonymousHelp',
-                    'A fingerprint of the conversation (conv_…): outputs of one chat belong together, across chats they do not.'
+                    'A plain SHA-256 of the user id. Whoever knows a user id can compute it and so attribute the record.'
                   )
                 ],
                 [

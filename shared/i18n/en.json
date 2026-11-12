@@ -6455,13 +6455,13 @@
           "invalid": "This value is not allowed."
         },
         "recordUser": "Who a record names",
-        "recordUserHelp": "Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. Deleting a user removes their id and fingerprint from the records.",
+        "recordUserHelp": "Applies to records written from now on. Only admins see it when checking an output; it is never part of what a user or API caller receives. It stays in the record when the user is deleted.",
         "recordUserNone": "Nobody",
         "recordUserNoneHelp": "The record describes the output only. Default.",
-        "recordUserAnonymous": "Anonymous (hashed user)",
-        "recordUserAnonymousHelp": "A one-way fingerprint of the user (usr_…): the same person always has the same value, but it cannot be turned back into a user id.",
-        "recordUserPseudonymous": "Pseudonymous (conversation)",
-        "recordUserPseudonymousHelp": "A fingerprint of the conversation (conv_…): outputs of one chat belong together, across chats they do not.",
+        "recordUserAnonymous": "Anonymous (secured hash)",
+        "recordUserAnonymousHelp": "A hash keyed with a secret only the server holds (usr_…). Records of one person share the value, but the user cannot be determined from it.",
+        "recordUserPseudonymous": "Pseudonymous (hash of the user id)",
+        "recordUserPseudonymousHelp": "A plain SHA-256 of the user id. Whoever knows a user id can compute it and so attribute the record.",
         "recordUserIdentified": "Identified (user id)",
         "recordUserIdentifiedHelp": "The user id, never the name or email. The records then hold personal data: cover them in your data protection documentation."
       },
@@ -6586,8 +6586,8 @@
         "bytes": "{{formatted}} bytes",
         "user": "User",
         "userIdentified": "user id",
-        "userPseudonymous": "conversation fingerprint",
-        "userAnonymous": "user fingerprint"
+        "userPseudonymous": "hash of the user id",
+        "userAnonymous": "secured hash"
       }
     }
   },

@@ -1796,8 +1796,8 @@ config files.
   confirmation says that the current key is retired, that vLLM's `--watermark-config` must follow
   and that self-test results turn outdated until then.
 - **Provenance settings.** Retention (0 keeps records forever), whether records are kept, who a
-  record names (nobody by default; a user fingerprint, a conversation fingerprint or the user id,
-  shown to admins only and removed when the user is deleted; migration V246), who may
+  record names (nobody by default; a secured hash, a plain hash of the user id or the user id,
+  shown to admins only; migration V246), who may
   check an output (signed-in users or anyone), the size limit of checked files (in MiB), C2PA reading and the text detector's false-positive limit, shortest judged text and
   time limit are a form with defaults and units. Values are checked in the browser and on the
   server against the same bounds. Lowering the retention or opening the check to the public asks

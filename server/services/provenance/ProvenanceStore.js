@@ -189,64 +189,6 @@ export class ProvenanceStore {
     return result;
   }
 
-  /**
-   * Drop the `user` member of every record that names one of `ids` (a deleted
-   * user's id and fingerprint). The records themselves stay: they describe an
-   * output, not the person.
-   *
-   * @param {string[]} ids
-   * @returns {Promise<{scanned: number, changedRecords: number}>}
-   */
-  async forgetUser(ids) {
-    const result = { scanned: 0, changedRecords: 0 };
-    const wanted = new Set((ids || []).filter(Boolean).map(String));
-    if (!this.isAvailable() || wanted.size === 0) return result;
-    await this._eachDocument(async doc => {
-      result.scanned += 1;
-      const records = Array.isArray(doc.data?.records) ? doc.data.records : [];
-      let changed = 0;
-      const next = records.map(r => {
-        if (!r?.user || !wanted.has(String(r.user.id))) return r;
-        changed += 1;
-        const { user: _user, ...rest } = r;
-        return rest;
-      });
-      if (changed === 0) return;
-      try {
-        await this.documents.put(
-          PROVENANCE_RECORDS_NAMESPACE,
-          doc.key,
-          { v: DOCUMENT_VERSION, records: next },
-          { etag: doc.etag }
-        );
-        result.changedRecords += changed;
-      } catch (error) {
-        // Written again since the scan (a new record prepended): read it once more.
-        if (!(error instanceof EtagMismatchError)) throw error;
-        const fresh = await this.documents.get(PROVENANCE_RECORDS_NAMESPACE, doc.key);
-        if (fresh) await this.forgetUserIn({ ...fresh, key: doc.key }, wanted, result);
-      }
-    });
-    return result;
-  }
-
-  /** One retry of {@link forgetUser} on a document that changed under it. */
-  async forgetUserIn(doc, wanted, result) {
-    const records = Array.isArray(doc.data?.records) ? doc.data.records : [];
-    const next = records.map(r => {
-      if (!r?.user || !wanted.has(String(r.user.id))) return r;
-      result.changedRecords += 1;
-      const { user: _user, ...rest } = r;
-      return rest;
-    });
-    await this.documents.put(
-      PROVENANCE_RECORDS_NAMESPACE,
-      doc.key,
-      { v: DOCUMENT_VERSION, records: next },
-      { etag: doc.etag }
-    );
-  }
-
   /** Visit every record document (scan when the provider can, else pages). */
   async _eachDocument(handle) {
     if (this.documents.supportsScan) {

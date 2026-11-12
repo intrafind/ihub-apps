@@ -227,17 +227,6 @@ export const USER_CLEANUP_STEPS = [
       }
       return { removed };
     }
-  },
-  {
-    // Provenance records keep describing the output; only the user they name
-    // (`provenance.recordUser`: the id or its fingerprint) is removed.
-    name: 'provenanceRecords',
-    kind: 'content',
-    run: async userId => {
-      const { getProvenanceStore } = await import('./provenance/ProvenanceStore.js');
-      const { changedRecords } = await getProvenanceStore().forgetUser(await ownerIdsOf(userId));
-      return { removed: changedRecords };
-    }
   }
 ];
 

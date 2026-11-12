@@ -279,8 +279,7 @@ export class ResultAccumulator {
         new Promise(resolve => setImmediate(resolve)).then(() =>
           recordGeneratedImage(image, {
             model: this.meta.model,
-            user: this.meta.user || null,
-            conversationId: this.meta.conversationId || null
+            user: this.meta.user || null
           })
         )
       );
@@ -914,8 +913,7 @@ export class LLMClient {
       stream: effectiveStream,
       marking: request.marking ?? null,
       // Who a generated image's provenance record may name (`provenance.recordUser`).
-      user: options.user || telemetry.user || telemetry.reportUser || null,
-      conversationId: telemetry.chatId || telemetry.executionId || telemetry.runId || null
+      user: options.user || telemetry.user || telemetry.reportUser || null
     };
 
     this._recordRequestHeader({

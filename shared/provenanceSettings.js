@@ -17,8 +17,8 @@ export const MIB = 1024 * 1024;
 export const VERIFY_ACCESS_VALUES = ['authenticated', 'public'];
 
 /**
- * Who a stored record names (`provenance.recordUser`): nobody, or the user in
- * one of the usage-tracking modes (fingerprint, conversation, user id).
+ * Who a stored record names (`provenance.recordUser`): nobody, a secured
+ * (keyed) hash, a plain hash of the user id, or the user id.
  */
 export const RECORD_USER_VALUES = ['none', 'anonymous', 'pseudonymous', 'identified'];
 

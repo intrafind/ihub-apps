@@ -136,22 +136,23 @@ prompt, name, email, chat or run ID.**
 
 ### Who a record names
 
-`provenance.recordUser` uses the identity modes of usage tracking and feedback, plus `none`:
+`provenance.recordUser`:
 
 | Mode | `user` in the record | |
 | --- | --- | --- |
 | `none` (default) | absent | The record describes the output only. |
-| `anonymous` | `{ "mode": "anonymous", "id": "usr_<16 hex>" }` | A salted one-way fingerprint of the user id (the pepper in `contents/.usage-pepper`, shared with usage tracking and the pseudonymized run ledger). The same person always has the same value; it cannot be turned back into an id. |
-| `pseudonymous` | `{ "mode": "pseudonymous", "id": "conv_<16 hex>" }` | A fingerprint of the conversation (chat id; the run or execution id where there is no chat). Outputs of one chat belong together, across chats they do not. Without any conversation, the user fingerprint. |
+| `anonymous` | `{ "mode": "anonymous", "id": "usr_<16 hex>" }` | A secured hash: the user id hashed with a secret only the server holds (the installation pepper `contents/.usage-pepper`, never shown in any UI or API). Records of one person share the value; the user cannot be determined from it. |
+| `pseudonymous` | `{ "mode": "pseudonymous", "id": "<64 hex>" }` | A plain SHA-256 of the user id. Whoever knows a user id can compute it and attribute the record; the id cannot be read from it. |
 | `identified` | `{ "mode": "identified", "id": "<user id>" }` | The user id, never name, email or groups. The records then hold personal data. |
 
 - **Only in the stored record.** The provenance object in a chat message, an API response, an MCP or A2A
   result never carries `user`. `POST /api/eu-ai-act/provenance/_verify` returns it to admins only (the
   verification card on the EU AI Act page shows it); any other caller gets the record without it.
 - **Applies from the moment it is saved.** Records already stored keep what they had.
-- **Deleting a user** removes `user` from every record that names their id or their fingerprint (cleanup step
-  `provenanceRecords`); the records themselves stay. A conversation fingerprint is not linked to a user and stays.
-- Machine callers (API keys, OAuth clients) are named by the id they act as; an anonymous visitor by the guest id.
+- **Kept when a user is deleted**, like the rest of the record, until the retention period ends. With
+  `pseudonymous` or `identified` the records hold personal data for that time: cover them in your data
+  protection documentation.
+- Machine callers (API keys, OAuth clients) are named by the id they act as; every anonymous visitor is `anonymous`.
 
 A short text's hash can be guessed by someone with disk access. They learn only that this installation once
 produced that string, with no attribution. With `chats.enabled: false` the store is the only trace of outputs;

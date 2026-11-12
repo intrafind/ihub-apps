@@ -506,8 +506,7 @@ export async function buildMcpServer({ user, platform }) {
               ? await recordTextOutput({
                   text: answer.text,
                   model: { id: `workflow:${wf.id}` },
-                  user,
-                  conversationId: context.chatId || null
+                  user
                 })
               : null;
             return workflowToolResult(result, provenance);

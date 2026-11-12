@@ -53,9 +53,9 @@ function userModeText(mode, t) {
     case 'identified':
       return t('admin.euAiAct.record.userIdentified', 'user id');
     case 'pseudonymous':
-      return t('admin.euAiAct.record.userPseudonymous', 'conversation fingerprint');
+      return t('admin.euAiAct.record.userPseudonymous', 'hash of the user id');
     case 'anonymous':
-      return t('admin.euAiAct.record.userAnonymous', 'user fingerprint');
+      return t('admin.euAiAct.record.userAnonymous', 'secured hash');
     default:
       return String(mode || '–');
   }

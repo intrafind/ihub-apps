@@ -187,7 +187,7 @@ it; "Not found" only means there is no record, not that a person wrote it.
   |---|---|---|---|
   | `provenance.retentionDays` | 365 | 0 to 36500 | Days records are kept; 0 keeps them forever. |
   | `provenance.storeRecords` | true | on/off | Off still attaches the provenance object but keeps no record. |
-  | `provenance.recordUser` | `none` | `none`, `anonymous`, `pseudonymous`, `identified` | Who a stored record names: nobody, a user fingerprint, a conversation fingerprint or the user id. Admins only see it when checking; see [Who a record names](provenance.md#who-a-record-names). |
+  | `provenance.recordUser` | `none` | `none`, `anonymous`, `pseudonymous`, `identified` | Who a stored record names: nobody, a secured (keyed) hash, a plain hash of the user id, or the user id. Only admins see it when checking; kept when the user is deleted; see [Who a record names](provenance.md#who-a-record-names). |
   | `provenance.verify.access` | `authenticated` | `authenticated`, `public` | Who may call `POST /api/eu-ai-act/provenance/_verify`. |
   | `provenance.media.maxVerifyBytes` | 52428800 (50 MiB) | 1024 bytes to 1 GiB | Largest uploaded file; the form shows MiB. |
   | `provenance.media.readC2pa` | true | on/off | Read C2PA marks of images. |

@@ -1255,8 +1255,7 @@ class ChatService {
         model: { id: model?.id },
         modelConfig: model,
         marking: result.marking?.text,
-        user,
-        conversationId: chatId || runId
+        user
       });
       if (provenance) summary.provenance = provenance;
       return provenance;
@@ -1789,8 +1788,7 @@ class ChatService {
         model: { id: model.id },
         modelConfig: model,
         marking: result.marking?.text,
-        user,
-        conversationId: chatId || runId
+        user
       });
       this._endLedgerRun(runId, {
         status: result.status,

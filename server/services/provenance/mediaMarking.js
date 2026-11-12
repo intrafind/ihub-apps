@@ -224,10 +224,9 @@ export function buildMediaRecord({
  * @param {Object} context
  * @param {Object} context.model - Model config (`id`, `contentMarking`).
  * @param {Object|null} [context.user] - The acting user (`provenance.recordUser`).
- * @param {string|null} [context.conversationId] - Chat, run or execution id.
  * @returns {Promise<Object|null>} The stored object, or null.
  */
-export async function recordGeneratedImage(image, { model, user, conversationId } = {}) {
+export async function recordGeneratedImage(image, { model, user } = {}) {
   try {
     if (!isEuAiActEnabled()) return null;
     const stamp = image?.provenance;
@@ -254,7 +253,7 @@ export async function recordGeneratedImage(image, { model, user, conversationId 
       createdAt: stamp.createdAt,
       installationId: await store.installationId()
     });
-    const named = await recordedUser({ user, conversationId });
+    const named = await recordedUser({ user });
     if (named) record.user = named;
     await store.record(record);
     return record;

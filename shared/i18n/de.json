@@ -6887,13 +6887,13 @@
           "invalid": "Dieser Wert ist nicht zulässig."
         },
         "recordUser": "Wen ein Nachweis nennt",
-        "recordUserHelp": "Gilt für Nachweise, die ab jetzt geschrieben werden. Nur Administratoren sehen den Wert bei der Prüfung einer Ausgabe; er ist nie Teil dessen, was Benutzer oder API-Aufrufer erhalten. Beim Löschen eines Benutzers werden seine ID und sein Fingerabdruck aus den Nachweisen entfernt.",
+        "recordUserHelp": "Gilt für Nachweise, die ab jetzt geschrieben werden. Nur Administratoren sehen den Wert bei der Prüfung einer Ausgabe; er ist nie Teil dessen, was Benutzer oder API-Aufrufer erhalten. Er bleibt im Nachweis, wenn der Benutzer gelöscht wird.",
         "recordUserNone": "Niemanden",
         "recordUserNoneHelp": "Der Nachweis beschreibt nur die Ausgabe. Standard.",
-        "recordUserAnonymous": "Anonym (gehashter Benutzer)",
-        "recordUserAnonymousHelp": "Ein Einweg-Fingerabdruck des Benutzers (usr_…): Dieselbe Person hat immer denselben Wert, er lässt sich aber nicht in eine Benutzer-ID zurückverwandeln.",
-        "recordUserPseudonymous": "Pseudonym (Unterhaltung)",
-        "recordUserPseudonymousHelp": "Ein Fingerabdruck der Unterhaltung (conv_…): Ausgaben eines Chats gehören zusammen, über Chats hinweg nicht.",
+        "recordUserAnonymous": "Anonym (gesicherter Hash)",
+        "recordUserAnonymousHelp": "Ein Hash mit einem Geheimnis, das nur der Server kennt (usr_…). Nachweise derselben Person haben denselben Wert, der Benutzer lässt sich daraus aber nicht bestimmen.",
+        "recordUserPseudonymous": "Pseudonym (Hash der Benutzer-ID)",
+        "recordUserPseudonymousHelp": "Ein einfacher SHA-256-Hash der Benutzer-ID. Wer eine Benutzer-ID kennt, kann ihn berechnen und den Nachweis so zuordnen.",
         "recordUserIdentified": "Identifiziert (Benutzer-ID)",
         "recordUserIdentifiedHelp": "Die Benutzer-ID, nie Name oder E-Mail. Die Nachweise enthalten dann personenbezogene Daten: Berücksichtigen Sie das in Ihrer Datenschutzdokumentation."
       },
@@ -7018,8 +7018,8 @@
         "bytes": "{{formatted}} Byte",
         "user": "Benutzer",
         "userIdentified": "Benutzer-ID",
-        "userPseudonymous": "Fingerabdruck der Unterhaltung",
-        "userAnonymous": "Fingerabdruck des Benutzers"
+        "userPseudonymous": "Hash der Benutzer-ID",
+        "userAnonymous": "gesicherter Hash"
       }
     }
   },

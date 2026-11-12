@@ -38,8 +38,6 @@ const COMPONENT = 'TurnProvenance';
  * @param {string} [input.keyId] - Watermark key id used.
  * @param {Object|null} [input.user] - The acting user; named in the stored record
  *   only as `provenance.recordUser` says, never in the returned object.
- * @param {string|null} [input.conversationId] - Chat, run or execution id
- *   (`pseudonymous` mode).
  * @returns {Promise<Object|null>} The object, or null for an output without text and tool calls.
  */
 export async function recordTextOutput({
@@ -51,8 +49,7 @@ export async function recordTextOutput({
   marking,
   watermarkApplied,
   keyId,
-  user,
-  conversationId
+  user
 }) {
   // EU AI Act master switch off: no record, no object (callers are null-safe).
   if (!isEuAiActEnabled()) return null;
@@ -79,7 +76,7 @@ export async function recordTextOutput({
           ? [hashText(finalText)]
           : [];
       try {
-        const named = await recordedUser({ user, conversationId });
+        const named = await recordedUser({ user });
         await store.record(named ? { ...provenance, user: named } : provenance, { extraHashes });
       } catch (error) {
         logger.warn('Could not store a provenance record', {

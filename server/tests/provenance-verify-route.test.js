@@ -91,8 +91,7 @@ describe('POST /api/eu-ai-act/provenance/_verify', () => {
       await recordTextOutput({
         text: 'An answer with a recorded user.',
         model: { id: 'model-a' },
-        user: { id: 'writer-1', email: 'writer@example.com' },
-        conversationId: 'chat-9'
+        user: { id: 'writer-1', email: 'writer@example.com' }
       });
     } finally {
       delete platform.provenance.recordUser;

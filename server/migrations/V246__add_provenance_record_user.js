@@ -6,8 +6,8 @@
  *
  * `provenance.recordUser` decides whether a stored provenance record names the
  * user who produced the output: `none` (nobody, as before), `anonymous` (a
- * fingerprint of the user), `pseudonymous` (a fingerprint of the conversation)
- * or `identified` (the user id). Seeded as `none` so nothing changes on upgrade
+ * secured, keyed hash), `pseudonymous` (a plain hash of the user id) or
+ * `identified` (the user id). Seeded as `none` so nothing changes on upgrade
  * and the key is visible; a value an installation already set is kept.
  */
 

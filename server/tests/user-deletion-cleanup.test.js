@@ -315,8 +315,7 @@ describe('the cleanup', () => {
       'userProjects',
       'userSkills',
       'integrationRequests',
-      'shortLinks',
-      'provenanceRecords'
+      'shortLinks'
     ]);
     expect(names.indexOf('scheduledTasks')).toBeLessThan(names.indexOf('chats'));
   });
