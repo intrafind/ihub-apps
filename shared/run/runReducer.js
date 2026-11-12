@@ -25,6 +25,7 @@ import { SSE_V2_EVENTS } from '../runEvents.js';
 import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 import { generatedFilesOf } from '../generatedFiles.js';
 import { ARGS_OUTCOMES, KNOWN_ARGS_OUTCOMES, PROGRESS_PHASES } from './argProgress.js';
+import { KNOWLEDGE_REFRESH_PHASE } from './knowledgeRefresh.js';
 
 const TERMINAL_STATUSES = new Set(['completed', 'aborted', 'error', 'budget_exhausted']);
 
@@ -91,6 +92,9 @@ export function createRunState(runId, init = {}) {
     argOrder: [],
     // The model call has shown nothing for a while (`model.waiting`), or null.
     waiting: null,
+    // The outdated project documents the turn waits for before it starts
+    // (`knowledge.refresh`, #3622): `{total, done, receivedAt}`, or null.
+    knowledgeRefresh: null,
     nodes: {},
     nodeOrder: [],
     // interactions
@@ -461,7 +465,28 @@ function foldLiveProgress(run, frame, envelope) {
   if (frame.phase === ARG_PHASE || frame.phase === ARG_ENDED_PHASE) {
     return foldArgFrame(run, frame, when);
   }
+  if (frame.phase === KNOWLEDGE_REFRESH_PHASE) return foldKnowledgeRefresh(run, frame, when);
   return frame.phase === WAITING_PHASE ? foldWaitingFrame(run, frame, when) : null;
+}
+
+/**
+ * Fold a `knowledge.refresh` frame: the turn waits for outdated project
+ * documents to be refreshed before it starts (#3622). The counts are the
+ * server's; the line ends when the turn starts (`run/started`).
+ */
+function foldKnowledgeRefresh(run, frame, when) {
+  if (TERMINAL_STATUSES.has(run.status) || run.lastLifecycleAt) return run;
+  const detail = detailOf(frame);
+  const total = Math.max(0, Math.floor(finiteOr(detail.total, 0)));
+  return {
+    ...run,
+    knowledgeRefresh: {
+      total,
+      done: Math.min(total, Math.max(0, Math.floor(finiteOr(detail.done, 0)))),
+      // The clock runs from the first frame.
+      receivedAt: run.knowledgeRefresh?.receivedAt ?? when.receivedAt
+    }
+  };
 }
 
 /** The skill a `skill.activation` frame names, for `foldSkill`. */
@@ -583,7 +608,9 @@ export function reduceRunEvent(state, envelope) {
         startedAt: run.startedAt || ts,
         lastLifecycleAt: ts,
         status: 'running',
-        error: null
+        error: null,
+        // The wait for outdated documents is over once the turn starts.
+        knowledgeRefresh: null
       };
       return { ...withRun(next, run), activeRunId: runId };
 

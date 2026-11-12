@@ -268,6 +268,8 @@ export default function registerAdminProjectsRoutes(app) {
       refreshTtl,
       refreshMode,
       refreshIdleDays,
+      refreshWaitSeconds,
+      ingest,
       knowledgeModes
     } = projectSettings(platformConfig);
     return {
@@ -278,6 +280,8 @@ export default function registerAdminProjectsRoutes(app) {
       refreshTtl,
       refreshMode,
       refreshIdleDays,
+      refreshWaitSeconds,
+      ingest: { concurrency: ingest.concurrency, fetchConcurrency: ingest.fetchConcurrency },
       knowledgeModes,
       maxFilesCeiling: MAX_FILES_CEILING
     };
@@ -302,7 +306,11 @@ export default function registerAdminProjectsRoutes(app) {
    *       background, `auto`: in the background while a project is used,
    *       `onDemand`: when it is used) and
    *       `refreshIdleDays` (days without use after which an `auto` project is
-   *       refreshed only when used; 0 never). Full admins only.
+   *       refreshed only when used; 0 never) and `refreshWaitSeconds` (how long
+   *       a chat turn or a workflow step waits for outdated documents before it
+   *       reads them; 0 does not wait) and `ingest` (`fetchConcurrency`: pages
+   *       and files checked at once per server process; `concurrency`:
+   *       conversions at once). Full admins only.
    *     tags: [Admin Projects]
    *   put:
    *     summary: Change the sharing audiences, the tier policy, the default app and the limits
@@ -341,6 +349,10 @@ export default function registerAdminProjectsRoutes(app) {
             ...(body.refreshIdleDays !== undefined
               ? { refreshIdleDays: body.refreshIdleDays }
               : {}),
+            ...(body.refreshWaitSeconds !== undefined
+              ? { refreshWaitSeconds: body.refreshWaitSeconds }
+              : {}),
+            ...(body.ingest ? { ingest: { ...stored.ingest, ...body.ingest } } : {}),
             ...(body.knowledgeModes ? { knowledgeModes: [...new Set(body.knowledgeModes)] } : {})
           }
         };
@@ -359,6 +371,15 @@ export default function registerAdminProjectsRoutes(app) {
         ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
         ...(body.refreshMode !== undefined ? { refreshMode: body.refreshMode } : {}),
         ...(body.refreshIdleDays !== undefined ? { refreshIdleDays: body.refreshIdleDays } : {}),
+        ...(body.refreshWaitSeconds !== undefined
+          ? { refreshWaitSeconds: body.refreshWaitSeconds }
+          : {}),
+        ...(body.ingest?.concurrency !== undefined
+          ? { 'ingest.concurrency': body.ingest.concurrency }
+          : {}),
+        ...(body.ingest?.fetchConcurrency !== undefined
+          ? { 'ingest.fetchConcurrency': body.ingest.fetchConcurrency }
+          : {}),
         ...(body.knowledgeModes ? { knowledgeModes: body.knowledgeModes.join('|') } : {}),
         ...body.limits
       })

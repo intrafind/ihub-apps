@@ -51,6 +51,7 @@ import {
   evictProjectIndex
 } from '../services/knowledge/LocalKnowledgeProvider.js';
 import { ProjectIngestService } from '../services/projects/ProjectIngestService.js';
+import { awaitFreshScope } from '../services/projects/readFreshness.js';
 import {
   DEFAULT_REFRESH_TTL_SECONDS,
   effectiveRefreshMode,
@@ -87,6 +88,9 @@ const pages = new Map();
 /** Requests the website saw: { path, headers }. */
 const seen = [];
 
+/** Requests the website is answering right now, and the most at once. */
+const load = { inFlight: 0, max: 0 };
+
 function setPlatform(overrides = {}) {
   platform = { ...platform, ...overrides };
   configCache.setCacheEntry('config/platform.json', platform);
@@ -96,6 +100,20 @@ function answer(req, res) {
   const url = new URL(req.url, 'http://localhost');
   seen.push({ path: url.pathname, headers: req.headers });
   const page = pages.get(url.pathname);
+  load.inFlight += 1;
+  load.max = Math.max(load.max, load.inFlight);
+  res.on('close', () => {
+    load.inFlight -= 1;
+  });
+  // `delayMs`: a slow website.
+  if (page?.delayMs) {
+    setTimeout(() => respond(req, res, page), page.delayMs);
+    return;
+  }
+  respond(req, res, page);
+}
+
+function respond(req, res, page) {
   if (!page) {
     res.writeHead(404, { 'content-type': 'text/plain' });
     res.end('not found');
@@ -1538,5 +1556,224 @@ describe('refresh modes: always, automatically, when used, never', () => {
       { actor: ADA }
     );
     assert.equal(cleared.refreshMode, undefined);
+  });
+});
+
+describe('a reader waits for what is outdated, and fetching is bounded apart from converting', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const service = () => getProjectService();
+  const newProject = name => service().createUserProject({ owner: ADA, content: { name } });
+  const addUrl = (project, url) =>
+    service().addItem(project.id, { kind: 'url', ref: { url } }, { user: ADA });
+  const settingsWith = (projects = {}) =>
+    projectSettings({ ...platform, projects: { ...platform.projects, ...projects } });
+
+  /** A stored page whose last check is a week and a day old, in a project nobody used lately. */
+  async function outdatedPage(path, version) {
+    servePage(path, html('Policy', `Version ${version}.`));
+    const project = await newProject(`Reader ${path}`);
+    await service().updateProject(project.id, { refreshMode: 'onDemand' }, { actor: ADA });
+    const { item } = await addUrl(project, `${base}${path}`);
+    await settled(project.id, item.id);
+    const at = new Date(Date.now() - 8 * DAY).toISOString();
+    await getProjectRepository().mutate(
+      project.id,
+      current => {
+        const entry = current.items.find(candidate => candidate.id === item.id);
+        entry.checkedAt = at;
+        entry.snapshotAt = at;
+        return current;
+      },
+      { touchActivity: false, touchUpdated: false }
+    );
+    return { project: await getProjectRepository().get(project.id), item };
+  }
+
+  const textOf = async (project, itemId) =>
+    (
+      await getItemText(
+        { id: project.id },
+        project.items.find(entry => entry.id === itemId),
+        { user: ADA }
+      )
+    ).text;
+
+  it('reads the refreshed page, not the outdated one, and reports the wait', async () => {
+    const { project, item } = await outdatedPage('/reader-fresh', 'one');
+    servePage('/reader-fresh', html('Policy', 'Version two.'));
+    const progress = [];
+    const fresh = await awaitFreshScope([{ project }], {
+      settings: settingsWith({ refreshWaitSeconds: 15 }),
+      onProgress: entry => progress.push(entry)
+    });
+    assert.equal(fresh.total, 1);
+    assert.equal(fresh.done, 1);
+    assert.equal(fresh.timedOut, false);
+    assert.match(await textOf(fresh.scope[0].project, item.id), /Version two/);
+    assert.deepEqual(progress[0], { total: 1, done: 0 });
+    assert.deepEqual(progress.at(-1), { total: 1, done: 1 });
+  });
+
+  it('builds a chat prompt from the refreshed page and tells the turn how far it got', async () => {
+    const { default: PromptService } = await import('../services/PromptService.js');
+    const { project } = await outdatedPage('/reader-chat', 'one');
+    servePage('/reader-chat', html('Policy', 'Version two of the chat page.'));
+    setPlatform({ projects: { ...platform.projects, refreshWaitSeconds: 15 } });
+    const progress = [];
+    const key = `prep-${crypto.randomBytes(4).toString('hex')}`;
+    PromptService.watchKnowledgeRefresh(key, entry => progress.push(entry));
+    try {
+      const prompt = await PromptService._applyProjects(
+        'You answer questions.',
+        { id: 'chat-app', projects: [{ id: project.id, mode: 'context' }] },
+        {
+          user: { ...ADA, permissions: { projects: true } },
+          chatId: 'chat-reader',
+          lang: 'en',
+          modelName: null,
+          scopeKey: key,
+          question: 'What does the policy say?'
+        }
+      );
+      assert.match(prompt, /Version two of the chat page/);
+      assert.doesNotMatch(prompt, /Version one/);
+      assert.deepEqual(progress.at(-1), { total: 1, done: 1 });
+    } finally {
+      PromptService.unwatchKnowledgeRefresh(key);
+      PromptService.takeKnowledgeScope(key);
+      setPlatform({ projects: { ...platform.projects, refreshWaitSeconds: undefined } });
+    }
+  });
+
+  it('stops waiting at the time limit and reads what is stored; the refresh goes on', async () => {
+    const { project, item } = await outdatedPage('/reader-slow', 'one');
+    servePage('/reader-slow', html('Policy', 'Version two.'), { delayMs: 2500 });
+    const started = Date.now();
+    const fresh = await awaitFreshScope([{ project }], {
+      settings: settingsWith({ refreshWaitSeconds: 1 })
+    });
+    const waited = Date.now() - started;
+    assert.ok(waited >= 900 && waited < 2400, `waited ${waited} ms`);
+    assert.equal(fresh.timedOut, true);
+    assert.equal(fresh.done, 0);
+    assert.match(await textOf(fresh.scope[0].project, item.id), /Version one/);
+    // It is not dropped: the next read finds the new version.
+    const done = await settled(project.id, item.id);
+    assert.match((await getItemText({ id: project.id }, done, { user: ADA })).text, /Version two/);
+  });
+
+  it('does not wait, nor fetch, when the wait is 0 or nothing is outdated', async () => {
+    const { project } = await outdatedPage('/reader-off', 'one');
+    seen.length = 0;
+    const off = await awaitFreshScope([{ project }], {
+      settings: settingsWith({ refreshWaitSeconds: 0 })
+    });
+    assert.equal(off.total, 0);
+    assert.equal(hits('/reader-off'), 0);
+    assert.equal(off.scope[0].project, project);
+
+    servePage('/reader-current', html('Current', 'Current.'));
+    const current = await newProject('Current');
+    const { item } = await addUrl(current, `${base}/reader-current`);
+    await settled(current.id, item.id);
+    seen.length = 0;
+    const none = await awaitFreshScope(
+      [{ project: await getProjectRepository().get(current.id) }],
+      {
+        settings: settingsWith({ refreshWaitSeconds: 15 })
+      }
+    );
+    assert.equal(none.total, 0);
+    assert.equal(hits('/reader-current'), 0);
+  });
+
+  it('keeps the items a reader may not see out of the scope it hands back', async () => {
+    const { project, item } = await outdatedPage('/reader-hidden', 'one');
+    servePage('/reader-hidden', html('Policy', 'Version two.'));
+    const fresh = await awaitFreshScope([{ project: { ...project, items: [] } }], {
+      settings: settingsWith({ refreshWaitSeconds: 15 })
+    });
+    assert.deepEqual(fresh.scope[0].project.items, []);
+    const visible = await awaitFreshScope([{ project }], {
+      settings: settingsWith({ refreshWaitSeconds: 15 })
+    });
+    assert.deepEqual(
+      visible.scope[0].project.items.map(entry => entry.id),
+      [item.id]
+    );
+  });
+
+  it('checks many pages at once while converting few', async () => {
+    const ingest = getIngestService();
+    const project = await newProject('Many pages');
+    const items = [];
+    for (let index = 0; index < 4; index += 1) {
+      servePage(`/many-${index}`, html(`Page ${index}`, 'First version.'));
+      const { item } = await addUrl(project, `${base}/many-${index}`);
+      items.push(await settled(project.id, item.id));
+    }
+    setPlatform({
+      projects: { ...platform.projects, ingest: { concurrency: 1, fetchConcurrency: 4 } }
+    });
+    let converting = 0;
+    let maxConverting = 0;
+    const acquire = ingest._acquireConvert.bind(ingest);
+    ingest._acquireConvert = async job => {
+      const release = await acquire(job);
+      converting += 1;
+      maxConverting = Math.max(maxConverting, converting);
+      return () => {
+        converting -= 1;
+        release();
+      };
+    };
+    try {
+      for (let index = 0; index < 4; index += 1) {
+        servePage(`/many-${index}`, html(`Page ${index}`, 'Second version.'), { delayMs: 400 });
+      }
+      load.max = 0;
+      for (const item of items) await service().refreshItem(project.id, item.id, { user: ADA });
+      for (const item of items) {
+        await waitFor(async () => {
+          const entry = await itemOf(project.id, item.id);
+          return entry && !entry.refreshingAt && !ingest.isActive(item.id) ? entry : null;
+        });
+      }
+      assert.ok(load.max >= 3, `checked ${load.max} at once`);
+      assert.equal(maxConverting, 1, 'one conversion at a time');
+      for (const item of items) {
+        const entry = await itemOf(project.id, item.id);
+        assert.match(
+          (await getItemText({ id: project.id }, entry, { user: ADA })).text,
+          /Second version/
+        );
+      }
+    } finally {
+      ingest._acquireConvert = acquire;
+      setPlatform({ projects: { ...platform.projects, ingest: undefined } });
+    }
+  });
+
+  it('never runs fewer jobs than conversions, and bounds both', () => {
+    assert.deepEqual(projectSettings({}).ingest, {
+      concurrency: 2,
+      fetchConcurrency: 8,
+      staleAfterMinutes: 30
+    });
+    assert.equal(
+      projectSettings({ projects: { ingest: { concurrency: 6, fetchConcurrency: 2 } } }).ingest
+        .fetchConcurrency,
+      6
+    );
+    assert.equal(
+      projectSettings({ projects: { ingest: { fetchConcurrency: 500 } } }).ingest.fetchConcurrency,
+      32
+    );
+    assert.equal(projectSettings({}).refreshWaitSeconds, 15);
+    assert.equal(projectSettings({ projects: { refreshWaitSeconds: 0 } }).refreshWaitSeconds, 0);
+    assert.equal(
+      projectSettings({ projects: { refreshWaitSeconds: 999 } }).refreshWaitSeconds,
+      120
+    );
   });
 });

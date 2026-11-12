@@ -16,7 +16,13 @@ import {
   IFINDER_PROJECT_ID_PREFIX,
   PROJECT_TIERS
 } from '../services/projects/projectConstants.js';
-import { zRefreshMode, zRefreshTtl } from '../services/projects/refreshTtl.js';
+import {
+  MAX_CONVERT_CONCURRENCY,
+  MAX_FETCH_CONCURRENCY,
+  MAX_REFRESH_WAIT_SECONDS,
+  zRefreshMode,
+  zRefreshTtl
+} from '../services/projects/refreshTtl.js';
 
 /** One of the knowledge modes (`shared/knowledgeModes.js`). */
 export const knowledgeModeSchema = z.enum(KNOWLEDGE_MODES);
@@ -589,6 +595,18 @@ export const projectSharingSettingsSchema = z
     // `auto` project is refreshed only when used (0: never idle) (#3622).
     refreshMode: zRefreshMode.optional(),
     refreshIdleDays: z.number().int().min(0).max(3650).optional(),
+    // How long a reader waits for outdated documents before it reads them
+    // (0: not at all), and the checks and conversions at once per server
+    // process (#3622).
+    refreshWaitSeconds: z.number().int().min(0).max(MAX_REFRESH_WAIT_SECONDS).optional(),
+    ingest: z
+      .object({
+        concurrency: z.number().int().min(1).max(MAX_CONVERT_CONCURRENCY),
+        fetchConcurrency: z.number().int().min(1).max(MAX_FETCH_CONCURRENCY)
+      })
+      .partial()
+      .strict()
+      .optional(),
     // The knowledge modes users may choose (#3538); `auto` is always offered.
     knowledgeModes: z.array(knowledgeModeSchema).min(1).max(KNOWLEDGE_MODES.length).optional()
   })
@@ -602,9 +620,11 @@ export const projectSharingSettingsSchema = z
       body.refreshTtl !== undefined ||
       body.refreshMode !== undefined ||
       body.refreshIdleDays !== undefined ||
+      body.refreshWaitSeconds !== undefined ||
+      body.ingest !== undefined ||
       body.knowledgeModes !== undefined,
     {
       message:
-        'Send sharing, tierPolicy, defaultAppId, limits, refreshTtl, refreshMode, refreshIdleDays or knowledgeModes'
+        'Send sharing, tierPolicy, defaultAppId, limits, refreshTtl, refreshMode, refreshIdleDays, refreshWaitSeconds, ingest or knowledgeModes'
     }
   );

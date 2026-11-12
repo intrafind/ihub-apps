@@ -6,9 +6,14 @@ import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { usageLimitBucketSchema } from './common.js';
 import { KNOWLEDGE_MODES, MAX_FILES_CEILING } from '../services/projects/projectConstants.js';
 import {
+  DEFAULT_FETCH_CONCURRENCY,
   DEFAULT_REFRESH_IDLE_DAYS,
   DEFAULT_REFRESH_MODE,
   DEFAULT_REFRESH_TTL_SECONDS,
+  DEFAULT_REFRESH_WAIT_SECONDS,
+  MAX_CONVERT_CONCURRENCY,
+  MAX_FETCH_CONCURRENCY,
+  MAX_REFRESH_WAIT_SECONDS,
   zRefreshMode,
   zRefreshTtl
 } from '../services/projects/refreshTtl.js';
@@ -839,6 +844,14 @@ export const platformConfigSchema = z
         // without use after which an `auto` project counts as idle (0: never).
         refreshMode: zRefreshMode.prefault(DEFAULT_REFRESH_MODE),
         refreshIdleDays: z.number().int().min(0).max(3650).prefault(DEFAULT_REFRESH_IDLE_DAYS),
+        // How long a reader waits for the outdated documents of its projects
+        // to be refreshed before it reads them (0: not at all).
+        refreshWaitSeconds: z
+          .number()
+          .int()
+          .min(0)
+          .max(MAX_REFRESH_WAIT_SECONDS)
+          .prefault(DEFAULT_REFRESH_WAIT_SECONDS),
         kinds: z.record(z.string(), z.boolean()).prefault({}),
         encryption: z
           .object({ keyProvider: z.string().prefault('local-file') })
@@ -857,7 +870,15 @@ export const platformConfigSchema = z
           .prefault({}),
         ingest: z
           .object({
-            concurrency: z.number().int().min(1).max(8).prefault(2),
+            // Conversions (scan and extraction) at once per server process.
+            concurrency: z.number().int().min(1).max(MAX_CONVERT_CONCURRENCY).prefault(2),
+            // Jobs at once per server process, each fetching its source first.
+            fetchConcurrency: z
+              .number()
+              .int()
+              .min(1)
+              .max(MAX_FETCH_CONCURRENCY)
+              .prefault(DEFAULT_FETCH_CONCURRENCY),
             staleAfterMinutes: z.number().int().positive().prefault(30)
           })
           .passthrough()

@@ -285,6 +285,51 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     );
   });
 
+  test('sets how long a reader waits for outdated documents and the checks and conversions at once', async () => {
+    mockApi.fetchProjectSettings.mockResolvedValue({
+      sharing: { allowUsers: true, allowGroups: true, allowEveryone: false, allowCatalog: false },
+      tierPolicy: 'ihub',
+      limits: {
+        maxFiles: 25,
+        maxFileBytes: 20 * MB,
+        maxProjectBytes: 200 * MB,
+        maxProjectsPerUser: 20
+      },
+      refreshWaitSeconds: 15,
+      ingest: { concurrency: 2, fetchConcurrency: 8 },
+      maxFilesCeiling: 200
+    });
+    mockApi.saveProjectSettings.mockImplementation(async settings => ({
+      ...settings,
+      maxFilesCeiling: 200
+    }));
+    renderPage();
+    const wait = await screen.findByLabelText(
+      'Wait for outdated documents before answering (seconds)'
+    );
+    expect(wait).toHaveValue(15);
+    expect(screen.getByLabelText('Files and web pages checked at once')).toHaveValue(8);
+    expect(screen.getByLabelText('Documents converted at once')).toHaveValue(2);
+
+    fireEvent.change(wait, { target: { value: '30' } });
+    fireEvent.change(screen.getByLabelText('Files and web pages checked at once'), {
+      target: { value: '16' }
+    });
+    // Out of range: kept as it was.
+    fireEvent.change(screen.getByLabelText('Documents converted at once'), {
+      target: { value: '99' }
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() =>
+      expect(mockApi.saveProjectSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          refreshWaitSeconds: 30,
+          ingest: { concurrency: 2, fetchConcurrency: 16 }
+        })
+      )
+    );
+  });
+
   test('keeps Save off while a limit is out of range', async () => {
     renderPage();
     const items = await screen.findByLabelText('Items per project');

@@ -15,6 +15,7 @@
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 import { setProjectUseListener } from './projectUse.js';
+import { setReadRefresher } from './readFreshness.js';
 import { evictItemText, setItemInfoRecorder, setTextReader } from '../knowledge/ItemTextService.js';
 import { evictProjectIndex } from '../knowledge/LocalKnowledgeProvider.js';
 import { evictItemKeys, readText } from './ItemTextStore.js';
@@ -79,6 +80,8 @@ export async function bootstrapProjects({ reconcile = true } = {}) {
   setProjectUseListener(project =>
     Promise.all([service.noteUse(project.id), ingestService.refreshOnUse(project)])
   );
+  // A reader waits, within `refreshWaitSeconds`, for what is outdated (#3622).
+  setReadRefresher((project, options) => ingestService.refreshForRead(project, options));
   if (reconcile) {
     try {
       const removed = await ingestService.cleanTempDir();

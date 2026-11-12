@@ -67,6 +67,29 @@ export const DEFAULT_REFRESH_MODE = 'auto';
 /** Days without use after which an `auto` project is refreshed only when used. */
 export const DEFAULT_REFRESH_IDLE_DAYS = 7;
 
+/**
+ * How long a reader (a chat turn, a workflow step) waits for the outdated
+ * documents of its projects to be refreshed before it reads them; what is not
+ * done by then is read as stored and keeps refreshing. 0 does not wait.
+ */
+export const DEFAULT_REFRESH_WAIT_SECONDS = 15;
+
+/** The longest wait an installation may set. */
+export const MAX_REFRESH_WAIT_SECONDS = 120;
+
+/**
+ * Pages and files checked at once per server process: a check is mostly a
+ * conditional request, cheap in CPU and memory. Converting what changed is
+ * bounded on its own (`ingest.concurrency`).
+ */
+export const DEFAULT_FETCH_CONCURRENCY = 8;
+
+/** The highest number of checks at once an installation may set. */
+export const MAX_FETCH_CONCURRENCY = 32;
+
+/** The highest number of conversions at once an installation may set. */
+export const MAX_CONVERT_CONCURRENCY = 8;
+
 /** A refresh mode as the API and the stored documents take it. */
 export const zRefreshMode = z.enum(REFRESH_MODES);
 

@@ -1579,6 +1579,22 @@ describe('ToolActivity — the model is silent', () => {
     expect(icons).toEqual(['spinner', 'light-bulb']);
   });
 
+  test('says how many outdated documents the turn is refreshing before it starts', () => {
+    const { container } = render(
+      <ToolActivity
+        activity={{
+          items: [],
+          reading: null,
+          idle: { kind: 'refreshing', total: 12, done: 5, elapsedMs: 0, receivedAt: T0, step: null }
+        }}
+        loading
+      />
+    );
+    expect(container.firstChild).toHaveTextContent('Refreshing outdated documents… 5 of 12');
+    const icons = screen.getAllByTestId('icon').map(icon => icon.dataset.name);
+    expect(icons).toEqual(['spinner', 'arrow-path']);
+  });
+
   test('the numbers are hidden from a screen reader', () => {
     render(
       <ToolActivity activity={{ items: [], reading: null, idle: idle('waiting', 12000) }} loading />

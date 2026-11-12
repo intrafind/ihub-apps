@@ -67,6 +67,7 @@ import {
   scopeSummary
 } from '../../knowledge/KnowledgeScopePlanner.js';
 import { projectSettings } from '../../projects/projectSettings.js';
+import { awaitFreshScope } from '../../projects/readFreshness.js';
 import { workflowProjectLinks } from '../projectNodes.js';
 import logger from '../../../utils/logger.js';
 import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
@@ -1446,9 +1447,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const model = Array.isArray(models)
         ? models.find(entry => entry.id === nodeConfig.modelId) || null
         : null;
-      const plan = await planKnowledgeScope(scope, {
+      const settings = projectSettings(configCache.getPlatform?.() || {});
+      // What is outdated is refreshed first, within `refreshWaitSeconds` (#3622).
+      const fresh = await awaitFreshScope(scope, { settings });
+      const plan = await planKnowledgeScope(fresh.scope, {
         model,
-        settings: projectSettings(configCache.getPlatform?.() || {}),
+        settings,
         ctx: {
           user: context.user,
           chatId: context.executionId,

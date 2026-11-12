@@ -33,9 +33,14 @@ export const PROJECTS_FEATURE = 'projects';
 export const USER_PROJECTS_FEATURE = 'userProjects';
 
 import {
+  DEFAULT_FETCH_CONCURRENCY,
   DEFAULT_REFRESH_IDLE_DAYS,
   DEFAULT_REFRESH_MODE,
   DEFAULT_REFRESH_TTL_SECONDS,
+  DEFAULT_REFRESH_WAIT_SECONDS,
+  MAX_CONVERT_CONCURRENCY,
+  MAX_FETCH_CONCURRENCY,
+  MAX_REFRESH_WAIT_SECONDS,
   normalizeRefreshMode,
   normalizeRefreshTtl
 } from './refreshTtl.js';
@@ -73,10 +78,18 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   refreshTtl: DEFAULT_REFRESH_TTL_SECONDS,
   refreshMode: DEFAULT_REFRESH_MODE,
   refreshIdleDays: DEFAULT_REFRESH_IDLE_DAYS,
+  refreshWaitSeconds: DEFAULT_REFRESH_WAIT_SECONDS,
   kinds: Object.freeze({}),
   encryption: Object.freeze({ keyProvider: 'local-file' }),
   scan: Object.freeze({ provider: 'none', command: '', timeoutMs: 30000, onError: 'reject' }),
-  ingest: Object.freeze({ concurrency: 2, staleAfterMinutes: 30 })
+  // `concurrency`: conversions (scan and extraction) at once per server
+  // process; `fetchConcurrency`: jobs at once, each fetching its source before
+  // it waits for a conversion slot (#3622).
+  ingest: Object.freeze({
+    concurrency: 2,
+    fetchConcurrency: DEFAULT_FETCH_CONCURRENCY,
+    staleAfterMinutes: 30
+  })
 });
 
 /** Malware scan providers phase 1 ships. */
@@ -155,6 +168,11 @@ export function projectSettings(platformConfig) {
       Number.isInteger(block.refreshIdleDays) && block.refreshIdleDays >= 0
         ? Math.min(block.refreshIdleDays, 3650)
         : defaults.refreshIdleDays,
+    // 0 does not wait: readers take the stored text and the refresh runs behind.
+    refreshWaitSeconds:
+      Number.isInteger(block.refreshWaitSeconds) && block.refreshWaitSeconds >= 0
+        ? Math.min(block.refreshWaitSeconds, MAX_REFRESH_WAIT_SECONDS)
+        : defaults.refreshWaitSeconds,
     kinds:
       block.kinds && typeof block.kinds === 'object' && !Array.isArray(block.kinds)
         ? { ...block.kinds }
@@ -173,16 +191,29 @@ export function projectSettings(platformConfig) {
       timeoutMs: readPositive(block.scan?.timeoutMs, defaults.scan.timeoutMs),
       onError: block.scan?.onError === 'allow' ? 'allow' : 'reject'
     },
-    ingest: {
-      concurrency: Math.min(
-        8,
-        readPositive(block.ingest?.concurrency, defaults.ingest.concurrency)
-      ),
-      staleAfterMinutes: readPositive(
-        block.ingest?.staleAfterMinutes,
-        defaults.ingest.staleAfterMinutes
+    ingest: ingestSettings(block.ingest, defaults.ingest)
+  };
+}
+
+/**
+ * The `ingest` block: conversions at once, and jobs at once (each fetching
+ * before it waits for a conversion), never fewer jobs than conversions.
+ */
+function ingestSettings(block, defaults) {
+  const concurrency = Math.min(
+    MAX_CONVERT_CONCURRENCY,
+    readPositive(block?.concurrency, defaults.concurrency)
+  );
+  return {
+    concurrency,
+    fetchConcurrency: Math.max(
+      concurrency,
+      Math.min(
+        MAX_FETCH_CONCURRENCY,
+        readPositive(block?.fetchConcurrency, defaults.fetchConcurrency)
       )
-    }
+    ),
+    staleAfterMinutes: readPositive(block?.staleAfterMinutes, defaults.staleAfterMinutes)
   };
 }
 

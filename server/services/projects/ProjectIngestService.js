@@ -165,7 +165,8 @@ export function fetchInput(
     nameFromTitle = false,
     scheduled = false,
     attempt = item.ingestAttempt,
-    reserve = false
+    reserve = false,
+    urgent = false
   } = {}
 ) {
   return {
@@ -177,8 +178,21 @@ export function fetchInput(
     purpose: 'pick',
     ...(reserve ? { reserve: true } : {}),
     ...(nameFromTitle ? { nameFromTitle: true } : {}),
-    ...(scheduled ? { scheduled: true } : {})
+    ...(scheduled ? { scheduled: true } : {}),
+    ...(urgent ? { urgent: true } : {})
   };
+}
+
+/** How often a reader waiting for refreshes (`refreshForRead`) looks at the project again. */
+const READ_WAIT_POLL_MS = 200;
+
+/**
+ * Whether an item is still to be read from its source for a reader: a job
+ * fetches or extracts it (here or on another worker), or it waits for its
+ * first fetch.
+ */
+function isUnsettled(item) {
+  return Boolean(item?.refreshingAt) || item?.status === 'pending' || item?.status === 'extracting';
 }
 
 /**
@@ -306,6 +320,15 @@ export class ProjectIngestService {
     this.running = 0;
     /** Background jobs (scheduled refreshes) running now. */
     this.runningBackground = 0;
+    /**
+     * Jobs waiting for a conversion slot (#3622): a job holds one of the
+     * `ingest.fetchConcurrency` job slots from its start, and one of the
+     * `ingest.concurrency` conversion slots only while it scans and extracts.
+     * Checking a source is cheap; converting it is what costs memory.
+     */
+    this.convertQueue = [];
+    this.converting = 0;
+    this.convertingBackground = 0;
     /** Project id → when this worker last refreshed it on use. */
     this.usedAt = new Map();
   }
@@ -356,12 +379,14 @@ export class ProjectIngestService {
       itemId: item.id,
       input,
       user,
-      // A scheduled refresh waits behind every job someone is waiting for.
-      background: input.scheduled === true,
+      // A scheduled refresh waits behind every job someone is waiting for,
+      // unless a reader waits for it (`urgent`, `refreshForRead`).
+      background: input.scheduled === true && input.urgent !== true,
       startedAt: Date.now()
     };
-    // Every job goes through the queue, so `ingest.concurrency` bounds the
-    // downloads, scans and extractions of this worker whatever the route;
+    // Every job goes through the queue, so `ingest.fetchConcurrency` bounds
+    // the jobs and `ingest.concurrency` the scans and extractions of this
+    // worker whatever the route;
     // `inline` only decides whether the caller waits for the result.
     // An explicit `wait: false` wins even for text handed in.
     const inline = wait === true || (wait !== false && typeof input.text === 'string');
@@ -385,7 +410,7 @@ export class ProjectIngestService {
    * one job's time however many files a tick queued.
    */
   _pump() {
-    const limit = this.settings().ingest.concurrency;
+    const limit = this.settings().ingest.fetchConcurrency;
     const backgroundLimit = Math.max(1, limit - 1);
     while (this.running < limit && this.queue.length) {
       let index = this.queue.findIndex(entry => !entry.job.background);
@@ -394,17 +419,81 @@ export class ProjectIngestService {
         index = 0;
       }
       const [{ job, resolve }] = this.queue.splice(index, 1);
+      // Counted as it started: a job moved ahead later (`promote`) still
+      // gives back the slot it took.
+      const background = job.background;
       this.running += 1;
-      if (job.background) this.runningBackground += 1;
+      if (background) this.runningBackground += 1;
       void this._run(job)
         .catch(() => null)
         .then(result => {
           this.running -= 1;
-          if (job.background) this.runningBackground -= 1;
+          if (background) this.runningBackground -= 1;
           resolve(result);
           this._pump();
         });
     }
+  }
+
+  /**
+   * Wait for a conversion slot (`ingest.concurrency`): jobs someone waits for
+   * first, background jobs never in the last slot when there is more than one.
+   *
+   * @param {Object} job
+   * @returns {Promise<() => void>} Gives the slot back; call it exactly once.
+   */
+  _acquireConvert(job) {
+    return new Promise(resolve => {
+      this.convertQueue.push({ job, resolve });
+      this._pumpConvert();
+    });
+  }
+
+  _pumpConvert() {
+    const limit = this.settings().ingest.concurrency;
+    const backgroundLimit = Math.max(1, limit - 1);
+    while (this.converting < limit && this.convertQueue.length) {
+      let index = this.convertQueue.findIndex(entry => !entry.job.background);
+      if (index < 0) {
+        if (this.convertingBackground >= backgroundLimit) return;
+        index = 0;
+      }
+      const [{ job, resolve }] = this.convertQueue.splice(index, 1);
+      const background = job.background;
+      this.converting += 1;
+      if (background) this.convertingBackground += 1;
+      let released = false;
+      resolve(() => {
+        if (released) return;
+        released = true;
+        this.converting -= 1;
+        if (background) this.convertingBackground -= 1;
+        this._pumpConvert();
+      });
+    }
+  }
+
+  /**
+   * Move the queued jobs of these items ahead of the background: a reader
+   * waits for them (`refreshForRead`). A job already converting keeps going.
+   *
+   * @param {Iterable<string>} itemIds
+   * @returns {number} The jobs moved.
+   */
+  promote(itemIds) {
+    const wanted = new Set(itemIds);
+    let moved = 0;
+    for (const entry of [...this.queue, ...this.convertQueue]) {
+      if (entry.job.background && wanted.has(entry.job.itemId)) {
+        entry.job.background = false;
+        moved += 1;
+      }
+    }
+    if (moved) {
+      this._pump();
+      this._pumpConvert();
+    }
+    return moved;
   }
 
   /** The items with a job queued or running on this worker. */
@@ -561,46 +650,54 @@ export class ProjectIngestService {
       if (!project) return null;
       this.service._checkItemQuota(withoutItem(project, itemId), { bytes: size });
 
-      // 3. Scan, on the temp file (the command scanner needs a path). Text
-      //    handed in is scanned as the bytes it will be stored as.
-      {
-        const scanBytes = bytes || Buffer.from(text, 'utf8');
-        let scanPath = bytes ? input.path || null : null;
-        let scratch = null;
-        if (!scanPath && this.scanner().id !== 'none') {
-          scratch = await this.newTempDir();
-          job.scratchDir = scratch;
-          scanPath = path.join(scratch, 'fetched');
-          await fs.writeFile(scanPath, scanBytes, { mode: 0o600 });
-        }
-        try {
-          await this._scan({ path: scanPath, bytes: scanBytes, contentType, name });
-        } finally {
-          await removeQuietly(scratch);
-        }
-      }
-
-      // 4. Extract.
+      // 3–4 hold a conversion slot (`ingest.concurrency`): the fetch above
+      //    ran under the job's slot only, so many sources are checked at once
+      //    while few are converted.
       const maxChars = input.purpose === 'import' ? MAX_IMPORT_TEXT_CHARS : MAX_TEXT_CHARS;
       let extracted = null;
-      if (text !== null) {
-        const normalized = normalizeText(text, { maxChars });
-        extracted = {
-          text: normalized.text,
-          contentType,
-          truncated: normalized.truncated,
-          ...infoFromText(normalized.text)
-        };
-        if (!extracted.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
-      } else {
-        const started = Date.now();
-        extracted = await extractText({ bytes, contentType, name }, { maxChars });
-        logger.debug('Extracted a project item', {
-          ...where,
-          contentType: extracted.contentType,
-          chars: extracted.text.length,
-          ms: Date.now() - started
-        });
+      const releaseConvert = await this._acquireConvert(job);
+      try {
+        // 3. Scan, on the temp file (the command scanner needs a path). Text
+        //    handed in is scanned as the bytes it will be stored as.
+        {
+          const scanBytes = bytes || Buffer.from(text, 'utf8');
+          let scanPath = bytes ? input.path || null : null;
+          let scratch = null;
+          if (!scanPath && this.scanner().id !== 'none') {
+            scratch = await this.newTempDir();
+            job.scratchDir = scratch;
+            scanPath = path.join(scratch, 'fetched');
+            await fs.writeFile(scanPath, scanBytes, { mode: 0o600 });
+          }
+          try {
+            await this._scan({ path: scanPath, bytes: scanBytes, contentType, name });
+          } finally {
+            await removeQuietly(scratch);
+          }
+        }
+
+        // 4. Extract.
+        if (text !== null) {
+          const normalized = normalizeText(text, { maxChars });
+          extracted = {
+            text: normalized.text,
+            contentType,
+            truncated: normalized.truncated,
+            ...infoFromText(normalized.text)
+          };
+          if (!extracted.text) throw new ExtractionError('NO_TEXT', 'The text is empty');
+        } else {
+          const started = Date.now();
+          extracted = await extractText({ bytes, contentType, name }, { maxChars });
+          logger.debug('Extracted a project item', {
+            ...where,
+            contentType: extracted.contentType,
+            chars: extracted.text.length,
+            ms: Date.now() - started
+          });
+        }
+      } finally {
+        releaseConvert();
       }
 
       // 4b. The same text as stored (#3622): a page whose HTML changes on
@@ -966,7 +1063,7 @@ export class ProjectIngestService {
    * @param {{max?: number}} [options]
    * @returns {Promise<number>} Fetches queued.
    */
-  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES } = {}) {
+  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES, urgent = false } = {}) {
     let queued = 0;
     const due = item => isWaitingForFetch(item);
     for (const project of projects || []) {
@@ -1007,7 +1104,8 @@ export class ProjectIngestService {
             nameFromTitle: isNamedAfterUrl(item),
             scheduled: true,
             attempt: randomUUID(),
-            reserve: true
+            reserve: true,
+            urgent
           }),
           { wait: false }
         );
@@ -1108,6 +1206,88 @@ export class ProjectIngestService {
       });
     }
     return { refreshed, fetched };
+  }
+
+  /**
+   * A reader is about to read a project (a chat turn, a workflow step) and
+   * waits, until `deadline`, for what in it is not current (#3622): outdated
+   * snapshots are refreshed and pages waiting for their first fetch fetched,
+   * in any refresh mode except `never`; items already being processed (here,
+   * on another worker, an upload still extracting) are waited for. Their jobs
+   * go ahead of the background. What is not done by the deadline keeps going;
+   * the reader takes what is stored.
+   *
+   * @param {Object} project - As loaded, with its items.
+   * @param {Object} options
+   * @param {number} options.deadline - Epoch milliseconds.
+   * @param {(progress: {total: number, done: number}) => void} [options.onProgress] -
+   *   Called with the counts when the wait starts and whenever more are done.
+   * @param {number} [options.now]
+   * @returns {Promise<{project: Object, total: number, done: number, timedOut: boolean}>}
+   *   `project` as stored when the wait ended.
+   */
+  async refreshForRead(project, { deadline, onProgress, now = Date.now() } = {}) {
+    const none = { project, total: 0, done: 0, timedOut: false };
+    if (!project?.id || project.deleting || project.enabled === false) return none;
+    const settings = this.settings();
+    const items = (project.items || []).filter(item => item.excludedFromAi !== true);
+    const outdated = items.filter(
+      item => !this.isActive(item.id) && isRefreshExpired(item, project, settings, now)
+    );
+    const waiting = items.filter(item => isLinkedWebPage(item) || isWaitingForFetch(item));
+    const targets = new Set([
+      ...outdated.map(item => item.id),
+      ...waiting.map(item => item.id),
+      ...items.filter(isUnsettled).map(item => item.id)
+    ]);
+    if (!targets.size) return none;
+    const total = targets.size;
+    const report = done => {
+      try {
+        onProgress?.({ total, done });
+      } catch {
+        // A progress listener never fails the read.
+      }
+    };
+    report(0);
+    // The refresh on use of this project need not run again for this read.
+    this.usedAt.set(project.id, now);
+    for (const item of outdated) {
+      try {
+        await this.service.refreshItem(project.id, item.id, {
+          scheduled: true,
+          urgent: true,
+          wait: false
+        });
+      } catch (error) {
+        // Taken by another job meanwhile: it is waited for like the others.
+        if (error?.code === 'PROJECT_MISMATCH' || error?.code === 'ITEM_NOT_FOUND') continue;
+        logger.warn('Could not refresh a project item for a reader', {
+          component: COMPONENT,
+          projectId: project.id,
+          itemId: item.id,
+          error: error?.message
+        });
+      }
+    }
+    if (waiting.length) await this.fetchWaiting([project], { urgent: true });
+    this.promote(targets);
+
+    let latest = project;
+    let done = 0;
+    for (;;) {
+      latest = (await this.repository.get(project.id)) || latest;
+      const byId = new Map((latest.items || []).map(item => [item.id, item]));
+      const settledNow = [...targets].filter(id => !isUnsettled(byId.get(id))).length;
+      if (settledNow !== done) {
+        done = settledNow;
+        report(done);
+      }
+      const left = deadline - Date.now();
+      if (done >= total || left <= 0) break;
+      await new Promise(resolve => setTimeout(resolve, Math.min(READ_WAIT_POLL_MS, left)));
+    }
+    return { project: latest, total, done, timedOut: done < total };
   }
 
   /**
