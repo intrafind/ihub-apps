@@ -356,6 +356,21 @@ export class FilesystemStorageProvider extends StorageProvider {
   async initialize() {
     if (this._initialized) return;
     await fs.mkdir(this._baseDir, { recursive: true });
+    try {
+      const removed = await this._blobs.removeDeletionLeftovers();
+      if (removed > 0) {
+        logger.info('Removed blobs left behind by interrupted deletes', {
+          component: COMPONENT,
+          count: removed
+        });
+      }
+    } catch (error) {
+      // Leftovers are inert (never listed, never a key): not worth failing a start.
+      logger.warn('Could not remove blobs left behind by interrupted deletes', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
     this._initialized = true;
     logger.debug('Filesystem storage provider initialized', {
       component: COMPONENT,

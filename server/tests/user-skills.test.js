@@ -58,6 +58,7 @@ const skillAccess = await import('../services/skillAccess.js');
 const { runTool } = await import('../services/tools/runTool.js');
 const { default: registerUserSkillRoutes } = await import('../routes/userSkillRoutes.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
+const { flushAuditLog } = await import('../services/AuditLogService.js');
 const { default: registerSkillRoutes } = await import('../routes/skillRoutes.js');
 const { default: registerAdminSkillsRoutes, skillMarkdownFromUserSkill } =
   await import('../routes/admin/skills.js');
@@ -292,6 +293,11 @@ before(async () => {
 
 after(async () => {
   await shutdownStorageBootstrap();
+  // The routes audit into contents/data/audit-log/ in baseDir through a
+  // buffer whose timer flushes a few seconds later. Write it now (and wait for
+  // a flush already running): a flush racing the removal below recreates a
+  // folder in it, and the removal fails with ENOTEMPTY.
+  await flushAuditLog();
   await fs.rm(baseDir, { recursive: true, force: true });
 });
 
