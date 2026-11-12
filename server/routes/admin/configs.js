@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import configStore from '../../services/config/ConfigStore.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
@@ -274,7 +275,10 @@ export default function registerAdminConfigRoutes(app) {
    * Update platform configuration
    */
   app.post(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
-    const newConfig = req.body;
+    const submittedConfig = req.body;
+    // The merge restores redacted secrets into it; a fresh copy per attempt keeps a
+    // re-run (after a conflicting write) from carrying the first attempt's restores.
+    let newConfig = submittedConfig;
 
     if (!newConfig || typeof newConfig !== 'object') {
       throw new ServiceError('BAD_REQUEST', 'Invalid configuration data');
@@ -322,130 +326,151 @@ export default function registerAdminConfigRoutes(app) {
     // `storage`, `chats`, `runLog`, `rateLimit` and the rest with nothing.
     // One trailing comma left by an operator, one Save, and the file is
     // gone.
-    const storedConfig = await configStore.readJsonStrict(PLATFORM_FILE);
-    if (!storedConfig) {
+    // The merge below runs inside updatePlatform: on the stored file, under the
+    // update lock, and strictly (an unparseable platform.json is an error, not a
+    // first run — the merge emits only the named keys, so treating it as empty
+    // would replace `features`, `cors`, `storage`, `chats`, `runLog`, `rateLimit`
+    // and the rest with nothing). It may run again after a conflicting write, so
+    // it only reads its input and sets the variables below.
+    let existingConfig;
+    let mergedConfig;
+    let firstRun = false;
+    await updatePlatform(
+      stored => {
+        firstRun = stored === null || Object.keys(stored).length === 0;
+        newConfig = structuredClone(submittedConfig);
+        existingConfig = structuredClone(stored);
+
+        // Merge the authentication-related config with existing config
+        mergedConfig = {
+          ...existingConfig,
+          // Listed explicitly for the same reason as `mcpServer` below: this merge
+          // emits only the named keys, so an unnamed one is silently reverted by
+          // the spread of existingConfig on save.
+          defaultLanguage:
+            newConfig.defaultLanguage !== undefined
+              ? newConfig.defaultLanguage
+              : existingConfig.defaultLanguage,
+          // First-run onboarding toggle (Admin → Advanced); same reason as above.
+          setup: newConfig.setup !== undefined ? newConfig.setup : existingConfig.setup,
+          // First-turn AI notice (Admin → Advanced); same reason as above.
+          aiDisclosure:
+            newConfig.aiDisclosure !== undefined
+              ? newConfig.aiDisclosure
+              : existingConfig.aiDisclosure,
+          // AI-use acknowledgement (#3326): the form owns enabled/enforce/text/
+          // policyUrl; `requiredVersion` and `resetAt` always come from the stored
+          // block, so a stale form cannot re-validate everyone.
+          aiAcknowledgement: mergeSettingsForSave(
+            newConfig.aiAcknowledgement,
+            existingConfig.aiAcknowledgement
+          ),
+          // Provenance records (#3327): retention, store switch, verify access, media and
+          // watermark tunables. Validated and deep-merged, so keys a form does not own survive.
+          provenance: mergeProvenanceForSave(newConfig.provenance, existingConfig.provenance),
+          auth: newConfig.auth || existingConfig.auth,
+          anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
+          proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
+          localAuth: newConfig.localAuth || existingConfig.localAuth,
+          oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
+          ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
+          ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
+          authorization: newConfig.authorization || existingConfig.authorization,
+          oauth: newConfig.oauth || existingConfig.oauth,
+          // MCP gateway (Admin → MCP gateway) is edited through this generic
+          // endpoint rather than a dedicated route, so it must be listed here —
+          // otherwise the spread of existingConfig silently wins and the saved
+          // toggles revert on the next load.
+          mcpServer:
+            newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
+          telemetry:
+            newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
+          speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
+          // Admin → Prompts → Variables (global context and custom variables).
+          globalPromptVariables:
+            newConfig.globalPromptVariables !== undefined
+              ? newConfig.globalPromptVariables
+              : existingConfig.globalPromptVariables,
+          // Admin → System → Cookie settings (`disableSecure`); same reason as above.
+          cookieSettings:
+            newConfig.cookieSettings !== undefined
+              ? newConfig.cookieSettings
+              : existingConfig.cookieSettings,
+          // Admin → Security → Tool approval (#2945).
+          toolApproval:
+            newConfig.toolApproval !== undefined
+              ? newConfig.toolApproval
+              : existingConfig.toolApproval
+        };
+        if (
+          newConfig.cookieSettings !== undefined &&
+          (newConfig.cookieSettings === null ||
+            typeof newConfig.cookieSettings !== 'object' ||
+            Array.isArray(newConfig.cookieSettings) ||
+            (newConfig.cookieSettings.disableSecure !== undefined &&
+              typeof newConfig.cookieSettings.disableSecure !== 'boolean'))
+        ) {
+          throw new ServiceError(
+            'BAD_REQUEST',
+            'cookieSettings must be an object with a boolean disableSecure'
+          );
+        }
+        if (newConfig.toolApproval === null) {
+          // `null` turns approval off: the block is removed, never stored as
+          // null (the platform schema has it as an optional object).
+          delete mergedConfig.toolApproval;
+        } else if (newConfig.toolApproval !== undefined) {
+          const approvalProblem = toolApprovalConfigProblem(newConfig.toolApproval);
+          if (approvalProblem) throw new ServiceError('BAD_REQUEST', approvalProblem);
+        }
+
+        // Restore secrets that were redacted in the client
+        // This prevents environment variable placeholders from being overwritten with ***REDACTED***
+
+        // Restore JWT secrets
+        if (newConfig.auth?.jwtSecret) {
+          if (!mergedConfig.auth) mergedConfig.auth = {};
+          mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
+            newConfig.auth.jwtSecret,
+            existingConfig.auth?.jwtSecret
+          );
+        }
+
+        if (newConfig.localAuth?.jwtSecret) {
+          if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
+          mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
+            newConfig.localAuth.jwtSecret,
+            existingConfig.localAuth?.jwtSecret
+          );
+        }
+
+        // Integration secrets (oidc/ldap/ntlm) live in
+        // the central credential store and are referenced by *Ref ids that are
+        // plain config values — they pass through the merge above unchanged and
+        // require no encrypt/restore handling here.
+
+        // Azure Speech subscription key: restore if the client sent the redacted
+        // placeholder, otherwise encrypt the newly provided secret at rest.
+        if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
+          if (!mergedConfig.speech) mergedConfig.speech = {};
+          if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
+          const restored = restoreSecretIfRedacted(
+            newConfig.speech.azure.subscriptionKey,
+            existingConfig.speech?.azure?.subscriptionKey
+          );
+          mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
+        }
+
+        // Save to file. Every secret has already been restored-if-redacted and
+        // encrypted above; what reaches the store is a plain object.
+        return mergedConfig;
+      },
+      { create: true }
+    );
+    if (firstRun) {
       // File genuinely absent: first run.
       logger.info('Creating new platform config file', { component: 'AdminConfigs' });
     }
-    const existingConfig = storedConfig || {};
-
-    // Merge the authentication-related config with existing config
-    const mergedConfig = {
-      ...existingConfig,
-      // Listed explicitly for the same reason as `mcpServer` below: this merge
-      // emits only the named keys, so an unnamed one is silently reverted by
-      // the spread of existingConfig on save.
-      defaultLanguage:
-        newConfig.defaultLanguage !== undefined
-          ? newConfig.defaultLanguage
-          : existingConfig.defaultLanguage,
-      // First-run onboarding toggle (Admin → Advanced); same reason as above.
-      setup: newConfig.setup !== undefined ? newConfig.setup : existingConfig.setup,
-      // First-turn AI notice (Admin → Advanced); same reason as above.
-      aiDisclosure:
-        newConfig.aiDisclosure !== undefined ? newConfig.aiDisclosure : existingConfig.aiDisclosure,
-      // AI-use acknowledgement (#3326): the form owns enabled/enforce/text/
-      // policyUrl; `requiredVersion` and `resetAt` always come from the stored
-      // block, so a stale form cannot re-validate everyone.
-      aiAcknowledgement: mergeSettingsForSave(
-        newConfig.aiAcknowledgement,
-        existingConfig.aiAcknowledgement
-      ),
-      // Provenance records (#3327): retention, store switch, verify access, media and
-      // watermark tunables. Validated and deep-merged, so keys a form does not own survive.
-      provenance: mergeProvenanceForSave(newConfig.provenance, existingConfig.provenance),
-      auth: newConfig.auth || existingConfig.auth,
-      anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
-      proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
-      localAuth: newConfig.localAuth || existingConfig.localAuth,
-      oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
-      ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
-      ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
-      authorization: newConfig.authorization || existingConfig.authorization,
-      oauth: newConfig.oauth || existingConfig.oauth,
-      // MCP gateway (Admin → MCP gateway) is edited through this generic
-      // endpoint rather than a dedicated route, so it must be listed here —
-      // otherwise the spread of existingConfig silently wins and the saved
-      // toggles revert on the next load.
-      mcpServer: newConfig.mcpServer !== undefined ? newConfig.mcpServer : existingConfig.mcpServer,
-      telemetry: newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry,
-      speech: newConfig.speech !== undefined ? newConfig.speech : existingConfig.speech,
-      // Admin → Prompts → Variables (global context and custom variables).
-      globalPromptVariables:
-        newConfig.globalPromptVariables !== undefined
-          ? newConfig.globalPromptVariables
-          : existingConfig.globalPromptVariables,
-      // Admin → System → Cookie settings (`disableSecure`); same reason as above.
-      cookieSettings:
-        newConfig.cookieSettings !== undefined
-          ? newConfig.cookieSettings
-          : existingConfig.cookieSettings,
-      // Admin → Security → Tool approval (#2945).
-      toolApproval:
-        newConfig.toolApproval !== undefined ? newConfig.toolApproval : existingConfig.toolApproval
-    };
-    if (
-      newConfig.cookieSettings !== undefined &&
-      (newConfig.cookieSettings === null ||
-        typeof newConfig.cookieSettings !== 'object' ||
-        Array.isArray(newConfig.cookieSettings) ||
-        (newConfig.cookieSettings.disableSecure !== undefined &&
-          typeof newConfig.cookieSettings.disableSecure !== 'boolean'))
-    ) {
-      throw new ServiceError(
-        'BAD_REQUEST',
-        'cookieSettings must be an object with a boolean disableSecure'
-      );
-    }
-    if (newConfig.toolApproval === null) {
-      // `null` turns approval off: the block is removed, never stored as
-      // null (the platform schema has it as an optional object).
-      delete mergedConfig.toolApproval;
-    } else if (newConfig.toolApproval !== undefined) {
-      const approvalProblem = toolApprovalConfigProblem(newConfig.toolApproval);
-      if (approvalProblem) throw new ServiceError('BAD_REQUEST', approvalProblem);
-    }
-
-    // Restore secrets that were redacted in the client
-    // This prevents environment variable placeholders from being overwritten with ***REDACTED***
-
-    // Restore JWT secrets
-    if (newConfig.auth?.jwtSecret) {
-      if (!mergedConfig.auth) mergedConfig.auth = {};
-      mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
-        newConfig.auth.jwtSecret,
-        existingConfig.auth?.jwtSecret
-      );
-    }
-
-    if (newConfig.localAuth?.jwtSecret) {
-      if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
-      mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
-        newConfig.localAuth.jwtSecret,
-        existingConfig.localAuth?.jwtSecret
-      );
-    }
-
-    // Integration secrets (oidc/ldap/ntlm) live in
-    // the central credential store and are referenced by *Ref ids that are
-    // plain config values — they pass through the merge above unchanged and
-    // require no encrypt/restore handling here.
-
-    // Azure Speech subscription key: restore if the client sent the redacted
-    // placeholder, otherwise encrypt the newly provided secret at rest.
-    if (newConfig.speech?.azure && Object.hasOwn(newConfig.speech.azure, 'subscriptionKey')) {
-      if (!mergedConfig.speech) mergedConfig.speech = {};
-      if (!mergedConfig.speech.azure) mergedConfig.speech.azure = {};
-      const restored = restoreSecretIfRedacted(
-        newConfig.speech.azure.subscriptionKey,
-        existingConfig.speech?.azure?.subscriptionKey
-      );
-      mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
-    }
-
-    // Save to file. Every secret has already been restored-if-redacted and
-    // encrypted above; what reaches the store is a plain object.
-    await configStore.writeJson(PLATFORM_FILE, mergedConfig);
 
     // Refresh cache
     await configCache.refreshCacheEntry('config/platform.json');

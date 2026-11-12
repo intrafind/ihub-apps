@@ -7,7 +7,6 @@ import { ZipArchive } from 'archiver';
 import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
 import { getContentsPath, oauthClientsFile } from '../../utils/contentsPath.js';
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -21,6 +20,7 @@ import {
 } from '../../utils/chromeExtensionId.js';
 import { isValidExtensionId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 // The browser extension uses a fixed redirect URI scheme:
 //   https://<extension-id>.chromiumapp.org/cb     (Chrome / Edge)
@@ -45,9 +45,9 @@ function signingKeyPath() {
  * @returns {Promise<Object>} The merged configuration that was written
  */
 async function savePlatformConfig(updates) {
-  const existing = configCache.getPlatform() || {};
-  const merged = { ...existing, ...updates };
-  await configStore.writeJson('config/platform.json', merged);
+  // The stored file, never the cache: the cache holds resolved values (env
+  // placeholders expanded, overrides applied) and can lag another worker's save.
+  const { data: merged } = await updatePlatform(updates);
   await configCache.refreshCacheEntry('config/platform.json');
   return merged;
 }

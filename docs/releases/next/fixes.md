@@ -1,5 +1,21 @@
 # Fixes — Unreleased
 
+## Saving Two Admin Settings Pages at Once No Longer Loses One of Them
+
+Almost every admin page that stores a setting (CORS, SSL, SSRF allow-list, rate limits, LLM timeouts, logging,
+audit log, chat history, proxy, usage limits, scheduled-task and user-skill/prompt settings, the Office add-in,
+browser extension and Nextcloud embed switches, the first-run setup, the generic platform settings page, and
+rolling back a platform change) read all of `platform.json`, changed its own section and wrote the whole file
+back. When two admins saved different pages within a fraction of a second, or two workers did, one of the
+saves was silently reverted — including security settings and the "setup configured" flag. The "refresh client
+cache" button could also lose clicks, because it counts them in the file.
+
+All of these now change the file as it is stored, in one locked step, so every section survives. The Office
+add-in, browser extension and Nextcloud embed pages no longer rebuild the file from the server's cache either:
+that cache could lag another worker's save (reverting it) and holds `${ENV}` placeholders already expanded, which
+were then written to disk as literal values. Secrets in `platform.json` are still encrypted on save exactly as
+before. No action is needed after the upgrade.
+
 ## Server Startup No Longer Reads the Whole Workflow History
 
 On every start, one worker read every stored workflow run in full (`contents/data/workflow-state`) to find

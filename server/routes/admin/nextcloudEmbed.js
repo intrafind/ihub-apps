@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -10,6 +9,7 @@ import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { oauthClientsFile } from '../../utils/contentsPath.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 /**
  * Merge updates into the platform configuration and publish them.
@@ -22,9 +22,9 @@ import { oauthClientsFile } from '../../utils/contentsPath.js';
  * @returns {Promise<Object>} The merged configuration that was written
  */
 async function savePlatformConfig(updates) {
-  const existing = configCache.getPlatform() || {};
-  const merged = { ...existing, ...updates };
-  await configStore.writeJson('config/platform.json', merged);
+  // The stored file, never the cache: the cache holds resolved values (env
+  // placeholders expanded, overrides applied) and can lag another worker's save.
+  const { data: merged } = await updatePlatform(updates);
   await configCache.refreshCacheEntry('config/platform.json');
   return merged;
 }

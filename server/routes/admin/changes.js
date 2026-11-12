@@ -10,6 +10,7 @@ import configCache from '../../configCache.js';
 import configStore from '../../services/config/ConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const VALID_RESOURCES = new Set([
   'app',
@@ -132,7 +133,9 @@ export default function registerAdminChangesRoutes(app) {
           break;
         }
         case 'platform': {
-          await configStore.writeJson('config/platform.json', beforeState);
+          // A rollback replaces the whole file by design; it still goes through
+          // the platform update lock so it cannot interleave with another save.
+          await updatePlatform(() => structuredClone(beforeState));
           await configCache.refreshCacheEntry('config/platform.json');
           break;
         }

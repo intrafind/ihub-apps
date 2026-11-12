@@ -9,6 +9,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import logger from '../utils/logger.js';
 import { adminAuth } from '../middleware/adminAuth.js';
+import { updatePlatform } from '../utils/platformConfigStore.js';
 
 // Cloud LLM providers that require API keys
 const LLM_PROVIDER_IDS = new Set(['openai', 'anthropic', 'google', 'mistral']);
@@ -62,13 +63,9 @@ async function testApiKey(providerId, apiKey) {
  * Mark setup as completed by setting setup.configured = true in platform.json.
  */
 async function markSetupConfigured() {
-  const platform = await configStore.readJson(PLATFORM_FILE);
-  // A read resolves to null rather than throwing, so an unreadable platform
-  // config has to be turned back into the failure the caller maps onto a 500 —
-  // recording "setup is done" against an empty object would drop the file.
-  if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
-  platform.setup = { ...platform.setup, configured: true };
-  await configStore.writeJson(PLATFORM_FILE, platform);
+  await updatePlatform(platform => {
+    platform.setup = { ...platform.setup, configured: true };
+  });
   await configCache.refreshCacheEntry(PLATFORM_FILE);
 }
 
@@ -93,10 +90,9 @@ export default function registerSetupRoutes(app) {
    * redirect to /setup stops for every user. Admin only.
    */
   app.post(buildServerPath('/api/setup/_disable'), adminAuth, async (req, res) => {
-    const platform = await configStore.readJson(PLATFORM_FILE);
-    if (!platform) throw new Error(`Unable to read ${PLATFORM_FILE}`);
-    platform.setup = { ...platform.setup, disabled: true };
-    await configStore.writeJson(PLATFORM_FILE, platform);
+    await updatePlatform(platform => {
+      platform.setup = { ...platform.setup, disabled: true };
+    });
     await configCache.refreshCacheEntry(PLATFORM_FILE);
     logger.info('Setup: onboarding disabled', { component: 'Setup' });
     res.status(204).end();

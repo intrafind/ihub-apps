@@ -5,7 +5,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import configStore from '../../services/config/ConfigStore.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 export default function registerAdminLoggingRoutes(app) {
   /**
@@ -71,16 +71,13 @@ export default function registerAdminLoggingRoutes(app) {
   app.put(buildServerPath('/api/admin/logging/config'), adminAuth, async (req, res) => {
     const newLoggingConfig = req.body;
 
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
     // Update logging config
-    platformConfig.logging = {
-      ...platformConfig.logging,
-      ...newLoggingConfig
-    };
-
-    await configStore.writeJson('config/platform.json', platformConfig);
+    const { data: platformConfig } = await updatePlatform(platformConfig => {
+      platformConfig.logging = {
+        ...platformConfig.logging,
+        ...newLoggingConfig
+      };
+    });
 
     // Refresh config cache
     await configCache.refreshCacheEntry('config/platform.json');

@@ -15,7 +15,7 @@ import { MAX_PAGE_SIZE, clampInt, isFlagSet, parseAuditLogQuery } from './auditL
 import { buildCsv } from '../../utils/csv.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
-import configStore from '../../services/config/ConfigStore.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 // Accept the platform.json shape exactly: 'off' | 'mask' | 'drop'. Anything
 // else is a 400 — we don't want the UI accidentally writing something the
@@ -166,15 +166,12 @@ export default function registerAdminAuditLogRoutes(app) {
       );
     }
 
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
-    if (!platformConfig.audit) platformConfig.audit = {};
-    if (anonymizeIp !== undefined) {
-      platformConfig.audit.anonymizeIp = anonymizeIp;
-    }
-
-    await configStore.writeJson('config/platform.json', platformConfig);
+    await updatePlatform(platformConfig => {
+      if (!platformConfig.audit) platformConfig.audit = {};
+      if (anonymizeIp !== undefined) {
+        platformConfig.audit.anonymizeIp = anonymizeIp;
+      }
+    });
     await configCache.refreshCacheEntry('config/platform.json');
 
     logAudit({

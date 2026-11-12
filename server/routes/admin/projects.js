@@ -16,7 +16,6 @@ import path from 'node:path';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { isAdmin } from '../../utils/authorization.js';
-import configStore from '../../services/config/ConfigStore.js';
 import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { requireFeature } from '../../featureRegistry.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -71,6 +70,7 @@ import { estimateProject } from '../../services/projects/projectEstimate.js';
 import { ACCEPTED_TYPES } from '../../services/projects/extractText.js';
 import { RESULT_BUDGET_TOKENS } from '../../sources/documentRetrieval.js';
 import { sendCreated, sendWithLocation, segment } from '../../utils/created.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const ADMIN_PERMISSIONS = Object.freeze({
   ...NO_ACCESS,
@@ -329,35 +329,30 @@ export default function registerAdminProjectsRoutes(app) {
     const body = parseBody(projectSharingSettingsSchema, req);
     // Changed on the body as stored right now: another admin's save of a
     // different setting is not overwritten.
-    const { data: platformConfig } = await configStore.updateJson(
-      'config/platform.json',
-      current => {
-        if (!current || typeof current !== 'object') {
-          throw new Error('Unable to read config/platform.json');
-        }
-        const stored = current.projects || {};
-        return {
-          ...current,
-          projects: {
-            ...stored,
-            ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
-            ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId } : {}),
-            ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {}),
-            ...(body.limits ? { limits: { ...stored.limits, ...body.limits } } : {}),
-            ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
-            ...(body.refreshMode !== undefined ? { refreshMode: body.refreshMode } : {}),
-            ...(body.refreshIdleDays !== undefined
-              ? { refreshIdleDays: body.refreshIdleDays }
-              : {}),
-            ...(body.refreshWaitSeconds !== undefined
-              ? { refreshWaitSeconds: body.refreshWaitSeconds }
-              : {}),
-            ...(body.ingest ? { ingest: { ...stored.ingest, ...body.ingest } } : {}),
-            ...(body.knowledgeModes ? { knowledgeModes: [...new Set(body.knowledgeModes)] } : {})
-          }
-        };
+    const { data: platformConfig } = await updatePlatform(current => {
+      if (!current || typeof current !== 'object') {
+        throw new Error('Unable to read config/platform.json');
       }
-    );
+      const stored = current.projects || {};
+      return {
+        ...current,
+        projects: {
+          ...stored,
+          ...(body.tierPolicy ? { tierPolicy: body.tierPolicy } : {}),
+          ...(body.defaultAppId !== undefined ? { defaultAppId: body.defaultAppId } : {}),
+          ...(body.sharing ? { sharing: { ...stored.sharing, ...body.sharing } } : {}),
+          ...(body.limits ? { limits: { ...stored.limits, ...body.limits } } : {}),
+          ...(body.refreshTtl !== undefined ? { refreshTtl: body.refreshTtl } : {}),
+          ...(body.refreshMode !== undefined ? { refreshMode: body.refreshMode } : {}),
+          ...(body.refreshIdleDays !== undefined ? { refreshIdleDays: body.refreshIdleDays } : {}),
+          ...(body.refreshWaitSeconds !== undefined
+            ? { refreshWaitSeconds: body.refreshWaitSeconds }
+            : {}),
+          ...(body.ingest ? { ingest: { ...stored.ingest, ...body.ingest } } : {}),
+          ...(body.knowledgeModes ? { knowledgeModes: [...new Set(body.knowledgeModes)] } : {})
+        }
+      };
+    });
     await configCache.refreshCacheEntry('config/platform.json');
     await logAudit({
       req,

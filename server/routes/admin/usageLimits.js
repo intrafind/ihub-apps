@@ -19,7 +19,6 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import configStore from '../../services/config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { usageLimitBucketSchema } from '../../validators/common.js';
 import {
@@ -38,6 +37,7 @@ import {
   listNearLimitUsers,
   listQuotaUsers
 } from '../../services/quota/quotaAdmin.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -128,24 +128,24 @@ export default function registerAdminUsageLimitRoutes(app) {
       throw new ServiceError('BAD_REQUEST', 'weeklyOn must be a weekday name');
     }
 
-    const platform = await configStore.readJson('config/platform.json');
-    if (!platform) throw new ServiceError('INTERNAL_ERROR', 'platform.json unreadable');
-    const current = platform.usageLimits || {};
-    platform.usageLimits = {
-      ...current,
-      allModels: Object.fromEntries(
-        Object.entries(parsedBudget.data).filter(([, v]) => v !== undefined && v !== null)
-      ),
-      resets: {
-        ...(current.resets || {}),
-        timezone: resets.timezone ? resets.timezone : null,
-        ...(resets.dailyAt ? { dailyAt: resets.dailyAt } : {}),
-        ...(resets.weeklyOn ? { weeklyOn: resets.weeklyOn } : {}),
-        ...(resets.weeklyAt ? { weeklyAt: resets.weeklyAt } : {}),
-        ...(resets.monthlyAt ? { monthlyAt: resets.monthlyAt } : {})
-      }
-    };
-    await configStore.writeJson('config/platform.json', platform);
+    // Unreadable platform.json: updateJson throws rather than overwrite it.
+    const { data: platform } = await updatePlatform(platform => {
+      const current = platform.usageLimits || {};
+      platform.usageLimits = {
+        ...current,
+        allModels: Object.fromEntries(
+          Object.entries(parsedBudget.data).filter(([, v]) => v !== undefined && v !== null)
+        ),
+        resets: {
+          ...(current.resets || {}),
+          timezone: resets.timezone ? resets.timezone : null,
+          ...(resets.dailyAt ? { dailyAt: resets.dailyAt } : {}),
+          ...(resets.weeklyOn ? { weeklyOn: resets.weeklyOn } : {}),
+          ...(resets.weeklyAt ? { weeklyAt: resets.weeklyAt } : {}),
+          ...(resets.monthlyAt ? { monthlyAt: resets.monthlyAt } : {})
+        }
+      };
+    });
     await configCache.refreshCacheEntry('config/platform.json');
     res.json(settingsResponse(configCache.getPlatform() || platform));
   });

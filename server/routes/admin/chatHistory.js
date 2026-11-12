@@ -20,7 +20,6 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import configCache from '../../configCache.js';
-import configStore from '../../services/config/ConfigStore.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { isFeatureEnabled } from '../../featureRegistry.js';
@@ -47,6 +46,7 @@ import { sweepChats } from '../../services/chat/chatRetention.js';
 import { collectChatStats } from '../../services/chat/chatAdminStats.js';
 import { getRunSummaryRepository } from '../../services/runtime/RunSummaryRepository.js';
 import { STORAGE_MODES, chatFileSettings } from '../../services/chatFiles/chatFilePolicy.js';
+import { updatePlatform, SKIP } from '../../utils/platformConfigStore.js';
 
 const COMPONENT = 'AdminChatHistory';
 
@@ -266,76 +266,79 @@ export default function registerAdminChatHistoryRoutes(app) {
       );
     }
     const { chats, runLog: ledger, titles, sharing, uploads } = parsed.data;
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
-    // Only values that differ from what is in force are written: the page
-    // sends its whole form, and an unchanged field should neither land in
-    // the audit entry nor ask for a restart.
-    const current = resolveSettings(platformConfig);
-    const changed = [];
-    for (const [block, patch] of [
-      ['chats', chats],
-      ['runLog', ledger]
-    ]) {
-      for (const [key, value] of Object.entries(patch || {})) {
-        if (current[block][key] === value) continue;
-        platformConfig[block] = { ...platformConfig[block], [key]: value };
-        changed.push(`${block}.${key}`);
-      }
-    }
-    // The titles form section is `platform.chats.titles` on disk.
-    for (const [key, value] of Object.entries(titles || {})) {
-      if (current.titles[key] === value) continue;
-      platformConfig.chats = {
-        ...platformConfig.chats,
-        titles: { ...platformConfig.chats?.titles, [key]: value }
-      };
-      changed.push(`chats.titles.${key}`);
-    }
-    // The sharing form section is `platform.chats.sharing` on disk.
-    const nextSharing = { ...current.sharing, ...sharing };
-    if (
-      nextSharing.defaultExpiryDays > 0 &&
-      nextSharing.maxExpiryDays > 0 &&
-      nextSharing.defaultExpiryDays > nextSharing.maxExpiryDays
-    ) {
-      throw new ServiceError(
-        'BAD_REQUEST',
-        'Invalid chat history settings: sharing.defaultExpiryDays must not exceed sharing.maxExpiryDays'
-      );
-    }
-    for (const [key, rawValue] of Object.entries(sharing || {})) {
-      // Origins are stored as bare `http(s)` origins; anything else is dropped.
-      const value = key === 'embedAllowedOrigins' ? sanitizeOrigins(rawValue) : rawValue;
-      if (JSON.stringify(current.sharing[key]) === JSON.stringify(value)) continue;
-      platformConfig.chats = {
-        ...platformConfig.chats,
-        sharing: { ...platformConfig.chats?.sharing, [key]: value }
-      };
-      changed.push(`chats.sharing.${key}`);
-    }
-
-    // `platform.uploads`: top-level values and the `quotas` block, written
-    // one by one so only what changed shows up in the audit entry.
-    for (const [key, value] of Object.entries(uploads || {})) {
-      if (key === 'quotas') {
-        for (const [quota, limit] of Object.entries(value || {})) {
-          if (current.uploads.quotas[quota] === limit) continue;
-          platformConfig.uploads = {
-            ...platformConfig.uploads,
-            quotas: { ...platformConfig.uploads?.quotas, [quota]: limit }
-          };
-          changed.push(`uploads.quotas.${quota}`);
+    // Computed from the stored file under the update lock; reruns on conflict, so
+    // everything it needs is derived from the body it is handed.
+    let changed = [];
+    const { data: platformConfig } = await updatePlatform(platformConfig => {
+      changed = [];
+      // Only values that differ from what is in force are written: the page
+      // sends its whole form, and an unchanged field should neither land in
+      // the audit entry nor ask for a restart.
+      const current = resolveSettings(platformConfig);
+      for (const [block, patch] of [
+        ['chats', chats],
+        ['runLog', ledger]
+      ]) {
+        for (const [key, value] of Object.entries(patch || {})) {
+          if (current[block][key] === value) continue;
+          platformConfig[block] = { ...platformConfig[block], [key]: value };
+          changed.push(`${block}.${key}`);
         }
-      } else if (current.uploads[key] !== value) {
-        platformConfig.uploads = { ...platformConfig.uploads, [key]: value };
-        changed.push(`uploads.${key}`);
       }
-    }
+      // The titles form section is `platform.chats.titles` on disk.
+      for (const [key, value] of Object.entries(titles || {})) {
+        if (current.titles[key] === value) continue;
+        platformConfig.chats = {
+          ...platformConfig.chats,
+          titles: { ...platformConfig.chats?.titles, [key]: value }
+        };
+        changed.push(`chats.titles.${key}`);
+      }
+      // The sharing form section is `platform.chats.sharing` on disk.
+      const nextSharing = { ...current.sharing, ...sharing };
+      if (
+        nextSharing.defaultExpiryDays > 0 &&
+        nextSharing.maxExpiryDays > 0 &&
+        nextSharing.defaultExpiryDays > nextSharing.maxExpiryDays
+      ) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'Invalid chat history settings: sharing.defaultExpiryDays must not exceed sharing.maxExpiryDays'
+        );
+      }
+      for (const [key, rawValue] of Object.entries(sharing || {})) {
+        // Origins are stored as bare `http(s)` origins; anything else is dropped.
+        const value = key === 'embedAllowedOrigins' ? sanitizeOrigins(rawValue) : rawValue;
+        if (JSON.stringify(current.sharing[key]) === JSON.stringify(value)) continue;
+        platformConfig.chats = {
+          ...platformConfig.chats,
+          sharing: { ...platformConfig.chats?.sharing, [key]: value }
+        };
+        changed.push(`chats.sharing.${key}`);
+      }
+
+      // `platform.uploads`: top-level values and the `quotas` block, written
+      // one by one so only what changed shows up in the audit entry.
+      for (const [key, value] of Object.entries(uploads || {})) {
+        if (key === 'quotas') {
+          for (const [quota, limit] of Object.entries(value || {})) {
+            if (current.uploads.quotas[quota] === limit) continue;
+            platformConfig.uploads = {
+              ...platformConfig.uploads,
+              quotas: { ...platformConfig.uploads?.quotas, [quota]: limit }
+            };
+            changed.push(`uploads.quotas.${quota}`);
+          }
+        } else if (current.uploads[key] !== value) {
+          platformConfig.uploads = { ...platformConfig.uploads, [key]: value };
+          changed.push(`uploads.${key}`);
+        }
+      }
+
+      if (changed.length === 0) return SKIP;
+    });
 
     if (changed.length > 0) {
-      await configStore.writeJson('config/platform.json', platformConfig);
       await configCache.refreshCacheEntry('config/platform.json');
       logAudit({
         req,

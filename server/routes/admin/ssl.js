@@ -6,7 +6,7 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import configStore from '../../services/config/ConfigStore.js';
+import { updatePlatform } from '../../utils/platformConfigStore.js';
 
 export default function registerAdminSSLRoutes(app) {
   /**
@@ -101,16 +101,13 @@ export default function registerAdminSSLRoutes(app) {
       }
     }
 
-    const platformConfig = await configStore.readJson('config/platform.json');
-    if (!platformConfig) throw new Error('Unable to read config/platform.json');
-
     // Update SSL configuration
-    platformConfig.ssl = {
-      ignoreInvalidCertificates,
-      domainWhitelist
-    };
-
-    await configStore.writeJson('config/platform.json', platformConfig);
+    await updatePlatform({
+      ssl: {
+        ignoreInvalidCertificates,
+        domainWhitelist
+      }
+    });
 
     // Refresh config cache
     await configCache.refreshCacheEntry('config/platform.json');
