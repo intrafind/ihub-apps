@@ -172,11 +172,18 @@ describe('the admin settings route', () => {
     originals = {
       readJson: configStore.readJson,
       writeJson: configStore.writeJson,
+      updateJson: configStore.updateJson,
       refresh: configCache.refreshCacheEntry
     };
     configStore.readJson = async () => structuredClone(stored);
     configStore.writeJson = async (_file, value) => {
       stored = structuredClone(value);
+    };
+    configStore.updateJson = async (_file, mutate) => {
+      const next = await mutate(structuredClone(stored));
+      if (next === undefined) return { data: stored, written: false };
+      stored = structuredClone(next);
+      return { data: next, written: true };
     };
     configCache.refreshCacheEntry = async _file => {
       configCache.setCacheEntry('config/platform.json', structuredClone(stored));
@@ -185,6 +192,7 @@ describe('the admin settings route', () => {
   after(() => {
     configStore.readJson = originals.readJson;
     configStore.writeJson = originals.writeJson;
+    configStore.updateJson = originals.updateJson;
     configCache.refreshCacheEntry = originals.refresh;
   });
 
