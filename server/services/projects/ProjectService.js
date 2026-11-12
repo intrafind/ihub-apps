@@ -42,7 +42,7 @@ import {
   refreshesOnSchedule,
   takesRefreshTtl
 } from './refreshTtl.js';
-import { fetchInput } from './ProjectIngestService.js';
+import { fetchInput, isNamedAfterUrl } from './ProjectIngestService.js';
 import { setProjectViewSettings } from './projectView.js';
 import { projectSettings } from './projectSettings.js';
 import { findDependencies } from './projectLinks.js';
@@ -1036,7 +1036,7 @@ export class ProjectService {
         fetchInput(refetch.kind, item, {
           user,
           prefetched: refetch.prepared?.prefetched,
-          nameFromTitle: item.name === item.ref?.url
+          nameFromTitle: isNamedAfterUrl(item)
         }),
         { user, wait: false }
       );

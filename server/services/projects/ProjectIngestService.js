@@ -131,6 +131,21 @@ export function isWaitingForFetch(item) {
   );
 }
 
+/** The longest item name stored (`ProjectService`, the item schema). */
+const MAX_ITEM_NAME_CHARS = 300;
+
+/**
+ * Whether an item is still named after its address (as it is until its page's
+ * title names it): its name is the URL, cut to the length a name is stored at.
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+export function isNamedAfterUrl(item) {
+  const url = typeof item?.ref?.url === 'string' ? item.ref.url : '';
+  return Boolean(url) && item.name === url.slice(0, MAX_ITEM_NAME_CHARS);
+}
+
 /**
  * The ingest input of an item's first fetch by its kind (a picked document, a
  * file or a page from a website): the kind's `fetch` with nobody's or the
@@ -943,7 +958,7 @@ export class ProjectIngestService {
           current,
           item,
           fetchInput(kind, item, {
-            nameFromTitle: item.name === item.ref?.url,
+            nameFromTitle: isNamedAfterUrl(item),
             scheduled: true,
             attempt: randomUUID(),
             reserve: true

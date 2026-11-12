@@ -437,6 +437,27 @@ describe('a web page is a stored snapshot', () => {
     await settled(project.id, item.id);
   });
 
+  it('names a page with an address longer than a name after its title', async () => {
+    const long = `/long-${'x'.repeat(400)}`;
+    const longer = `/longer-${'y'.repeat(400)}`;
+    servePage(long, html('Long', 'A long address.'));
+    servePage(longer, html('Longer', 'An even longer address.'));
+    const project = await newProject('Long');
+    const { item } = await addUrl(project, `${base}${long}`);
+    assert.equal((await settled(project.id, item.id)).name, 'Long');
+    await service.updateItem(
+      project.id,
+      item.id,
+      { ref: { url: `${base}${longer}` } },
+      { user: ADA }
+    );
+    const moved = await waitFor(async () => {
+      const entry = await itemOf(project.id, item.id);
+      return entry?.status === 'ready' && entry.ref.url.endsWith('y') ? entry : null;
+    });
+    assert.equal(moved.name, 'Longer');
+  });
+
   it('turns a link not converted yet into a snapshot when its address changes', async () => {
     servePage('/linked-new', html('Linked', 'The address it points at now.'));
     const project = await newProject('Linked');
