@@ -529,12 +529,11 @@ export class WorkflowStateRepository {
   /**
    * Every known execution, as metadata only.
    *
-   * Document bodies are not returned, so the caller does not hold them. They
-   * are still read: the store owes every listed document an `etag` and a
-   * `size`, and the filesystem provider derives both from the body. A walk of
-   * this namespace therefore costs a read and a parse of every state — callers
-   * that only want the unfinished runs use
-   * {@link WorkflowStateRepository#listActive} instead.
+   * Served by the store's metadata listing, which never reads a state body:
+   * a state carrying a whole workflow definition costs the first few
+   * kilobytes of its file. The workflow retention sweep walks the namespace
+   * this way at boot and once a day. Callers that only want the unfinished
+   * runs use {@link WorkflowStateRepository#listActive} instead.
    *
    * @param {Object} [options]
    * @param {string} [options.prefix] - Keep only ids starting with this.
@@ -579,12 +578,16 @@ export class WorkflowStateRepository {
     do {
       let page;
       try {
-        page = await this.documents.list(WORKFLOW_STATE_NAMESPACE, {
+        const pageOptions = {
           limit: SCAN_PAGE_SIZE,
-          includeData,
           ...(prefix ? { prefix } : {}),
           ...(cursor ? { cursor } : {})
-        });
+        };
+        // Metadata only: no state body is read, so walking an installation's
+        // whole history for ids and timestamps costs a few kilobytes a state.
+        page = includeData
+          ? await this.documents.list(WORKFLOW_STATE_NAMESPACE, pageOptions)
+          : await this.documents.listMetadata(WORKFLOW_STATE_NAMESPACE, pageOptions);
       } catch (error) {
         this.logger.warn('Could not list the workflow state namespace', {
           component: COMPONENT,

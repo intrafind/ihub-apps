@@ -2,87 +2,201 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * A metadata-only listing on the filesystem document store (#3624).
+ * Metadata-only reads on the filesystem document store (#3624).
  *
- * `list({ includeData: false })` still owes every document its `etag` and
- * `size` — both derived from the canonical serialization of the body — but
- * it must not build that serialization (or the key-sorted copy of every object
- * `canonicalJson` makes on the way) just to hash it: on a workflow state of
- * tens of megabytes that was the larger half of the boot spike.
+ * Every envelope carries the `etag` and `size` `put` computed, before `data`,
+ * so a metadata-only listing (`listMetadata`, `list({ includeData: false })`,
+ * `scan({ includeData: false })`) takes them from the start of the file and
+ * never parses, canonicalizes or hashes a body. On a workflow state of tens of
+ * megabytes that was the whole boot spike.
+ *
+ * There is no fallback for an envelope without them: migration V247 upgrades
+ * the stored ones once, and anything left without a valid etag is reported
+ * like any other corrupt document instead of being silently recomputed.
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { scratchDocuments } from './helpers/testStorage.js';
+import { documentDigest } from '../storage/etag.js';
+import { CorruptDocumentError } from '../storage/errors.js';
 
 const store = await scratchDocuments({ prefix: 'ihub-test-metadata-list-' });
 after(() => store.stop());
 
+const BIG = 200_000;
+
 /**
- * Run `fn` while recording every `JSON.stringify` call on an object.
+ * Run `fn` while recording the size of every string `JSON.parse` is handed and
+ * every object `JSON.stringify` is handed.
  *
  * @param {() => Promise<unknown>} fn - Code under observation.
- * @returns {Promise<{result: unknown, objectCalls: number}>}
+ * @returns {Promise<{result: unknown, largestParse: number, objectStringify: number}>}
  */
-async function countObjectStringify(fn) {
-  const original = JSON.stringify;
-  let objectCalls = 0;
+async function observeJson(fn) {
+  const { parse, stringify } = JSON;
+  let largestParse = 0;
+  let objectStringify = 0;
+  JSON.parse = function (text, ...rest) {
+    largestParse = Math.max(largestParse, String(text).length);
+    return parse.call(this, text, ...rest);
+  };
   JSON.stringify = function (value, ...rest) {
-    if (value !== null && typeof value === 'object') objectCalls += 1;
-    return original.call(this, value, ...rest);
+    if (value !== null && typeof value === 'object') objectStringify += 1;
+    return stringify.call(this, value, ...rest);
   };
   try {
-    return { result: await fn(), objectCalls };
+    return { result: await fn(), largestParse, objectStringify };
   } finally {
-    JSON.stringify = original;
+    JSON.parse = parse;
+    JSON.stringify = stringify;
   }
 }
 
-test('a metadata-only list reports the etag and size get() reports', async () => {
-  await store.reset();
-  const body = {
+function bigBody(i = 0) {
+  return {
     status: 'completed',
-    history: Array.from({ length: 200 }, (_, i) => ({ z: i, a: `entry ${i}`, m: { y: 1, b: 2 } }))
+    history: Array.from({ length: 2000 }, (_, j) => ({ z: j, a: `entry ${i}/${j} `.repeat(8) }))
   };
-  const written = await store.documents.put('meta-ns', 'doc-1', body, { ownerId: 'u1' });
-  const page = await store.documents.list('meta-ns', { includeData: false });
-  const fetched = await store.documents.get('meta-ns', 'doc-1');
+}
 
-  assert.equal(page.items.length, 1);
-  const [item] = page.items;
-  assert.equal('data' in item, false, 'no body on a metadata-only page');
-  assert.equal(item.etag, written.etag);
-  assert.equal(item.etag, fetched.etag);
-  assert.equal(item.size, fetched.size);
-  assert.equal(item.ownerId, 'u1');
-  assert.equal(item.updatedAt, fetched.updatedAt);
+/** Envelope file of a document; the scratch provider's base directory is `<dir>/data`. */
+const envelopePath = (ns, key) => path.join(store.dir, 'data', ns, `${key}.json`);
+
+test('the stored envelope carries etag and size before the body', async () => {
+  await store.reset();
+  const written = await store.documents.put('meta-ns', 'doc-1', bigBody(), { ownerId: 'u1' });
+  const raw = await fs.readFile(envelopePath('meta-ns', 'doc-1'), 'utf8');
+  const envelope = JSON.parse(raw);
+  assert.equal(envelope.v, 2);
+  assert.equal(envelope.etag, written.etag);
+  assert.equal(envelope.size, written.size);
+  assert.deepEqual({ etag: written.etag, size: written.size }, documentDigest(bigBody()));
+  assert.ok(raw.indexOf('"etag"') < raw.indexOf('"data"'), 'etag precedes data');
+  assert.ok(raw.indexOf('"size"') < raw.indexOf('"data"'), 'size precedes data');
 });
 
-test('a metadata-only list does not serialize document bodies whole', async () => {
+test('metadata-only reads report what get() reports, and never parse a body', async () => {
   await store.reset();
   for (let i = 0; i < 5; i += 1) {
-    await store.documents.put('meta-ns', `doc-${i}`, {
-      b: { nested: [1, 2, { c: 'x'.repeat(1000) }] },
-      a: Array.from({ length: 100 }, (_, j) => ({ j }))
-    });
+    await store.documents.put('meta-ns', `doc-${i}`, bigBody(i), { ownerId: 'u1' });
   }
-  const { result, objectCalls } = await countObjectStringify(() =>
-    store.documents.list('meta-ns', { includeData: false })
-  );
-  assert.equal(result.items.length, 5);
-  assert.equal(objectCalls, 0, 'no canonical copy of a body was built to hash it');
+  const fetched = await store.documents.get('meta-ns', 'doc-3');
+  assert.ok(fetched.size > BIG, 'the fixture is large');
+
+  for (const [label, read] of [
+    ['listMetadata', () => store.documents.listMetadata('meta-ns')],
+    ['list without data', () => store.documents.list('meta-ns', { includeData: false })],
+    [
+      'list by owner without data',
+      () => store.documents.list('meta-ns', { includeData: false, ownerId: 'u1' })
+    ],
+    [
+      'scan without data',
+      async () => {
+        const items = [];
+        for await (const doc of store.documents.scan('meta-ns', { includeData: false })) {
+          items.push(doc);
+        }
+        return { items };
+      }
+    ]
+  ]) {
+    const { result, largestParse, objectStringify } = await observeJson(read);
+    assert.equal(result.items.length, 5, label);
+    assert.ok(largestParse < 10_000, `${label}: largest JSON.parse input was ${largestParse}`);
+    assert.equal(objectStringify, 0, `${label}: no body serialized`);
+    const item = result.items.find(doc => doc.key === 'doc-3');
+    assert.equal('data' in item, false, label);
+    for (const field of [
+      'ns',
+      'key',
+      'ownerId',
+      'contentType',
+      'createdAt',
+      'updatedAt',
+      'etag',
+      'size'
+    ]) {
+      assert.deepEqual(item[field], fetched[field], `${label}: ${field}`);
+    }
+  }
 });
 
-test('a scan without data does not serialize document bodies whole either', async () => {
+test('listMetadata pages like list', async () => {
   await store.reset();
-  await store.documents.put('meta-ns', 'doc-a', { b: [{ c: 1 }], a: { d: 2 } });
-  const { result, objectCalls } = await countObjectStringify(async () => {
-    const items = [];
-    for await (const doc of store.documents.scan('meta-ns', { includeData: false })) {
-      items.push(doc);
-    }
-    return items;
+  for (const key of ['a', 'b', 'c']) await store.documents.put('meta-ns', key, { key });
+  const first = await store.documents.listMetadata('meta-ns', { limit: 2 });
+  assert.deepEqual(
+    first.items.map(item => item.key),
+    ['a', 'b']
+  );
+  const second = await store.documents.listMetadata('meta-ns', {
+    limit: 2,
+    cursor: first.nextCursor
   });
-  assert.equal(result.length, 1);
-  assert.match(result[0].etag, /^[0-9a-f]{64}$/);
-  assert.equal(objectCalls, 0);
+  assert.deepEqual(
+    second.items.map(item => item.key),
+    ['c']
+  );
+  assert.equal(second.nextCursor, null);
+});
+
+test('an envelope without a valid etag is a corrupt document, not recomputed', async () => {
+  await store.reset();
+  await store.documents.put('meta-ns', 'good', { ok: true });
+  const dir = path.join(store.dir, 'data', 'meta-ns');
+  const now = new Date().toISOString();
+  // What releases before V247 wrote: no etag, no size.
+  await fs.writeFile(
+    path.join(dir, 'legacy.json'),
+    JSON.stringify(
+      {
+        v: 1,
+        key: 'legacy',
+        ownerId: null,
+        contentType: 'application/json',
+        createdAt: now,
+        updatedAt: now,
+        data: { a: 1 }
+      },
+      null,
+      2
+    )
+  );
+  await fs.writeFile(
+    path.join(dir, 'tampered.json'),
+    JSON.stringify(
+      {
+        v: 2,
+        key: 'tampered',
+        ownerId: null,
+        contentType: 'application/json',
+        createdAt: now,
+        updatedAt: now,
+        etag: 'nope',
+        size: 7,
+        data: { a: 1 }
+      },
+      null,
+      2
+    )
+  );
+
+  for (const options of [{ includeData: false }, {}]) {
+    const page = await store.documents.list('meta-ns', options);
+    assert.deepEqual(
+      page.items.map(item => item.key),
+      ['good'],
+      JSON.stringify(options)
+    );
+    assert.equal(page.skipped, 2, JSON.stringify(options));
+  }
+  await assert.rejects(store.documents.get('meta-ns', 'legacy'), CorruptDocumentError);
+  await assert.rejects(store.documents.get('meta-ns', 'tampered'), CorruptDocumentError);
+
+  // An unconditional overwrite is still the repair, as for any torn document.
+  const repaired = await store.documents.put('meta-ns', 'legacy', { a: 1 });
+  assert.deepEqual({ etag: repaired.etag, size: repaired.size }, documentDigest({ a: 1 }));
 });

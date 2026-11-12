@@ -51,8 +51,25 @@ import {
 
 const COMPONENT = 'FilesystemDocumentStore';
 
-/** Envelope schema version, so a later layout change can be detected on read. */
-const ENVELOPE_VERSION = 1;
+/**
+ * Envelope schema version, so a later layout change can be detected on read.
+ *
+ * 2 carries `etag` and `size`, written before `data` (migration V247 upgraded
+ * the version-1 envelopes, which had neither).
+ */
+const ENVELOPE_VERSION = 2;
+
+/** Bytes a metadata read takes from the start of an envelope at a time. */
+const HEAD_CHUNK = 4096;
+
+/** A stored etag: sha256 hex. */
+const ETAG_PATTERN = /^[0-9a-f]{64}$/;
+
+/** Head scanner verdict: the text read so far ends before the metadata does. */
+const NEED_MORE = Symbol('need-more');
+
+/** Head scanner verdict: not laid out as this store writes envelopes. */
+const NOT_A_HEAD = Symbol('not-a-head');
 
 const DEFAULT_CONTENT_TYPE = 'application/json';
 const DEFAULT_LIMIT = 100;
@@ -99,24 +116,122 @@ function isReservedEntry(entry) {
 }
 
 /**
- * The stored body of an envelope together with its `etag` and `size`.
+ * Whether an envelope's stored `etag` and `size` are usable.
  *
- * Both are taken over the canonical JSON of the body rather than
- * `JSON.stringify`: the etag is contracted to depend on the data alone, and
- * `JSON.stringify` emits keys in insertion order, so this provider was
- * reporting a digest that depended on the order the *writer* built the object
- * in. It survived only because the JSON text is persisted and re-parsed, which
- * preserves that order by accident — a backend that stores bodies structurally
- * does not. See `storage/canonicalJson.js`.
+ * They are minted by `put` — over the canonical JSON of the body, see
+ * `storage/canonicalJson.js` and {@link documentDigest} — and stored, so a
+ * read never derives them again. An envelope without them (one written before
+ * migration V247 that the migration did not reach, or one edited by hand) is
+ * treated as a corrupt document rather than silently re-hashed: recomputing on
+ * read is exactly the cost the stored values exist to remove.
  *
- * `size` follows the same bytes, and both come from one streamed pass
- * ({@link documentDigest}) so they cannot drift apart — and so neither the
- * canonical string nor a key-sorted copy of the body is built just to hash it,
- * which on a metadata-only listing of large documents was most of the cost.
+ * @param {Object} envelope - Parsed envelope, or its head
+ * @returns {boolean}
  */
-function envelopeBody(envelope) {
-  const data = envelope.data === undefined ? null : envelope.data;
-  return { data, ...documentDigest(data) };
+function hasStoredDigest(envelope) {
+  return (
+    typeof envelope.etag === 'string' &&
+    ETAG_PATTERN.test(envelope.etag) &&
+    Number.isSafeInteger(envelope.size) &&
+    envelope.size >= 0
+  );
+}
+
+/**
+ * Index just past the closing quote of the JSON string starting at `start`.
+ *
+ * @param {string} text - Text being scanned
+ * @param {number} start - Index of the opening quote
+ * @returns {number} Index after the closing quote, or -1 when the text ends first
+ */
+function stringEnd(text, start) {
+  for (let i = start + 1; i < text.length; i += 1) {
+    const char = text[i];
+    if (char === '\\') i += 1;
+    else if (char === '"') return i + 1;
+  }
+  return -1;
+}
+
+const isJsonSpace = char => char === ' ' || char === '\n' || char === '\r' || char === '\t';
+
+/**
+ * The metadata of an envelope from the start of its text, without the body.
+ *
+ * Walks the top-level members in order and stops at `data`, which `put`
+ * always writes last. Every member before it is a primitive (a string, a
+ * number, null), so the walk only ever parses those small values — never a
+ * byte of the body.
+ *
+ * @param {string} text - The start of the envelope file
+ * @returns {Object|NEED_MORE|NOT_A_HEAD} The members before `data`; NEED_MORE
+ *   when `text` ends first; NOT_A_HEAD when the file is not laid out like that.
+ */
+function scanEnvelopeHead(text) {
+  const head = {};
+  const n = text.length;
+  let i = 0;
+  const skipSpace = () => {
+    while (i < n && isJsonSpace(text[i])) i += 1;
+  };
+  skipSpace();
+  if (i >= n) return NEED_MORE;
+  if (text[i] !== '{') return NOT_A_HEAD;
+  i += 1;
+  for (;;) {
+    skipSpace();
+    if (i >= n) return NEED_MORE;
+    if (text[i] === '}') return head;
+    if (text[i] !== '"') return NOT_A_HEAD;
+    const nameEnd = stringEnd(text, i);
+    if (nameEnd === -1) return NEED_MORE;
+    let name;
+    try {
+      name = JSON.parse(text.slice(i, nameEnd));
+    } catch {
+      return NOT_A_HEAD;
+    }
+    i = nameEnd;
+    skipSpace();
+    if (i >= n) return NEED_MORE;
+    if (text[i] !== ':') return NOT_A_HEAD;
+    i += 1;
+    skipSpace();
+    if (i >= n) return NEED_MORE;
+    if (name === 'data') return head;
+
+    let valueEnd;
+    if (text[i] === '"') {
+      valueEnd = stringEnd(text, i);
+      if (valueEnd === -1) return NEED_MORE;
+    } else if (text[i] === '{' || text[i] === '[') {
+      return NOT_A_HEAD; // metadata members are primitives
+    } else {
+      valueEnd = i;
+      while (valueEnd < n && text[valueEnd] !== ',' && text[valueEnd] !== '}') {
+        if (isJsonSpace(text[valueEnd])) break;
+        valueEnd += 1;
+      }
+      if (valueEnd >= n) return NEED_MORE;
+    }
+    let value;
+    try {
+      value = JSON.parse(text.slice(i, valueEnd));
+    } catch {
+      return NOT_A_HEAD;
+    }
+    if (name !== '__proto__') head[name] = value;
+    i = valueEnd;
+    skipSpace();
+    if (i >= n) return NEED_MORE;
+    if (text[i] === ',') {
+      i += 1;
+    } else if (text[i] === '}') {
+      return head;
+    } else {
+      return NOT_A_HEAD;
+    }
+  }
 }
 
 /** Serialize document data, rejecting anything JSON cannot represent. */
@@ -281,8 +396,10 @@ export class FilesystemDocumentStore extends DocumentStore {
       async () => {
         // Lenient: an unconditional overwrite is the deliberate repair for a
         // torn document, and the create-only branch below asks `_docExists`
-        // rather than this, so it still refuses to write over one.
-        const existing = await this._readEnvelope(ns, key, { lenient: true });
+        // rather than this, so it still refuses to write over one. The head
+        // is all a write needs of the stored document (etag, owner, content
+        // type, createdAt), so the previous body is never parsed.
+        const existing = await this._readEnvelopeHead(ns, key, { lenient: true });
 
         if (expectedEtag === null && existing) {
           throw new EtagMismatchError(`Document ${ns}/${key} already exists`);
@@ -291,7 +408,7 @@ export class FilesystemDocumentStore extends DocumentStore {
           if (!existing) {
             throw new EtagMismatchError(`Document ${ns}/${key} does not exist`);
           }
-          if (envelopeBody(existing).etag !== expectedEtag) {
+          if (existing.etag !== expectedEtag) {
             throw new EtagMismatchError(`Etag mismatch for document ${ns}/${key}`);
           }
         }
@@ -299,6 +416,10 @@ export class FilesystemDocumentStore extends DocumentStore {
         const previousOwnerId = storedOwnerId(existing);
         const ownerId = ownerRequested ? nextOwnerId : previousOwnerId;
         const now = new Date().toISOString();
+        // Store the round-tripped body so what put() returns is exactly what a
+        // following get() reads back (JSON drops undefined-valued keys and
+        // applies any toJSON()).
+        const body = JSON.parse(json);
         const envelope = {
           v: ENVELOPE_VERSION,
           key,
@@ -306,10 +427,11 @@ export class FilesystemDocumentStore extends DocumentStore {
           contentType: resolveContentType(options.contentType, existing),
           createdAt: typeof existing?.createdAt === 'string' ? existing.createdAt : now,
           updatedAt: now,
-          // Store the round-tripped body so what put() returns is exactly what
-          // a following get() reads back (JSON drops undefined-valued keys and
-          // applies any toJSON()).
-          data: JSON.parse(json)
+          // Minted once here and stored, before `data`, so every later read —
+          // a metadata-only listing above all — takes them from the start of
+          // the file instead of re-hashing the body.
+          ...documentDigest(body),
+          data: body
         };
 
         await fs.mkdir(this._nsDir(ns), { recursive: true });
@@ -405,7 +527,10 @@ export class FilesystemDocumentStore extends DocumentStore {
         // Lenient: a delete does not need to parse what it is removing, and
         // refusing to remove a torn document would leave the caller no way to
         // clear it.
-        const existing = await this._readEnvelope(ns, key, { lenient: true });
+        const existing = await this._readEnvelopeHead(ns, key, {
+          lenient: true,
+          requireDigest: false
+        });
         const ownerId = storedOwnerId(existing);
         const removed = await removeIfExists(this._docPath(ns, key));
         // Drop the index entry after the envelope: a marker may outlive its
@@ -439,6 +564,7 @@ export class FilesystemDocumentStore extends DocumentStore {
   async list(ns, opts = {}) {
     assertValidNamespace(ns);
     const { ownerId, prefix, limit, cursor, includeData = true } = opts || {};
+    const withData = includeData !== false;
     const pageSize = clampLimit(limit);
     const after = cursor === undefined || cursor === null ? null : decodeCursor(cursor);
 
@@ -471,10 +597,12 @@ export class FilesystemDocumentStore extends DocumentStore {
       // page can say it is not the whole set (`skipped`).
       const envelopes = await Promise.all(
         batch.map(key =>
-          this._readEnvelope(ns, key).catch(error => {
-            if (error instanceof CorruptDocumentError) return UNREADABLE;
-            throw error;
-          })
+          (withData ? this._readEnvelope(ns, key) : this._readEnvelopeHead(ns, key)).catch(
+            error => {
+              if (error instanceof CorruptDocumentError) return UNREADABLE;
+              throw error;
+            }
+          )
         )
       );
       let taken = 0;
@@ -494,7 +622,7 @@ export class FilesystemDocumentStore extends DocumentStore {
         // same, and removing that one would hide a live document from its owner.
         if (!envelope) continue;
         if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
-        items.push(this._toDocument(ns, key, envelope, includeData !== false));
+        items.push(this._toDocument(ns, key, envelope, withData));
       }
       consumed += taken;
     }
@@ -535,7 +663,10 @@ export class FilesystemDocumentStore extends DocumentStore {
     for (const key of keys) {
       // Same reasoning as `list`: a missing envelope is a stale owner marker
       // or a document deleted mid-walk, and is skipped rather than removed.
-      const envelope = await this._readEnvelope(ns, key, { lenient: true });
+      const envelope =
+        includeData !== false
+          ? await this._readEnvelope(ns, key, { lenient: true })
+          : await this._readEnvelopeHead(ns, key, { lenient: true });
       if (!envelope) continue;
       if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
       yield this._toDocument(ns, key, envelope, includeData !== false);
@@ -736,7 +867,77 @@ export class FilesystemDocumentStore extends DocumentStore {
     if (!envelope || typeof envelope !== 'object' || Array.isArray(envelope)) {
       return this._corrupt(ns, key, lenient, null);
     }
+    if (!hasStoredDigest(envelope)) {
+      return this._corrupt(ns, key, lenient, null, 'no valid stored etag and size');
+    }
     return envelope;
+  }
+
+  /**
+   * Read the metadata of an envelope — everything before `data` — without
+   * parsing the body.
+   *
+   * `put` writes `data` last and every member before it is a primitive, so
+   * the head is read from the start of the file a few kilobytes at a time and
+   * the body is never decoded past its first bytes. A file that is not laid
+   * out that way (written by hand, say) is parsed whole instead — that is a
+   * question of layout, not of a missing etag: the stored etag and size are
+   * required either way, and an envelope without them is corrupt.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Document key.
+   * @param {Object} [options]
+   * @param {boolean} [options.lenient=false] - Report a torn document as
+   *   absent instead of throwing.
+   * @param {boolean} [options.requireDigest=true] - False for a caller that
+   *   only needs the owner (a delete), so an envelope without a stored etag
+   *   can still be removed together with its index entry.
+   * @returns {Promise<Object|null>} The envelope without `data`, or null.
+   * @throws {CorruptDocumentError} When the file is present but unreadable.
+   * @private
+   */
+  async _readEnvelopeHead(ns, key, { lenient = false, requireDigest = true } = {}) {
+    let handle;
+    try {
+      handle = await fs.open(this._docPath(ns, key), 'r');
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'EISDIR') return null;
+      throw error;
+    }
+    let head;
+    try {
+      let buffer = Buffer.alloc(0);
+      for (;;) {
+        const chunk = Buffer.alloc(HEAD_CHUNK);
+        const { bytesRead } = await handle.read(chunk, 0, HEAD_CHUNK, buffer.length);
+        if (bytesRead > 0) buffer = Buffer.concat([buffer, chunk.subarray(0, bytesRead)]);
+        head = scanEnvelopeHead(buffer.toString('utf8'));
+        if (head !== NEED_MORE) break;
+        if (bytesRead === 0) {
+          head = NOT_A_HEAD; // the file ended inside the metadata
+          break;
+        }
+      }
+    } catch (error) {
+      if (error.code === 'EISDIR') return null;
+      throw error;
+    } finally {
+      await handle.close();
+    }
+
+    if (head === NOT_A_HEAD) {
+      const whole = await this._readEnvelope(ns, key, { lenient: true });
+      if (whole) {
+        const { data: _data, ...rest } = whole;
+        return rest;
+      }
+      if (!requireDigest) return null;
+      return this._corrupt(ns, key, lenient, null);
+    }
+    if (requireDigest && !hasStoredDigest(head)) {
+      return this._corrupt(ns, key, lenient, null, 'no valid stored etag and size');
+    }
+    return head;
   }
 
   /**
@@ -746,17 +947,18 @@ export class FilesystemDocumentStore extends DocumentStore {
    * @param {string} key - Document key.
    * @param {boolean} lenient - Whether to answer null instead of throwing.
    * @param {unknown} cause - The parse error, when there was one.
+   * @param {string} [reason] - What is wrong, when there is no parse error.
    * @returns {null} When `lenient`.
    * @throws {CorruptDocumentError} Otherwise.
    * @private
    */
-  _corrupt(ns, key, lenient, cause) {
+  _corrupt(ns, key, lenient, cause, reason = 'not a document envelope') {
     logger.error('Storage document exists but cannot be read', {
       component: COMPONENT,
       ns,
       key,
       path: this._docPath(ns, key),
-      ...(cause ? { error: cause.message } : { reason: 'not a document envelope' })
+      ...(cause ? { error: cause.message } : { reason })
     });
     if (lenient) return null;
     throw new CorruptDocumentError(`Document ${ns}/${key} is present but unreadable`, {
@@ -766,7 +968,7 @@ export class FilesystemDocumentStore extends DocumentStore {
 
   /** Project a stored envelope into the public Document shape. @private */
   _toDocument(ns, key, envelope, includeData) {
-    const { data, etag, size } = envelopeBody(envelope);
+    const data = envelope.data === undefined ? null : envelope.data;
     const document = {
       ns,
       key,
@@ -777,8 +979,9 @@ export class FilesystemDocumentStore extends DocumentStore {
           : DEFAULT_CONTENT_TYPE,
       createdAt: envelope.createdAt,
       updatedAt: envelope.updatedAt,
-      etag,
-      size
+      // Stored by `put` (see hasStoredDigest), never derived on read.
+      etag: envelope.etag,
+      size: envelope.size
     };
     // Left off entirely rather than set to undefined, so a metadata-only page
     // is distinguishable with a plain `in` check.

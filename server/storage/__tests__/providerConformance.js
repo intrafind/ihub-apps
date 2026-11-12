@@ -941,6 +941,21 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(item.etag, contractEtag(data), 'the etag still describes the body');
         assert.equal(item.size, contractSize(data));
       });
+
+      it('listMetadata is list without data, page for page', async () => {
+        const ns = nextId('list');
+        await seed(ns, {
+          'k-a': { data: { a: 1 }, ownerId: 'alice' },
+          'k-b': { data: { b: [1, 2] }, ownerId: 'bob' },
+          'k-c': { data: { c: 'x' }, ownerId: 'alice' }
+        });
+        for (const opts of [{}, { ownerId: 'alice' }, { prefix: 'k-b' }, { limit: 2 }]) {
+          const meta = await shared.documents.listMetadata(ns, opts);
+          const plain = await shared.documents.list(ns, { ...opts, includeData: false });
+          assert.deepEqual(meta, plain, JSON.stringify(opts));
+          for (const item of meta.items) assert.equal('data' in item, false);
+        }
+      });
     });
 
     /**

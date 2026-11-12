@@ -527,18 +527,26 @@ The envelope is written with `atomicWriteJSON`:
 
 ```
 {
-  "v": 1,
+  "v": 2,
   "key": "…",
   "ownerId": "…" | null,
   "contentType": "application/json",
   "createdAt": "ISO",
   "updatedAt": "ISO",
+  "etag": "<sha256 hex of the canonical JSON of data>",
+  "size": 123,
   "data": {}
 }
 ```
 
-`etag` and `size` are recomputed on every read, never stored, so they cannot
-drift from the data.
+`etag` and `size` are minted by `put` over the canonical serialization of
+`data` (the value the contract defines) and stored before `data`. Every read
+reports the stored values, and a metadata-only read (`listMetadata`,
+`list`/`scan` with `includeData: false`, and the owner/etag check inside `put`
+and `delete`) reads only the start of the file and never parses the body. An
+envelope without a valid stored `etag`/`size` is reported as corrupt (logged,
+counted in a page's `skipped`), never re-hashed. Migration V247 added both to
+the `v: 1` envelopes of earlier releases once.
 
 **Why documents are flat and owners are an index.** The design sketch had
 `contents/data/<ns>/[<ownerId>/]<key>.json`, but `get(ns, key)` takes no
