@@ -6653,7 +6653,7 @@
         "c2paSignedAt": "Signiert am {{when}}.",
         "recordTitle": "Herkunftsnachweis",
         "recordsTitle": "Herkunftsnachweise ({{count}}, neueste zuerst)",
-        "recordHelp": "Was diese Installation gespeichert hat, als sie die Ausgabe erzeugt hat. Er enthält einen Hash, nie den Inhalt, und nennt keinen Benutzer."
+        "recordHelp": "Was diese Installation gespeichert hat, als sie die Ausgabe erzeugt hat. Er enthält einen Hash, nie den Inhalt; einen Benutzer nennt er nur, wenn „Wen ein Nachweis nennt“ gesetzt ist."
       },
       "selfTest": {
         "keysMatch": "Bestanden: Der Detektor hat den aktiven Schlüssel {{keyId}} erkannt ({{n}} Tokens bewertet).",

@@ -6221,7 +6221,7 @@
         "c2paSignedAt": "Signed on {{when}}.",
         "recordTitle": "Provenance record",
         "recordsTitle": "Provenance records ({{count}}, newest first)",
-        "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content, and names no user."
+        "recordHelp": "What this installation stored when it produced the output. It holds a hash, never the content; it names a user only when \"Who a record names\" is set."
       },
       "selfTest": {
         "keysMatch": "Passed: the detector recognised the active key {{keyId}} ({{n}} tokens scored).",

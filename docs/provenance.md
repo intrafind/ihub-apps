@@ -141,7 +141,7 @@ prompt, name, email, chat or run ID.**
 | Mode | `user` in the record | |
 | --- | --- | --- |
 | `none` (default) | absent | The record describes the output only. |
-| `anonymous` | `{ "mode": "anonymous", "id": "usr_<16 hex>" }` | A secured hash: the user id hashed with a secret only the server holds (the installation pepper `contents/.usage-pepper`, never shown in any UI or API). Records of one person share the value; the user cannot be determined from it. |
+| `anonymous` | `{ "mode": "anonymous", "id": "usr_<16 hex>" }` | A secured hash: the user id hashed with a secret only the server holds (the installation pepper `contents/.usage-pepper`, never shown in any UI or API). Records of one person share the value; the user cannot be determined from it. It is the same value usage tracking (`anonymous` mode) and the pseudonymized run ledger use for that user, so provenance records can be joined with those data per person, still without naming them. |
 | `pseudonymous` | `{ "mode": "pseudonymous", "id": "<64 hex>" }` | A plain SHA-256 of the user id. Whoever knows a user id can compute it and attribute the record; the id cannot be read from it. |
 | `identified` | `{ "mode": "identified", "id": "<user id>" }` | The user id, never name, email or groups. The records then hold personal data. |
 

@@ -456,7 +456,7 @@ export default function VerificationCard({ maxFileBytes = DEFAULT_MAX_FILE_BYTES
                 <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
                   {t(
                     'admin.euAiAct.verify.recordHelp',
-                    'What this installation stored when it produced the output. It holds a hash, never the content, and names no user.'
+                    'What this installation stored when it produced the output. It holds a hash, never the content; it names a user only when "Who a record names" is set.'
                   )}
                 </p>
                 <div className="mt-2 space-y-3">
