@@ -39,10 +39,16 @@ const RESERVED = new Set(['.owners', '.locks']);
 
 // Snapshot of storage/canonicalJson.js + storage/etag.js as of V247 — the etag
 // rule. Do NOT replace with an import: migrations must be self-contained.
+// Plain UTF-16 code-unit order, the default sort order, never locale-dependent.
+function compareCodeUnits(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 function canonicalReplacer(_key, value) {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
   const sorted = {};
-  for (const key of Object.keys(value).sort()) sorted[key] = value[key];
+  for (const key of Object.keys(value).sort(compareCodeUnits)) sorted[key] = value[key];
   return sorted;
 }
 

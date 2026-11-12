@@ -103,6 +103,19 @@ function isOmitted(value) {
   return type === 'undefined' || type === 'function' || type === 'symbol';
 }
 
+/**
+ * Order two keys by UTF-16 code units — exactly what `Array.prototype.sort`
+ * does without a comparator, written out so it is visibly locale-independent.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareCodeUnits(a, b) {
+  if (a < b) return -1;
+  return a > b ? 1 : 0;
+}
+
 /** An array-index property name, which JavaScript objects order numerically. */
 const ARRAY_INDEX = /^(?:0|[1-9]\d*)$/;
 const MAX_ARRAY_INDEX = 2 ** 32 - 2;
@@ -128,7 +141,7 @@ function canonicalKeyOrder(value) {
     else if (key !== '__proto__') names.push(key);
   }
   if (indices.length > 1) indices.sort((a, b) => Number(a) - Number(b));
-  if (names.length > 1) names.sort();
+  if (names.length > 1) names.sort(compareCodeUnits);
   return indices.length === 0 ? names : indices.concat(names);
 }
 

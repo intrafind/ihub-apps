@@ -53,6 +53,8 @@ beforeEach(async () => {
 
 const DAY = 24 * 60 * 60 * 1000;
 
+const byCodeUnits = (a, b) => (a < b ? -1 : Number(a > b));
+
 function state(executionId, status, extra = {}) {
   return {
     executionId,
@@ -119,7 +121,10 @@ test('a stored non-terminal status is listed as active, a terminal one is not', 
 
   const { items, truncated } = await repository.listActive();
   assert.equal(truncated, false);
-  assert.deepEqual(items.map(item => item.executionId).sort(), ['wf-exec-run', 'wf-exec-wait']);
+  assert.deepEqual(items.map(item => item.executionId).sort(byCodeUnits), [
+    'wf-exec-run',
+    'wf-exec-wait'
+  ]);
   assert.equal(items.find(item => item.executionId === 'wf-exec-wait').status, 'paused');
 });
 
@@ -179,10 +184,13 @@ test('findResumableExecutions reads only the unfinished states', async () => {
   const observed = await observeStateReads(storage.provider.documents, () =>
     findResumableExecutions(stateRepositoryFor(storage))
   );
-  assert.deepEqual(observed.result.map(run => run.executionId).sort(), ['wf-exec-p', 'wf-exec-r']);
+  assert.deepEqual(observed.result.map(run => run.executionId).sort(byCodeUnits), [
+    'wf-exec-p',
+    'wf-exec-r'
+  ]);
   assert.equal(observed.listedWithBodies, 0, 'no listing of state bodies');
   assert.equal(observed.listedMetadata, 0, 'no walk of the namespace either');
-  assert.deepEqual(observed.gets.sort(), ['wf-exec-p', 'wf-exec-r', 'wf-exec-w']);
+  assert.deepEqual(observed.gets.sort(byCodeUnits), ['wf-exec-p', 'wf-exec-r', 'wf-exec-w']);
 });
 
 test('a run paused for approval long ago stays resumable and is never swept', async () => {
