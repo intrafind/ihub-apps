@@ -16,6 +16,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
+import { withFileLock } from '../../utils/fileLock.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
@@ -100,8 +101,20 @@ export async function readMemory(profileId) {
   }
 }
 
-export async function writeMemory(
+export async function writeMemory(profileId, options) {
+  // Concurrent runs of one profile are routine: the version check and the write
+  // are one step under a lock file every worker honours, or two writers both
+  // pass the check and the second silently replaces the first.
+  await fs.mkdir(memoryBaseDir(), { recursive: true });
+  const file = await memoryPath(profileId);
+  return withFileLock(`${file}.lock`, () => writeMemoryLocked(profileId, file, options), {
+    component: 'MemoryFile'
+  });
+}
+
+async function writeMemoryLocked(
   profileId,
+  file,
   { mode = 'replace', content = '', summary, expectedVersion, updatedBy }
 ) {
   const current = await readMemory(profileId);
@@ -134,9 +147,6 @@ export async function writeMemory(
     ...(summary ? { summary } : {})
   });
 
-  // memoryPath re-validates the profile id before constructing the path.
-  await fs.mkdir(memoryBaseDir(), { recursive: true });
-  const file = await memoryPath(profileId);
   // lgtm[js/path-injection] -- profileId validated by AGENT_PROFILE_ID_PATTERN; path canonicalized by resolveAndValidatePath.
   await atomicWriteFile(file, `${frontmatter}${nextBody}`);
   logger.info('Memory written', {
