@@ -1,31 +1,27 @@
 # Answer footer: one basis chip instead of duplicate badges
 
-Status: agreed design, not yet implemented.
-Participants: product, UX and UI review, and the product owner's decisions (2026-11-12).
+Status: agreed design, not yet implemented. The product, UX and UI review and the product owner's decisions are from 2026-11-12. The product owner later cut the chip down to source kinds only.
 
 ## Problem
 
-In a project chat, the footer of each finished answer says the same thing several times:
+In a project chat, the footer of each finished answer repeats information:
 
 ```
 [🔍 12 results ›]   [📁 Project Alpha · loaded in full]  [📄 Based on configured sources]  (ⓘ)
 ```
 
-- The project appears twice. Two different server signals describe the same fact:
+- **The project appears twice.** Two server signals describe the same fact:
   - `knowledge/scope` produces the project badge.
-  - `run/ended.knowledgeSources` contains `sources`, which produces "Based on configured sources".
-    The server adds `sources` for project knowledge in two places:
-    `PromptService.trackPromptSources` when project text is injected into the prompt, and
-    `knowledgeSourceSeam` for `knowledge_*` tools.
-- When the answer also used a web search, the project gets hidden inside "Based on multiple sources".
-- "Configured sources" is admin wording. The word "sources" also clashes with the Sources panel that "N results" opens.
-- "AI" is said twice:
-  - on a plain answer as "✨ Based on AI knowledge";
-  - on every answer by the separate icon-only ⓘ "AI generated: details" button.
-- Visual issues:
+  - `run/ended.knowledgeSources` produces "Based on configured sources". Project knowledge adds `sources` to it in two places:
+    - `PromptService.trackPromptSources`, when project text is injected;
+    - `knowledgeSourceSeam`, for `knowledge_*` tools.
+- **The project can disappear.** When the answer also used a web search, the project is hidden inside "Based on multiple sources".
+- **"Configured sources" is admin wording.** The word "sources" also clashes with the Sources panel that "N results" opens.
+- **"AI" appears twice.** A plain answer shows "✨ Based on AI knowledge". Every answer also has the separate icon-only ⓘ button "AI generated: details".
+- **Visual issues:**
   - Two identical purple pills next to each other.
   - 11 hues for 11 source types, several almost identical.
-  - The project badge is a link but tinted, which breaks the #3521 rule that clickable elements are outlined. It has no focus ring.
+  - The project badge is a link, but it is tinted. That breaks the #3521 rule that clickable elements are outlined.
   - All details sit in `title` tooltips, which keyboard and screen-reader users cannot reach.
   - At 320px (the Office taskpane) the row breaks into three lines.
 
@@ -33,120 +29,128 @@ In a project chat, the footer of each finished answer says the same thing severa
 
 The footer row has at most three elements:
 
-1. **Results entry:** `[🔍 N results ›]`. Outlined, unchanged. It shows the evidence, which is different from the basis of the answer.
-2. **Basis chip:** one outlined button with a chevron. It states that the answer is AI-generated and what it is based on, and it opens the "About this answer" popover.
-3. **Amber warning chip:** only when something in scope could not be used. It stays separate so a failure is not hidden inside a success statement.
+1. **Results entry** `[🔍 N results ›]`. It is outlined and unchanged. It shows the evidence, which is a different thing from the basis.
+2. **Basis chip.** One outlined button with a chevron. It shows only the **kinds** of sources the answer used, with no names, modes or prefix. It opens the "About this answer" popover.
+3. **Amber warning chip**, only when something in scope could not be used. It stays separate so a failure is not hidden.
 
-The separate ⓘ provenance button is removed from the row. Its whole content moves into the basis chip's popover, unchanged.
+The separate ⓘ provenance button is removed from the row. Its content moves into the chip's popover.
 
 ```
-Single project       [🔍 12 results ›]          [✦ AI-generated · based on 📁 Project Alpha ▾]
-Project + web        [🔍 18 results ›]  [✦ AI-generated · based on 📁 Project Alpha + 🌐 Web ▾]
-Several projects     [🔍 30 results ›]  [✦ AI-generated · based on 📁 Project Alpha + 2 more ▾]
-No retrieval                                          [✦ AI-generated · no sources ▾]
-Project unavailable           [✦ AI-generated · based on 📁 Project Alpha ▾] [⚠ Project Beta not used]
-Workflow                                 [⚙ Workflow: Monthly report ▾]
-320px taskpane       [🔍 18 results ›]
-                                       [✦ AI · 📁 Project Al… + 🌐 ▾]
+Project only          [🔍 12 results ›]              [📁 Project ▾]
+Project + web         [🔍 18 results ›]      [📁 Project · 🌐 Web ▾]
+Project + Jira        [🔍 9 results ›]      [📁 Project · 🔗 Jira ▾]
+Three or more kinds   [🔍 30 results ›]  [📁 Project · 🌐 Web · +1 ▾]
+No sources                                   [✦ Model knowledge ▾]
+Project unavailable               [✦ Model knowledge ▾] [⚠ Project not available]
+Workflow                                            [⚙ Workflow ▾]
 ```
 
-### Chip rules
+### What the chip shows
 
-- **Tone means how grounded the answer is, not the source type.** Use the shared `Badge` tones:
-  - `info` (indigo): retrieved knowledge.
-  - `neutral` (gray): no sources.
-  - `warning` (amber): something degraded.
-- **The icon carries the type:**
-  - `folder` = project
-  - `globe-alt` = web
-  - `sparkles` = model
-  - `document-text` = uploaded file only
-  - a stack icon = admin-configured sources
-- **Text is one line.**
-  - Only the project-name segment truncates.
-  - When the container is narrower than about 360px:
-    - "AI-generated" shortens to "AI";
-    - "based on" is hidden visually;
-    - the full text stays in the accessible name.
-- **More than two source types:** show the first, then "+ N more".
+**Source kinds, decided by the server.** Each kind is an icon plus a short noun:
+
+| Kind | EN | DE | Icon |
+|---|---|---|---|
+| Project | Project | Projekt | `folder` |
+| Web search, search grounding | Web | Web | `globe-alt` |
+| iFinder / iAssistant | iFinder / iAssistant | iFinder / iAssistant | `document-text` / `book-open` |
+| Admin-configured sources | Documents | Dokumente | `stack` |
+| Uploaded file | File | Datei | `paper-clip` |
+| Email (Office add-in) | Email | E-Mail | `mail` |
+| Audio recording | Recording | Aufnahme | `microphone` |
+| An integration, MCP server or remote agent | its own label, e.g. "Jira", "Confluence", "Munich AD" | same | `link` or the integration's icon |
+| Nothing retrieved | Model knowledge | Modellwissen | `sparkles` |
+
+**Model knowledge.** When no source was used, the chip says "Model knowledge" ("Modellwissen"). It never says "no sources", because the user must learn that the answer rests on the model's own knowledge.
+
+**Chip rules:**
+
+- Tone: `info` (indigo) when at least one source was used, `neutral` (gray) for model knowledge, `warning` (amber) for the separate warning chip. Colour does not tell the kinds apart; the icon and the noun do.
+- At most two kinds are named, then "+N".
+- Text never wraps.
+- At narrow widths the nouns can drop to icons only. The accessible name always holds the full text, e.g. "About this answer: based on project and web".
 
 ### Popover "About this answer"
 
-It reuses the `ProvenanceInfo` disclosure pattern: a button with `aria-expanded`, a non-modal dialog, Escape closes it and returns focus to the button, and clicking outside closes it. It has three sections, each with a heading and a `<dl>`:
+The popover reuses the `ProvenanceInfo` disclosure pattern:
 
-1. **Based on:**
-   - Each contributing source with its mode in plain words: "all documents read", "searched for matching passages", "only pinned documents".
-   - "Open project" link.
-   - Diagnostics stay and are shown as muted text: knowledge mode, over budget, "the model cannot call tools".
-2. **Not used:** projects that were in scope but did not contribute, with the reason.
-3. **AI generated:** model, created, marking, content hash with copy, output id, note. This is the current `ProvenanceInfo` content.
+- a button with `aria-expanded`;
+- a non-modal dialog;
+- Escape and an outside click close it, and focus returns to the button;
+- `max-h` with scrolling, and a width that fits the taskpane.
 
-Other details:
+The popover opens with the AI statement, then the details:
 
-- No `title` tooltips anywhere in the footer.
-- The amber chip has `role="status"` only on the newest answer, not on history.
-- Popover sizing: `max-h` with scrolling, and its width fits the taskpane.
+1. **AI-generated** (heading). One sentence: "This answer was generated by AI, based on project and web" or "…based on the model's knowledge". In German: "Diese Antwort wurde von einer KI erstellt, auf Grundlage von …".
+2. **Sources.** Each source by name:
+   - Projects get a plain-words mode ("all documents read", "searched for matching passages", "only pinned documents") and an "Open project" link.
+   - Each integration is listed with its label.
+   - Diagnostics stay here as muted text: knowledge mode, over budget, "the model cannot call tools".
+3. **Not used.** Projects that were in scope but did not contribute, with the reason.
+4. **Details.** Model, created, marking, content hash with copy, output id, and the note. This is today's `ProvenanceInfo` content.
 
-### Labels
-
-| Case | EN | DE |
-|---|---|---|
-| Single project | AI-generated · based on Project Alpha | KI-generiert · basierend auf Project Alpha |
-| Project + web | AI-generated · based on Project Alpha and web search | KI-generiert · basierend auf Project Alpha und Websuche |
-| 3+ kinds or 2+ projects | AI-generated · based on Project Alpha and 2 more | KI-generiert · basierend auf Project Alpha und 2 weiteren |
-| App-configured sources | AI-generated · based on {source name} (fallback "app documents") | KI-generiert · basierend auf {Name} (Fallback „App-Dokumenten“) |
-| No retrieval | AI-generated · no sources | KI-generiert · ohne Quellen |
-| Project unavailable | Project Alpha not used | Project Alpha nicht verwendet |
-| Popover title | About this answer | Über diese Antwort |
-| Popover sections | Based on / Not used / AI generated | Grundlage / Nicht verwendet / KI-generiert |
+The page has no `title` tooltips in the footer. The amber chip has `role="status"` only on the newest answer, not on history.
 
 ## Server changes
 
-These follow the CLAUDE.md rule that the server decides and the client renders.
+These follow the CLAUDE.md rule "the server decides, the client renders".
 
-1. **New knowledge source value `project`** in `run/ended.knowledgeSources`.
-   - Both project paths emit it in place of `sources`: `PromptService.trackPromptSources` and `knowledge_*` in `knowledgeSourceSeam`.
-   - `sources` keeps only its admin meaning: `source_*` tools and app-level sources.
-2. **`contributed: boolean` per project on `knowledge/scope`.**
-   - It is `true` when the project's text was injected into the prompt, or its search tool returned content for this turn.
-   - A project with `contributed: false` appears under "Not used", never as a basis.
-3. **Additive only.** The new enum value is added to `sseV2.js` and `runLogEvents.js`, and `contributed` is optional. Consumers of `knowledgeSources` (run ledger, analytics) will see `project` for new runs.
+1. **The server names the kinds.**
+   - `run/ended` gains an optional `answerBasis` array: `[{ kind, label?, icon? }]`.
+   - `kind` is one of `project`, `web`, `ifinder`, `iassistant`, `documents`, `file`, `email`, `audio`, `integration`, `model`.
+   - `label` is set for `integration`, from the instance label `toolDisplay` already computes (`_integration.instanceLabel`, `_mcp.serverName`, `_a2a.agentName`).
+   - One entry per distinct kind, and per distinct integration.
+   - `model` appears alone when nothing was used.
+   - The client renders this array and never maps tool ids itself.
+2. **Projects are their own kind.**
+   - Both project paths, `PromptService.trackPromptSources` and `knowledge_*` in `knowledgeSourceSeam`, report `project`.
+   - `sources` and `documents` keep only the admin-configured meaning.
+3. **`contributed: boolean` per project** on `knowledge/scope`.
+   - A project counts as contributed when its text was injected or its search returned content this turn.
+   - Only contributing projects make the answer count as project-based.
+   - The others appear under "Not used".
+4. **Additive only.**
+   - `knowledgeSources` stays as it is for the ledger and analytics.
+   - `answerBasis` and `contributed` are new optional fields in `sseV2.js`, `runLogEvents.js`, the reducer and the stored message (`OPTIONAL_MESSAGE_FIELDS`).
 
 ## Decisions by the product owner
 
-1. **Old stored messages: clean break.**
-   - Messages stored before the change keep `answerSource.sources: ['sources']` together with their `knowledgeScope`.
-   - No client compatibility rule is added. Old chats may still show the old pairing.
-2. **The chip states "AI-generated".** The visible per-answer AI marker stays, now as the start of the basis chip. The separate ⓘ button is what goes away, and its content moves into the chip's popover. Nothing is removed from:
-   - the first-turn notice (`AiFirstTurnNotice`);
-   - the disclaimer banner below the composer (`AIDisclaimerBanner`);
-   - the server's `provenance` object, watermarking and headers.
-3. **Wording:** "based on", not "used".
-4. **Diagnostics are kept**, in the popover's "Based on" section, for all users, as today's tooltips are.
+1. **Clean break for old messages.** Messages stored before the change have no `answerBasis`. The old badges and their code are removed, and nothing maps `knowledgeSources` or `knowledgeScope` onto the chip, so these messages show no basis chip.
+2. **The AI statement moves into the popover.** The chip shows only the kinds. Opening it says "AI-generated" with the details.
+   - The first-turn notice (`AiFirstTurnNotice`) is not removed.
+   - The disclaimer banner below the composer (`AIDisclaimerBanner`) is not removed.
+   - The server's `provenance` object, watermarking and headers are not removed.
+   - Only the separate ⓘ button goes away.
+3. **"Model knowledge", never "no sources".** This applies when nothing was retrieved.
+4. **Diagnostics are kept**, in the popover, for all users, as today's tooltips are.
 
 ## Acceptance criteria
 
-- A project answer shows exactly one chip naming the project, and no "configured sources" badge.
-- Project + web search shows one chip naming both, never "multiple sources" with the project hidden.
-- A project in scope whose content was not used is never shown as a basis. It appears under "Not used".
-- An unavailable project shows the amber chip; the basis chip reflects what was actually used.
-- App-configured sources without a project still show; app sources + a project are each named once.
-- A workflow answer shows the workflow chip; its popover links to the execution and keeps the AI generated section.
-- An answer with provenance but no reported sources (aborted, or stored before sources existed) shows the chip as "AI-generated" with the popover's AI section only.
-- Everything is reachable by keyboard and screen reader, with no information only in `title`.
-- The row fits a 320px taskpane in German without horizontal scroll.
-- EN and DE strings exist, plus a release note in `docs/releases/next/`.
+- **Project only:** the chip says "Project". No "configured sources" badge and no project mode appear in the row.
+- **Project + web search:** the chip says "Project · Web". It never says "multiple sources".
+- **An integration:** an answer that used one shows the integration's own label (e.g. "Jira"). Two integrations are two entries.
+- **No sources:** the chip says "Model knowledge" / "Modellwissen".
+- **Project in scope but not used:** the chip never shows "Project". The project is listed under "Not used".
+- **Project unavailable:** the amber chip shows, and the basis chip reflects what was actually used.
+- **Popover:** it opens with "AI-generated" and the basis sentence, then sources, not used, and details.
+- **Workflow answer:** the chip shows "Workflow". Its popover links to the execution and keeps the AI-generated section.
+- **Accessibility:** everything is reachable by keyboard and screen reader. No information is only in `title`.
+- **Narrow pane:** the row fits a 320px taskpane in German without horizontal scroll.
+- **Strings and release note:** EN and DE strings exist, plus a release note in `docs/releases/next/`.
 
 ## Files
 
 - Server:
   - `server/services/PromptService.js`
   - `server/services/loop/seams/knowledgeSourceSeam.js`
+  - `server/utils/toolDisplay.js`
   - `server/services/knowledge/KnowledgeScopePlanner.js`
+  - `server/services/chat/ChatService.js`
   - `server/services/loop/contracts/sseV2.js`
   - `server/services/loop/contracts/runLogEvents.js`
 - Client:
-  - `client/src/features/chat/components/AnswerSourceBadge.jsx`, which becomes the basis chip and popover
-  - `client/src/features/chat/components/ProvenanceInfo.jsx`, whose content becomes a popover section
-  - `client/src/features/chat/components/ChatMessage.jsx`, the footer row
-- Strings: `shared/i18n/en.json`, `shared/i18n/de.json` (`chatMessage.answerSource.*`, `chatMessage.knowledgeScope.*`, `chatMessage.provenance.*`)
+  - `client/src/features/chat/components/AnswerSourceBadge.jsx`, which becomes the chip and popover
+  - `client/src/features/chat/components/ProvenanceInfo.jsx`, whose content becomes the popover's details section
+  - `client/src/features/chat/components/ChatMessage.jsx`
+  - `shared/run/runReducer.js`
+- Strings: `shared/i18n/en.json`, `shared/i18n/de.json`
