@@ -237,22 +237,19 @@ describe('the "AI generated" details of a picture (EU AI Act Art. 50(2))', () =>
     content_hash: { alg: 'sha-256', normalization: 'none', value: 'a'.repeat(64) }
   };
 
-  it('offers the details button on a picture the server attached provenance to', () => {
+  it('keeps them out of the picture: they are in the chip under the answer', () => {
+    // One place for the "AI generated" information of a turn — the answer's chip
+    // (`AnswerBasis`) — rather than a second, different control on the image.
     render(
       <GeneratedImage
         image={{ mimeType: 'image/png', data: 'iVBORw0KGgo=', provenance }}
         index={0}
-        models={[{ id: 'gemini-image', name: { en: 'Gemini Image' } }]}
       />
     );
-    expect(screen.getByTestId('provenance-button')).toHaveAttribute(
-      'aria-label',
-      'AI-generated image: details'
-    );
-  });
-
-  it('shows no button on a picture without provenance (stored before it existed)', () => {
-    render(<GeneratedImage image={{ mimeType: 'image/png', data: 'iVBORw0KGgo=' }} index={0} />);
+    expect(screen.getByRole('img')).toBeInTheDocument();
     expect(screen.queryByTestId('provenance-button')).not.toBeInTheDocument();
+    expect(screen.queryByText(/AI-generated image/i)).not.toBeInTheDocument();
+    // What stays on the picture: download.
+    expect(screen.getByLabelText('Download image')).toBeInTheDocument();
   });
 });

@@ -30,6 +30,8 @@ import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.
 import runLog from '../services/loop/RunLog.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { activeRequests } from '../sse.js';
+import { getProvenanceStore } from '../services/provenance/ProvenanceStore.js';
+import { buildMediaRecord, hashBytes } from '../services/provenance/mediaMarking.js';
 import registerChatRoutes from '../routes/chats.js';
 import errorHandler from '../middleware/errorHandler.js';
 import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
@@ -145,6 +147,10 @@ const patchHandlers = handlersFor('patch', '/api/chats/:chatId');
 const deleteHandlers = handlersFor('delete', '/api/chats/:chatId');
 const artifactHandlers = handlersFor('get', '/api/chats/:chatId/artifacts/:artifactId');
 const artifactListHandlers = handlersFor('get', '/api/chats/:chatId/artifacts');
+const artifactProvenanceHandlers = handlersFor(
+  'get',
+  '/api/chats/:chatId/artifacts/:artifactId/provenance'
+);
 
 /**
  * Store one chat with a turn in it, owned by `user`.
@@ -321,6 +327,82 @@ describe('GET /api/chats/:chatId/artifacts/:artifactId', () => {
     });
 
     assert.equal(res.statusCode, 404);
+  });
+
+  describe('/provenance: what the provider embedded in a generated image', () => {
+    const IMAGE_BYTES = Buffer.from('a generated image');
+
+    async function seedRecordedImage(chatId) {
+      const artifact = await seedArtifact(chatId, IMAGE_BYTES.toString('base64'));
+      await getProvenanceStore().record({
+        ...buildMediaRecord({
+          outputId: '01JCROUTE000000000000000001',
+          kind: 'image',
+          contentHash: hashBytes(IMAGE_BYTES),
+          byteLength: IMAGE_BYTES.length,
+          mimeType: 'image/png',
+          model: { id: 'img-model' },
+          c2pa: {
+            present: true,
+            status: 'present',
+            valid: true,
+            issuer: 'Google LLC',
+            digitalSourceType: null,
+            claimGenerator: 'Gemini',
+            signedAt: null,
+            trust: 'not-evaluated'
+          },
+          installationId: 'inst_test',
+          version: '1.0.0'
+        }),
+        user: { mode: 'identified', id: 'ada' }
+      });
+      return artifact;
+    }
+
+    it('tells the owner, found by the bytes and without who produced it', async () => {
+      await seedChat(ADA, 'chat-prov-own');
+      const artifact = await seedRecordedImage('chat-prov-own');
+
+      const res = await drive(artifactProvenanceHandlers, {
+        params: { chatId: 'chat-prov-own', artifactId: artifact.id },
+        user: ADA
+      });
+
+      assert.equal(res.statusCode, 200);
+      assert.equal(res.body.outputId, '01JCROUTE000000000000000001');
+      assert.equal(res.body.providerMarking.c2pa.issuer, 'Google LLC');
+      assert.equal(res.body.providerMarking.c2pa.trust, 'not-evaluated');
+      assert.equal(JSON.stringify(res.body).includes('ada'), false);
+      assert.match(res.headers['cache-control'], /private/);
+    });
+
+    it("says nothing of another owner's image", async () => {
+      await seedChat(ADA, 'chat-prov-private');
+      const artifact = await seedRecordedImage('chat-prov-private');
+
+      const res = await drive(artifactProvenanceHandlers, {
+        params: { chatId: 'chat-prov-private', artifactId: artifact.id },
+        user: GRACE
+      });
+
+      assert.equal(res.statusCode, 404);
+    });
+
+    it('answers 404 for an image no record was kept for', async () => {
+      await seedChat(ADA, 'chat-prov-none');
+      const artifact = await seedArtifact(
+        'chat-prov-none',
+        Buffer.from('unrecorded').toString('base64')
+      );
+
+      const res = await drive(artifactProvenanceHandlers, {
+        params: { chatId: 'chat-prov-none', artifactId: artifact.id },
+        user: ADA
+      });
+
+      assert.equal(res.statusCode, 404);
+    });
   });
 
   it('refuses an artifact id that could address a path', async () => {

@@ -810,6 +810,7 @@ with the other public API prefixes (500 requests/minute/IP by default).
 | `GET /api/chats/:chatId` | `{ chat, messages, version }` — the transcript, and clears `hasUnseenActivity` |
 | `GET /api/chats/:chatId/artifacts` | What this chat's turns produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one artifact, as its own media type |
+| `GET /api/chats/:chatId/artifacts/:artifactId/provenance` | What the provider embedded in a generated image (its Content Credentials); `404` when no record was kept |
 | `PATCH /api/chats/:chatId` | `{ title }` — rename; capped at 200 characters and marked as user-set. `{ temporary: false }` — keep a temporary chat (there is no way back; not combinable with `projectId` or `attachedProjectIds`) |
 | `DELETE /api/chats/:chatId` | Erase the chat, its transcript and its runs                             |
 

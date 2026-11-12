@@ -4457,6 +4457,9 @@
   "GET /api/chats/:chatId/artifacts/:artifactId": {
     "skipped": "its parent list has no entry in the seed"
   },
+  "GET /api/chats/:chatId/artifacts/:artifactId/provenance": {
+    "skipped": "its parent list has no entry in the seed"
+  },
   "GET /api/chats/:chatId/files": {
     "status": 200,
     "shape": {
@@ -6312,6 +6315,9 @@
     "skipped": "its parent path is not a readable list"
   },
   "GET /api/shares/:shareId/artifacts/:artifactId": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/shares/:shareId/artifacts/:artifactId/provenance": {
     "skipped": "its parent path is not a readable list"
   },
   "GET /api/shares/:shareId/files": {

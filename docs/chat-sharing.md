@@ -281,6 +281,7 @@ one up). The dialog then gives an `<iframe>` embed code pointing at
 | `GET /api/shares/:shareId`                       | per mode   | The snapshot and the display fields; counts as a view     |
 | `GET /api/shares/:shareId/artifacts`             | per mode   | Descriptors of the artifacts the snapshot references      |
 | `GET /api/shares/:shareId/artifacts/:artifactId` | per mode   | The bytes; `?download=1` sets `Content-Disposition: attachment` |
+| `GET /api/shares/:shareId/artifacts/:artifactId/provenance` | per mode   | What the provider embedded in a shared image (its Content Credentials); `404` when no record was kept |
 | `POST /api/shares/:shareId/artifacts/zip`        | per mode   | Several (`{ artifactIds }`) or all of them as one ZIP     |
 | `DELETE /api/shares/:shareId`                    | owner/admin| Revoke                                                    |
 | `GET /api/users/lookup?q=`                       | signed in  | Recipient picker: at most ten `{ id, name, email }`, never the caller; empty unless user links are on offer, and for machine or agent tokens |
