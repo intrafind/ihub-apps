@@ -51,6 +51,7 @@
  */
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import logger from '../../utils/logger.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { atomicCreateJSON, atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
@@ -394,6 +395,21 @@ async function updateOnDisk(relPath, mutate) {
 }
 
 /**
+ * Run a whole-file write on the contained filesystem path under the lock
+ * `updateOnDisk` and `removeNow` hold, so no writer of the file — in this
+ * process or another worker — can land between another's read and write.
+ *
+ * @param {string} relPath - Path relative to `contents/`
+ * @param {(filePath: string) => Promise<void>} write - Performs the write
+ * @returns {Promise<void>}
+ */
+async function writeOnDisk(relPath, write) {
+  const filePath = await resolveConfigPath(relPath);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await withFileLock(`${filePath}.lock`, () => write(filePath), { component: COMPONENT });
+}
+
+/**
  * Delete one configuration file, wherever it lives (see {@link ConfigStore#remove}).
  *
  * @param {string} relPath - Path relative to `contents/`
@@ -606,15 +622,17 @@ export class ConfigStore {
       const { encryptPlatformSecrets } = await import('../../utils/configSecrets.js');
       data = await encryptPlatformSecrets(data);
     }
-    const location = parseRawRelPath(relPath);
-    const documents = location ? documentsFor(location.ns) : null;
-    if (documents) {
-      await documents.put(location.ns, location.key, data);
-      return;
-    }
-    const filePath = await resolveConfigPath(relPath);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await atomicWriteJSON(filePath, data);
+    // Behind and under the same locks as `updateJson`: a bare write landing
+    // between an update's read and its write was erased by that write.
+    await this.#serialize(relPath, async () => {
+      const location = parseRawRelPath(relPath);
+      const documents = location ? documentsFor(location.ns) : null;
+      if (documents) {
+        await documents.put(location.ns, location.key, data);
+        return;
+      }
+      await writeOnDisk(relPath, filePath => atomicWriteJSON(filePath, data));
+    });
   }
 
   /**
@@ -630,24 +648,24 @@ export class ConfigStore {
    *   same shape `atomicCreateJSON` throws, so callers can map it onto 409
    */
   async createJson(relPath, data) {
-    const location = parseRawRelPath(relPath);
-    const documents = location ? documentsFor(location.ns) : null;
-    if (documents) {
-      try {
-        await documents.put(location.ns, location.key, data, { etag: null });
-      } catch (error) {
-        if (error?.code !== 'ETAG_MISMATCH') throw error;
-        const conflict = new Error(`Configuration file already exists: ${relPath}`, {
-          cause: error
-        });
-        conflict.code = 'EEXIST';
-        throw conflict;
+    await this.#serialize(relPath, async () => {
+      const location = parseRawRelPath(relPath);
+      const documents = location ? documentsFor(location.ns) : null;
+      if (documents) {
+        try {
+          await documents.put(location.ns, location.key, data, { etag: null });
+        } catch (error) {
+          if (error?.code !== 'ETAG_MISMATCH') throw error;
+          const conflict = new Error(`Configuration file already exists: ${relPath}`, {
+            cause: error
+          });
+          conflict.code = 'EEXIST';
+          throw conflict;
+        }
+        return;
       }
-      return;
-    }
-    const filePath = await resolveConfigPath(relPath);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await atomicCreateJSON(filePath, data);
+      await writeOnDisk(relPath, filePath => atomicCreateJSON(filePath, data));
+    });
   }
 
   /**
@@ -682,19 +700,47 @@ export class ConfigStore {
     // Updates of one file from this process queue behind each other, so the
     // compare-and-set below only ever races other processes — a handful of
     // workers — rather than every request this worker is serving.
+    return this.#serialize(relPath, () => this.#updateJsonNow(relPath, mutate, attempts));
+  }
+
+  /** Writers of each file in flight in this process, by path. */
+  #updateQueues = new Map();
+
+  /** The paths whose writer slot the current async call chain already holds. */
+  #held = new AsyncLocalStorage();
+
+  /**
+   * Run `task` as the only writer of `relPath` in this process: behind every
+   * earlier `updateJson`, `writeJson`, `createJson`, `writeText` and `remove`
+   * of the same path. Across processes the disk path then takes the file lock.
+   *
+   * The slot is not reentrant — a writer waiting for its own slot would wait
+   * forever — so a write to a path from inside a `mutate` of that same path
+   * fails at once with a message naming the cause instead of hanging until the
+   * lock times out. Return the new body from `mutate` instead.
+   */
+  #serialize(relPath, task) {
     const queueKey = String(relPath);
+    const held = this.#held.getStore();
+    if (held?.has(queueKey)) {
+      return Promise.reject(
+        new Error(
+          `Nested write to ${queueKey} from inside an update of the same file would deadlock; ` +
+            'return the new body from the mutate function instead'
+        )
+      );
+    }
     const previous = this.#updateQueues.get(queueKey) || Promise.resolve();
-    const run = previous.then(() => this.#updateJsonNow(relPath, mutate, attempts));
-    const settled = run.catch(() => {});
+    const run = previous.then(() => this.#held.run(new Set([...(held || []), queueKey]), task));
+    const settled = run.catch(() => {
+      /* a failed write is reported to its caller, not to the next in line */
+    });
     this.#updateQueues.set(queueKey, settled);
     settled.then(() => {
       if (this.#updateQueues.get(queueKey) === settled) this.#updateQueues.delete(queueKey);
     });
     return run;
   }
-
-  /** Updates of each file in flight in this process, by path. */
-  #updateQueues = new Map();
 
   async #updateJsonNow(relPath, mutate, attempts) {
     const location = parseRawRelPath(relPath);
@@ -732,9 +778,9 @@ export class ConfigStore {
    * @returns {Promise<void>}
    */
   async writeText(relPath, text) {
-    const filePath = await resolveConfigPath(relPath);
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await atomicWriteFile(filePath, text, 'utf8');
+    await this.#serialize(relPath, () =>
+      writeOnDisk(relPath, filePath => atomicWriteFile(filePath, text, 'utf8'))
+    );
     // The mtime check catches almost every edit on its own. What it cannot
     // catch is a write that lands within the filesystem's mtime resolution of
     // the cached read *and* produces the same number of bytes — a one-word
@@ -756,17 +802,7 @@ export class ConfigStore {
     // under the same file lock `updateOnDisk` takes: a delete that slipped
     // between an update's read and its atomic write was undone by that
     // write, and reported success for a file that survived.
-    const queueKey = String(relPath);
-    const previous = this.#updateQueues.get(queueKey) || Promise.resolve();
-    const run = previous.then(() => removeNow(relPath));
-    const settled = run.catch(() => {
-      /* a failed removal is reported to its caller, not to the next in line */
-    });
-    this.#updateQueues.set(queueKey, settled);
-    settled.then(() => {
-      if (this.#updateQueues.get(queueKey) === settled) this.#updateQueues.delete(queueKey);
-    });
-    return run;
+    return this.#serialize(relPath, () => removeNow(relPath));
   }
 
   /**

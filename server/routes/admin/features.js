@@ -84,10 +84,12 @@ export default function registerAdminFeaturesRoutes(app) {
     }
 
     // features.json is a sparse override map: no file means every flag is at
-    // its registry default, so an absent one starts fresh rather than failing.
-    const existing = (await configStore.readJson('config/features.json')) || {};
-    const merged = { ...existing, ...updates };
-    await configStore.writeJson('config/features.json', merged);
+    // its registry default, so an absent one starts fresh. One that exists but
+    // cannot be read makes `updateJson` throw rather than lose every override.
+    const { data: merged } = await configStore.updateJson('config/features.json', current => ({
+      ...(current && typeof current === 'object' && !Array.isArray(current) ? current : {}),
+      ...updates
+    }));
 
     // Refresh cache
     await configCache.refreshCacheEntry('config/features.json');

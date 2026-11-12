@@ -216,13 +216,15 @@ export default function registerAdminUsageRoutes(app) {
         `Invalid tracking mode. Must be one of: ${validModes.join(', ')}`
       );
     }
-    // An unreadable platform.json starts fresh here, as it always has: the
-    // tracking mode is a single flag and refusing to set it would strand the
-    // admin with no way to turn tracking off.
-    const platform = (await configStore.readJson('config/platform.json')) || {};
-    if (!platform.features) platform.features = {};
-    platform.features.usageTrackingMode = trackingMode;
-    await configStore.writeJson('config/platform.json', platform);
+    // Only a missing platform.json starts fresh. One that exists but cannot be
+    // read or parsed makes `updateJson` throw: readJson cannot tell that from
+    // "missing", and writing a file built from `{}` over it would wipe every
+    // other platform setting on a transient read error.
+    await configStore.updateJson('config/platform.json', current => {
+      const platform = current && typeof current === 'object' ? current : {};
+      platform.features = { ...(platform.features || {}), usageTrackingMode: trackingMode };
+      return platform;
+    });
     await configCache.refreshCacheEntry('config/platform.json');
     res.json({ trackingMode });
   });

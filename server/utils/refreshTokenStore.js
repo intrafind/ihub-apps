@@ -59,13 +59,35 @@ const TOKEN_TTL_DAYS = 30;
  * @returns {{ tokens: Object.<string, Object> }}
  */
 function loadStore() {
+  let raw;
   try {
-    if (!fs.existsSync(STORE_PATH)) {
-      return { tokens: {} };
+    raw = fs.readFileSync(STORE_PATH, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return { tokens: {} };
+    // Unreadable (EIO, EACCES, ...) is not empty: the caller's next write would
+    // replace a store that is still there with one holding a single token.
+    logger.error('Refresh token store could not be read', {
+      component: 'RefreshTokenStore',
+      error: error.message
+    });
+    throw error;
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    // Malformed: keep the bytes aside before the next write replaces them, so
+    // a bad write or a hand edit can be recovered rather than silently lost.
+    const backup = `${STORE_PATH}.corrupt-${Date.now()}`;
+    try {
+      fs.writeFileSync(backup, raw, { mode: 0o600 });
+    } catch {
+      /* best effort */
     }
-    const data = fs.readFileSync(STORE_PATH, 'utf8');
-    return JSON.parse(data);
-  } catch {
+    logger.error('Refresh token store is malformed; starting empty', {
+      component: 'RefreshTokenStore',
+      backup,
+      error: error.message
+    });
     return { tokens: {} };
   }
 }
@@ -82,7 +104,7 @@ function loadStore() {
 async function saveStore(store) {
   try {
     await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
-    await atomicWriteJSON(STORE_PATH, store);
+    await atomicWriteJSON(STORE_PATH, store, { mode: 0o600 });
   } catch (error) {
     logger.error('Failed to save refresh token store', { component: 'RefreshTokenStore', error });
     throw error;

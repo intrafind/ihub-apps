@@ -680,3 +680,18 @@ same name at once end with one `409` instead of two users.
 ## Storage Locks Hold Under Contention Between Workers
 
 With several workers or replicas on one data volume, taking over an expired storage lock could rarely let two workers hold it at once (the same work done twice, or one worker's lock released by another); a takeover now elects exactly one.
+
+## Saving a Config File No Longer Races Another Save of the Same File
+
+A plain save of a configuration file (an app, model, prompt, page text, …) could land between another
+worker's read and write of the same file, and one of the two changes was silently lost. Every way of
+writing a config file now takes the same lock, in this process and across workers.
+
+- Saving the usage tracking mode or the feature flags no longer rewrites `platform.json` or
+  `features.json` from an empty body when the file exists but cannot be read; the request fails
+  instead and the file is left untouched.
+- Files are flushed to disk before they replace the old version, keep their permissions (the refresh
+  token store is `0600`), and a malformed refresh token store is copied to `*.corrupt-<time>` before
+  it starts empty.
+- Two change-history snapshots of one resource saved in the same millisecond no longer overwrite each
+  other.

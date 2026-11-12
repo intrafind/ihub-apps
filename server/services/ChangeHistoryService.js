@@ -3,11 +3,16 @@
 
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
+import { randomBytes } from 'node:crypto';
+import { atomicWriteFile } from '../utils/atomicWrite.js';
 import { getContentsPath } from '../utils/contentsPath.js';
 import logger from '../utils/logger.js';
 
 const HISTORY_DIR = 'data/change-history';
 const MAX_SNAPSHOTS = 20;
+
+/** Orders snapshots saved within one millisecond by this process. */
+let snapshotSequence = 0;
 
 /**
  * Get the directory for a specific resource's change history.
@@ -36,7 +41,14 @@ export async function saveSnapshot({ resource, id, before, after, admin }) {
     const safeTs = ts.replaceAll(':', '-'); // Filesystem-safe timestamp
     const snapshot = { ts, admin, before, after };
 
-    await fs.writeFile(join(dir, `${safeTs}.json`), JSON.stringify(snapshot, null, 2), 'utf8');
+    // A sequence and a random suffix keep two saves of one resource in the same
+    // millisecond apart, in this process and across workers (the name still
+    // sorts by timestamp first), and
+    // the rename-based write means a reader never sees half a snapshot.
+    snapshotSequence = (snapshotSequence + 1) % 1000;
+    const seq = String(snapshotSequence).padStart(3, '0');
+    const name = `${safeTs}-${seq}-${randomBytes(3).toString('hex')}.json`;
+    await atomicWriteFile(join(dir, name), JSON.stringify(snapshot, null, 2), 'utf8');
 
     // Prune oldest snapshots if over limit
     const files = (await fs.readdir(dir)).filter(f => f.endsWith('.json')).sort();
