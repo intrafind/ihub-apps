@@ -359,6 +359,23 @@ describe('web files in a project', () => {
     return service.addItem(project.id, { kind: 'url', ref: { url }, ...extra }, { user: ADA });
   }
 
+  /**
+   * Add a file and wait for its ingest job to finish, `onReady` included.
+   * Use this rather than `settled` when the test then counts `onReady`
+   * calls: the job saves the item as ready and calls `onReady` only after
+   * the save has returned (the project lock is released in between), so
+   * `settled` can see the item ready before the first ingest's `onReady`
+   * has run, and that call then lands in what the test counts.
+   */
+  async function addUrlIngested(project, url) {
+    const { item } = await service.addItem(
+      project.id,
+      { kind: 'url', ref: { url } },
+      { user: ADA, wait: true }
+    );
+    return item;
+  }
+
   it('downloads a linked PDF like an upload and keeps the source URL', async () => {
     const pdf = await makePdf('The lease runs until 2030.');
     serve('/docs/lease.pdf', pdf, { 'content-type': 'application/pdf' });
@@ -613,8 +630,7 @@ describe('web files in a project', () => {
     // new bytes, the same text once extracted.
     serve('/eol.txt', 'Line one.\nLine two.\n', { 'content-type': 'text/plain' });
     const project = await newProject('Line endings');
-    const { item } = await addUrl(project, `${base}/eol.txt`);
-    const first = await settled(project.id, item.id);
+    const first = await addUrlIngested(project, `${base}/eol.txt`);
     assert.equal(first.kind, 'web-file');
 
     serve('/eol.txt', 'Line one.\r\nLine two.\r\n', { 'content-type': 'text/plain' });
@@ -637,7 +653,7 @@ describe('web files in a project', () => {
     };
     let same;
     try {
-      ({ item: same } = await service.refreshItem(project.id, item.id, { user: ADA, wait: true }));
+      ({ item: same } = await service.refreshItem(project.id, first.id, { user: ADA, wait: true }));
     } finally {
       blobs.put = put;
       blobs.delete = remove;
@@ -651,7 +667,7 @@ describe('web files in a project', () => {
     assert.equal(same.refreshingAt, undefined);
 
     serve('/eol.txt', 'Line one.\r\nLine three.\r\n', { 'content-type': 'text/plain' });
-    const { item: changed } = await service.refreshItem(project.id, item.id, {
+    const { item: changed } = await service.refreshItem(project.id, first.id, {
       user: ADA,
       wait: true
     });
