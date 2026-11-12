@@ -68,7 +68,9 @@ async function write(file, text) {
 }
 
 before(async () => {
-  scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-projects-import-'));
+  // The real path: import files resolve to their real path (symlink
+  // confinement), and the temp directory is a symlink on macOS (/var -> /private/var).
+  scratch = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-projects-import-')));
   defaultsDir = path.join(scratch, 'defaults');
   await bootstrapStorage({
     storage: {

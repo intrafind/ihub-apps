@@ -11,11 +11,13 @@
  * reach `advisory-single-machine` — it guards the workers of one installation
  * against each other, not two installations against each other.
  *
- * The lease primitives (exclusive create, guarded takeover of an expired
- * lease, owner-checked release, renewal) live in `utils/fileLock.js` and are
- * shared with `withFileLock`; this class adds the named-lease layout and the
- * fencing tokens on top. Both fail closed: when the lease cannot be had within
- * the wait, `LockTimeoutError` is thrown and `fn` never runs.
+ * The lease primitives — publishing a lease whole (scratch file `link`ed onto
+ * the path), the per-lease removal claim that makes a takeover or release a
+ * compare-and-delete, owner-checked release, renewal, and one-read judging of
+ * a lease — live in `utils/fileLock.js` and are shared with `withFileLock`.
+ * This class adds the named-lease layout and the fencing tokens. Both fail
+ * closed: when the lease cannot be had within the wait, `LockTimeoutError` is
+ * thrown and `fn` never runs.
  *
  * A held lease is refreshed while its section runs
  * ({@link FilesystemLockManager#_startRenewal}), so `ttlMs` bounds only how
@@ -38,7 +40,7 @@ import crypto from 'node:crypto';
 import {
   acquireLease,
   isExpiredLease,
-  readJsonMarker,
+  readLease,
   releaseLease,
   removeIfExists,
   startLeaseRenewal,
@@ -46,7 +48,7 @@ import {
 } from '../../../utils/fileLock.js';
 import logger from '../../../utils/logger.js';
 import { LockManager } from '../../LockManager.js';
-import { InvalidKeyError, StorageError } from '../../errors.js';
+import { InvalidKeyError, LockTimeoutError, StorageError } from '../../errors.js';
 import { containedPath } from './paths.js';
 
 const COMPONENT = 'FilesystemLockManager';
@@ -156,7 +158,7 @@ export class FilesystemLockManager extends LockManager {
    * The lease is released when `fn` settles either way and `fn`'s rejection is
    * rethrown unchanged. **Not reentrant**: a nested `withLock` on the same name
    * waits for a lease its own caller holds and therefore fails with
-   * `LockTimeoutError` after `waitMs`.
+   * {@link LockTimeoutError} after `waitMs`.
    *
    * `fn` receives the lease (`{ name, token, isCurrent }`): `token` is this
    * acquisition's fencing token, `isCurrent()` whether it still holds the
@@ -200,7 +202,13 @@ export class FilesystemLockManager extends LockManager {
       token = await this._issueToken(name);
       // The lease names its token, so `isTokenCurrent` can tell this lease
       // from one a later holder created after taking the name over.
-      await this._touch(lockPath, owner, ttl, name, token);
+      if (!(await this._touch(lockPath, owner, ttl, name, token))) {
+        // Lost before the section started (a TTL shorter than issuing the
+        // token takes): running `fn` now would run it without the lock.
+        throw new LockTimeoutError(
+          `Storage lock "${String(name).slice(0, 64)}" was taken over before its section started`
+        );
+      }
     } catch (error) {
       this._held.delete(lockPath);
       await this._release(lockPath, owner, name);
@@ -223,9 +231,8 @@ export class FilesystemLockManager extends LockManager {
   }
 
   /**
-   * Keep a held lease young while its critical section runs; see
-   * `startLeaseRenewal` in `utils/fileLock.js`, which this and `withFileLock`
-   * share so there is one lease scheme.
+   * Keep a held lease young while its section runs (`startLeaseRenewal` in
+   * `utils/fileLock.js`, shared with `withFileLock`).
    *
    * @returns {() => void} Stops the renewal; safe to call more than once
    * @private
@@ -235,7 +242,8 @@ export class FilesystemLockManager extends LockManager {
   }
 
   /**
-   * Rewrite our own lease's start time, and report whether we still hold it.
+   * Rewrite our own lease's start time, and report whether we still hold it
+   * (`touchLease`).
    *
    * @returns {Promise<boolean>} False once the lease is no longer ours
    * @private
@@ -263,7 +271,7 @@ export class FilesystemLockManager extends LockManager {
     const issued = await this._readToken(name);
     if (issued !== token) return false;
     const lockPath = containedPath(this._baseDir, LOCKS_DIR, leaseFileName(name));
-    const lease = await readJsonMarker(lockPath);
+    const lease = await readLease(lockPath);
     if (lease?.data?.token !== token) return false;
     return !isExpiredLease(lease, DEFAULT_TTL_MS);
   }
@@ -361,8 +369,8 @@ export class FilesystemLockManager extends LockManager {
   }
 
   /**
-   * Create the lease, waiting out (or taking over) an existing one; see
-   * `acquireLease` in `utils/fileLock.js`.
+   * Create the lease, waiting out (or taking over) an existing one
+   * (`acquireLease`).
    *
    * @throws {LockTimeoutError} When the budget ran out
    * @private
@@ -378,7 +386,7 @@ export class FilesystemLockManager extends LockManager {
   }
 
   /**
-   * Remove the lease, but only while it is still ours; see `releaseLease`.
+   * Remove the lease, but only while it is still ours (`releaseLease`).
    *
    * @private
    */

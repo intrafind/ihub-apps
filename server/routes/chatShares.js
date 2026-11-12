@@ -11,6 +11,7 @@
  *   GET    /api/shares/:shareId                    the frozen transcript (auth per mode)
  *   GET    /api/shares/:shareId/artifacts          descriptors of the artifacts it references
  *   GET    /api/shares/:shareId/artifacts/:id      the bytes of one (`?download=1` to attach)
+ *   GET    /api/shares/:shareId/artifacts/:id/provenance  what the provider embedded in one image
  *   POST   /api/shares/:shareId/artifacts/zip      several (or all) of those as one ZIP
  *   DELETE /api/shares/:shareId                    revoke (owner or admin)
  *   GET    /api/users/lookup?q=                    recipient picker for `users` shares
@@ -48,6 +49,8 @@ import { getChatRepository } from '../services/chat/ChatRepository.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { downloadName, sendArtifactsZip } from '../services/artifacts/artifactZip.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
+import { providerMarkingOfArtifact } from '../services/provenance/artifactProvenance.js';
+import { requireEuAiActEnabled } from '../services/euAiAct/conformity.js';
 import { isChatHistoryConfigured } from '../services/chat/chatPersistence.js';
 import {
   getChatShareRepository,
@@ -716,6 +719,26 @@ export default function registerChatShareRoutes(app) {
     }
     return res.send(body);
   });
+
+  // What the provider embedded in a shared image (EU AI Act Art. 50(2)): the same answer
+  // as the owner's route, behind the share's own allow-list.
+  app.get(
+    buildServerPath('/api/shares/:shareId/artifacts/:artifactId/provenance'),
+    requireEuAiActEnabled('provenance'),
+    async (req, res) => {
+      const { artifactId } = req.params;
+      assertValidId(artifactId, 'artifact');
+      const { share } = await loadViewableShare(req, { purpose: 'artifact' });
+      if (!(share.artifactIds || []).includes(artifactId)) throw notFound('Artifact');
+      const artifact = await getArtifactRepository().get(
+        getChatRepository().artifactScope(share.chatId),
+        artifactId
+      );
+      if (!artifact) throw notFound('Artifact');
+      setViewerHeaders(res, share);
+      return res.json(await providerMarkingOfArtifact(artifact));
+    }
+  );
 
   app.delete(buildServerPath('/api/shares/:shareId'), authenticatedOnly, async (req, res) => {
     const { shareId } = req.params;

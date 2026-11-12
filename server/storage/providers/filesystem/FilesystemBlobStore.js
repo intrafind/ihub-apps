@@ -31,12 +31,19 @@ import { promises as fs } from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
+import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
 import { StorageError } from '../../errors.js';
 import { assertValidKey, assertValidNamespace, containedPath } from './paths.js';
 
 /** Directory holding every blob namespace, relative to the provider's base. */
 export const BLOB_DIR = 'blobs';
+
+/**
+ * Name prefix of a blob being deleted (renamed aside, then unlinked). It holds
+ * `..`, which no key may contain (`isValidId`), so it never hides a real blob.
+ */
+export const DELETING_PREFIX = '..deleting_';
 
 const DEFAULT_LIMIT = 100;
 const MIN_LIMIT = 1;
@@ -156,12 +163,22 @@ export class FilesystemBlobStore extends BlobStore {
     }
   }
 
-  /** @inheritdoc */
+  /**
+   * @inheritdoc
+   *
+   * The blob is first renamed aside, then unlinked: of two concurrent
+   * deletes only one rename succeeds. `unlink` alone is no such claim — on
+   * macOS (APFS) two unlinks of the same file racing each other both report
+   * success.
+   */
   async delete(ns, key) {
     const file = this._path(ns, key);
+    const claimed = path.join(
+      path.dirname(file),
+      `${DELETING_PREFIX}${crypto.randomBytes(8).toString('hex')}`
+    );
     try {
-      await fs.unlink(file);
-      return true;
+      await fs.rename(file, claimed);
     } catch (error) {
       if (error.code === 'ENOENT') return false;
       throw new StorageError(`Failed to delete blob ${ns}/${key}`, {
@@ -169,6 +186,57 @@ export class FilesystemBlobStore extends BlobStore {
         cause: error
       });
     }
+    try {
+      await fs.unlink(claimed);
+    } catch (error) {
+      // The key is gone either way, which is what the caller is told. The
+      // leftover is skipped by `list` and removed at the next start
+      // (`removeDeletionLeftovers`).
+      if (error.code !== 'ENOENT') {
+        logger.warn('Could not remove a deleted blob; it is removed at the next start', {
+          component: 'FilesystemBlobStore',
+          ns,
+          key,
+          path: claimed,
+          error: error.message
+        });
+      }
+    }
+    return true;
+  }
+
+  /**
+   * Remove what deletes left behind (a crash or a failed unlink between the
+   * rename and the unlink). Called once when the provider starts, not on any
+   * request path. A delete running in another process at the same time finds
+   * its file gone and still reports the removal.
+   *
+   * @returns {Promise<number>} Files removed.
+   */
+  async removeDeletionLeftovers() {
+    const root = containedPath(this.baseDir, BLOB_DIR);
+    let namespaces;
+    try {
+      namespaces = await fs.readdir(root, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') return 0;
+      throw error;
+    }
+    let removed = 0;
+    for (const entry of namespaces) {
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(root, entry.name);
+      for (const name of await fs.readdir(dir)) {
+        if (!name.startsWith(DELETING_PREFIX)) continue;
+        try {
+          await fs.unlink(path.join(dir, name));
+          removed += 1;
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+      }
+    }
+    return removed;
   }
 
   /** @inheritdoc */
@@ -183,7 +251,7 @@ export class FilesystemBlobStore extends BlobStore {
       if (error.code === 'ENOENT') return { items: [], nextCursor: null };
       throw new StorageError(`Failed to list blobs in ${ns}`, { code: 'IO_ERROR', cause: error });
     }
-    let keys = names.sort(compareKeys);
+    let keys = names.filter(name => !name.startsWith(DELETING_PREFIX)).sort(compareKeys);
     if (typeof prefix === 'string' && prefix.length > 0) {
       keys = keys.filter(key => key.startsWith(prefix));
     }
