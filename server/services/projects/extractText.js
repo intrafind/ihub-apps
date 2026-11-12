@@ -951,6 +951,28 @@ function formatLabel(type) {
   return 'text';
 }
 
+/** The raw text of a file of a resolved type, and its page count where it has pages. */
+async function readRawText(
+  type,
+  bytes,
+  name,
+  { report, maxChars, maxPages, sheetRows, speakerNotes }
+) {
+  if (type === PDF_MIME) {
+    // A PDF that stops at `maxChars + 1` is cut by `normalizeText`.
+    const raw = await extractPdfDocument(bytes, { maxPages, maxChars: maxChars + 1, report });
+    return { raw, pages: countPages(raw) };
+  }
+  if (PACKAGES.has(type)) {
+    const raw = await PACKAGES.get(type).extract(bytes, { report, sheetRows, speakerNotes });
+    return { raw };
+  }
+  if (type === HTML_MIME) return { raw: htmlFileText(decodeText(bytes, name), report) };
+  if (type === EML_MIME) return { raw: emailText(bytes) };
+  if (type === MSG_MIME) return { raw: await msgText(bytes) };
+  return { raw: decodeText(bytes, name) };
+}
+
 async function extractTextOf(
   { bytes, contentType, name },
   { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows, speakerNotes },
@@ -965,21 +987,13 @@ async function extractTextOf(
   let raw;
   let pages;
   try {
-    if (type === PDF_MIME) {
-      // A PDF that stops at `maxChars + 1` is cut below, by `normalizeText`.
-      raw = await extractPdfDocument(bytes, { maxPages, maxChars: maxChars + 1, report });
-      pages = countPages(raw);
-    } else if (PACKAGES.has(type)) {
-      raw = await PACKAGES.get(type).extract(bytes, { report, sheetRows, speakerNotes });
-    } else if (type === HTML_MIME) {
-      raw = htmlFileText(decodeText(bytes, name), report);
-    } else if (type === EML_MIME) {
-      raw = emailText(bytes);
-    } else if (type === MSG_MIME) {
-      raw = await msgText(bytes);
-    } else {
-      raw = decodeText(bytes, name);
-    }
+    ({ raw, pages } = await readRawText(type, bytes, name, {
+      report,
+      maxChars,
+      maxPages,
+      sheetRows,
+      speakerNotes
+    }));
   } catch (error) {
     if (error instanceof ExtractionError) throw error;
     throw new ExtractionError(
