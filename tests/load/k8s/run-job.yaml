@@ -1,0 +1,41 @@
+# One pod per shard; together they produce the profile's VU totals.
+# Keep `completions`/`parallelism` equal to LT_SHARD_COUNT in loadtest.env.
+#   kubectl -n ihub-loadtest apply -f tests/load/k8s/run-job.yaml
+#   kubectl -n ihub-loadtest logs -f -l job-name=loadtest-run --max-log-requests 20 | grep -v '##LT-RESULT##'
+#   tests/load/k8s/collect.sh            # merges the shards into a report
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: loadtest-run
+  namespace: ihub-loadtest
+spec:
+  completionMode: Indexed
+  completions: 8
+  parallelism: 8
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 172800
+  template:
+    metadata:
+      labels: { app: loadtest-run }
+    spec:
+      restartPolicy: Never
+      # Spread shards over nodes so a runner is never the bottleneck.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: { app: loadtest-run }
+      # The runner talks to iHub over HTTP only; it needs no Kubernetes API access.
+      automountServiceAccountToken: false
+      containers:
+        - name: runner
+          image: ghcr.io/intrafind/ihub-loadtest:latest
+          args: ['run.mjs']
+          envFrom:
+            - configMapRef: { name: loadtest-config }
+            - secretRef: { name: loadtest-secrets }
+          # JOB_COMPLETION_INDEX (set by Kubernetes) is the shard index.
+          resources:
+            requests: { cpu: '1', memory: 1Gi }
+            limits: { cpu: '2', memory: 2Gi }

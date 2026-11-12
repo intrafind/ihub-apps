@@ -1,0 +1,23 @@
+# Settings for the iHub deployment UNDER TEST (merge into its Deployment's
+# container env). Platform settings need a restart. Run setup.mjs --check to
+# see what is still missing.
+- { name: WORKERS, value: '4' } # = CPU limit; vary per sizing run
+- { name: IHUB_PLATFORM__RATE_LIMIT__AUTH_API__LIMIT, value: '100000' }
+- { name: IHUB_PLATFORM__RATE_LIMIT__PUBLIC_API__LIMIT, value: '1000000' }
+- { name: IHUB_PLATFORM__RATE_LIMIT__DEFAULT__LIMIT, value: '1000000' }
+- { name: IHUB_PLATFORM__RATE_LIMIT__ADMIN_API__LIMIT, value: '100000' }
+- { name: IHUB_PLATFORM__RATE_LIMIT__INFERENCE_API__LIMIT, value: '1000000' }
+- { name: IHUB_PLATFORM__AI_ACKNOWLEDGEMENT__ENFORCE, value: 'false' }
+# Crawl the in-cluster stub site; reach the GPU through the internal CA.
+- { name: IHUB_PLATFORM__SSRF__ALLOWED_HOSTS, value: '["loadtest-stubs.ihub-loadtest.svc"]' }
+- { name: IHUB_PLATFORM__SSL__DOMAIN_WHITELIST, value: '["gpu-01.local.intrafind.io"]' }
+- { name: IHUB_PLATFORM__SSL__IGNORE_INVALID_CERTIFICATES, value: 'true' }
+- { name: IHUB_PLATFORM__PROJECTS__INGEST__CONCURRENCY, value: '2' }
+- { name: IHUB_PLATFORM__PROJECTS__LIMITS__MAX_PROJECTS_PER_USER, value: '50' }
+# iHub's own Prometheus metrics on :9464 (optional; pod CPU/memory come from cAdvisor).
+- { name: IHUB_PLATFORM__TELEMETRY__ENABLED, value: 'true' }
+- { name: IHUB_PLATFORM__TELEMETRY__PROVIDER, value: 'prometheus' }
+# Only if you ever run >1 replica: shared RWX contents volume + cookie affinity (docs/scaling.md):
+#   nginx.ingress.kubernetes.io/affinity: cookie
+#   nginx.ingress.kubernetes.io/proxy-buffering: "off"
+#   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"

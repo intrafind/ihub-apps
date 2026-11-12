@@ -60,6 +60,8 @@ playwright-report/
 tests/coverage/
 tests/data/
 tests/uploads/
+tests/load/results/
+tests/load/fixtures/corpus/
 *.tsbuildinfo
 
 # Test screenshots and videos

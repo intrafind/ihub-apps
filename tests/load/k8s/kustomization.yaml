@@ -1,0 +1,18 @@
+# kubectl apply -k tests/load/k8s           (stubs + config)
+# then the jobs one by one, see tests/load/README.md → "In the cluster"
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ihub-loadtest
+resources:
+  - namespace.yaml
+  - stubs.yaml
+images:
+  - name: ihub-loadtest
+    newName: ghcr.io/intrafind/ihub-loadtest # push tests/load/Dockerfile here
+    newTag: latest
+configMapGenerator:
+  - name: loadtest-config
+    envs:
+      - loadtest.env
+    options:
+      disableNameSuffixHash: true

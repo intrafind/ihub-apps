@@ -1,0 +1,24 @@
+# kubectl -n ihub-loadtest apply -f tests/load/k8s/setup-job.yaml && kubectl -n ihub-loadtest logs -f job/loadtest-setup
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: loadtest-setup
+  namespace: ihub-loadtest
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      # The runner talks to iHub over HTTP only; it needs no Kubernetes API access.
+      automountServiceAccountToken: false
+      containers:
+        - name: setup
+          image: ghcr.io/intrafind/ihub-loadtest:latest
+          args: ['setup.mjs']
+          envFrom:
+            - configMapRef: { name: loadtest-config }
+            - secretRef: { name: loadtest-secrets }
+          resources:
+            requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: '1', memory: 1Gi }

@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: loadtest-stubs
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: loadtest-stubs }
+  template:
+    metadata:
+      labels: { app: loadtest-stubs }
+    spec:
+      # The stubs need no Kubernetes API access.
+      automountServiceAccountToken: false
+      containers:
+        - name: stubs
+          image: ihub-loadtest
+          args: ['stub/server.mjs']
+          ports:
+            - { name: llm, containerPort: 8979 }
+            - { name: site, containerPort: 8980 }
+          env:
+            - { name: STUB_TTFT_MS, value: '700' }
+            - { name: STUB_TOKENS, value: '250' }
+            - { name: STUB_TOKENS_PER_SEC, value: '40' }
+            - { name: STUB_SITE_PAGES, value: '300' }
+          resources:
+            requests: { cpu: 500m, memory: 256Mi }
+            limits: { cpu: '2', memory: 1Gi }
+          readinessProbe:
+            httpGet: { path: /v1/models, port: llm }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: loadtest-stubs
+spec:
+  selector: { app: loadtest-stubs }
+  ports:
+    - { name: llm, port: 8979, targetPort: llm }
+    - { name: site, port: 8980, targetPort: site }

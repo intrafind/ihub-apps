@@ -242,6 +242,16 @@ async function startServer(contentsDir) {
   throw new Error('the server did not come up in time');
 }
 
+/** SIGTERM, wait for the exit (SIGKILL after 15 s). */
+async function stopServer(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  const exited = new Promise(resolve => child.once('exit', resolve));
+  child.kill('SIGTERM');
+  const timer = setTimeout(() => child.kill('SIGKILL'), 15_000);
+  await exited;
+  clearTimeout(timer);
+}
+
 async function request(base, cookie, routePath) {
   try {
     const response = await fetch(base + routePath, {
@@ -550,8 +560,11 @@ async function main() {
     await waitForProjectImports(base, cookie);
     snapshot = await collectShapes({ base, cookie, routes });
   } finally {
-    child.kill('SIGTERM');
-    fs.rmSync(contentsDir, { recursive: true, force: true });
+    // Delete the contents only once the server is gone: a server still shutting
+    // down writes into the directory (flushes, locks) while rmSync walks it,
+    // which fails with ENOTEMPTY.
+    await stopServer(child);
+    fs.rmSync(contentsDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 
   const requested = Object.values(snapshot).filter(v => !v.skipped);
