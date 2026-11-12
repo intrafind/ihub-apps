@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V247 — every stored document envelope gets its `etag` and `size`
+ * Migration V249 — every stored document envelope gets its `etag` and `size`
  * (#3624).
  *
  * The filesystem document store now writes both into the envelope, before the
@@ -20,28 +20,28 @@ import path from 'node:path';
 import { canonicalJson } from '../storage/canonicalJson.js';
 import { documentEtag } from '../storage/etag.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { precondition, up } from '../migrations/V247__document_envelope_etag.js';
+import { precondition, up } from '../migrations/V249__document_envelope_etag.js';
 
 const roots = [];
 after(async () => {
   for (const root of roots) await fs.rm(root, { recursive: true, force: true });
 });
 
-/** Etag and size as releases before V247 derived them on every read. */
+/** Etag and size as releases before V249 derived them on every read. */
 function legacyDigest(data) {
   const json = canonicalJson(data);
   return { etag: documentEtag(json), size: Buffer.byteLength(json, 'utf8') };
 }
 
 async function legacyInstall(platform = {}) {
-  const contentsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v247-'));
+  const contentsDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v249-'));
   roots.push(contentsDir);
   await fs.mkdir(path.join(contentsDir, 'config'), { recursive: true });
   await fs.writeFile(path.join(contentsDir, 'config', 'platform.json'), JSON.stringify(platform));
   return contentsDir;
 }
 
-/** Write an envelope the way releases before V247 did. */
+/** Write an envelope the way releases before V249 did. */
 async function writeLegacyEnvelope(baseDir, ns, key, data, ownerId = null) {
   await fs.mkdir(path.join(baseDir, ns), { recursive: true });
   const envelope = {

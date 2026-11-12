@@ -10,9 +10,10 @@
  * never parses, canonicalizes or hashes a body. On a workflow state of tens of
  * megabytes that was the whole boot spike.
  *
- * There is no fallback for an envelope without them: migration V247 upgrades
- * the stored ones once, and anything left without a valid etag is reported
- * like any other corrupt document instead of being silently recomputed.
+ * Migration V249 upgrades the stored envelopes once. One that turns up later
+ * without `etag` and `size` (a backup restored, a rollback that kept writing)
+ * is served by every read and written back upgraded, once; an etag that is
+ * present but malformed is still a corrupt document.
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -143,45 +144,161 @@ test('listMetadata pages like list', async () => {
   assert.equal(second.nextCursor, null);
 });
 
-test('an envelope without a valid etag is a corrupt document, not recomputed', async () => {
+const legacyEnvelope = (key, data, stamp) => ({
+  v: 1,
+  key,
+  ownerId: 'u1',
+  contentType: 'application/json',
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: stamp,
+  data
+});
+
+/** Write an envelope the way releases before V249 did: no etag, no size. */
+async function writeLegacy(key, data, stamp = '2026-01-02T00:00:00.000Z') {
+  const dir = path.join(store.dir, 'data', 'meta-ns');
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(
+    path.join(dir, `${key}.json`),
+    JSON.stringify(legacyEnvelope(key, data, stamp), null, 2)
+  );
+}
+
+async function readRaw(key) {
+  return JSON.parse(await fs.readFile(envelopePath('meta-ns', key), 'utf8'));
+}
+
+test('an envelope stored without etag and size is served by every read and upgraded once', async () => {
+  // E.g. restored from a backup taken before the upgrade, after V249 ran.
+  for (const [label, read] of [
+    ['get', key => store.documents.get('meta-ns', key)],
+    ['list', async key => (await store.documents.list('meta-ns')).items.find(d => d.key === key)],
+    [
+      'list without data',
+      async key =>
+        (await store.documents.list('meta-ns', { includeData: false })).items.find(
+          d => d.key === key
+        )
+    ],
+    [
+      'listMetadata',
+      async key => (await store.documents.listMetadata('meta-ns')).items.find(d => d.key === key)
+    ],
+    [
+      'scan without data',
+      async key => {
+        for await (const doc of store.documents.scan('meta-ns', { includeData: false })) {
+          if (doc.key === key) return doc;
+        }
+        return null;
+      }
+    ]
+  ]) {
+    await store.reset();
+    const data = { b: [1, { z: 'ä' }], a: 'body' };
+    await writeLegacy('old', data);
+    const before = await readRaw('old');
+
+    const doc = await read('old');
+    assert.ok(doc, `${label}: the document is returned`);
+    assert.deepEqual({ etag: doc.etag, size: doc.size }, documentDigest(data), label);
+    assert.equal(doc.updatedAt, before.updatedAt, label);
+
+    // Written back: same body, owner and timestamps, now with the digest.
+    const after = await readRaw('old');
+    assert.equal(after.v, 2, label);
+    assert.equal(after.etag, doc.etag, label);
+    assert.equal(after.size, doc.size, label);
+    assert.deepEqual(after.data, data, label);
+    assert.equal(after.ownerId, 'u1', label);
+    assert.equal(after.createdAt, before.createdAt, label);
+    assert.equal(after.updatedAt, before.updatedAt, `${label}: not an edit`);
+
+    // Later metadata reads take the cheap path again.
+    const { result, largestParse } = await observeJson(() =>
+      store.documents.listMetadata('meta-ns')
+    );
+    assert.equal(result.items[0].etag, doc.etag, label);
+    assert.equal(result.skipped, undefined, label);
+    assert.ok(largestParse < 1000, `${label}: ${largestParse}`);
+  }
+});
+
+test('the upgrade publishes no change event', async () => {
+  await store.reset();
+  const events = [];
+  const notifier = store.provider.notifier;
+  const unsubscribe = notifier.subscribe(event => events.push(event));
+  try {
+    await writeLegacy('quiet', { a: 1 });
+    await store.documents.get('meta-ns', 'quiet');
+    assert.equal((await readRaw('quiet')).v, 2);
+    assert.deepEqual(
+      events.filter(event => event.key === 'quiet'),
+      []
+    );
+  } finally {
+    unsubscribe?.();
+  }
+});
+
+test('a compare-and-set works on an envelope stored without etag', async () => {
+  await store.reset();
+  await writeLegacy('cas', { a: 1 });
+  const written = await store.documents.put(
+    'meta-ns',
+    'cas',
+    { a: 2 },
+    {
+      etag: documentDigest({ a: 1 }).etag
+    }
+  );
+  assert.equal(written.createdAt, '2026-01-01T00:00:00.000Z', 'createdAt is carried over');
+  assert.equal(written.ownerId, 'u1');
+});
+
+test('the write-back never overwrites a newer write', async () => {
+  await store.reset();
+  await writeLegacy('raced', { a: 1 }, '2026-01-02T00:00:00.000Z');
+  // What a read saw, before anything was written back...
+  const stale = await store.provider._envelopeDocuments._readEnvelope('meta-ns', 'raced');
+  // ...then a newer write lands — in the old format, by an older release...
+  await writeLegacy('raced', { a: 'newer' }, '2026-01-03T00:00:00.000Z');
+  assert.equal(
+    await store.provider._envelopeDocuments._upgradeLegacyEnvelope('meta-ns', 'raced', stale),
+    false
+  );
+  assert.deepEqual((await readRaw('raced')).data, { a: 'newer' });
+  // ...or by this release.
+  await store.documents.put('meta-ns', 'raced', { a: 'newest' });
+  assert.equal(
+    await store.provider._envelopeDocuments._upgradeLegacyEnvelope('meta-ns', 'raced', stale),
+    false
+  );
+  assert.deepEqual((await readRaw('raced')).data, { a: 'newest' });
+});
+
+test('an envelope with a malformed etag stays a corrupt document', async () => {
   await store.reset();
   await store.documents.put('meta-ns', 'good', { ok: true });
   const dir = path.join(store.dir, 'data', 'meta-ns');
   const now = new Date().toISOString();
-  // What releases before V247 wrote: no etag, no size.
-  await fs.writeFile(
-    path.join(dir, 'legacy.json'),
-    JSON.stringify(
-      {
-        v: 1,
-        key: 'legacy',
-        ownerId: null,
-        contentType: 'application/json',
-        createdAt: now,
-        updatedAt: now,
-        data: { a: 1 }
-      },
-      null,
-      2
-    )
-  );
+  const tampered = {
+    v: 2,
+    key: 'tampered',
+    ownerId: null,
+    contentType: 'application/json',
+    createdAt: now,
+    updatedAt: now,
+    data: { a: 1 }
+  };
   await fs.writeFile(
     path.join(dir, 'tampered.json'),
-    JSON.stringify(
-      {
-        v: 2,
-        key: 'tampered',
-        ownerId: null,
-        contentType: 'application/json',
-        createdAt: now,
-        updatedAt: now,
-        etag: 'nope',
-        size: 7,
-        data: { a: 1 }
-      },
-      null,
-      2
-    )
+    JSON.stringify({ ...tampered, etag: 'nope', size: 7 }, null, 2)
+  );
+  await fs.writeFile(
+    path.join(dir, 'half.json'),
+    JSON.stringify({ ...tampered, key: 'half', size: 7 }, null, 2)
   );
 
   for (const options of [{ includeData: false }, {}]) {
@@ -193,10 +310,10 @@ test('an envelope without a valid etag is a corrupt document, not recomputed', a
     );
     assert.equal(page.skipped, 2, JSON.stringify(options));
   }
-  await assert.rejects(store.documents.get('meta-ns', 'legacy'), CorruptDocumentError);
   await assert.rejects(store.documents.get('meta-ns', 'tampered'), CorruptDocumentError);
+  await assert.rejects(store.documents.get('meta-ns', 'half'), CorruptDocumentError);
 
   // An unconditional overwrite is still the repair, as for any torn document.
-  const repaired = await store.documents.put('meta-ns', 'legacy', { a: 1 });
+  const repaired = await store.documents.put('meta-ns', 'tampered', { a: 1 });
   assert.deepEqual({ etag: repaired.etag, size: repaired.size }, documentDigest({ a: 1 }));
 });
