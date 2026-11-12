@@ -525,3 +525,59 @@ Next after the top 10:
 - One primary colour token and `AdminPageHeader` (CU-UI1, UI2).
 - Replace "Backup Config" with change history (CU-PM7).
 - Announcement banner (CU-PM10).
+
+## Appendix — verification log
+
+### Adversarial verification
+
+An adversarial verifier re-checked every row of §4, every §11 recommendation, the §8 wizards and the §9 doc gaps on 2026-11-12. Scripts and screenshots: `SCRATCH/customization/verify/`. The `zz-customization-v1` short link it created was deleted (`GET` → 404).
+
+**Removed from §4:**
+- CU-B26 · **Refuted.** "Fetches its config twice on load" did not reproduce: a cold load of `/admin/ui` made one `GET /api/admin/ui/config`. The `[uiConfig]` dependency only re-runs the fetch after this page's own Save (`refreshUIConfig`, `AdminUICustomization.jsx:67`), which is harmless.
+
+**Changed in §4:**
+- CU-B10 · Suspected → **Confirmed.** With `X-Forwarded-Prefix: /ihub`, `/s/<code>` answered `Location: /apps/chat`, while `/docs/` answered `Location: /ihub/admin/docs`.
+- CU-B19 · **Narrowed.** An unrelated save (Params only) left `expiresAt` at `2026-12-01T10:00:00.000Z`. The real bug: the field shows UTC as local time, and typed values are saved as local time (in Europe/Berlin, typing 10:00 stored `09:00Z`, which reopened as 09:00). The Params-only guard gap was reproduced (Cancel left without a dialog).
+- CU-B27 · Confirmed → **Suspected.** It could not be re-rendered in dark mode here. By code the disabled text is `gray-400` on `gray-800` (about 5.8:1); the invisible boundary is CU-B6.
+- CU-B22 · Count corrected: 196 of 427 keys are missing from both locale files in this part's 25 files; "206" included shared components.
+- Line references fixed: B1 (`shortLinkManager.js:231`), B6 (full `formStyles.js` path), B8 (`:113-116, 193`), B14 (`ui.json:77,86,108`), B18 (`AdminPageEditPage.jsx:195`).
+
+**Confirmed unchanged (how):**
+- **Running app:**
+  - B1 and B2: API create, then edit, then `curl /s/`.
+  - B4: edit on `/admin/ui`, then sidebar click; no dialog.
+  - B6: computed style plus screenshot.
+  - B7: `changedOnly=true` → `total: 0`; `false` → 61.
+  - B17: 390px metrics.
+- **Code read:**
+  - B3: `ui.js:238-262` writes the whole file blindly, and `pages.js` read-modify-writes the same file.
+  - B5: `AdminUICustomization.jsx:36-43`, and `dataRoutes.js:688-698` adds the fields.
+  - B8: drafts are keyed by key only.
+  - B9: `location.origin`, with no `buildPath`.
+  - B11: no `enabled` or `target` reads in `Layout.jsx` or `AppSidebar.jsx`.
+  - B12 and B13: `pageRoutes.js:34`, `client/src/utils/pageAccess.js`, `groups.json` ids `admins` / `users`.
+  - B14: no reference check in `DELETE`.
+  - B15: the hints against `Layout.jsx:176`, `DocumentTitle.jsx:50` and `BrandTitle.jsx:14`.
+  - B16: `ui.json:25,68` hold `$t(…)`.
+  - B18: 0 `htmlFor`.
+  - B20: `#000000` fallback.
+  - B21: `err.message` against `getAdminApiErrorMessage`.
+  - B23: all six doc errors re-read.
+  - B24: `alert`, `confirm`, `prompt`.
+  - B25: the stored `filePath` wins.
+- **Recommendations (§11) checked against existing code; none is already implemented:**
+  - #2: noted that the `useUnsavedChanges` hook and cache ETags exist, but there is no `If-Match`.
+  - #3: noted that `INPUT_CLASS` exists, but there is no `AdminInput`.
+  - #4: noted that language names are already shown on the default-language card.
+  - #5: noted that `AdminLoadError` exists.
+  - #7: noted that a private `ColorField` exists.
+  - #10: noted that the translation-key test skips `features/admin`.
+- **Wizards (§8):**
+  - No branding, legal-page or short-link wizard exists.
+  - The W1 entry point was corrected: roadmap 3B-5 has shipped (`SetupWizard.jsx:510` next-steps cards). The Overview has a `SetupChecklist`, so W1 adds an item to each rather than a new screen.
+- **Docs (§9):**
+  - No short-link, branding or pages doc.
+  - `includeParams` and "imprint" have 0 hits in `docs/`.
+  - `admin-ui.md` has only a `## UI Customization` section.
+  - `customization.md` teaches label changes by hand-editing JSON.
+  - No `/admin/docs` or `docsLinks` use in this part's files.
