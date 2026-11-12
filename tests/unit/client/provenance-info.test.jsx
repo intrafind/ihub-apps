@@ -142,6 +142,17 @@ describe('ProvenanceInfo', () => {
     window.innerHeight = 768;
   });
 
+  it('never caps the panel above the room there is, however small', () => {
+    render(<ProvenanceInfo provenance={provenance} />);
+    const button = screen.getByTestId('provenance-button');
+    // 80 px on each side in a 184 px viewport: capped to 72 px, not to a fixed floor.
+    window.innerHeight = 184;
+    button.getBoundingClientRect = () => ({ top: 80, bottom: 104, left: 0, right: 24 });
+    fireEvent.click(button);
+    expect(screen.getByTestId('provenance-panel').style.maxHeight).toBe('72px');
+    window.innerHeight = 768;
+  });
+
   it('opens above when there is room above', () => {
     render(<ProvenanceInfo provenance={provenance} />);
     const button = screen.getByTestId('provenance-button');

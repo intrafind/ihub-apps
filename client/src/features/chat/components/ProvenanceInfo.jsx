@@ -124,7 +124,7 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
     // Neither side fits: the roomier one, with the panel capped to it (it scrolls).
     else next = room.top > room.bottom ? 'top' : 'bottom';
     setSide(next);
-    setMaxHeight(room[next] >= height ? null : Math.max(room[next] - GAP, 96));
+    setMaxHeight(room[next] >= height ? null : Math.max(room[next] - GAP, 0));
   }, [open, placement]);
 
   if (!provenance?.ai_generated) return null;
@@ -172,7 +172,7 @@ function ProvenanceInfo({ provenance, models, placement = 'top', buttonClassName
         <div
           ref={panelRef}
           id={panelId}
-          style={maxHeight ? { maxHeight: `${maxHeight}px` } : undefined}
+          style={maxHeight !== null ? { maxHeight: `${maxHeight}px` } : undefined}
           role="dialog"
           aria-label={t('chatMessage.provenance.title', 'AI generated')}
           data-testid="provenance-panel"
