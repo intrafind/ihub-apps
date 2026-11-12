@@ -337,10 +337,19 @@ describe('POST _migrate', () => {
   it('answers 409 MIGRATION_LOCKED while the lock is held', async () => {
     const locks = new FilesystemLockManager({ baseDir: path.join(contents, 'data') });
     let release;
+    let entered;
+    const holding = new Promise(resolve => (entered = resolve));
     const held = locks.withLock(
       'integration-migration:pending',
-      () => new Promise(resolve => (release = resolve))
+      () =>
+        new Promise(resolve => {
+          release = resolve;
+          entered();
+        })
     );
+    // Only once the lock is held: acquiring it takes a few file operations,
+    // and a request sent before they finish takes the lock itself.
+    await holding;
     try {
       const res = await admin(
         request(app).post('/api/admin/integrations/installed/pending/_migrate')

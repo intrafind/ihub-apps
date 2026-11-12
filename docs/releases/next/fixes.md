@@ -651,3 +651,7 @@ it. Each now takes a share of the worker's own memory limit (about a quarter for
 capped at its old size; the web page cache also keeps at most 256 pages per source type and drops the oldest
 first. On a small worker, a project read again after a while may be loaded from storage again instead of
 from memory.
+
+## Storage Locks Hold Under Contention Between Workers
+
+With several workers or replicas on one data volume, taking over an expired storage lock could rarely let two workers hold it at once (the same work done twice, or one worker's lock released by another); a takeover now elects exactly one.
