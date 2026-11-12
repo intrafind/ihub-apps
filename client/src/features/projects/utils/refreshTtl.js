@@ -45,10 +45,28 @@ export function refreshModeLabel(mode, t) {
  * @returns {number|null}
  */
 export function parseRefreshIdleDays(value) {
-  if (String(value ?? '').trim() === '') return null;
-  const days = Number(value);
-  return Number.isInteger(days) && days >= 0 && days <= 3650 ? days : null;
+  return parseWholeNumber(value, 0, 3650);
 }
+
+/**
+ * A number field's value as a whole number within `min`..`max`, or null for
+ * anything else (an emptied field included: it never stands for 0).
+ *
+ * @param {string|number|null|undefined} value
+ * @param {number} min
+ * @param {number} max
+ * @returns {number|null}
+ */
+export function parseWholeNumber(value, min, max) {
+  if (String(value ?? '').trim() === '') return null;
+  const number = Number(value);
+  return Number.isInteger(number) && number >= min && number <= max ? number : null;
+}
+
+/** The bounds of the refresh wait and the ingest limits, as the server takes them (#3622). */
+export const REFRESH_WAIT_RANGE = Object.freeze({ min: 0, max: 120 });
+export const FETCH_CONCURRENCY_RANGE = Object.freeze({ min: 1, max: 32 });
+export const CONVERT_CONCURRENCY_RANGE = Object.freeze({ min: 1, max: 8 });
 
 /**
  * A mode select's value back to a mode: `''` is "inherit" (null).

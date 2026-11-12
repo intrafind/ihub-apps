@@ -131,8 +131,26 @@ export function stoppedUnstartedLabel(t, item) {
     : t('toolActivity.stoppedUnfinished', 'Stopped — the unfinished call was not run.');
 }
 
-/** The idle line: "Thinking…" while the model reasons, else "Waiting for the model…". */
-export function idleLabel(t, kind) {
+/**
+ * The idle line: "Thinking…" while the model reasons, "Refreshing outdated
+ * documents…" while the turn waits for them (#3622), else "Waiting for the
+ * model…".
+ *
+ * @param {Function} t
+ * @param {string} kind
+ * @param {{total?: number, done?: number}} [idle] - The counts of `refreshing`.
+ */
+export function idleLabel(t, kind, idle = {}) {
+  if (kind === 'refreshing') {
+    return t(
+      'toolActivity.refreshingDocuments',
+      'Refreshing outdated documents… {{done}} of {{total}}',
+      {
+        done: idle.done ?? 0,
+        total: idle.total ?? 0
+      }
+    );
+  }
   return kind === 'thinking'
     ? t('toolActivity.thinking', 'Thinking…')
     : t('toolActivity.waitingForModel', 'Waiting for the model…');
@@ -411,7 +429,7 @@ export function headlineOf(t, activity, loading) {
       label = runningHeadline(t, items, activity.reading);
       break;
     case 'idle':
-      label = idleLabel(t, activity.idle.kind);
+      label = idleLabel(t, activity.idle.kind, activity.idle);
       break;
     default:
       label = finishedHeadline(t, items, searches);

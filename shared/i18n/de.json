@@ -6006,6 +6006,18 @@
       "refreshIdleDays": {
         "label": "Nur bei Nutzung aktualisieren nach (Tage ohne Nutzung)",
         "help": "Für „Automatisch, solange das Projekt genutzt wird“: Ein Projekt, das so viele Tage niemand genutzt hat, wird nicht mehr im Hintergrund aktualisiert, sondern erst, wenn es wieder genutzt wird. 0 aktualisiert immer im Hintergrund."
+      },
+      "refreshWait": {
+        "label": "Vor der Antwort auf veraltete Dokumente warten (Sekunden)",
+        "help": "Bevor ein Chat oder ein Workflow ein Projekt liest, werden seine veralteten Dateien und Webseiten aktualisiert, und es wird bis zu dieser Zeit darauf gewartet. Was bis dahin nicht fertig ist, wird wie gespeichert gelesen und weiter aktualisiert. 0 antwortet sofort mit dem Gespeicherten."
+      },
+      "fetchConcurrency": {
+        "label": "Gleichzeitig geprüfte Dateien und Webseiten",
+        "help": "Pro Serverprozess. Die Prüfung, ob sich eine Datei oder Seite geändert hat, braucht wenig Speicher; mindestens so viele wie gleichzeitige Umwandlungen."
+      },
+      "convertConcurrency": {
+        "label": "Gleichzeitig umgewandelte Dokumente",
+        "help": "Pro Serverprozess: Uploads sowie geänderte Dateien und Webseiten werden so viele auf einmal in Text umgewandelt. Jede Umwandlung kann viel Speicher brauchen."
       }
     },
     "updates": {
@@ -8435,6 +8447,7 @@
     "occurrence": "Nr. {{count}}",
     "thinking": "Denkt nach…",
     "waitingForModel": "Wartet auf das Modell…",
+    "refreshingDocuments": "Veraltete Dokumente werden aktualisiert… {{done}} von {{total}}",
     "awaitingApproval": "Wartet auf Freigabe",
     "stalled": "Seit einiger Zeit keine neue Ausgabe. Das Modell ist möglicherweise ausgelastet – warten oder stoppen ist möglich.",
     "stoppedUnfinished": "Abgebrochen – der unfertige Aufruf wurde nicht ausgeführt.",

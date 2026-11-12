@@ -14,13 +14,55 @@ import { knowledgeModeDescription, knowledgeModeLabel } from '../../projects/uti
 import { KNOWLEDGE_MODES } from '../../../../../shared/knowledgeModes.js';
 import { LIMIT_FIELDS, LIMIT_LABELS, limitInputsOf, parseLimits } from '../utils/projectLimits';
 import {
+  CONVERT_CONCURRENCY_RANGE,
+  FETCH_CONCURRENCY_RANGE,
   parseRefreshTtl,
+  parseWholeNumber,
   REFRESH_MODES,
+  REFRESH_WAIT_RANGE,
   parseRefreshIdleDays,
   refreshModeLabel,
   refreshTtlChoices,
   refreshTtlLabel
 } from '../../projects/utils/refreshTtl';
+
+const NUMBER_INPUT_CLASS =
+  'block w-32 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2';
+
+/**
+ * A whole-number setting with its label and help text.
+ *
+ * @param {Object} props
+ * @param {string} props.id
+ * @param {string} props.label
+ * @param {string} props.help
+ * @param {number} props.value
+ * @param {{min: number, max: number}} props.range
+ * @param {(value: string) => void} props.onChange
+ */
+function NumberSetting({ id, label, help, value, range, onChange }) {
+  return (
+    <div className="space-y-1">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="number"
+        min={range.min}
+        max={range.max}
+        step={1}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        aria-describedby={`${id}-help`}
+        className={NUMBER_INPUT_CLASS}
+      />
+      <p id={`${id}-help`} className="text-xs text-gray-500 dark:text-gray-400">
+        {help}
+      </p>
+    </div>
+  );
+}
 
 const TIER_POLICIES = [
   {
@@ -153,6 +195,19 @@ function ProjectSharingSettingsPanel() {
     setSaved(false);
   };
 
+  const updateRefreshWait = value => {
+    const seconds = parseWholeNumber(value, REFRESH_WAIT_RANGE.min, REFRESH_WAIT_RANGE.max);
+    if (seconds === null) return;
+    setDraft(previous => ({ ...previous, refreshWaitSeconds: seconds }));
+    setSaved(false);
+  };
+  const updateIngest = (key, range, value) => {
+    const number = parseWholeNumber(value, range.min, range.max);
+    if (number === null) return;
+    setDraft(previous => ({ ...previous, ingest: { ...previous.ingest, [key]: number } }));
+    setSaved(false);
+  };
+
   const save = async () => {
     setSaving(true);
     setError(null);
@@ -164,8 +219,11 @@ function ProjectSharingSettingsPanel() {
         refreshTtl,
         refreshMode,
         refreshIdleDays,
+        refreshWaitSeconds,
+        ingest,
         knowledgeModes
       } = draft;
+      const ingestChanged = JSON.stringify(ingest) !== JSON.stringify(stored.ingest);
       const modesChanged =
         Array.isArray(knowledgeModes) &&
         JSON.stringify(knowledgeModes) !== JSON.stringify(stored.knowledgeModes);
@@ -179,6 +237,10 @@ function ProjectSharingSettingsPanel() {
         ...(refreshIdleDays !== undefined && refreshIdleDays !== stored.refreshIdleDays
           ? { refreshIdleDays }
           : {}),
+        ...(refreshWaitSeconds !== undefined && refreshWaitSeconds !== stored.refreshWaitSeconds
+          ? { refreshWaitSeconds }
+          : {}),
+        ...(ingest && ingestChanged ? { ingest } : {}),
         ...(limitsChanged ? { limits: limits.values } : {})
       });
       // The default app and the limits reach the project pages through the platform config.
@@ -367,6 +429,51 @@ function ProjectSharingSettingsPanel() {
               )}
             </p>
           </div>
+        )}
+        {draft.refreshWaitSeconds !== undefined && (
+          <NumberSetting
+            id="project-settings-refresh-wait"
+            label={t(
+              'admin.projects.refreshWait.label',
+              'Wait for outdated documents before answering (seconds)'
+            )}
+            help={t(
+              'admin.projects.refreshWait.help',
+              'Before a chat or a workflow reads a project, its outdated files and web pages are refreshed and waited for up to this long. What is not done by then is read as stored and keeps refreshing. 0 answers at once from what is stored.'
+            )}
+            value={draft.refreshWaitSeconds}
+            range={REFRESH_WAIT_RANGE}
+            onChange={updateRefreshWait}
+          />
+        )}
+        {draft.ingest && (
+          <>
+            <NumberSetting
+              id="project-settings-fetch-concurrency"
+              label={t(
+                'admin.projects.fetchConcurrency.label',
+                'Files and web pages checked at once'
+              )}
+              help={t(
+                'admin.projects.fetchConcurrency.help',
+                'Per server process. Checking whether a file or page changed takes little memory; at least as many as conversions at once.'
+              )}
+              value={draft.ingest.fetchConcurrency}
+              range={FETCH_CONCURRENCY_RANGE}
+              onChange={value => updateIngest('fetchConcurrency', FETCH_CONCURRENCY_RANGE, value)}
+            />
+            <NumberSetting
+              id="project-settings-convert-concurrency"
+              label={t('admin.projects.convertConcurrency.label', 'Documents converted at once')}
+              help={t(
+                'admin.projects.convertConcurrency.help',
+                'Per server process: uploads, and files and web pages that changed, are read into text this many at a time. Each conversion can take a lot of memory.'
+              )}
+              value={draft.ingest.concurrency}
+              range={CONVERT_CONCURRENCY_RANGE}
+              onChange={value => updateIngest('concurrency', CONVERT_CONCURRENCY_RANGE, value)}
+            />
+          </>
         )}
         {Array.isArray(draft.knowledgeModes) && (
           <fieldset className="space-y-2">

@@ -25,6 +25,9 @@
 import { callerContext, permissionsFor } from '../../middleware/projectAccess.js';
 import { resolveProjectScope } from '../knowledge/ProjectScope.js';
 import { providerFor } from '../knowledge/registry.js';
+import configCache from '../../configCache.js';
+import { projectSettings } from '../projects/projectSettings.js';
+import { awaitFreshScope } from '../projects/readFreshness.js';
 import { normalizeProjectLink } from '../../validators/projectSchema.js';
 
 /** The input type of the run dialog's project picker. */
@@ -231,7 +234,11 @@ export async function resolveNodeProject({ executor, node, state, context }) {
     // The node works on the documents, not through the model: "Not for AI" does not apply.
     forAi: false
   });
-  const entry = scope.find(candidate => candidate.project.id === projectId);
+  // What is outdated is refreshed first, within `refreshWaitSeconds` (#3622).
+  const { scope: fresh } = await awaitFreshScope(scope, {
+    settings: projectSettings(configCache.getPlatform?.() || {})
+  });
+  const entry = fresh.find(candidate => candidate.project.id === projectId);
   if (!entry)
     throw new ProjectNodeError(
       'PROJECT_NOT_FOUND',

@@ -713,15 +713,21 @@ export class ProjectService {
    *
    * @param {string} projectId
    * @param {string} itemId
-   * @param {{user?: Object, authorize?: Function, wait?: boolean, scheduled?: boolean}} options
+   * @param {{user?: Object, authorize?: Function, wait?: boolean, scheduled?: boolean,
+   *   urgent?: boolean}} options
    *   `scheduled`: the reconciler refreshes an expired file (#3536); there is
-   *   no user, and the project's change stamps stay as they are.
+   *   no user, and the project's change stamps stay as they are. `urgent`: a
+   *   reader waits for the scheduled refresh; it goes ahead of the background.
    * @returns {Promise<{project: Object, item: Object}>} Without `wait`, the
    *   item as reserved — carrying `refreshingAt` — while the job runs
    * @throws {ProjectError} `PROJECT_MISMATCH` while the item is being
    *   processed, a refresh included
    */
-  async refreshItem(projectId, itemId, { user, authorize, wait = false, scheduled = false }) {
+  async refreshItem(
+    projectId,
+    itemId,
+    { user, authorize, wait = false, scheduled = false, urgent = false }
+  ) {
     if (!this.ingest) {
       throw new ProjectError(
         'INGEST_UNAVAILABLE',
@@ -797,7 +803,9 @@ export class ProjectService {
         previousSha256: storedItem.provenance?.source?.sha256 || null,
         attempt: storedItem.ingestAttempt,
         purpose: 'refresh',
-        scheduled
+        scheduled,
+        // A reader waits for it (`refreshForRead`): ahead of the background.
+        ...(urgent ? { urgent: true } : {})
       },
       { user, wait }
     );

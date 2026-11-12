@@ -714,7 +714,7 @@ describe('ingest queue', () => {
   it('starts a job someone waits for before scheduled refreshes, and keeps a slot for it', async () => {
     const ingest = new ProjectIngestService({
       service: {},
-      platform: () => ({ projects: { ingest: { concurrency: 2 } } })
+      platform: () => ({ projects: { ingest: { concurrency: 2, fetchConcurrency: 2 } } })
     });
     const started = [];
     const gates = new Map();
@@ -744,6 +744,59 @@ describe('ingest queue', () => {
     await new Promise(resolve => setImmediate(resolve));
     // Both slots are free: the pick first, then the last background job.
     assert.deepEqual(started.slice(3), ['pick', 'bg3']);
+  });
+
+  it('moves a queued refresh a reader waits for ahead of the background', async () => {
+    const ingest = new ProjectIngestService({
+      service: {},
+      platform: () => ({ projects: { ingest: { concurrency: 2, fetchConcurrency: 2 } } })
+    });
+    const started = [];
+    const gates = new Map();
+    ingest._run = job =>
+      new Promise(resolve => {
+        started.push(job.itemId);
+        gates.set(job.itemId, resolve);
+      });
+    const enqueue = (itemId, input) =>
+      ingest.start({ id: 'p' }, { id: itemId }, { fetch: () => null, ...input }, { wait: false });
+    await enqueue('bg1', { scheduled: true });
+    await enqueue('bg2', { scheduled: true });
+    await enqueue('bg3', { scheduled: true });
+    assert.deepEqual(started, ['bg1'], 'one background job, the last slot kept free');
+    // A reader waits for bg3: it starts in the free slot, before bg2.
+    assert.equal(ingest.promote(['bg3']), 1);
+    assert.deepEqual(started, ['bg1', 'bg3']);
+    // Queued as urgent from the start, a scheduled job is not background either.
+    gates.get('bg3')();
+    await new Promise(resolve => setImmediate(resolve));
+    await enqueue('urgent', { scheduled: true, urgent: true });
+    assert.deepEqual(started.slice(2), ['urgent']);
+  });
+
+  it('converts at most `concurrency` jobs at once, those someone waits for first', async () => {
+    const ingest = new ProjectIngestService({
+      service: {},
+      platform: () => ({ projects: { ingest: { concurrency: 2, fetchConcurrency: 8 } } })
+    });
+    const order = [];
+    const take = async (itemId, background) => {
+      const release = await ingest._acquireConvert({ itemId, background });
+      order.push(itemId);
+      return release;
+    };
+    const first = take('bg1', true);
+    const second = take('bg2', true);
+    const third = take('pick', false);
+    const releaseFirst = await first;
+    await third;
+    assert.deepEqual(order, ['bg1', 'pick'], 'the last conversion slot is not a background one');
+    assert.equal(ingest.converting, 2);
+    releaseFirst();
+    releaseFirst(); // A second release gives nothing back.
+    await second;
+    assert.deepEqual(order, ['bg1', 'pick', 'bg2']);
+    assert.equal(ingest.converting, 2);
   });
 });
 

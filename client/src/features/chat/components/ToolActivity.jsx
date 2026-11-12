@@ -139,19 +139,25 @@ function ToolActivity({ activity, loading = false }) {
   );
 }
 
+/** The icon of an idle line when motion is reduced. */
+function idleIcon(kind) {
+  if (kind === 'thinking') return 'light-bulb';
+  return kind === 'refreshing' ? 'arrow-path' : 'clock';
+}
+
 /**
  * The idle line of a turn with no rows yet ("Waiting for the model… 0:12",
  * "Thinking… 0:07"): not a button, nothing to expand.
  */
 function IdleLine({ idle }) {
   const { t } = useTranslation();
-  const label = idleLabel(t, idle.kind);
+  const label = idleLabel(t, idle.kind, idle);
   return (
     <div
       aria-live="off"
       className="mb-2 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-gray-600 dark:text-gray-400"
     >
-      <BusyIcon staticIcon={idle.kind === 'thinking' ? 'light-bulb' : 'clock'} />
+      <BusyIcon staticIcon={idleIcon(idle.kind)} />
       <span className={ACTIVE_LABEL}>{label}</span>
       <ArgumentProgress
         lead
@@ -166,11 +172,7 @@ function IdleLine({ idle }) {
 /** The icon in front of the headline: a spinner while it is busy, else what the line stands for. */
 function HeadlineIcon({ headline, items, idle }) {
   if (headline.busy) {
-    return (
-      <BusyIcon
-        staticIcon={headline.mode === 'idle' && idle.kind === 'thinking' ? 'light-bulb' : 'clock'}
-      />
-    );
+    return <BusyIcon staticIcon={headline.mode === 'idle' ? idleIcon(idle.kind) : 'clock'} />;
   }
   if (headline.mode === 'awaiting') {
     return <Icon name="shield-check" size="sm" className={`shrink-0 ${ATTENTION}`} />;

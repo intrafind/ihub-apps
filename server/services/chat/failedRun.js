@@ -15,8 +15,13 @@ import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
  * chat stream: a short-lived run that starts, errors and ends, so the client
  * reducer can attach the message to the pending assistant bubble.
  */
-export function emitFailedRun(chatId, { kind = 'chat', messageId, code, message, refs = {} }) {
-  const emitter = new RunStreamEmitter({ streamId: chatId, runId: newRunId(kind) });
+export function emitFailedRun(
+  chatId,
+  { kind = 'chat', messageId, code, message, refs = {}, runId = null }
+) {
+  // `runId`: the run the turn was named before it failed (its preparation
+  // showed progress on it), so that run ends; else a run of its own.
+  const emitter = new RunStreamEmitter({ streamId: chatId, runId: runId || newRunId(kind) });
   emitter.emit(SSE_V2_EVENTS.RUN_STARTED, {
     kind,
     refs: { chatId, ...(messageId ? { messageId } : {}), ...refs }

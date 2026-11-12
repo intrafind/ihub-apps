@@ -134,7 +134,7 @@ function announceIdle(collector, idle, idleSince, { t, now }) {
   const key = `idle:${idle.kind}:${idle.step ?? 0}`;
   idleSince[key] = idleSince[key] ?? now;
   if (now - idleSince[key] >= IDLE_ANNOUNCE_AFTER_MS) {
-    collector.say(key, spoken(idleLabel(t, idle.kind)), 'low');
+    collector.say(key, spoken(idleLabel(t, idle.kind, idle)), 'low');
   } else {
     collector.wakeIn(IDLE_ANNOUNCE_AFTER_MS - (now - idleSince[key]));
   }

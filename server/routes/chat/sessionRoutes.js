@@ -33,6 +33,7 @@ import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
 import { prepareChatApproval } from '../../services/chat/chatToolApproval.js';
 import { SSE_V2_EVENTS, RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
+import { KNOWLEDGE_REFRESH_PHASE } from '../../../shared/run/knowledgeRefresh.js';
 import { createSseChannel } from '../../utils/sseChannel.js';
 import {
   authRequired,
@@ -709,7 +710,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     user,
     persistence = null,
     toolApproval = null,
-    canApproveTools = false
+    canApproveTools = false,
+    runId = null
   }) {
     await logInteraction('chat_request', buildLogData(streaming));
 
@@ -717,6 +719,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       prep,
       chatId,
       messageId,
+      ...(runId ? { runId } : {}),
       activatedSkills,
       streaming,
       buildLogData,
@@ -1435,19 +1438,39 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           // defeat that check, letting a dead socket's close handler bail out
           // and leak the Map entry + activeRequests controller for up to
           // 5 minutes until cleanupInactiveClients evicts it.
-          const prep = await chatService.prepareChatRequest(chatRequestOptions);
+          //
+          // The turn's run is named before its preparation (#3622): while the
+          // prompt is built, the refresh of outdated project documents it
+          // waits for is shown on that run, and the turn then runs as it (or
+          // fails as it, so the status line ends with the turn).
+          const turnRunId = newRunId('chat');
+          const refreshStatus = new RunStreamEmitter({ streamId: chatId, runId: turnRunId });
+          const prep = await chatService.prepareChatRequest({
+            ...chatRequestOptions,
+            onKnowledgeRefresh: ({ total, done }) =>
+              refreshStatus.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+                phase: KNOWLEDGE_REFRESH_PHASE,
+                data: { total, done }
+              })
+          });
           if (!prep.success) {
             const errMsg = await getLocalizedError(
               prep.error.code || 'internalError',
               {},
               clientLanguage
             );
-            emitFailedRun(chatId, { messageId, code: prep.error.code, message: errMsg });
+            emitFailedRun(chatId, {
+              messageId,
+              code: prep.error.code,
+              message: errMsg,
+              runId: turnRunId
+            });
             return res.json({ status: 'error', message: errMsg, code: prep.error.code });
           }
           const approvalRefusal = await commitApproval();
           if (approvalRefusal) {
             emitFailedRun(chatId, {
+              runId: turnRunId,
               messageId,
               code: approvalRefusal.code,
               message: approvalRefusal.message
@@ -1483,7 +1506,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             persistence,
             toolApproval,
             // Only a client that draws the approval card can answer one.
-            canApproveTools: toolApprovalCapable === true
+            canApproveTools: toolApprovalCapable === true,
+            runId: turnRunId
           });
           // Refused at persistence: the chat's container changed under the
           // turn (`settleUserTurn`), and nothing of it was stored.

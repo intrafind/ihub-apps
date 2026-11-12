@@ -5544,6 +5544,18 @@
       "refreshIdleDays": {
         "label": "Refresh only when used after (days without use)",
         "help": "For \"Automatically, while the project is used\": a project nobody used for this many days is no longer refreshed in the background, only when it is used again. 0 always refreshes in the background."
+      },
+      "refreshWait": {
+        "label": "Wait for outdated documents before answering (seconds)",
+        "help": "Before a chat or a workflow reads a project, its outdated files and web pages are refreshed and waited for up to this long. What is not done by then is read as stored and keeps refreshing. 0 answers at once from what is stored."
+      },
+      "fetchConcurrency": {
+        "label": "Files and web pages checked at once",
+        "help": "Per server process. Checking whether a file or page changed takes little memory; at least as many as conversions at once."
+      },
+      "convertConcurrency": {
+        "label": "Documents converted at once",
+        "help": "Per server process: uploads, and files and web pages that changed, are read into text this many at a time. Each conversion can take a lot of memory."
       }
     },
     "updates": {
@@ -8436,6 +8448,7 @@
     "occurrence": "No. {{count}}",
     "thinking": "Thinking…",
     "waitingForModel": "Waiting for the model…",
+    "refreshingDocuments": "Refreshing outdated documents… {{done}} of {{total}}",
     "awaitingApproval": "Waiting for approval",
     "stalled": "No new output for a while. The model may be busy — you can wait or stop.",
     "stoppedUnfinished": "Stopped — the unfinished call was not run.",

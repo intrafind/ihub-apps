@@ -16,6 +16,7 @@ import {
   scopeSummary
 } from './knowledge/KnowledgeScopePlanner.js';
 import { projectSettings } from './projects/projectSettings.js';
+import { awaitFreshScope } from './projects/readFreshness.js';
 import { hasProjectScope } from './knowledge/knowledgeTools.js';
 
 /**
@@ -29,6 +30,13 @@ const promptKnowledgeSources = new Map();
 // not the chat: two preparations of one chat can overlap (a turn and the one
 // that supersedes it), and each must report its own scope.
 const knowledgeScopes = new Map();
+
+/**
+ * Who hears, per preparation, how the refresh of outdated project documents
+ * a turn waits for advances (#3622): the chat route, which shows it on the
+ * stream. Keyed like {@link knowledgeScopes}.
+ */
+const refreshListeners = new Map();
 
 /**
  * The model behind the request: its id when the request builder hands it
@@ -179,6 +187,22 @@ class PromptService {
     knowledgeScopes.delete(key);
     return summary;
   }
+  /**
+   * Listen to the refresh a preparation waits for (`readFreshness.js`):
+   * `fn({total, done})` as the outdated documents of its projects are
+   * refreshed. The listener is dropped with {@link unwatchKnowledgeRefresh}.
+   *
+   * @param {string} key - The preparation id.
+   * @param {(progress: {total: number, done: number}) => void} fn
+   */
+  watchKnowledgeRefresh(key, fn) {
+    if (key && typeof fn === 'function') refreshListeners.set(key, fn);
+  }
+
+  /** @param {string} key - The preparation id. */
+  unwatchKnowledgeRefresh(key) {
+    if (key) refreshListeners.delete(key);
+  }
 
   /**
    * The system prompt with the request's projects applied (spec 2 §6).
@@ -207,9 +231,16 @@ class PromptService {
       return hasPlaceholder ? systemPrompt.replace(placeholder, () => '') : systemPrompt;
     }
     const platform = configCache.getPlatform() || {};
-    const plan = await planKnowledgeScope(scope, {
+    const settings = projectSettings(platform);
+    // What is outdated is refreshed first, within `refreshWaitSeconds`: the
+    // turn answers from current documents where it can (#3622).
+    const fresh = await awaitFreshScope(scope, {
+      settings,
+      onProgress: refreshListeners.get(scopeKey)
+    });
+    const plan = await planKnowledgeScope(fresh.scope, {
       model: findModel(configCache.getModels?.()?.data || [], modelName),
-      settings: projectSettings(platform),
+      settings,
       ctx: { user, chatId, language: lang, purpose: 'chat' },
       question
     });

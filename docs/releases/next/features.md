@@ -1964,9 +1964,16 @@ longer re-read the whole site on each server process, which could exhaust the se
   the number of idle days), per project and per item.
 - A project is used when a chat, a search, a workflow, an app or an MCP client reads it, or when it
   is attached to a chat; opening the project page is not a use, and background refreshes never
-  keep a project active. Using a project refreshes what is outdated in it. Answers use the
-  stored text meanwhile; the project page shows **Refreshing N outdated documents**, and **About
-  this answer** in a chat says when an answer read outdated documents.
+  keep a project active. Using a project refreshes what is outdated in it.
+- **Answers wait for outdated documents.** Before a chat or a workflow reads a project, its
+  outdated files and pages are refreshed and waited for, up to 15 seconds by default; the chat
+  shows **Refreshing outdated documents… 3 of 12** meanwhile. Unchanged documents take
+  milliseconds to check. What is not done in time is answered from the stored text and keeps
+  refreshing, and **About this answer** says when an answer read outdated documents. Set the time
+  in **Admin → Projects → Project settings** (0 answers at once from the stored text).
+- **More pages are checked at once without more memory:** checking a page and converting it have
+  separate limits per server process, 8 checks and 2 conversions at once by default, both set in
+  **Admin → Projects → Project settings**.
 - Adding a page asks the website once. Pages picked with **Find more pages of this website** are
   not fetched again at all: the site search's own read is stored.
 - The whole page is kept (no longer cut at 50,000 characters), and its text counts toward the

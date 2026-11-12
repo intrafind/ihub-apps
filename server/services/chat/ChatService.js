@@ -279,11 +279,22 @@ class ChatService {
     // turn prepared while another one of the chat still awaits its tools
     // and API key must not take, or overwrite, the other one's scope.
     const preparationId = uuidv4();
-    const result = await this.requestBuilder.prepareChatRequest({
-      ...params,
-      preparationId,
-      processMessageTemplates
-    });
+    // How the refresh of outdated project documents this turn waits for
+    // advances (#3622): the chat route shows it on the stream.
+    const { onKnowledgeRefresh, ...request } = params || {};
+    if (typeof onKnowledgeRefresh === 'function') {
+      PromptService.watchKnowledgeRefresh(preparationId, onKnowledgeRefresh);
+    }
+    let result;
+    try {
+      result = await this.requestBuilder.prepareChatRequest({
+        ...request,
+        preparationId,
+        processMessageTemplates
+      });
+    } finally {
+      PromptService.unwatchKnowledgeRefresh(preparationId);
+    }
     // `PromptService` notes the app sources it loaded under the chat id while
     // the prompt is built. Take them with this request: a turn then reports
     // its own sources, never those of a newer turn on the same chat that was

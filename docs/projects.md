@@ -147,15 +147,32 @@ recorded as the project's `lastUsedAt` (at most once an hour per project and ser
 the idle rule reads; a project not used since this was recorded counts from its last activity.
 Nothing the server does by itself is a use: a background refresh never keeps a project active. A use
 also queues a refresh of every outdated file and page of the project (at most once a minute per
-project and server process) and the first fetch of pages still waiting for one; the answer of that
-turn uses the stored text. The project page shows **Refreshing N outdated
-documents** while it runs, the item card **Outdated since …, refreshed when used**, and **About this
-answer** in a chat says how many outdated documents the answer read.
+project and server process) and the first fetch of pages still waiting for one.
+
+**Before a chat turn or a workflow step reads its projects, it waits for what is outdated**, at most
+`platform.projects.refreshWaitSeconds` (15 by default, up to 120; **Admin → Projects → Project
+settings**) for the whole turn. Outdated files and pages are refreshed, pages waiting for their
+first fetch are fetched, and items still being processed (an upload still extracting) are waited
+for, in every refresh mode except a TTL of `never`; these jobs go ahead of the background
+refreshes. Most refreshes are a conditional request answered "unchanged" within milliseconds; only
+changed documents are converted. While the turn waits, the chat shows **Refreshing outdated
+documents… 3 of 12**. What is not done by the time limit is read as stored and keeps refreshing,
+so the next turn reads the new text; **About this answer** says how many outdated documents an
+answer read. An MCP client reading a project waits the same way. `0` turns the wait off: turns then
+answer from the stored text at once while the refresh runs behind. The project page shows
+**Refreshing N outdated documents** while refreshes run, and the item card **Outdated since …,
+refreshed when used**.
+
+**Checking and converting have separate limits** per server process: `ingest.fetchConcurrency`
+jobs run at once (8 by default, up to 32), each fetching its source, but only `ingest.concurrency`
+of them convert at once (2 by default, up to 8), the step that reads a document into text and needs
+the memory. Many pages are checked in parallel, while conversions stay few. Both are set in
+**Admin → Projects → Project settings**.
 
 - **Files from websites** are refreshed on their own (in mode `always`, and in mode `auto` while
   the project is used):
   every 15 minutes the ingest reconciler queues the files (and web pages) whose last check is older
-  than their TTL (at most 50 per run, on the `ingest.concurrency` queue). These background refreshes
+  than their TTL (at most 50 per run, on the ingest queue). These background refreshes
   wait behind every upload, pick and refresh someone asked for, and with more than one slot they
   never take the last free one, so an upload starts within one job's time however many files are
   due. The request is conditional (`If-None-Match` with the stored ETag, `If-Modified-Since` with
@@ -1266,12 +1283,14 @@ would go past it.
 | `refreshTtl`                | `604800` (7 days)   | How long a file from a website is kept before it is downloaded again, and how long a web page's read is cached: seconds (900 to 31536000) or `"never"`. Projects and items may set their own (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
 | `refreshMode`               | `auto`              | When an outdated file or page is refreshed: `always`, `auto` or `onDemand` (see [Refresh](#refresh)). Projects and items may set their own. **Admin → Projects → Project settings**. |
 | `refreshIdleDays`           | `7`                 | Days without use after which a project in mode `auto` is refreshed only when it is used; 0 never counts a project as idle. **Admin → Projects → Project settings**. |
+| `refreshWaitSeconds`        | `15`                | How long a chat turn or a workflow step waits for the outdated documents of its projects before it reads them; 0 to 120, 0 does not wait (see [Refresh](#refresh)). **Admin → Projects → Project settings**. |
 | `kinds`                     | `{}`                | Item kinds to switch off, `{ "<kind>": false }`.                                                         |
 | `scan.provider`             | `none`              | `none` (no scan) or `command` (run a scanner on every upload and picked file before extraction).         |
 | `scan.command`              | `""`                | The scanner command; `{path}` is replaced by the file, or the path is appended. Exit code 0 is clean, 1 infected, anything else an error. |
 | `scan.timeoutMs`            | `30000`             | How long the scanner may run.                                                                            |
 | `scan.onError`              | `reject`            | What a scanner error does to the file: `reject` fails it, `allow` lets it through.                       |
-| `ingest.concurrency`        | `2`                 | Extraction jobs per server process, at most 8.                                                           |
+| `ingest.concurrency`        | `2`                 | Conversions (scan and extraction) at once per server process, at most 8. **Admin → Projects → Project settings**. |
+| `ingest.fetchConcurrency`   | `8`                 | Jobs at once per server process, each fetching its source before it waits for a conversion; at most 32, never fewer than `ingest.concurrency`. **Admin → Projects → Project settings**. |
 | `ingest.staleAfterMinutes`  | `30`                | After how long a waiting or extracting item counts as interrupted.                                       |
 | `tierPolicy`                | `ihub`              | `ihub`: local projects only. `both` and `ifinder`: users add their iFinder smart collections to their projects from the catalog, and create, rename, configure and delete them (see [The iFinder tier](#the-ifinder-tier-smart-collections)). Local projects stay creatable under every value. |
 | `defaultAppId`              | —                   | The app a chat in a project starts in when the project has no default app of its own (or the user cannot use it). Without it, the first app that allows projects. **Admin → Projects → Project settings**. |

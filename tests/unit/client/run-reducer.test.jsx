@@ -602,3 +602,43 @@ describe('runReducer — tool calls whose arguments are still streaming (#3534)'
     });
   });
 });
+
+describe('runReducer — knowledge.refresh (the turn waits for outdated documents)', () => {
+  const refresh = (seq, total, done) =>
+    env(seq, 'run-k', 'tool/progress', { phase: 'knowledge.refresh', data: { total, done } });
+
+  test('shows the counts before the turn starts, and drops the line once it starts', async () => {
+    const { buildToolActivity } = await import('../../../shared/run/toolActivity.js');
+    let state = fold([refresh(1, 12, 0), refresh(2, 12, 5)]);
+    let run = getRun(state, 'run-k');
+    expect(run.knowledgeRefresh).toMatchObject({ total: 12, done: 5 });
+    expect(run.progress).toEqual([]);
+    expect(buildToolActivity(run).idle).toMatchObject({
+      kind: 'refreshing',
+      total: 12,
+      done: 5
+    });
+    state = fold(
+      [env(3, 'run-k', 'run/started', { kind: 'chat', refs: { messageId: 'm1' } })],
+      state
+    );
+    run = getRun(state, 'run-k');
+    expect(run.knowledgeRefresh).toBeNull();
+    expect(buildToolActivity(run)).toBeNull();
+    // A late frame after the start changes nothing.
+    run = getRun(fold([refresh(4, 12, 12)], state), 'run-k');
+    expect(run.knowledgeRefresh).toBeNull();
+  });
+
+  test('ends with a failed turn too', () => {
+    const run = getRun(
+      fold([
+        refresh(1, 3, 0),
+        env(2, 'run-k', 'run/started', { kind: 'chat', refs: {} }),
+        env(3, 'run-k', 'run/ended', { status: 'error', finishReason: 'error' })
+      ]),
+      'run-k'
+    );
+    expect(run.knowledgeRefresh).toBeNull();
+  });
+});

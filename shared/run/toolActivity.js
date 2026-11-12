@@ -428,7 +428,19 @@ function nativeSearchRow(run, finished) {
  * never inferred here.
  */
 function idleOf(run, finished) {
-  if (finished || run.status !== 'running' || !run.waiting) return null;
+  if (finished || run.status !== 'running') return null;
+  // Before the turn starts: the outdated project documents it waits for (#3622).
+  if (run.knowledgeRefresh && !run.waiting) {
+    return {
+      kind: 'refreshing',
+      total: run.knowledgeRefresh.total,
+      done: run.knowledgeRefresh.done,
+      elapsedMs: 0,
+      receivedAt: run.knowledgeRefresh.receivedAt,
+      step: null
+    };
+  }
+  if (!run.waiting) return null;
   return {
     kind: run.waiting.reasoning ? 'thinking' : 'waiting',
     elapsedMs: run.waiting.elapsedMs,
@@ -459,7 +471,8 @@ function readingOf(run, items, finished) {
  * @param {Object|null} run - RunState from the run reducer
  * @returns {{items: Array<Object>, reading: string|null, idle?: Object, answering?: boolean}|null}
  *   null when the turn used no tools and has no idle line. `idle`
- *   (`{kind: 'thinking'|'waiting', elapsedMs, receivedAt, step}`) and
+ *   (`{kind: 'thinking'|'waiting'|'refreshing', elapsedMs, receivedAt, step}`,
+ *   with `total` and `done` for `refreshing`) and
  *   `answering` are only on a turn that is still going: the model has been
  *   silent for a while, and answer text has started.
  */

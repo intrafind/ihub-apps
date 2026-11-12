@@ -1455,7 +1455,7 @@ describe('ingest pipeline', () => {
     assert.equal(picked.status, 'ready', JSON.stringify(picked.error));
     const ingest = service.ingest;
     // Every slot taken: the refresh waits in the queue, not yet in `_run`.
-    const occupied = ingest.settings().ingest.concurrency;
+    const occupied = ingest.settings().ingest.fetchConcurrency;
     ingest.running += occupied;
     let released = false;
     const release = () => {
