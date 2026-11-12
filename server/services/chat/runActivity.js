@@ -301,6 +301,7 @@ function boundScopeProject(project) {
     documents: integer(project?.documents),
     tokens: integer(project?.tokens),
     pinned: integer(project?.pinned),
+    contributed: typeof project?.contributed === 'boolean' ? project.contributed : undefined,
     overBudget: project?.overBudget === true ? true : undefined,
     excerpted: project?.excerpted === true ? true : undefined,
     cut: integer(project?.cut),
@@ -439,9 +440,6 @@ export function boundStoredActivity(activity) {
       })
     );
   }
-  if (Array.isArray(activity.answerSource?.sources) && activity.answerSource.sources.length) {
-    out.answerSource = { sources: strings(activity.answerSource.sources, 20, 100), type: 'mixed' };
-  }
   if (Array.isArray(activity.workflowSteps) && activity.workflowSteps.length > 0) {
     // The end of a long run is what led to the answer; the execution page has
     // the whole history.
@@ -508,7 +506,6 @@ export function boundStoredActivity(activity) {
   // and the execution link read is kept, and nothing when even that is over.
   if (jsonBytes(out) > MAX_STORED_ACTIVITY_BYTES) {
     const minimal = compact({
-      answerSource: out.answerSource,
       workflowResult: out.workflowResult,
       outputFormat: out.outputFormat
     });

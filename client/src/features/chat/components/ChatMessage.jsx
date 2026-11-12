@@ -67,8 +67,8 @@ function ChatCheckpoint({ executionId, checkpoint }) {
     </div>
   );
 }
-import AnswerSourceBadge from './AnswerSourceBadge';
-import ProvenanceInfo from './ProvenanceInfo';
+import AnswerBasis from './AnswerBasis';
+import { basisEntries, splitScope } from './answerBasisModel';
 import ExportDialog from './ExportDialog';
 import McpAppViews from '../mcpApps/McpAppViews';
 import ConnectCards from '../../integrations/connect/ConnectCard';
@@ -217,28 +217,30 @@ function ChatMessage({
     [isUser, message.loading, citationView, answerText]
   );
   // The footer at the answer's end (#3521): the cited list, then one row with
-  // the entry to everything found and the badge saying what the answer is
-  // based on. Only once the answer is complete. An answer that cites nothing
-  // lists what was read for it in the cited list's place.
+  // the entry to everything found and the chip saying what the answer is based
+  // on (the kinds of source the server named, "About this answer" behind it).
+  // Only once the answer is complete. An answer that cites nothing lists what
+  // was read for it in the cited list's place.
   const finished = !message.loading;
   const hasCited = Boolean(citationView?.cited.length);
   const hasRead = Boolean(citationView?.read?.length);
   const hasList = hasCited || hasRead;
   const hasResults = hasAnswerResults(citationView);
-  const showAnswerSourceBadge =
+  // The basis chip, and the amber chip for a project that could not be used.
+  // Drawn from what the server sent: a message stored without `answerBasis` has
+  // no chip, and nothing is derived from its other fields.
+  const showAnswerBasis =
     !isUser &&
     !isError &&
     finished &&
-    Boolean(message.answerSource || message.workflowResult || message.knowledgeScope);
-  // "AI generated" details from the server's provenance object (EU AI Act Art. 50(2)).
-  const showProvenance =
-    !isUser && !isError && finished && Boolean(message.provenance?.ai_generated);
+    (basisEntries(message.answerBasis, message.workflowResult).length > 0 ||
+      splitScope(message.knowledgeScope).unavailable.length > 0);
   const showSourcesBlock = !isUser && finished && (hasList || hasResults);
-  const showFooterRow =
-    !isUser && finished && (hasResults || showAnswerSourceBadge || showProvenance);
+  const showFooterRow = !isUser && finished && (hasResults || showAnswerBasis);
+  // `@container`: the basis chip drops its nouns when the row is narrow (the Office taskpane).
   const footerRowClass = hasList
-    ? 'mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5'
-    : 'flex flex-wrap items-center gap-x-2 gap-y-1.5';
+    ? '@container mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5'
+    : '@container flex flex-wrap items-center gap-x-2 gap-y-1.5';
   const citations = useMemo(
     () =>
       citationView?.cited.length
@@ -1104,8 +1106,8 @@ function ChatMessage({
         {/* Where the answer came from, at its end (#3521): the sources it
             cites, listed like footnotes; under them one row with the entry
             to everything it found ("N results", opening the sources panel)
-            at the start and what the answer is based on ("Based on web
-            search") at the end. How it searched stays above the answer
+            at the start and what the answer is based on (the chip "Project ·
+            Web", opening "About this answer") at the end. How it searched stays above the answer
             (ToolActivity). Not while the answer streams, so nothing grows
             or jumps under the text — but the sources component stays
             mounted, because the inline badges open its panel from the text,
@@ -1135,19 +1137,16 @@ function ChatMessage({
                   entryHidden={!finished}
                 />
               )}
-              {(showAnswerSourceBadge || showProvenance) && (
-                <div className="ms-auto flex max-w-full items-center justify-end gap-1.5">
-                  {showAnswerSourceBadge && (
-                    <AnswerSourceBadge
-                      answerSource={message.answerSource}
-                      workflowResult={message.workflowResult}
-                      knowledgeScope={message.knowledgeScope}
-                    />
-                  )}
-                  {showProvenance && (
-                    <ProvenanceInfo provenance={message.provenance} models={models} />
-                  )}
-                </div>
+              {showAnswerBasis && (
+                <AnswerBasis
+                  className="ms-auto"
+                  answerBasis={message.answerBasis}
+                  workflowResult={message.workflowResult}
+                  knowledgeScope={message.knowledgeScope}
+                  provenance={message.provenance}
+                  models={models}
+                  newest={isLatestAssistantMessage}
+                />
               )}
             </div>
           </div>

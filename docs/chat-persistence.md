@@ -611,12 +611,12 @@ kinds the chat has:
 - An app with `sendChatHistory: false`, and a turn sent without history, get
   no tools either.
 - The tools are read-only: no approval prompt.
-- **The answer badge counts a recalled source as what it was when it was
+- **The answer's basis counts a recalled source as what it was when it was
   found.** An answer that reads an earlier web page with `chat_sources_read`
-  is badged *web search*, an iFinder document *iFinder*, a project document
-  *sources*, anything from a connected system *integration*
+  names *Web*, an iFinder document *iFinder*, a project document *Project*,
+  anything from a connected system *Integration*
   (`knowledgeSourceSeam`, by the source's stored `provider`). Listing earlier
-  sources, and reading files or created files, adds nothing to the badge.
+  sources, and reading files or created files, adds nothing to it.
 
 **Files of earlier turns within a budget.** The files of the turn being
 answered always go in full. The files of earlier turns go in full, newest

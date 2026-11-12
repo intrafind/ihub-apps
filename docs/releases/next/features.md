@@ -576,8 +576,8 @@ every turn.
 
 - **Sources:** "what did the second source say?" or "open that article again" works. The assistant
   reads the stored title, link, snippet and passages of a source an earlier answer found, and can
-  cite it again with a badge. For more of a web page, it reads the page again. The answer badge
-  shows where the source came from: an answer built on a web page found earlier says "web search".
+  cite it again with a badge. For more of a web page, it reads the page again. The basis chip
+  shows where the source came from: an answer built on a web page found earlier says "Web".
 - **Uploaded files:** files from earlier turns can be read again in full, also those that were
   left out of the prompt to save space.
 - **Created files:** documents, spreadsheets, presentations, code and web pages the chat created
@@ -1334,7 +1334,7 @@ Tick documents in a project and choose **Delete** to delete them all after one c
 - A document that cannot be deleted stays in the list and stays ticked, and the page says why, so
   you can try it again.
 
-## Chat: Sources Sit at the End of the Answer, Next to "Based on Web Search"
+## Chat: Sources Sit at the End of the Answer, Next to the Basis Chip
 
 An answer used to show two near-identical lines above its text: **Searched the web · 1 search · 10
 sources** and, right under it, **Searched for “…”** with the sites' icons. The entry to the
@@ -1342,8 +1342,8 @@ sources has moved to the end of the answer. The top of an answer now says how it
 the end says what it rests on.
 
 - Under the answer: **Cited in this answer**, then one row with the entry at the start and the
-  **Based on web search** badge at the end. In narrow panes (Outlook, the browser extension,
-  phones) the badge moves to its own line.
+  basis chip at the end (for example **Web**). In narrow panes (Outlook, the browser extension,
+  phones) the chip moves to its own line.
 - The entry reads **10 results** instead of **Searched for “…”**, and the activity line above the
   answer counts **results** too. Not "sources": the count includes everything the search found,
   and only what the answer cites is a source of it. The searches are listed in the panel's header.
@@ -1353,8 +1353,8 @@ the end says what it rests on.
 - Closing the panel returns the keyboard focus to whatever opened it: a badge in the text, a
   number in the cited list or the entry. Focus you have moved elsewhere, for example to the
   message box, stays there.
-- The entry and the badge are the same height. The entry has an outline because it can be
-  clicked, and the badge has a soft fill without an outline because it is only a label.
+- The entry and the chip are the same height, and both have an outline because both can be
+  clicked.
 - An answer that links none of its sources, but was written from pages the search read, lists
   those pages as **Read for this answer** in the cited list's place, and at the top of the panel;
   the other results stay under **Also considered**. The panel shows a section only when it has
@@ -1485,7 +1485,7 @@ an administrator set keep their mode.
   model, listed or searched.
 - **Models without tools** cannot call `knowledge_search`. For them Look things up reads as Best passages,
   so unpinned documents are not silently out of reach.
-- **The answer badge** names the mode a project was used in and says when it was replaced.
+- **The answer** names the mode a project was used in, under **About this answer**, and says when it was replaced.
 
 **API:** `knowledgeMode` on projects (`POST` and `PATCH` `/api/projects`, the admin project
 documents), `excludedFromAi` on items,
@@ -1512,9 +1512,9 @@ word for word, ranked with the keyword search iHub already uses; no extra model 
 - **Web search:** the search tools of Brave, Qwant and Staan take the same optional `focus`. With
   page extraction on, a long result page contributes the sections that answer the question instead
   of its first characters. Without `focus`, nothing changes.
-- **Answer badge:** a searched project that also put the sections matching the question into the
-  prompt now reads "searched, relevant sections loaded" (German: "durchsucht, passende Abschnitte
-  geladen"), so the answer is not mistaken for one that rested on search alone.
+- **About this answer:** a searched project that also put the sections matching the question into
+  the prompt reads "searched for matching passages" (German: "nach passenden Abschnitten
+  durchsucht"), so the answer is not mistaken for one that rested on search alone.
 - The sections the model was given appear as passages of the page or document in the sources panel,
   for the pages a web search read as well. A section cut short to fit shows only the part the model saw.
 - A chat turn that has excerpts changes the system prompt with the question, so a model
@@ -1739,7 +1739,7 @@ AI Act.
   is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
   `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
   results as `metadata.provenance`.
-- **In the chat.** Under every finished answer, next to the "based on…" badge, an **AI generated: details** button opens the model (name and id), time, marking and content hash, with a **Copy hash** action. Every generated picture has the same button next to download and share.
+- **In the chat.** Under every finished answer, the chip that says what the answer is based on opens **About this answer**. Its **Details** show the model (name and id), time, marking and content hash, with a **Copy hash** action. Every generated picture has an **AI generated: details** button next to download and share.
 - **The record never holds the text**, only its hash, and names no user unless `provenance.recordUser` says so. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
 - **Look it up.** `POST /api/eu-ai-act/provenance/_verify` takes a text or a hash and answers "Found" with the record or
@@ -1882,3 +1882,51 @@ template has, and the model is told which exist, where each one sits and how muc
   whose accent 1 is grey no longer produces grey cards.
 
 See [Document templates → PowerPoint](../../document-templates.md#powerpoint).
+
+## Chat: One Chip Says What an Answer Is Based On
+
+Under a finished answer, a project chat used to say the same thing three times: the project as a
+badge, **Based on configured sources**, and an icon-only ⓘ for **AI generated**. When the answer
+also used a web search, the project disappeared into **Based on multiple sources**. One chip now
+replaces all of them.
+
+- **The chip names only the kinds of source the answer used:** Project, Web, iFinder, iAssistant,
+  Documents, File, Email, Recording, or the name of an integration, MCP server or remote agent, for
+  example **Jira**. Two integrations are two entries. At most two kinds are named, then **+N**.
+  A workflow answer reads **Workflow**.
+- **Nothing retrieved reads "Model knowledge"** (German: "Modellwissen"), never "no sources".
+- **A project counts only when the answer used it.** A project that was in scope but whose text
+  neither went into the prompt nor came back from a search is not named on the chip. It is listed
+  as not used.
+- **An amber chip stays separate** when a project in scope could not be used, for example an
+  iFinder collection while iFinder is unreachable. The basis chip next to it shows what the answer
+  actually used. Screen readers announce the amber chip only on the newest answer.
+- **The chip opens "About this answer":**
+  - **AI-generated:** one sentence, for example "This answer was generated by AI, based on project
+    and web".
+  - **Sources:** each source by name. A project shows how it was used (all documents read, searched
+    for matching passages, only pinned documents) and an **Open project** link. The diagnostics
+    that were in tooltips stay as muted text: the knowledge mode, over budget, the model cannot call
+    tools.
+  - **Not used:** projects that were in scope but did not contribute, with the reason.
+  - **Details:** model, time, marking, content hash and output ID, as before.
+- **The separate ⓘ button is gone.** The first-turn notice, the disclaimer below the message box,
+  and the provenance record, watermark and headers are unchanged.
+- **Keyboard and narrow panes.** The chip is a button. Opening the popover moves the focus into it,
+  without trapping it: Escape closes it and returns the focus to the chip. Nothing is only in a
+  tooltip. In a narrow pane (Outlook) a chip with several kinds
+  shows icons only; its accessible name keeps the full text.
+- **After a tool approval the chip covers the whole turn.** An answer that continues after you
+  approved or rejected a tool call is based on everything the turn used before it paused, for
+  example a project search or a Jira lookup, and not only on the approved call.
+- **Older answers show no chip.** Answers stored before this release have no record of what they
+  were based on, and iHub does not guess it from other fields. The amber chip for an unavailable
+  project is still shown on them.
+
+**API:** `run/ended` gains `answerBasis` (`[{ kind, label? }]`, `kind` one of `project`, `web`,
+`ifinder`, `iassistant`, `documents`, `integration`, `email`, `file`, `audio`, `model`), and each
+project of `knowledge/scope` gains `contributed`. Stored chat messages carry `answerBasis`. The
+chat's own project knowledge now reports `project` in `knowledgeSources` instead of `sources`, which
+keeps its admin-configured meaning.
+
+See [Answer Sources](../../answer-sources.md#what-users-see).

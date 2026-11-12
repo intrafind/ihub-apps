@@ -11,7 +11,7 @@
  * thoughts, images, clarification/awaitingInput/clarificationAnswered,
  * workflowCheckpoint, workflowSteps/workflowStep, workflowResult/outputFormat,
  * activeSkills, searchStatus, searchSummary, toolActivity, mcpApps, integrationAuthRequired, sources,
- * answerSource, finishReason. The hook (`useAppChat`) only decides WHEN to write the
+ * answerBasis, finishReason. The hook (`useAppChat`) only decides WHEN to write the
  * projection and which message it belongs to — it never interprets events.
  *
  * @module features/chat/runToMessage
@@ -19,7 +19,6 @@
 import { isRunFinished, getInteractions } from '../../../../shared/run/runReducer.js';
 import { buildToolActivity } from '../../../../shared/run/toolActivity.js';
 import {
-  answerSourceOf,
   buildWorkflowSteps,
   settleWorkflowSteps,
   workflowResultOf
@@ -208,8 +207,9 @@ function addToolSideChannels(extras, run) {
 
 function addCompletionMetadata(extras, run, finished) {
   if (finished) {
-    const answerSource = answerSourceOf(run);
-    if (answerSource) extras.answerSource = answerSource;
+    // What the answer is based on (the kinds of source the server named on
+    // `run/ended`): the basis chip under it.
+    if (run.answerBasis) extras.answerBasis = run.answerBasis;
     // The server's provenance object: the "AI generated" details under the answer.
     if (run.provenance) extras.provenance = run.provenance;
     if (run.finishReason !== null && run.finishReason !== undefined) {

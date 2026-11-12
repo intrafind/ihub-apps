@@ -15,7 +15,6 @@ const STORED_ACTIVITY_FIELDS = [
   'toolActivity',
   'searchSummary',
   'activeSkills',
-  'answerSource',
   'knowledgeScope',
   'workflowSteps',
   'workflowResult',
@@ -72,6 +71,11 @@ export function transformStoredMessage(msg) {
   if (msg.finishReason) message.finishReason = msg.finishReason;
   // Where the answer came from (EU AI Act Art. 50(2)): the "AI generated" details.
   if (msg.provenance && typeof msg.provenance === 'object') message.provenance = msg.provenance;
+  // What the answer is based on: the kinds of source the server named. A message
+  // stored without it shows no basis chip.
+  if (Array.isArray(msg.answerBasis) && msg.answerBasis.length > 0) {
+    message.answerBasis = msg.answerBasis;
+  }
   // A transcription turn (its audio is not kept: no edit, no resend).
   if (msg.transcription === true) message.transcription = true;
   // A turn spoken in voice mode: the bubble marks it with the waveform icon.

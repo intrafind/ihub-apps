@@ -87,7 +87,7 @@ test('a connected system counts only when the call returned data', async () => {
     const added = [];
     const outcome = { message, error: null };
     knowledgeSourceSeam.postTool(
-      { addKnowledgeSource: source => added.push(source) },
+      { addKnowledgeSource: source => added.push(source), addIntegration: () => {} },
       { toolId: 'muc-ad__get_person', toolDef: { _integration: { definition: 'd' } } },
       outcome
     );
@@ -110,7 +110,7 @@ test('a recalled source counts as the kind of source it was found as', async () 
   assert.equal(classifySourceProvider('web'), 'websearch');
   // iFinder documents, iAssistant's included.
   assert.equal(classifySourceProvider('ifinder'), 'ifinder');
-  assert.equal(classifySourceProvider('project'), 'sources');
+  assert.equal(classifySourceProvider('project'), 'project');
   // An MCP server is a connected system, even one that searches.
   assert.equal(classifySourceProvider('mcp:brave-search'), 'integration');
   // Otherwise the provider is the id of the tool that found it.

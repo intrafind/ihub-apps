@@ -18,6 +18,7 @@
 import { z } from 'zod';
 import { provenanceContractSchema } from '../../provenance/provenanceSchema.js';
 import {
+  ANSWER_BASIS_KINDS,
   RUN_KINDS,
   RUN_STATUSES,
   RUN_LOG_EVENTS,
@@ -132,12 +133,26 @@ export const abortCauseSchema = z.object({
   related: z.record(z.string(), z.string()).optional()
 });
 
+/**
+ * What an answer is based on (`run/ended.answerBasis`): one entry per kind of
+ * source it used, and one per connected system (named by `label`). `model`
+ * stands alone when nothing was used. The server decides it, the chat draws it.
+ */
+export const answerBasisSchema = z.array(
+  z.object({
+    kind: z.enum(ANSWER_BASIS_KINDS),
+    label: z.string().optional()
+  })
+);
+
 export const runEndData = z.object({
   status: runStatusSchema,
   finishReason: z.string().nullable().prefault(null),
   usage: usageSchema.optional(),
   /** The answer's sources as `run/ended` reported them (chat turns). */
   knowledgeSources: z.array(z.string()).optional(),
+  /** What the answer is based on, for the footer's basis chip (chat turns). */
+  answerBasis: answerBasisSchema.optional(),
   /** Provenance of the answer, so a replay of the ledger keeps it. */
   provenance: provenanceContractSchema.optional(),
   cost: z.number().nonnegative().optional(),
@@ -347,6 +362,8 @@ export const knowledgeScopeData = z.object({
         documents: z.number().int().nonnegative().optional(),
         tokens: z.number().int().nonnegative().optional(),
         pinned: z.number().int().nonnegative().optional(),
+        /** Whether the answer rests on the project: its text went into the prompt or a search returned it. */
+        contributed: z.boolean().optional(),
         overBudget: z.boolean().optional(),
         excerpted: z.boolean().optional(),
         cut: z.number().int().nonnegative().optional(),

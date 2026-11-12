@@ -75,6 +75,7 @@ import { recordChatInProject } from '../knowledge/chatProjects.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 import { artifactPolicy } from '../artifacts/artifactPolicy.js';
 import { publicImageProvenance } from '../provenance/mediaMarking.js';
+import { boundAnswerBasis } from './answerBasis.js';
 
 const COMPONENT = 'chatMaterializer';
 
@@ -696,6 +697,8 @@ export async function settleAssistantTurn({
     // citation markers in the stored text (the live chat places them the same
     // way); what is stored beside it is the sources and queries.
     const sources = pausedWithoutAnswer ? null : boundStoredSources(summary?.sources);
+    // What the answer is based on: the footer's basis chip, kept with the answer.
+    const answerBasis = pausedWithoutAnswer ? undefined : boundAnswerBasis(summary?.answerBasis);
     const storedContent =
       sources && Array.isArray(summary?.sources?.supports)
         ? insertSupportMarkers(content, summary.sources.supports)
@@ -726,7 +729,8 @@ export async function settleAssistantTurn({
             ...(scheduledTaskProposals.length > 0 ? { scheduledTaskProposals } : {}),
             ...(activity ? { activity } : {}),
             ...(sources ? { sources } : {}),
-            ...(summary?.provenance ? { provenance: summary.provenance } : {})
+            ...(summary?.provenance ? { provenance: summary.provenance } : {}),
+            ...(answerBasis ? { answerBasis } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.

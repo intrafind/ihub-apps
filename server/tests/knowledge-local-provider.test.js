@@ -1222,10 +1222,10 @@ describe('tools', () => {
   });
 
   it('is classified as project knowledge, never as web search', () => {
-    assert.equal(classifyKnowledgeSource('knowledge_search'), 'sources');
-    assert.equal(activityKindOf('knowledge_search', 'sources'), 'search');
-    assert.equal(activityKindOf('knowledge_read', 'sources'), 'fetch');
-    assert.equal(activityScopeOf('knowledge_search', 'sources'), 'documents');
+    assert.equal(classifyKnowledgeSource('knowledge_search'), 'project');
+    assert.equal(activityKindOf('knowledge_search', 'project'), 'search');
+    assert.equal(activityKindOf('knowledge_read', 'project'), 'fetch');
+    assert.equal(activityScopeOf('knowledge_search', 'project'), 'documents');
   });
 });
 
@@ -1755,7 +1755,7 @@ describe('prompt injection', () => {
     const scope = PromptService.takeKnowledgeScope('chat-k1');
     assert.equal(scope.projects[0].mode, 'loaded');
     assert.equal(PromptService.takeKnowledgeScope('chat-k1'), null, 'taken once');
-    assert.deepEqual(PromptService.getPromptSources('chat-k1'), ['sources']);
+    assert.deepEqual(PromptService.getPromptSources('chat-k1'), ['project']);
     PromptService.resetPromptSources('chat-k1');
   });
 

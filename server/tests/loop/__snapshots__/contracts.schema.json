@@ -222,6 +222,34 @@
                   "type": "string"
                 }
               },
+              "answerBasis": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "web",
+                        "ifinder",
+                        "iassistant",
+                        "documents",
+                        "integration",
+                        "email",
+                        "file",
+                        "audio",
+                        "model"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
+                }
+              },
               "provenance": {
                 "type": "object",
                 "properties": {
@@ -2294,6 +2322,9 @@
                       "minimum": 0,
                       "maximum": 9007199254740991
                     },
+                    "contributed": {
+                      "type": "boolean"
+                    },
                     "overBudget": {
                       "type": "boolean"
                     },
@@ -3885,6 +3916,12 @@
           "type": "string"
         }
       },
+      "integrations": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
       "error": {
         "type": "object",
         "properties": {
@@ -3913,7 +3950,8 @@
       "disabledTools",
       "budgetExhausted",
       "messages",
-      "knowledgeSources"
+      "knowledgeSources",
+      "integrations"
     ],
     "additionalProperties": false
   },
@@ -4373,6 +4411,34 @@
                 "type": "array",
                 "items": {
                   "type": "string"
+                }
+              },
+              "answerBasis": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "web",
+                        "ifinder",
+                        "iassistant",
+                        "documents",
+                        "integration",
+                        "email",
+                        "file",
+                        "audio",
+                        "model"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
                 }
               },
               "provenance": {
@@ -5370,6 +5436,9 @@
                       "type": "integer",
                       "minimum": 0,
                       "maximum": 9007199254740991
+                    },
+                    "contributed": {
+                      "type": "boolean"
                     },
                     "overBudget": {
                       "type": "boolean"

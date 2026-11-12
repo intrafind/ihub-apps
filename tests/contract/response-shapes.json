@@ -4516,7 +4516,7 @@
       },
       "messages": [
         {
-          "activity?": "object",
+          "answerBasis?": "array",
           "clientMessageId?": "string",
           "content": "string",
           "context?": "object",

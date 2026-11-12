@@ -99,8 +99,7 @@ const {
   invalidateProjectsList
 } = require('../../../client/src/features/projects/hooks/useProjects');
 const { isIFinderProject } = require('../../../client/src/features/projects/utils/projectView');
-const AnswerSourceBadge =
-  require('../../../client/src/features/chat/components/AnswerSourceBadge').default;
+const AnswerBasis = require('../../../client/src/features/chat/components/AnswerBasis').default;
 
 const COLLECTION_ID = 'ifc_00000000-0000-4000-8000-000000000001';
 
@@ -352,60 +351,51 @@ describe('a smart collection opened as a project', () => {
   });
 });
 
-describe('the chat badge for a collection iFinder could not deliver', () => {
-  const renderBadge = projects =>
+describe('the chat chip for a collection iFinder could not deliver', () => {
+  const renderBasis = (projects, props = {}) =>
     render(
       <MemoryRouter>
-        <AnswerSourceBadge answerSource={{ sources: [] }} knowledgeScope={{ projects }} />
+        <AnswerBasis answerBasis={[{ kind: 'model' }]} knowledgeScope={{ projects }} {...props} />
       </MemoryRouter>
     );
 
-  it('says in amber which collection was not available, and why', () => {
-    renderBadge([
-      { id: COLLECTION_ID, name: 'Contracts', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
-    ]);
+  it('says in amber that a project was not available, and which one and why', () => {
+    renderBasis(
+      [
+        { id: COLLECTION_ID, name: 'Contracts', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
+      ],
+      { newest: true }
+    );
     const notice = screen.getByTestId('knowledge-scope-missing');
-    expect(notice).toHaveTextContent('Contracts · not available');
+    expect(notice).toHaveTextContent('chatMessage.answerBasis.unavailable');
     expect(notice).toHaveAttribute('role', 'status');
-    expect(notice.getAttribute('title')).toMatch(/Contracts: iFinder could not be reached/);
-    // Nothing is claimed as used: no "unavailable" inside a purple badge, no link to a page.
+    expect(notice).toHaveTextContent(/Contracts\. iFinder could not be reached/);
+    // Nothing is claimed as used: the chip says what the model did on its own.
+    expect(screen.getByTestId('answer-basis-chip')).not.toHaveTextContent('Project');
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
-  it('keeps the reached projects as they were and adds the notice beside them', () => {
-    renderBadge([
-      { id: 'prj_case', name: 'Case 2026-114', mode: 'loaded' },
-      { id: COLLECTION_ID, name: 'Contracts', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
-    ]);
-    expect(screen.getByRole('link', { name: 'Case 2026-114 · loaded in full' })).toHaveAttribute(
-      'href',
-      '/projects/prj_case'
+  it('keeps the reached project on the chip and adds the notice beside it', () => {
+    renderBasis(
+      [
+        { id: 'prj_case', name: 'Case 2026-114', mode: 'loaded', contributed: true },
+        { id: COLLECTION_ID, name: 'Contracts', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
+      ],
+      { answerBasis: [{ kind: 'project' }] }
     );
-    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent(
-      'Contracts · not available'
-    );
+    expect(screen.getByTestId('answer-basis-chip')).toHaveTextContent('Project');
+    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent('Contracts');
   });
 
-  it('names an unnamed iFinder collection generically, and counts several', () => {
-    const { unmount } = renderBadge([
+  it('names an unnamed iFinder collection generically', () => {
+    renderBasis([
       { id: COLLECTION_ID, name: '', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' }
     ]);
-    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent(
-      'iFinder collection · not available'
-    );
-    unmount();
-    renderBadge([
-      { id: COLLECTION_ID, name: 'A', mode: 'unavailable', reason: 'IFINDER_UNAVAILABLE' },
-      { id: 'ifc_00000000-0000-4000-8000-000000000002', name: 'B', mode: 'unavailable' }
-    ]);
-    // The mock translator returns the key for a counted phrase.
-    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent(
-      'chatMessage.knowledgeScope.missing'
-    );
+    expect(screen.getByTestId('knowledge-scope-missing')).toHaveTextContent('iFinder collection');
   });
 
   it('shows no notice when every project was reached', () => {
-    renderBadge([{ id: 'faq', name: 'FAQ', mode: 'searched' }]);
+    renderBasis([{ id: 'faq', name: 'FAQ', mode: 'searched' }]);
     expect(screen.queryByTestId('knowledge-scope-missing')).not.toBeInTheDocument();
   });
 });

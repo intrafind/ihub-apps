@@ -99,10 +99,12 @@ export function createRunState(runId, init = {}) {
     pendingInteractionId: null,
     // surface metadata
     meta: { extra: {} },
-    // The answer's sources as the server named them on `run/ended` — never
-    // gathered here from the tools or steps, so the badge shows exactly what
-    // the server reported (see shared/run/runActivity.js#answerSourceOf).
-    knowledgeSources: [],
+    // What the answer is based on, as the server named it on `run/ended`
+    // (`answerBasis`: the kinds of source) — never gathered here from the
+    // tools or steps, so the footer's chip shows exactly what the server
+    // reported. Null: the run ended without one (failed, stopped before it
+    // wrote anything, not a chat turn) and the answer shows no chip.
+    answerBasis: null,
     // Which projects the turn reached and whether each was loaded or searched.
     knowledgeScope: null,
     // Everything the run's producers found (`sources/added`, shared/sources).
@@ -592,7 +594,8 @@ export function reduceRunEvent(state, envelope) {
         finishReason: data.finishReason ?? null,
         usage: data.usage || run.usage,
         context: data.context || run.context,
-        knowledgeSources: union([], data.knowledgeSources),
+        answerBasis:
+          Array.isArray(data.answerBasis) && data.answerBasis.length > 0 ? data.answerBasis : null,
         provenance: data.provenance || run.provenance,
         toolName: data.toolName || run.toolName,
         output: data.output !== undefined ? data.output : run.output,
