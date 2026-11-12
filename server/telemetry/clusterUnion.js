@@ -92,7 +92,7 @@ export function createClusterUnion({
       unregister = respond(channel, () => getLocalEntries());
       timer = setInterval(refresh, refreshMs);
       timer.unref?.();
-      refresh();
+      void refresh();
     },
     stop() {
       if (timer) clearInterval(timer);
