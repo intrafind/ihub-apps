@@ -417,6 +417,33 @@ describe('a web page is a stored snapshot', () => {
     assert.match((await getItemText({ id: project.id }, retried, { user: ADA })).text, /here now/);
   });
 
+  it('keeps the snapshot when the address changes but nothing could fetch the new page', async () => {
+    servePage('/kept', html('Kept', 'The page that stays.'));
+    servePage('/elsewhere', html('Elsewhere', 'Never fetched.'));
+    const project = await newProject('No ingest');
+    const { item } = await addUrl(project, `${base}/kept`);
+    const first = await settled(project.id, item.id);
+    const ingest = service.ingest;
+    service.ingest = null;
+    try {
+      await assert.rejects(
+        service.updateItem(
+          project.id,
+          item.id,
+          { ref: { url: `${base}/elsewhere` } },
+          { user: ADA }
+        ),
+        error => error.code === 'INGEST_UNAVAILABLE'
+      );
+    } finally {
+      service.ingest = ingest;
+    }
+    const after = await itemOf(project.id, item.id);
+    assert.equal(after.ref.url, `${base}/kept`);
+    assert.equal(after.status, 'ready');
+    assert.equal(after.text.blobKey, first.text.blobKey);
+  });
+
   it('points an item at another page: the new page is fetched, the old text goes', async () => {
     servePage('/old', html('Old', 'The old page.'));
     servePage('/new', html('New', 'The new page.'));
@@ -811,6 +838,38 @@ describe('web pages that were links before', () => {
     seen.length = 0;
     await worker().reconcile();
     assert.equal(hits('/legacy'), 0);
+  });
+
+  it('does not fetch a page another worker took while its job waited', async () => {
+    servePage('/taken', html('Taken', 'Fetched by the first worker.'));
+    const service = getProjectService();
+    const project = await service.createUserProject({ owner: ADA, content: { name: 'Taken' } });
+    const legacy = legacyItem(`${base}/taken`);
+    await getProjectRepository().mutate(project.id, current => {
+      current.items = [...(current.items || []), { ...legacy, storage: 'text', status: 'pending' }];
+      delete current.items.at(-1).cache;
+      return current;
+    });
+    // Both workers saw the page waiting; the first one fetches it.
+    const seenByBoth = await getProjectRepository().get(project.id);
+    const worker = () =>
+      new ProjectIngestService({
+        service: () => getProjectService(),
+        repository: () => getProjectService().repository,
+        platform: () => configCache.getPlatform(),
+        tempDir: path.join(scratch, 'uploads')
+      });
+    seen.length = 0;
+    const first = worker();
+    assert.equal(await first.fetchWaiting([seenByBoth]), 1);
+    await settled(project.id, legacy.id);
+    await waitFor(() => !first.isActive(legacy.id));
+    // The second job starts only now: the page is no longer waiting.
+    const second = worker();
+    assert.equal(await second.fetchWaiting([seenByBoth]), 1);
+    await waitFor(() => !second.isActive(legacy.id));
+    assert.equal(hits('/taken'), 1, 'the second job did not fetch it');
+    assert.equal((await itemOf(project.id, legacy.id)).status, 'ready');
   });
 
   it('waits in the queue without a reservation another worker would expire', async () => {

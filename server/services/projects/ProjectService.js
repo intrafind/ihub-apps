@@ -992,8 +992,17 @@ export class ProjectService {
             // Judged before the reference changes anything: an item still
             // being processed takes no other address.
             const busy = isBeingProcessed(item);
-            if (stored && busy && JSON.stringify(checkedRef.ref) !== JSON.stringify(item.ref)) {
+            const otherRef = JSON.stringify(checkedRef.ref) !== JSON.stringify(item.ref);
+            if (stored && busy && otherRef) {
               throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
+            }
+            // Without the ingest pipeline the new page could not be fetched:
+            // the old snapshot stays.
+            if (stored && otherRef && !this.ingest) {
+              throw new ProjectError(
+                'INGEST_UNAVAILABLE',
+                'Changing the address of a stored page is not available on this installation'
+              );
             }
             // A name the old page's title gave follows the new page's title.
             const titleNamed =

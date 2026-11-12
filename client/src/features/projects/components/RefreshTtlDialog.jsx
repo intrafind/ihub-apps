@@ -133,7 +133,7 @@ function RefreshTtlDialog({
               id="refresh-mode-select"
               value={modeChoice}
               onChange={e => setModeChoice(e.target.value)}
-              disabled={manualOnly}
+              disabled={manualOnly || saving}
               aria-describedby="refresh-mode-hint"
               className={INPUT_CLASS}
             >
@@ -178,6 +178,7 @@ function RefreshTtlDialog({
               ref={selectRef}
               value={choice}
               onChange={e => setChoice(e.target.value)}
+              disabled={saving}
               className={INPUT_CLASS}
             >
               <option value="">

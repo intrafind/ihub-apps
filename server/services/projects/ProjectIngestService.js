@@ -454,6 +454,9 @@ export class ProjectIngestService {
         );
       }
     };
+    // A first fetch whose item another worker took while it waited: it does
+    // nothing (`patchItem` answers the item unchanged, so this is tracked).
+    let declined = false;
     try {
       const extracting = await patch(item => {
         // A first fetch queued for an item waiting for one (`fetchWaiting`) takes
@@ -461,7 +464,10 @@ export class ProjectIngestService {
         // no reservation another worker's reconciler could take for a crashed
         // one. If another worker took the item meanwhile, this job does nothing.
         if (input.reserve) {
-          if (!isWaitingForFetch(item)) return false;
+          if (!isWaitingForFetch(item)) {
+            declined = true;
+            return false;
+          }
           item.ingestAttempt = input.attempt;
           item.updatedAt = new Date().toISOString();
         }
@@ -475,7 +481,8 @@ export class ProjectIngestService {
         else item.status = 'extracting';
         item.error = null;
       });
-      if (!extracting) return null; // The item was removed while queued.
+      // The item was removed while queued, or another worker took it.
+      if (!extracting || declined) return null;
       assertOwned();
 
       // 1. Bytes: from the temp file, the picker's fetch, or handed in.
