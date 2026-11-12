@@ -19,8 +19,11 @@ import './requestThrottler.js';
 import './utils/clusterRateLimitStore.js';
 import './utils/loginLockout.js';
 import config from './config.js';
-import { startPrimary } from './startup/primary.js';
-import { startWorker } from './startup/worker.js';
+// `startup/primary.js` and `startup/worker.js` are imported below, each only in
+// the process that runs it. A static import of `worker.js` loaded the whole
+// application — routes, services, every library they use — into the cluster
+// primary too, which only supervises: ~140 MB of heap and ~300 MB of RSS for a
+// process that never serves a request (#3624).
 
 // Initialize environment variables
 dotenv.config();
@@ -82,7 +85,10 @@ const workerCount = config.WORKERS;
 const stickyRouting = config.STICKY_SESSIONS === true;
 
 if (cluster.isPrimary && workerCount > 1) {
+  const { startPrimary } = await import('./startup/primary.js');
   await startPrimary({ workerCount, stickyRouting });
 } else {
+  // A cluster worker, or the single process when WORKERS=1.
+  const { startWorker } = await import('./startup/worker.js');
   await startWorker({ stickyRouting });
 }
