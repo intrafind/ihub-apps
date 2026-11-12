@@ -1941,7 +1941,8 @@ longer re-read the whole site on each server process, which could exhaust the se
 - The page is refreshed after its refresh schedule (seven days by default). The website is asked
   whether the page changed; an unchanged page keeps its text and is not converted again. A website
   that ignores that question is not downloaded either when it names the same version, and a page
-  that names no version is compared by its content.
+  that names no version is compared by its content. A page whose text is unchanged keeps its
+  stored copy even when the rest of its HTML differs on every request.
 - **Choose when outdated pages and files are refreshed:** **Always, in the background** refreshes
   them as soon as they are outdated, used or not. **Automatically, while the project is used**
   (the default) does the same, but a project nobody used for 7 days is refreshed only when it is

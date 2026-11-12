@@ -631,6 +631,45 @@ describe('an unchanged page is not downloaded or converted again', () => {
       /new paragraph/
     );
   });
+
+  it('keeps the stored text when only the HTML around the same text changed', async () => {
+    // A CSRF token or a nonce in every response, and no ETag: new bytes each time.
+    const page = token =>
+      html('Tokens', 'The same text every time.').replace(
+        '<head>',
+        `<head><meta name="csrf-token" content="${token}">`
+      );
+    servePage('/tokens', page('one'));
+    const project = await newProject('Tokens');
+    const { item } = await addUrl(project, `${base}/tokens`);
+    const first = await settled(project.id, item.id);
+
+    servePage('/tokens', page('two'));
+    const ingest = getIngestService();
+    const evicted = [];
+    const onReady = ingest.onReady;
+    ingest.onReady = (...args) => {
+      evicted.push(args[0]);
+      return onReady(...args);
+    };
+    let same;
+    try {
+      ({ item: same } = await getProjectService().refreshItem(project.id, item.id, {
+        user: ADA,
+        wait: true
+      }));
+    } finally {
+      ingest.onReady = onReady;
+    }
+    assert.notEqual(same.provenance.source.sha256, first.provenance.source.sha256, 'new bytes');
+    assert.equal(same.text.blobKey, first.text.blobKey, 'the same text keeps its blob');
+    assert.equal(same.text.extractedAt, first.text.extractedAt);
+    assert.equal(same.status, 'ready');
+    assert.notEqual(same.checkedAt, first.checkedAt, 'the check is recorded');
+    assert.equal(same.refreshingAt, undefined);
+    assert.deepEqual(evicted, [], 'no cache or index is dropped');
+    assert.match((await getItemText({ id: project.id }, same, { user: ADA })).text, /same text/);
+  });
 });
 
 describe('outbound fetches honor the SSL whitelist', () => {

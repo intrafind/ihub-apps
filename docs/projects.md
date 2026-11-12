@@ -169,7 +169,10 @@ answer** in a chat says how many outdated documents the answer read.
 - **A source that ignores the conditional request** and answers in full is not downloaded either
   when its headers name the stored version (the same ETag, or a `Last-Modified` no later than
   the stored one). **A source that names no version** (no ETag, no `Last-Modified`) is compared by
-  a SHA-256 of what it sends: the same bytes are not converted again.
+  a SHA-256 of what it sends: the same bytes are not converted again. **New bytes with the same
+  text** (a page that sends a fresh token, nonce or timestamp on every request) are converted, but
+  the result is compared with the stored text: the same text keeps its stored copy, and no search
+  index or cache is rebuilt.
 - **Picked cloud documents** (OneDrive / SharePoint, Google Drive, Nextcloud) are refreshed only
   by hand. Their download needs the account of the user who picked them, which a background job
   must not use: that user may have left, lost access to the file, or let the connection expire.

@@ -21,7 +21,7 @@
  *
  * @module services/projects/ProjectIngestService
  */
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from '../../utils/logger.js';
@@ -601,6 +601,42 @@ export class ProjectIngestService {
           chars: extracted.text.length,
           ms: Date.now() - started
         });
+      }
+
+      // 4b. The same text as stored (#3622): a page whose HTML changes on
+      //     every request (a token, a nonce, a timestamp) while its content
+      //     does not. The download and the conversion could not be avoided,
+      //     everything after them is: the blob stays, no reader's cache or
+      //     index is dropped. Only the check and the source's version are
+      //     recorded, as for an unchanged source.
+      if (refresh) {
+        const textSha256 = createHash('sha256').update(extracted.text, 'utf8').digest('hex');
+        const storedText = (project.items || []).find(entry => entry.id === itemId)?.text;
+        if (
+          storedText?.blobKey === input.previousBlobKey &&
+          storedText.sha256 === textSha256 &&
+          Boolean(storedText.truncated) === Boolean(extracted.truncated)
+        ) {
+          const checkedAt = new Date().toISOString();
+          const unchanged = await patch(item => {
+            if (!owns(item) || item.text?.sha256 !== textSha256) return false;
+            item.status = 'ready';
+            item.error = null;
+            item.checkedAt = checkedAt;
+            if (job.source) {
+              item.provenance = {
+                ...(item.provenance || {}),
+                source: { ...(item.provenance?.source || {}), ...job.source }
+              };
+            }
+            delete item.refreshingAt;
+            delete item.ingestAttempt;
+          });
+          assertOwned();
+          if (unchanged?.text?.sha256 === textSha256 && !unchanged.refreshingAt) {
+            return { item: unchanged, unchanged: true };
+          }
+        }
       }
 
       // 5. Encrypt and store; then the item, under the lock.
