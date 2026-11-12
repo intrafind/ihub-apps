@@ -6001,7 +6001,7 @@
       },
       "refreshMode": {
         "label": "Veraltete Dateien und Webseiten aktualisieren",
-        "help": "Automatisch: wird im Hintergrund aktualisiert, solange ein Projekt genutzt wird. Wenn das Projekt genutzt wird: im Hintergrund läuft nichts; die Nutzung des Projekts (ein Chat, eine Suche, das Öffnen) aktualisiert, was veraltet ist, und Antworten verwenden bis dahin den gespeicherten Text. Projekte und Elemente können eine eigene Einstellung festlegen."
+        "help": "Automatisch: wird im Hintergrund aktualisiert, solange ein Projekt genutzt wird. Wenn das Projekt genutzt wird: veraltete werden nicht im Hintergrund aktualisiert; die Nutzung des Projekts (ein Chat, eine Suche, das Öffnen) aktualisiert, was veraltet ist, und Antworten verwenden bis dahin den gespeicherten Text. Projekte und Elemente können eine eigene Einstellung festlegen."
       },
       "refreshIdleDays": {
         "label": "Nur bei Nutzung aktualisieren nach (Tage ohne Nutzung)",

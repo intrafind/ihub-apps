@@ -122,3 +122,30 @@ test('a superseded reload that fails reports nothing', async () => {
   expect(result.current.error).toBeNull();
   expect(result.current.project.items).toEqual([READY('itm_9')]);
 });
+
+test('polls a few times for an outdated item whose refresh on use never starts, then stops', async () => {
+  jest.useFakeTimers();
+  try {
+    const outdated = {
+      id: 'itm_old',
+      status: 'ready',
+      refresh: { expired: true, background: false, ttl: 86400 }
+    };
+    // Every read answers the same: nothing ever starts the refresh (an admin view).
+    const load = jest.fn(async () => ({ id: 'prj_idle', items: [{ ...outdated }] }));
+    renderHook(() => usePolledProject('prj_idle', { load, errorMessage: e => e.message }));
+    for (let tick = 0; tick < 30; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2000);
+      });
+    }
+    const {
+      AWAITING_REFRESH_POLLS
+    } = require('../../../client/src/features/projects/utils/projectItems');
+    // The first load, then at most the awaiting polls; not one every 2 s for a minute.
+    expect(load.mock.calls.length).toBeLessThanOrEqual(1 + AWAITING_REFRESH_POLLS);
+    expect(load.mock.calls.length).toBeGreaterThan(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});

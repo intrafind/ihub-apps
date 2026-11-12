@@ -35,6 +35,20 @@ export function refreshModeLabel(mode, t) {
 }
 
 /**
+ * The idle-days field's value as the setting takes it: a whole number of days
+ * from 0 to 3650, or null for anything else. An emptied field is null, not 0:
+ * 0 turns the idle rule off, which an empty field must not do silently.
+ *
+ * @param {string|number|null|undefined} value
+ * @returns {number|null}
+ */
+export function parseRefreshIdleDays(value) {
+  if (String(value ?? '').trim() === '') return null;
+  const days = Number(value);
+  return Number.isInteger(days) && days >= 0 && days <= 3650 ? days : null;
+}
+
+/**
  * A mode select's value back to a mode: `''` is "inherit" (null).
  *
  * @param {string|null|undefined} value

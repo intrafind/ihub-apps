@@ -334,15 +334,11 @@ export class ProjectService {
       throw translateError(error);
     }
     if (this.ingest && items.some(item => item.status === 'pending')) {
-      // Creating it is a use: its pages are fetched now, whatever the refresh mode.
-      await attempt(
-        () => this.ingest.fetchWaiting([created], { onUse: true }),
-        'the first fetch of its pages',
-        {
-          component: COMPONENT,
-          projectId: created.id
-        }
-      );
+      // Its pages are fetched now: a first snapshot is fetched in any refresh mode.
+      await attempt(() => this.ingest.fetchWaiting([created]), 'the first fetch of its pages', {
+        component: COMPONENT,
+        projectId: created.id
+      });
     }
     return created;
   }
@@ -739,10 +735,17 @@ export class ProjectService {
               'Only picked documents, files from websites and web pages can be refreshed'
             );
           }
-          if (item.status === 'pending' || item.status === 'extracting' || item.refreshingAt) {
+          // A page waiting for its first fetch (pending, no job reserved)
+          // is not being processed: a refresh fetches it now.
+          if (isBeingProcessed(item)) {
             throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
           }
           this._checkKindRef(item.kind, item.ref, { admin: true });
+          // A web page link not converted yet becomes the snapshot it now is.
+          if (item.storage !== 'text') {
+            item.storage = 'text';
+            delete item.cache;
+          }
           // The old snapshot stays readable until the new one is stored, so
           // the status is left alone. `refreshingAt` is reserved here, under
           // the project's lock and before the job is queued: a second refresh
@@ -980,8 +983,7 @@ export class ProjectService {
             const stored = checkedRef.kind.storage.ihub === 'text';
             // Judged before the reference changes anything: an item still
             // being processed takes no other address.
-            const busy =
-              item.status === 'pending' || item.status === 'extracting' || item.refreshingAt;
+            const busy = isBeingProcessed(item);
             if (stored && busy && JSON.stringify(checkedRef.ref) !== JSON.stringify(item.ref)) {
               throw new ProjectError('PROJECT_MISMATCH', 'The item is still being processed');
             }
@@ -1675,6 +1677,22 @@ export class ProjectService {
 /**
  * Run one cascade step without letting it strand the rest.
  */
+/**
+ * Whether a job is working on an item: extracting, being refreshed, or
+ * pending with its job reserved (`ingestAttempt`). A page waiting for its
+ * first fetch is pending without one: nothing works on it yet (#3622).
+ *
+ * @param {Object} item
+ * @returns {boolean}
+ */
+function isBeingProcessed(item) {
+  return (
+    (item.status === 'pending' && Boolean(item.ingestAttempt)) ||
+    item.status === 'extracting' ||
+    Boolean(item.refreshingAt)
+  );
+}
+
 /** The origins whose stored text an editor may replace in the dialog. */
 export const EDITABLE_TEXT_ORIGINS = Object.freeze(['written', 'uploaded', 'imported']);
 

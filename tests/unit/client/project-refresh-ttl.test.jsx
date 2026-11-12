@@ -10,10 +10,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RefreshTtlDialog from '../../../client/src/features/projects/components/RefreshTtlDialog';
 import {
   hasActiveItems,
+  hasAwaitingItems,
   isAwaitingRefresh
 } from '../../../client/src/features/projects/utils/projectItems';
 import {
   REFRESH_NEVER,
+  parseRefreshIdleDays,
   parseRefreshMode,
   parseRefreshTtl,
   refreshModeLabel,
@@ -164,14 +166,25 @@ describe('refresh when used (#3622)', () => {
     expect(parseRefreshMode('auto')).toBe('auto');
   });
 
-  it('keeps the project polling while an outdated item waits for its refresh on use', () => {
+  it('reads the idle days, and an emptied field as nothing rather than 0', () => {
+    expect(parseRefreshIdleDays('')).toBeNull();
+    expect(parseRefreshIdleDays('  ')).toBeNull();
+    expect(parseRefreshIdleDays('0')).toBe(0);
+    expect(parseRefreshIdleDays('14')).toBe(14);
+    expect(parseRefreshIdleDays('1.5')).toBeNull();
+    expect(parseRefreshIdleDays('3651')).toBeNull();
+  });
+
+  it('tells an outdated item waiting for its refresh on use from one being processed', () => {
     expect(isAwaitingRefresh(outdated)).toBe(true);
     expect(isAwaitingRefresh({ ...outdated, refreshingAt: '2026-11-12T08:00:00.000Z' })).toBe(
       false
     );
-    expect(hasActiveItems([{ status: 'ready', ...outdated }])).toBe(true);
+    expect(hasAwaitingItems([{ status: 'ready', ...outdated }])).toBe(true);
+    // Waiting is not processing: the page polls for it only a few times.
+    expect(hasActiveItems([{ status: 'ready', ...outdated }])).toBe(false);
     expect(
-      hasActiveItems([{ status: 'ready', refresh: { ...outdated.refresh, background: true } }])
+      hasAwaitingItems([{ status: 'ready', refresh: { ...outdated.refresh, background: true } }])
     ).toBe(false);
   });
 });

@@ -1944,8 +1944,8 @@ longer re-read the whole site on each server process, which could exhaust the se
   that names no version is compared by its content.
 - **Choose when outdated pages and files are refreshed:** **Automatically, while the project is
   used** (the default) refreshes them in the background, but a project nobody used for 14 days
-  is refreshed only when it is used again. **When the project is used** never runs in the
-  background. **Never** refreshes only by hand. Set it per installation (**Admin → Projects →
+  is refreshed only when it is used again. **When the project is used** never refreshes them in
+  the background. **Never** refreshes only by hand. Set it per installation (**Admin → Projects →
   Project settings**, with the number of idle days), per project and per item.
 - Using a project (a chat, a search, opening it) refreshes what is outdated in it. Answers use the
   stored text meanwhile; the project page shows **Refreshing N outdated documents**, and **About

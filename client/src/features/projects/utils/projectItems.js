@@ -120,22 +120,36 @@ export function isAwaitingRefresh(item) {
 
 /**
  * Whether the server is still extracting the text of any item: a new item
- * (`pending` / `extracting`), a picked document or web page being refreshed —
- * that one keeps its `ready` / `stale` status (the old snapshot stays
- * readable) and carries `refreshingAt` until the new snapshot is stored — or
- * an outdated one whose refresh on use is about to start.
+ * (`pending` / `extracting`), or a picked document or web page being
+ * refreshed — that one keeps its `ready` / `stale` status (the old snapshot
+ * stays readable) and carries `refreshingAt` until the new snapshot is stored.
  *
  * @param {Array<{status: string, refreshingAt?: string}>|undefined} items
  * @returns {boolean}
  */
 export function hasActiveItems(items) {
   return (items || []).some(
-    item =>
-      ACTIVE_ITEM_STATUSES.includes(item?.status) ||
-      Boolean(item?.refreshingAt) ||
-      isAwaitingRefresh(item)
+    item => ACTIVE_ITEM_STATUSES.includes(item?.status) || Boolean(item?.refreshingAt)
   );
 }
+
+/**
+ * Whether any item is outdated and waits for the refresh that using the
+ * project starts ({@link isAwaitingRefresh}).
+ *
+ * @param {Array<Object>|undefined} items
+ * @returns {boolean}
+ */
+export function hasAwaitingItems(items) {
+  return (items || []).some(isAwaitingRefresh);
+}
+
+/**
+ * Polls a page makes for outdated items whose refresh on use has not started
+ * yet: enough for opening the project to start it, not forever where nothing
+ * will (an admin view, which is no use; a disabled project).
+ */
+export const AWAITING_REFRESH_POLLS = 10;
 
 /**
  * Whether an item's text can be previewed.

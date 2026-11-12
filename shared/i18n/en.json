@@ -5539,7 +5539,7 @@
       },
       "refreshMode": {
         "label": "Refresh outdated files and web pages",
-        "help": "Automatically: refreshed in the background while a project is used. When the project is used: nothing runs in the background; using the project (a chat, a search, opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own."
+        "help": "Automatically: refreshed in the background while a project is used. When the project is used: outdated ones are not refreshed in the background; using the project (a chat, a search, opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own."
       },
       "refreshIdleDays": {
         "label": "Refresh only when used after (days without use)",

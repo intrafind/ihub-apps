@@ -43,12 +43,7 @@ import {
 import { storeText, evictItemKeys } from './ItemTextStore.js';
 import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
-import {
-  isRefreshDue,
-  isRefreshExpired,
-  refreshesInBackground,
-  refreshesOnSchedule
-} from './refreshTtl.js';
+import { isRefreshDue, isRefreshExpired, refreshesOnSchedule } from './refreshTtl.js';
 import { getItemKind } from './kinds/registry.js';
 
 const COMPONENT = 'ProjectIngestService';
@@ -500,19 +495,21 @@ export class ProjectIngestService {
         // If-None-Match first, and a changed ETag with an unchanged
         // Last-Modified (an edit within the second, a kept mtime) is a change.
         const bothTagged = Boolean(input.previousEtag) && Boolean(fetched.etag);
-        // The same bytes are the same document, whatever the source says
-        // about its version (a page that names none, #3622).
-        const sameBytes =
-          Boolean(input.previousSha256) && fetched.source?.sha256 === input.previousSha256;
+        // The bytes decide when both sides have their hash (#3622): the
+        // same bytes are the same document whatever the source says about
+        // its version, and changed bytes are a new one even under an old
+        // Last-Modified (a page that named no version when it was stored).
+        const bothHashed = Boolean(input.previousSha256) && Boolean(fetched.source?.sha256);
         const sameVersion =
           refresh &&
           (fetched.notModified === true ||
-            sameBytes ||
-            (bothTagged
-              ? fetched.etag === input.previousEtag
-              : Boolean(previousVersion) &&
-                Boolean(job.lastModified) &&
-                Date.parse(job.lastModified) <= Date.parse(previousVersion)));
+            (bothHashed
+              ? fetched.source.sha256 === input.previousSha256
+              : bothTagged
+                ? fetched.etag === input.previousEtag
+                : Boolean(previousVersion) &&
+                  Boolean(job.lastModified) &&
+                  Date.parse(job.lastModified) <= Date.parse(previousVersion)));
         if (sameVersion) {
           // Keep the text, clear `stale`, note the check.
           const checkedAt = new Date().toISOString();
@@ -910,19 +907,18 @@ export class ProjectIngestService {
    * {@link MAX_FIRST_FETCHES} per call; the rest wait for the next tick. A
    * disabled admin project or one being deleted is converted, not fetched.
    *
-   * In the background (`onUse` false) only items refreshed in the background
-   * are fetched (`refreshesInBackground`): a page of a project refreshed on
-   * demand, or of one nobody used lately, waits until the project is used.
+   * A first fetch runs in the background whatever the refresh mode and however
+   * long nobody used the project: the mode decides when an outdated snapshot
+   * is refreshed, and a page without one has nothing to answer from until it
+   * is fetched.
    *
    * @param {Object[]} projects - As inventoried; each is read again under its lock.
-   * @param {{max?: number, onUse?: boolean, now?: number}} [options]
+   * @param {{max?: number}} [options]
    * @returns {Promise<number>} Fetches queued.
    */
-  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES, onUse = false, now = Date.now() } = {}) {
+  async fetchWaiting(projects, { max = MAX_FIRST_FETCHES } = {}) {
     let queued = 0;
-    const settings = this.settings();
-    const due = (item, project) =>
-      isWaitingForFetch(item) && (onUse || refreshesInBackground(item, project, settings, now));
+    const due = item => isWaitingForFetch(item);
     for (const project of projects || []) {
       const fetches = !project.deleting && project.enabled !== false;
       let current = project;
@@ -951,7 +947,7 @@ export class ProjectIngestService {
       if (!fetches) continue;
       for (const item of current.items || []) {
         if (queued >= max) break;
-        if (this.isActive(item.id) || !due(item, current)) continue;
+        if (this.isActive(item.id) || !due(item)) continue;
         const kind = getItemKind(item.kind);
         if (!kind) continue;
         await this.start(
@@ -1052,7 +1048,7 @@ export class ProjectIngestService {
         });
       }
     }
-    const fetched = waiting ? await this.fetchWaiting([project], { onUse: true, now }) : 0;
+    const fetched = waiting ? await this.fetchWaiting([project]) : 0;
     if (refreshed || fetched) {
       logger.info('Refreshing a project on use', {
         component: COMPONENT,

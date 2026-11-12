@@ -16,6 +16,7 @@ import { LIMIT_FIELDS, LIMIT_LABELS, limitInputsOf, parseLimits } from '../utils
 import {
   parseRefreshTtl,
   REFRESH_MODES,
+  parseRefreshIdleDays,
   refreshModeLabel,
   refreshTtlChoices,
   refreshTtlLabel
@@ -145,8 +146,9 @@ function ProjectSharingSettingsPanel() {
     setSaved(false);
   };
   const updateRefreshIdleDays = value => {
-    const days = Number(value);
-    if (!Number.isInteger(days) || days < 0 || days > 3650) return;
+    // An emptied field is no number: 0 would silently turn the idle rule off.
+    const days = parseRefreshIdleDays(value);
+    if (days === null) return;
     setDraft(previous => ({ ...previous, refreshIdleDays: days }));
     setSaved(false);
   };
@@ -327,7 +329,7 @@ function ProjectSharingSettingsPanel() {
             >
               {t(
                 'admin.projects.refreshMode.help',
-                'Automatically: refreshed in the background while a project is used. When the project is used: nothing runs in the background; using the project (a chat, a search, opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own.'
+                'Automatically: refreshed in the background while a project is used. When the project is used: outdated ones are not refreshed in the background; using the project (a chat, a search, opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own.'
               )}
             </p>
           </div>

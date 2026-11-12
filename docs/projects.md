@@ -113,8 +113,8 @@ Web pages stored as links before this change are converted on their own: migrati
 converts the items of admin project files, and the ingest reconciler converts the rest (user
 projects, and any link left) shortly after the server starts. Each converted page waits for its
 first fetch, which one server process takes under the project's lock (at most 200 pages per
-reconciler run; the rest follow 15 minutes later). A page of a project refreshed only when used
-(see [Refresh](#refresh)) is fetched the first time its project is used.
+reconciler run; the rest follow 15 minutes later). A first fetch runs in the background in every
+refresh mode (see [Refresh](#refresh)): a page without a snapshot has nothing to answer from.
 
 ### Refresh
 
@@ -137,7 +137,7 @@ installation):
 | Mode                                                      | What happens to an outdated snapshot                                                                                                                                                                       |
 | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Automatically, while the project is used** (`auto`, default) | Refreshed in the background (below). A project nobody used for `platform.projects.refreshIdleDays` days (14 by default; 0 turns this off) is refreshed only when it is used again, like `onDemand`. |
-| **When the project is used** (`onDemand`)                  | Nothing runs in the background. Using the project refreshes it.                                                                                                                                      |
+| **When the project is used** (`onDemand`)                  | Outdated snapshots are not refreshed in the background (a first fetch still is). Using the project refreshes them.                                                                                  |
 | TTL `never`                                               | Refreshed only when someone chooses **Refresh**, in either mode.                                                                                                                                     |
 
 A project is **used** when a chat, a search, a workflow or an MCP client reads its knowledge, or
@@ -147,7 +147,7 @@ one; the answer of that turn uses the stored text. For the idle rule only a chat
 or a change of its items counts (`lastActivityAt`): a project that only an app reads counts as idle,
 and is refreshed on each use after its TTL. The project page shows **Refreshing N outdated
 documents** while it runs, the item card **Outdated since …, refreshed when used**, and **About this
-answer** in a chat names the outdated documents the answer read.
+answer** in a chat says how many outdated documents the answer read.
 
 - **Files from websites** are refreshed on their own (in mode `auto`, while the project is used):
   every 15 minutes the ingest reconciler queues the files (and web pages) whose last check is older

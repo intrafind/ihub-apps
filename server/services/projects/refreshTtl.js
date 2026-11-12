@@ -286,6 +286,9 @@ export function isRefreshDue(item, project, settings, now = Date.now()) {
  * @returns {boolean}
  */
 export function isRefreshExpired(item, project, settings, now = Date.now()) {
+  // A web page link not converted yet has no snapshot to refresh: the
+  // conversion fetches it (`ProjectIngestService.fetchWaiting`).
+  if (item?.storage === 'link') return false;
   if (!refreshesOnSchedule(getItemKind(item?.kind))) return false;
   if (item.refreshingAt || !['ready', 'stale', 'failed'].includes(item.status)) return false;
   const { ttl } = effectiveRefreshTtl(item, project, settings);

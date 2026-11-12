@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ITEM_POLL_INTERVAL_MS, hasActiveItems } from '../utils/projectItems';
+import {
+  AWAITING_REFRESH_POLLS,
+  ITEM_POLL_INTERVAL_MS,
+  hasActiveItems,
+  hasAwaitingItems
+} from '../utils/projectItems';
 
 /**
  * Loads one project and keeps its items current: while any item is
@@ -92,9 +97,22 @@ export function usePolledProject(projectId, { load, errorMessage }) {
     });
   }, [projectId, reload]);
 
+  // Polls for outdated items whose refresh on use has not started yet: a few,
+  // then only while something is processed (#3622). Counted per project.
+  const awaitingPollsRef = useRef({ projectId, count: 0 });
+  if (awaitingPollsRef.current.projectId !== projectId) {
+    awaitingPollsRef.current = { projectId, count: 0 };
+  }
+
   const items = project?.items;
   useEffect(() => {
-    if (!projectId || !hasActiveItems(items)) return undefined;
+    if (!projectId) return undefined;
+    const active = hasActiveItems(items);
+    if (active) awaitingPollsRef.current.count = 0;
+    const awaiting =
+      !active && hasAwaitingItems(items) && awaitingPollsRef.current.count < AWAITING_REFRESH_POLLS;
+    if (!active && !awaiting) return undefined;
+    if (awaiting) awaitingPollsRef.current.count += 1;
     // A poll already in flight when the items change (a delete, a pin, a
     // reload) is stale by the time it answers: its result must not put the
     // older snapshot back over the newer state.

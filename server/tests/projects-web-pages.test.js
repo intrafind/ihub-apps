@@ -52,6 +52,7 @@ import {
   DEFAULT_REFRESH_TTL_SECONDS,
   effectiveRefreshMode,
   isRefreshDue,
+  isRefreshExpired,
   refreshScheduleOf
 } from '../services/projects/refreshTtl.js';
 import { providerFor } from '../services/knowledge/registry.js';
@@ -552,6 +553,26 @@ describe('an unchanged page is not downloaded or converted again', () => {
     assert.equal(refreshed.text.extractedAt, first.text.extractedAt);
   });
 
+  it('takes changed bytes as a new version, whatever Last-Modified says', async () => {
+    // Stored without a version; later the site sends an old date with new content.
+    servePage('/same-date', html('Same date', 'The first text.'));
+    const project = await newProject('Same date');
+    const { item } = await addUrl(project, `${base}/same-date`);
+    const first = await settled(project.id, item.id);
+    servePage('/same-date', html('Same date', 'The second text.'), {
+      lastModified: new Date(Date.now() - 365 * 24 * 3600 * 1000).toUTCString()
+    });
+    const { item: changed } = await getProjectService().refreshItem(project.id, item.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.notEqual(changed.text.blobKey, first.text.blobKey, 'the content decides');
+    assert.match(
+      (await getItemText({ id: project.id }, changed, { user: ADA })).text,
+      /second text/
+    );
+  });
+
   it('compares the page itself when it names no version', async () => {
     servePage('/plain', html('Plain', 'No ETag, no Last-Modified.'));
     const project = await newProject('Plain');
@@ -823,6 +844,31 @@ describe('web pages that were links before', () => {
     assert.equal(ready.status, 'ready', JSON.stringify(ready.error));
   });
 
+  it('are not refreshed as outdated snapshots before they are converted', async () => {
+    const settings = projectSettings({});
+    const old = { ...legacyItem('https://example.com/old'), checkedAt: '2020-01-01T00:00:00.000Z' };
+    assert.equal(isRefreshExpired(old, {}, settings), false, 'a link has no snapshot to refresh');
+
+    // A refresh by hand converts it and stores its snapshot.
+    servePage('/by-hand', html('By hand', 'Refreshed before the reconciler ran.'));
+    const project = await getProjectService().createUserProject({
+      owner: ADA,
+      content: { name: 'By hand' }
+    });
+    const legacy = legacyItem(`${base}/by-hand`);
+    await getProjectRepository().mutate(project.id, current => {
+      current.items = [...(current.items || []), legacy];
+      return current;
+    });
+    const { item } = await getProjectService().refreshItem(project.id, legacy.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.equal(item.storage, 'text');
+    assert.equal(item.cache, undefined);
+    assert.equal(item.status, 'ready', JSON.stringify(item.error));
+  });
+
   it('are converted in admin project files by migration V247', async () => {
     const files = new Map([
       [
@@ -1000,16 +1046,14 @@ describe('refresh modes: automatically, when used, never', () => {
     assert.equal(hits('/fixed'), 0);
   });
 
-  it('fetches a converted page of an on-demand project when it is used, not before', async () => {
-    servePage('/later-page', html('Later', 'Fetched on use.'));
-    const project = await newProject('Waiting');
-    await service().updateProject(project.id, { refreshMode: 'onDemand' }, { actor: ADA });
+  /** A page waiting for its first fetch, stored straight into a project. */
+  async function waitingPage(project, url) {
     const now = new Date().toISOString();
     const waiting = {
       id: `itm_${crypto.randomBytes(6).toString('hex')}`,
       kind: 'url',
-      name: `${base}/later-page`,
-      ref: { url: `${base}/later-page` },
+      name: url,
+      ref: { url },
       storage: 'text',
       pinned: false,
       status: 'pending',
@@ -1023,17 +1067,52 @@ describe('refresh modes: automatically, when used, never', () => {
       current.items = [...(current.items || []), waiting];
       return current;
     });
-    const ingest = getIngestService();
-    seen.length = 0;
-    await ingest.reconcile();
-    assert.equal(hits('/later-page'), 0, 'not fetched in the background');
-    assert.equal((await itemOf(project.id, waiting.id)).status, 'pending', 'and not stuck either');
+    return waiting;
+  }
 
-    const used = await ingest.refreshOnUse(await getProjectRepository().get(project.id));
-    assert.equal(used.fetched, 1);
+  it('fetches a first snapshot in the background in any mode: there is nothing to answer from', async () => {
+    servePage('/later-page', html('Later', 'Fetched before any use.'));
+    const project = await newProject('Waiting');
+    await service().updateProject(project.id, { refreshMode: 'onDemand' }, { actor: ADA });
+    const waiting = await waitingPage(project, `${base}/later-page`);
+    // Idle as well: nobody used it for a month.
+    await getProjectRepository().mutate(
+      project.id,
+      current => {
+        current.lastActivityAt = new Date(Date.now() - 30 * DAY).toISOString();
+        return current;
+      },
+      { touchActivity: false, touchUpdated: false }
+    );
+    seen.length = 0;
+    await getIngestService().reconcile();
     const ready = await settled(project.id, waiting.id);
     assert.equal(ready.status, 'ready', JSON.stringify(ready.error));
     assert.equal(ready.name, 'Later', 'named after its title');
+    assert.equal(hits('/later-page'), 1);
+  });
+
+  it('takes a refresh and a new address for a page that waits for its first fetch', async () => {
+    servePage('/waits', html('Waits', 'Waiting page.'));
+    servePage('/waits-new', html('Waits new', 'Its new address.'));
+    const project = await newProject('Waits');
+    const first = await waitingPage(project, `${base}/waits`);
+    const { item: refreshed } = await service().refreshItem(project.id, first.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.equal(refreshed.status, 'ready', JSON.stringify(refreshed.error));
+
+    const second = await waitingPage(project, `${base}/waits`);
+    await service().updateItem(
+      project.id,
+      second.id,
+      { ref: { url: `${base}/waits-new` } },
+      { user: ADA }
+    );
+    const moved = await settled(project.id, second.id);
+    assert.equal(moved.ref.url, `${base}/waits-new`);
+    assert.equal(moved.status, 'ready', JSON.stringify(moved.error));
   });
 
   it('sets and clears the mode of a project and an item', async () => {
