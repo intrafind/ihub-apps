@@ -163,22 +163,26 @@ export default function registerSetupRoutes(app) {
     const trimmedKey = apiKey.trim();
     const encryptedKey = tokenStorageService.encryptString(trimmedKey);
 
-    // Deep-copy providers from cache to avoid mutating cached data
-    const { data: cachedProviders } = configCache.getProviders(true);
-    const providers = cachedProviders.map(p => ({ ...p }));
+    // Change the stored list under the lock: the config cache can lag behind
+    // another admin's edit, and writing it back would revert that edit.
+    await configStore.updateJson(PROVIDERS_FILE, stored => {
+      const providers = (Array.isArray(stored) ? stored : stored?.providers || []).map(p => ({
+        ...p
+      }));
 
-    const providerIndex = providers.findIndex(p => p.id === providerId);
-    if (providerIndex === -1) {
-      throw new ServiceError('NOT_FOUND', 'Provider not found');
-    }
+      const providerIndex = providers.findIndex(p => p.id === providerId);
+      if (providerIndex === -1) {
+        throw new ServiceError('NOT_FOUND', 'Provider not found');
+      }
 
-    providers[providerIndex] = {
-      ...providers[providerIndex],
-      apiKey: encryptedKey,
-      enabled: true
-    };
+      providers[providerIndex] = {
+        ...providers[providerIndex],
+        apiKey: encryptedKey,
+        enabled: true
+      };
 
-    await configStore.writeJson(PROVIDERS_FILE, { providers });
+      return { providers };
+    });
     await configCache.refreshProvidersCache();
 
     // Mark setup as complete in platform.json

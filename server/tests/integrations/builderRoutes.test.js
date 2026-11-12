@@ -22,6 +22,18 @@ jest.unstable_mockModule('../../services/config/ConfigStore.js', () => ({
       if (file === 'config/integrations.json') state.integrations = structuredClone(data);
       if (file === 'config/credentials.json') state.credentials = structuredClone(data);
     },
+    updateJson: async function (file, mutate) {
+      const current =
+        file === 'config/integrations.json'
+          ? structuredClone(state.integrations)
+          : file === 'config/credentials.json'
+            ? structuredClone(state.credentials)
+            : null;
+      const next = await mutate(current);
+      if (next === undefined) return { data: current, written: false };
+      await this.writeJson(file, next);
+      return { data: next, written: true };
+    },
     readJsonStrict: async file =>
       file === 'config/credentials.json' ? structuredClone(state.credentials) : null
   }

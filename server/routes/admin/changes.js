@@ -123,12 +123,12 @@ export default function registerAdminChangesRoutes(app) {
           //
           // `beforeState` comes from a snapshot the groups routes take from
           // this same authored file, so it merges back into it unchanged.
-          const config = (await configStore.readJsonStrict('config/groups.json')) || {
-            groups: {}
-          };
-          if (!config.groups || typeof config.groups !== 'object') config.groups = {};
-          config.groups[id] = beforeState;
-          await configStore.writeJson('config/groups.json', config);
+          await configStore.updateJson('config/groups.json', current => {
+            const config = current || { groups: {} };
+            if (!config.groups || typeof config.groups !== 'object') config.groups = {};
+            config.groups[id] = beforeState;
+            return config;
+          });
           await configCache.refreshCacheEntry('config/groups.json');
           break;
         }

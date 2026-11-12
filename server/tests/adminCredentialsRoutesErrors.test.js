@@ -24,11 +24,21 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
       if (state.readError) throw state.readError;
       return state.store;
     },
+    updateJson: async (_path, mutate) => {
+      if (state.readError) throw state.readError;
+      const next = await mutate(structuredClone(state.store));
+      if (next === undefined) return { data: state.store, written: false };
+      state.store = structuredClone(next);
+      return { data: next, written: true };
+    },
     writeJson: async () => {}
   }
 }));
 jest.unstable_mockModule('../configCache.js', () => ({
   default: { refreshCredentialsCache: async () => {} }
+}));
+jest.unstable_mockModule('../services/TokenStorageService.js', () => ({
+  default: { encryptString: value => `ENC[${value}]`, isEncrypted: value => /^ENC\[/.test(value) }
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({
   logAudit: async () => {}

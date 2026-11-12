@@ -84,6 +84,13 @@ const FULL_ADMIN = {
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
     readJsonStrict: async () => structuredClone(state.groupsData),
+    updateJson: async function (file, mutate) {
+      const current = structuredClone(state.groupsData);
+      const next = await mutate(current);
+      if (next === undefined) return { data: current, written: false };
+      await this.writeJson(file, next);
+      return { data: next, written: true };
+    },
     writeJson: async (file, data) => {
       state.writes.push({ file, data: structuredClone(data) });
       state.groupsData = structuredClone(data);

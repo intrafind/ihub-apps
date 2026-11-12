@@ -157,7 +157,11 @@ async function syncLinkedModelsApiType(provider) {
     if (model.provider === next) continue;
     const modelPath = await configStore.resolveIdToPath('models', model.id);
     if (!modelPath) continue;
-    await configStore.writeJson(modelPath, { ...model, provider: next });
+    // Only the provider field, on the stored model: the cached copy can lag
+    // behind an edit made to the model meanwhile.
+    await configStore.updateJson(modelPath, stored =>
+      stored ? { ...stored, provider: next } : undefined
+    );
     updated.push(model.id);
   }
   if (updated.length > 0) {
@@ -263,6 +267,29 @@ const modelStore = {
   write: async (id, model) =>
     configStore.writeJson(await configStore.resolveIdToPath('models', id), model)
 };
+
+/** The provider list in a stored body: `{ providers }`, or a bare array from an older file. */
+function storedProviderList(stored) {
+  if (Array.isArray(stored)) return stored;
+  return Array.isArray(stored?.providers) ? stored.providers : [];
+}
+
+/**
+ * Change providers.json as one locked read-change-write step, on the stored
+ * body — never on the config cache, which can lag behind another writer and
+ * would write that writer's change away. `mutate` gets a private copy of the
+ * stored list, may run more than once, and returns the list to store.
+ * Throwing from it writes nothing. The cache is refreshed after the write.
+ *
+ * @param {(providers: Object[]) => Object[]} mutate
+ * @returns {Promise<void>}
+ */
+async function updateProviders(mutate) {
+  await configStore.updateJson(PROVIDERS_FILE, stored => ({
+    providers: mutate(storedProviderList(stored))
+  }));
+  await configCache.refreshProvidersCache();
+}
 
 /** Most picks one sync request may carry: as many as a listing is read with. */
 const MAX_SYNC_PICKS = MAX_MODELS;
@@ -622,86 +649,77 @@ export default function registerAdminProvidersRoutes(app) {
       throw new ServiceError('BAD_REQUEST', 'Provider ID cannot be changed');
     }
 
-    // Define paths once at the top
-    // Handle API key encryption
-    if (updatedProvider.apiKey) {
-      // Check if this is a new key or unchanged masked value
-      if (updatedProvider.apiKey !== '••••••••') {
-        // New key provided - encrypt it
-        updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
-      } else {
-        // Masked value - need to preserve existing key
-        // CRITICAL FIX: Read the stored file, not the cache, to ensure we have
-        // the apiKey field. The cache might not have it due to TTL expiration
-        // or race conditions.
-        const stored = await configStore.readJson(PROVIDERS_FILE);
-        const existingProvider = Array.isArray(stored?.providers)
-          ? stored.providers.find(p => p.id === providerId)
-          : undefined;
-        if (existingProvider?.apiKey) {
+    // A new key is encrypted before the locked step; a masked placeholder
+    // takes the stored key inside it, so a key saved meanwhile is not lost.
+    const MASK = '••••••••';
+    const keepStoredKey = updatedProvider.apiKey === MASK;
+    if (updatedProvider.apiKey && !keepStoredKey) {
+      updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
+    }
+
+    let savedProvider;
+    await updateProviders(providers => {
+      // Work on a copy: the body is reused if the step has to run again.
+      const next = { ...updatedProvider };
+
+      // Find and update the provider
+      const index = providers.findIndex(p => p.id === providerId);
+      if (index === -1) {
+        throw new ServiceError('NOT_FOUND', 'Provider not found');
+      }
+
+      if (keepStoredKey) {
+        // The stored file, not the cache, holds the apiKey field.
+        if (providers[index].apiKey) {
           // Preserve the existing encrypted API key
-          updatedProvider.apiKey = existingProvider.apiKey;
+          next.apiKey = providers[index].apiKey;
         } else {
           // Nothing stored to preserve, drop the masked placeholder
-          delete updatedProvider.apiKey;
+          delete next.apiKey;
         }
       }
-    }
 
-    // Remove client-side helper fields
-    delete updatedProvider.apiKeySet;
-    delete updatedProvider.apiKeyMasked;
+      // Remove client-side helper fields
+      delete next.apiKeySet;
+      delete next.apiKeyMasked;
 
-    // Load current providers and create a deep copy to avoid cache mutation
-    const { data: cachedProviders } = configCache.getProviders(true);
-
-    // Create a deep copy of the providers array to avoid mutating the cache
-    const providers = cachedProviders.map(p => ({ ...p }));
-
-    // Find and update the provider
-    const index = providers.findIndex(p => p.id === providerId);
-    if (index === -1) {
-      throw new ServiceError('NOT_FOUND', 'Provider not found');
-    }
-
-    // The category decides which fields an entry has; it is fixed at creation.
-    if (providers[index].category !== undefined) {
-      updatedProvider.category = providers[index].category;
-    } else {
-      delete updatedProvider.category;
-    }
-    const validationError = normalizeProviderFields(updatedProvider);
-    if (validationError) {
-      throw new ServiceError('BAD_REQUEST', validationError);
-    }
-
-    // A gateway provider's models speak different dialects (Mistral next to
-    // OpenAI, a realtime speech backend). Taking the gateway setting away would
-    // move them all to the provider's one API type — a realtime model would end
-    // up on the OpenAI batch transcriber — so refuse while that would happen.
-    if (isGatewayProvider(providers[index]) && !isGatewayProvider(updatedProvider)) {
-      const { data: models = [] } = configCache.getModels(true);
-      const apiType = getProviderApiType(updatedProvider);
-      const affected = getLinkedModels(providerId, models).filter(
-        model => linkedModelProvider(apiType, model) !== model.provider
-      );
-      if (affected.length > 0) {
-        throw new ServiceError(
-          'BAD_REQUEST',
-          `Provider "${providerId}" is a model gateway and ${affected.length} of its models use their own API type. Delete or relink them before removing the gateway setting.`
-        );
+      // The category decides which fields an entry has; it is fixed at creation.
+      if (providers[index].category !== undefined) {
+        next.category = providers[index].category;
+      } else {
+        delete next.category;
       }
-    }
+      const validationError = normalizeProviderFields(next);
+      if (validationError) {
+        throw new ServiceError('BAD_REQUEST', validationError);
+      }
 
-    providers[index] = updatedProvider;
+      // A gateway provider's models speak different dialects (Mistral next to
+      // OpenAI, a realtime speech backend). Taking the gateway setting away would
+      // move them all to the provider's one API type — a realtime model would end
+      // up on the OpenAI batch transcriber — so refuse while that would happen.
+      if (isGatewayProvider(providers[index]) && !isGatewayProvider(next)) {
+        const { data: models = [] } = configCache.getModels(true);
+        const apiType = getProviderApiType(next);
+        const affected = getLinkedModels(providerId, models).filter(
+          model => linkedModelProvider(apiType, model) !== model.provider
+        );
+        if (affected.length > 0) {
+          throw new ServiceError(
+            'BAD_REQUEST',
+            `Provider "${providerId}" is a model gateway and ${affected.length} of its models use their own API type. Delete or relink them before removing the gateway setting.`
+          );
+        }
+      }
 
-    // Save updated providers
-    await configStore.writeJson(PROVIDERS_FILE, { providers });
-    await configCache.refreshProvidersCache();
-    const updatedModels = await syncLinkedModelsApiType(updatedProvider);
+      providers[index] = next;
+      savedProvider = next;
+      return providers;
+    });
+    const updatedModels = await syncLinkedModelsApiType(savedProvider);
 
     res.json({
-      provider: updatedProvider,
+      provider: savedProvider,
       updatedModels
     });
   });
@@ -759,16 +777,6 @@ export default function registerAdminProvidersRoutes(app) {
       throw new ServiceError('BAD_REQUEST', validationError);
     }
 
-    // Load current providers. Nothing readable means nothing configured yet,
-    // which is the first-run case for a custom provider.
-    const storedProviders = await configStore.readJson(PROVIDERS_FILE);
-    const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
-
-    // Check if provider with this ID already exists
-    if (providers.find(p => p.id === newProvider.id)) {
-      throw new ServiceError('BAD_REQUEST', `Provider with id '${newProvider.id}' already exists`);
-    }
-
     // Handle API key encryption
     if (newProvider.apiKey && newProvider.apiKey !== '••••••••') {
       newProvider.apiKey = tokenStorageService.encryptString(newProvider.apiKey);
@@ -785,12 +793,20 @@ export default function registerAdminProvidersRoutes(app) {
       newProvider.enabled = true;
     }
 
-    // Add new provider
-    providers.push(newProvider);
-
-    // Save updated providers
-    await configStore.writeJson(PROVIDERS_FILE, { providers });
-    await configCache.refreshProvidersCache();
+    // Nothing readable means nothing configured yet, which is the first-run
+    // case for a custom provider. The existence check and the write are one
+    // locked step, so two creates of the same id cannot both pass it.
+    await updateProviders(providers => {
+      // Check if provider with this ID already exists
+      if (providers.find(p => p.id === newProvider.id)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `Provider with id '${newProvider.id}' already exists`
+        );
+      }
+      providers.push(newProvider);
+      return providers;
+    });
 
     sendCreated(res, `/api/admin/providers/${segment(newProvider.id)}`, newProvider);
   });
@@ -850,22 +866,17 @@ export default function registerAdminProvidersRoutes(app) {
       );
     }
 
-    // Load current providers
-    const storedProviders = await configStore.readJson(PROVIDERS_FILE);
-    const providers = Array.isArray(storedProviders?.providers) ? storedProviders.providers : [];
+    await updateProviders(providers => {
+      // Find provider index
+      const index = providers.findIndex(p => p.id === providerId);
+      if (index === -1) {
+        throw new ServiceError('NOT_FOUND', 'Provider not found');
+      }
 
-    // Find provider index
-    const index = providers.findIndex(p => p.id === providerId);
-    if (index === -1) {
-      throw new ServiceError('NOT_FOUND', 'Provider not found');
-    }
-
-    // Remove provider
-    providers.splice(index, 1);
-
-    // Save updated providers
-    await configStore.writeJson(PROVIDERS_FILE, { providers });
-    await configCache.refreshProvidersCache();
+      // Remove provider
+      providers.splice(index, 1);
+      return providers;
+    });
 
     res.status(204).end();
   });

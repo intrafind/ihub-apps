@@ -320,28 +320,35 @@ export default function registerAdminContentAccessRoutes(app) {
         );
       }
 
-      const groupsData = await configStore.readJsonStrict(GROUPS_FILE);
-      if (!groupsData?.groups) {
-        throw new ServiceError('NOT_FOUND', 'Groups file not found');
-      }
+      // The view, the change and the write all use the body read under the
+      // lock: a group edit landing in between would otherwise revert the
+      // grant (or this write would revert the edit).
+      let changes = [];
+      const { data: groupsData } = await configStore.updateJson(GROUPS_FILE, groupsData => {
+        if (!groupsData?.groups) {
+          throw new ServiceError('NOT_FOUND', 'Groups file not found');
+        }
 
-      const { manageableIds } = buildView(req, groupsData, target.type, target.contentId);
+        const { manageableIds } = buildView(req, groupsData, target.type, target.contentId);
 
-      const changes = applyContentAccessChanges({
-        groups: groupsData.groups,
-        type: target.type,
-        contentId: target.contentId,
-        grant,
-        revoke,
-        manageableIds
-      });
+        changes = applyContentAccessChanges({
+          groups: groupsData.groups,
+          type: target.type,
+          contentId: target.contentId,
+          grant,
+          revoke,
+          manageableIds
+        });
 
-      if (changes.length > 0) {
+        if (changes.length === 0) return undefined;
         groupsData.metadata = {
           ...groupsData.metadata,
           lastModified: new Date().toISOString()
         };
-        await configStore.writeJson(GROUPS_FILE, groupsData);
+        return groupsData;
+      });
+
+      if (changes.length > 0) {
         await configCache.refreshCacheEntry(GROUPS_FILE);
 
         const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
