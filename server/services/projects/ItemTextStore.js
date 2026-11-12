@@ -66,6 +66,19 @@ export function mintVersionId(now = Date.now()) {
   return `${now.toString(36).padStart(9, '0')}${crypto.randomBytes(4).toString('hex')}`;
 }
 
+/**
+ * The hash a `text` block records (`sha256`): SHA-256 of the UTF-8 plaintext,
+ * hex. `storeText` records it, `readText` verifies it, and a refresh compares
+ * a new extraction with it to tell an unchanged text (#3622).
+ *
+ * @param {string|Buffer} text - The text, or its UTF-8 bytes.
+ * @returns {string}
+ */
+export function textSha256(text) {
+  const plaintext = Buffer.isBuffer(text) ? text : Buffer.from(text, 'utf8');
+  return crypto.createHash('sha256').update(plaintext).digest('hex');
+}
+
 function keyProviderFor(platform) {
   return getKeyProvider(projectSettings(platform).encryption.keyProvider);
 }
@@ -115,7 +128,7 @@ export async function storeText({
     bytes: stored.bytes,
     chars: text.length,
     tokens: estimateTokens(text),
-    sha256: crypto.createHash('sha256').update(plaintext).digest('hex'),
+    sha256: textSha256(plaintext),
     format: FORMAT_ID,
     segmentBytes: DEFAULT_SEGMENT_BYTES,
     key: { provider: provider.id, keyId, wrapped: wrapped.toString('base64') },
@@ -202,7 +215,7 @@ export async function readText(
       where
     );
   }
-  const sha256 = crypto.createHash('sha256').update(plaintext).digest('hex');
+  const sha256 = textSha256(plaintext);
   if (block.sha256 && sha256 !== block.sha256) {
     throw new KnowledgeError('TEXT_UNAVAILABLE', 'The stored text does not match its hash', where);
   }

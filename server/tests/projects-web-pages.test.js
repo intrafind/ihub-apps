@@ -36,7 +36,10 @@ import {
   registerKeyProvider
 } from '../services/projects/crypto/KeyProvider.js';
 import { getProjectService } from '../services/projects/ProjectService.js';
-import { getProjectRepository } from '../services/projects/ProjectRepository.js';
+import {
+  PROJECT_FILES_NAMESPACE,
+  getProjectRepository
+} from '../services/projects/ProjectRepository.js';
 import {
   bootstrapProjects,
   getIngestService,
@@ -669,6 +672,175 @@ describe('an unchanged page is not downloaded or converted again', () => {
     assert.equal(same.refreshingAt, undefined);
     assert.deepEqual(evicted, [], 'no cache or index is dropped');
     assert.match((await getItemText({ id: project.id }, same, { user: ADA })).text, /same text/);
+  });
+
+  /**
+   * Record what one refresh writes: blobs stored and deleted, and the
+   * readiness hook that drops readers' caches and indexes.
+   */
+  async function watching(run) {
+    const ingest = getIngestService();
+    const blobs = ingest.repository.blobs;
+    const calls = { put: [], delete: [], ready: [] };
+    const { put, delete: remove } = blobs;
+    const onReady = ingest.onReady;
+    blobs.put = (namespace, key, ...rest) => {
+      if (namespace === PROJECT_FILES_NAMESPACE) calls.put.push(key);
+      return put.call(blobs, namespace, key, ...rest);
+    };
+    blobs.delete = (namespace, key, ...rest) => {
+      if (namespace === PROJECT_FILES_NAMESPACE) calls.delete.push(key);
+      return remove.call(blobs, namespace, key, ...rest);
+    };
+    ingest.onReady = (...args) => {
+      calls.ready.push(args[0]);
+      return onReady(...args);
+    };
+    try {
+      return { result: await run(), calls };
+    } finally {
+      blobs.put = put;
+      blobs.delete = remove;
+      ingest.onReady = onReady;
+    }
+  }
+
+  /** The same main content around a script and a CSP nonce that change on every request. */
+  const noncePage = (nonce, body = 'The content stays the same.') =>
+    html('Nonces', body).replace(
+      '<head>',
+      `<head><meta name="csp-nonce" content="${nonce}"><script nonce="${nonce}">window.t=${JSON.stringify(nonce)}</script>`
+    );
+
+  it('stores, deletes and evicts nothing when only a script nonce changed', async () => {
+    servePage('/nonce', noncePage('n1'));
+    const project = await newProject('Nonce');
+    const { item } = await addUrl(project, `${base}/nonce`);
+    const first = await settled(project.id, item.id);
+
+    const second = noncePage('n2');
+    servePage('/nonce', second);
+    const { result, calls } = await watching(() =>
+      getProjectService().refreshItem(project.id, item.id, { user: ADA, wait: true })
+    );
+    const same = result.item;
+    assert.deepEqual(calls.put, [], 'no new blob is stored');
+    assert.deepEqual(calls.delete, [], 'the stored blob is not deleted');
+    assert.deepEqual(calls.ready, [], 'no cache or index is dropped');
+    assert.deepEqual(same.text, first.text, 'the text block is untouched');
+    assert.equal(same.snapshotAt, first.snapshotAt);
+    assert.equal(same.status, 'ready');
+    assert.ok(Date.parse(same.checkedAt) > Date.parse(first.checkedAt), 'the check is recorded');
+    assert.equal(same.refreshingAt, undefined);
+    assert.equal(same.ingestAttempt, undefined);
+    assert.equal(
+      same.provenance.source.sha256,
+      crypto.createHash('sha256').update(second).digest('hex'),
+      'the new bytes are recorded, so the next refresh stops at them'
+    );
+    assert.ok(
+      await getIngestService().repository.blobs.get(PROJECT_FILES_NAMESPACE, first.text.blobKey)
+    );
+  });
+
+  it('stores a new snapshot when the main content changed', async () => {
+    servePage('/nonce-changed', noncePage('n1'));
+    const project = await newProject('Nonce changed');
+    const { item } = await addUrl(project, `${base}/nonce-changed`);
+    const first = await settled(project.id, item.id);
+
+    servePage('/nonce-changed', noncePage('n2', 'The content is new.'));
+    const { result, calls } = await watching(() =>
+      getProjectService().refreshItem(project.id, item.id, { user: ADA, wait: true })
+    );
+    const changed = result.item;
+    assert.equal(calls.put.length, 1, 'the new text is stored');
+    assert.deepEqual(calls.put, [changed.text.blobKey]);
+    assert.deepEqual(calls.delete, [first.text.blobKey], 'the old one goes');
+    assert.deepEqual(calls.ready, [project.id], 'readers drop their caches');
+    assert.notEqual(changed.text.sha256, first.text.sha256);
+    assert.match((await getItemText({ id: project.id }, changed, { user: ADA })).text, /is new/);
+  });
+
+  it('writes nothing for a job that lost its attempt, also when the text is unchanged', async () => {
+    servePage('/nonce-fenced', noncePage('n1'));
+    const project = await newProject('Nonce fenced');
+    const { item } = await addUrl(project, `${base}/nonce-fenced`);
+    const first = await settled(project.id, item.id);
+
+    // Reserve the item like `refreshItem` does, then let a newer run take it
+    // over while this job downloads.
+    await getProjectRepository().mutate(project.id, current => {
+      const entry = current.items.find(candidate => candidate.id === item.id);
+      entry.refreshingAt = new Date().toISOString();
+      entry.ingestAttempt = 'mine';
+      return current;
+    });
+    const stored = await getProjectRepository().get(project.id);
+    const reserved = stored.items.find(entry => entry.id === item.id);
+    const body = Buffer.from(noncePage('n2'));
+    const { result, calls } = await watching(() =>
+      getIngestService().start(
+        stored,
+        reserved,
+        {
+          fetch: async () => {
+            await getProjectRepository().mutate(project.id, current => {
+              current.items.find(entry => entry.id === item.id).ingestAttempt = 'newer';
+              return current;
+            });
+            return {
+              bytes: body,
+              contentType: 'text/html',
+              name: 'nonce-fenced',
+              source: { sha256: crypto.createHash('sha256').update(body).digest('hex') }
+            };
+          },
+          previousBlobKey: first.text.blobKey,
+          previousSha256: first.provenance.source.sha256,
+          attempt: 'mine',
+          purpose: 'refresh'
+        },
+        { user: ADA, wait: true }
+      )
+    );
+    assert.ok(!result?.unchanged, 'the lost job does not report its result');
+    assert.deepEqual(calls.put, []);
+    assert.deepEqual(calls.delete, []);
+    assert.deepEqual(calls.ready, []);
+    const after = await itemOf(project.id, item.id);
+    assert.equal(after.ingestAttempt, 'newer', 'the newer run keeps the item');
+    assert.ok(after.refreshingAt, 'and its reservation');
+    assert.equal(after.checkedAt, first.checkedAt, 'no check is recorded');
+    assert.deepEqual(after.provenance, first.provenance, 'nor the new version');
+    assert.deepEqual(after.text, first.text);
+  });
+
+  it('does not count a scheduled refresh with the same text as activity', async () => {
+    servePage('/nonce-scheduled', noncePage('n1'));
+    const project = await newProject('Nonce scheduled');
+    const { item } = await addUrl(project, `${base}/nonce-scheduled`);
+    const first = await settled(project.id, item.id);
+    const idleSince = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+    await getProjectRepository().mutate(
+      project.id,
+      current => {
+        current.lastActivityAt = idleSince;
+        return current;
+      },
+      { touchActivity: false, touchUpdated: false }
+    );
+    const before = await getProjectRepository().get(project.id);
+
+    servePage('/nonce-scheduled', noncePage('n2'));
+    const { result, calls } = await watching(() =>
+      getProjectService().refreshItem(project.id, item.id, { wait: true, scheduled: true })
+    );
+    assert.equal(result.item.text.blobKey, first.text.blobKey);
+    assert.deepEqual(calls.put, []);
+    const after = await getProjectRepository().get(project.id);
+    assert.equal(after.lastActivityAt, idleSince, 'the refresh is no activity');
+    assert.equal(after.updatedAt, before.updatedAt);
   });
 });
 
