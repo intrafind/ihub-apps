@@ -10,6 +10,8 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      # The runner talks to iHub over HTTP only; it needs no Kubernetes API access.
+      automountServiceAccountToken: false
       containers:
         - name: setup
           image: ghcr.io/intrafind/ihub-loadtest:latest
@@ -19,3 +21,4 @@ spec:
             - secretRef: { name: loadtest-secrets }
           resources:
             requests: { cpu: 250m, memory: 256Mi }
+            limits: { cpu: '1', memory: 1Gi }

@@ -10,6 +10,8 @@ spec:
     metadata:
       labels: { app: loadtest-stubs }
     spec:
+      # The stubs need no Kubernetes API access.
+      automountServiceAccountToken: false
       containers:
         - name: stubs
           image: ihub-loadtest

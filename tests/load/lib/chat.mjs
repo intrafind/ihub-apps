@@ -30,7 +30,7 @@ export function newChatId() {
 }
 
 function messageId() {
-  return `msg-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  return `msg-${Date.now()}-${randomUUID().slice(0, 8)}`;
 }
 
 export class ChatSession {

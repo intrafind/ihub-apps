@@ -232,7 +232,7 @@ function page(n) {
 }
 
 const site = http.createServer((req, res) => {
-  const url = new URL(req.url, 'http://x');
+  const url = { pathname: (req.url || '/').split('?')[0] };
   setTimeout(() => {
     if (url.pathname === '/robots.txt') {
       res.writeHead(200, { 'content-type': 'text/plain' });
@@ -264,9 +264,9 @@ const site = http.createServer((req, res) => {
 llm.keepAliveTimeout = 65_000;
 llm.listen(LLM_PORT, HOST, () =>
   console.log(
-    `fake LLM  http://${HOST}:${LLM_PORT}/v1  (TTFT ${TTFT_MS} ms, ${TOKENS} tokens @ ${TPS}/s)`
+    `fake LLM  on ${HOST}:${LLM_PORT} (/v1)  (TTFT ${TTFT_MS} ms, ${TOKENS} tokens @ ${TPS}/s)`
   )
 );
 site.listen(SITE_PORT, HOST, () =>
-  console.log(`test site http://${HOST}:${SITE_PORT}/docs/  (${PAGES} pages)`)
+  console.log(`test site on ${HOST}:${SITE_PORT} (/docs/)  (${PAGES} pages)`)
 );

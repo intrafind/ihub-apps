@@ -26,6 +26,8 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels: { app: loadtest-run }
+      # The runner talks to iHub over HTTP only; it needs no Kubernetes API access.
+      automountServiceAccountToken: false
       containers:
         - name: runner
           image: ghcr.io/intrafind/ihub-loadtest:latest

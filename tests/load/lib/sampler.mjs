@@ -79,7 +79,7 @@ export function startSamplers({ cfg, metrics, adminClient }) {
         metrics.count('sampler.server.failed');
       }
     };
-    tick();
+    tick().catch(() => metrics.count('sampler.failed'));
     timers.push(setInterval(tick, intervalMs));
   }
 
@@ -100,13 +100,13 @@ export function startSamplers({ cfg, metrics, adminClient }) {
 
   if (firstShard && cfg.sampling.vllmMetricsUrl) {
     const tick = createVllmObserver({ url: cfg.sampling.vllmMetricsUrl, metrics, log });
-    tick();
+    tick().catch(() => metrics.count('sampler.failed'));
     timers.push(setInterval(tick, intervalMs));
   }
 
   if (firstShard && cfg.sampling.prometheus?.url) {
     const tick = createPrometheusObserver({ prom: cfg.sampling.prometheus, metrics, log });
-    tick();
+    tick().catch(() => metrics.count('sampler.failed'));
     // PromQL rates span 1 min; sampling faster than 15 s adds nothing.
     timers.push(setInterval(tick, Math.max(intervalMs, 15_000)));
   }
