@@ -159,7 +159,8 @@ iHub product counters & gauges:
 - `ihub.conversations` - chat messages with the `conversation.is_follow_up` dimension
 - `ihub.active.users` - **observable gauge**, distinct users active in the rolling
   window (default 5 min). In cluster mode this is the union across the workers of
-  the pod (each user counted once), not one worker's share
+  the pod (each user counted once), not one worker's share. Every worker reports the
+  same pod-wide value, so aggregate with `max` per pod, never `sum`
 - `ihub.active.chats` - **observable gauge**, distinct chats active in the rolling
   window, counted across workers the same way
 - `ihub.projects.active` + `ihub.projects.active.chars` - **observable gauges**, the

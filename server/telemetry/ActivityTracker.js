@@ -40,12 +40,14 @@ class ActivityTracker {
     this.userUnion = createClusterUnion({
       channel: ACTIVE_USERS_CHANNEL,
       getLocalEntries: entriesOf(this.userTimestamps),
-      expectedPeers: otherWorkers
+      expectedPeers: otherWorkers,
+      retainMs: () => this.windowMs
     });
     this.chatUnion = createClusterUnion({
       channel: ACTIVE_CHATS_CHANNEL,
       getLocalEntries: entriesOf(this.chatTimestamps),
-      expectedPeers: otherWorkers
+      expectedPeers: otherWorkers,
+      retainMs: () => this.windowMs
     });
   }
 

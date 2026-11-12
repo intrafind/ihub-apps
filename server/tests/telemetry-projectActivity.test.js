@@ -146,3 +146,44 @@ test('totalIndexCache adds the processes up', () => {
   assert.equal(total.misses, 4);
   assert.equal(total.hitRate, 0.6);
 });
+
+test('a refresh that misses a worker keeps its unexpired entries', () => {
+  const now = Date.now();
+  projectActivityTracker.union.rememberEntries([
+    ['fromA', now - 1000, 100],
+    ['fromB', now - 2000, 200]
+  ]);
+  // Next refresh: worker B did not answer in time.
+  projectActivityTracker.union.rememberEntries([['fromA', now, 100]]);
+  assert.equal(projectActivityTracker.getWorkingSet({ now })[0].projects, 2);
+
+  // Entries older than every window are dropped once a refresh runs.
+  projectActivityTracker.union.rememberEntries([['ancient', now - 2 * 3600_000, 1]]);
+  assert.equal(projectActivityTracker.union.entries().has('ancient'), false);
+});
+
+test('index-cache gauges attach even when registered before telemetry exists', async () => {
+  const { initializeMetrics, registerIndexCacheObservers } =
+    await import('../telemetry/metrics.js');
+  const callbacks = [];
+  const instrument = () => ({
+    addCallback: cb => callbacks.push(cb),
+    add() {},
+    record() {}
+  });
+  // The cache module registers at import time, before telemetry is initialised.
+  registerIndexCacheObservers({ getStats: () => ({ entries: 3, chars: 42 }) });
+  assert.equal(callbacks.length, 0);
+
+  initializeMetrics({
+    getMeter: () => ({
+      createHistogram: instrument,
+      createCounter: instrument,
+      createObservableGauge: instrument
+    })
+  });
+
+  const observed = [];
+  for (const cb of callbacks) cb({ observe: value => observed.push(value) });
+  assert.ok(observed.includes(3) && observed.includes(42));
+});

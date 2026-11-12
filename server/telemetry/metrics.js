@@ -115,6 +115,7 @@ let indexCacheEntriesGauge = null;
 let indexCacheCharsGauge = null;
 let indexBuildDurationHistogram = null;
 let extractionDurationHistogram = null;
+let pendingIndexCacheProvider = null;
 
 /**
  * Initialize metrics from a meter source. Accepts anything with a
@@ -286,6 +287,8 @@ export function initializeMetrics(meterSource) {
     advice: { explicitBucketBoundaries: WORK_DURATION_BUCKETS }
   });
 
+  attachIndexCacheObservers();
+
   console.info(
     `GenAI metrics initialized - allowed labels: ${[...ALLOWED_METRIC_LABELS].join(', ')}`
   );
@@ -367,7 +370,17 @@ export function registerProjectObservers(provider) {
  * @param {() => {entries: number, chars: number}} provider.getStats
  */
 export function registerIndexCacheObservers(provider) {
-  if (!indexCacheEntriesGauge || !indexCacheCharsGauge || !provider) return;
+  if (!provider) return;
+  // The cache module is loaded before telemetry is initialised: keep the
+  // provider and attach it as soon as the gauges exist.
+  pendingIndexCacheProvider = provider;
+  attachIndexCacheObservers();
+}
+
+function attachIndexCacheObservers() {
+  const provider = pendingIndexCacheProvider;
+  if (!provider || !indexCacheEntriesGauge || !indexCacheCharsGauge) return;
+  pendingIndexCacheProvider = null;
   indexCacheEntriesGauge.addCallback(result => result.observe(provider.getStats().entries));
   indexCacheCharsGauge.addCallback(result => result.observe(provider.getStats().chars));
 }

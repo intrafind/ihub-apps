@@ -24,6 +24,9 @@ import { gather, respond } from '../clusterBus.js';
 /** How often a worker re-asks the others. The gauges are scraped about every 15 s. */
 export const DEFAULT_REFRESH_MS = 10_000;
 
+/** Longest window anything reports over (the project working set's 60 minutes). */
+export const DEFAULT_RETAIN_MS = 60 * 60_000;
+
 /** How long a gather waits for a silent worker. */
 const GATHER_TIMEOUT_MS = 1500;
 
@@ -55,6 +58,10 @@ export function mergeEntries(...lists) {
  * @param {() => Array<[string, number, *]>} options.getLocalEntries - This
  *   process's own `[id, timestamp, value]` entries.
  * @param {number} [options.refreshMs]
+ * @param {() => number} [options.retainMs] - How long an entry heard from another
+ *   worker is kept after its timestamp. A refresh that misses a worker (slow,
+ *   restarting) then does not drop what it already reported; entries only leave
+ *   when they are too old to count in any window.
  * @param {typeof gather} [options.gatherFn] - Test seam.
  * @param {() => number} [options.expectedPeers] - Replies to wait for.
  */
@@ -63,12 +70,26 @@ export function createClusterUnion({
   getLocalEntries,
   refreshMs = DEFAULT_REFRESH_MS,
   gatherFn = gather,
-  expectedPeers = () => undefined
+  expectedPeers = () => undefined,
+  retainMs = () => DEFAULT_RETAIN_MS
 }) {
-  /** What the other processes reported at the last refresh. */
-  let remoteEntries = [];
+  /** What the other processes have reported, newest entry per id. */
+  let remote = new Map();
   let timer = null;
   let unregister = null;
+
+  /** Merge what the others reported into what is already known, dropping the expired. */
+  function remember(entries) {
+    const cutoff = Date.now() - retainMs();
+    const merged = mergeEntries(
+      [...remote].map(([id, { ts, value }]) => [id, ts, value]),
+      entries
+    );
+    for (const [id, { ts }] of merged) {
+      if (ts < cutoff) merged.delete(id);
+    }
+    remote = merged;
+  }
 
   async function refresh() {
     try {
@@ -76,7 +97,7 @@ export function createClusterUnion({
         expected: expectedPeers(),
         timeoutMs: GATHER_TIMEOUT_MS
       });
-      remoteEntries = replies.flatMap(reply => (Array.isArray(reply) ? reply : []));
+      remember(replies.flatMap(reply => (Array.isArray(reply) ? reply : [])));
     } catch {
       // Keep the previous copy: a missed refresh must not zero the gauge.
     }
@@ -99,16 +120,22 @@ export function createClusterUnion({
       timer = null;
       unregister?.();
       unregister = null;
-      remoteEntries = [];
+      remote = new Map();
     },
     refresh,
     /** Union of this process's live entries and the last copy of the others'. */
     entries() {
-      return mergeEntries(remoteEntries, getLocalEntries());
+      return mergeEntries(
+        [...remote].map(([id, { ts, value }]) => [id, ts, value]),
+        getLocalEntries()
+      );
     },
     /** Test seam. */
     setRemoteEntries(entries) {
-      remoteEntries = entries;
-    }
+      remote = new Map();
+      remember(entries);
+    },
+    /** Test seam: merge a refresh's replies as `refresh` would. */
+    rememberEntries: remember
   };
 }

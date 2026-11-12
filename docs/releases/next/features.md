@@ -9,9 +9,10 @@ projects used by a chat turn or a knowledge tool in the last 5, 15 and 60 minute
 `ihub.extraction.duration` per file format. The same numbers are part of `GET /api/admin/system/resources`
 (`workingSet`, `knowledge.indexCache`, and `indexCache` per process), which the load-test harness samples.
 
-In cluster mode, `ihub.active.users`, `ihub.active.chats` and the project working set are now counted across
-all workers of a pod (each user or project once) instead of per worker. Dashboards that summed or
-compared per-worker series will see higher, correct numbers. See [Telemetry](../../telemetry.md#metrics).
+In cluster mode, `ihub.active.users`, `ihub.active.chats` and the project working set are now the union
+across all workers of a pod (each user or project once) instead of one worker's share. Every worker reports the
+same pod-wide number, so a dashboard must not sum these gauges over workers: pick one worker's series or use
+`max` per pod. Only the per-process cache counters (`ihub.knowledge.index.cache.*`) are meant to be summed. See [Telemetry](../../telemetry.md#metrics).
 
 ## Workers and Their Memory Follow the Container's Memory Limit
 
