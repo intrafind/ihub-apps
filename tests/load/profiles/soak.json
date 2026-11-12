@@ -1,0 +1,17 @@
+{
+  "name": "soak",
+  "description": "Hold ~70% of the measured capacity for 4 hours: memory growth (leaks), disk growth per chat/project, retention sweeps, token refresh. Set LT_STAGES or LT_VU_SCALE to your capacity result; model via LT_MODEL_ID.",
+  "modelId": "loadtest-stub",
+  "llm": { "expectedTtftMs": 700 },
+  "stages": [{ "name": "soak", "vus": 100, "rampSec": 300, "holdSec": 14400 }],
+  "thinkTimeSec": [20, 60],
+  "sessionPauseSec": [10, 40],
+  "mix": {
+    "chat": 45,
+    "chatFile": 15,
+    "projectChat": 30,
+    "projectBuild": 5,
+    "browse": 5,
+    "inference": 0
+  }
+}

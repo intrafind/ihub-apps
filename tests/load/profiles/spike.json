@@ -1,0 +1,21 @@
+{
+  "name": "spike",
+  "description": "Morning peak / all-hands announcement: 20 → 200 users in 30 s and back. Checks queueing, error behaviour and recovery, not steady capacity.",
+  "modelId": "loadtest-stub",
+  "llm": { "expectedTtftMs": 700 },
+  "stages": [
+    { "name": "base", "vus": 20, "rampSec": 30, "holdSec": 300 },
+    { "name": "spike", "vus": 200, "rampSec": 30, "holdSec": 300 },
+    { "name": "recover", "vus": 20, "rampSec": 30, "holdSec": 300 }
+  ],
+  "thinkTimeSec": [10, 30],
+  "sessionPauseSec": [5, 20],
+  "mix": {
+    "chat": 55,
+    "chatFile": 10,
+    "projectChat": 30,
+    "projectBuild": 0,
+    "browse": 5,
+    "inference": 0
+  }
+}

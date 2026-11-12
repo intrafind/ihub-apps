@@ -1,0 +1,35 @@
+{
+  "name": "capacity-gpu",
+  "description": "End to end with the real LLM (model loadtest-gpu on gpu-01). Finds how many concurrent users the GPU serves before TTFT degrades, and validates iHub with real tool calls and real answer lengths. ~40 min.",
+  "modelId": "loadtest-gpu",
+  "answerLengthHint": "Answer in about 120 words.",
+  "stages": [
+    { "name": "G1-5", "vus": 5, "rampSec": 30, "holdSec": 300 },
+    { "name": "G2-10", "vus": 10, "rampSec": 30, "holdSec": 300 },
+    { "name": "G3-20", "vus": 20, "rampSec": 60, "holdSec": 300 },
+    { "name": "G4-40", "vus": 40, "rampSec": 60, "holdSec": 300 },
+    { "name": "G5-60", "vus": 60, "rampSec": 60, "holdSec": 300 },
+    { "name": "G6-80", "vus": 80, "rampSec": 60, "holdSec": 300 },
+    { "name": "G7-120", "vus": 120, "rampSec": 60, "holdSec": 300 }
+  ],
+  "thinkTimeSec": [20, 60],
+  "sessionPauseSec": [10, 40],
+  "mix": {
+    "chat": 45,
+    "chatFile": 15,
+    "projectChat": 30,
+    "projectBuild": 5,
+    "browse": 5,
+    "inference": 0
+  },
+  "slo": {
+    "ttftP95Ms": 6000,
+    "ttftOverheadP95Ms": null,
+    "apiP95Ms": 500,
+    "turnErrorPct": 2,
+    "httpErrorPct": 2,
+    "workerCpuAvgPct": 80,
+    "eventLoopDelayMaxMs": 150,
+    "ingestReadyP95Sec": 180
+  }
+}

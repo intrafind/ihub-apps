@@ -1,0 +1,57 @@
+# Local sizing lab: iHub with a fixed CPU/RAM budget + the stubs.
+# The runner runs on the host (node tests/load/run.mjs) against http://localhost:3000.
+#
+#   IHUB_CPUS=2 IHUB_WORKERS=2 docker compose -f tests/load/docker-compose.yml up -d
+#
+# Re-run with IHUB_CPUS/IHUB_WORKERS = 1/1, 2/2, 4/4 to get users per worker and
+# the scaling factor. `docker compose ... down -v` resets all data.
+name: ihub-loadtest
+
+services:
+  ihub:
+    image: ${IHUB_IMAGE:-ghcr.io/intrafind/ihub-apps:latest}
+    ports:
+      - '3000:3000'
+      - '9464:9464' # Prometheus metrics when telemetry is on
+    cpus: ${IHUB_CPUS:-2}
+    mem_limit: ${IHUB_MEMORY:-4g}
+    environment:
+      WORKERS: ${IHUB_WORKERS:-2}
+      NODE_ENV: production
+      # Load from one IP must not hit the per-IP limits.
+      IHUB_PLATFORM__RATE_LIMIT__AUTH_API__LIMIT: '100000'
+      IHUB_PLATFORM__RATE_LIMIT__PUBLIC_API__LIMIT: '1000000'
+      IHUB_PLATFORM__RATE_LIMIT__DEFAULT__LIMIT: '1000000'
+      IHUB_PLATFORM__RATE_LIMIT__ADMIN_API__LIMIT: '100000'
+      IHUB_PLATFORM__RATE_LIMIT__INFERENCE_API__LIMIT: '1000000'
+      IHUB_PLATFORM__AI_ACKNOWLEDGEMENT__ENFORCE: 'false'
+      # Crawl the stub site (private address) and reach the GPU with the internal CA.
+      IHUB_PLATFORM__SSRF__ALLOWED_HOSTS: '["loadtest-stubs"]'
+      IHUB_PLATFORM__SSL__DOMAIN_WHITELIST: '["gpu-01.local.intrafind.io"]'
+      IHUB_PLATFORM__SSL__IGNORE_INVALID_CERTIFICATES: 'true'
+      IHUB_PLATFORM__PROJECTS__INGEST__CONCURRENCY: ${IHUB_INGEST_CONCURRENCY:-2}
+      IHUB_PLATFORM__PROJECTS__LIMITS__MAX_PROJECTS_PER_USER: '50'
+      IHUB_PLATFORM__TELEMETRY__ENABLED: ${IHUB_TELEMETRY:-false}
+      IHUB_PLATFORM__TELEMETRY__PROVIDER: prometheus
+    volumes:
+      - ihub-contents:/app/contents
+    depends_on:
+      - loadtest-stubs
+
+  loadtest-stubs:
+    image: node:22-alpine
+    working_dir: /loadtest
+    command: ['node', 'stub/server.mjs']
+    volumes:
+      - ./:/loadtest:ro
+    ports:
+      - '8979:8979'
+      - '8980:8980'
+    environment:
+      STUB_TTFT_MS: ${STUB_TTFT_MS:-700}
+      STUB_TOKENS: ${STUB_TOKENS:-250}
+      STUB_TOKENS_PER_SEC: ${STUB_TOKENS_PER_SEC:-40}
+      STUB_SITE_PAGES: '300'
+
+volumes:
+  ihub-contents:

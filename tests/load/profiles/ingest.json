@@ -1,0 +1,31 @@
+{
+  "name": "ingest",
+  "description": "Upload, extraction and crawl throughput: documents per minute per worker and their effect on chat latency. Use LT_FIXTURES_DIR with real customer-like PDF/Office files and LT_CRAWL_URL pointing at the stub site for repeated runs. ~25 min.",
+  "modelId": "loadtest-stub",
+  "llm": { "expectedTtftMs": 700 },
+  "stages": [
+    { "name": "I1-2", "vus": 2, "rampSec": 10, "holdSec": 300 },
+    { "name": "I2-5", "vus": 5, "rampSec": 30, "holdSec": 300 },
+    { "name": "I3-10", "vus": 10, "rampSec": 30, "holdSec": 300 },
+    { "name": "I4-20", "vus": 20, "rampSec": 30, "holdSec": 300 }
+  ],
+  "thinkTimeSec": [3, 10],
+  "sessionPauseSec": [2, 8],
+  "mix": {
+    "chat": 0,
+    "chatFile": 30,
+    "projectChat": 0,
+    "projectBuild": 70,
+    "browse": 0,
+    "inference": 0
+  },
+  "scenarios": {
+    "projectBuild": {
+      "files": [5, 15],
+      "uploadParallel": 3,
+      "chatTurns": 1,
+      "crawl": { "maxPages": 30, "addPages": 10, "maxConcurrent": 2 }
+    }
+  },
+  "slo": { "ttftOverheadP95Ms": 3000, "workerCpuAvgPct": 90, "eventLoopDelayMaxMs": 300 }
+}
