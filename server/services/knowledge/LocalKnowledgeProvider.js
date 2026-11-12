@@ -31,10 +31,14 @@ import { getProjectService } from '../projects/ProjectService.js';
 import { KnowledgeProvider } from './KnowledgeProvider.js';
 import { getItemText } from './ItemTextService.js';
 import { KnowledgeError, docOf, isUsable } from './types.js';
+import { searchIndexCacheChars } from '../../utils/cacheBudgets.js';
 
-/** Corpus indexes kept per process, and the characters they may stand for together. */
+/**
+ * Corpus indexes kept per process, and the characters they may stand for
+ * together — a share of this process's heap limit (utils/cacheBudgets.js).
+ */
 const INDEX_CACHE_SIZE = 32;
-const INDEX_CACHE_MAX_CHARS = 30_000_000;
+export const INDEX_CACHE_MAX_CHARS = searchIndexCacheChars();
 const indexCache = new Map();
 
 function cacheGet(key) {

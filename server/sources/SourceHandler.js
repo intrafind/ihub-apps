@@ -9,10 +9,18 @@
  * APIs, databases, etc.) and providing caching capabilities.
  */
 
+import { BoundedSourceCache } from './boundedSourceCache.js';
+import { SOURCE_CACHE_MAX_ENTRIES, sourceCacheBytes } from '../utils/cacheBudgets.js';
+
 class SourceHandler {
   constructor(config = {}) {
     this.config = config;
-    this.cache = new Map();
+    // Bounded by count and estimated bytes, oldest out first: a plain Map
+    // only dropped an entry when its key was asked for again after the TTL.
+    this.cache = new BoundedSourceCache({
+      maxEntries: SOURCE_CACHE_MAX_ENTRIES,
+      maxBytes: sourceCacheBytes()
+    });
     this.cacheConfig = config.caching || { ttl: 3600, strategy: 'static' };
   }
 

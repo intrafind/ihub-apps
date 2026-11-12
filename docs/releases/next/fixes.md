@@ -642,3 +642,12 @@ the whole application and used about as much memory as a worker (~400 MB RSS). I
 needs (~120 MB). Every worker also stopped generating the API documentation (`/api/docs`) at startup: the
 production build writes it, and the server reads it on the first request to `/api/docs`. Workers listen about
 a second and a half sooner.
+
+## In-Memory Caches Scale With Each Worker's Memory
+
+The caches of project item text, project search indexes and fetched web pages had fixed sizes (96 MB, about
+165 MB, and no limit for web pages), which on a worker with a small memory limit could take 40 % or more of
+it. Each now takes a share of the worker's own memory limit (about a quarter for all of them together),
+capped at its old size; the web page cache also keeps at most 256 pages per source type and drops the oldest
+first. On a small worker, a project read again after a while may be loaded from storage again instead of
+from memory.
