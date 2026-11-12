@@ -1710,6 +1710,21 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         assert.equal(await shared.blobs.get(NS, key), null);
       });
 
+      it('reports a removal to one of two deletes racing each other', async () => {
+        // What a caller claims a blob with (a crawl hand-over is taken by the
+        // add whose delete removed it). Repeated, as a race shows only sometimes.
+        for (let i = 0; i < 20; i++) {
+          const key = nextId('blob');
+          await shared.blobs.put(NS, key, Buffer.from('once'));
+          const removed = await Promise.all([
+            shared.blobs.delete(NS, key),
+            shared.blobs.delete(NS, key)
+          ]);
+          assert.deepEqual(removed.sort(), [false, true]);
+          assert.equal(await shared.blobs.get(NS, key), null);
+        }
+      });
+
       it('lists by prefix, without the payloads', async () => {
         // The one call a caller cannot emulate: it is how everything belonging
         // to one owner is swept, including a blob whose metadata never landed.

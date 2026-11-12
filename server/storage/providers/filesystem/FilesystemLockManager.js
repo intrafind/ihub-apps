@@ -16,14 +16,18 @@
  * (a warning, then the unguarded write), because its callers would rather lose
  * a bookkeeping guarantee than block a request forever. A `LockManager` cannot
  * do that — the contract is that `fn` never runs without the lock — so this
- * builds directly on the primitives from that same module
- * (`tryCreateExclusive`, `readJsonMarker`, `removeIfExists`) and throws
- * {@link LockTimeoutError} instead.
+ * builds on primitives of its own (and `tryCreateExclusive`/`removeIfExists`
+ * from that module) and throws {@link LockTimeoutError} instead.
  *
- * Taking over an abandoned lease is the one step `O_EXCL` does not cover, and
- * it is handled by `rename`/`link` rather than by `unlink` — see
- * {@link FilesystemLockManager#_evictExpired} for why an `unlink` there is a
- * compare-and-set against nothing.
+ * A lease is published whole: written to a scratch file and `link`ed onto the
+ * lease path, which fails with `EEXIST` when the name is taken. No reader ever
+ * sees a lease file without its content (see
+ * {@link FilesystemLockManager#_publish}).
+ *
+ * Removing a lease — a holder's release or a waiter's takeover of an abandoned
+ * one — is the step `O_EXCL` does not cover, and it goes through a per-lease
+ * removal claim — see {@link FilesystemLockManager#_removeLease} for why that
+ * is what makes the removal a compare-and-delete.
  *
  * A held lease is refreshed while its section runs
  * ({@link FilesystemLockManager#_startRenewal}), so `ttlMs` bounds only how
@@ -43,7 +47,7 @@
  */
 import { promises as fs } from 'node:fs';
 import crypto from 'node:crypto';
-import { tryCreateExclusive, readJsonMarker, removeIfExists } from '../../../utils/fileLock.js';
+import { tryCreateExclusive, removeIfExists } from '../../../utils/fileLock.js';
 import logger from '../../../utils/logger.js';
 import { LockManager } from '../../LockManager.js';
 import { InvalidKeyError, LockTimeoutError, StorageError } from '../../errors.js';
@@ -60,6 +64,16 @@ const NAME_DIGEST_LENGTH = 40;
 const DEFAULT_TTL_MS = 30_000;
 const DEFAULT_WAIT_MS = 5_000;
 const DEFAULT_POLL_MS = 25;
+
+/**
+ * How old a removal claim must be before it is presumed abandoned by a worker
+ * that died between claiming a lease and removing it. A claim is held for a
+ * read and an unlink, so this is generous; see `_claimRemoval`.
+ */
+const CLAIM_STALE_MS = 10_000;
+
+/** Error codes of a filesystem that has no hard links (some SMB/FAT mounts). */
+const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV']);
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -102,9 +116,10 @@ function nameDigest(name) {
  *
  * The lease carries its own `ttlMs`, so a long-running holder is judged by the
  * TTL it asked for rather than by the waiter's. A lease that cannot be parsed
- * (a half-written file, or one from an older format) is judged by its mtime
- * against the waiter's TTL instead — an unreadable lease must not be able to
- * wedge a lock name forever.
+ * (a refresh caught mid-write, a crash, a hand edit) is judged by its own mtime
+ * against the waiter's TTL but never less than the default TTL: a file that is
+ * still being written was touched just now, so it reads as held, while one
+ * that stays unreadable ages out and cannot wedge a lock name forever.
  *
  * The start time is the *earlier* of what the holder wrote down and what the
  * filesystem recorded, never the holder's word alone. `at` is a timestamp from
@@ -115,13 +130,17 @@ function nameDigest(name) {
  * the caller turns it into a 503, while the takeover warning — the one line
  * that would name the lock — is never reached. mtime cannot drift from the
  * reader this way, because both come from the same machine reading the same
- * filesystem, and it is preserved by the `rename` in `_evictExpired`.
+ * filesystem.
  *
  * The min is the safe direction of the two: it can only ever judge a lease
  * older than the holder claimed, never younger, so a lock cannot be wedged —
  * only taken over sooner than a skewed clock would have liked.
  *
- * @param {{data: Object|null, mtimeMs: number}} marker - Result of `readJsonMarker`
+ * Both values must come from one read of one file (`readLease`): the mtime of
+ * the lease that was there a moment ago, paired with the content of the lease
+ * that replaced it, made a live lease look as old as a dead one.
+ *
+ * @param {{data: Object|null, mtimeMs: number}} marker - Result of `readLease`
  * @param {number} fallbackTtlMs - TTL to apply when the lease says nothing usable
  * @returns {boolean} True when the lease is older than its TTL
  */
@@ -129,7 +148,9 @@ function isExpiredLease(marker, fallbackTtlMs) {
   const ttlMs =
     Number.isFinite(marker.data?.ttlMs) && marker.data.ttlMs > 0
       ? marker.data.ttlMs
-      : fallbackTtlMs;
+      : marker.data
+        ? fallbackTtlMs
+        : Math.max(fallbackTtlMs, DEFAULT_TTL_MS);
   const recordedAt = Date.parse(marker.data?.at ?? '');
   const startedAt = Number.isNaN(recordedAt)
     ? marker.mtimeMs
@@ -143,15 +164,58 @@ function isExpiredLease(marker, fallbackTtlMs) {
  *
  * The owner token is a uuid minted per acquisition, which pins the instance
  * exactly. A lease too damaged to parse has no token, so it falls back to the
- * modification time `isExpiredLease` already judged it by — `rename` preserves
- * mtime, so the value still matches after the lease has been moved aside.
+ * file itself: inode, mtime and size together.
  *
- * @param {{data: Object|null, mtimeMs: number}|null} marker - Result of `readJsonMarker`
+ * @param {{data: Object|null, mtimeMs: number, ino: number, size: number}} marker - Result of `readLease`
  * @returns {string} Comparable identity of that lease
  */
 function leaseIdentity(marker) {
   const owner = marker?.data?.owner;
-  return typeof owner === 'string' ? `owner:${owner}` : `mtime:${marker?.mtimeMs}`;
+  return typeof owner === 'string'
+    ? `owner:${owner}`
+    : `file:${marker?.ino}:${marker?.mtimeMs}:${marker?.size}`;
+}
+
+/**
+ * Read a lease file: its content and its metadata through one open handle, so
+ * both describe the same file even when the path is replaced meanwhile.
+ *
+ * @param {string} lockPath - Absolute lease file path
+ * @returns {Promise<{data: Object|null, mtimeMs: number, ino: number, size: number}|null>}
+ *   Null when there is no lease; `data` null when it does not parse
+ */
+async function readLease(lockPath) {
+  let handle;
+  try {
+    handle = await fs.open(lockPath, 'r');
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+  try {
+    const stat = await handle.stat();
+    const text = await handle.readFile('utf8');
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+    return { data, mtimeMs: stat.mtimeMs, ino: stat.ino, size: stat.size };
+  } finally {
+    await handle.close().catch(() => {});
+  }
+}
+
+/** Lease content for an owner, stamped now. */
+function leasePayload(owner, ttlMs, token) {
+  return JSON.stringify({
+    owner,
+    pid: process.pid,
+    at: new Date().toISOString(),
+    ttlMs,
+    ...(token === undefined ? {} : { token })
+  });
 }
 
 /** Reject a non-positive or non-numeric duration instead of looping forever on it. */
@@ -259,7 +323,13 @@ export class FilesystemLockManager extends LockManager {
       token = await this._issueToken(name);
       // The lease names its token, so `isTokenCurrent` can tell this lease
       // from one a later holder created after taking the name over.
-      await this._touch(lockPath, owner, ttl, name, token);
+      if (!(await this._touch(lockPath, owner, ttl, name, token))) {
+        // Lost before the section started (a TTL shorter than issuing the
+        // token takes): running `fn` now would run it without the lock.
+        throw new LockTimeoutError(
+          `Storage lock "${String(name).slice(0, 64)}" was taken over before its section started`
+        );
+      }
     } catch (error) {
       this._held.delete(lockPath);
       await this._release(lockPath, owner, name);
@@ -345,9 +415,9 @@ export class FilesystemLockManager extends LockManager {
    * `ENOENT` instead, and we simply stop renewing.
    *
    * The payload is written before the truncate so the file is never briefly
-   * empty. A reader that catches a torn refresh mid-write judges the lease
-   * unparseable, which `_evictExpired` handles by putting it back — the right
-   * answer here, since a lease being refreshed has a holder that is alive.
+   * empty. A reader that catches a torn refresh mid-write finds an unparseable
+   * lease written just now, which `isExpiredLease` counts as held — the right
+   * answer, since a lease being refreshed has a holder that is alive.
    *
    * @param {string} lockPath - Absolute lease file path
    * @param {string} owner - This holder's token
@@ -392,13 +462,7 @@ export class FilesystemLockManager extends LockManager {
         });
         return false;
       }
-      const payload = JSON.stringify({
-        owner,
-        pid: process.pid,
-        at: new Date().toISOString(),
-        ttlMs,
-        ...(token === undefined ? {} : { token })
-      });
+      const payload = leasePayload(owner, ttlMs, token);
       await handle.write(payload, 0, 'utf8');
       await handle.truncate(Buffer.byteLength(payload, 'utf8'));
       return true;
@@ -433,7 +497,7 @@ export class FilesystemLockManager extends LockManager {
     const issued = await this._readToken(name);
     if (issued !== token) return false;
     const lockPath = containedPath(this._baseDir, LOCKS_DIR, leaseFileName(name));
-    const lease = await readJsonMarker(lockPath);
+    const lease = await readLease(lockPath);
     if (lease?.data?.token !== token) return false;
     return !isExpiredLease(lease, DEFAULT_TTL_MS);
   }
@@ -543,12 +607,10 @@ export class FilesystemLockManager extends LockManager {
    */
   async _acquire(lockPath, owner, ttlMs, waitMs, name) {
     const deadline = Date.now() + waitMs;
-    const payload = JSON.stringify({
-      owner,
-      pid: process.pid,
-      at: new Date().toISOString(),
-      ttlMs
-    });
+    // Stamped per attempt, not once up front: a lease that recorded when its
+    // waiter *started* waiting looked abandoned the moment it appeared
+    // whenever the wait had outlasted the TTL.
+    const publish = () => this._publish(lockPath, leasePayload(owner, ttlMs));
     // Guarantees at least one attempt even with a zero-length budget, and
     // guarantees termination: every path that retries without sleeping either
     // found the lease gone or removed an expired one, and both are re-checked
@@ -561,26 +623,33 @@ export class FilesystemLockManager extends LockManager {
     for (;;) {
       if (attempted && Date.now() >= deadline) throw timedOut();
       attempted = true;
-      if (await tryCreateExclusive(lockPath, payload)) return;
+      if (await publish()) return;
 
-      const existing = await readJsonMarker(lockPath);
+      const existing = await readLease(lockPath);
       if (!existing) continue; // released between the two calls — retry at once
       if (isExpiredLease(existing, ttlMs)) {
-        logger.warn('Taking over an expired storage lease', {
-          component: COMPONENT,
-          pid: existing.data?.pid,
-          name: String(name).slice(0, 64)
-        });
-        await this._evictExpired(lockPath, owner, existing, name);
-        // Try immediately rather than looping back to the deadline guard.
-        // Eviction is a rename, a read and an unlink, so with a short `waitMs`
-        // — `ANSWER_LOCK_OPTIONS` uses 50ms — the budget can be gone by the
-        // time the path is free, and the very caller that cleared the dead
-        // lease is the one that gives up on it. That surfaces as a spurious
-        // 409 ANSWER_IN_PROGRESS against a run that has been finished for
-        // however long the TTL is.
-        if (await tryCreateExclusive(lockPath, payload)) return;
-        continue;
+        const outcome = await this._removeLease(lockPath, existing, current =>
+          isExpiredLease(current, ttlMs)
+        );
+        if (outcome === 'removed') {
+          logger.warn('Took over an expired storage lease', {
+            component: COMPONENT,
+            pid: existing.data?.pid,
+            name: String(name).slice(0, 64)
+          });
+        }
+        if (outcome === 'removed' || outcome === 'gone') {
+          // Try immediately rather than looping back to the deadline guard.
+          // With a short `waitMs` — `ANSWER_LOCK_OPTIONS` uses 50ms — the
+          // budget can be gone by the time the path is free, and the very
+          // caller that cleared the dead lease is the one that gives up on it.
+          // That surfaces as a spurious 409 ANSWER_IN_PROGRESS against a run
+          // that has been finished for however long the TTL is.
+          if (await publish()) return;
+          continue;
+        }
+        // 'changed' (another lease is there now, or this one was refreshed)
+        // or 'busy' (another worker is removing it): wait as for any lease.
       }
       if (Date.now() >= deadline) throw timedOut();
       await sleep(this._pollMs);
@@ -588,79 +657,138 @@ export class FilesystemLockManager extends LockManager {
   }
 
   /**
-   * Move an abandoned lease out of the way so the next `tryCreateExclusive`
-   * can decide the new owner.
+   * Put a lease on the path unless one is there: atomically, and whole.
    *
-   * `unlink` cannot do this job: it removes whatever sits at the path at unlink
-   * time, while the decision to remove was taken from a marker read a round-trip
-   * earlier. Two waiters that saw the same abandoned lease would therefore both
-   * unlink, and the second unlink would delete the *fresh* lease the first one
-   * had meanwhile created — both would then create a lease of their own and
-   * both would run their critical section, which is precisely what this class
-   * exists to prevent.
-   *
-   * `rename` supplies the missing atomicity twice over. It elects exactly one
-   * evictor — every other waiter gets `ENOENT` and simply retries against
-   * whatever is at the path now — and it hands that evictor the bytes it moved,
-   * so it can check that it moved the lease it meant to move. When it did not
-   * (a takeover completed between the read and the rename) the lease goes
-   * straight back through `link`, which refuses an existing target and so can
-   * never clobber a lease acquired in the meantime.
-   *
-   * What remains: the path is unoccupied between the rename and the restore, so
-   * a third waiter creating a lease in that window makes the restore fail with
-   * `EEXIST` and the lease that was moved aside is lost. A POSIX filesystem has
-   * no atomic compare-and-delete, so no eviction scheme closes this entirely —
-   * which is why the capability is `advisory-single-machine` and step 3 of the
-   * epic elects singletons through a real distributed lock instead. A crash
-   * inside the same window also leaves an `.evicted-*` file behind; it is inert
-   * (only the exact lease path is ever acquired) and the next takeover writes a
-   * fresh one under its own name.
+   * The content goes to a scratch file first, which is then hard-linked onto
+   * the lease path. `link` refuses an existing target with `EEXIST`, so it is
+   * the same election `O_EXCL` is, but the lease appears with its content
+   * already in it. Created with `O_EXCL` and written afterwards, a lease spent
+   * a moment as an empty file, and a waiter reading it then saw no owner and
+   * no TTL. On a filesystem without hard links this falls back to `O_EXCL`;
+   * an empty lease read there was written just now and counts as held (see
+   * `isExpiredLease`).
    *
    * @param {string} lockPath - Absolute lease file path
-   * @param {string} owner - This waiter's token; keeps the scratch name unique
-   * @param {{data: Object|null, mtimeMs: number}} expected - The lease that was
-   *   judged expired
-   * @param {string} name - Lock name, for the log message
-   * @returns {Promise<void>}
+   * @param {string} content - Lease content
+   * @returns {Promise<boolean>} True when this call created the lease
    * @private
    */
-  async _evictExpired(lockPath, owner, expected, name) {
-    const evicted = `${lockPath}.evicted-${owner}`;
+  async _publish(lockPath, content) {
+    await fs.mkdir(this.lockDir, { recursive: true });
+    const scratch = `${lockPath}.new-${crypto.randomUUID()}`;
     try {
-      await fs.rename(lockPath, evicted);
+      await fs.writeFile(scratch, content, { encoding: 'utf8', flag: 'wx' });
+      await fs.link(scratch, lockPath);
+      return true;
     } catch (err) {
-      // Another waiter evicted it first; retry against the new state.
-      if (err.code === 'ENOENT') return;
+      if (err.code === 'EEXIST') return false;
+      if (NO_HARD_LINKS.has(err.code)) return tryCreateExclusive(lockPath, content);
       throw err;
-    }
-    // The scratch file goes away whatever happens below. It is inert if it
-    // survives — only the exact lease path is ever acquired — but one left
-    // behind per takeover fills the lock directory with them.
-    try {
-      const moved = await readJsonMarker(evicted);
-      if (moved && leaseIdentity(moved) !== leaseIdentity(expected)) {
-        logger.warn('Restoring a storage lease acquired during a takeover', {
-          component: COMPONENT,
-          name: String(name).slice(0, 64)
-        });
-        // The bytes as they were, not `JSON.stringify(moved.data)`: a lease
-        // that did not parse has no `data` to re-serialize, and it is exactly
-        // the lease that most needs putting back.
-        const bytes = await fs.readFile(evicted, 'utf8').catch(() => null);
-        if (bytes !== null) await tryCreateExclusive(lockPath, bytes);
-      }
     } finally {
-      await removeIfExists(evicted);
+      await removeIfExists(scratch).catch(() => {});
+    }
+  }
+
+  /**
+   * Remove the lease at the path if, and only if, it is still the lease
+   * `expected` describes and `stillWanted` still holds for it.
+   *
+   * POSIX has no compare-and-delete: `unlink` removes whatever sits at the
+   * path, while the decision to remove was taken from a read a round-trip
+   * earlier. Two earlier schemes failed on that. Unlinking let two waiters
+   * that saw the same abandoned lease both unlink, the second one deleting the
+   * fresh lease the first had created meanwhile. Renaming the lease aside,
+   * checking what was moved and linking it back when it was the wrong one left
+   * the path empty in between, and any third waiter creating its lease in
+   * that gap made two holders. (Nor is `unlink` itself an election: two
+   * concurrent unlinks of one file can both succeed on macOS.)
+   *
+   * So removal is serialized per lease instance instead. Whoever wants to
+   * remove a lease — a waiter taking it over, or its holder releasing it —
+   * first creates a claim file named after that lease's identity, with
+   * `O_EXCL`; exactly one worker wins it. The winner then re-reads the path.
+   * The lease at a path changes in only two ways: a new one is published,
+   * which `link` allows only while the path is empty, or the current one is
+   * removed, which needs its claim. So when the re-read still finds the
+   * expected lease, it stays there until the claim holder unlinks it, and
+   * that unlink removes exactly that lease and nothing else. Nothing is ever
+   * moved off the path and put back, so there is no window, whatever the
+   * number of waiters or processes on the volume. (A holder refreshing its
+   * lease rewrites it in place, which keeps its identity; the re-read
+   * re-checks `stillWanted`, so a lease refreshed meanwhile is left alone.)
+   *
+   * The one assumption is about time, the same kind the TTL makes: a claim
+   * older than `CLAIM_STALE_MS` is presumed to belong to a worker that died
+   * holding it, and the next round's claim is taken. A worker frozen for that
+   * long between its re-read and its unlink could still remove a lease
+   * published since. A worker killed while holding a claim leaves an inert
+   * claim file behind; a later lease cannot be confused with it, because
+   * owner tokens are never reused.
+   *
+   * @param {string} lockPath - Absolute lease file path
+   * @param {{data: Object|null, mtimeMs: number, ino: number, size: number}} expected
+   *   The lease the decision was taken from
+   * @param {(current: Object) => boolean} stillWanted - Re-checked on the
+   *   lease as re-read under the claim (a takeover re-checks it is expired)
+   * @returns {Promise<'removed'|'gone'|'changed'|'busy'>} `gone` when there is
+   *   no lease at the path any more, `changed` when it is another lease or no
+   *   longer wanted, `busy` when another worker holds the claim
+   * @private
+   */
+  async _removeLease(lockPath, expected, stillWanted) {
+    const identity = leaseIdentity(expected);
+    const claim = await this._claimRemoval(lockPath, identity);
+    if (!claim) return 'busy';
+    try {
+      const current = await readLease(lockPath);
+      if (!current) return 'gone';
+      if (leaseIdentity(current) !== identity || !stillWanted(current)) return 'changed';
+      return (await removeIfExists(lockPath)) ? 'removed' : 'gone';
+    } finally {
+      await removeIfExists(claim).catch(() => {});
+    }
+  }
+
+  /**
+   * Win the right to remove one lease instance, or learn that another worker
+   * has it.
+   *
+   * @param {string} lockPath - Absolute lease file path
+   * @param {string} identity - `leaseIdentity` of the lease to remove
+   * @returns {Promise<string|null>} Path of the claim file now owned by this
+   *   call, or null while another worker's claim is live
+   * @private
+   */
+  async _claimRemoval(lockPath, identity) {
+    const digest = crypto.createHash('sha256').update(identity, 'utf8').digest('hex').slice(0, 16);
+    for (let round = 1; ; round++) {
+      const claim = `${lockPath}.claim-${digest}-${round}`;
+      try {
+        const handle = await fs.open(claim, 'wx');
+        await handle.close();
+        return claim;
+      } catch (err) {
+        if (err.code !== 'EEXIST') throw err;
+      }
+      const stat = await fs.stat(claim).catch(err => {
+        if (err.code === 'ENOENT') return null;
+        throw err;
+      });
+      // Released just now, so the lease it was for has been dealt with; the
+      // caller reads the path again on its next pass.
+      if (!stat) return null;
+      if (Date.now() - stat.mtimeMs < CLAIM_STALE_MS) return null;
+      // Abandoned by a worker that died holding it: try the next round.
     }
   }
 
   /**
    * Remove the lease, but only while it is still ours.
    *
-   * The read and the unlink are not one atomic step, so a takeover landing
-   * exactly between them can still lose its lease — the TTL is what bounds
-   * that, and it is far narrower than unlinking unconditionally.
+   * Goes through the same removal claim as a takeover (`_removeLease`), so a
+   * release racing a takeover of the same lease cannot remove the lease the
+   * taker publishes next: whichever of the two wins the claim removes ours,
+   * and the other finds it gone.
    *
    * @param {string} lockPath - Absolute lease file path
    * @param {string} owner - This holder's token
@@ -669,7 +797,7 @@ export class FilesystemLockManager extends LockManager {
    */
   async _release(lockPath, owner, name) {
     try {
-      const existing = await readJsonMarker(lockPath);
+      const existing = await readLease(lockPath);
       if (!existing) return;
       if (existing.data?.owner !== owner) {
         logger.warn('Storage lease was taken over before release', {
@@ -678,7 +806,7 @@ export class FilesystemLockManager extends LockManager {
         });
         return;
       }
-      await removeIfExists(lockPath);
+      await this._removeLease(lockPath, existing, () => true);
     } catch (error) {
       // The section already ran; failing to clean up must not replace its
       // result with an I/O error. The TTL makes the stale lease recoverable.

@@ -18,6 +18,7 @@
  * brand-new provider instance over the same durable files.
  */
 import fs from 'node:fs/promises';
+import fsCallbacks from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -26,6 +27,7 @@ import assert from 'node:assert/strict';
 import { runProviderConformance } from '../storage/__tests__/providerConformance.js';
 import { LockTimeoutError } from '../storage/errors.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
+import { FilesystemLockManager } from '../storage/providers/filesystem/FilesystemLockManager.js';
 
 /** Directory handed out by the most recent factory call; `reuse` re-opens it. */
 let lastBaseDir = null;
@@ -83,6 +85,47 @@ runProviderConformance({
 const ABANDONED_LEASE_BYTES = 8 * 1024 * 1024;
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+/** Lease file of a lock name, as `FilesystemLockManager` lays it out. */
+function leasePath(baseDir, name) {
+  const digest = crypto.createHash('sha256').update(name, 'utf8').digest('hex').slice(0, 40);
+  return path.join(baseDir, 'locks', `${digest}.lock`);
+}
+
+/**
+ * Run `body` while recording every `rename` or `unlink` of `lockPath` made
+ * while the lease there belongs to `owner`. The lock manager calls the shared
+ * `fs.promises` object, so wrapping its methods sees each call before it
+ * happens.
+ *
+ * @returns {Promise<string[]>} One entry per such call
+ */
+async function watchLeaseDisplacement(lockPath, owner, body) {
+  const promises = fsCallbacks.promises;
+  const original = { rename: promises.rename, unlink: promises.unlink };
+  const displaced = [];
+  const ownedNow = () => {
+    try {
+      return JSON.parse(fsCallbacks.readFileSync(lockPath, 'utf8')).owner === owner;
+    } catch {
+      return false;
+    }
+  };
+  promises.rename = (from, ...rest) => {
+    if (String(from) === lockPath && ownedNow()) displaced.push(`rename ${rest[0]}`);
+    return original.rename.call(promises, from, ...rest);
+  };
+  promises.unlink = (target, ...rest) => {
+    if (String(target) === lockPath && ownedNow()) displaced.push('unlink');
+    return original.unlink.call(promises, target, ...rest);
+  };
+  try {
+    await body();
+  } finally {
+    Object.assign(promises, original);
+  }
+  return displaced;
+}
 
 describe('filesystem storage provider: create-only writes (filesystem-specific)', () => {
   it('refuses to create over a document that exists but does not parse', async () => {
@@ -538,13 +581,241 @@ describe('filesystem storage provider: lease takeover (filesystem-specific)', ()
       );
       await fs.rename(incoming, lockPath);
 
+      // Not even for a moment: a live lease moved aside and put back leaves
+      // the path empty in between, and any third waiter that creates its own
+      // lease in that gap is a second holder. So every rename or unlink of the
+      // lease path while the live lease sits there counts, not just the end
+      // state.
+      const displaced = await watchLeaseDisplacement(lockPath, 'other-worker', () =>
+        assert.rejects(waiter, LockTimeoutError, 'the waiter must not take a live lease')
+      );
+
       // The waiter's decision to evict was taken from the abandoned lease, so
       // it must not touch the live one that replaced it.
-      await assert.rejects(waiter, LockTimeoutError, 'the waiter must not take a live lease');
+      assert.deepEqual(displaced, [], 'the live lease was never moved off its path');
       assert.equal(sectionRan, false, 'the critical section never ran');
       const held = JSON.parse(await fs.readFile(lockPath, 'utf8'));
       assert.equal(held.owner, 'other-worker', "the live holder's lease survived");
     } finally {
+      await provider.shutdown();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('judges a lease by one read, not by the age of the lease it replaced', async () => {
+    // A takeover finishing while a waiter looks at the path: the waiter's
+    // look at the file's age found the abandoned lease, its read of the
+    // content found the new holder's. Stitched together that is a live
+    // owner with a dead lease's age, so the waiter evicted the live lease —
+    // and, the owner matching what it had read, did not even put it back.
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-lease-torn-read-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 1000 });
+    await provider.initialize();
+    const promises = fsCallbacks.promises;
+    const original = { stat: promises.stat, open: promises.open };
+    try {
+      const name = 'torn-read';
+      const lockPath = leasePath(baseDir, name);
+      await fs.mkdir(path.dirname(lockPath), { recursive: true });
+      await fs.writeFile(
+        lockPath,
+        JSON.stringify({ owner: 'dead-worker', pid: 1, at: new Date(0).toISOString(), ttlMs: 1 })
+      );
+      const anHourAgo = new Date(Date.now() - 3600_000);
+      await fs.utimes(lockPath, anHourAgo, anHourAgo);
+      const incoming = `${lockPath}.incoming`;
+      await fs.writeFile(
+        incoming,
+        JSON.stringify({
+          owner: 'other-worker',
+          pid: 1,
+          at: new Date().toISOString(),
+          ttlMs: 30_000
+        })
+      );
+
+      // The takeover lands right after the waiter first looks at the lease,
+      // whichever call it looks with.
+      let swapped = false;
+      const swapAfter = method =>
+        async function (target, ...rest) {
+          const result = await original[method].call(promises, target, ...rest);
+          if (!swapped && String(target) === lockPath) {
+            swapped = true;
+            await fs.rename(incoming, lockPath);
+          }
+          return result;
+        };
+      promises.stat = swapAfter('stat');
+      promises.open = swapAfter('open');
+
+      let sectionRan = false;
+      const displaced = await watchLeaseDisplacement(lockPath, 'other-worker', () =>
+        assert.rejects(
+          provider.locks.withLock(
+            name,
+            () => {
+              sectionRan = true;
+            },
+            { ttlMs: 30_000, waitMs: 150 }
+          ),
+          LockTimeoutError,
+          'the waiter must not take a live lease'
+        )
+      );
+      assert.equal(swapped, true, 'the takeover happened while the waiter was looking');
+      assert.deepEqual(displaced, [], 'the live lease was never moved off its path');
+      assert.equal(sectionRan, false, 'the critical section never ran');
+      const held = JSON.parse(await fs.readFile(lockPath, 'utf8'));
+      assert.equal(held.owner, 'other-worker', "the live holder's lease survived");
+    } finally {
+      Object.assign(promises, original);
+      await provider.shutdown();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('several workers taking over one expired lease never hold it twice', async () => {
+    // The shared suite's version of this runs one manager in one process, and
+    // fails only now and then. Several managers over one directory are what
+    // cluster workers and replicas on a shared volume are, and enough rounds
+    // make the race show: before the takeover was an election, roughly one
+    // round in ten let two waiters in at once.
+    const rounds = 40;
+    let overlaps = 0;
+    for (let round = 0; round < rounds; round++) {
+      const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-lease-contention-'));
+      // A 1ms poll keeps the waiters close behind each other, which is where
+      // the takeover race lives, and keeps the rounds quick.
+      const workers = Array.from({ length: 4 }, () => ({
+        locks: new FilesystemLockManager({ baseDir, pollMs: 1 })
+      }));
+      try {
+        const name = 'contended-takeover';
+        let entered;
+        const holderEntered = new Promise(resolve => {
+          entered = resolve;
+        });
+        let release;
+        const released = new Promise(resolve => {
+          release = resolve;
+        });
+        // A holder that outlives its own lease without refreshing it: every
+        // waiter below finds a lease that looks abandoned.
+        const holder = workers[0].locks.withLock(
+          name,
+          async () => {
+            entered();
+            await released;
+          },
+          { ttlMs: 20, waitMs: 2000, renewMs: 0 }
+        );
+        await holderEntered;
+        await delay(30);
+
+        let inside = 0;
+        let mostAtOnce = 0;
+        const waiters = Array.from({ length: 8 }, (_, i) =>
+          workers[i % workers.length].locks.withLock(
+            name,
+            async () => {
+              inside += 1;
+              mostAtOnce = Math.max(mostAtOnce, inside);
+              await delay(1);
+              inside -= 1;
+            },
+            { ttlMs: 5000, waitMs: 5000 }
+          )
+        );
+        try {
+          await Promise.all(waiters);
+        } finally {
+          release();
+          await Promise.allSettled([holder, ...waiters]);
+        }
+        if (mostAtOnce > 1) overlaps += 1;
+      } finally {
+        await fs.rm(baseDir, { recursive: true, force: true });
+      }
+    }
+    assert.equal(overlaps, 0, `two waiters held the lease at once in ${overlaps}/${rounds} rounds`);
+  });
+
+  it('counts a lease that is still being written as held', async () => {
+    // What a reader sees between a lease file being created and its content
+    // landing: an empty file, just now. A waiter that judged it by its own
+    // short TTL took it over, which removed the lease of a worker that had
+    // just won the lock.
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-lease-partial-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 1000 });
+    await provider.initialize();
+    try {
+      const name = 'partial-lease';
+      const lockPath = leasePath(baseDir, name);
+      await fs.mkdir(path.dirname(lockPath), { recursive: true });
+      for (const partial of ['', '{"owner":"new-wor']) {
+        await fs.writeFile(lockPath, partial, 'utf8');
+        let ran = false;
+        await assert.rejects(
+          provider.locks.withLock(
+            name,
+            () => {
+              ran = true;
+            },
+            { ttlMs: 10, waitMs: 150 }
+          ),
+          LockTimeoutError,
+          `a fresh ${partial ? 'partial' : 'empty'} lease is not abandoned`
+        );
+        assert.equal(ran, false);
+        assert.equal(await fs.readFile(lockPath, 'utf8'), partial, 'and it was left in place');
+      }
+    } finally {
+      await provider.shutdown();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+  });
+
+  it('a lease won after a long wait is not already expired', async () => {
+    // The lease used to carry the time its waiter *started* waiting. A waiter
+    // that waited longer than its TTL therefore created a lease that looked
+    // abandoned the moment it appeared, and stayed so until the first refresh.
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-lease-born-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 1000 });
+    await provider.initialize();
+    const name = 'born-expired';
+    const lockPath = leasePath(baseDir, name);
+    const rename = fsCallbacks.promises.rename;
+    try {
+      let release;
+      const released = new Promise(resolve => {
+        release = resolve;
+      });
+      const holder = provider.locks.withLock(name, () => released, { ttlMs: 30_000 });
+      await delay(10);
+      const waiter = provider.locks.withLock(name, () => {}, { ttlMs: 100, waitMs: 2000 });
+      await delay(150);
+
+      // The fencing counter is written right after the lease is won and
+      // before the lease is first refreshed: the lease as it was created.
+      let atCreation = null;
+      fsCallbacks.promises.rename = async (from, to, ...rest) => {
+        if (String(to).endsWith('.fence') && atCreation === null) {
+          atCreation = JSON.parse(await fs.readFile(lockPath, 'utf8'));
+        }
+        return rename.call(fsCallbacks.promises, from, to, ...rest);
+      };
+      release();
+      await holder;
+      await waiter;
+
+      assert.ok(atCreation, 'the lease was observed before its first refresh');
+      assert.ok(
+        Date.now() - Date.parse(atCreation.at) < atCreation.ttlMs,
+        `the lease records when it was won, not when its waiter started waiting (${atCreation.at})`
+      );
+    } finally {
+      fsCallbacks.promises.rename = rename;
       await provider.shutdown();
       await fs.rm(baseDir, { recursive: true, force: true });
     }

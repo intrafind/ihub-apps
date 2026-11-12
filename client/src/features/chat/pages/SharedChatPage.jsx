@@ -8,10 +8,12 @@ import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import ChatMessageList from '../components/ChatMessageList';
 import { ArtifactFetchContext } from '../contexts/ArtifactFetchContext';
+import { ArtifactProvenanceFetchContext } from '../contexts/ArtifactProvenanceFetchContext';
 import { transformStoredMessage } from '../hooks/useChatMessages';
 import {
   downloadSharedArtifactsZip,
   fetchSharedArtifact,
+  fetchSharedArtifactProvenance,
   fetchSharedChat,
   fetchSharedChatArtifacts,
   fetchSharedChatFileBlob,
@@ -270,6 +272,10 @@ export default function SharedChatPage() {
     (_chatId, artifactId) => fetchSharedArtifact(shareId, artifactId),
     [shareId]
   );
+  const fetchArtifactProvenance = useCallback(
+    (_chatId, artifactId) => fetchSharedArtifactProvenance(shareId, artifactId),
+    [shareId]
+  );
   const fetchArtifactBlob = useCallback(
     artifactId => fetchSharedArtifact(shareId, artifactId),
     [shareId]
@@ -495,17 +501,19 @@ export default function SharedChatPage() {
           <main className="flex-1 flex flex-col max-w-4xl w-full mx-auto px-2 sm:px-6 py-4">
             <ChatFilesContext.Provider value={filesContext}>
               <ArtifactFetchContext.Provider value={fetchArtifact}>
-                <div className="flex-1 flex flex-col min-h-0">
-                  <ChatMessageList
-                    messages={messages}
-                    editable={false}
-                    readOnly
-                    appId={share.appId || undefined}
-                    chatId={share.id}
-                    app={null}
-                    models={[]}
-                  />
-                </div>
+                <ArtifactProvenanceFetchContext.Provider value={fetchArtifactProvenance}>
+                  <div className="flex-1 flex flex-col min-h-0">
+                    <ChatMessageList
+                      messages={messages}
+                      editable={false}
+                      readOnly
+                      appId={share.appId || undefined}
+                      chatId={share.id}
+                      app={null}
+                      models={[]}
+                    />
+                  </div>
+                </ArtifactProvenanceFetchContext.Provider>
               </ArtifactFetchContext.Provider>
             </ChatFilesContext.Provider>
 

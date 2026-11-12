@@ -660,3 +660,7 @@ of these at the same time — two admins, a bulk import through the API, or an a
 answered success while one change silently disappeared. They now run under the same lock as the other writers of
 `users.json`, and the check for an existing username happens against the freshly read file, so two creates of the
 same name at once end with one `409` instead of two users.
+
+## Storage Locks Hold Under Contention Between Workers
+
+With several workers or replicas on one data volume, taking over an expired storage lock could rarely let two workers hold it at once (the same work done twice, or one worker's lock released by another); a takeover now elects exactly one.

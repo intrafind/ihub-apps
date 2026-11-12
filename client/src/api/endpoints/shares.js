@@ -190,6 +190,25 @@ export const fetchSharedArtifact = async (shareId, artifactId) => {
 };
 
 /**
+ * What the provider embedded in one shared image, through the share. Same shape as
+ * `fetchChatArtifactProvenance`.
+ *
+ * @param {string} shareId - Share id.
+ * @param {string} artifactId - Artifact id from a message descriptor.
+ * @returns {Promise<{outputId: string, createdAt?: string, providerMarking: Object}>}
+ */
+export const fetchSharedArtifactProvenance = async (shareId, artifactId) => {
+  if (!shareId || !artifactId) {
+    throw new Error('Missing required parameters');
+  }
+  const response = await apiClient.get(
+    `/shares/${encodeURIComponent(shareId)}/artifacts/${encodeURIComponent(artifactId)}/provenance`,
+    VIEWER_REQUEST
+  );
+  return response.data;
+};
+
+/**
  * Several of a share's artifacts as one ZIP archive, or every one its
  * snapshot named when no ids are given.
  *

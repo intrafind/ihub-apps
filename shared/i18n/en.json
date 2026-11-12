@@ -6923,6 +6923,8 @@
       "notUsed": "Not used",
       "notUsedReason": "It was in scope, but nothing from it went into this answer.",
       "details": "Details",
+      "detailsText": "Text",
+      "detailsImage": "Image {{number}}",
       "openProject": "Open project",
       "openProjectNamed": "Open project {{name}}",
       "openExecution": "Open workflow execution",
@@ -6976,8 +6978,6 @@
       "outdated_other": "{{count}} outdated documents are being refreshed; this answer used their stored text"
     },
     "provenance": {
-      "button": "AI generated: details",
-      "title": "AI generated",
       "model": "Model",
       "created": "Created",
       "marking": "Marking",
@@ -6989,9 +6989,26 @@
       "copied": "Copied",
       "outputId": "Output ID",
       "note": "iHub keeps this hash, not the text. The exact text can be looked up with it. No match does not mean a person wrote it.",
-      "imageButton": "AI-generated image: details",
-      "imageTitle": "AI-generated image",
-      "imageNote": "The provenance record keeps this hash, not the image itself. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it."
+      "imageNote": "The provenance record keeps this hash, not the image itself. The unchanged file can be checked with it. Any marks the provider embedded are kept. No match does not mean a person made it.",
+      "providerMark": {
+        "title": "Content Credentials (C2PA)",
+        "status": {
+          "found": "Found in the file",
+          "absent": "None in the file",
+          "unreadable": "Found in the file, but could not be read",
+          "unsupported": "This file type cannot be checked"
+        },
+        "signatureOk": "The signature matches the file.",
+        "signatureBad": "The signature does not match the file: it was changed or damaged.",
+        "trustNote": "iHub does not check whether the signer is trusted.",
+        "signer": "Signed by",
+        "tool": "Created with",
+        "signedAt": "Signed",
+        "source": "Source type",
+        "metadata": "Embedded metadata",
+        "sourceAi": "Created by an AI model",
+        "sourceAlgorithmic": "Created by software"
+      }
     },
     "imageTooLargeToStore": "This image was larger than this installation stores, so it was not kept.",
     "imageTooManyToStore": "This turn produced more images than this installation stores, so this one was not kept.",

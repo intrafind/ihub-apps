@@ -241,8 +241,10 @@ Today the surface is the chat's, because chats are the only producer:
 | ---------------------------------------------- | ---------------------------------------------------- |
 | `GET /api/chats/:chatId/artifacts`             | What this chat produced, newest first, as descriptors |
 | `GET /api/chats/:chatId/artifacts/:artifactId` | The bytes of one, as its own media type              |
+| `GET /api/chats/:chatId/artifacts/:artifactId/provenance` | What the provider embedded in a generated image (its Content Credentials), from its [provenance record](provenance.md#images-provider-marks-3328); `404` when none was kept |
 | `GET /api/shares/:shareId/artifacts`           | Through a [share](chat-sharing.md): the ones its snapshot named |
 | `GET /api/shares/:shareId/artifacts/:artifactId` | The bytes of one of those; `?download=1` attaches    |
+| `GET /api/shares/:shareId/artifacts/:artifactId/provenance` | The same provenance answer, through the share         |
 | `POST /api/chats/:chatId/artifacts/zip`        | Several of the chat's artifacts as one ZIP           |
 | `POST /api/shares/:shareId/artifacts/zip`      | Several of a share's artifacts as one ZIP            |
 

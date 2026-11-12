@@ -61,7 +61,7 @@ the hash of the final step's text, so a user who copied only the final answer st
 
 | Channel | Where |
 | --- | --- |
-| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer the chip that says what the answer is based on opens **About this answer**; its **Details** section shows the model (its display name and id), time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) has no **Details**; a stopped answer that had already written text does. An answer stored without `answerBasis` has no chip, and so no way to the details. A generated image keeps its own **AI generated: details** button. |
+| Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer the chip that says what the answer is based on opens **About this answer**; its **Details** section shows the model (its display name and id), time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) has no **Details**; a stopped answer that had already written text does. An answer stored without `answerBasis` has no chip, and so no way to the details. The generated pictures of the answer are in the same **Details**, one record each (named **Image 1**, **Image 2**… when there is more than one record); the picture itself carries no separate control. |
 > **Master switch.** While the [EU AI Act features are switched off](ai-act.md#switching-the-features-off) no record is made, no `provenance` member or `X-AI-*` header is sent and `_verify` answers `403 FEATURE_DISABLED`. Existing records are kept, expire on schedule and answer again after switching on.
 
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |
@@ -197,9 +197,22 @@ answer with `kind: "image"`, the model, the time and the hash of the raw bytes (
 provider marking are in the stored record, which is read after the picture was sent); the descriptor also
 carries `outputId`. The MCP image block carries `_meta.provenance`; the A2A artifact `metadata.provenance`.
 
-In the chat every generated picture has an **AI-generated image: details** button (an info icon next to
-download and share) that opens the model, time, declared marking, a shortened hash with **Copy hash** and
-the output ID, the same as under a text answer. A picture stored before this change has no button.
+In the chat the picture's record is in the same place as the text's: the chip under the answer opens
+**About this answer**, and its **Details** show the model, time, declared marking, a shortened hash with
+**Copy hash** and the output ID of each generated picture. The picture itself has only download and share.
+A picture stored before this change has no record in **Details**.
+
+**What the file itself carries.** For a stored picture, **Details** also asks the server what the provider embedded
+in the file, when it is opened: **Content Credentials (C2PA)** found or not, whether the signature matches the
+file, who signed it, with which tool and when, and the source type (for example *Created by an AI model*). This is
+the C2PA read the record already holds (`provider_marking`, read when the picture was generated), looked up by the
+SHA-256 of the stored bytes through `GET /api/chats/:chatId/artifacts/:artifactId/provenance` (and the share's
+`GET /api/shares/:shareId/artifacts/:artifactId/provenance`), so pictures generated before the chat showed it have
+it too, as long as a record was kept (`provenance.storeRecords`, `provenance.media.readC2pa`). Without a record the
+row is left out. Two limits are worded as they are: a matching signature means the file is unchanged since it was
+signed, not that the signer is trusted (iHub does not evaluate trust), and SynthID cannot be read at all, so it
+stays "declared" under **Marking**. A picture that has only just been generated gets the row once the chat is
+reopened, because it has no stored copy before that.
 
 A media record is the usual provenance object with `kind: "image"`, `content_hash.normalization:
 "none"` (the hash is over the raw bytes, not the base64 text), `content_hash.bytes` and `mime_type`, plus:
