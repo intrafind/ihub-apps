@@ -608,6 +608,57 @@ describe('web files in a project', () => {
     );
   });
 
+  it('keeps the stored text of a file whose bytes changed but whose text did not', async () => {
+    // No ETag and no Last-Modified, and other line endings on every deploy:
+    // new bytes, the same text once extracted.
+    serve('/eol.txt', 'Line one.\nLine two.\n', { 'content-type': 'text/plain' });
+    const project = await newProject('Line endings');
+    const { item } = await addUrl(project, `${base}/eol.txt`);
+    const first = await settled(project.id, item.id);
+    assert.equal(first.kind, 'web-file');
+
+    serve('/eol.txt', 'Line one.\r\nLine two.\r\n', { 'content-type': 'text/plain' });
+    const ingest = getIngestService();
+    const blobs = ingest.repository.blobs;
+    const { put, delete: remove } = blobs;
+    const onReady = ingest.onReady;
+    const writes = [];
+    blobs.put = (...args) => {
+      writes.push(['put', args[1]]);
+      return put.apply(blobs, args);
+    };
+    blobs.delete = (...args) => {
+      writes.push(['delete', args[1]]);
+      return remove.apply(blobs, args);
+    };
+    ingest.onReady = (...args) => {
+      writes.push(['ready', args[0]]);
+      return onReady(...args);
+    };
+    let same;
+    try {
+      ({ item: same } = await service.refreshItem(project.id, item.id, { user: ADA, wait: true }));
+    } finally {
+      blobs.put = put;
+      blobs.delete = remove;
+      ingest.onReady = onReady;
+    }
+    assert.deepEqual(writes, [], 'nothing is stored, deleted or evicted');
+    assert.deepEqual(same.text, first.text);
+    assert.notEqual(same.provenance.source.sha256, first.provenance.source.sha256, 'new bytes');
+    assert.ok(Date.parse(same.checkedAt) > Date.parse(first.checkedAt), 'the check is recorded');
+    assert.equal(same.status, 'ready');
+    assert.equal(same.refreshingAt, undefined);
+
+    serve('/eol.txt', 'Line one.\r\nLine three.\r\n', { 'content-type': 'text/plain' });
+    const { item: changed } = await service.refreshItem(project.id, item.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.notEqual(changed.text.blobKey, first.text.blobKey, 'a changed text is a new snapshot');
+    assert.match((await getItemText({ id: project.id }, changed, { user: ADA })).text, /three/);
+  });
+
   it('never refreshes a file set to `never`, and follows the project and item TTL', async () => {
     serve('/static.txt', 'Static.', { 'content-type': 'text/plain' });
     const project = await newProject('Never');

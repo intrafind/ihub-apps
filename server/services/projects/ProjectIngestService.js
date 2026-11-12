@@ -21,7 +21,7 @@
  *
  * @module services/projects/ProjectIngestService
  */
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from '../../utils/logger.js';
@@ -40,7 +40,7 @@ import {
   extractText,
   normalizeText
 } from './extractText.js';
-import { storeText, evictItemKeys } from './ItemTextStore.js';
+import { storeText, evictItemKeys, textSha256 as sha256OfText } from './ItemTextStore.js';
 import { applyItemInfo, infoFromText } from './itemInfo.js';
 import { scannerFor } from './scan/MalwareScanner.js';
 import { isRefreshDue, isRefreshExpired, refreshesOnSchedule } from './refreshTtl.js';
@@ -610,7 +610,8 @@ export class ProjectIngestService {
       //     index is dropped. Only the check and the source's version are
       //     recorded, as for an unchanged source.
       if (refresh) {
-        const textSha256 = createHash('sha256').update(extracted.text, 'utf8').digest('hex');
+        // The hash `storeText` records for the stored text.
+        const textSha256 = sha256OfText(extracted.text);
         const storedText = (project.items || []).find(entry => entry.id === itemId)?.text;
         if (
           storedText?.blobKey === input.previousBlobKey &&
