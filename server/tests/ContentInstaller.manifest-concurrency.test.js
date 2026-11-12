@@ -103,14 +103,8 @@ jest.unstable_mockModule('../requestThrottler.js', () => ({
 }));
 
 const { default: contentInstaller } = await import('../services/marketplace/ContentInstaller.js');
-const { MARKETPLACE_TARGET_BLOCKED } = await import('../services/marketplace/marketplaceFetch.js');
 
 const contentsPath = rel => path.join(state.rootDir, 'contents', rel);
-const readContents = async rel => JSON.parse(await fs.readFile(contentsPath(rel), 'utf8'));
-const writeContents = async (rel, data) => {
-  await fs.mkdir(path.dirname(contentsPath(rel)), { recursive: true });
-  await fs.writeFile(contentsPath(rel), JSON.stringify(data, null, 2));
-};
 
 const { default: configStore } = await import('../services/config/ConfigStore.js');
 const { removeMarketplaceInstallation } = await import('../utils/installationCleanup.js');
