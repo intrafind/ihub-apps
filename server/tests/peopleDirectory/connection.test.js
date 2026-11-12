@@ -196,8 +196,9 @@ describe('people directory connections', { skip }, () => {
 
     it('points only to tlsCa when the directory trusts its own certificates', async () => {
       // With tlsCa, `ca` replaces the default roots: installing the issuer in
-      // the operating system store would change nothing.
-      const other = generateCertificates('other.test');
+      // the operating system store would change nothing. The other root has its
+      // own name, so the chain fails as "issuer not trusted" with every openssl.
+      const other = generateCertificates('other.test', { rootName: 'Other Root CA' });
       await assert.rejects(
         openDirectoryConnection(
           ldapsDirectory({ tlsCa: ['other-root'] }),
