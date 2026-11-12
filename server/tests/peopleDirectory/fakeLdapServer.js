@@ -223,10 +223,16 @@ export async function startFakeLdapServer({
 /**
  * A root, an intermediate and a server certificate for `hostname`, made with
  * the openssl CLI in a temp directory.
+ *
+ * Two sets meant to be told apart need different `rootName`s: LibreSSL (the
+ * macOS openssl) writes no key identifiers, so a verifier picks a trusted root
+ * by name alone and reports a foreign root with the same name as a signature
+ * failure (CERT_SIGNATURE_FAILURE) instead of a missing issuer.
  * @param {string} [hostname]
+ * @param {{rootName?: string}} [options]
  * @returns {{rootPem: string, intermediatePem: string, key: string, cert: string, chain: string, dir: string}}
  */
-export function generateCertificates(hostname = 'ldap.test') {
+export function generateCertificates(hostname = 'ldap.test', { rootName = 'Test Root CA' } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'people-dir-certs-'));
   const run = args => execFileSync(OPENSSL, args, { cwd: dir, stdio: 'pipe' });
   const write = (name, text) => fs.writeFileSync(path.join(dir, name), text);
@@ -243,7 +249,7 @@ export function generateCertificates(hostname = 'ldap.test') {
     '-days',
     '2',
     '-subj',
-    '/CN=Test Root CA',
+    `/CN=${rootName}`,
     '-addext',
     'basicConstraints=critical,CA:TRUE',
     '-addext',

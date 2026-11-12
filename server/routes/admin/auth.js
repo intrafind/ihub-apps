@@ -369,25 +369,9 @@ export default function registerAdminAuthRoutes(app) {
       throw new ServiceError('BAD_REQUEST', 'Password must be at least 6 characters long');
     }
 
-    // No user database yet is the first-run case: start the structure here.
-    const usersData = (await configStore.readJson(USERS_FILE)) || {
-      users: {},
-      metadata: {
-        version: '2.0.0',
-        description: 'Local user database for iHub Apps'
-      }
-    };
-
-    // Check if username already exists (case-insensitive)
-    const existingUser = Object.values(usersData.users).find(user =>
-      equalsIgnoreCase(user.username, username)
-    );
-    if (existingUser) {
-      throw new ServiceError('CONFLICT', 'Username already exists');
-    }
-
     // Create new user
     const userId = `user_${uuidv4().replaceAll('-', '_')}`;
+    const now = new Date().toISOString();
 
     const newUser = {
       id: userId,
@@ -397,20 +381,43 @@ export default function registerAdminAuthRoutes(app) {
       internalGroups: Array.isArray(internalGroups) ? internalGroups : [],
       authMethods: Array.isArray(authMethods) ? authMethods : ['local'],
       active,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: now,
+      updatedAt: now
     };
 
-    // Only add password hash for local auth users
+    // Only add password hash for local auth users. Hashed before the lock: the
+    // hash is slow and must not hold up every other writer of users.json.
     if (isLocalAuth && password) {
       newUser.passwordHash = await hashPasswordWithUserId(password, userId);
     }
 
-    usersData.users[userId] = newUser;
-    usersData.metadata.lastUpdated = new Date().toISOString();
+    // The existence check, the insert and the write run under the file lock, so
+    // a user another request or a first login just added is not overwritten.
+    // `apply` may run again on a newer body; it keeps no effect of an earlier run.
+    await configStore.updateJson(USERS_FILE, current => {
+      // No user database yet is the first-run case: start the structure here.
+      const usersData = current || {
+        users: {},
+        metadata: {
+          version: '2.0.0',
+          description: 'Local user database for iHub Apps'
+        }
+      };
+      if (!usersData.users || typeof usersData.users !== 'object') usersData.users = {};
+      if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
 
-    // Save to file
-    await configStore.writeJson(USERS_FILE, usersData);
+      // Check if username already exists (case-insensitive)
+      const existingUser = Object.values(usersData.users).find(user =>
+        equalsIgnoreCase(user.username, username)
+      );
+      if (existingUser) {
+        throw new ServiceError('CONFLICT', 'Username already exists');
+      }
+
+      usersData.users[userId] = newUser;
+      usersData.metadata.lastUpdated = new Date().toISOString();
+      return usersData;
+    });
 
     // Refresh cache to ensure new user is available in cache
     await configCache.refreshCacheEntry('config/users.json');
@@ -512,45 +519,49 @@ export default function registerAdminAuthRoutes(app) {
     const limits = usageLimits === undefined ? null : parseUsageLimitsInput(usageLimits);
     if (limits && !limits.ok) throw new ServiceError('BAD_REQUEST', limits.error);
 
-    const usersData = await configStore.readJson(USERS_FILE);
-    if (!usersData) {
-      throw new ServiceError('NOT_FOUND', 'Users file not found');
+    if (password && password.length < 6) {
+      throw new ServiceError('BAD_REQUEST', 'Password must be at least 6 characters long');
     }
+    // Hashed before the lock (slow); the salt is the user id, so it needs no file data.
+    const newPasswordHash = password ? await hashPasswordWithUserId(password, userId) : null;
 
-    // Check if user exists
-    if (!usersData.users[userId]) {
-      throw new ServiceError('NOT_FOUND', 'User not found');
-    }
-
-    const user = usersData.users[userId];
-    const deactivated = active === false && user.active !== false;
-
-    // Update fields
-    if (email !== undefined) user.email = email;
-    if (name !== undefined) user.name = name;
-    if (internalGroups !== undefined)
-      user.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
-    if (active !== undefined) user.active = active;
-    if (limits) {
-      if (limits.value) user.usageLimits = limits.value;
-      else delete user.usageLimits;
-    }
-
-    // Update password if provided
-    if (password) {
-      if (password.length < 6) {
-        throw new ServiceError('BAD_REQUEST', 'Password must be at least 6 characters long');
+    // Read, change and write run under the file lock; see the create route.
+    let user;
+    let deactivated = false;
+    await configStore.updateJson(USERS_FILE, usersData => {
+      if (!usersData) {
+        throw new ServiceError('NOT_FOUND', 'Users file not found');
       }
-      user.passwordHash = await hashPasswordWithUserId(password, userId);
-      // A new password ends a lockout from failed sign-ins.
-      await clearFailedLogins(lockoutKey(user));
-    }
 
-    user.updatedAt = new Date().toISOString();
-    usersData.metadata.lastUpdated = new Date().toISOString();
+      // Check if user exists
+      if (!Object.hasOwn(usersData.users || {}, userId)) {
+        throw new ServiceError('NOT_FOUND', 'User not found');
+      }
 
-    // Save to file
-    await configStore.writeJson(USERS_FILE, usersData);
+      const target = usersData.users[userId];
+      deactivated = active === false && target.active !== false;
+
+      // Update fields
+      if (email !== undefined) target.email = email;
+      if (name !== undefined) target.name = name;
+      if (internalGroups !== undefined)
+        target.internalGroups = Array.isArray(internalGroups) ? internalGroups : [];
+      if (active !== undefined) target.active = active;
+      if (limits) {
+        if (limits.value) target.usageLimits = limits.value;
+        else delete target.usageLimits;
+      }
+      if (newPasswordHash) target.passwordHash = newPasswordHash;
+
+      target.updatedAt = new Date().toISOString();
+      if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
+      usersData.metadata.lastUpdated = new Date().toISOString();
+      user = target;
+      return usersData;
+    });
+
+    // A new password ends a lockout from failed sign-ins.
+    if (newPasswordHash) await clearFailedLogins(lockoutKey(user));
 
     // Refresh cache to ensure updated user data is available in cache
     await configCache.refreshCacheEntry('config/users.json');
@@ -633,32 +644,34 @@ export default function registerAdminAuthRoutes(app) {
     // Validate userId for security (prevents prototype pollution)
     assertValidId(userId, 'user');
 
-    const usersData = await configStore.readJson(USERS_FILE);
-    if (!usersData) {
-      throw new ServiceError('NOT_FOUND', 'Users file not found');
-    }
+    // Read, change and write run under the file lock; see the create route.
+    let username;
+    await configStore.updateJson(USERS_FILE, usersData => {
+      if (!usersData) {
+        throw new ServiceError('NOT_FOUND', 'Users file not found');
+      }
 
-    // Check if user exists
-    if (!usersData.users[userId]) {
-      throw new ServiceError('NOT_FOUND', 'User not found');
-    }
+      // Check if user exists
+      if (!Object.hasOwn(usersData.users || {}, userId)) {
+        throw new ServiceError('NOT_FOUND', 'User not found');
+      }
 
-    // Check if user is the last admin - prevent deletion
-    if (isLastAdmin(userId)) {
-      throw new ServiceError(
-        'FORBIDDEN',
-        'Cannot delete the last admin user. At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
-      );
-    }
+      // Check if user is the last admin - prevent deletion
+      if (isLastAdmin(userId)) {
+        throw new ServiceError(
+          'FORBIDDEN',
+          'Cannot delete the last admin user. At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
+        );
+      }
 
-    const username = usersData.users[userId].username;
+      username = usersData.users[userId].username;
 
-    // Remove user
-    delete usersData.users[userId];
-    usersData.metadata.lastUpdated = new Date().toISOString();
-
-    // Save to file
-    await configStore.writeJson(USERS_FILE, usersData);
+      // Remove user
+      delete usersData.users[userId];
+      if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
+      usersData.metadata.lastUpdated = new Date().toISOString();
+      return usersData;
+    });
 
     // Refresh cache to ensure deleted user is removed from cache
     await configCache.refreshCacheEntry('config/users.json');

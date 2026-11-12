@@ -235,7 +235,7 @@ export async function saveUsers(usersConfig, usersFilePath) {
  * @param {(usersConfig: Object) => (boolean|void)} change
  * @returns {Promise<boolean>} Whether the file was written
  */
-async function updateUsersFile(usersFilePath, change) {
+export async function updateUsersFile(usersFilePath, change) {
   const { fullPath, cacheKey, relPath } = locateUsersFile(usersFilePath);
   const apply = current => {
     const usersConfig = current && typeof current === 'object' ? current : {};
@@ -414,8 +414,26 @@ export function findLocalUserById(userId, usersFilePath) {
  * @returns {Object} Created/updated user object
  */
 export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
-  const usersConfig = loadUsers(usersFilePath);
+  // Read, change and write under the store's lock: two first logins at once, or a
+  // login next to an admin edit, must not overwrite each other. The change runs
+  // again on a newer body when another worker wrote first, so it keeps no state
+  // from an earlier run.
+  let result = null;
+  await updateUsersFile(usersFilePath, usersConfig => {
+    result = provisionExternalUser(usersConfig, externalUser);
+    return true;
+  });
+  return result;
+}
 
+/**
+ * Apply an external login to a users configuration, in place.
+ *
+ * @param {Object} usersConfig - Users configuration to change
+ * @param {Object} externalUser - External user data
+ * @returns {Object} Created/updated user object
+ */
+function provisionExternalUser(usersConfig, externalUser) {
   // Determine auth method based on provider
   const authMethod =
     externalUser.authMethod === 'ldap'
@@ -511,7 +529,6 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     user.lastActiveDate = today;
     user.updatedAt = now;
 
-    await saveUsers(usersConfig, usersFilePath);
     return { ...user, id: userId };
   } else {
     // Create new user
@@ -573,7 +590,6 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
     }
 
     usersConfig.users[userId] = newUser;
-    await saveUsers(usersConfig, usersFilePath);
     return newUser;
   }
 }
@@ -584,21 +600,20 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
  * @param {string} usersFilePath - Path to users.json file
  */
 export async function updateUserActivity(userId, usersFilePath) {
-  const usersConfig = loadUsers(usersFilePath);
-  const user = usersConfig.users[userId];
-
-  if (!user) {
-    return;
-  }
-
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-  // Only update if it's a different day
-  if (user.lastActiveDate !== today) {
+  // Only write if the user is known and it is a different day. Checked against
+  // the cached file first: this runs on requests, and most of them change nothing.
+  const cached = loadUsers(usersFilePath).users?.[userId];
+  if (!cached || cached.lastActiveDate === today) return;
+
+  await updateUsersFile(usersFilePath, usersConfig => {
+    const user = Object.hasOwn(usersConfig.users, userId) ? usersConfig.users[userId] : null;
+    if (!user || user.lastActiveDate === today) return false;
     user.lastActiveDate = today;
     user.updatedAt = new Date().toISOString();
-    await saveUsers(usersConfig, usersFilePath);
-  }
+    return true;
+  });
 }
 
 /**

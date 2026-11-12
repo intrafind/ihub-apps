@@ -583,6 +583,23 @@ describe('an unchanged page is not downloaded or converted again', () => {
   const addUrl = (project, url) =>
     getProjectService().addItem(project.id, { kind: 'url', ref: { url } }, { user: ADA });
 
+  /**
+   * Add a page and wait for its ingest job to finish, `onReady` included.
+   * Use this rather than `settled` when the test then counts `onReady`
+   * calls: the job saves the item as ready and calls `onReady` only after
+   * the save has returned (the project lock is released in between), so
+   * `settled` can see the item ready before the first ingest's `onReady`
+   * has run, and that call then lands in what the test counts.
+   */
+  async function addUrlIngested(project, url) {
+    const { item } = await getProjectService().addItem(
+      project.id,
+      { kind: 'url', ref: { url } },
+      { user: ADA, wait: true }
+    );
+    return item;
+  }
+
   it('stops at the headers when a server ignores the conditional request', async () => {
     servePage('/stubborn', html('Stubborn', 'Always answers in full.'), {
       etag: '"s1"',
@@ -662,8 +679,7 @@ describe('an unchanged page is not downloaded or converted again', () => {
       );
     servePage('/tokens', page('one'));
     const project = await newProject('Tokens');
-    const { item } = await addUrl(project, `${base}/tokens`);
-    const first = await settled(project.id, item.id);
+    const first = await addUrlIngested(project, `${base}/tokens`);
 
     servePage('/tokens', page('two'));
     const ingest = getIngestService();
@@ -675,7 +691,7 @@ describe('an unchanged page is not downloaded or converted again', () => {
     };
     let same;
     try {
-      ({ item: same } = await getProjectService().refreshItem(project.id, item.id, {
+      ({ item: same } = await getProjectService().refreshItem(project.id, first.id, {
         user: ADA,
         wait: true
       }));
@@ -733,13 +749,12 @@ describe('an unchanged page is not downloaded or converted again', () => {
   it('stores, deletes and evicts nothing when only a script nonce changed', async () => {
     servePage('/nonce', noncePage('n1'));
     const project = await newProject('Nonce');
-    const { item } = await addUrl(project, `${base}/nonce`);
-    const first = await settled(project.id, item.id);
+    const first = await addUrlIngested(project, `${base}/nonce`);
 
     const second = noncePage('n2');
     servePage('/nonce', second);
     const { result, calls } = await watching(() =>
-      getProjectService().refreshItem(project.id, item.id, { user: ADA, wait: true })
+      getProjectService().refreshItem(project.id, first.id, { user: ADA, wait: true })
     );
     const same = result.item;
     assert.deepEqual(calls.put, [], 'no new blob is stored');
@@ -764,12 +779,11 @@ describe('an unchanged page is not downloaded or converted again', () => {
   it('stores a new snapshot when the main content changed', async () => {
     servePage('/nonce-changed', noncePage('n1'));
     const project = await newProject('Nonce changed');
-    const { item } = await addUrl(project, `${base}/nonce-changed`);
-    const first = await settled(project.id, item.id);
+    const first = await addUrlIngested(project, `${base}/nonce-changed`);
 
     servePage('/nonce-changed', noncePage('n2', 'The content is new.'));
     const { result, calls } = await watching(() =>
-      getProjectService().refreshItem(project.id, item.id, { user: ADA, wait: true })
+      getProjectService().refreshItem(project.id, first.id, { user: ADA, wait: true })
     );
     const changed = result.item;
     assert.equal(calls.put.length, 1, 'the new text is stored');
@@ -783,19 +797,18 @@ describe('an unchanged page is not downloaded or converted again', () => {
   it('writes nothing for a job that lost its attempt, also when the text is unchanged', async () => {
     servePage('/nonce-fenced', noncePage('n1'));
     const project = await newProject('Nonce fenced');
-    const { item } = await addUrl(project, `${base}/nonce-fenced`);
-    const first = await settled(project.id, item.id);
+    const first = await addUrlIngested(project, `${base}/nonce-fenced`);
 
     // Reserve the item like `refreshItem` does, then let a newer run take it
     // over while this job downloads.
     await getProjectRepository().mutate(project.id, current => {
-      const entry = current.items.find(candidate => candidate.id === item.id);
+      const entry = current.items.find(candidate => candidate.id === first.id);
       entry.refreshingAt = new Date().toISOString();
       entry.ingestAttempt = 'mine';
       return current;
     });
     const stored = await getProjectRepository().get(project.id);
-    const reserved = stored.items.find(entry => entry.id === item.id);
+    const reserved = stored.items.find(entry => entry.id === first.id);
     const body = Buffer.from(noncePage('n2'));
     const { result, calls } = await watching(() =>
       getIngestService().start(
@@ -804,7 +817,7 @@ describe('an unchanged page is not downloaded or converted again', () => {
         {
           fetch: async () => {
             await getProjectRepository().mutate(project.id, current => {
-              current.items.find(entry => entry.id === item.id).ingestAttempt = 'newer';
+              current.items.find(entry => entry.id === first.id).ingestAttempt = 'newer';
               return current;
             });
             return {
@@ -826,7 +839,7 @@ describe('an unchanged page is not downloaded or converted again', () => {
     assert.deepEqual(calls.put, []);
     assert.deepEqual(calls.delete, []);
     assert.deepEqual(calls.ready, []);
-    const after = await itemOf(project.id, item.id);
+    const after = await itemOf(project.id, first.id);
     assert.equal(after.ingestAttempt, 'newer', 'the newer run keeps the item');
     assert.ok(after.refreshingAt, 'and its reservation');
     assert.equal(after.checkedAt, first.checkedAt, 'no check is recorded');
@@ -837,8 +850,7 @@ describe('an unchanged page is not downloaded or converted again', () => {
   it('does not count a scheduled refresh with the same text as activity', async () => {
     servePage('/nonce-scheduled', noncePage('n1'));
     const project = await newProject('Nonce scheduled');
-    const { item } = await addUrl(project, `${base}/nonce-scheduled`);
-    const first = await settled(project.id, item.id);
+    const first = await addUrlIngested(project, `${base}/nonce-scheduled`);
     const idleSince = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
     await getProjectRepository().mutate(
       project.id,
@@ -852,7 +864,7 @@ describe('an unchanged page is not downloaded or converted again', () => {
 
     servePage('/nonce-scheduled', noncePage('n2'));
     const { result, calls } = await watching(() =>
-      getProjectService().refreshItem(project.id, item.id, { wait: true, scheduled: true })
+      getProjectService().refreshItem(project.id, first.id, { wait: true, scheduled: true })
     );
     assert.equal(result.item.text.blobKey, first.text.blobKey);
     assert.deepEqual(calls.put, []);

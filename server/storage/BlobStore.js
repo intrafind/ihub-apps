@@ -106,7 +106,8 @@ export class BlobStore {
    * @param {string} _ns - Namespace.
    * @param {string} _key - Key within the namespace.
    * @returns {Promise<boolean>} True when a blob was removed, false when there
-   *   was nothing at that key — a delete is idempotent, never an error.
+   *   was nothing at that key — a delete is idempotent, never an error. Of
+   *   deletes racing each other, only one reports true.
    * @abstract
    */
   async delete(_ns, _key) {

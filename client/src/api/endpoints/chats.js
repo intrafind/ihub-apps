@@ -98,6 +98,25 @@ export const fetchChatArtifact = async (chatId, artifactId) => {
 };
 
 /**
+ * What the provider embedded in a stored generated image (EU AI Act Art. 50(2)):
+ * the result of reading its Content Credentials (C2PA) when it was generated.
+ * Rejects with a 404 when no record was kept, which callers treat as "nothing to show".
+ *
+ * @param {string} chatId - Chat the artifact belongs to.
+ * @param {string} artifactId - Artifact id from a message descriptor.
+ * @returns {Promise<{outputId: string, createdAt?: string, providerMarking: Object}>}
+ */
+export const fetchChatArtifactProvenance = async (chatId, artifactId) => {
+  if (!chatId || !artifactId) {
+    throw new Error('Missing required parameters');
+  }
+  const response = await apiClient.get(
+    `/chats/${encodeURIComponent(chatId)}/artifacts/${encodeURIComponent(artifactId)}/provenance`
+  );
+  return response.data;
+};
+
+/**
  * Descriptors of everything a chat produced, newest first — the index the
  * Artifacts panel lists. Never payloads.
  *

@@ -78,6 +78,14 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
     writeJson: (_relPath, data) => {
       state.disk = clone(data);
       return Promise.resolve();
+    },
+    // The locked read-modify-write the sign-in path uses (#3638).
+    updateJson: async (_relPath, mutate) => {
+      const current = clone(state.disk);
+      const next = await mutate(current);
+      if (next === undefined) return { data: current, written: false };
+      state.disk = clone(next);
+      return { data: clone(next), written: true };
     }
   }
 }));

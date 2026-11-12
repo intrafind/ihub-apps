@@ -1752,7 +1752,7 @@ AI Act.
   is on stored chat messages and `run/ended`, on `/api/inference/v1` completions (plus the headers
   `X-AI-Generated` and `X-AI-Content-Id`, also on a stream), on MCP results as `_meta.provenance` and on A2A
   results as `metadata.provenance`.
-- **In the chat.** Under every finished answer, the chip that says what the answer is based on opens **About this answer**. Its **Details** show the model (name and id), time, marking and content hash, with a **Copy hash** action. Every generated picture has an **AI generated: details** button next to download and share.
+- **In the chat.** Under every finished answer, the chip that says what the answer is based on opens **About this answer**. Its **Details** show the model (name and id), time, marking and content hash, with a **Copy hash** action. The same **Details** hold the record of each picture the answer generated; the picture has no separate info button. For a stored picture they also show what the provider embedded in the file: its Content Credentials (C2PA), the signer and tool, and whether the signature matches the file. Pictures generated earlier show it too, when a record was kept.
 - **The record never holds the text**, only its hash, and names no user unless `provenance.recordUser` says so. `provenance.retentionDays` in `platform.json` (365 by
   default, `0` keeps them) is enforced by a daily sweep; `provenance.storeRecords: false` keeps no records.
 - **Look it up.** `POST /api/eu-ai-act/provenance/_verify` takes a text or a hash and answers "Found" with the record or
