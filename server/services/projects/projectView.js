@@ -198,6 +198,7 @@ export function serializeProject(
     knowledgeMode: project.knowledgeMode || null,
     // The project's own refresh TTL (#3536); null takes the platform's.
     refreshTtl: project.refreshTtl ?? null,
+    refreshMode: project.refreshMode ?? null,
     owner: project.owner
       ? {
           name: project.owner.name || '',

@@ -244,6 +244,20 @@ describe('the popover "About this answer"', () => {
     expect(within(details).getByText('01JC0000000000000000000000')).toBeInTheDocument();
   });
 
+  it('says when a project answered from outdated documents that are being refreshed', () => {
+    renderBasis({
+      answerBasis: [{ kind: 'project' }],
+      knowledgeScope: { projects: [{ ...PROJECT, outdated: 3 }] }
+    });
+    open();
+    expect(
+      screen.getByText(
+        '3 outdated documents are being refreshed; this answer used their stored text',
+        { exact: false }
+      )
+    ).toBeInTheDocument();
+  });
+
   it('model knowledge: the sentence says so and there is no sources section', () => {
     renderBasis({ answerBasis: [{ kind: 'model' }], provenance: PROVENANCE });
     open();

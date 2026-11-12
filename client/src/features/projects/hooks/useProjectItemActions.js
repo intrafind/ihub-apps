@@ -77,19 +77,23 @@ export function useProjectItemActions({ projectId, setProject, reload }) {
     [projectId, run, setProject, reload]
   );
 
-  // The refresh TTL of a file from a website or a web page (#3536); null
-  // goes back to the project's.
+  // The refresh TTL (#3536) and mode (#3622) of a file from a website or a
+  // web page: `{refreshTtl?, refreshMode?}`; null goes back to the project's.
   // Throws like `editText`: the dialog shows the failure next to its form.
   const setRefreshTtl = useCallback(
-    async (item, refreshTtl) => {
+    async (item, changes) => {
       setBusyItemId(item.id);
       try {
-        const updated = await updateProjectItem(projectId, item.id, { refreshTtl });
+        const updated = await updateProjectItem(projectId, item.id, changes);
         // An item back on the project's setting comes without the key: the
         // merge in replaceItem must not keep the old value.
         if (updated) {
           setProject(prev =>
-            replaceItem(prev, { ...updated, refreshTtl: updated.refreshTtl ?? undefined })
+            replaceItem(prev, {
+              ...updated,
+              refreshTtl: updated.refreshTtl ?? undefined,
+              refreshMode: updated.refreshMode ?? undefined
+            })
           );
         }
         return true;

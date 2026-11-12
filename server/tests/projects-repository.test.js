@@ -413,16 +413,17 @@ describe('service rules', () => {
 
   it('adds link items as ready, refuses unknown kinds and bad refs', async () => {
     const project = await service.createUserProject({ owner: ADA, content: { name: 'Items' } });
+    // An iHub page is a link; a web page is a stored snapshot since #3622.
     const { item } = await service.addItem(
       project.id,
-      { kind: 'url', ref: { url: 'https://example.com/doc' } },
+      { kind: 'page', ref: { pageId: 'doc' } },
       { user: ADA }
     );
     assert.equal(item.status, 'ready');
     assert.equal(item.storage, 'link');
     assert.equal(item.provenance.origin, 'linked');
     assert.equal(item.provenance.by.id, ADA.id);
-    assert.equal(item.name, 'https://example.com/doc');
+    assert.equal(item.name, 'doc');
     assert.equal(item.cache.ttlSeconds, 7200);
     assert.equal((await repo.get(project.id)).usage.items, 1);
 
@@ -522,17 +523,9 @@ describe('service rules', () => {
   it('caps items per project', async () => {
     platform = { projects: { limits: { maxFiles: 1 } } };
     const project = await service.createUserProject({ owner: ADA, content: { name: 'Full' } });
-    await service.addItem(
-      project.id,
-      { kind: 'url', ref: { url: 'https://a.example' } },
-      { user: ADA }
-    );
+    await service.addItem(project.id, { kind: 'page', ref: { pageId: 'a' } }, { user: ADA });
     await assert.rejects(
-      service.addItem(
-        project.id,
-        { kind: 'url', ref: { url: 'https://b.example' } },
-        { user: ADA }
-      ),
+      service.addItem(project.id, { kind: 'page', ref: { pageId: 'b' } }, { user: ADA }),
       error => error.code === 'QUOTA_FILES'
     );
     platform = {};

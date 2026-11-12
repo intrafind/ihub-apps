@@ -106,10 +106,11 @@ async function content({ ref, user, format = 'original', followed = false }) {
 
 /**
  * The original of a link item, by its kind: an iFinder document through the
- * iFinder provider (the reader's credentials, the same formats). A web page
- * or an iHub page has no file to hand over: the preview and the download
- * fall back to the extracted text (410, like a discarded upload), and the
- * card's URL opens the page where it lives.
+ * iFinder provider (the reader's credentials, the same formats). An iHub
+ * page has no file to hand over: the preview and the download fall back to
+ * the extracted text (410, like a discarded upload), and the card's URL opens
+ * the page where it lives. (A web page is a stored snapshot, #3622: its
+ * original is discarded like an upload's.)
  */
 async function linkContent(project, item, { user, format, followed = false }) {
   // A document linked from another project: its original, for this reader.

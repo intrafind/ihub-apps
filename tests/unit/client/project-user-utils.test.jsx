@@ -214,6 +214,20 @@ describe('project items — pages picked from a site crawl', () => {
     ]);
   });
 
+  test('a page names the crawl that read it, so the server does not fetch it again', () => {
+    expect(
+      buildUrlItemRequests([{ url: 'https://x.com/a', title: 'A', crawlId: 'mhw3k2l0a1b2c3d4' }])
+    ).toEqual([
+      {
+        kind: 'url',
+        ref: { url: 'https://x.com/a' },
+        name: 'A',
+        pinned: false,
+        crawlId: 'mhw3k2l0a1b2c3d4'
+      }
+    ]);
+  });
+
   test('the item quota counts the pages to add', () => {
     const config = { limits: { maxFiles: 10 } };
     expect(validateItemCount(3, config, { items: 7 })).toBeNull();

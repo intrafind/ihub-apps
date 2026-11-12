@@ -122,3 +122,24 @@ test('a superseded reload that fails reports nothing', async () => {
   expect(result.current.error).toBeNull();
   expect(result.current.project.items).toEqual([READY('itm_9')]);
 });
+
+test('does not poll for an outdated item: opening the project does not refresh it', async () => {
+  jest.useFakeTimers();
+  try {
+    const outdated = {
+      id: 'itm_old',
+      status: 'ready',
+      refresh: { expired: true, background: false, ttl: 604800 }
+    };
+    const load = jest.fn(async () => ({ id: 'prj_idle', items: [{ ...outdated }] }));
+    renderHook(() => usePolledProject('prj_idle', { load, errorMessage: e => e.message }));
+    for (let tick = 0; tick < 10; tick += 1) {
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2000);
+      });
+    }
+    expect(load).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});

@@ -27,6 +27,7 @@
  *
  * @module services/projects/kinds/webFileKind
  */
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import { isHttpUrl } from '../../../validators/common.js';
 import configCache from '../../../configCache.js';
@@ -87,6 +88,9 @@ export const webFileKind = registerItemKind({
       ...(result.finalUrl && result.finalUrl !== item.ref.url ? { finalUrl: result.finalUrl } : {})
     };
     if (result.notModified) return { notModified: true, etag: result.etag, source: version };
+    // The file itself, for a source that names no version: the same bytes are
+    // not extracted again (#3622).
+    version.sha256 = crypto.createHash('sha256').update(result.bytes).digest('hex');
     return {
       bytes: result.bytes,
       contentType: result.contentType || item.ref.contentType,

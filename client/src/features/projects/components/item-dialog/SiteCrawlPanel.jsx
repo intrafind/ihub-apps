@@ -39,8 +39,9 @@ function scopeLabel(scope) {
  *   => Promise<{ok: boolean, pages?: Array<Object>, truncated?: boolean,
  *   robotsExcluded?: number, scope?: Object, error?: string}>} props.crawlUrl
  * @param {(error: Error) => string} props.errorMessage
- * @param {Array<{url: string, title?: string}>} props.selected
- * @param {(selected: Array<{url: string, title?: string}>) => void} props.onSelectedChange
+ * @param {Array<{url: string, title?: string, crawlId?: string}>} props.selected - The
+ *   picked pages, each with the crawl that read it
+ * @param {(selected: Array<{url: string, title?: string, crawlId?: string}>) => void} props.onSelectedChange
  * @param {(url: string, title?: string) => void} [props.onPreview]
  * @param {Set<string>} [props.existingUrls] - `comparableUrl` forms of the
  *   URLs the project has already.
@@ -111,11 +112,18 @@ function SiteCrawlPanel({
   const room = Math.max(0, remaining - selected.length);
   const full = room === 0;
 
+  // A picked page names the crawl that read it: the server stores that read
+  // instead of fetching the page again.
+  const pickOf = page => ({
+    url: page.url,
+    title: page.title,
+    ...(crawl?.crawlId ? { crawlId: crawl.crawlId } : {})
+  });
   const toggle = page => {
     onSelectedChange(
       selectedUrls.has(page.url)
         ? selected.filter(entry => entry.url !== page.url)
-        : [...selected, { url: page.url, title: page.title }]
+        : [...selected, pickOf(page)]
     );
   };
   // Ticks the shown pages in list order, as many as the project takes.
@@ -123,7 +131,7 @@ function SiteCrawlPanel({
     const added = selectable
       .filter(page => !selectedUrls.has(page.url))
       .slice(0, room)
-      .map(page => ({ url: page.url, title: page.title }));
+      .map(pickOf);
     onSelectedChange([...selected, ...added]);
   };
   const clearVisible = () => {

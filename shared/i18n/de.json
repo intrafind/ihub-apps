@@ -770,7 +770,9 @@
         "email": "E-Mail-Inhalt",
         "file": "Hochgeladene Datei",
         "audio": "Audioaufnahme"
-      }
+      },
+      "outdated_one": "{{count}} veraltetes Dokument wird aktualisiert; diese Antwort hat seinen gespeicherten Text verwendet",
+      "outdated_other": "{{count}} veraltete Dokumente werden aktualisiert; diese Antwort hat ihren gespeicherten Text verwendet"
     },
     "provenance": {
       "button": "KI-generiert: Details",
@@ -5995,7 +5997,15 @@
       },
       "refreshTtl": {
         "label": "Dateien und Webseiten aktualisieren nach",
-        "help": "Von Websites verlinkte Dateien werden nach dieser Zeit erneut heruntergeladen (eine unveränderte Datei behält ihren Text); Webseiten werden neu gelesen. Projekte und Elemente können eine eigene Zeit festlegen."
+        "help": "Dateien und Webseiten von Websites werden nach dieser Zeit erneut abgerufen; eine unveränderte behält ihren Text. Projekte und Elemente können eine eigene Zeit festlegen."
+      },
+      "refreshMode": {
+        "label": "Veraltete Dateien und Webseiten aktualisieren",
+        "help": "Immer: wird im Hintergrund aktualisiert, ob genutzt oder nicht. Automatisch: wird im Hintergrund aktualisiert, solange ein Projekt genutzt wird. Wenn das Projekt genutzt wird: veraltete werden nicht im Hintergrund aktualisiert; die Nutzung des Projekts (ein Chat, eine Suche, eine App oder ein Workflow, die es lesen, das Anhängen an einen Chat; nicht das Öffnen) aktualisiert, was veraltet ist, und Antworten verwenden bis dahin den gespeicherten Text. Projekte und Elemente können eine eigene Einstellung festlegen."
+      },
+      "refreshIdleDays": {
+        "label": "Nur bei Nutzung aktualisieren nach (Tage ohne Nutzung)",
+        "help": "Für „Automatisch, solange das Projekt genutzt wird“: Ein Projekt, das so viele Tage niemand genutzt hat, wird nicht mehr im Hintergrund aktualisiert, sondern erst, wenn es wieder genutzt wird. 0 aktualisiert immer im Hintergrund."
       }
     },
     "updates": {
@@ -9879,13 +9889,12 @@
       "hours_other": "{{count}} Stunden",
       "minutes_one": "{{count}} Minute",
       "minutes_other": "{{count}} Minuten",
-      "cachedFor": "Live gelesen, {{ttl}} zwischengespeichert",
       "manualOnly": "Nur von Hand aktualisiert",
       "nextAt": "Nächste Aktualisierung {{date}}",
       "every": "Alle {{ttl}} aktualisiert",
       "itemTitle": "Aktualisierung",
       "projectTitle": "Aktualisierung von Dateien und Webseiten",
-      "itemLiveHint": "Diese Webseite wird live gelesen. Das Gelesene wird so lange behalten, bevor die Seite erneut gelesen wird.",
+      "itemPageHint": "Diese Webseite ist als Momentaufnahme gespeichert. Sie wird erneut gelesen, wenn diese Zeit vergangen ist; eine unveränderte Seite behält ihren Text.",
       "itemFileHint": "Diese Datei wurde von einer Website heruntergeladen. Nach dieser Zeit wird sie erneut heruntergeladen; eine unveränderte Datei behält ihren Text.",
       "projectHint": "Wie lange von Websites heruntergeladene Dateien und Webseiten in diesem Projekt als aktuell gelten. Jedes Element kann eine eigene Zeit haben.",
       "label": "Aktualisieren nach",
@@ -9901,7 +9910,20 @@
       "projectValue": "Dateien und Webseiten: {{ttl}}",
       "projectDefault": "Dateien und Webseiten: {{ttl}} (Standard)",
       "projectDefaultUnknown": "Standard dieser Installation",
-      "cachedManual": "Live gelesen, bis zur Aktualisierung von Hand zwischengespeichert"
+      "modeLabel": "Aktualisieren",
+      "modeAlways": "Immer, im Hintergrund",
+      "modeAuto": "Automatisch, solange das Projekt genutzt wird",
+      "modeOnDemand": "Wenn das Projekt genutzt wird",
+      "modeHint": "Immer: wird im Hintergrund aktualisiert, ob genutzt oder nicht. Automatisch: wird im Hintergrund aktualisiert, solange das Projekt genutzt wird; ein Projekt, das eine Weile niemand genutzt hat, wird aktualisiert, wenn es wieder genutzt wird. Wenn das Projekt genutzt wird: wird dann aktualisiert, durch einen Chat oder eine Suche; Antworten verwenden bis dahin den gespeicherten Text.",
+      "modeNeverHint": "Auf „Nie“ gesetzt: wird nur von Hand aktualisiert.",
+      "onUse": "Wird aktualisiert, wenn das Projekt genutzt wird",
+      "onUseAfter": "Wird bei Nutzung nach {{date}} aktualisiert",
+      "onUseNow": "Bei der nächsten Nutzung des Projekts",
+      "outdatedSince": "Veraltet seit {{date}}, wird bei Nutzung aktualisiert",
+      "refreshingNotice_one": "{{count}} veraltetes Dokument wird aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
+      "refreshingNotice_other": "{{count}} veraltete Dokumente werden aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
+      "outdatedNotice_one": "{{count}} Dokument ist veraltet. Es wird aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text.",
+      "outdatedNotice_other": "{{count}} Dokumente sind veraltet. Sie werden aktualisiert, sobald das Projekt das nächste Mal in einem Chat oder einer Suche genutzt wird; Antworten verwenden bis dahin den gespeicherten Text."
     }
   },
   "integrationScopes": {

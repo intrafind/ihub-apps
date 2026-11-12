@@ -128,6 +128,34 @@ export const NORMALIZERS = {
     if (!merged || typeof merged !== 'object') return shape;
     return { ...shape, projects: { '<id>': { ...merged, tokens: 'null|number' } } };
   },
+  // The resource sampler fills its fields on its first tick, five seconds after start: a
+  // request before it sees null, one after it a value. How soon the check reaches this
+  // route depends on what the server does meanwhile (the first fetch of the shipped
+  // project's web pages, #3622), so the description holds either way.
+  '/api/admin/system/resources': shape => {
+    const sampled = (value, type) =>
+      ['null', type, `null|${type}`].includes(value) ? `null|${type}` : value;
+    const cpu = shape?.host?.cpu;
+    const host =
+      cpu && typeof cpu === 'object'
+        ? {
+            ...shape.host,
+            cpu: { ...cpu, utilizationPercent: sampled(cpu.utilizationPercent, 'number') }
+          }
+        : shape?.host;
+    const processes = Array.isArray(shape?.processes)
+      ? shape.processes.map(entry =>
+          entry && typeof entry === 'object'
+            ? {
+                ...entry,
+                eventLoopDelayMs: sampled(entry.eventLoopDelayMs, 'object'),
+                sampledAt: sampled(entry.sampledAt, 'string')
+              }
+            : entry
+        )
+      : shape?.processes;
+    return { ...shape, host, processes };
+  },
   // `import` is the transient state of an item that is still being ingested, and
   // `text` is null until the ingest job has stored the item's text, an object after.
   '/api/admin/projects/:id': shape => {

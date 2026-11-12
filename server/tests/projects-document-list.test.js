@@ -423,7 +423,8 @@ describe('iHub pages and iFinder documents', () => {
       if (calls === 1) throw new Error('storage down');
     });
     try {
-      const doc = { id: 'itm_f', kind: 'url', ref: { url: 'https://example.com/' } };
+      // A web page's title comes from its extraction (#3622): an iFinder document's from its read.
+      const doc = { id: 'itm_f', kind: 'ifinder-document', ref: { documentId: 'example' } };
       offerItemInfo({ id: 'prj_f' }, doc, { title: 'Example' });
       await new Promise(resolve => setImmediate(resolve));
       offerItemInfo({ id: 'prj_f' }, doc, { title: 'Example' });

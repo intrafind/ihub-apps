@@ -39,6 +39,7 @@ import { useProjectItemDocumentActions } from './ProjectItemDocumentActions';
 import ProjectItemTextDialog from './ProjectItemTextDialog';
 import ProjectUsageBar from './ProjectUsageBar';
 import RefreshTtlDialog from './RefreshTtlDialog';
+import { isAwaitingRefresh } from '../utils/projectItems';
 
 /**
  * What the shared "Add item" dialog calls for a user project.
@@ -112,6 +113,44 @@ const ITEMS_SCROLL_FROM = 6;
 
 /** Text loader of the preview dialog. */
 const fetchItemText = (...args) => fetchProjectItemText(...args);
+
+/**
+ * What is being refreshed in the project, and what is outdated (#3622): web
+ * pages and files from websites refreshed when the project is used are read
+ * again the next time a chat or a search uses it (opening the page is no
+ * use); answers use the stored text until then. Nothing shows while
+ * everything is current.
+ *
+ * @param {{items?: Array<Object>}} props
+ * @returns {JSX.Element|null}
+ */
+function RefreshNotice({ items }) {
+  const { t } = useTranslation();
+  const refreshing = (items || []).filter(item => item?.refreshingAt).length;
+  const awaiting = (items || []).filter(isAwaitingRefresh).length;
+  if (!refreshing && !awaiting) return null;
+  return (
+    <div
+      role="status"
+      className="mb-3 flex items-start gap-2 rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 px-3 py-2 text-sm text-blue-800 dark:text-blue-200"
+    >
+      <Icon name="arrow-path" size="sm" className="mt-0.5 shrink-0" />
+      <span>
+        {refreshing
+          ? t(
+              'projects.refresh.refreshingNotice',
+              'Refreshing {{count}} outdated documents. Answers use the stored text until they are done.',
+              { count: refreshing + awaiting }
+            )
+          : t(
+              'projects.refresh.outdatedNotice',
+              '{{count}} documents are outdated. They are refreshed the next time the project is used in a chat or a search; answers use the stored text until then.',
+              { count: awaiting }
+            )}
+      </span>
+    </div>
+  );
+}
 
 /**
  * The items of a project (spec 1 §3, spec 3 §9): the usage against the
@@ -229,6 +268,8 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
           )}
         </div>
       </div>
+
+      <RefreshNotice items={project.items} />
 
       {estimateError && (
         <div
@@ -371,8 +412,14 @@ function ProjectItemsSection({ project, config, editable, setProject, reload }) 
             config?.refreshTtl ??
             (scheduling.refresh?.from !== 'item' ? scheduling.refresh?.ttl : null)
           }
+          mode={scheduling.refreshMode ?? null}
+          inheritedMode={
+            project.refreshMode ??
+            config?.refreshMode ??
+            (scheduling.refresh?.modeFrom !== 'item' ? scheduling.refresh?.mode : null)
+          }
           onClose={() => setScheduling(null)}
-          onSave={ttl => actions.setRefreshTtl(scheduling, ttl)}
+          onSave={changes => actions.setRefreshTtl(scheduling, changes)}
         />
       )}
       <ConfirmDialog

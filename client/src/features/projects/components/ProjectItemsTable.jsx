@@ -18,8 +18,8 @@ import ProjectItemStatus from './ProjectItemStatus';
 
 /**
  * Whether an item can be read again from its source (refresh): a stale
- * item, a picked document or a file from a website, or a web page (whose
- * cached read is dropped).
+ * item, a picked document, a file from a website, or a web page (its
+ * snapshot; a page added before #3622 keeps its `linked` origin).
  */
 function isRefreshable(item) {
   return (
