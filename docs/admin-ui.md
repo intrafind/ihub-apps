@@ -426,6 +426,8 @@ For each process: CPU (percent of one core, averaged over the last five seconds)
 
 The page is hidden, together with the other system pages, when `admin.pages.system` is `false` in `platform.json`. The data comes from `GET /api/admin/system/resources` (admin only).
 
+The response also carries what the knowledge search-index cache has to hold, so operators can size it from data and load tests can report the hit rate: `workingSet.windows` (per 5, 15 and 60 minutes: `projects` used by a chat turn or knowledge tool, and their text `chars`, as a union over all workers), `knowledge.indexCache` (entries, characters, hits, misses, evictions, builds and `hitRate`, added up over the processes) and `processes[].indexCache` (the same for one process, with build time average and maximum and the cache limits). These fields are additive; the metrics are also exported as `ihub.projects.active*` and `ihub.knowledge.index.*` (see [Telemetry](telemetry.md#metrics)).
+
 ### Low-disk warnings
 
 Nobody may open the admin UI for weeks on a small installation, so a full disk is reported in two more places:

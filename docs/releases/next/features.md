@@ -1,5 +1,18 @@
 # Features — Unreleased
 
+## Metrics for the Project Working Set, the Index Cache and Extraction
+
+Operators can now see how many projects are in use at the same time and how the search-index cache copes.
+New OpenTelemetry/Prometheus metrics: `ihub.projects.active` and `ihub.projects.active.chars` (distinct
+projects used by a chat turn or a knowledge tool in the last 5, 15 and 60 minutes, and their text size),
+`ihub.knowledge.index.cache.{hits,misses,evictions,entries,chars}`, `ihub.knowledge.index.build.duration` and
+`ihub.extraction.duration` per file format. The same numbers are part of `GET /api/admin/system/resources`
+(`workingSet`, `knowledge.indexCache`, and `indexCache` per process), which the load-test harness samples.
+
+In cluster mode, `ihub.active.users`, `ihub.active.chats` and the project working set are now counted across
+all workers of a pod (each user or project once) instead of per worker. Dashboards that summed or
+compared per-worker series will see higher, correct numbers. See [Telemetry](../../telemetry.md#metrics).
+
 ## Workers and Their Memory Follow the Container's Memory Limit
 
 In a container with a memory limit, iHub no longer starts four workers that each size their memory as if they

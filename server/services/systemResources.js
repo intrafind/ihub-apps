@@ -41,6 +41,8 @@ import config from '../config.js';
 import { getContentsPath } from '../utils/contentsPath.js';
 import { gather, respond, respondInPrimary } from '../clusterBus.js';
 import logger from '../utils/logger.js';
+import projectActivityTracker from '../telemetry/ProjectActivityTracker.js';
+import { getIndexCacheStats } from './knowledge/indexCacheStats.js';
 
 /** Cluster-bus channel on which each process reports its own snapshot. */
 export const SYSTEM_RESOURCES_CHANNEL = 'system:resources';
@@ -200,8 +202,36 @@ export function getProcessSnapshot() {
       external: memory.external
     },
     eventLoopDelayMs: latestSample.eventLoopDelayMs,
+    indexCache: getIndexCacheStats(),
     sampledAt: latestSample.sampledAt
   };
+}
+
+/**
+ * Index-cache numbers of all processes together. Counters add up; the working
+ * set is not here (it is a union, see `workingSet`).
+ *
+ * @param {Array<{indexCache?: object}>} processes
+ */
+export function totalIndexCache(processes) {
+  const total = {
+    entries: 0,
+    chars: 0,
+    hits: 0,
+    misses: 0,
+    evictions: 0,
+    builds: 0,
+    hitRate: null
+  };
+  for (const { indexCache } of processes) {
+    if (!indexCache) continue;
+    for (const key of ['entries', 'chars', 'hits', 'misses', 'evictions', 'builds']) {
+      total[key] += Number(indexCache[key]) || 0;
+    }
+  }
+  const lookups = total.hits + total.misses;
+  total.hitRate = lookups > 0 ? round(total.hits / lookups, 4) : null;
+  return total;
 }
 
 /**
@@ -469,7 +499,13 @@ export async function collectSystemResources({ logFile = null } = {}) {
     },
     host,
     storage,
-    processes
+    processes,
+    // Additive (#3652): what the search-index cache has to hold, and how it fares.
+    workingSet: {
+      // Union of the projects used across all workers, per window.
+      windows: projectActivityTracker.getWorkingSet()
+    },
+    knowledge: { indexCache: totalIndexCache(processes) }
   };
 }
 

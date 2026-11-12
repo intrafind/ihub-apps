@@ -158,9 +158,28 @@ iHub product counters & gauges:
 - `ihub.errors` - errors by type and context (`llm_call`, `inference_api`, ...)
 - `ihub.conversations` - chat messages with the `conversation.is_follow_up` dimension
 - `ihub.active.users` - **observable gauge**, distinct users active in the rolling
-  window (default 5 min)
+  window (default 5 min). In cluster mode this is the union across the workers of
+  the pod (each user counted once), not one worker's share
 - `ihub.active.chats` - **observable gauge**, distinct chats active in the rolling
-  window
+  window, counted across workers the same way
+- `ihub.projects.active` + `ihub.projects.active.chars` - **observable gauges**, the
+  working set of projects: distinct projects used by a chat turn or a knowledge tool
+  within the last 5, 15 or 60 minutes (`window.minutes` label), and the text
+  characters they hold. The characters times about 4.5 bytes is the index memory the
+  working set needs, which is what the knowledge index cache has to hold. In cluster
+  mode both are the **union** over the workers (a project used on three workers is
+  one project), refreshed about every 10 seconds
+- `ihub.knowledge.index.cache.hits` / `.misses` / `.evictions` - counters of the
+  per-process knowledge search-index cache. A miss is an index build; an eviction is
+  an index dropped to stay within the cache's entry or character limit (not one
+  invalidated because a project changed). Sum over workers for the pod total, or
+  keep the per-worker series
+- `ihub.knowledge.index.cache.entries` / `.chars` - gauges of what the cache holds now
+- `ihub.knowledge.index.build.duration` - histogram (seconds) of index builds; a
+  build blocks the event loop
+- `ihub.extraction.duration` - histogram (seconds) of text extraction from a file,
+  labelled by `format` (`pdf`, `docx`, `pptx`, `xlsx`, `odt`, `ods`, `odp`, `html`,
+  `eml`, `msg`, `text`). It is the wall-clock time of the call, failures included
 - `ihub.stream.outcome` - streaming chat outcomes (`completed`, `aborted`, `error`)
 - `ihub.ratelimit.hits` - throttler / rate-limit hits, labelled by `ratelimit.scope`
   (`http`, `llm`) and `ratelimit.route`
@@ -330,6 +349,9 @@ scrape_configs:
 | `server/telemetry/exporters.js` | Console / OTLP / Prometheus exporter wiring |
 | `server/telemetry/GenAIInstrumentation.js` | Span lifecycle helper |
 | `server/telemetry/ActivityTracker.js` | Rolling-window active users / chats tracker |
+| `server/telemetry/ProjectActivityTracker.js` | Project working set (5 / 15 / 60 min windows) |
+| `server/telemetry/clusterUnion.js` | Union of active ids across cluster workers (via the cluster bus) |
+| `server/services/knowledge/indexCacheStats.js` | Index-cache counters behind the knowledge metrics |
 
 The gen-ai span around a provider call is owned by `LLMClient`
 (`server/services/loop/LLMClient.js`): one span per model call, whoever the

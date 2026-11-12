@@ -15,6 +15,8 @@ import { attachStickyWorker } from '../clusterSticky.js';
 import { initWorkerBus } from '../clusterBus.js';
 import { confirmUpdateOnStartup } from '../services/updateService.js';
 import { initSystemResources } from '../services/systemResources.js';
+import activityTracker from '../telemetry/ActivityTracker.js';
+import projectActivityTracker from '../telemetry/ProjectActivityTracker.js';
 import { registerConfigReloadHooks } from '../configReloadHooks.js';
 import { attachRealtimeTranscription } from '../websocket/realtimeTranscription.js';
 import { setDefaultLanguage } from '../../shared/localize.js';
@@ -653,6 +655,11 @@ export async function startWorker({ stickyRouting }) {
   }
 
   const platformConfig = await initFoundations();
+  // Share what this worker saw with the others, so the activity and working-set
+  // gauges count across the cluster (#3652). After the foundations: the gauges
+  // exist only once telemetry is initialised; the worker bus is already up.
+  activityTracker.start();
+  projectActivityTracker.start();
   await initConfigCache();
   logProxyConfig();
 

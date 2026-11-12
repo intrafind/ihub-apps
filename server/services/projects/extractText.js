@@ -40,6 +40,7 @@ import {
 import { extractXlsxText } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
 import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
+import { recordExtractionDuration } from '../../telemetry/metrics.js';
 import { extractHtmlPage } from '../pageReader/pageContent.js';
 import { cleanItemInfo, infoFromText } from './itemInfo.js';
 
@@ -926,14 +927,40 @@ export function normalizeText(text, { maxChars = MAX_TEXT_CHARS } = {}) {
  *   metadata, or else from its first heading and paragraph.
  * @throws {ExtractionError} `UNSUPPORTED_TYPE`, `EXTRACTION_FAILED`, `NO_TEXT`
  */
-export async function extractText(
+export async function extractText(input, options = {}) {
+  const started = performance.now();
+  let format = 'unknown';
+  try {
+    return await extractTextOf(input, options, found => {
+      format = found;
+    });
+  } finally {
+    // Wall-clock time of the whole extraction, failures included: a slow
+    // failing file blocks the event loop as much as a slow good one.
+    recordExtractionDuration(format, (performance.now() - started) / 1000);
+  }
+}
+
+/** Short, bounded metric label for a resolved content type. */
+function formatLabel(type) {
+  if (type === PDF_MIME) return 'pdf';
+  if (PACKAGES.has(type)) return PACKAGES.get(type).extension.slice(1);
+  if (type === HTML_MIME) return 'html';
+  if (type === EML_MIME) return 'eml';
+  if (type === MSG_MIME) return 'msg';
+  return 'text';
+}
+
+async function extractTextOf(
   { bytes, contentType, name },
-  { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows, speakerNotes } = {}
+  { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows, speakerNotes } = {},
+  onFormat = () => {}
 ) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) {
     throw new ExtractionError('NO_TEXT', `${name || 'The file'} is empty`);
   }
   const type = await resolveContentType(bytes, { contentType, name });
+  onFormat(formatLabel(type));
   const report = { truncated: false };
   let raw;
   let pages;
