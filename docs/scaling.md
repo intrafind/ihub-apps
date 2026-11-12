@@ -1,12 +1,17 @@
 # Scaling with Multiple Workers
 
 iHub Apps runs a Node.js cluster so a single host can use multiple CPU cores
-without breaking the streaming chat experience. The default is **4 workers**;
-this page explains how it works, how to tune it, and what the trade-offs are.
+without breaking the streaming chat experience. Without a container memory
+limit the default is **4 workers**; in a container the server sizes the worker
+count and each worker's heap from the memory limit. This page explains how it
+works, how to tune it, and what the trade-offs are.
 
 ## TL;DR
 
-- **Default:** `WORKERS=4` in production, connections balanced round-robin.
+- **Default:** 4 workers, connections balanced round-robin. In a container
+  with a memory limit, as many workers as fit (see
+  [Sizing from the container](#sizing-from-the-container)), each with a V8
+  heap limit of its share.
 - **No stickiness required between workers.** Chat state that lands on the
   "wrong" worker is relayed to the right one over the cluster bus, so a single
   iHub instance is safe behind any load balancer — including a Kubernetes
@@ -168,30 +173,66 @@ branches in [`server/startup/primary.js`](../server/startup/primary.js) and
 
 | Variable          | Default | Description                                                            |
 | ----------------- | ------- | ---------------------------------------------------------------------- |
-| `WORKERS`         | `4`     | Number of worker processes. `1` = no cluster.                          |
-| `NUM_WORKERS`     | `4`     | Alias of `WORKERS` (accepted for backwards-compat).                    |
+| `WORKERS`         | derived | Number of worker processes. `1` = no cluster. Unset: from the container memory limit, or `4` without one. |
+| `NUM_WORKERS`     | derived | Alias of `WORKERS` (accepted for backwards-compat).                    |
 | `STICKY_SESSIONS` | `false` | Pin each client to one worker by hashing its TCP peer address.         |
+| `NODE_OPTIONS=--max-old-space-size=<MB>` | derived | V8 heap limit of every process. Unset: each worker gets its share of the container memory limit. |
 
 `WORKERS` is read **once at process start** by `server/config.js`. Changing
 it at runtime has no effect — see [Why it is not in the Admin UI](#why-it-is-not-in-the-admin-ui).
+
+### Sizing from the container
+
+At startup the server reads the container's memory limit from the cgroup
+(`/sys/fs/cgroup/memory.max`, or `memory/memory.limit_in_bytes` on cgroup v1;
+`max` means no limit) and the CPU count (`os.availableParallelism()`):
+
+- **Workers**, when neither `WORKERS` nor `NUM_WORKERS` is set:
+  `(limit − 160 MB for the primary) / 768 MB per worker`, at least 1, at most
+  the CPU count and never more than 4. Without a limit: 4, as before. One
+  worker means the plain single process, without a primary.
+- **Heap per worker**, unless `--max-old-space-size` is given in
+  `NODE_OPTIONS` or on the command line: `(limit − 160 MB) / workers − 300 MB`
+  (what a Node process uses outside its heap), at least 512 MB, passed to each
+  worker as `--max-old-space-size`. V8 then collects garbage before the
+  container reaches its limit instead of being killed by it. A single process
+  keeps Node's own default, which already follows the container limit.
+
+An explicit setting always wins. The decision is logged once at startup:
+
+```
+Worker sizing: 2 worker(s) (memory limit), heap per worker 620 MB (memory limit) { memoryLimitMb: 2000, cpus: 4 }
+```
+
+| Container memory limit | CPUs | Workers | Heap per worker |
+| ---------------------- | ---- | ------- | --------------- |
+| none                   | any  | 4       | Node default    |
+| 1 GiB                  | 4    | 1       | Node default    |
+| 2000 MiB               | 4    | 2       | 620 MB          |
+| 4 GiB                  | 4    | 4       | 684 MB          |
+| 4 GiB                  | 2    | 2       | 1668 MB         |
 
 ### Picking a value
 
 - **Small dev box / single-user:** `1`.
 - **Production host:** start with `min(cpuCores, 4)`. Profile and go higher
   only if CPU utilisation on all workers is sustained above ~70%.
-- **Docker / Kubernetes:** match `WORKERS` to the CPU limit assigned to the
-  container, not to the host's physical cores. A 2-core container running
-  `WORKERS=8` will thrash the scheduler.
+- **Docker / Kubernetes:** leave `WORKERS` unset to have it sized from the
+  memory limit (and capped at the CPUs the container sees), or match it to the
+  CPU limit assigned to the container, not to the host's physical cores. A
+  2-core container running `WORKERS=8` will thrash the scheduler.
 - **Memory budget:** each worker holds its own copy of the config cache,
-  loaded adapters, and in-flight state. Budget roughly 200–400 MB per worker.
+  loaded adapters, and in-flight state: about 450–550 MB RSS once started,
+  more while it extracts large files. The derived sizing plans 768 MB per
+  worker and 160 MB for the primary.
 
 ## Startup behaviour
 
-With `WORKERS > 1` the primary logs its routing mode, and each worker logs once
-when it has bound the shared socket:
+With `WORKERS > 1` the primary logs the sizing decision and its routing mode,
+and each worker logs once when it has bound the shared socket:
 
 ```
+Worker sizing: 4 worker(s) (default), heap per worker Node default (node default)
 Primary process 1234 starting 4 workers { workerCount: 4, routing: 'round-robin' }
 Cluster using round-robin connection scheduling; workers bind the port directly
 Server is listening on all interfaces { port: 3000 }   x4, one per worker
@@ -381,7 +422,8 @@ not implemented.
 Two working configurations, depending on whether you scale up or out.
 
 **Single replica, several workers.** Nothing special: set `WORKERS` to the pod's
-CPU limit and leave routing alone. This is the case that used to collapse onto
+CPU limit — or leave it unset and let the server size it from the pod's memory
+limit — and leave routing alone. This is the case that used to collapse onto
 one worker behind the ingress and no longer does.
 
 ```yaml

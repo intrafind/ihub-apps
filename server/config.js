@@ -3,6 +3,7 @@
 
 import { cleanEnv, str, num, bool } from 'envalid';
 import dotenv from 'dotenv';
+import { workerSizingForProcess } from './utils/workerSizing.js';
 
 dotenv.config();
 
@@ -98,6 +99,14 @@ const dynamicApiKeys = Object.fromEntries(
   Object.entries(process.env).filter(([key]) => key.endsWith('_API_KEY'))
 );
 
+// Worker count and per-worker heap limit. `WORKERS` / `NUM_WORKERS` win when
+// set; otherwise the count follows the container's memory limit (see
+// utils/workerSizing.js). The primary hands the decided count to every worker
+// as `WORKERS`, so a worker reads the same number back here.
+const workerSizing = Object.freeze(
+  workerSizingForProcess({ explicitWorkers: env.WORKERS ?? env.NUM_WORKERS })
+);
+
 const config = Object.freeze({
   ...dynamicApiKeys,
   PORT: env.PORT,
@@ -105,7 +114,8 @@ const config = Object.freeze({
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
   LLM_CONNECT_TIMEOUT_MS: env.LLM_CONNECT_TIMEOUT_MS,
   LLM_STREAM_IDLE_TIMEOUT_MS: env.LLM_STREAM_IDLE_TIMEOUT_MS,
-  WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 4,
+  WORKERS: workerSizing.workers,
+  WORKER_SIZING: workerSizing,
   STICKY_SESSIONS: env.STICKY_SESSIONS,
   SSL_KEY: env.SSL_KEY,
   SSL_CERT: env.SSL_CERT,
