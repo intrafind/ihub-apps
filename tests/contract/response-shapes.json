@@ -810,7 +810,8 @@
         "maxBytes": "number",
         "maxPerBatch": "number",
         "maxZipBytes": "number",
-        "maxZipFiles": "number"
+        "maxZipFiles": "number",
+        "scriptHosts": ["string"]
       },
       "audit": {
         "anonymizeIp": "string",
@@ -4822,6 +4823,9 @@
           "enabled": "boolean",
           "text": "object"
         }
+      },
+      "artifacts": {
+        "scriptHosts": ["string"]
       },
       "chats": {
         "persistence": "boolean",
