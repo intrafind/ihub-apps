@@ -90,12 +90,14 @@ function answer(req, res) {
     res.end('not found');
     return;
   }
-  if (page.etag && req.headers['if-none-match'] === page.etag) {
+  // `ignoresConditional`: a server that answers every request in full.
+  if (!page.ignoresConditional && page.etag && req.headers['if-none-match'] === page.etag) {
     res.writeHead(304, { etag: page.etag });
     res.end();
     return;
   }
   if (
+    !page.ignoresConditional &&
     !page.etag &&
     page.lastModified &&
     req.headers['if-modified-since'] &&
@@ -417,6 +419,63 @@ describe('a web page is a stored snapshot', () => {
     });
     assert.equal(moved.ref.url, `${base}/new`);
     assert.match((await getItemText({ id: project.id }, moved, { user: ADA })).text, /new page/);
+  });
+});
+
+describe('an unchanged page is not downloaded or converted again', () => {
+  const newProject = name =>
+    getProjectService().createUserProject({ owner: ADA, content: { name } });
+  const addUrl = (project, url) =>
+    getProjectService().addItem(project.id, { kind: 'url', ref: { url } }, { user: ADA });
+
+  it('stops at the headers when a server ignores the conditional request', async () => {
+    servePage('/stubborn', html('Stubborn', 'Always answers in full.'), {
+      etag: '"s1"',
+      ignoresConditional: true
+    });
+    const result = await downloadWebPage(`${base}/stubborn`, {
+      maxBytes: 1024 * 1024,
+      etag: '"s1"'
+    });
+    assert.equal(result.notModified, true, 'the same ETag in a 200 is the same version');
+    assert.equal(result.bytes, undefined, 'the body is not read');
+
+    const project = await newProject('Stubborn');
+    const { item } = await addUrl(project, `${base}/stubborn`);
+    const first = await settled(project.id, item.id);
+    const { item: refreshed } = await getProjectService().refreshItem(project.id, item.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.equal(refreshed.text.blobKey, first.text.blobKey);
+    assert.equal(refreshed.text.extractedAt, first.text.extractedAt);
+  });
+
+  it('compares the page itself when it names no version', async () => {
+    servePage('/plain', html('Plain', 'No ETag, no Last-Modified.'));
+    const project = await newProject('Plain');
+    const { item } = await addUrl(project, `${base}/plain`);
+    const first = await settled(project.id, item.id);
+    assert.match(first.provenance.source.sha256, /^[0-9a-f]{64}$/);
+
+    const { item: same } = await getProjectService().refreshItem(project.id, item.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.equal(same.text.blobKey, first.text.blobKey, 'the same bytes are not converted');
+    assert.equal(same.text.extractedAt, first.text.extractedAt);
+    assert.notEqual(same.checkedAt, first.checkedAt, 'but the check is recorded');
+
+    servePage('/plain', html('Plain', 'A new paragraph.'));
+    const { item: changed } = await getProjectService().refreshItem(project.id, item.id, {
+      user: ADA,
+      wait: true
+    });
+    assert.notEqual(changed.text.blobKey, first.text.blobKey);
+    assert.match(
+      (await getItemText({ id: project.id }, changed, { user: ADA })).text,
+      /new paragraph/
+    );
   });
 });
 

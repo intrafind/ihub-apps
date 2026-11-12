@@ -28,6 +28,7 @@
  *
  * @module services/projects/kinds/webPageKind
  */
+import crypto from 'node:crypto';
 import { z } from 'zod';
 import { isHttpUrl } from '../../../validators/common.js';
 import configCache from '../../../configCache.js';
@@ -61,6 +62,10 @@ function snapshotOf(item, result) {
     ...(result.finalUrl && result.finalUrl !== item.ref.url ? { finalUrl: result.finalUrl } : {})
   };
   if (result.notModified) return { notModified: true, etag: result.etag, source: version };
+  // The page itself, for a page that names no version (no ETag, no
+  // Last-Modified): the same bytes are the same page, and are not converted
+  // again (`ProjectIngestService`, `previousSha256`).
+  version.sha256 = crypto.createHash('sha256').update(result.bytes).digest('hex');
   return {
     bytes: result.bytes,
     contentType: result.contentType,

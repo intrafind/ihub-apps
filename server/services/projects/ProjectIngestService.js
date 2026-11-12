@@ -454,9 +454,14 @@ export class ProjectIngestService {
         // If-None-Match first, and a changed ETag with an unchanged
         // Last-Modified (an edit within the second, a kept mtime) is a change.
         const bothTagged = Boolean(input.previousEtag) && Boolean(fetched.etag);
+        // The same bytes are the same document, whatever the source says
+        // about its version (a page that names none, #3622).
+        const sameBytes =
+          Boolean(input.previousSha256) && fetched.source?.sha256 === input.previousSha256;
         const sameVersion =
           refresh &&
           (fetched.notModified === true ||
+            sameBytes ||
             (bothTagged
               ? fetched.etag === input.previousEtag
               : Boolean(previousVersion) &&

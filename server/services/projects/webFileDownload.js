@@ -458,11 +458,33 @@ export async function downloadWebFile(
 }
 
 /**
+ * Whether a full answer is the version a refresh already holds: the same
+ * ETag (which decides alone when both sides have one, as a server evaluates
+ * `If-None-Match` first), else a `Last-Modified` no later than the stored one.
+ * For servers that ignore conditional requests and answer `200` every time.
+ *
+ * @param {Object} response
+ * @param {{etag?: string|null, lastModified?: string|null}} stored
+ * @returns {boolean}
+ */
+function isStoredVersion(response, { etag, lastModified }) {
+  const answeredEtag = response.headers.get('etag');
+  if (etag && answeredEtag) return answeredEtag === etag;
+  const answeredDate = Date.parse(response.headers.get('last-modified') || '');
+  const storedDate = Date.parse(lastModified || '');
+  return Number.isFinite(answeredDate) && Number.isFinite(storedDate) && answeredDate <= storedDate;
+}
+
+/**
  * Download a web page for its snapshot (#3622): the same guarded fetch as a
  * file (SSRF guard on every hop, proxy, certificates skipped only for hosts on
  * `ssl.domainWhitelist`), conditional on a refresh, the HTML handed on as
  * UTF-8. A page that now serves a document is taken as that document: the
  * extraction reads what it is.
+ *
+ * A refresh whose server ignores the conditional request still stops at the
+ * headers when they name the stored version: the body is dropped unread and
+ * the answer is `notModified`.
  *
  * @param {string} url
  * @param {Object} options - As {@link downloadWebFile}.
@@ -482,5 +504,14 @@ export async function downloadWebPage(
     fetchPage
   });
   if (got.notModified) return got;
+  if ((etag || lastModified) && isStoredVersion(got.response, { etag, lastModified })) {
+    dropBody(got.response.body);
+    return {
+      notModified: true,
+      etag: got.response.headers.get('etag') || etag || null,
+      lastModified: got.response.headers.get('last-modified') || lastModified || null,
+      finalUrl: got.final
+    };
+  }
   return pageOf(got.response, got.final, { maxBytes, signal });
 }

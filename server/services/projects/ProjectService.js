@@ -763,6 +763,8 @@ export class ProjectService {
         // and the end of extraction is not mistaken for "unchanged".
         previousLastModified: storedItem.provenance?.source?.lastModified || null,
         previousEtag: storedItem.provenance?.source?.etag || null,
+        // A hash of what was fetched last, for a source that names no version.
+        previousSha256: storedItem.provenance?.source?.sha256 || null,
         attempt: storedItem.ingestAttempt,
         purpose: 'refresh',
         scheduled
