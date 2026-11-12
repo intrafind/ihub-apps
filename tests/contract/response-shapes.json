@@ -2455,6 +2455,7 @@
           "ownership": "string",
           "permissions": "object",
           "published": "boolean",
+          "refreshMode": "null",
           "refreshTtl": "null",
           "role": "string",
           "tags": "[]|array",
@@ -2520,6 +2521,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshMode": "null",
       "refreshTtl": "null",
       "role": "string",
       "tags": [],
@@ -2545,6 +2547,7 @@
         "maxProjectsPerUser": "number"
       },
       "loadAllMaxTokens": "number",
+      "refreshMode": "string",
       "refreshTtl": "number",
       "scan": {
         "provider": "string"
@@ -2593,6 +2596,8 @@
         "maxProjectsPerUser": "number"
       },
       "maxFilesCeiling": "number",
+      "refreshIdleDays": "number",
+      "refreshMode": "string",
       "refreshTtl": "number",
       "sharing": {
         "allowCatalog": "boolean",
@@ -4795,6 +4800,7 @@
           "maxProjectBytes": "number",
           "maxProjectsPerUser": "number"
         },
+        "refreshMode": "string",
         "refreshTtl": "number",
         "retentionDays": "number",
         "sharing": {
@@ -5650,6 +5656,7 @@
           "ownership": "string",
           "permissions": "object",
           "published?": "boolean",
+          "refreshMode": "null",
           "refreshTtl": "null",
           "role": "string",
           "subscribed?": "boolean",
@@ -5718,6 +5725,7 @@
         "readsAllChats": "boolean"
       },
       "published": "boolean",
+      "refreshMode": "null",
       "refreshTtl": "null",
       "role": "string",
       "tags": ["string"],
@@ -5852,6 +5860,7 @@
         "maxProjectBytes": "number",
         "maxProjectsPerUser": "number"
       },
+      "refreshMode": "string",
       "refreshTtl": "number",
       "retentionDays": "number",
       "sharing": {

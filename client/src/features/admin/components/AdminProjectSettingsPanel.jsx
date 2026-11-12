@@ -9,7 +9,7 @@ import {
   updateAdminProject
 } from '../../../api/adminApi';
 import RefreshTtlDialog from '../../projects/components/RefreshTtlDialog';
-import { refreshTtlLabel } from '../../projects/utils/refreshTtl';
+import { refreshModeLabel, refreshTtlLabel } from '../../projects/utils/refreshTtl';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import Modal from '../../../shared/components/Modal';
 import ProjectPanelRow, { PANEL_CARD, ROW_ACTION } from '../../projects/components/ProjectPanelRow';
@@ -212,9 +212,16 @@ function AdminProjectSettingsDialog({ project, section, onClose, onSaved }) {
  * @param {Object} props
  * @param {Object} props.project - As `GET /api/admin/projects/:id` returns it.
  * @param {(project: Object) => void} props.onSaved - The project as saved.
+ * @param {number|'never'|null} [props.platformRefreshTtl] - The installation's TTL default.
+ * @param {'auto'|'onDemand'|null} [props.platformRefreshMode] - Its refresh mode (#3622).
  * @returns {JSX.Element}
  */
-function AdminProjectSettingsPanel({ project, onSaved, platformRefreshTtl = null }) {
+function AdminProjectSettingsPanel({
+  project,
+  onSaved,
+  platformRefreshTtl = null,
+  platformRefreshMode = null
+}) {
   const { t, i18n } = useTranslation();
   const language = i18n?.language || 'en';
   const [editing, setEditing] = useState(null);
@@ -311,15 +318,20 @@ function AdminProjectSettingsPanel({ project, onSaved, platformRefreshTtl = null
                 })
               : t('projects.refresh.projectDefaultUnknown', 'Default of this installation')}
         </p>
+        <p className="text-gray-600 dark:text-gray-400">
+          {refreshModeLabel(project.refreshMode || platformRefreshMode, t)}
+        </p>
       </ProjectPanelRow>
       {editing === 'refresh' && (
         <RefreshTtlDialog
           scope="project"
           value={project.refreshTtl ?? null}
           inherited={platformRefreshTtl}
+          mode={project.refreshMode ?? null}
+          inheritedMode={platformRefreshMode}
           onClose={() => setEditing(null)}
-          onSave={async refreshTtl => {
-            handleSaved(await patchAdminProject(project.id, { refreshTtl }));
+          onSave={async changes => {
+            handleSaved(await patchAdminProject(project.id, changes));
             return true;
           }}
         />

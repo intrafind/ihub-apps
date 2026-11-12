@@ -1939,7 +1939,17 @@ text on every server process without asking the website again. Projects with man
 longer re-read the whole site on each server process, which could exhaust the server's memory.
 
 - The page is refreshed after its refresh schedule (one day by default). The website is asked
-  whether the page changed; an unchanged page keeps its text and is not converted again.
+  whether the page changed; an unchanged page keeps its text and is not converted again. A website
+  that ignores that question is not downloaded either when it names the same version, and a page
+  that names no version is compared by its content.
+- **Choose when outdated pages and files are refreshed:** **Automatically, while the project is
+  used** (the default) refreshes them in the background, but a project nobody used for 14 days
+  is refreshed only when it is used again. **When the project is used** never runs in the
+  background. **Never** refreshes only by hand. Set it per installation (**Admin → Projects →
+  Project settings**, with the number of idle days), per project and per item.
+- Using a project (a chat, a search, opening it) refreshes what is outdated in it. Answers use the
+  stored text meanwhile; the project page shows **Refreshing N outdated documents**, and **About
+  this answer** in a chat says when an answer read outdated documents.
 - Adding a page asks the website once. Pages picked with **Find more pages of this website** are
   not fetched again at all: the site search's own read is stored.
 - The whole page is kept (no longer cut at 50,000 characters), and its text counts toward the

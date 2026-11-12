@@ -770,7 +770,9 @@
         "email": "E-Mail-Inhalt",
         "file": "Hochgeladene Datei",
         "audio": "Audioaufnahme"
-      }
+      },
+      "outdated_one": "{{count}} veraltetes Dokument wird aktualisiert; diese Antwort hat seinen gespeicherten Text verwendet",
+      "outdated_other": "{{count}} veraltete Dokumente werden aktualisiert; diese Antwort hat ihren gespeicherten Text verwendet"
     },
     "provenance": {
       "button": "KI-generiert: Details",
@@ -5995,7 +5997,15 @@
       },
       "refreshTtl": {
         "label": "Dateien und Webseiten aktualisieren nach",
-        "help": "Von Websites verlinkte Dateien werden nach dieser Zeit erneut heruntergeladen (eine unveränderte Datei behält ihren Text); Webseiten werden neu gelesen. Projekte und Elemente können eine eigene Zeit festlegen."
+        "help": "Dateien und Webseiten von Websites werden nach dieser Zeit erneut abgerufen; eine unveränderte behält ihren Text. Projekte und Elemente können eine eigene Zeit festlegen."
+      },
+      "refreshMode": {
+        "label": "Veraltete Dateien und Webseiten aktualisieren",
+        "help": "Automatisch: wird im Hintergrund aktualisiert, solange ein Projekt genutzt wird. Wenn das Projekt genutzt wird: im Hintergrund läuft nichts; die Nutzung des Projekts (ein Chat, eine Suche, das Öffnen) aktualisiert, was veraltet ist, und Antworten verwenden bis dahin den gespeicherten Text. Projekte und Elemente können eine eigene Einstellung festlegen."
+      },
+      "refreshIdleDays": {
+        "label": "Nur bei Nutzung aktualisieren nach (Tage ohne Nutzung)",
+        "help": "Ein Projekt, das so viele Tage niemand genutzt hat, wird nicht mehr im Hintergrund aktualisiert, sondern erst, wenn es wieder genutzt wird. 0 aktualisiert immer im Hintergrund."
       }
     },
     "updates": {
@@ -9899,7 +9909,20 @@
       "change": "Aktualisierung von Dateien und Webseiten ändern",
       "projectValue": "Dateien und Webseiten: {{ttl}}",
       "projectDefault": "Dateien und Webseiten: {{ttl}} (Standard)",
-      "projectDefaultUnknown": "Standard dieser Installation"
+      "projectDefaultUnknown": "Standard dieser Installation",
+      "modeLabel": "Aktualisieren",
+      "modeAuto": "Automatisch, solange das Projekt genutzt wird",
+      "modeOnDemand": "Wenn das Projekt genutzt wird",
+      "modeHint": "Automatisch: wird im Hintergrund aktualisiert, solange das Projekt genutzt wird; ein Projekt, das eine Weile niemand genutzt hat, wird aktualisiert, wenn es wieder genutzt wird. Wenn das Projekt genutzt wird: wird dann aktualisiert; Antworten verwenden bis dahin den gespeicherten Text.",
+      "modeNeverHint": "Auf „Nie“ gesetzt: wird nur von Hand aktualisiert.",
+      "onUse": "Wird aktualisiert, wenn das Projekt genutzt wird",
+      "onUseAfter": "Wird bei Nutzung nach {{date}} aktualisiert",
+      "onUseNow": "Bei der nächsten Nutzung des Projekts",
+      "outdatedSince": "Veraltet seit {{date}}, wird bei Nutzung aktualisiert",
+      "refreshingNotice_one": "{{count}} veraltetes Dokument wird aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
+      "refreshingNotice_other": "{{count}} veraltete Dokumente werden aktualisiert. Antworten verwenden bis dahin den gespeicherten Text.",
+      "outdatedNotice_one": "{{count}} Dokument ist veraltet. Es wird jetzt aktualisiert, weil das Projekt genutzt wird; Antworten verwenden bis dahin den gespeicherten Text.",
+      "outdatedNotice_other": "{{count}} Dokumente sind veraltet. Sie werden jetzt aktualisiert, weil das Projekt genutzt wird; Antworten verwenden bis dahin den gespeicherten Text."
     }
   },
   "integrationScopes": {

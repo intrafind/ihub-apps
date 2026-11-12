@@ -2,14 +2,21 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The refresh TTL of project items in the UI (#3536): the choices the dialogs
- * offer, how a TTL reads, and the line an item card shows about its schedule.
+ * The refresh TTL (#3536) and mode (#3622) of project items in the UI: the
+ * choices the dialogs offer, how a TTL reads, and the line an item card shows
+ * about its schedule.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RefreshTtlDialog from '../../../client/src/features/projects/components/RefreshTtlDialog';
 import {
+  hasActiveItems,
+  isAwaitingRefresh
+} from '../../../client/src/features/projects/utils/projectItems';
+import {
   REFRESH_NEVER,
+  parseRefreshMode,
   parseRefreshTtl,
+  refreshModeLabel,
   refreshSummary,
   refreshTtlChoices,
   refreshTtlLabel,
@@ -86,7 +93,7 @@ describe('RefreshTtlDialog', () => {
     expect(screen.getByRole('option', { name: 'Project setting (1 days)' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Refresh after'), { target: { value: 'never' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith('never'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ refreshTtl: 'never' }));
     await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
@@ -103,7 +110,68 @@ describe('RefreshTtlDialog', () => {
     );
     fireEvent.change(screen.getByLabelText('Refresh after'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith(null));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ refreshTtl: null }));
     expect(await screen.findByRole('alert')).toBeTruthy();
+  });
+
+  it('sets the refresh mode, and turns it off for a TTL of never', async () => {
+    const onSave = jest.fn().mockResolvedValue(true);
+    render(
+      <RefreshTtlDialog
+        scope="project"
+        value={null}
+        inherited={86400}
+        mode={null}
+        inheritedMode="auto"
+        onClose={() => {}}
+        onSave={onSave}
+      />
+    );
+    expect(
+      screen.getByRole('option', {
+        name: 'Default of this installation (Automatically, while the project is used)'
+      })
+    ).toBeTruthy();
+    const mode = screen.getByLabelText('Refresh');
+    fireEvent.change(mode, { target: { value: 'onDemand' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ refreshMode: 'onDemand' }));
+
+    fireEvent.change(screen.getByLabelText('Refresh after'), { target: { value: 'never' } });
+    expect(mode.disabled).toBe(true);
+    expect(screen.getByText('Set to never: refreshed only by hand.')).toBeTruthy();
+  });
+});
+
+describe('refresh when used (#3622)', () => {
+  const outdated = {
+    refresh: {
+      scheduled: true,
+      ttl: 86400,
+      background: false,
+      expired: true,
+      outdatedAt: '2026-11-01T08:00:00.000Z'
+    }
+  };
+
+  it('says when an on-demand item is refreshed', () => {
+    expect(refreshSummary(outdated, t, 'en')).toMatch(/^Outdated since .+, refreshed when used$/);
+    expect(refreshSummary({ refresh: { ...outdated.refresh, expired: false } }, t, 'en')).toMatch(
+      /^Refreshed when used after /
+    );
+    expect(refreshModeLabel('onDemand', t)).toBe('When the project is used');
+    expect(parseRefreshMode('')).toBeNull();
+    expect(parseRefreshMode('auto')).toBe('auto');
+  });
+
+  it('keeps the project polling while an outdated item waits for its refresh on use', () => {
+    expect(isAwaitingRefresh(outdated)).toBe(true);
+    expect(isAwaitingRefresh({ ...outdated, refreshingAt: '2026-11-12T08:00:00.000Z' })).toBe(
+      false
+    );
+    expect(hasActiveItems([{ status: 'ready', ...outdated }])).toBe(true);
+    expect(
+      hasActiveItems([{ status: 'ready', refresh: { ...outdated.refresh, background: true } }])
+    ).toBe(false);
   });
 });

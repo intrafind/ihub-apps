@@ -106,17 +106,34 @@ export function localizedText(value, language = 'en') {
 // --- status ---------------------------------------------------------------------
 
 /**
+ * Whether an item is outdated and waits for the refresh that using the
+ * project starts (#3622): refreshed when used (on demand, or a project nobody
+ * used lately), past its refresh time, not being refreshed yet. Opening the
+ * project is such a use, so the refresh normally starts within moments.
+ *
+ * @param {{refresh?: Object, refreshingAt?: string}|null|undefined} item
+ * @returns {boolean}
+ */
+export function isAwaitingRefresh(item) {
+  return item?.refresh?.expired === true && item.refresh.background === false && !item.refreshingAt;
+}
+
+/**
  * Whether the server is still extracting the text of any item: a new item
- * (`pending` / `extracting`), or a picked document being refreshed — that one
- * keeps its `ready` / `stale` status (the old snapshot stays readable) and
- * carries `refreshingAt` until the new snapshot is stored.
+ * (`pending` / `extracting`), a picked document or web page being refreshed —
+ * that one keeps its `ready` / `stale` status (the old snapshot stays
+ * readable) and carries `refreshingAt` until the new snapshot is stored — or
+ * an outdated one whose refresh on use is about to start.
  *
  * @param {Array<{status: string, refreshingAt?: string}>|undefined} items
  * @returns {boolean}
  */
 export function hasActiveItems(items) {
   return (items || []).some(
-    item => ACTIVE_ITEM_STATUSES.includes(item?.status) || Boolean(item?.refreshingAt)
+    item =>
+      ACTIVE_ITEM_STATUSES.includes(item?.status) ||
+      Boolean(item?.refreshingAt) ||
+      isAwaitingRefresh(item)
   );
 }
 

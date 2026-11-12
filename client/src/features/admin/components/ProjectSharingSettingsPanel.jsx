@@ -15,6 +15,8 @@ import { KNOWLEDGE_MODES } from '../../../../../shared/knowledgeModes.js';
 import { LIMIT_FIELDS, LIMIT_LABELS, limitInputsOf, parseLimits } from '../utils/projectLimits';
 import {
   parseRefreshTtl,
+  REFRESH_MODES,
+  refreshModeLabel,
   refreshTtlChoices,
   refreshTtlLabel
 } from '../../projects/utils/refreshTtl';
@@ -137,11 +139,31 @@ function ProjectSharingSettingsPanel() {
     setSaved(false);
   };
 
+  const updateRefreshMode = value => {
+    if (!REFRESH_MODES.includes(value)) return;
+    setDraft(previous => ({ ...previous, refreshMode: value }));
+    setSaved(false);
+  };
+  const updateRefreshIdleDays = value => {
+    const days = Number(value);
+    if (!Number.isInteger(days) || days < 0 || days > 3650) return;
+    setDraft(previous => ({ ...previous, refreshIdleDays: days }));
+    setSaved(false);
+  };
+
   const save = async () => {
     setSaving(true);
     setError(null);
     try {
-      const { sharing, tierPolicy, defaultAppId, refreshTtl, knowledgeModes } = draft;
+      const {
+        sharing,
+        tierPolicy,
+        defaultAppId,
+        refreshTtl,
+        refreshMode,
+        refreshIdleDays,
+        knowledgeModes
+      } = draft;
       const modesChanged =
         Array.isArray(knowledgeModes) &&
         JSON.stringify(knowledgeModes) !== JSON.stringify(stored.knowledgeModes);
@@ -151,10 +173,19 @@ function ProjectSharingSettingsPanel() {
         defaultAppId,
         ...(modesChanged ? { knowledgeModes } : {}),
         ...(refreshTtl !== undefined && refreshTtl !== stored.refreshTtl ? { refreshTtl } : {}),
+        ...(refreshMode !== undefined && refreshMode !== stored.refreshMode ? { refreshMode } : {}),
+        ...(refreshIdleDays !== undefined && refreshIdleDays !== stored.refreshIdleDays
+          ? { refreshIdleDays }
+          : {}),
         ...(limitsChanged ? { limits: limits.values } : {})
       });
       // The default app and the limits reach the project pages through the platform config.
-      if (settings?.defaultAppId !== stored?.defaultAppId || limitsChanged || modesChanged) {
+      if (
+        settings?.defaultAppId !== stored?.defaultAppId ||
+        settings?.refreshMode !== stored?.refreshMode ||
+        limitsChanged ||
+        modesChanged
+      ) {
         refreshConfig?.();
       }
       setStored(settings);
@@ -264,7 +295,72 @@ function ProjectSharingSettingsPanel() {
             <p className="text-xs text-gray-500 dark:text-gray-400">
               {t(
                 'admin.projects.refreshTtl.help',
-                'Files linked from websites are downloaded again after this time (an unchanged file keeps its text); web pages are read again. Projects and items can set their own.'
+                'Files and web pages from websites are fetched again after this time; an unchanged one keeps its text. Projects and items can set their own.'
+              )}
+            </p>
+          </div>
+        )}
+        {draft.refreshMode !== undefined && (
+          <div className="space-y-1">
+            <label
+              htmlFor="project-settings-refresh-mode"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {t('admin.projects.refreshMode.label', 'Refresh outdated files and web pages')}
+            </label>
+            <select
+              id="project-settings-refresh-mode"
+              value={draft.refreshMode}
+              onChange={e => updateRefreshMode(e.target.value)}
+              aria-describedby="project-settings-refresh-mode-help"
+              className="block w-full max-w-sm rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+            >
+              {REFRESH_MODES.map(mode => (
+                <option key={mode} value={mode}>
+                  {refreshModeLabel(mode, t)}
+                </option>
+              ))}
+            </select>
+            <p
+              id="project-settings-refresh-mode-help"
+              className="text-xs text-gray-500 dark:text-gray-400"
+            >
+              {t(
+                'admin.projects.refreshMode.help',
+                'Automatically: refreshed in the background while a project is used. When the project is used: nothing runs in the background; using the project (a chat, a search, opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own.'
+              )}
+            </p>
+          </div>
+        )}
+        {draft.refreshIdleDays !== undefined && draft.refreshMode !== 'onDemand' && (
+          <div className="space-y-1">
+            <label
+              htmlFor="project-settings-refresh-idle-days"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              {t(
+                'admin.projects.refreshIdleDays.label',
+                'Refresh only when used after (days without use)'
+              )}
+            </label>
+            <input
+              id="project-settings-refresh-idle-days"
+              type="number"
+              min={0}
+              max={3650}
+              step={1}
+              value={draft.refreshIdleDays}
+              onChange={e => updateRefreshIdleDays(e.target.value)}
+              aria-describedby="project-settings-refresh-idle-days-help"
+              className="block w-32 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2"
+            />
+            <p
+              id="project-settings-refresh-idle-days-help"
+              className="text-xs text-gray-500 dark:text-gray-400"
+            >
+              {t(
+                'admin.projects.refreshIdleDays.help',
+                'A project nobody used for this many days is no longer refreshed in the background, only when it is used again. 0 always refreshes in the background.'
               )}
             </p>
           </div>

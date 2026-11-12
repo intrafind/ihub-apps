@@ -60,6 +60,9 @@ import logger from '../../utils/logger.js';
 import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
+import configCache from '../../configCache.js';
+import { isRefreshExpired } from '../projects/refreshTtl.js';
+import { projectSettings } from '../projects/projectSettings.js';
 import { docOf } from './types.js';
 import { DEFAULT_KNOWLEDGE_MODE, KNOWLEDGE_MODES } from '../../../shared/knowledgeModes.js';
 
@@ -500,6 +503,9 @@ export async function planKnowledgeScope(
       modeSource: entry.modeSource || 'default',
       ...(fellBack ? { modeFallback: entry.mode } : {}),
       documents: usable.length,
+      // Snapshots past their refresh time (#3622): reading the project started
+      // their refresh, and this turn uses the stored text meanwhile.
+      outdated: outdatedCount(project, usable),
       tokens,
       pinned: pinnedIds.length,
       overBudget: false,
@@ -792,6 +798,25 @@ export function renderProjectInstructions(plan) {
  * @param {Awaited<ReturnType<typeof planKnowledgeScope>>} plan
  * @returns {{projects: Array, budgetTokens: number}}
  */
+/**
+ * How many usable documents of a project are past their refresh time or being
+ * refreshed (#3622): the answer reads their stored text while the refresh
+ * that reading the project started runs.
+ *
+ * @param {Object} project
+ * @param {Object[]} usable
+ * @returns {number}
+ */
+function outdatedCount(project, usable) {
+  const settings = projectSettings(configCache.getPlatform?.() || {});
+  const now = Date.now();
+  return usable.filter(
+    item =>
+      Boolean(item.refreshingAt) ||
+      (item.status === 'ready' && isRefreshExpired(item, project, settings, now))
+  ).length;
+}
+
 export function scopeSummary(plan) {
   return {
     budgetTokens: plan.budgetTokens,
@@ -822,7 +847,8 @@ export function scopeSummary(plan) {
       ...(project.overBudget ? { overBudget: true } : {}),
       ...(project.injected?.some(entry => entry.excerpt) ? { excerpted: true } : {}),
       ...(project.cut?.length ? { cut: project.cut.length } : {}),
-      ...(project.unavailable?.length ? { unavailable: project.unavailable.length } : {})
+      ...(project.unavailable?.length ? { unavailable: project.unavailable.length } : {}),
+      ...(project.outdated ? { outdated: project.outdated } : {})
     }))
   };
 }

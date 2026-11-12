@@ -14,6 +14,36 @@
 /** The value that turns scheduled refreshes off. */
 export const REFRESH_NEVER = 'never';
 
+/**
+ * When an outdated snapshot is refreshed (#3622): `auto` in the background
+ * while the project is used (a project nobody used lately is refreshed when it
+ * is used again), `onDemand` only when the project is used.
+ */
+export const REFRESH_MODES = Object.freeze(['auto', 'onDemand']);
+
+/**
+ * A refresh mode in words.
+ *
+ * @param {'auto'|'onDemand'|null|undefined} mode
+ * @param {Function} t
+ * @returns {string}
+ */
+export function refreshModeLabel(mode, t) {
+  return mode === 'onDemand'
+    ? t('projects.refresh.modeOnDemand', 'When the project is used')
+    : t('projects.refresh.modeAuto', 'Automatically, while the project is used');
+}
+
+/**
+ * A mode select's value back to a mode: `''` is "inherit" (null).
+ *
+ * @param {string|null|undefined} value
+ * @returns {'auto'|'onDemand'|null}
+ */
+export function parseRefreshMode(value) {
+  return REFRESH_MODES.includes(value) ? value : null;
+}
+
 const HOUR = 60 * 60;
 const DAY = 24 * HOUR;
 
@@ -125,6 +155,20 @@ export function formatRefreshTime(value, language) {
 export function refreshSummary(item, t, language) {
   const refresh = item?.refresh;
   if (!refresh) return null;
+  // Refreshed when the project is used (#3622): on demand, or idle.
+  if (refresh.ttl !== REFRESH_NEVER && refresh.background === false) {
+    const since = formatRefreshTime(refresh.outdatedAt, language);
+    if (refresh.expired) {
+      return since
+        ? t('projects.refresh.outdatedSince', 'Outdated since {{date}}, refreshed when used', {
+            date: since
+          })
+        : t('projects.refresh.onUse', 'Refreshed when the project is used');
+    }
+    return since
+      ? t('projects.refresh.onUseAfter', 'Refreshed when used after {{date}}', { date: since })
+      : t('projects.refresh.onUse', 'Refreshed when the project is used');
+  }
   if (refresh.ttl === REFRESH_NEVER) {
     return t('projects.refresh.manualOnly', 'Refreshed only by hand');
   }

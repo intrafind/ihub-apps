@@ -113,7 +113,8 @@ Web pages stored as links before this change are converted on their own: migrati
 converts the items of admin project files, and the ingest reconciler converts the rest (user
 projects, and any link left) shortly after the server starts. Each converted page waits for its
 first fetch, which one server process takes under the project's lock (at most 200 pages per
-reconciler run; the rest follow 15 minutes later).
+reconciler run; the rest follow 15 minutes later). A page of a project refreshed only when used
+(see [Refresh](#refresh)) is fetched the first time its project is used.
 
 ### Refresh
 
@@ -129,19 +130,42 @@ three levels; the most specific one that is set applies:
 A TTL is a number of seconds (15 minutes to a year; the dialogs offer 1 hour, 6 hours, 1 day, 7 days
 and 30 days) or `never`.
 
-- **Files from websites** are refreshed on their own: every 15 minutes the ingest reconciler
-  queues the files (and web pages) whose last check is older than their TTL (at most 50 per run, on the
-  `ingest.concurrency` queue). These background refreshes wait behind every upload, pick and
-  refresh someone asked for, and with more than one slot they never take the last free one, so
-  an upload starts within one job's time however many files are due. The request is conditional (`If-None-Match` with the stored ETag,
-  `If-Modified-Since` with the stored `Last-Modified`): an unchanged file is neither downloaded
-  nor extracted again and keeps its text. A changed file replaces the text once the new one is
-  stored; until then the old one stays readable. A refresh that fails leaves the item
-  **Outdated** with the old text, and is tried again after another TTL. `never` refreshes only
-  when someone chooses **Refresh**. The item shows when its text was taken and when it is
-  refreshed next.
+When an outdated file or page is refreshed is its **refresh mode**, set on the same three levels
+(`refreshMode` on the item and the project, `platform.projects.refreshMode` for the
+installation):
+
+| Mode                                                      | What happens to an outdated snapshot                                                                                                                                                                       |
+| --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Automatically, while the project is used** (`auto`, default) | Refreshed in the background (below). A project nobody used for `platform.projects.refreshIdleDays` days (14 by default; 0 turns this off) is refreshed only when it is used again, like `onDemand`. |
+| **When the project is used** (`onDemand`)                  | Nothing runs in the background. Using the project refreshes it.                                                                                                                                      |
+| TTL `never`                                               | Refreshed only when someone chooses **Refresh**, in either mode.                                                                                                                                     |
+
+A project is **used** when a chat, a search, a workflow or an MCP client reads its knowledge, or
+when someone opens it. A use queues a refresh of every outdated file and page of the project (at
+most once a minute per project and server process) and the first fetch of pages still waiting for
+one; the answer of that turn uses the stored text. For the idle rule only a chat turn in the project
+or a change of its items counts (`lastActivityAt`): a project that only an app reads counts as idle,
+and is refreshed on each use after its TTL. The project page shows **Refreshing N outdated
+documents** while it runs, the item card **Outdated since …, refreshed when used**, and **About this
+answer** in a chat names the outdated documents the answer read.
+
+- **Files from websites** are refreshed on their own (in mode `auto`, while the project is used):
+  every 15 minutes the ingest reconciler queues the files (and web pages) whose last check is older
+  than their TTL (at most 50 per run, on the `ingest.concurrency` queue). These background refreshes
+  wait behind every upload, pick and refresh someone asked for, and with more than one slot they
+  never take the last free one, so an upload starts within one job's time however many files are
+  due. The request is conditional (`If-None-Match` with the stored ETag, `If-Modified-Since` with
+  the stored `Last-Modified`): an unchanged file is neither downloaded nor extracted again and keeps
+  its text. A changed file replaces the text once the new one is stored; until then the old one
+  stays readable. A refresh that fails leaves the item **Outdated** with the old text, and is tried
+  again after another TTL. `never` refreshes only when someone chooses **Refresh**. The item shows
+  when its text was taken and when it is refreshed next.
 - **Web pages** are refreshed the same way, in the same reconciler run and with the same
   conditional request: an unchanged page keeps its text and is not converted again.
+- **A source that ignores the conditional request** and answers in full is not downloaded either
+  when its headers name the stored version (the same ETag, or a `Last-Modified` no later than
+  the stored one). **A source that names no version** (no ETag, no `Last-Modified`) is compared by
+  a SHA-256 of what it sends: the same bytes are not converted again.
 - **Picked cloud documents** (OneDrive / SharePoint, Google Drive, Nextcloud) are refreshed only
   by hand. Their download needs the account of the user who picked them, which a background job
   must not use: that user may have left, lost access to the file, or let the connection expire.

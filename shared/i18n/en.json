@@ -5535,7 +5535,15 @@
       },
       "refreshTtl": {
         "label": "Refresh files and web pages after",
-        "help": "Files linked from websites are downloaded again after this time (an unchanged file keeps its text); web pages are read again. Projects and items can set their own."
+        "help": "Files and web pages from websites are fetched again after this time; an unchanged one keeps its text. Projects and items can set their own."
+      },
+      "refreshMode": {
+        "label": "Refresh outdated files and web pages",
+        "help": "Automatically: refreshed in the background while a project is used. When the project is used: nothing runs in the background; using the project (a chat, a search, opening it) refreshes what is outdated, and answers use the stored text until then. Projects and items can set their own."
+      },
+      "refreshIdleDays": {
+        "label": "Refresh only when used after (days without use)",
+        "help": "A project nobody used for this many days is no longer refreshed in the background, only when it is used again. 0 always refreshes in the background."
       }
     },
     "updates": {
@@ -6951,7 +6959,9 @@
         "email": "Email content",
         "file": "Uploaded file",
         "audio": "Audio recording"
-      }
+      },
+      "outdated_one": "{{count}} outdated document is being refreshed; this answer used its stored text",
+      "outdated_other": "{{count}} outdated documents are being refreshed; this answer used their stored text"
     },
     "provenance": {
       "button": "AI generated: details",
@@ -9900,7 +9910,20 @@
       "change": "Change the refresh of files and web pages",
       "projectValue": "Files and web pages: {{ttl}}",
       "projectDefault": "Files and web pages: {{ttl}} (default)",
-      "projectDefaultUnknown": "Default of this installation"
+      "projectDefaultUnknown": "Default of this installation",
+      "modeLabel": "Refresh",
+      "modeAuto": "Automatically, while the project is used",
+      "modeOnDemand": "When the project is used",
+      "modeHint": "Automatically: refreshed in the background while the project is used; a project nobody used for a while is refreshed when it is used again. When the project is used: refreshed then; answers use the stored text until it is done.",
+      "modeNeverHint": "Set to never: refreshed only by hand.",
+      "onUse": "Refreshed when the project is used",
+      "onUseAfter": "Refreshed when used after {{date}}",
+      "onUseNow": "The next time the project is used",
+      "outdatedSince": "Outdated since {{date}}, refreshed when used",
+      "refreshingNotice_one": "Refreshing {{count}} outdated document. Answers use the stored text until it is done.",
+      "refreshingNotice_other": "Refreshing {{count}} outdated documents. Answers use the stored text until they are done.",
+      "outdatedNotice_one": "{{count}} document is outdated. It is refreshed now because the project is in use; answers use the stored text until then.",
+      "outdatedNotice_other": "{{count}} documents are outdated. They are refreshed now because the project is in use; answers use the stored text until then."
     }
   },
   "integrationScopes": {
