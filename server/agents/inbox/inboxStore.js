@@ -24,6 +24,7 @@ import path from 'node:path';
 import { getContentsPath } from '../../utils/contentsPath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
+import { withFileLock } from '../../utils/fileLock.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { INBOX_ID_PATTERN } from '../../validators/agentInboxSchema.js';
@@ -159,9 +160,24 @@ export async function readInbox(inboxId, { status = 'all' } = {}) {
   };
 }
 
-export async function writeInbox(inboxId, { body, expectedVersion, updatedBy }) {
+/**
+ * Run a read-modify-write of one inbox under a lock file every worker honours.
+ * Not reentrant: `fn` must use `writeInboxLocked`, not `writeInbox`.
+ */
+async function withInboxLock(inboxId, fn) {
   // inboxPath re-validates the id before constructing the absolute path.
   await fs.mkdir(inboxBaseDir(), { recursive: true });
+  const file = await inboxPath(inboxId);
+  return withFileLock(`${file}.lock`, fn, { component: 'InboxStore' });
+}
+
+export async function writeInbox(inboxId, { body, expectedVersion, updatedBy }) {
+  return withInboxLock(inboxId, () =>
+    writeInboxLocked(inboxId, { body, expectedVersion, updatedBy })
+  );
+}
+
+async function writeInboxLocked(inboxId, { body, expectedVersion, updatedBy }) {
   const file = await inboxPath(inboxId);
   let current = { frontmatter: { version: 0 }, body: '' };
   try {
@@ -203,45 +219,49 @@ export async function writeInbox(inboxId, { body, expectedVersion, updatedBy }) 
  * Append a new checklist item to the inbox.
  */
 export async function addInboxItem(inboxId, { text, priority, updatedBy, expectedVersion }) {
-  const current = await readInboxRaw(inboxId).catch(err => {
-    if (err.code === 'ENOENT') return { body: `# ${inboxId}\n` };
-    throw err;
+  return withInboxLock(inboxId, async () => {
+    const current = await readInboxRaw(inboxId).catch(err => {
+      if (err.code === 'ENOENT') return { body: `# ${inboxId}\n` };
+      throw err;
+    });
+    const prio = priority ? `(${priority.toUpperCase()}) ` : '';
+    const newLine = `- [ ] ${prio}${text}`;
+    const body = current.body.endsWith('\n')
+      ? `${current.body}${newLine}\n`
+      : `${current.body}\n${newLine}\n`;
+    return writeInboxLocked(inboxId, { body, expectedVersion, updatedBy });
   });
-  const prio = priority ? `(${priority.toUpperCase()}) ` : '';
-  const newLine = `- [ ] ${prio}${text}`;
-  const body = current.body.endsWith('\n')
-    ? `${current.body}${newLine}\n`
-    : `${current.body}\n${newLine}\n`;
-  return writeInbox(inboxId, { body, expectedVersion, updatedBy });
 }
 
 /**
  * Mark an item done in the inbox by matching its text.
  */
 export async function markInboxItemDone(inboxId, { text, note, updatedBy, expectedVersion }) {
-  const current = await readInboxRaw(inboxId);
-  const lines = current.body.split('\n');
-  let matched = false;
-  const updated = lines.map(line => {
-    if (matched) return line;
-    const parsed = parseChecklistLine(line);
-    if (!parsed || parsed.status === 'done') return line;
-    if (!parsed.text.includes(text.trim())) return line;
-    matched = true;
-    const noteSuffix = note
-      ? `  -- ${note}`
-      : `  -- done by ${updatedBy || 'agent'} ${new Date().toISOString()}`;
-    return line.replace(/\[\s\]/, '[x]').replace(/$/, noteSuffix);
-  });
-  if (!matched) {
-    const err = new Error(`No matching open item containing: ${text}`);
-    err.code = 'NOT_FOUND';
-    throw err;
-  }
-  return writeInbox(inboxId, {
-    body: updated.join('\n'),
-    expectedVersion,
-    updatedBy
+  return withInboxLock(inboxId, async () => {
+    const current = await readInboxRaw(inboxId);
+    const lines = current.body.split('\n');
+    let matched = false;
+    const updated = lines.map(line => {
+      if (matched) return line;
+      const parsed = parseChecklistLine(line);
+      if (!parsed || parsed.status === 'done') return line;
+      if (!parsed.text.includes(text.trim())) return line;
+      matched = true;
+      const noteSuffix = note
+        ? `  -- ${note}`
+        : `  -- done by ${updatedBy || 'agent'} ${new Date().toISOString()}`;
+      return line.replace(/\[\s\]/, '[x]').replace(/$/, noteSuffix);
+    });
+    if (!matched) {
+      const err = new Error(`No matching open item containing: ${text}`);
+      err.code = 'NOT_FOUND';
+      throw err;
+    }
+    return writeInboxLocked(inboxId, {
+      body: updated.join('\n'),
+      expectedVersion,
+      updatedBy
+    });
   });
 }
 

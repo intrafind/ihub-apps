@@ -11,16 +11,50 @@ const pepperFile = getContentsPath('.usage-pepper');
 
 let pepper = null;
 
+const PEPPER_PATTERN = /^[0-9a-f]{64}$/;
+
+async function readPepper() {
+  try {
+    const value = (await fs.readFile(pepperFile, 'utf8')).trim();
+    return PEPPER_PATTERN.test(value) ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The pepper every worker shares. Created with an exclusive publish (a complete
+ * temp file linked into place, which fails if another worker got there first),
+ * and the winner's value is re-read: workers that each wrote their own pepper
+ * produced different fingerprints for the same user, and a half-written file
+ * read as an empty pepper.
+ */
 async function loadOrCreatePepper() {
   if (pepper) return pepper;
-  try {
-    pepper = await fs.readFile(pepperFile, 'utf8');
-  } catch {
-    pepper = crypto.randomBytes(32).toString('hex');
-    await fs.mkdir(path.dirname(pepperFile), { recursive: true });
-    await fs.writeFile(pepperFile, pepper, 'utf8');
-    logger.info('Created new usage tracking pepper', { component: 'UserFingerprint' });
+  const existing = await readPepper();
+  if (existing) {
+    pepper = existing;
+    return pepper;
   }
+
+  await fs.mkdir(path.dirname(pepperFile), { recursive: true });
+  const candidate = crypto.randomBytes(32).toString('hex');
+  const tmpPath = `${pepperFile}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  try {
+    await fs.writeFile(tmpPath, candidate, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+    try {
+      await fs.link(tmpPath, pepperFile);
+      logger.info('Created new usage tracking pepper', { component: 'UserFingerprint' });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      // Another worker published first. If what it left is unusable (a file an
+      // older version wrote empty), replace it with this complete one.
+      if (!(await readPepper())) await fs.rename(tmpPath, pepperFile);
+    }
+  } finally {
+    await fs.unlink(tmpPath).catch(() => {});
+  }
+  pepper = (await readPepper()) || candidate;
   return pepper;
 }
 

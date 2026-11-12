@@ -677,6 +677,31 @@ class RegistryService {
     await cc.refreshRegistriesCache();
   }
 
+  /**
+   * Change the registries config: read it fresh, apply `mutate`, write it, in
+   * one step no other change interleaves with, then refresh the cache. A change
+   * made from a snapshot taken earlier (before a catalog fetch, or before another
+   * admin's edit landed) erased what was written in between.
+   *
+   * `mutate` may run more than once and may throw (nothing is written then);
+   * it returns the value this method resolves to.
+   *
+   * @param {(data: { registries: Array }) => any} mutate
+   * @returns {Promise<any>}
+   */
+  async _updateRegistries(mutate) {
+    let result;
+    await configStore.updateJson(REGISTRIES_FILE, current => {
+      const body = current && typeof current === 'object' ? current : {};
+      if (!Array.isArray(body.registries)) body.registries = [];
+      result = mutate(body);
+      return body;
+    });
+    const cc = await this._getConfigCache();
+    await cc.refreshRegistriesCache();
+    return result;
+  }
+
   // --------------------------------------------------------------------------
   // Catalog operations
   // --------------------------------------------------------------------------
@@ -763,13 +788,13 @@ class RegistryService {
     });
 
     // Update lastSynced and itemCount in registries.json
-    const data = await this._getRegistriesData();
-    const idx = data.registries.findIndex(r => r.id === registryId);
-    if (idx !== -1) {
-      data.registries[idx].lastSynced = new Date().toISOString();
-      data.registries[idx].itemCount = (catalog.items || []).length;
-      await this._saveRegistries(data);
-    }
+    await this._updateRegistries(data => {
+      const idx = data.registries.findIndex(r => r.id === registryId);
+      if (idx !== -1) {
+        data.registries[idx].lastSynced = new Date().toISOString();
+        data.registries[idx].itemCount = (catalog.items || []).length;
+      }
+    });
 
     logger.info('Registry refreshed', {
       component: COMPONENT,
@@ -1048,12 +1073,6 @@ class RegistryService {
       );
     }
 
-    const data = await this._getRegistriesData();
-
-    if (data.registries.find(r => r.id === registryData.id)) {
-      throw new ServiceError('CONFLICT', `Registry with id '${registryData.id}' already exists`);
-    }
-
     const registry = {
       ...validation.data,
       auth: encryptRegistryAuth(validation.data.auth),
@@ -1062,8 +1081,12 @@ class RegistryService {
       itemCount: 0
     };
 
-    data.registries.push(registry);
-    await this._saveRegistries(data);
+    await this._updateRegistries(data => {
+      if (data.registries.find(r => r.id === registryData.id)) {
+        throw new ServiceError('CONFLICT', `Registry with id '${registryData.id}' already exists`);
+      }
+      data.registries.push(registry);
+    });
 
     return { ...registry, auth: redactAuth(registry.auth) };
   }
@@ -1079,46 +1102,47 @@ class RegistryService {
    * @throws {Error} When the registry is not found
    */
   async updateRegistry(id, updates) {
-    const data = await this._getRegistriesData();
-    const idx = data.registries.findIndex(r => r.id === id);
-    if (idx === -1) throw new ServiceError('NOT_FOUND', `Registry '${id}' not found`);
+    const stored = await this._updateRegistries(data => {
+      const idx = data.registries.findIndex(r => r.id === id);
+      if (idx === -1) throw new ServiceError('NOT_FOUND', `Registry '${id}' not found`);
 
-    const existing = data.registries[idx];
+      const existing = data.registries[idx];
 
-    // When the client sends back REDACTED placeholders, restore the existing encrypted values
-    const auth = updates.auth || existing.auth;
-    if (auth && auth.type !== 'none') {
-      if (auth.token === '***REDACTED***') auth.token = existing.auth?.token;
-      if (auth.password === '***REDACTED***') auth.password = existing.auth?.password;
-      if (auth.headerValue === '***REDACTED***') auth.headerValue = existing.auth?.headerValue;
-    }
+      // When the client sends back REDACTED placeholders, restore the existing encrypted values
+      const auth = updates.auth || existing.auth;
+      if (auth && auth.type !== 'none') {
+        if (auth.token === '***REDACTED***') auth.token = existing.auth?.token;
+        if (auth.password === '***REDACTED***') auth.password = existing.auth?.password;
+        if (auth.headerValue === '***REDACTED***') auth.headerValue = existing.auth?.headerValue;
+      }
 
-    const updated = {
-      ...existing,
-      ...updates,
-      id, // ID is immutable
-      auth: encryptRegistryAuth(auth),
-      updatedAt: new Date().toISOString()
-    };
-    // The version policy (channel, pins) is checked like on create; a pin
-    // that is not a semver range would otherwise hide every version. Only
-    // these two fields: an edit has never re-validated the rest.
-    const validation = validateRegistryVersionPolicy(updated);
-    if (!validation.success) {
-      throw new ServiceError(
-        'BAD_REQUEST',
-        `Invalid registry config: ${validation.errors.join(', ')}`
-      );
-    }
-    for (const field of ['channel', 'pins']) {
-      if (validation.data[field] === undefined) delete updated[field];
-      else updated[field] = validation.data[field];
-    }
+      const updated = {
+        ...existing,
+        ...updates,
+        id, // ID is immutable
+        auth: encryptRegistryAuth(auth),
+        updatedAt: new Date().toISOString()
+      };
+      // The version policy (channel, pins) is checked like on create; a pin
+      // that is not a semver range would otherwise hide every version. Only
+      // these two fields: an edit has never re-validated the rest.
+      const validation = validateRegistryVersionPolicy(updated);
+      if (!validation.success) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          `Invalid registry config: ${validation.errors.join(', ')}`
+        );
+      }
+      for (const field of ['channel', 'pins']) {
+        if (validation.data[field] === undefined) delete updated[field];
+        else updated[field] = validation.data[field];
+      }
 
-    data.registries[idx] = updated;
-    await this._saveRegistries(data);
+      data.registries[idx] = updated;
+      return updated;
+    });
 
-    return { ...updated, auth: redactAuth(updated.auth) };
+    return { ...stored, auth: redactAuth(stored.auth) };
   }
 
   /**
@@ -1129,12 +1153,11 @@ class RegistryService {
    * @throws {Error} When the registry is not found
    */
   async deleteRegistry(id) {
-    const data = await this._getRegistriesData();
-    const idx = data.registries.findIndex(r => r.id === id);
-    if (idx === -1) throw new ServiceError('NOT_FOUND', `Registry '${id}' not found`);
-
-    data.registries.splice(idx, 1);
-    await this._saveRegistries(data);
+    await this._updateRegistries(data => {
+      const idx = data.registries.findIndex(r => r.id === id);
+      if (idx === -1) throw new ServiceError('NOT_FOUND', `Registry '${id}' not found`);
+      data.registries.splice(idx, 1);
+    });
 
     // Best-effort cache cleanup — a cache file that was never written
     // reports false rather than throwing

@@ -30,7 +30,9 @@ import { generateJwt, decodeJwt } from '../utils/tokenService.js';
 import {
   generateRefreshToken,
   storeRefreshToken,
-  consumeRefreshToken,
+  beginRefreshRotation,
+  completeRefreshRotation,
+  abortRefreshRotation,
   revokeRefreshToken
 } from '../utils/refreshTokenStore.js';
 
@@ -470,8 +472,11 @@ export default function registerOAuthRoutes(app) {
         }
 
         // Consume the token (single-use rotation – deletes the entry)
-        const tokenData = await consumeRefreshToken(sanitizedRefreshToken);
-        if (!tokenData) {
+        // The old token stays in the store as a placeholder until the new one
+        // replaces it, so a revoke arriving meanwhile still finds something to
+        // delete (see beginRefreshRotation).
+        const rotation = await beginRefreshRotation(sanitizedRefreshToken);
+        if (!rotation) {
           return sendOAuthError(
             res,
             400,
@@ -479,146 +484,168 @@ export default function registerOAuthRoutes(app) {
             'Refresh token is invalid, expired, or already used'
           );
         }
-
-        // A refresh token must not outlive the user who granted it. The token is
-        // already consumed above, so refusing here also ends the connection.
-        const refreshUserState = await delegatedUserState(platform, tokenData.userId);
-        if (refreshUserState === 'unavailable') {
-          // Nothing is known about the user, so the grant is put back as it was:
-          // the client retries with the same token once the users can be read,
-          // instead of having to authorize again.
-          await storeRefreshToken(sanitizedRefreshToken, tokenData);
-          return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
-        }
-        if (refreshUserState !== 'active') {
-          return sendOAuthError(
-            res,
-            400,
-            'invalid_grant',
-            'The user who granted this access is no longer available'
+        const tokenData = rotation.data;
+        // Every refusal below ends the grant (the token is spent), as before.
+        const endRotation = (options = {}) =>
+          abortRefreshRotation(sanitizedRefreshToken, rotation.rotationId, options).catch(error =>
+            logger.warn('[OAuth] Could not end refresh rotation', {
+              component: 'OAuth',
+              error: error.message
+            })
           );
-        }
-
-        // Validate client still exists and is active
-        const refreshClient = await resolveGrantClient(tokenData.clientId, platform);
-
-        if (!refreshClient || !refreshClient.active) {
-          return sendOAuthError(res, 401, 'invalid_client', 'Client not found or suspended');
-        }
-
-        // The refresh-token entry carries the groups the user had when they
-        // first authorized. For a **local** user that snapshot is stale the
-        // moment an administrator edits their groups, and the user store is
-        // authoritative — so it is re-read here and the snapshot refreshed.
-        // For an OIDC or proxy user the groups come from the identity provider
-        // at sign-in and iHub holds nothing newer, so the snapshot stands; the
-        // remedies there are an admin revoke and `refreshTokenExpirationDays`.
-        const usersFilePath = localUsersFile(platform.localAuth);
-        let currentGroups = tokenData.userGroups || [];
+        let rotationSettled = false;
         try {
-          const localUser = findLocalUserById(tokenData.userId, usersFilePath);
-          if (localUser) currentGroups = Array.isArray(localUser.groups) ? localUser.groups : [];
-        } catch (error) {
-          logger.warn('[OAuth] Could not re-read group membership on refresh', {
-            component: 'OAuth',
-            error: error.message
-          });
-        }
-
-        // Build user object for the new access token
-        const userForRefresh = {
-          id: tokenData.userId,
-          username: tokenData.userUsername || tokenData.userId,
-          name: tokenData.userName || tokenData.userId,
-          email: tokenData.userEmail || '',
-          groups: currentGroups,
-          provider: 'oauth'
-        };
-
-        // The client's *current* group policy, not the one that applied when
-        // the connection was made. Narrowing a client's `allowedGroups` — or
-        // taking the user out of one — therefore ends the connection at the
-        // next rotation instead of never.
-        if (!isUserAllowedByGroups(refreshClient, userForRefresh)) {
-          logger.info('[OAuth] Refresh denied by client group policy', {
-            component: 'OAuth',
-            clientId: tokenData.clientId,
-            userId: tokenData.userId
-          });
-          return sendOAuthError(
-            res,
-            400,
-            'invalid_grant',
-            'This client is no longer available to your groups'
-          );
-        }
-
-        // Narrowing what a client may be granted has to narrow the connections
-        // that already hold those scopes, not only the ones made from now on.
-        const refreshedScopes = intersectScopes(tokenData.scopes, refreshClient.scopes);
-        if (refreshedScopes.length === 0) {
-          logger.info('[OAuth] Refresh denied: no granted scope survives the client policy', {
-            component: 'OAuth',
-            clientId: tokenData.clientId,
-            userId: tokenData.userId
-          });
-          return sendOAuthError(
-            res,
-            400,
-            'invalid_grant',
-            'None of the granted scopes are still available to this client'
-          );
-        }
-
-        const refreshExpiresInMinutes = refreshClient.tokenExpirationMinutes || 60;
-        const { token: newAccessToken, expiresIn: newExpiresIn } = generateJwt(userForRefresh, {
-          authMode: 'oauth_authorization_code',
-          expiresInMinutes: refreshExpiresInMinutes,
-          additionalClaims: {
-            client_id: tokenData.clientId,
-            scopes: refreshedScopes,
-            aud: tokenData.clientId
+          // A refresh token must not outlive the user who granted it. The token is
+          // already consumed above, so refusing here also ends the connection.
+          const refreshUserState = await delegatedUserState(platform, tokenData.userId);
+          if (refreshUserState === 'unavailable') {
+            // Nothing is known about the user, so the grant is put back as it was:
+            // the client retries with the same token once the users can be read,
+            // instead of having to authorize again.
+            rotationSettled = true;
+            await endRotation({ restore: true });
+            return sendOAuthError(res, 503, 'server_error', USER_CHECK_UNAVAILABLE);
           }
-        });
+          if (refreshUserState !== 'active') {
+            return sendOAuthError(
+              res,
+              400,
+              'invalid_grant',
+              'The user who granted this access is no longer available'
+            );
+          }
 
-        // Rotate refresh token: issue a brand new one and persist it
-        const rotatedRefreshToken = generateRefreshToken();
-        const refreshPlatform = configCache.getPlatform() || {};
-        await storeRefreshToken(
-          rotatedRefreshToken,
-          {
+          // Validate client still exists and is active
+          const refreshClient = await resolveGrantClient(tokenData.clientId, platform);
+
+          if (!refreshClient || !refreshClient.active) {
+            return sendOAuthError(res, 401, 'invalid_client', 'Client not found or suspended');
+          }
+
+          // The refresh-token entry carries the groups the user had when they
+          // first authorized. For a **local** user that snapshot is stale the
+          // moment an administrator edits their groups, and the user store is
+          // authoritative — so it is re-read here and the snapshot refreshed.
+          // For an OIDC or proxy user the groups come from the identity provider
+          // at sign-in and iHub holds nothing newer, so the snapshot stands; the
+          // remedies there are an admin revoke and `refreshTokenExpirationDays`.
+          const usersFilePath = localUsersFile(platform.localAuth);
+          let currentGroups = tokenData.userGroups || [];
+          try {
+            const localUser = findLocalUserById(tokenData.userId, usersFilePath);
+            if (localUser) currentGroups = Array.isArray(localUser.groups) ? localUser.groups : [];
+          } catch (error) {
+            logger.warn('[OAuth] Could not re-read group membership on refresh', {
+              component: 'OAuth',
+              error: error.message
+            });
+          }
+
+          // Build user object for the new access token
+          const userForRefresh = {
+            id: tokenData.userId,
+            username: tokenData.userUsername || tokenData.userId,
+            name: tokenData.userName || tokenData.userId,
+            email: tokenData.userEmail || '',
+            groups: currentGroups,
+            provider: 'oauth'
+          };
+
+          // The client's *current* group policy, not the one that applied when
+          // the connection was made. Narrowing a client's `allowedGroups` — or
+          // taking the user out of one — therefore ends the connection at the
+          // next rotation instead of never.
+          if (!isUserAllowedByGroups(refreshClient, userForRefresh)) {
+            logger.info('[OAuth] Refresh denied by client group policy', {
+              component: 'OAuth',
+              clientId: tokenData.clientId,
+              userId: tokenData.userId
+            });
+            return sendOAuthError(
+              res,
+              400,
+              'invalid_grant',
+              'This client is no longer available to your groups'
+            );
+          }
+
+          // Narrowing what a client may be granted has to narrow the connections
+          // that already hold those scopes, not only the ones made from now on.
+          const refreshedScopes = intersectScopes(tokenData.scopes, refreshClient.scopes);
+          if (refreshedScopes.length === 0) {
+            logger.info('[OAuth] Refresh denied: no granted scope survives the client policy', {
+              component: 'OAuth',
+              clientId: tokenData.clientId,
+              userId: tokenData.userId
+            });
+            return sendOAuthError(
+              res,
+              400,
+              'invalid_grant',
+              'None of the granted scopes are still available to this client'
+            );
+          }
+
+          const refreshExpiresInMinutes = refreshClient.tokenExpirationMinutes || 60;
+          const { token: newAccessToken, expiresIn: newExpiresIn } = generateJwt(userForRefresh, {
+            authMode: 'oauth_authorization_code',
+            expiresInMinutes: refreshExpiresInMinutes,
+            additionalClaims: {
+              client_id: tokenData.clientId,
+              scopes: refreshedScopes,
+              aud: tokenData.clientId
+            }
+          });
+
+          // Rotate refresh token: issue a brand new one and replace the old one's
+          // placeholder with it in one locked step. When the grant was revoked in
+          // the meantime nothing is stored and no access token is handed out.
+          const rotatedRefreshToken = generateRefreshToken();
+          const refreshPlatform = configCache.getPlatform() || {};
+          rotationSettled = true;
+          const rotated = await completeRefreshRotation(
+            sanitizedRefreshToken,
+            rotation.rotationId,
+            rotatedRefreshToken,
+            {
+              clientId: tokenData.clientId,
+              userId: tokenData.userId,
+              userEmail: tokenData.userEmail || '',
+              userName: tokenData.userName || '',
+              userUsername: tokenData.userUsername || '',
+              // Re-stamped rather than copied: rotation is where a stale group
+              // snapshot would otherwise live forever.
+              userGroups: currentGroups,
+              scopes: refreshedScopes
+            },
+            refreshPlatform.oauth?.refreshTokenExpirationDays || 30
+          );
+          if (!rotated) {
+            return sendOAuthError(res, 400, 'invalid_grant', 'This access was revoked');
+          }
+
+          // Rotation is the only moment a long-lived connection makes itself
+          // known — access tokens are verified statelessly and leave no trace —
+          // so it is where "last used" on the connections list comes from.
+          touchConsentLastUsed(tokenData.clientId, tokenData.userId).catch(err => {
+            logger.warn('Failed to record connection usage', { component: 'OAuth', error: err });
+          });
+
+          logger.info('[OAuth] Refresh token rotated', {
+            component: 'OAuth',
             clientId: tokenData.clientId,
-            userId: tokenData.userId,
-            userEmail: tokenData.userEmail || '',
-            userName: tokenData.userName || '',
-            userUsername: tokenData.userUsername || '',
-            // Re-stamped rather than copied: rotation is where a stale group
-            // snapshot would otherwise live forever.
-            userGroups: currentGroups,
-            scopes: refreshedScopes
-          },
-          refreshPlatform.oauth?.refreshTokenExpirationDays || 30
-        );
-
-        // Rotation is the only moment a long-lived connection makes itself
-        // known — access tokens are verified statelessly and leave no trace —
-        // so it is where "last used" on the connections list comes from.
-        touchConsentLastUsed(tokenData.clientId, tokenData.userId).catch(err => {
-          logger.warn('Failed to record connection usage', { component: 'OAuth', error: err });
-        });
-
-        logger.info('[OAuth] Refresh token rotated', {
-          component: 'OAuth',
-          clientId: tokenData.clientId,
-          userId: tokenData.userId
-        });
-        return res.json({
-          access_token: newAccessToken,
-          token_type: 'Bearer',
-          expires_in: newExpiresIn,
-          scope: refreshedScopes.join(' '),
-          refresh_token: rotatedRefreshToken
-        });
+            userId: tokenData.userId
+          });
+          return res.json({
+            access_token: newAccessToken,
+            token_type: 'Bearer',
+            expires_in: newExpiresIn,
+            scope: refreshedScopes.join(' '),
+            refresh_token: rotatedRefreshToken
+          });
+        } finally {
+          if (!rotationSettled) await endRotation();
+        }
       }
 
       // --- client_credentials grant ---

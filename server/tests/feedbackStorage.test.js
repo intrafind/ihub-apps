@@ -40,6 +40,14 @@ jest.unstable_mockModule('fs/promises', () => ({
   }
 }));
 
+// The cleanup rewrite goes through atomicWriteFile (temp file + rename), which the
+// in-memory fs mock above cannot serve; it lands in the same in-memory file.
+jest.unstable_mockModule('../utils/atomicWrite.js', () => ({
+  atomicWriteFile: jest.fn(async (_file, data) => {
+    fileContents = data;
+  })
+}));
+
 jest.unstable_mockModule('../configLoader.js', () => ({
   loadJson: async () => ({ features: { feedbackTracking: true } })
 }));

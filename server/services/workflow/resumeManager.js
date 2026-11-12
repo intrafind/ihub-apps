@@ -26,6 +26,7 @@
 import logger from '../../utils/logger.js';
 import { getWorkflowStateRepository } from './WorkflowStateRepository.js';
 import { isSchedulerOwner } from './triggers/schedulerLock.js';
+import { isHeldByAnotherWorker } from './orphanSweeper.js';
 
 /** Only these two statuses mean "was mid-flight when the process died". */
 const RESUMABLE_STATUSES = new Set(['running', 'pending']);
@@ -78,13 +79,18 @@ export async function findResumableExecutions(repository = getWorkflowStateRepos
  * @param {(state: Object) => Promise<{definition: Object, options?: Object}\|null>} params.resolveDefinition
  * @param {boolean} [params.requireSchedulerOwner=true] - Only resume if this instance owns the scheduler lock
  * @param {import('./WorkflowStateRepository.js').WorkflowStateRepository} [params.repository]
+ * @param {(executionId: string, state: Object) => boolean} [params.heldByAnotherWorker]
+ *   Whether a sibling worker still runs the execution (cluster presence when
+ *   omitted). A run that is live elsewhere is not interrupted and is not resumed:
+ *   resuming it would run it twice.
  * @returns {Promise<{ scanned: number, resumed: string[], skipped: string[] }>}
  */
 export async function resumeInterruptedRuns({
   engine,
   resolveDefinition,
   requireSchedulerOwner = true,
-  repository = null
+  repository = null,
+  heldByAnotherWorker = isHeldByAnotherWorker
 } = {}) {
   if (!engine || typeof engine.resumeFromCheckpoint !== 'function') {
     throw new Error(
@@ -110,6 +116,15 @@ export async function resumeInterruptedRuns({
   const skipped = [];
 
   for (const { executionId, state } of candidates) {
+    if (heldByAnotherWorker(executionId, state)) {
+      skipped.push(executionId);
+      logger.info({
+        component: 'ResumeManager',
+        message: `Not resuming ${executionId}: it is running on another worker`,
+        executionId
+      });
+      continue;
+    }
     let resolved = null;
     try {
       resolved = await resolveDefinition(state);

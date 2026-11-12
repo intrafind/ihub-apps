@@ -7,6 +7,7 @@ import { loadJson } from './configLoader.js';
 import logger from './utils/logger.js';
 import { createJsonlAppender } from './utils/jsonlAppender.js';
 import { getContentsPath } from './utils/contentsPath.js';
+import { atomicWriteFile } from './utils/atomicWrite.js';
 
 const dataFile = getContentsPath('data', 'feedback.jsonl');
 
@@ -125,7 +126,9 @@ export async function cleanupFeedback(retentionDays) {
 
     if (removed > 0) {
       const out = retained.length > 0 ? retained.join('\n') + '\n' : '';
-      await fs.writeFile(dataFile, out, 'utf8');
+      // Replaced as a whole: a crash or a concurrent reader (another worker
+      // listing feedback) never sees a truncated file.
+      await atomicWriteFile(dataFile, out);
       logger.info('Feedback cleanup removed expired entries', {
         component: 'FeedbackStorage',
         removed,

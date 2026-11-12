@@ -52,7 +52,7 @@ const ORPHAN_ID_PREFIXES = Object.freeze([
  * @param {Object} state - Stored workflow state.
  * @returns {boolean}
  */
-function isHeldByAnotherWorker(executionId, state) {
+export function isHeldByAnotherWorker(executionId, state) {
   const chatId = state?.data?._chatId;
   return (
     hasRemote(RUN_PRESENCE_KIND, executionId) ||

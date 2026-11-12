@@ -170,6 +170,33 @@ async function run() {
     check('does not resume when not lock owner', res.resumed.length === 0 && called === false);
   }
 
+  console.log('\n🧪 resumeInterruptedRuns — run live on a sibling worker\n');
+  {
+    const storage = await startTestStorage({ prefix: 'ihub-resume-' });
+    const repository = stateRepositoryFor(storage);
+    await seedState(repository, 'wf-exec-live', { status: 'running', workflowId: 'wf1' });
+    await seedState(repository, 'wf-exec-dead', { status: 'running', workflowId: 'wf1' });
+    const resumedIds = [];
+    const engine = {
+      resumeFromCheckpoint: async (definition, execId) => {
+        resumedIds.push(execId);
+      }
+    };
+    const res = await resumeInterruptedRuns({
+      engine,
+      resolveDefinition: async () => ({ definition: def }),
+      requireSchedulerOwner: false,
+      repository,
+      heldByAnotherWorker: executionId => executionId === 'wf-exec-live'
+    });
+    check(
+      'does not resume a run that is live on another worker',
+      !resumedIds.includes('wf-exec-live')
+    );
+    check('lists it as skipped', res.skipped.includes('wf-exec-live'));
+    check('still resumes the dead one', resumedIds.includes('wf-exec-dead'));
+  }
+
   console.log(`\n${failures === 0 ? '✅ all passed' : `❌ ${failures} failed`}`);
   await shutdownStorageBootstrap();
   process.exit(failures ? 1 : 0);

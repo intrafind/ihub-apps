@@ -29,6 +29,8 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { getWorkflowEngine } from '../../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../../services/workflow/ExecutionRegistry.js';
 import { isSchedulerOwner } from '../../services/workflow/triggers/schedulerLock.js';
+import { hasRemote } from '../../clusterBus.js';
+import { RUN_PRESENCE_KIND } from '../../services/loop/RunLog.js';
 import { actionTracker } from '../../actionTracker.js';
 import { createSseChannel, startInactiveClientSweep } from '../../utils/sseChannel.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
@@ -293,9 +295,14 @@ function validateWorkflow(workflow) {
  * @param {Object} [opts]
  * @param {boolean} [opts.requireSchedulerOwner=true] - Only run if this
  *   instance owns the scheduler lock.
+ * @param {(executionId: string) => boolean} [opts.heldByAnotherWorker] - Whether a
+ *   sibling worker still runs the execution; those are left alone.
  * @returns {Promise<{recovered: boolean, marked: number}>}
  */
-export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = true } = {}) {
+export async function markInterruptedExecutionsFailed({
+  requireSchedulerOwner = true,
+  heldByAnotherWorker = executionId => hasRemote(RUN_PRESENCE_KIND, executionId)
+} = {}) {
   const registry = getExecutionRegistry();
   // The registry is shared state, and exactly one process should write it.
   const owned = !requireSchedulerOwner || isSchedulerOwner();
@@ -318,7 +325,8 @@ export async function markInterruptedExecutionsFailed({ requireSchedulerOwner = 
     if (owned) {
       // Mark previously-running executions as failed (server process died)
       for (const exec of await registry.getActive()) {
-        if (exec.status === 'running') {
+        // A run a sibling worker still executes is not interrupted.
+        if (exec.status === 'running' && !heldByAnotherWorker(exec.executionId)) {
           registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
           marked += 1;
         }

@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import logger from '../utils/logger.js';
+import { atomicWriteFile } from '../utils/atomicWrite.js';
 import { getContentsPath } from '../utils/contentsPath.js';
 
 /**
@@ -608,7 +609,9 @@ class TokenStorageService {
       await fs.mkdir(tokenDir, { recursive: true });
 
       const tokenFile = this._tokenFilePath(userId, serviceName, tokenData.providerId);
-      await fs.writeFile(tokenFile, JSON.stringify(tokenData, null, 2));
+      // The only copy of the user's refresh token: replaced as a whole, never
+      // visible half-written, readable by the server user only.
+      await atomicWriteFile(tokenFile, JSON.stringify(tokenData, null, 2), { mode: 0o600 });
 
       logger.info('Tokens stored for user', {
         component: 'TokenStorage',
