@@ -543,10 +543,15 @@ The envelope is written with `atomicWriteJSON`:
 `data` (the value the contract defines) and stored before `data`. Every read
 reports the stored values, and a metadata-only read (`listMetadata`,
 `list`/`scan` with `includeData: false`, and the owner/etag check inside `put`
-and `delete`) reads only the start of the file and never parses the body. An
-envelope without a valid stored `etag`/`size` is reported as corrupt (logged,
-counted in a page's `skipped`), never re-hashed. Migration V247 added both to
-the `v: 1` envelopes of earlier releases once.
+and `delete`) reads only the start of the file and never parses the body.
+Migration V247 added both to the `v: 1` envelopes of earlier releases once. An
+envelope that turns up later without them (a restored backup, a rollback that
+kept writing, an older release on the same volume) is read whole once, its
+`etag` and `size` derived the way earlier releases derived them, and written
+back under the document's lock — same `data`, owner and timestamps, no change
+event, never over a newer write; one warning per listing counts them. An
+envelope whose `etag` or `size` is present but malformed is reported as
+corrupt (logged, counted in a page's `skipped`).
 
 **Why documents are flat and owners are an index.** The design sketch had
 `contents/data/<ns>/[<ownerId>/]<key>.json`, but `get(ns, key)` takes no
