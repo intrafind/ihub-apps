@@ -129,11 +129,14 @@ export function projectIdsReadBy(sources) {
  *
  * @param {{projects?: Array<Object>}|null|undefined} scope - `scopeSummary(plan)`
  * @param {{items?: Array<Object>}|null|undefined} sources - The turn's source set
+ * @param {Iterable<string>} [alsoRead] - Projects read before an approval paused the turn
+ *   (`carriedBasis`)
  * @returns {Object|null|undefined}
  */
-export function settleKnowledgeScope(scope, sources) {
+export function settleKnowledgeScope(scope, sources, alsoRead = []) {
   if (!Array.isArray(scope?.projects) || scope.projects.length === 0) return scope;
   const read = projectIdsReadBy(sources);
+  for (const id of alsoRead || []) read.add(id);
   let changed = false;
   const projects = scope.projects.map(project => {
     const contributed =
@@ -143,4 +146,54 @@ export function settleKnowledgeScope(scope, sources) {
     return { ...project, contributed };
   });
   return changed ? { ...scope, projects } : scope;
+}
+
+// ── across an approval pause ────────────────────────────────────────────────
+
+/** Most entries of each list a paused turn carries. */
+const MAX_CARRIED = 24;
+
+const stringList = (value, max = MAX_CARRIED) =>
+  Array.isArray(value)
+    ? [
+        ...new Set(value.filter(item => typeof item === 'string').map(item => item.slice(0, 200)))
+      ].slice(0, max)
+    : [];
+
+/**
+ * What the basis of an answer rests on, as a turn that pauses on a tool approval
+ * carries it to the turn that continues it. The continuation is a new loop run
+ * that starts with nothing recorded, so without this the answer after an approval
+ * would be named by the approved call alone: "Model knowledge" for an answer a
+ * search before the pause informed.
+ *
+ * It is cumulative: a continuation that pauses again carries what it inherited.
+ *
+ * @param {Object} input
+ * @param {Object|null} [input.prior] - What the paused turn itself inherited (`resume.basis`)
+ * @param {Object} input.result - The loop result of the segment that paused
+ * @returns {{knowledgeSources: string[], integrations: string[], projectsRead: string[]}}
+ */
+export function carriedBasis({ prior = null, result } = {}) {
+  return boundCarriedBasis({
+    knowledgeSources: [...(prior?.knowledgeSources || []), ...(result?.knowledgeSources || [])],
+    integrations: [...(prior?.integrations || []), ...(result?.integrations || [])],
+    projectsRead: [...(prior?.projectsRead || []), ...projectIdsReadBy(result?.sources)]
+  });
+}
+
+/**
+ * A carried basis as it is stored and read back: strings only, bounded. Whatever else
+ * a stored chat holds under it is dropped.
+ *
+ * @param {unknown} basis
+ * @returns {{knowledgeSources: string[], integrations: string[], projectsRead: string[]}}
+ */
+export function boundCarriedBasis(basis) {
+  return {
+    knowledgeSources: stringList(basis?.knowledgeSources),
+    // '' stands for a connected system without a name: kept.
+    integrations: stringList(basis?.integrations, 12),
+    projectsRead: stringList(basis?.projectsRead)
+  };
 }

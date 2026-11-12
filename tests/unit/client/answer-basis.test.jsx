@@ -521,14 +521,41 @@ describe('keyboard and screen reader', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it('Escape closes it and returns the focus to the chip', () => {
+  it('opening moves the focus into the dialog, which is not modal and traps nothing', () => {
     renderBasis({ answerBasis: [{ kind: 'web' }] });
-    // Opening does not move the focus: only closing returns it to the chip.
+    chip().focus();
     open();
+    const dialog = screen.getByRole('dialog', { name: 'About this answer' });
+    expect(dialog).toHaveFocus();
     expect(chip()).not.toHaveFocus();
+    // Non-modal: the page behind stays available and nothing keeps Tab inside.
+    expect(dialog).not.toHaveAttribute('aria-modal');
+    expect(fireEvent.keyDown(dialog, { key: 'Tab' })).toBe(true);
+  });
+
+  it('Escape closes it and returns the focus from the dialog to the chip', () => {
+    renderBasis({ answerBasis: [{ kind: 'web' }] });
+    open();
+    // The focus is in the dialog, so the chip has it again only through the restore.
+    expect(screen.getByRole('dialog')).toHaveFocus();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(chip()).toHaveFocus();
+  });
+
+  it('a press outside closes it without pulling the focus back to the chip', () => {
+    render(
+      <MemoryRouter>
+        <AnswerBasis answerBasis={[{ kind: 'web' }]} />
+        <button type="button">elsewhere</button>
+      </MemoryRouter>
+    );
+    open();
+    const elsewhere = screen.getByRole('button', { name: 'elsewhere' });
+    elsewhere.focus();
+    fireEvent.mouseDown(elsewhere);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(elsewhere).toHaveFocus();
   });
 
   it('a press outside closes it', () => {

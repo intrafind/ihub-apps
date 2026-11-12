@@ -43,7 +43,12 @@ import {
   SSE_V2_EVENTS
 } from '../../../shared/runEvents.js';
 import { storedSourceSet } from '../../../shared/sources/index.js';
-import { answerBasisOf, settleKnowledgeScope } from './answerBasis.js';
+import {
+  answerBasisOf,
+  boundCarriedBasis,
+  carriedBasis,
+  settleKnowledgeScope
+} from './answerBasis.js';
 import {
   approvalSeam,
   imageLiftSeam,
@@ -966,7 +971,9 @@ class ChatService {
           grants: toolApproval?.grants || [],
           interaction: result.pendingInteraction,
           messages: result.messages,
-          startMessage: turnStartMessage
+          startMessage: turnStartMessage,
+          // What this turn found so far: the answer after the approval rests on it too.
+          basis: carriedBasis({ prior: resume?.basis, result })
         });
         if (stored) {
           stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: result.pendingInteraction });
@@ -1010,6 +1017,8 @@ class ChatService {
         generatedImages,
         promptSources,
         knowledgeScope,
+        // What the turn this one continues had used (an approval paused it).
+        priorBasis: resume?.basis || null,
         contextTracker,
         signal: controller.signal,
         structured: outputSeam
@@ -1132,7 +1141,8 @@ class ChatService {
     grants,
     interaction,
     messages,
-    startMessage
+    startMessage,
+    basis = null
   }) {
     const toolCallId = interaction.source?.toolCallId;
     const transcript = toolCallId
@@ -1159,6 +1169,8 @@ class ChatService {
               transcript,
               // For an app that sends no chat history: the continuation puts it back.
               question: pausedTurnQuestion(startMessage),
+              // The sources the turn had used before it paused, for the basis of the answer.
+              ...(basis ? { basis: boundCarriedBasis(basis) } : {}),
               createdAt: new Date().toISOString()
             }
           }
@@ -1204,11 +1216,19 @@ class ChatService {
     generatedImages = [],
     promptSources = [],
     knowledgeScope = null,
+    priorBasis = null,
     contextTracker = null,
     structured = null,
     signal = null
   }) {
-    const loopSources = result.knowledgeSources || [];
+    // A continuation after an approval starts a new loop run: what the turn used
+    // before it paused is added, so the answer's basis is the whole turn's.
+    const loopSources = [
+      ...new Set([...(priorBasis?.knowledgeSources || []), ...(result.knowledgeSources || [])])
+    ];
+    const integrations = [
+      ...new Set([...(priorBasis?.integrations || []), ...(result.integrations || [])])
+    ];
     const content = result.content || '';
     const usage = wireUsage(result.usage);
     const summary = {
@@ -1279,12 +1299,16 @@ class ChatService {
     // What the answer is based on, from the sources the turn used and the
     // connected systems that informed it: the kinds the footer's chip shows.
     const answerBasisFor = (sources, { byModel = true } = {}) =>
-      answerBasisOf({ knowledgeSources: sources, integrations: result.integrations, byModel });
+      answerBasisOf({ knowledgeSources: sources, integrations, byModel });
     // The knowledge scope is reported when the turn starts, with what went into
     // the prompt. A project a search of the turn then returned contributed too:
     // said again, with that settled, just before the turn ends.
     const reportSettledScope = () => {
-      const settled = settleKnowledgeScope(knowledgeScope, result.sources);
+      const settled = settleKnowledgeScope(
+        knowledgeScope,
+        result.sources,
+        priorBasis?.projectsRead
+      );
       if (!settled || settled === knowledgeScope) return;
       stream.emit(SSE_V2_EVENTS.KNOWLEDGE_SCOPE, settled);
       this.runLog.append(runId, RUN_LOG_EVENTS.KNOWLEDGE_SCOPE, settled);

@@ -240,7 +240,11 @@ be resumed after an answer (`EXECUTION_PRINCIPAL_UNKNOWN`): start it again.
   nodes and scheduled runs, before the seams that announce (`tool/started`) or run a call.
 - Chat continuation: `server/services/chat/chatToolApproval.js`. The stored chat transcript holds
   only text, so the paused turn's tool calls and results are kept on the chat document
-  (`toolApproval.pending`, bounded, never sent to clients) until the approval is answered.
+  (`toolApproval.pending`, bounded, never sent to clients) until the approval is answered. The
+  pause also keeps what the turn had used so far (`pending.basis`: its knowledge sources, the
+  connected systems by name and the projects it read), so the answer after the approval names the
+  whole turn as its basis (`run/ended.answerBasis`, see
+  [Answer Sources](answer-sources.md#what-users-see)).
 - Chat API: answer an approval by posting the next message with
   `approvalResponse: { interactionId, decision: 'approve' | 'reject', grant?: 'chat' }`, and send
   `toolApprovalCapable: true` with every request from a client that draws the card. A chat

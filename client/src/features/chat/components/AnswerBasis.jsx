@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useId } from 'react';
+import { useEffect, useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
@@ -168,6 +168,14 @@ function NotUsedList({ projects, t }) {
  */
 function BasisPopover({ entries, scope, workflowResult, provenance, models, panelProps }) {
   const { t, i18n } = useTranslation();
+  const { panelRef } = panelProps;
+  // The popover is a dialog, so opening it moves the focus into it: a keyboard or screen
+  // reader user lands on its title and reads on. It is not a trap: Tab leaves it, Escape
+  // closes it and the focus returns to the chip (`usePopoverPanel`). After the hook's
+  // positioning (a layout effect), so the panel is not scrolled into place.
+  useEffect(() => {
+    panelRef.current?.focus({ preventScroll: true });
+  }, [panelRef]);
   const { used, unused } = splitScope(scope);
   const titleId = useId();
   const modelOnly = isModelOnly(entries);
@@ -195,11 +203,12 @@ function BasisPopover({ entries, scope, workflowResult, provenance, models, pane
     <div
       ref={panelProps.panelRef}
       id={panelProps.panelId}
+      tabIndex={-1}
       style={panelProps.panelStyle}
       role="dialog"
       aria-labelledby={titleId}
       data-testid="answer-basis-panel"
-      className={`absolute ${panelProps.side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} end-0 z-20 w-80 max-h-[70vh] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white p-3 text-start text-xs font-normal shadow-lg dark:border-gray-700 dark:bg-gray-900`}
+      className={`absolute ${panelProps.side === 'bottom' ? 'top-full mt-2' : 'bottom-full mb-2'} end-0 z-20 w-80 max-h-[70vh] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-lg border focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 border-gray-200 bg-white p-3 text-start text-xs font-normal shadow-lg dark:border-gray-700 dark:bg-gray-900`}
     >
       <h3 id={titleId} className="m-0 text-sm font-medium text-gray-900 dark:text-gray-100">
         {t('chatMessage.answerBasis.title', 'About this answer')}

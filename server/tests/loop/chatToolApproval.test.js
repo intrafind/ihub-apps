@@ -40,7 +40,8 @@ import { makeClient, sseResponse, MODELS } from './helpers/llmFixtures.js';
 import { FilesystemStorageProvider } from '../../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../../services/chat/ChatRepository.js';
 
-const { INTERACTION_RAISED, TOOL_STARTED, TOOL_COMPLETED, RUN_PAUSED } = SSE_V2_EVENTS;
+const { INTERACTION_RAISED, TOOL_STARTED, TOOL_COMPLETED, RUN_PAUSED, RUN_ENDED, KNOWLEDGE_SCOPE } =
+  SSE_V2_EVENTS;
 
 const sinks = new Map();
 test.before(() => {
@@ -135,7 +136,7 @@ function makeService(turns, { interactionService, runTool } = {}) {
     logInteraction: spy(async () => {}),
     runTool: runToolSpy,
     telemetry: { recordChatCallStart: async () => ({}), recordChatCallEnd: async () => {} },
-    runLog: { startRun: async () => ({}), endRun: () => {} },
+    runLog: { startRun: async () => ({}), endRun: () => {}, append: () => {} },
     ...(interactionService ? { interactionService } : {})
   });
   return { service, requests, runTool: runToolSpy };
@@ -432,6 +433,145 @@ test('reject and expiry: the placeholder becomes USER_REJECTED / APPROVAL_EXPIRE
     const [done] = ofType(frames, TOOL_COMPLETED);
     assert.equal(done.data.error.code, code);
   }
+});
+
+// ── the answer basis across an approval ─────────────────────────────────────
+
+const SEARCH = {
+  id: 'webSearch',
+  name: 'webSearch',
+  script: 'braveSearch.js',
+  description: 'search the web',
+  parameters: { type: 'object', properties: { query: { type: 'string' } } }
+};
+
+test('a pause keeps what the turn had used so far with the approval', async t => {
+  const chatId = newChatId('basis-pause');
+  captureFrames(t, chatId);
+  const repository = await chatStore(t);
+  const interactionService = await interactionsFor(t);
+  const { service } = makeService(
+    [toolTurn('webSearch', { query: 'acme' }), toolTurn('dangerous', { target: 'ACME-12' })],
+    { interactionService }
+  );
+  const summary = await turn(service, {
+    chatId,
+    prepData: prep({ tools: [SEARCH, GATED] }),
+    persistence: persistenceFor(repository)
+  });
+  assert.equal(summary.status, 'paused');
+  const stored = (await repository.getChat(chatId)).toolApproval.pending;
+  assert.deepEqual(stored.basis.knowledgeSources, ['websearch']);
+  assert.deepEqual(stored.basis.integrations, []);
+  assert.deepEqual(stored.basis.projectsRead, []);
+});
+
+test('the answer after an approval is based on the whole turn, not on the approved call alone', async t => {
+  for (const outcome of ['approved', 'rejected']) {
+    const chatId = newChatId(`basis-${outcome}`);
+    const frames = captureFrames(t, chatId);
+    const { service } = makeService([textTurn('Done.')]);
+    const knowledgeScope = {
+      projects: [
+        { id: 'prj_a', name: 'Alpha', mode: 'searched', contributed: false },
+        { id: 'prj_b', name: 'Beta', mode: 'searched', contributed: false }
+      ]
+    };
+    const summary = await turn(service, {
+      chatId,
+      prepData: prep({
+        llmMessages: [
+          { role: 'user', content: 'Please change ACME-12' },
+          { role: 'user', content: 'Decision' }
+        ],
+        knowledgeScope
+      }),
+      toolApproval: {
+        grants: [],
+        resume: {
+          interactionId: `basis-${outcome}`,
+          outcome,
+          call: { id: 'call_1', name: 'dangerous', toolId: 'dangerous' },
+          args: { target: 'ACME-12' },
+          transcript: pausedTranscript({ target: 'ACME-12' }),
+          // What the turn had used before an approval paused it.
+          basis: {
+            knowledgeSources: ['project', 'websearch', 'integration'],
+            integrations: ['Jira'],
+            projectsRead: ['prj_a']
+          }
+        }
+      }
+    });
+    const expected = [{ kind: 'project' }, { kind: 'web' }, { kind: 'integration', label: 'Jira' }];
+    assert.deepEqual(ofType(frames, RUN_ENDED)[0].data.answerBasis, expected, outcome);
+    assert.deepEqual(summary.answerBasis, expected, outcome);
+    // The project read before the pause contributed; the other one did not.
+    const scopes = ofType(frames, KNOWLEDGE_SCOPE).map(f => f.data);
+    assert.deepEqual(
+      scopes.at(-1).projects.map(p => [p.id, p.contributed]),
+      [
+        ['prj_a', true],
+        ['prj_b', false]
+      ],
+      outcome
+    );
+  }
+});
+
+test('without a carried basis the continuation is named by what it used itself', async t => {
+  const chatId = newChatId('basis-none');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService([textTurn('Done.')]);
+  await turn(service, {
+    chatId,
+    prepData: prep({
+      llmMessages: [
+        { role: 'user', content: 'Please change ACME-12' },
+        { role: 'user', content: 'Decision' }
+      ]
+    }),
+    toolApproval: {
+      resume: {
+        interactionId: 'basis-none',
+        outcome: 'rejected',
+        call: { id: 'call_1', name: 'dangerous', toolId: 'dangerous' },
+        args: {},
+        transcript: pausedTranscript({ target: 'ACME-12' })
+      }
+    }
+  });
+  assert.deepEqual(ofType(frames, RUN_ENDED)[0].data.answerBasis, [{ kind: 'model' }]);
+});
+
+test('settle: the carried basis is handed to the continuation, bounded to strings', async t => {
+  const svc = await interactionsFor(t);
+  const chatId = 'chat-settle-basis';
+  const interaction = await raiseChatApproval(svc, chatId);
+  const chat = storedChat(interaction);
+  chat.toolApproval.pending.basis = {
+    knowledgeSources: ['websearch', 42, { x: 1 }],
+    integrations: ['Jira', ''],
+    projectsRead: ['prj_a'],
+    leftover: 'dropped'
+  };
+  const result = await settleChatApprovals({
+    chatId,
+    user: { id: 'u1' },
+    chat,
+    lastMessage: {
+      role: 'user',
+      approvalResponse: { interactionId: interaction.id, decision: 'approve' }
+    },
+    repository: fakeRepository(),
+    interactionService: svc,
+    authorizeInteraction: allow
+  });
+  assert.deepEqual(result.resume.basis, {
+    knowledgeSources: ['websearch'],
+    integrations: ['Jira', ''],
+    projectsRead: ['prj_a']
+  });
 });
 
 // ── settling the answer ─────────────────────────────────────────────────────

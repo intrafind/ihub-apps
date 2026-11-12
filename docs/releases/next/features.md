@@ -1912,9 +1912,13 @@ replaces all of them.
   - **Details:** model, time, marking, content hash and output ID, as before.
 - **The separate ⓘ button is gone.** The first-turn notice, the disclaimer below the message box,
   and the provenance record, watermark and headers are unchanged.
-- **Keyboard and narrow panes.** The chip is a button: Escape closes the popover and returns the
-  focus to it. Nothing is only in a tooltip. In a narrow pane (Outlook) a chip with several kinds
+- **Keyboard and narrow panes.** The chip is a button. Opening the popover moves the focus into it,
+  without trapping it: Escape closes it and returns the focus to the chip. Nothing is only in a
+  tooltip. In a narrow pane (Outlook) a chip with several kinds
   shows icons only; its accessible name keeps the full text.
+- **After a tool approval the chip covers the whole turn.** An answer that continues after you
+  approved or rejected a tool call is based on everything the turn used before it paused, for
+  example a project search or a Jira lookup, and not only on the approved call.
 - **Older answers show no chip.** Answers stored before this release have no record of what they
   were based on, and iHub does not guess it from other fields. The amber chip for an unavailable
   project is still shown on them.

@@ -11,6 +11,8 @@ import assert from 'node:assert/strict';
 import {
   answerBasisOf,
   boundAnswerBasis,
+  boundCarriedBasis,
+  carriedBasis,
   projectIdsReadBy,
   settleKnowledgeScope
 } from '../services/chat/answerBasis.js';
@@ -257,4 +259,82 @@ test('the basis names a system the way the activity row does', () => {
   }
   assert.equal(integrationLabelOf({ id: 'webSearch' }), null);
   assert.equal(integrationLabelOf(null), null);
+});
+
+// ── across an approval pause ──────────────────────────────────────────────
+
+test('carriedBasis: what the paused segment used, plus what it inherited', () => {
+  const result = {
+    knowledgeSources: ['websearch', 'integration'],
+    integrations: ['Jira'],
+    sources: { items: [hit('prj_a'), { provider: 'web' }] }
+  };
+  assert.deepEqual(carriedBasis({ result }), {
+    knowledgeSources: ['websearch', 'integration'],
+    integrations: ['Jira'],
+    projectsRead: ['prj_a']
+  });
+  // A continuation that pauses again carries what it inherited: cumulative, no repeats.
+  assert.deepEqual(
+    carriedBasis({
+      prior: {
+        knowledgeSources: ['project', 'websearch'],
+        integrations: ['Munich AD'],
+        projectsRead: ['prj_b']
+      },
+      result
+    }),
+    {
+      knowledgeSources: ['project', 'websearch', 'integration'],
+      integrations: ['Munich AD', 'Jira'],
+      projectsRead: ['prj_b', 'prj_a']
+    }
+  );
+  assert.deepEqual(carriedBasis({ result: {} }), {
+    knowledgeSources: [],
+    integrations: [],
+    projectsRead: []
+  });
+});
+
+test('boundCarriedBasis: strings only, bounded, nothing else kept', () => {
+  assert.deepEqual(boundCarriedBasis(undefined), {
+    knowledgeSources: [],
+    integrations: [],
+    projectsRead: []
+  });
+  const bounded = boundCarriedBasis({
+    knowledgeSources: ['websearch', 7, null, 'websearch'],
+    integrations: Array.from({ length: 40 }, (_, i) => `S${i}`),
+    projectsRead: ['x'.repeat(500)],
+    extra: 'dropped'
+  });
+  assert.deepEqual(bounded.knowledgeSources, ['websearch']);
+  assert.equal(bounded.integrations.length, 12);
+  assert.equal(bounded.projectsRead[0].length, 200);
+  assert.deepEqual(Object.keys(bounded), ['knowledgeSources', 'integrations', 'projectsRead']);
+  // A system without a name stays in the list.
+  assert.deepEqual(boundCarriedBasis({ integrations: ['', 'Jira'] }).integrations, ['', 'Jira']);
+});
+
+test('settleKnowledgeScope: projects read before an approval pause contribute too', () => {
+  const scope = {
+    projects: [
+      { id: 'prj_a', mode: 'searched', contributed: false },
+      { id: 'prj_b', mode: 'searched', contributed: false }
+    ]
+  };
+  const settled = settleKnowledgeScope(scope, { items: [] }, ['prj_b']);
+  assert.deepEqual(
+    settled.projects.map(p => [p.id, p.contributed]),
+    [
+      ['prj_a', false],
+      ['prj_b', true]
+    ]
+  );
+  assert.equal(
+    settleKnowledgeScope(scope, { items: [] }, []),
+    scope,
+    'nothing changed: the same object'
+  );
 });
