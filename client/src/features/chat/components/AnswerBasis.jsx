@@ -5,6 +5,7 @@ import { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import { usePopoverPanel } from '../hooks/usePopoverPanel';
 import { ProvenanceDetails } from './ProvenanceInfo';
 import {
@@ -80,7 +81,7 @@ function UsedProject({ project, t }) {
 }
 
 /** The sources section: every kind the answer used, a project by the projects behind it. */
-function SourcesList({ entries, used, workflowResult, t }) {
+function SourcesList({ entries, used, workflowResult, language, t }) {
   const items = [];
   for (const entry of entries) {
     if (entry.kind === 'project') {
@@ -92,7 +93,9 @@ function SourcesList({ entries, used, workflowResult, t }) {
       }
     }
     if (entry.kind === 'workflow') {
-      items.push(<WorkflowSource key="workflow" workflowResult={workflowResult} t={t} />);
+      items.push(
+        <WorkflowSource key="workflow" workflowResult={workflowResult} language={language} t={t} />
+      );
       continue;
     }
     items.push(
@@ -113,10 +116,9 @@ function SourcesList({ entries, used, workflowResult, t }) {
 }
 
 /** The workflow run behind the answer, with the way to its execution. */
-function WorkflowSource({ workflowResult, t }) {
-  const names = workflowResult?.workflowName;
-  const name =
-    names && typeof names === 'object' ? names.en || Object.values(names)[0] : names || null;
+function WorkflowSource({ workflowResult, language, t }) {
+  // The name in the reader's language, else the default language, else any it has.
+  const name = getLocalizedContent(workflowResult?.workflowName, language) || null;
   return (
     <li className="flex flex-col gap-0.5" data-testid="answer-basis-workflow">
       <span className="font-medium text-gray-900 dark:text-gray-100">
@@ -212,7 +214,13 @@ function BasisPopover({ entries, scope, workflowResult, provenance, models, pane
 
       {!modelOnly && (
         <Section title={t('chatMessage.answerBasis.sources', 'Sources')}>
-          <SourcesList entries={entries} used={used} workflowResult={workflowResult} t={t} />
+          <SourcesList
+            entries={entries}
+            used={used}
+            workflowResult={workflowResult}
+            language={i18n?.language}
+            t={t}
+          />
         </Section>
       )}
 

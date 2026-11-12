@@ -144,9 +144,15 @@ export const isModelOnly = entries => entries.length === 1 && entries[0].kind ==
 
 // ── the projects of the scope ───────────────────────────────────────────────
 
-/** Whether a scope entry is a user project (it has a page to link to). */
+/**
+ * Whether a scope entry has a project page to link to: a user project (`prj_`) or an
+ * iFinder smart collection (`ifc_`, the iFinder tier). An admin project (`faq`) is
+ * reachable only through the apps that list it, and a project a shared chat does not
+ * name has no id.
+ */
 export const isUserProject = project =>
-  typeof project?.id === 'string' && project.id.startsWith('prj_');
+  typeof project?.id === 'string' &&
+  (project.id.startsWith('prj_') || project.id.startsWith('ifc_'));
 
 /** A scope entry's name; a project the viewer may not see by name stays anonymous. */
 export function projectName(project, t) {

@@ -78,7 +78,8 @@ export function answerBasisOf({ knowledgeSources = [], integrations = [], byMode
     if (named.length === 0 || names.includes('')) basis.push({ kind });
   }
   if (basis.length === 0 && byModel) return [{ kind: 'model' }];
-  return basis;
+  // The bound of a stored answer, so the live chip and the reopened one agree.
+  return boundAnswerBasis(basis) ?? [];
 }
 
 /**

@@ -333,6 +333,27 @@ describe('the popover "About this answer"', () => {
     expect(within(list).getByText('Web search')).toBeInTheDocument();
   });
 
+  it('an iFinder collection has a project page too, so it is linked', () => {
+    renderBasis({
+      answerBasis: [{ kind: 'project' }],
+      knowledgeScope: {
+        projects: [
+          {
+            id: 'ifc_00000000-0000-4000-8000-000000000001',
+            name: 'Contracts',
+            mode: 'searched',
+            contributed: true
+          }
+        ]
+      }
+    });
+    open();
+    expect(screen.getByRole('link', { name: 'Open project Contracts' })).toHaveAttribute(
+      'href',
+      '/projects/ifc_00000000-0000-4000-8000-000000000001'
+    );
+  });
+
   it('a project the basis names without a project in the scope is still listed', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }] });
     open();
@@ -425,6 +446,20 @@ describe('a workflow answer', () => {
     expect(headings()).toContain('Details');
   });
 
+  it('names the workflow in the reader’s language, and falls back to the default one', () => {
+    mockLanguage = 'de';
+    const names = { en: 'Review', de: 'Prüfung' };
+    const { unmount } = renderBasis({
+      workflowResult: { status: 'completed', workflowName: names }
+    });
+    open();
+    expect(screen.getByTestId('answer-basis-workflow')).toHaveTextContent('Prüfung');
+    unmount();
+    renderBasis({ workflowResult: { status: 'completed', workflowName: { en: 'Review' } } });
+    open();
+    expect(screen.getByTestId('answer-basis-workflow')).toHaveTextContent('Review');
+  });
+
   it('without an execution there is no link', () => {
     renderBasis({ workflowResult: { status: 'completed', workflowName: 'Review' } });
     open();
@@ -488,8 +523,9 @@ describe('keyboard and screen reader', () => {
 
   it('Escape closes it and returns the focus to the chip', () => {
     renderBasis({ answerBasis: [{ kind: 'web' }] });
-    chip().focus();
+    // Opening does not move the focus: only closing returns it to the chip.
     open();
+    expect(chip()).not.toHaveFocus();
     fireEvent.keyDown(document, { key: 'Escape' });
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(chip()).toHaveFocus();

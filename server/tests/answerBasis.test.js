@@ -72,6 +72,21 @@ test('each connected system is an entry of its own, named by its label', () => {
   assert.deepEqual(answerBasisOf({ knowledgeSources: ['integration'] }), [{ kind: 'integration' }]);
 });
 
+test('the live basis has the bound a stored answer has, so the chip is the same after reopening', () => {
+  const integrations = Array.from({ length: 20 }, (_, i) => `System ${i}`);
+  const live = answerBasisOf({
+    knowledgeSources: ['project', 'websearch', 'integration'],
+    integrations
+  });
+  assert.equal(live.length, 12);
+  assert.deepEqual(live.slice(0, 3), [
+    { kind: 'project' },
+    { kind: 'web' },
+    { kind: 'integration', label: 'System 0' }
+  ]);
+  assert.deepEqual(boundAnswerBasis(live), live, 'storing it changes nothing');
+});
+
 test('nothing used: the model’s own knowledge, alone', () => {
   assert.deepEqual(answerBasisOf({ knowledgeSources: [] }), [{ kind: 'model' }]);
   assert.deepEqual(answerBasisOf({ knowledgeSources: ['llm'] }), [{ kind: 'model' }]);

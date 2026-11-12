@@ -723,7 +723,7 @@ export NODE_OPTIONS="--max-old-space-size=4096"
 ### A project's documents do not reach the model
 
 **Symptoms:**
-- The answer badge says the project was unavailable
+- The answer shows the amber **Project not available** chip
 - A document stays in "Waiting" or "Extracting"
 - A linked project is missing from an app's knowledge
 
