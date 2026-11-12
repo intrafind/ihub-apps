@@ -21,7 +21,7 @@ This part is the composition layer above apps:
 **The rest is not intuitive.** The admin finished one of six tasks only through a workaround, three partially, and failed two: create an agent and approve its action, and explain the five concepts. Panel median for the agent editor: 1/5.
 
 The biggest problems:
-- **Agents don't do what they promise.** The Schedule field is saved where no scheduler reads it, so a scheduled agent never runs (AX-B1). The editor's JSON mode drops keystrokes (AX-B2). Commas cannot be typed into the approver and service-account fields (AX-B3). The model picker offers disabled and transcription models (AX-B8).
+- **Agents don't do what they promise.** The server discards the Schedule on save (`serializeProfile()` rebuilds the definition without triggers), so a scheduled agent is never stored with its schedule and never runs (AX-B1). The editor's JSON mode drops keystrokes (AX-B2). Commas cannot be typed into the approver and service-account fields (AX-B3). The model picker offers disabled and transcription models (AX-B8).
 - **Approvals can get stuck.** An "Ask a Person" step with no options can be saved and can never be answered (AX-B4). Its option labels show `[object Object]` and editing them destroys the German text (AX-B5). A cancelled run leaves its approval in the queue (AX-B16). The queue is admin-only although the API serves approver groups (AX-B24).
 - **Workflows have two half-editors.** Neither can run a test. The canvas loses work without warning (AX-B6). "Publish" changes nothing at runtime (AX-B11). Nobody can tell from the UI what the run input is called (AX-B12).
 - **Admins cannot write a skill in Admin → Skills.** It takes 18 steps through the end-user library, sharing and Promote.
@@ -286,7 +286,7 @@ Personas are in brackets; "lead" means the lead verified the claim (appendix).
   - `sharing.permissionHint` names `"projectSharing"`.
 
   Rewrite of `largeContextHint`: "This project is larger than the ~{{budget}} tokens loaded into a prompt. With "Read everything" it fills the context window of every request; "Automatic" searches it instead."
-- **AX-TW6 — Schedule time zone is unstated.** The UTC schedule is saved without saying so (`AdminAgentEditPage.jsx:213`). An admin in Berlin who types `0 8 * * 1-5` gets 09:00 or 10:00 local time.
+- **AX-TW6 — Schedule time zone is unstated.** The editor treats the cron expression as UTC without saying so (`AdminAgentEditPage.jsx:213`). Today the schedule is discarded on save anyway (AX-B1); once that is fixed, an admin in Berlin who types `0 8 * * 1-5` would get 09:00 or 10:00 local time unless the field states or takes a time zone.
 - **AX-TW7 — Skills and Workflows lack an "Install from Marketplace" shortcut.** Models has one (`AdminModelsPage.jsx:547`, `?type=model`). Add `?type=skill|workflow` links to both list headers and to the Skills empty state.
 - **AX-TW8 — The docs IA doesn't mirror the admin.** In `SUMMARY.md`, Skills and Projects sit under Configuration, while Workflows, Marketplace and Agent Factory sit under Features among 40 pages. Searching "agent" in `/admin/docs` ranks `a2a-agents.md` first. *Recommendation:* an "AI Workspace" docs group.
 
