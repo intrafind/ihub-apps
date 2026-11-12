@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V247 — Web pages in admin projects become stored snapshots (#3622)
+ * Migration V248 — Web pages in admin projects become stored snapshots (#3622)
  *
  * A web page item (`kind: 'url'`) was a live link (`storage: 'link'`): every
  * worker fetched and converted the page whenever its own cache was cold. It
@@ -22,17 +22,17 @@
  * changes nothing.
  */
 
-export const version = '247';
+export const version = '248';
 export const description = 'project_web_pages_stored';
 
 const PROJECTS_DIR = 'projects';
 
-/** Snapshot of `isLinkedWebPage` as of V247 — migrations do not import live code. */
+/** Snapshot of `isLinkedWebPage` as of V248 — migrations do not import live code. */
 function isLinkedWebPage(item) {
   return item?.kind === 'url' && item.storage === 'link';
 }
 
-/** Snapshot of `convertLinkedWebPage` as of V247. */
+/** Snapshot of `convertLinkedWebPage` as of V248. */
 function convert(item) {
   item.storage = 'text';
   item.status = 'pending';

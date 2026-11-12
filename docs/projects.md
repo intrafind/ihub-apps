@@ -109,7 +109,7 @@ A **web page** (`url`) is a stored snapshot, like a file from a website:
   meta description are what the item is about.
 - **A changed address** (edit the item) drops the old snapshot and fetches the new page.
 
-Web pages stored as links before this change are converted on their own: migration V247
+Web pages stored as links before this change are converted on their own: migration V248
 converts the items of admin project files, and the ingest reconciler converts the rest (user
 projects, and any link left) shortly after the server starts. Each converted page waits for its
 first fetch, which one server process takes under the project's lock (at most 200 pages per

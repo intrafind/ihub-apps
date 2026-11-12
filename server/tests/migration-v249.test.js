@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V248 specs — the default refresh TTL of project items is a week.
+ * Migration V249 specs — the default refresh TTL of project items is a week.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, precondition, version } from '../migrations/V248__project_refresh_week.js';
+import { up, precondition, version } from '../migrations/V249__project_refresh_week.js';
 
 function fakeCtx(files) {
   const logs = [];
@@ -24,8 +24,8 @@ function fakeCtx(files) {
   };
 }
 
-test('version is 248', () => {
-  assert.equal(version, '248');
+test('version is 249', () => {
+  assert.equal(version, '249');
 });
 
 test('precondition needs platform.json', async () => {

@@ -66,7 +66,7 @@ import {
 } from '../services/projects/crawlHandover.js';
 import { downloadWebPage } from '../services/projects/webFileDownload.js';
 import { _clearPageCache } from '../services/pageCache.js';
-import * as migration from '../migrations/V247__project_web_pages_stored.js';
+import * as migration from '../migrations/V248__project_web_pages_stored.js';
 import { selfSignedCertificate } from './helpers/mockIFinder.js';
 
 const MASTER = crypto.createHash('sha256').update('web-pages-master').digest('hex');
@@ -972,7 +972,7 @@ describe('web pages that were links before', () => {
     assert.equal(item.status, 'ready', JSON.stringify(item.error));
   });
 
-  it('are converted in admin project files by migration V247', async () => {
+  it('are converted in admin project files by migration V248', async () => {
     const files = new Map([
       [
         'projects/website.json',

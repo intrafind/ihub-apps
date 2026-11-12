@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V248 — Project items are refreshed after a week by default (#3622)
+ * Migration V249 — Project items are refreshed after a week by default (#3622)
  *
  * The default refresh TTL of files from websites and web pages goes from a
  * day to a week. V237 wrote the day into `platform.projects.refreshTtl` before
@@ -10,7 +10,7 @@
  * administrator's choice: it becomes the week. Any other value is kept.
  */
 
-export const version = '248';
+export const version = '249';
 export const description = 'project_refresh_week';
 
 export const PREVIOUS_DEFAULT_SECONDS = 86400;
