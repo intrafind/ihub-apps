@@ -27,10 +27,11 @@
  */
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 const execFileAsync = promisify(execFile);
@@ -40,6 +41,59 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 
 /** The guard, as `package.json` invokes it. */
 const GUARD = 'scripts/check-config-fs-access.js';
+
+/**
+ * Directories the guard itself skips (`SKIP_DIRS` in the guard). The mirror
+ * below leaves them out too: they are never scanned, and `node_modules` alone
+ * would make the copy take seconds.
+ */
+const MIRROR_SKIP_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'coverage',
+  'tests',
+  '__tests__'
+]);
+
+/**
+ * A private copy of what the guard scans: the guard script and every `.js`
+ * file under `server/`. The guard resolves the tree from its own location, so
+ * running the copy scans the copy.
+ *
+ * Every probe below plants a violation, and several do it by rewriting real
+ * modules (`configLoader.js`, `userManager.js`, `namespaces.js`). Doing that
+ * in the working tree is not safe: the server suite runs test files in
+ * parallel processes, and any of them that imported `configLoader.js` during
+ * the few hundred milliseconds the stray `fs.readFileSync` probe was on disk
+ * died with "fs.readFileSync is not a function" — a different file each run,
+ * and never when run alone. The mirror keeps every mutation inside this
+ * process's temp directory.
+ *
+ * @type {string}
+ */
+let SCAN_ROOT;
+
+/**
+ * Copy the guard and the scanned part of `server/` into a fresh temp root.
+ *
+ * @returns {Promise<string>} The mirror's root directory
+ */
+async function createScanMirror() {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'config-guard-'));
+  await fs.mkdir(path.join(root, 'scripts'), { recursive: true });
+  await fs.copyFile(path.join(REPO_ROOT, GUARD), path.join(root, GUARD));
+  await fs.copyFile(path.join(REPO_ROOT, 'package.json'), path.join(root, 'package.json'));
+  await fs.cp(path.join(REPO_ROOT, 'server'), path.join(root, 'server'), {
+    recursive: true,
+    filter: async source => {
+      const stat = await fs.lstat(source);
+      if (stat.isDirectory()) return !MIRROR_SKIP_DIRS.has(path.basename(source));
+      return stat.isFile() && (source.endsWith('.js') || path.basename(source) === 'package.json');
+    }
+  });
+  return root;
+}
 
 /**
  * The deliberate violation. Named so it is obvious in a `git status` if a run
@@ -103,12 +157,14 @@ ${Array.from({ length: 12 }, (_unused, i) => `  // spacer ${i}`).join('\n')}
 /**
  * Run the guard and report how it went, whatever its exit status.
  *
+ * @param {string} [root] - Tree to scan; the private mirror unless a test
+ *   needs the real working tree (read-only scans only)
  * @returns {Promise<{code: number, output: string}>} Exit code and the
  *   combined stdout/stderr the guard produced
  */
-async function runGuard() {
+async function runGuard(root = SCAN_ROOT) {
   try {
-    const { stdout, stderr } = await execFileAsync(process.execPath, [GUARD], { cwd: REPO_ROOT });
+    const { stdout, stderr } = await execFileAsync(process.execPath, [GUARD], { cwd: root });
     return { code: 0, output: `${stdout}${stderr}` };
   } catch (error) {
     return { code: error.code ?? 1, output: `${error.stdout || ''}${error.stderr || ''}` };
@@ -126,7 +182,7 @@ async function runGuard() {
  *   the probe in place
  */
 async function withProbe(repoPath, source) {
-  const probePath = path.join(REPO_ROOT, repoPath);
+  const probePath = path.join(SCAN_ROOT, repoPath);
   await fs.writeFile(probePath, source, 'utf8');
   try {
     return await runGuard();
@@ -227,6 +283,14 @@ const BLIND_SPOT_PROBES = [
 const NAMESPACES_FILE = 'server/storage/namespaces.js';
 
 describe('the config filesystem-access guard', () => {
+  before(async () => {
+    SCAN_ROOT = await createScanMirror();
+  });
+
+  after(async () => {
+    if (SCAN_ROOT) await fs.rm(SCAN_ROOT, { recursive: true, force: true });
+  });
+
   it('exists and is wired into the scripts CI runs', async () => {
     await fs.access(path.join(REPO_ROOT, GUARD));
     const pkg = JSON.parse(await fs.readFile(path.join(REPO_ROOT, 'package.json'), 'utf8'));
@@ -259,7 +323,8 @@ describe('the config filesystem-access guard', () => {
   });
 
   it('reports no direct filesystem configuration access in the tree', async () => {
-    const { code, output } = await runGuard();
+    // The real working tree, not the mirror: this scan only reads.
+    const { code, output } = await runGuard(REPO_ROOT);
     assert.equal(
       code,
       0,
@@ -274,7 +339,7 @@ describe('the config filesystem-access guard', () => {
     const baseline = await runGuard();
     assert.doesNotMatch(baseline.output, /__config-access-guard-probe__/, 'the probe is not there');
 
-    const probePath = path.join(REPO_ROOT, PROBE);
+    const probePath = path.join(SCAN_ROOT, PROBE);
     await fs.writeFile(probePath, PROBE_SOURCE, 'utf8');
     let planted;
     try {
@@ -308,7 +373,7 @@ describe('the config filesystem-access guard', () => {
     // RegExp`, and unescaped `$name` compiled to a pattern that matches
     // nothing, so the guard passed a leak it was built to catch and said so
     // cheerfully.
-    const probePath = path.join(REPO_ROOT, DOLLAR_PROBE);
+    const probePath = path.join(SCAN_ROOT, DOLLAR_PROBE);
     await fs.writeFile(probePath, DOLLAR_PROBE_SOURCE, 'utf8');
     let planted;
     try {
@@ -361,7 +426,7 @@ describe('the config filesystem-access guard', () => {
     // call, once for the exemption now matching nothing. Neither has anything
     // to do with configuration moving off the provider, which is the only
     // thing this guard is for.
-    const loaderPath = path.join(REPO_ROOT, 'server/configLoader.js');
+    const loaderPath = path.join(SCAN_ROOT, 'server/configLoader.js');
     const original = await fs.readFile(loaderPath, 'utf8');
     const call = "    const data = await fs.readFile(filePath, 'utf8');";
     assert.ok(original.includes(call), 'the exempted builtin-locale read is where we expect');
@@ -399,7 +464,7 @@ describe('the config filesystem-access guard', () => {
     // operation — so where it sits cannot change the answer. This probe is
     // deliberately at top level, below everything, reading a config path the
     // `configLoader` entry's argument names do not cover.
-    const loaderPath = path.join(REPO_ROOT, 'server/configLoader.js');
+    const loaderPath = path.join(SCAN_ROOT, 'server/configLoader.js');
     const original = await fs.readFile(loaderPath, 'utf8');
     const stray =
       "\nconst strayConfig = 'contents/config/platform.json';\n" +
@@ -437,7 +502,7 @@ describe('the config filesystem-access guard', () => {
     // The probe is the realistic drift: a plain `writeFileSync` where the
     // atomic helper belongs. It is on the same `fullPath`, in the same file,
     // so only the operation tells it apart.
-    const managerPath = path.join(REPO_ROOT, 'server/utils/userManager.js');
+    const managerPath = path.join(SCAN_ROOT, 'server/utils/userManager.js');
     const original = await fs.readFile(managerPath, 'utf8');
     const call = '      await atomicWriteJSON(fullPath, usersConfig);';
     assert.ok(original.includes(call), 'the exempted write is where we expect');
@@ -476,7 +541,7 @@ describe('the config filesystem-access guard', () => {
     // deletes CONFIG_NAMESPACES, but Prettier rewrapping a long line, or a
     // type annotation landing between the name and the call, both move the
     // marker while leaving the map entirely intact.
-    const nsPath = path.join(REPO_ROOT, NAMESPACES_FILE);
+    const nsPath = path.join(SCAN_ROOT, NAMESPACES_FILE);
     const original = await fs.readFile(nsPath, 'utf8');
     const marker = 'CONFIG_NAMESPACES = Object.freeze({';
     assert.ok(original.includes(marker), 'the declaration is spelled the way the guard expects');
@@ -522,7 +587,7 @@ describe('the config filesystem-access guard', () => {
     // directory it was never meant to cover, and the fix a maintainer reaches
     // for is to widen CONFIG_DIRS, which quietly extends the scan to a tree
     // that is not configuration.
-    const nsPath = path.join(REPO_ROOT, NAMESPACES_FILE);
+    const nsPath = path.join(SCAN_ROOT, NAMESPACES_FILE);
     const original = await fs.readFile(nsPath, 'utf8');
     const unrelated = `${original}\nconst UNRELATED_NAMESPACES = Object.freeze({\n  runs: Object.freeze({ dir: 'runs', raw: false })\n});\nvoid UNRELATED_NAMESPACES;\n`;
 
@@ -551,7 +616,7 @@ describe('the config filesystem-access guard', () => {
     // from JSON produces. The marker check sees nothing wrong; only the
     // "parsed to zero namespaces" check stands between that and a guard that
     // reports agreement having compared nothing.
-    const nsPath = path.join(REPO_ROOT, NAMESPACES_FILE);
+    const nsPath = path.join(SCAN_ROOT, NAMESPACES_FILE);
     const original = await fs.readFile(nsPath, 'utf8');
     const requoted = original.replace(/dir: '([^']+)'/g, 'dir: "$1"');
     assert.notEqual(requoted, original, 'the namespace map still spells dir values in quotes');
