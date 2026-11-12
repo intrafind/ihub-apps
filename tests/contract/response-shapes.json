@@ -3436,7 +3436,7 @@
           "limitCores": "null",
           "loadAverage": "array",
           "model": "string",
-          "utilizationPercent": "null"
+          "utilizationPercent": "null|number"
         },
         "hostname": "string",
         "memory": {
@@ -3456,11 +3456,11 @@
         {
           "cpuPercent": "number",
           "current": "boolean",
-          "eventLoopDelayMs": "null",
+          "eventLoopDelayMs": "null|object",
           "memory": "object",
           "pid": "number",
           "role": "string",
-          "sampledAt": "null",
+          "sampledAt": "null|string",
           "uptimeSeconds": "number",
           "workerIndex": "null"
         }
