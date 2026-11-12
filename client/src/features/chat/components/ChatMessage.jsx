@@ -1139,6 +1139,7 @@ function ChatMessage({
                   knowledgeScope={message.knowledgeScope}
                   provenance={message.provenance}
                   images={message.images}
+                  chatId={chatId}
                   models={models}
                   newest={isLatestAssistantMessage}
                 />

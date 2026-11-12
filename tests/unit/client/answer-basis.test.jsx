@@ -33,6 +33,12 @@ jest.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: mockLanguage } })
 }));
 
+const mockFetchChatArtifactProvenance = jest.fn();
+jest.mock('../../../client/src/api', () => ({
+  __esModule: true,
+  fetchChatArtifactProvenance: (...args) => mockFetchChatArtifactProvenance(...args)
+}));
+
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
   default: ({ name }) => <span data-testid="icon" data-name={name} />
@@ -65,6 +71,8 @@ const PROVENANCE = {
 
 beforeEach(() => {
   mockLanguage = 'en';
+  mockFetchChatArtifactProvenance.mockReset();
+  mockFetchChatArtifactProvenance.mockRejectedValue(new Error('404'));
 });
 
 describe('the chip names the kinds of source, nothing else', () => {
@@ -194,6 +202,39 @@ describe('the details of generated pictures are in the same chip (EU AI Act Art.
       'Image 1',
       'Image 3'
     ]);
+  });
+
+  it('asks what the file of a stored picture carries, once the details are open', async () => {
+    mockFetchChatArtifactProvenance.mockResolvedValue({
+      outputId: IMAGE.provenance.output_id,
+      providerMarking: {
+        c2pa: {
+          present: true,
+          status: 'present',
+          valid: true,
+          issuer: 'Google LLC',
+          trust: 'not-evaluated'
+        },
+        xmp: {}
+      }
+    });
+    renderBasis({
+      answerBasis: [{ kind: 'model' }],
+      images: [{ ...IMAGE, id: 'art-1' }],
+      chatId: 'chat-1'
+    });
+    // Nothing is asked for before the details are opened.
+    expect(mockFetchChatArtifactProvenance).not.toHaveBeenCalled();
+    open();
+    const details = screen.getByTestId('answer-basis-details');
+    expect(await within(details).findByText('Google LLC')).toBeInTheDocument();
+    expect(mockFetchChatArtifactProvenance).toHaveBeenCalledWith('chat-1', 'art-1');
+  });
+
+  it('a picture only just generated has no stored copy to ask about yet', () => {
+    renderBasis({ answerBasis: [{ kind: 'model' }], images: [IMAGE], chatId: 'chat-1' });
+    open();
+    expect(mockFetchChatArtifactProvenance).not.toHaveBeenCalled();
   });
 
   it('pictures without a record leave out the details, not the AI statement', () => {

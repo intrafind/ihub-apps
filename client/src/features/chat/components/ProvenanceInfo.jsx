@@ -38,7 +38,8 @@ function modelLabel(modelId, models, language) {
   return name && name !== modelId ? `${name} (${modelId})` : modelId;
 }
 
-function Row({ label, children }) {
+/** One labelled entry of a provenance list; also the rows of `ProviderMark`. */
+export function Row({ label, children }) {
   return (
     <div className="flex flex-col gap-0.5">
       <dt className="text-gray-500 dark:text-gray-400">{label}</dt>
@@ -58,8 +59,10 @@ function Row({ label, children }) {
  * @param {Object} props
  * @param {Object} props.provenance - The server's provenance object
  * @param {Array<Object>} [props.models] - Model list, for the model's display name
+ * @param {import('react').ReactNode} [props.extra] - More rows after the marking (what the
+ *   file itself carries, for a picture)
  */
-export function ProvenanceDetails({ provenance, models }) {
+export function ProvenanceDetails({ provenance, models, extra }) {
   const { t, i18n } = useTranslation();
   const [copied, setCopied] = useState(false);
   const isImage = provenance?.kind === 'image';
@@ -92,6 +95,7 @@ export function ProvenanceDetails({ provenance, models }) {
         <Row label={t('chatMessage.provenance.marking', 'Marking')}>
           {markingLabel(provenance.model?.watermark, t)}
         </Row>
+        {extra}
         {hash && (
           <Row label={t('chatMessage.provenance.hash', 'Content hash (SHA-256)')}>
             {/* Shortened to fit a narrow panel; the full hash is read out and copied. */}

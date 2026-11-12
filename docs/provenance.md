@@ -202,6 +202,18 @@ In the chat the picture's record is in the same place as the text's: the chip un
 **Copy hash** and the output ID of each generated picture. The picture itself has only download and share.
 A picture stored before this change has no record in **Details**.
 
+**What the file itself carries.** For a stored picture, **Details** also asks the server what the provider embedded
+in the file, when it is opened: **Content Credentials (C2PA)** found or not, whether the signature matches the
+file, who signed it, with which tool and when, and the source type (for example *Created by an AI model*). This is
+the C2PA read the record already holds (`provider_marking`, read when the picture was generated), looked up by the
+SHA-256 of the stored bytes through `GET /api/chats/:chatId/artifacts/:artifactId/provenance` (and the share's
+`GET /api/shares/:shareId/artifacts/:artifactId/provenance`), so pictures generated before the chat showed it have
+it too, as long as a record was kept (`provenance.storeRecords`, `provenance.media.readC2pa`). Without a record the
+row is left out. Two limits are worded as they are: a matching signature means the file is unchanged since it was
+signed, not that the signer is trusted (iHub does not evaluate trust), and SynthID cannot be read at all, so it
+stays "declared" under **Marking**. A picture that has only just been generated gets the row once the chat is
+reopened, because it has no stored copy before that.
+
 A media record is the usual provenance object with `kind: "image"`, `content_hash.normalization:
 "none"` (the hash is over the raw bytes, not the base64 text), `content_hash.bytes` and `mime_type`, plus:
 

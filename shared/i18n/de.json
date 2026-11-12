@@ -788,7 +788,26 @@
       "copied": "Kopiert",
       "outputId": "Ausgabe-ID",
       "note": "iHub speichert diesen Hash, nicht den Text. Mit ihm lässt sich der genaue Text nachschlagen. Kein Treffer bedeutet nicht, dass ein Mensch ihn geschrieben hat.",
-      "imageNote": "Der Herkunftsnachweis speichert diesen Hash, nicht das Bild selbst. Mit ihm lässt sich die unveränderte Datei prüfen. Kennzeichnungen des Anbieters bleiben erhalten. Kein Treffer bedeutet nicht, dass ein Mensch es erstellt hat."
+      "imageNote": "Der Herkunftsnachweis speichert diesen Hash, nicht das Bild selbst. Mit ihm lässt sich die unveränderte Datei prüfen. Kennzeichnungen des Anbieters bleiben erhalten. Kein Treffer bedeutet nicht, dass ein Mensch es erstellt hat.",
+      "providerMark": {
+        "title": "Inhaltsnachweise (C2PA)",
+        "status": {
+          "found": "In der Datei vorhanden",
+          "absent": "Keine in der Datei",
+          "unreadable": "In der Datei vorhanden, konnten aber nicht gelesen werden",
+          "unsupported": "Dieser Dateityp kann nicht geprüft werden"
+        },
+        "signatureOk": "Die Signatur passt zur Datei.",
+        "signatureBad": "Die Signatur passt nicht zur Datei: Sie wurde verändert oder beschädigt.",
+        "trustNote": "iHub prüft nicht, ob dem Signierenden vertraut wird.",
+        "signer": "Signiert von",
+        "tool": "Erstellt mit",
+        "signedAt": "Signiert",
+        "source": "Quellentyp",
+        "metadata": "Eingebettete Metadaten",
+        "sourceAi": "Von einem KI-Modell erstellt",
+        "sourceAlgorithmic": "Von Software erstellt"
+      }
     },
     "imageTooLargeToStore": "Dieses Bild war größer als von dieser Installation gespeichert wird und wurde daher nicht aufbewahrt.",
     "imageTooManyToStore": "Diese Antwort hat mehr Bilder erzeugt, als diese Installation speichert; dieses wurde daher nicht aufbewahrt.",

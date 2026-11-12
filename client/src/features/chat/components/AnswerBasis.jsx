@@ -8,6 +8,7 @@ import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { usePopoverPanel } from '../hooks/usePopoverPanel';
 import { ProvenanceDetails } from './ProvenanceInfo';
+import ProviderMark from './ProviderMark';
 import {
   KIND_ICON,
   basisEntries,
@@ -165,7 +166,8 @@ function NotUsedList({ projects, t }) {
  * The AI-generated records of the answer: its text's and one per picture, each as the
  * server sent it. A picture without the object (stored before it existed) has none.
  *
- * @returns {Array<{key: string, kind: 'text'|'image', number?: number, provenance: Object}>}
+ * @returns {Array<{key: string, kind: 'text'|'image', number?: number, provenance: Object,
+ *   artifactId?: string}>}
  */
 function provenanceRecords(provenance, images) {
   const records = [];
@@ -176,7 +178,10 @@ function provenanceRecords(provenance, images) {
         key: `image-${index}`,
         kind: 'image',
         number: index + 1,
-        provenance: image.provenance
+        provenance: image.provenance,
+        // The stored picture, for what its file itself carries. A picture only just
+        // generated has no artifact id yet; it gets the row once the chat is reopened.
+        artifactId: image.id
       });
     }
   });
@@ -188,7 +193,16 @@ function provenanceRecords(provenance, images) {
  * out, and the record of it. A non-modal dialog like the other disclosures:
  * Escape closes it and returns the focus to the chip.
  */
-function BasisPopover({ entries, scope, workflowResult, provenance, images, models, panelProps }) {
+function BasisPopover({
+  entries,
+  scope,
+  workflowResult,
+  provenance,
+  images,
+  chatId,
+  models,
+  panelProps
+}) {
   const { t, i18n } = useTranslation();
   const { panelRef } = panelProps;
   // The popover is a dialog, so opening it moves the focus into it: a keyboard or screen
@@ -280,7 +294,15 @@ function BasisPopover({ entries, scope, workflowResult, provenance, images, mode
                       : t('chatMessage.answerBasis.detailsText', 'Text')}
                   </p>
                 )}
-                <ProvenanceDetails provenance={record.provenance} models={models} />
+                <ProvenanceDetails
+                  provenance={record.provenance}
+                  models={models}
+                  extra={
+                    record.artifactId ? (
+                      <ProviderMark chatId={chatId} artifactId={record.artifactId} />
+                    ) : null
+                  }
+                />
               </div>
             ))}
           </div>
@@ -295,7 +317,16 @@ function BasisPopover({ entries, scope, workflowResult, provenance, images, mode
  * used, and nothing else (no names, modes or prefix). Opening it shows "About
  * this answer".
  */
-function BasisChip({ entries, scope, workflowResult, provenance, images, models, className = '' }) {
+function BasisChip({
+  entries,
+  scope,
+  workflowResult,
+  provenance,
+  images,
+  chatId,
+  models,
+  className = ''
+}) {
   const { t, i18n } = useTranslation();
   const popover = usePopoverPanel('top');
   const { open, setOpen, panelId, rootRef, buttonRef } = popover;
@@ -349,6 +380,7 @@ function BasisChip({ entries, scope, workflowResult, provenance, images, models,
           workflowResult={workflowResult}
           provenance={provenance}
           images={images}
+          chatId={chatId}
           models={models}
           panelProps={popover}
         />
@@ -403,6 +435,7 @@ function UnavailableChip({ projects, newest, t }) {
  * @param {Object} [props.provenance] - The server's provenance object, for the popover's details
  * @param {Array<Object>} [props.images] - The pictures of the answer, each with its own
  *   `provenance`: their details are in the same popover
+ * @param {string} [props.chatId] - The chat, to ask what a stored picture's file carries
  * @param {Array<Object>} [props.models] - Model list, for the model's display name
  * @param {boolean} [props.newest=false] - Whether this is the newest answer of the chat
  */
@@ -412,6 +445,7 @@ function AnswerBasis({
   knowledgeScope,
   provenance,
   images,
+  chatId,
   models,
   newest = false,
   className = ''
@@ -432,6 +466,7 @@ function AnswerBasis({
           workflowResult={workflowResult}
           provenance={provenance}
           images={images}
+          chatId={chatId}
           models={models}
         />
       )}

@@ -55,6 +55,8 @@ import { chatModelOf, scheduleChatTitle } from '../services/chat/chatTitles.js';
 import { getArtifactRepository } from '../services/artifacts/ArtifactRepository.js';
 import { servedMediaType } from '../services/artifacts/artifactPolicy.js';
 import { sendArtifactsZip } from '../services/artifacts/artifactZip.js';
+import { providerMarkingOfArtifact } from '../services/provenance/artifactProvenance.js';
+import { requireEuAiActEnabled } from '../services/euAiAct/conformity.js';
 import { ServiceError } from '../utils/ServiceError.js';
 import { chatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
 import { withUserFileLimit } from '../services/quota/quotaService.js';
@@ -441,6 +443,48 @@ export default function registerChatRoutes(app) {
       res.setHeader('Content-Disposition', 'inline');
       res.setHeader('X-Content-Type-Options', 'nosniff');
       return res.send(body);
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/chats/{chatId}/artifacts/{artifactId}/provenance:
+   *   get:
+   *     summary: What the provider embedded in a generated image
+   *     description: >-
+   *       The provider marking recorded for a stored image (EU AI Act Art. 50(2)): the result of
+   *       reading its C2PA Content Credentials when it was generated. `valid` means the
+   *       signature and the binding to the file hold, never that the signer is trusted
+   *       (`trust` is always `not-evaluated`). Authorized through the chat, like the bytes.
+   *     tags: [Chats]
+   *     responses:
+   *       200:
+   *         description: >-
+   *           `{ outputId, createdAt?, providerMarking: { c2pa: { present, status, valid, issuer,
+   *           digitalSourceType, claimGenerator, signedAt, trust }, xmp: { digitalSourceType },
+   *           declared } }`
+   *       403: { description: The EU AI Act features are switched off (FEATURE_DISABLED) }
+   *       404: { description: No such chat or artifact, not an image, or no record was kept (NOT_FOUND) }
+   */
+  app.get(
+    buildServerPath('/api/chats/:chatId/artifacts/:artifactId/provenance'),
+    authRequired,
+    requireEuAiActEnabled('provenance'),
+    async (req, res) => {
+      const { chatId, artifactId } = req.params;
+      assertValidId(chatId, 'chat');
+      assertValidId(artifactId, 'artifact');
+      const repository = requireRepository();
+      // Authorized through the chat that owns the artifact, like its bytes.
+      const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+      if (!access) throw notFound('Chat');
+      const artifact = await getArtifactRepository().get(
+        repository.artifactScope(chatId),
+        artifactId
+      );
+      if (!artifact) throw notFound('Artifact');
+      res.setHeader('Cache-Control', 'private, no-store');
+      return res.json(await providerMarkingOfArtifact(artifact));
     }
   );
 
