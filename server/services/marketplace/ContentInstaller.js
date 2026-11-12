@@ -248,15 +248,32 @@ async function readInstallations() {
 }
 
 /**
- * Persist the installations manifest to disk and refresh the cache.
+ * Change the installations manifest: read it fresh, apply `mutate`, write it,
+ * in one step that no other install, update or uninstall (on this worker or
+ * another) interleaves with, then refresh the cache.
  *
- * @param {{ installations: Record<string, object> }} data
- * @returns {Promise<void>}
+ * Installing, updating and uninstalling fetch from the network and write content
+ * files between reading the manifest and recording the result. Writing back the
+ * snapshot taken before that erased the entries other operations recorded in the
+ * meantime, which left their files on disk with nothing tracking them. Do the
+ * slow work first, then call this with a pure change.
+ *
+ * `mutate` may run more than once and edits the body it is given; it may throw
+ * (nothing is written then).
+ *
+ * @param {(data: { installations: Record<string, object> }) => void} mutate
+ * @returns {Promise<{ installations: Record<string, object> }>} The stored manifest
  */
-async function saveInstallations(data) {
-  await configStore.writeJson(INSTALLATIONS_FILE, data);
+async function updateInstallations(mutate) {
+  const { data } = await configStore.updateJson(INSTALLATIONS_FILE, current => {
+    const body = current && typeof current === 'object' ? current : {};
+    if (!body.installations || typeof body.installations !== 'object') body.installations = {};
+    mutate(body);
+    return body;
+  });
   const cc = await getConfigCache();
   await cc.refreshInstallationsCache();
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -979,8 +996,17 @@ class ContentInstaller {
       if (codeIntegrity) manifest.codeIntegrity = codeIntegrity;
     }
 
-    installations.installations[key] = manifest;
-    await saveInstallations(installations);
+    // Re-checked on the fresh manifest: of two installs of the same item only one
+    // records it, and neither erases the entry of a different item.
+    await updateInstallations(data => {
+      if (data.installations[key]) {
+        throw new ServiceError(
+          'CONFLICT',
+          `${type} '${name}' is already installed. Use update to upgrade.`
+        );
+      }
+      data.installations[key] = manifest;
+    });
 
     // Refresh the cache for the affected content type
     const cc = await getConfigCache();
@@ -1039,8 +1065,9 @@ class ContentInstaller {
 
     await this._deleteContent(type, name, config);
 
-    delete installations.installations[key];
-    await saveInstallations(installations);
+    await updateInstallations(data => {
+      delete data.installations[key];
+    });
 
     const cc = await getConfigCache();
     if (typeof cc[config.cacheRefresh] === 'function') {
@@ -1120,12 +1147,19 @@ class ContentInstaller {
 
     await this._writeContent(type, name, content, config);
 
-    existing.updatedAt = new Date().toISOString();
-    existing.updatedBy = updatedBy;
-    existing.version = item.version || existing.version;
-    existing.updateAvailable = null;
-
-    await saveInstallations(installations);
+    const patch = {
+      updatedAt: new Date().toISOString(),
+      updatedBy,
+      version: item.version || existing.version,
+      updateAvailable: null
+    };
+    const stored = await updateInstallations(data => {
+      if (!data.installations[key]) {
+        throw new ServiceError('NOT_FOUND', `${type} '${name}' is not installed`);
+      }
+      Object.assign(data.installations[key], patch);
+    });
+    Object.assign(existing, stored.installations[key]);
 
     const cc = await getConfigCache();
     if (typeof cc[config.cacheRefresh] === 'function') {
@@ -1219,8 +1253,9 @@ class ContentInstaller {
       throw new Error(`${type} '${name}' is not tracked in marketplace installations`);
     }
 
-    delete installations.installations[key];
-    await saveInstallations(installations);
+    await updateInstallations(data => {
+      delete data.installations[key];
+    });
 
     logger.info('Content item detached from marketplace tracking', {
       component: COMPONENT,

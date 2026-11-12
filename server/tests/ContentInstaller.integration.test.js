@@ -45,7 +45,21 @@ jest.unstable_mockModule('../storage/bootstrap.js', () => ({
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     getInstallations: () => ({ data: state.installations }),
-    refreshInstallationsCache: async () => {},
+    // The installer writes the manifest to disk and then asks the cache to reload it.
+    refreshInstallationsCache: async () => {
+      try {
+        state.installations = JSON.parse(
+          await (
+            await import('fs')
+          ).promises.readFile(
+            path.join(state.rootDir, 'contents', 'config', 'installations.json'),
+            'utf8'
+          )
+        );
+      } catch {
+        /* no manifest written yet */
+      }
+    },
     getApps: () => ({ data: [] }),
     getModels: () => ({ data: [] }),
     getPrompts: () => ({ data: [] }),

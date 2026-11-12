@@ -18,14 +18,15 @@ const INSTALLATIONS_FILE = 'config/installations.json';
  */
 export async function removeMarketplaceInstallation(type, itemId) {
   try {
-    const { data: installationsData } = configCache.getInstallations();
-    const installations = installationsData || { installations: {} };
     const key = `${type}:${itemId}`;
-    if (installations.installations[key]) {
-      delete installations.installations[key];
-      await configStore.writeJson(INSTALLATIONS_FILE, installations);
-      await configCache.refreshInstallationsCache();
-    }
+    // Read, change and write in one locked step; a stale snapshot would erase
+    // entries a concurrent install recorded.
+    const { written } = await configStore.updateJson(INSTALLATIONS_FILE, current => {
+      if (!current?.installations?.[key]) return undefined;
+      delete current.installations[key];
+      return current;
+    });
+    if (written) await configCache.refreshInstallationsCache();
   } catch (error) {
     logger.warn('Failed to clean up installation tracking', {
       component: 'InstallationCleanup',
