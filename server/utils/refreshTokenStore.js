@@ -208,12 +208,44 @@ export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
  *   or null if the token is unknown, expired, or the bcrypt check fails.
  */
 export async function consumeRefreshToken(token) {
+  const result = await redeem(token, false);
+  return result ? result.data : null;
+}
+
+/**
+ * How long a rotation in progress holds its token. The rotation path does user
+ * and client lookups, signs a JWT and hashes the new token between redeeming
+ * the old token and storing the new one; this is the budget for that. A
+ * rotation that is neither completed nor aborted within it (a crash, a hung
+ * lookup) is treated as abandoned and the old token becomes redeemable again,
+ * so a crash in the gap no longer loses the grant.
+ */
+const ROTATION_LEASE_MS = 2 * 60 * 1000;
+
+const rotationLive = entry =>
+  Boolean(entry?.rotation) && Date.now() - Number(entry.rotation.startedAt) < ROTATION_LEASE_MS;
+
+/**
+ * Verify a token and either delete it (`keep` false) or mark it as being
+ * rotated (`keep` true). The marked entry stays in the store with its client and
+ * user, so a revoke of that connection, user or client finds and deletes it
+ * while the rotation is still in flight.
+ *
+ * @returns {Promise<{data: Object, rotationId: string|null}|null>}
+ */
+async function redeem(token, keep) {
   const store = loadStore();
   const tokenHash = tokenIndexKey(token);
   const entry = store.tokens[tokenHash];
 
   if (!entry) {
     logger.warn('Token not found', { component: 'RefreshTokenStore' });
+    return null;
+  }
+
+  // Being rotated right now: it was already redeemed.
+  if (rotationLive(entry)) {
+    logger.warn('Token already redeemed', { component: 'RefreshTokenStore' });
     return null;
   }
 
@@ -236,13 +268,16 @@ export async function consumeRefreshToken(token) {
     return null;
   }
 
-  // Delete the entry (single-use rotation). Under the lock and only if it is
-  // still the entry just verified: of two concurrent redemptions, on this
-  // worker or another, exactly one finds it.
+  // Delete or mark the entry (single-use rotation). Under the lock and only if
+  // it is still the entry just verified and not being rotated: of two concurrent
+  // redemptions, on this worker or another, exactly one finds it.
+  const rotationId = keep ? crypto.randomUUID() : null;
   const consumed = await withStoreLock(async () => {
     const current = loadStore();
-    if (current.tokens[tokenHash]?.bcryptHash !== entry.bcryptHash) return false;
-    delete current.tokens[tokenHash];
+    const now = current.tokens[tokenHash];
+    if (now?.bcryptHash !== entry.bcryptHash || rotationLive(now)) return false;
+    if (keep) now.rotation = { id: rotationId, startedAt: Date.now() };
+    else delete current.tokens[tokenHash];
     await saveStore(current);
     return true;
   });
@@ -251,9 +286,103 @@ export async function consumeRefreshToken(token) {
     return null;
   }
 
-  // Strip the internal bcrypt hash before returning to callers.
-  const { bcryptHash: _, ...data } = entry;
-  return data;
+  // Strip the internal fields before returning to callers.
+  const { bcryptHash: _, rotation: __, ...data } = entry;
+  return { data, rotationId };
+}
+
+/**
+ * Redeem a refresh token for rotation, keeping its entry as a placeholder until
+ * the rotation is finished with {@link completeRefreshRotation} or
+ * {@link abortRefreshRotation}.
+ *
+ * Between redeeming the old token and storing the new one the caller does work
+ * that takes time, and a revoke arriving then (disconnect, user deletion,
+ * client revoke) used to find nothing to delete — the rotation then stored a
+ * fresh token and undid the revoke. With the placeholder the revoke deletes it,
+ * and `completeRefreshRotation` sees that and stores nothing.
+ *
+ * @param {string} token - Plaintext refresh token from the client request.
+ * @returns {Promise<{data: Object, rotationId: string}|null>} The token's context,
+ *   or null when unknown, expired, invalid or already redeemed.
+ */
+export async function beginRefreshRotation(token) {
+  return redeem(token, true);
+}
+
+/**
+ * Finish a rotation: replace the placeholder with the new token, in one locked
+ * step. Stores nothing and returns false when the placeholder is gone (the
+ * grant was revoked meanwhile).
+ *
+ * @param {string} oldToken - The token passed to {@link beginRefreshRotation}.
+ * @param {string} rotationId - Its `rotationId`.
+ * @param {string} newToken - Plaintext new refresh token.
+ * @param {Object} data - Context for the new token (as for {@link storeRefreshToken}).
+ * @param {number} [ttlDays=30]
+ * @returns {Promise<boolean>} True when the new token was stored.
+ */
+export async function completeRefreshRotation(
+  oldToken,
+  rotationId,
+  newToken,
+  data,
+  ttlDays = TOKEN_TTL_DAYS
+) {
+  const oldHash = tokenIndexKey(oldToken);
+  const newHash = tokenIndexKey(newToken);
+  const bcryptHash = await bcrypt.hash(newToken, 10);
+  const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
+
+  const stored = await withStoreLock(async () => {
+    const store = loadStore();
+    if (store.tokens[oldHash]?.rotation?.id !== rotationId) return false;
+    delete store.tokens[oldHash];
+    store.tokens[newHash] = { bcryptHash, expiresAt, ...data, createdAt: new Date().toISOString() };
+    const now = Date.now();
+    for (const [key, entry] of Object.entries(store.tokens)) {
+      if (new Date(entry.expiresAt).getTime() < now) delete store.tokens[key];
+    }
+    await saveStore(store);
+    return true;
+  });
+  if (stored) {
+    logger.info('Refresh token stored', {
+      component: 'RefreshTokenStore',
+      clientId: data.clientId,
+      userId: data.userId
+    });
+  } else {
+    logger.info('Refresh token rotation dropped: the grant was revoked meanwhile', {
+      component: 'RefreshTokenStore',
+      clientId: data.clientId,
+      userId: data.userId
+    });
+  }
+  return stored;
+}
+
+/**
+ * End a rotation without a new token. By default the old token is deleted (the
+ * grant ends, as when a rotation used to be refused after the token was
+ * consumed); with `restore` it becomes redeemable again, for a refusal that
+ * says nothing about the grant (the user store could not be read).
+ *
+ * @param {string} oldToken
+ * @param {string} rotationId
+ * @param {{restore?: boolean}} [options]
+ * @returns {Promise<void>}
+ */
+export async function abortRefreshRotation(oldToken, rotationId, { restore = false } = {}) {
+  const oldHash = tokenIndexKey(oldToken);
+  await withStoreLock(async () => {
+    const store = loadStore();
+    const entry = store.tokens[oldHash];
+    if (entry?.rotation?.id !== rotationId) return;
+    if (restore) delete entry.rotation;
+    else delete store.tokens[oldHash];
+    await saveStore(store);
+  });
 }
 
 /**
