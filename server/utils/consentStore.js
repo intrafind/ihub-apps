@@ -4,44 +4,75 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { atomicWriteJSON } from './atomicWrite.js';
+import { withFileLock } from './fileLock.js';
 import logger from './logger.js';
 import { getContentsPath } from './contentsPath.js';
 
 const STORE_PATH = getContentsPath('data', 'oauth-consent.json');
+const LOCK_PATH = `${STORE_PATH}.lock`;
 
 /**
- * Load the consent store from disk.
- * Returns an empty store structure if the file does not exist or is corrupt.
+ * Read the consent store for a change. A missing file is an empty store; any
+ * other failure (unreadable, malformed) throws, so a change is never written on
+ * top of an empty store that stands in for consents that are still on disk.
+ *
+ * @returns {{ consents: Record<string, ConsentEntry> }} The parsed store.
+ */
+function readStoreStrict() {
+  let text;
+  try {
+    text = fs.readFileSync(STORE_PATH, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return { consents: {} };
+    throw error;
+  }
+  const data = JSON.parse(text);
+  if (!data || typeof data !== 'object') throw new Error('Consent store is not an object');
+  if (!data.consents || typeof data.consents !== 'object') data.consents = {};
+  return data;
+}
+
+/**
+ * Read the consent store for a decision. Never throws; an unreadable store reads
+ * as empty, which denies consent (fail closed) and is never written back, because
+ * only `updateStore` persists, and it reads strictly.
  *
  * @returns {{ consents: Record<string, ConsentEntry> }} The parsed store.
  */
 function loadStore() {
   try {
-    if (!fs.existsSync(STORE_PATH)) {
-      return { consents: {} };
-    }
-    const data = fs.readFileSync(STORE_PATH, 'utf8');
-    return JSON.parse(data);
+    return readStoreStrict();
   } catch {
     return { consents: {} };
   }
 }
 
 /**
- * Persist the consent store to disk atomically.
- * Uses a temp-file-and-rename strategy to avoid partial writes.
+ * Change the store: read it fresh under a lock file every worker honours,
+ * apply `mutate`, write atomically. `mutate` returns `false` to skip the write.
+ * A throw from `mutate` or from reading leaves the file untouched.
  *
- * @param {{ consents: Record<string, ConsentEntry> }} store - Store to persist.
- * @returns {Promise<void>}
+ * @param {(store: { consents: Record<string, ConsentEntry> }) => any} mutate
+ * @returns {Promise<any>} What `mutate` returned.
  */
-async function saveStore(store) {
-  try {
-    await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
-    await atomicWriteJSON(STORE_PATH, store);
-  } catch (error) {
-    logger.error('Failed to save consent store', { component: 'ConsentStore', error });
-    throw error;
-  }
+async function updateStore(mutate) {
+  await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
+  return withFileLock(
+    LOCK_PATH,
+    async () => {
+      const store = readStoreStrict();
+      const result = await mutate(store);
+      if (result === false) return result;
+      try {
+        await atomicWriteJSON(STORE_PATH, store);
+      } catch (error) {
+        logger.error('Failed to save consent store', { component: 'ConsentStore', error });
+        throw error;
+      }
+      return result;
+    },
+    { component: 'ConsentStore' }
+  );
 }
 
 /**
@@ -142,35 +173,34 @@ export function hasConsent(clientId, userId, scopes, _ttlDays = 90) {
  * await grantConsent('my-app', 'user-123', ['openid', 'email'], 90);
  */
 export async function grantConsent(clientId, userId, scopes, ttlDays = 90, snapshot = {}) {
-  const store = loadStore();
   const key = consentKey(clientId, userId);
   const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
-  const previous = store.consents[key];
 
-  store.consents[key] = {
-    clientId,
-    userId,
-    scopes,
-    grantedAt: new Date().toISOString(),
-    expiresAt,
-    clientName: snapshot.clientName || previous?.clientName || '',
-    clientHost: snapshot.clientHost || previous?.clientHost || '',
-    clientKind: snapshot.clientKind || previous?.clientKind || 'stored',
-    userName: snapshot.userName || previous?.userName || '',
-    userEmail: snapshot.userEmail || previous?.userEmail || '',
-    // Re-consenting is not using the connection; leave the usage clock alone.
-    lastUsedAt: previous?.lastUsedAt || null
-  };
+  await updateStore(store => {
+    const previous = store.consents[key];
+    store.consents[key] = {
+      clientId,
+      userId,
+      scopes,
+      grantedAt: new Date().toISOString(),
+      expiresAt,
+      clientName: snapshot.clientName || previous?.clientName || '',
+      clientHost: snapshot.clientHost || previous?.clientHost || '',
+      clientKind: snapshot.clientKind || previous?.clientKind || 'stored',
+      userName: snapshot.userName || previous?.userName || '',
+      userEmail: snapshot.userEmail || previous?.userEmail || '',
+      // Re-consenting is not using the connection; leave the usage clock alone.
+      lastUsedAt: previous?.lastUsedAt || null
+    };
 
-  // Prune expired entries on every write to keep the file compact
-  const now = Date.now();
-  for (const [k, v] of Object.entries(store.consents)) {
-    if (new Date(v.expiresAt).getTime() < now) {
-      delete store.consents[k];
+    // Prune expired entries on every write to keep the file compact
+    const now = Date.now();
+    for (const [k, v] of Object.entries(store.consents)) {
+      if (new Date(v.expiresAt).getTime() < now) {
+        delete store.consents[k];
+      }
     }
-  }
-
-  await saveStore(store);
+  });
   logger.info('Consent granted', {
     component: 'ConsentStore',
     clientId,
@@ -194,16 +224,14 @@ export async function grantConsent(clientId, userId, scopes, ttlDays = 90, snaps
  * if (revoked) { ... }
  */
 export async function revokeConsent(clientId, userId) {
-  const store = loadStore();
   const key = consentKey(clientId, userId);
-
-  if (store.consents[key]) {
+  const removed = await updateStore(store => {
+    if (!store.consents[key]) return false;
     delete store.consents[key];
-    await saveStore(store);
-    logger.info('Consent revoked', { component: 'ConsentStore', clientId, userId });
     return true;
-  }
-  return false;
+  });
+  if (removed) logger.info('Consent revoked', { component: 'ConsentStore', clientId, userId });
+  return removed;
 }
 
 /**
@@ -218,20 +246,17 @@ export async function revokeConsent(clientId, userId) {
 export async function revokeConsentsForUser(userId) {
   if (!userId) return 0;
 
-  const store = loadStore();
-  const keys = Object.entries(store.consents || {})
-    .filter(([, entry]) => entry?.userId === userId)
-    .map(([key]) => key);
-  if (keys.length === 0) return 0;
-
-  for (const key of keys) delete store.consents[key];
-  await saveStore(store);
-  logger.info('Consents revoked for user', {
-    component: 'ConsentStore',
-    userId,
-    count: keys.length
+  const count = await updateStore(store => {
+    const keys = Object.entries(store.consents || {})
+      .filter(([, entry]) => entry?.userId === userId)
+      .map(([key]) => key);
+    if (keys.length === 0) return false;
+    for (const key of keys) delete store.consents[key];
+    return keys.length;
   });
-  return keys.length;
+  if (!count) return 0;
+  logger.info('Consents revoked for user', { component: 'ConsentStore', userId, count });
+  return count;
 }
 
 /**
@@ -249,16 +274,16 @@ export async function revokeConsentsForUser(userId) {
  */
 export async function touchConsentLastUsed(clientId, userId) {
   try {
-    const store = loadStore();
     const key = consentKey(clientId, userId);
-    const entry = store.consents[key];
-    if (!entry) return;
-
-    const now = Date.now();
-    if (entry.lastUsedAt && now - new Date(entry.lastUsedAt).getTime() < 60000) return;
-
-    entry.lastUsedAt = new Date(now).toISOString();
-    await saveStore(store);
+    await updateStore(store => {
+      // Decided on the fresh copy under the lock: a consent revoked in the
+      // meantime is gone here and is not written back.
+      const entry = store.consents[key];
+      if (!entry) return false;
+      const now = Date.now();
+      if (entry.lastUsedAt && now - new Date(entry.lastUsedAt).getTime() < 60000) return false;
+      entry.lastUsedAt = new Date(now).toISOString();
+    });
   } catch (error) {
     logger.warn('Failed to record consent usage', { component: 'ConsentStore', error });
     // Non-critical: this is display bookkeeping, not authorization state.
