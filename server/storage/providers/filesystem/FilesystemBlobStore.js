@@ -31,6 +31,7 @@ import { promises as fs } from 'node:fs';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
+import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
 import { StorageError } from '../../errors.js';
 import { assertValidKey, assertValidNamespace, containedPath } from './paths.js';
@@ -38,8 +39,11 @@ import { assertValidKey, assertValidNamespace, containedPath } from './paths.js'
 /** Directory holding every blob namespace, relative to the provider's base. */
 export const BLOB_DIR = 'blobs';
 
-/** Name prefix of a blob being deleted (renamed aside, then unlinked); never a key. */
-const DELETING_PREFIX = '.deleting_';
+/**
+ * Name prefix of a blob being deleted (renamed aside, then unlinked). It holds
+ * `..`, which no key may contain (`isValidId`), so it never hides a real blob.
+ */
+export const DELETING_PREFIX = '..deleting_';
 
 const DEFAULT_LIMIT = 100;
 const MIN_LIMIT = 1;
@@ -185,15 +189,54 @@ export class FilesystemBlobStore extends BlobStore {
     try {
       await fs.unlink(claimed);
     } catch (error) {
-      // The blob is gone from its key either way; a leftover is skipped by `list`.
+      // The key is gone either way, which is what the caller is told. The
+      // leftover is skipped by `list` and removed at the next start
+      // (`removeDeletionLeftovers`).
       if (error.code !== 'ENOENT') {
-        throw new StorageError(`Failed to delete blob ${ns}/${key}`, {
-          code: 'IO_ERROR',
-          cause: error
+        logger.warn('Could not remove a deleted blob; it is removed at the next start', {
+          component: 'FilesystemBlobStore',
+          ns,
+          key,
+          path: claimed,
+          error: error.message
         });
       }
     }
     return true;
+  }
+
+  /**
+   * Remove what deletes left behind (a crash or a failed unlink between the
+   * rename and the unlink). Called once when the provider starts, not on any
+   * request path. A delete running in another process at the same time finds
+   * its file gone and still reports the removal.
+   *
+   * @returns {Promise<number>} Files removed.
+   */
+  async removeDeletionLeftovers() {
+    const root = containedPath(this.baseDir, BLOB_DIR);
+    let namespaces;
+    try {
+      namespaces = await fs.readdir(root, { withFileTypes: true });
+    } catch (error) {
+      if (error.code === 'ENOENT') return 0;
+      throw error;
+    }
+    let removed = 0;
+    for (const entry of namespaces) {
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(root, entry.name);
+      for (const name of await fs.readdir(dir)) {
+        if (!name.startsWith(DELETING_PREFIX)) continue;
+        try {
+          await fs.unlink(path.join(dir, name));
+          removed += 1;
+        } catch (error) {
+          if (error.code !== 'ENOENT') throw error;
+        }
+      }
+    }
+    return removed;
   }
 
   /** @inheritdoc */
