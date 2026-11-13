@@ -54,7 +54,7 @@ One origin vocabulary, decided by the server and shared by the activity line, th
 | Skills | pill on top plus a row in the list | one static chip: `Skill: Contract review · started manually` (also: chosen by the model, set by the app, kept from an earlier message) |
 | Raw arguments | on every row | behind a "Technical details" switch, off by default |
 | Reasoning link | `Show thinking analysis` | `Thinking process`, same shape as the activity line |
-| "Read" | green eye on hits, "Read" rows, "5 pages read" | retired: "Opened web page" rows and "N opened" |
+| "Read" | green eye on hits, "Read" rows, "5 pages read" | retired: "Opened web page" rows and "N opened" (counts only fetches that succeeded) |
 
 German strings, whole phrases per origin, are in `03-ux-brief.md` section 5. The German UI is formal ("Sie"; 970 strings against 23 informal). The PM's draft assumed informal "du" and was corrected.
 
@@ -100,6 +100,7 @@ Other disagreements, resolved by UX:
 6. **Thinking process:** rename and restyle in this slice (recommended), or the label and `aria-expanded` fix only? Merging both disclosures into one "How this answer was made" block is a separate ticket.
 7. **`activityScope` stays on the wire for one release** with no new reader (recommended), so cached extension and Outlook bundles keep working.
 8. **Footer for answers whose only retrieval was `read_url`:** count it as Web (recommended, if the check below confirms it).
+9. **How many origins the collapsed line names before "+N":** two, like the footer chip (as specced), or up to four, since the finished line wraps instead of truncating? With three or more origins a sighted reader does not see the hidden names in the collapsed line.
 
 ## Scope
 

@@ -255,12 +255,12 @@ The `before:` strut (Tailwind v4 emits `content: ''` for `before:` utilities) fo
                   focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500">
       <span className="line-clamp-2 break-words">{title}</span>
     </a>
-    <span className="shrink-0 text-gray-500 dark:text-gray-400">{host}</span>
+    <span className="min-w-0 max-w-full text-gray-500 [overflow-wrap:anywhere] dark:text-gray-400">{host}</span>
   </li>
 </ul>
 ```
 
-- Title clamps at two lines (never `truncate`); the **host is never clipped**: it follows the title on the same line when it fits and drops below it when it does not. The host is the only visible origin cue for a web hit (research F11).
+- Title clamps at two lines (never `truncate`). The clamp is visual: the link text and its accessible name are the complete title, and `title` repeats it for mouse users as a duplicate, never the only source. Two results whose titles differ only after the second line look alike on screen; if that matters more than height, drop `line-clamp-2` (the 320 px heights in 5.6 then grow). The **host is never clipped**: it follows the title on the same line when it fits and drops below it when it does not. A host wider than the row (a long internal hostname at 320 px) wraps inside the row instead of overflowing: it has no `shrink-0` and may break anywhere. The mockup uses short hosts and does not show that case. The host is the only visible origin cue for a web hit (research F11).
 - The link is a 24 px target (`min-h-6`) with the shared focus ring (today hit links have only the browser outline; a ring is added because the link is touched anyway).
 - Below 640 px the hits get `space-y-1.5` (6 px) so that "title, title, host" of one hit does not run into the next hit (seen at 320 px in the mockup).
 - iFinder and project hits without a URL: plain `text-gray-700 dark:text-gray-300` text in the same structure, no ring.

@@ -95,7 +95,7 @@ Rules:
 MVP:
 1. **Remove the hit-level markers, both the green eye "Read" and the amber "Not readable"** (`SourceRow`, `ToolActivity.jsx:567-587`). A failed open is the read row's own Failed state. The green eye meant "the provider returned an extract" (`web.js:204`), an iFinder document that was opened (`resolveDocuments`, `toolActivity.js:75-98`) or a page that was fetched, and it was drawn in the same colour and word for all three.
 2. **Page and document reads become rows named by origin and verb "Opened"**: "Opened web page", "Opened document in the project", "Opened document in iFinder" (live: "Opening <host>"). Lead icon is the origin icon (globe for web), not a document glyph.
-3. **The headline counts only openings**: "3 opened" per origin. "5 pages read" and the "Seiten" false friend disappear. "N opened" is computed from `kind: 'fetch'` rows, whose kind the server sends, so nothing is inferred.
+3. **The headline counts only openings**: "3 opened" per origin. "5 pages read" and the "Seiten" false friend disappear. "N opened" counts a `kind: 'fetch'` row only when it succeeded: its status is `completed`, it did not hit the page-read limit (`limitReached`), and its source did not report `read.ok === false` (the flag behind today's "Not readable"). A failed, stopped or limit-reached fetch is not counted as opened; it is counted in "N failed" or shown as "Not opened" (section 4.1). All three signals are already on the row and come from the server's tool outcome, so nothing is inferred from a tool id. If a check shows that a fetch can complete without delivering any text, add a server-declared outcome for it (section 7, G10).
 4. **"partly read" replaces the amber "truncated"**, visible neutral text next to the row, no tooltip (F15). Word counts ("1,334 words") move into Technical details.
 5. The provider extract (the `extractContent` text) is not marked in the default view. It appears only in Technical details if the server sends its depth (section 7, G6, Later).
 6. The panel section "Read for this answer" stays as is. It is a different axis (role in the answer: cited / read / considered) and it counts everything the model had text for, including extracts. The headline's "3 opened" and the panel's "Read (5)" can differ on the screenshot run; section 8 tests whether that confuses anyone.
@@ -349,7 +349,7 @@ Segment grammar (the owner's wish: origin first, provider at the end of its own 
 ```
 - Noun in medium weight, facts in the secondary colour; facts are separated by a middle dot, segments by space only (no dot between segments: one separator, one meaning).
 - Order of segments: first use. Outputs (Created PDF) after the origin segments, always shown.
-- At most two origin segments are named, the rest as `+N` (same rule as the footer chip, `MAX_NAMED_KINDS = 2`, `answerBasisModel.js:66`). The `+N` carries visually hidden text naming what it hides, so the button's accessible name still lists everything and still contains the visible text (WCAG 2.5.3).
+- At most two origin segments are named, the rest as `+N` (same rule as the footer chip, `MAX_NAMED_KINDS = 2`, `answerBasisModel.js:66`). The `+N` carries visually hidden text naming what it hides, so the button's accessible name still lists everything and still contains the visible text (WCAG 2.5.3). **Known limit:** a sighted reader does not see the names that the `+N` hides; they are in the accessible name and in the expanded list. With three or more origins the collapsed line is therefore not the full "what was used" check, and the expanded list is. Because the finished headline wraps instead of truncating, it could name more than two origins; whether to raise the limit (for example to four) is open question V12 in section 8.
 - Connected systems: `[k] Jira  2 calls`, noun = the system label from the server; no "via".
 - Rows without origin (older chats): one neutral segment, `2 searches . 5 results`, no icon, nothing guessed.
 - Counts belong to their segment only. No global "2 searches".
@@ -680,7 +680,7 @@ Segment nouns (headline): reuse `chatMessage.answerBasis.kind.web|project|ifinde
 | `toolActivity.noResults` | no results | keine Ergebnisse | declared zero only |
 | `toolActivity.via` | via {{name}} | über {{name}} | visible text; replaces the `title` "Data from" / "Daten aus" |
 | `toolActivity.searches_one/_other` (existing) | {{count}} search / searches | {{count}} Suche / Suchen | shown only when 2 or more |
-| `toolActivity.openedCount_one/_other` | {{count}} opened | {{count}} geöffnet | no noun, so no "pages" / "Seiten" |
+| `toolActivity.openedCount_one/_other` | {{count}} opened | {{count}} geöffnet | no noun, so no "pages" / "Seiten"; counts completed fetches only (D2) |
 | `toolActivity.failedCount_one/_other` | {{count}} failed | {{count}} fehlgeschlagen | red text |
 | `toolActivity.calls_one/_other` | {{count}} call / calls | {{count}} Aufruf / Aufrufe | connected systems; replaces "tool call" in segments |
 | `toolActivity.partlyRead` | partly read | teilweise gelesen | neutral; replaces "truncated" / "gekürzt" |
@@ -831,8 +831,9 @@ The PM contract (section 4) covers `activityOrigin` on `tool/started`, the `args
 | G7 | **Scope provenance at run start** (`webSearch` or an attached project enabled by `user` or by `app`). | D6: the only truthful "who" for searches. A sentence in the footer popover, not on rows. Not on any run event today (`RequestBuilder.js:725`). | M | Later |
 | G8 | **Model step number per call** (which calls ran in the same step). | Would let the list show that two calls were parallel and drop the implied order claim. Hypothesis, not needed for MVP. | S | Later, only if validation asks |
 | G9 | **`read` of a hit by id match across calls** (already true: sources share an id across calls, `countRead` relies on it). | Needed for the later merge; verify that the id of a hit and of the page fetched later are equal for web results (it is arithmetically implied by "5 read, 3 rows" in the screenshot, not directly observed). | none | verify before the merge |
+| G10 | **A declared outcome for a page or document read**, only if needed. | "N opened" counts fetch rows that completed, did not hit the read limit and did not report `read.ok === false`. If a fetch can complete without text (for example an empty body), that rule would count it as opened. | S | verify first; add only if it happens |
 
-Client-computed, so no data needed: opened count per origin (from `fetch` rows), searches per origin, "N failed", `+N`, the origin summary on the sources panel (from `Source.origin`).
+Client-computed, so no data needed: opened count per origin (from `fetch` rows that completed, did not hit the read limit and did not report `read.ok === false`), searches per origin, "N failed", `+N`, the origin summary on the sources panel (from `Source.origin`).
 
 ---
 
@@ -853,6 +854,7 @@ All of this is a plan, not evidence. Reuse the research script (`01-research.md`
 | V9 | Screen reader: the collapsed line's accessible name; the "no results" announcement; steps to answer "was the project used?"; focus after the list closes by itself. | one SR session | At least 50% fewer stops than today (research metric). |
 | V10 | Sources panel: is the origin noun without a glyph enough; is `Web 5 . Project 3` understood as a count of cards; project versus iFinder document told apart. | panel screenshot | If not, add the origin glyph with the collision fix. |
 | V11 | "5 results" in the headline versus "N results" in the footer tile can still differ (research F16). Does anyone notice? | mixed fixture | If yes, rename the segment's word (for example "hits / Treffer"). |
+| V12 | Does the collapsed line need to name more than two origins? With three origins (web, project, iFinder) a sighted reader sees two names and `+1`. | mixed fixture with three origins | If compliance participants cannot say from the collapsed line whether iFinder was used, raise the finished headline's limit to four (the footer chip keeps two). |
 
 ---
 
