@@ -9,6 +9,7 @@
 | Binding inputs | `03-ux-brief.md` (structure, copy, state matrix, a11y), `02-product-brief.md` sections 0, 4, 6, `01-research.md` section 2 |
 | Companion file | `mockups.html` in this folder (self-contained; open it in a browser; light and dark follow the system or the theme button) |
 | Location | `concepts/2026-11-13 Activity origin/04-ui-spec.md`, with `mockups.html` next to it |
+| Revision | 2026-11-13, owner decision: the skill moves from a header chip into the activity block (sections 0, 2.3, 3, 4.5, 5.6, 6, 10, 11, 12, 13). It overrides UX D1 (header chip, never in the list). |
 
 How to read this: section 0 is the verdict. Section 1 is the foundation (type, spacing, icon sizes, colour roles). Sections 2 to 9 are the elements a to h of the task, in the same order as the mockup sections. Section 10 is dark mode, contrast (with a calculated table), reduced motion and 320 px. Section 11 is the implementation map (file, today's class string, new class string). Section 12 lists every deviation from the UX and PM briefs. Section 13 is what I checked and fixed. Section 14 is what I could not verify. Section 15 is how to continue.
 
@@ -22,18 +23,18 @@ The activity block keeps its one visual language (12 px text, 16 px icons, the t
 
 Key visual decisions:
 
-1. **Origin atom = icon + noun, never colour.** Six icons (globe-alt, folder, document-text, book-open, document-duplicate, link). Three icon collisions are resolved by changing the *other* usage, not the footer: the iFinder search-profile glyph `folder` becomes `squares-2x2`; the created PDF/document glyph `document-text` becomes `document-plus`; the skill chip uses `academic-cap`, because `sparkles` is the footer's AI segment (section 2).
+1. **Origin atom = icon + noun, never colour.** Six icons (globe-alt, folder, document-text, book-open, document-duplicate, link). Three icon collisions are resolved by changing the *other* usage, not the footer: the iFinder search-profile glyph `folder` becomes `squares-2x2`; the created PDF/document glyph `document-text` becomes `document-plus`; the skill (row and headline segment) uses `academic-cap`, because `sparkles` is the footer's AI segment (section 2).
 2. **Leading slot: status wins, origin otherwise.** The origin is always also in the words (section 3).
 3. **Collapsed headline = segments.** `[icon] Noun facts`, noun in medium weight and primary ink, facts in the secondary grey, a trailing middle dot between facts, 16 px between segments, wrapping at segment and fact boundaries, never truncating; `+N` after two origins (section 4).
 4. **Expanded rows keep the flat timeline** but get a hanging layout: an icon column and a body that wraps *under the phrase*, a 24 px first line, hit titles clamped at two lines with the host never clipped, 24 px link targets (section 5).
 5. **"no results" is stated in primary-ink grey** (`gray-700` / `gray-300`), "partly read" and "via Brave Search" in the secondary grey. No amber, no green, no outlined provider chip. Hue is kept for failure (red) and for the one real warning (amber, "Not opened").
-6. **Skill chip = a tinted status**, purple as today, no border, no focus stop, glyph `academic-cap`, text `Skill: <name> · <reason>` (section 6).
+6. **A skill appears exactly once, in the activity block** (owner decision: never a header chip, never a chip plus a row). Expanded: one row per distinct skill in the flat list, the normal row grammar, glyph `academic-cap`, text `Skill: <name> · <reason>`; skills in force from the start come first, a model-chosen skill appears where it happened. Collapsed: skill segments come first in the headline (`[academic-cap] Skill: Contract review · started manually`; three or more become one names-only segment `Skills: A, B, C`) and do not count against the `+N` limit of two origins. It stays a status, not a control: no border, no fill, no focus stop, no `title`. Without the old pill it is recognised by a purple glyph and a purple name (section 6). Costs: the collapsed line is one segment longer (on F1 at 640 px it wraps to a second line), a skill row adds 28 px, and three or more skills lose their reasons in the collapsed state (to be validated).
 7. **Technical details** is a 28 x 16 px switch (outlined when off, filled indigo when on), 24 px high, directly under the headline (section 7).
 8. **Thinking process** takes the activity button's own classes (section 8).
 9. **Sources panel**: origin noun as medium-weight text at the start of every card's meta line, a summary line `Web 5 · Project 3` under the panel title, filter pills for "Next" (section 9).
 10. **Every text pair passes AA in light and dark (calculated, section 10)**. Two failures were found in existing code and fixed in this spec (filter-pill border, secondary text on the highlighted source card).
 
-Measured on the F1 run (screenshot), expanded, at the 640 px message width: Today 350 px, Option C 310 px, A-prime 384 px. At 320 px (EN): Today 558, C 638, A-prime 694 (C is taller than today on a narrow pane because hit titles wrap instead of truncating; the honest cost is in section 5.6). Single-origin run (F6) at 640 px: Today 168, C 168.
+Measured on the F1 run (screenshot), expanded, at the 640 px message width: Today 350 px, Option C 310 px, A-prime 384 px. At 320 px (EN): Today 558, C 638, A-prime 694 (C is taller than today on a narrow pane because hit titles wrap instead of truncating; the honest cost is in section 5.6). Single-origin run (F6) at 640 px: Today 168, C 168. With one skill row on the F1 run: 354 px at 640 px (+44: the 28 px row and one more headline line) and 686 px at 320 px (+48).
 
 Deviations from the UX brief are small and listed in section 12 (the biggest: the row layout, the two-row filter, the profile glyph change now rather than later).
 
@@ -45,7 +46,7 @@ Deviations from the UX brief are small and listed in section 12 (the biggest: th
 
 | Use | Tailwind | Size / line |
 |---|---|---|
-| Whole activity block, thinking line, skill chip, row text, facts, hits, details | `text-xs` | 12 / 16 px |
+| Whole activity block, thinking line, skill row and skill segment, row text, facts, hits, details | `text-xs` | 12 / 16 px |
 | Mono argument values | `font-mono` (inside `text-xs`) | 12 px |
 | Segment noun, running label, skill name, panel meta noun | `font-medium` | 500 |
 | Everything else in the block | regular | 400 |
@@ -60,7 +61,7 @@ No new size. Only two weights (400, 500) inside the activity block.
 | Token | px | Use |
 |---|---|---|
 | `gap-0.5` / `gap-y-0.5` | 2 | wrapped lines inside a row body |
-| `gap-1`, `py-1` | 4 | segment rows, chip padding, switch gap |
+| `gap-1`, `py-1` | 4 | segment rows, switch gap, row spacing (`space-y-1`) |
 | `gap-1.5`, `mt-1.5`, `ms-1.5` | 6 | icon-to-text, list offset (existing) |
 | `gap-2`, `mb-2` | 8 | block bottom margin (existing), switch label gap |
 | `gap-x-3`, `ps-3` | 12 | list inset, argument pairs |
@@ -71,7 +72,7 @@ No new size. Only two weights (400, 500) inside the activity block.
 ### 1.3 Icon sizes
 
 - `size="sm"` (16 px, `w-4 h-4`): lead slot of a headline, a row, a disclosure button, the chevron.
-- `size="xs"` (12 px, `w-3 h-3`): inside a chip or pill (skill chip, footer chip, scope chip, "Uploaded").
+- `size="xs"` (12 px, `w-3 h-3`): inside a chip or pill (footer chip, scope chip, "Uploaded"). The skill glyph is a lead icon and is 16 px, like every other row and segment glyph.
 - Stroke: Heroicons 24 outline, 1.5 at 24 px (about 1 px at 16 px). Do not mix solid.
 
 ### 1.4 Colour roles (Tailwind utilities; ratios are in section 10)
@@ -88,7 +89,8 @@ No new size. Only two weights (400, 500) inside the activity block.
 | Active status icon (spinner) | `text-indigo-600` | `dark:text-indigo-400` (existing `ACTIVE_ICON`) |
 | Failed text / icon | `text-red-600` / `text-red-500` | `dark:text-red-400` / `text-red-500` |
 | Attention ("Not opened", awaiting) | `text-amber-700` | `dark:text-amber-400` |
-| Skill chip | `bg-purple-100 text-purple-700` | `dark:bg-purple-900/30 dark:text-purple-300` (unchanged from today's pill) |
+| Skill name (row and headline segment) | `font-medium text-purple-700` | `dark:text-purple-300` (no fill, no border) |
+| Skill glyph | `text-purple-600` | `dark:text-purple-400` |
 | Mono detail value | `bg-gray-100 text-gray-700` | `dark:bg-gray-800 dark:text-gray-300` (unchanged) |
 | List rule | `border-gray-200` | `dark:border-gray-700` (decorative) |
 | Focus ring | `focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500` | same |
@@ -123,7 +125,7 @@ Rule: **secondary grey (`gray-500`) only on white or `gray-50`**. On `gray-100` 
 | C1 | `folder` = Project (footer, headline, rows) **and** the iFinder search-profile chip and the panel header's scope list (`AnswerSources.jsx:664`, `:924`) | panel | Profile chip and header scope glyph become **`squares-2x2`** ("a slice of the index"; already registered in `Icon.jsx`). `folder` stays Project everywhere. |
 | C2 | `document-text` = iFinder (footer) **and** the created PDF and Word document glyph (`activityHeadline.js:29-37`, `pdf` and `document`) **and** the generic read fallback (`ToolActivity.jsx:309`) **and** a source card's file glyph | rows, headline, cards | Created `pdf` and `document` become **`document-plus`** ("made", registered). The read fallback disappears: an open row leads with its origin icon. Unknown-origin reads use plain `document`. A source card's `document-text` stays: it means "a file" there, tinted by file type, and the origin is the noun beside it (no glyph on cards, UX D5). |
 | C3 | `link` = integration (footer, `IntegrationChip`) **and** hyperlink **and** the panel menu's "Copy link" (`AnswerSources.jsx:1066`) **and** project provenance "Linked" (`ItemProvenance.jsx:7`) | row, chip, panel menu | `link` is the integration origin only. The "via Brave Search" chip (which wore `link`) becomes plain text, so no web row carries `link`. The menu item and the provenance marker have a visible word next to the glyph; no change. |
-| C4 | `sparkles` = footer AI segment (reserved) **and** the skill pill today **and** `SkillCard` | skill chip | The skill chip uses **`academic-cap`** (registered; "a learned capability"). Rejected: `puzzle-piece` (reads as plug-in or integration, not registered), `bolt` (workflow), `book-open` (iAssistant), `light-bulb` (thinking). `SkillCard` and the admin screens may keep `sparkles` (outside the chat answer). |
+| C4 | `sparkles` = footer AI segment (reserved) **and** the skill pill today **and** `SkillCard` | skill row and headline segment | The skill uses **`academic-cap`** (registered; "a learned capability") at 16 px, in purple. Rejected: `puzzle-piece` (reads as plug-in or integration, not registered), `bolt` (workflow), `book-open` (iAssistant), `light-bulb` (thinking). `SkillCard` and the admin screens may keep `sparkles` (outside the chat answer). |
 | C5 | `light-bulb` = Thinking process **and** the idle "Thinking…" line | header | One meaning: the model's reasoning. Keep. |
 | C6 | `eye` = the retired green "Read" marker **and** the panel menu's "Preview" action (`AnswerSources.jsx:1061`) **and** the card's `ReadStatus` | hits, panel | The activity-hit marker is removed (UX D2); `eye` stays Preview and the card's read status (unchanged in the MVP). |
 | C7 | `document-text` and `document-plus` look alike at 16 px when the iFinder segment and "Created PDF" are neighbours (F3) | headline | Accepted residual: the words differ ("iFinder 3 results" / "Created PDF"). Revisit only if the label test (UX V10) says people confuse them. |
@@ -145,13 +147,14 @@ The lead slot is the first 16 px of a row and of the headline. **Status wins; ot
 | stopped | **origin icon** (the word "Stopped" carries the state; a stopped row is final information) | gray |
 | completed, default | origin icon | gray |
 | completed, origin unknown | kind glyph (section 2.2) | gray |
+| skill row | `academic-cap` | `text-purple-600 dark:text-purple-400` (the skill's own colour, section 6). It is final when its activation frame arrives and has no running state in the data I read; if the server ever gives it one, the status rules above apply and the glyph yields to the status. |
 
 Headline lead:
 
 | Headline mode | Lead |
 |---|---|
 | running, preparing, idle | spinner (static glyph under reduced motion), then the label |
-| between (turn continues, nothing active) | spinner **replaces the first segment's icon only**; later segments keep theirs. At the end the first segment's icon appears in the same 16 px slot, so nothing shifts. |
+| between (turn continues, nothing active) | spinner **replaces the first segment's icon only**; later segments keep theirs. The first segment is the skill segment when there is one (skills come first), so the spinner then sits where the skill glyph will be. At the end the first segment's icon appears in the same 16 px slot, so nothing shifts. |
 | awaiting | `shield-check` amber, replaces all segments |
 | finished, streaming-answer | each segment has its own icon |
 | finished with failures | **no red icon**. The segment's fact "1 failed" is red text with words. A red globe would say "the whole Web segment failed". (Today `summaryIconOf` turns the single headline icon red; that goes away with the single icon.) |
@@ -176,6 +179,7 @@ Alignment: the icon column is 16 px wide and 24 px tall in a row (`flex h-6 shri
 - Segment markup: `inline-flex min-w-0 items-start gap-1.5` with the icon `shrink-0` and the text column `min-w-0` (so a wrapped fact hangs under the noun, not under the icon).
 - Segment row: `flex min-w-0 flex-wrap gap-x-4 gap-y-1`.
 - `+N`: after the second named segment, `shrink-0 whitespace-nowrap text-gray-500 dark:text-gray-400` (same word as the footer: `chatMessage.answerBasis.more`), with a visually hidden suffix naming what it hides (UX 6.1).
+- Skill segments come first, before every origin segment; they are not origins and do not count in `+N` (section 4.5).
 - Output segments ("Created PDF") follow the origin segments, same atom with the output glyph, the label in noun weight, no facts.
 - A segment without an icon (old chats) keeps an empty 16 px slot (`w-4 shrink-0`) so its text aligns with the rows below.
 
@@ -207,6 +211,25 @@ Chevron: unchanged (`Icon chevron-down size="sm" shrink-0 transition-transform m
 | F5 | `[folder] Project no results   [globe] Web 3 results · via Brave Search   v` | 1 |
 | F3 | `[document-text] iFinder 3 results   [link] Jira 2 calls   +1   [document-plus] Created PDF   v` | 1 |
 | F1 DE, 320 px | `Web 5 Ergebnisse · 3 geöffnet ·` / `über Brave Search` / `Projekt keine Ergebnisse` (chevron top right) | 3 (52 px measured, headline only) |
+| F1 + one skill | `[academic-cap] Skill: Contract review · started manually   [globe] Web 5 results · 3 opened · via Brave Search` / `[folder] Project no results   v` | **2** at 640 px (36 px; 56 px at 320 px) |
+| F1 + three skills | `[academic-cap] Skills: Contract review, Brand voice, Summaries   [globe] Web 5 results · 3 opened · via Brave Search` / `[folder] Project no results   v` | 2 at 640 px (36 px; 72 px at 320 px) |
+| skill only | `[academic-cap] Skill: Brand voice · set by the app   v` | 1 (20 px) |
+
+### 4.5 Skill segments (first in the headline)
+
+Owner decision: a skill is shown once, in the activity block. In the collapsed line it is the first segment.
+
+- **Order**: skill segments first, then origin segments (in first-use order), then output segments. Among skills: those in force from the start (started manually, set by the app, kept from an earlier message), then those the model chose (the order of their rows). The expanded list keeps pure time order; the collapsed line groups.
+- **One or two skills**: one segment each, in the same grammar as an origin segment: `[academic-cap] Skill: Contract review · started manually`. Markup: `inline-flex min-w-0 items-start gap-1.5`; glyph `Icon academic-cap size="sm" shrink-0 text-purple-600 dark:text-purple-400`; `Skill:` regular in block grey; the name `font-medium text-purple-700 dark:text-purple-300 break-words`; a middle dot after the name (`aria-hidden`, trailing like every dot, with a visually hidden comma); the reason as a `whitespace-nowrap` fact in block grey, so it wraps under the name as a unit.
+- **Three or more**: one segment `[academic-cap] Skills: Contract review, Brand voice, Summaries`, names only (each name `font-medium` purple and `whitespace-nowrap`, a comma after every name but the last), no reasons. **This loses the reason of each skill in the collapsed state; the reasons are in the expanded rows. To be validated** (does anyone need the reason without expanding?).
+- **Not origins**: skills do **not** count against the `+N` limit of two named origins (`MAX_NAMED_KINDS` applies to origin segments only). A turn with two skills and three origins shows two skill segments, two named origins and `+1`.
+- **Wrap**: like every segment, at its own boundary, never truncated; a long name breaks inside the segment.
+- **Accessible name**: the headline button's name is its visible text, so it includes the skill segment as text ("Skill: Contract review, started manually. Web: 5 results, ..."): a screen reader hears the skill without expanding. No `aria-label` (WCAG 2.5.3). `RunAnnouncer` stays silent for skills (`deriveAnnouncements.js:172`, as today).
+- **Costs, honestly**:
+  - the collapsed line is one segment longer. On F1 at 640 px EN it no longer fits on one line (36 px instead of 20: the Project segment wraps); at 320 px EN 56 px (one skill), 76 px (two), 72 px (three);
+  - a model-chosen skill inserts a segment before the existing ones in the between and finished headline (while a call runs the headline is the running label, so this is one line reflowing, not the list);
+  - three or more skills lose their reasons when collapsed (above).
+- Mockup: section 5 (one, two and three skills) and section 8.
 
 ---
 
@@ -293,6 +316,11 @@ The `before:` strut (Tailwind v4 emits `content: ''` for `before:` utilities) fo
 | F6 single web, Today | 168 px | 212 px |
 | F6 single web, Option C | **168 px** | 306 px |
 | F1 German, Option C | n/a | 654 px |
+| F1, Option C with one skill row | **354 px** (+44) | 686 px (+48) |
+| F1 German, Option C with two skill rows | n/a | 784 px (+130) |
+| Skill-only turn, expanded (headline + one row) | 48 px | 48 px |
+| Skill-only turn, collapsed | 20 px | 20 px |
+| F1-style list with a model-chosen skill in the middle (skill, search, skill, opened page) | 250 px | 412 px |
 | F5, Option C | 148 px | |
 | F3, Option C | 232 px | |
 
@@ -300,37 +328,76 @@ Read it honestly: at 640 px C is 40 px lighter than today on F1 (the argument ch
 
 A-prime in this run: +3 header lines (one per origin change), every hit and read 22 px deeper, so more wrapping at 320 px; the three reads sit under a Web header and cannot be misread as children of the Project search. C reaches the same only with the globe and the words, until the later merge (a page shown once on its hit) removes the three read rows.
 
+A skill row adds 28 px to the expanded list (a 24 px row plus the 4 px gap). The skill segment makes the collapsed F1 headline wrap to a second line at 640 px (+16 px), so one skill costs 44 px at 640 px and 48 px at 320 px on this run. The DE figure (+130 px) is two skill rows (56 px) plus the German headline wrapping to more lines.
+
 Streaming stability: in C only text changes in place and rows append; the first line of a painted row never changes height (the strut), so nothing above a new row moves (mockup section 4).
 
 ---
 
-## 6. e) The skill chip
+## 6. e) The skill row and the skill headline segment
 
-A **status, not a control**: #3619 says clickable = outlined, status = tinted. So: tinted fill, **no border, no focus ring, no tab stop, no `title`, no hover state.**
+Owner decision (2026-11-13): **a skill appears exactly once, in the activity block**. Never a header chip, never a chip plus a row. The old purple pill above the answer and the `SkillRow` outlined chip are both gone; there is one row grammar and one segment grammar.
+
+### 6.1 Rules
+
+- **Expanded list**: one row per distinct skill, in the flat time-ordered list. Skills in force from the start (started manually, set by the app, kept from an earlier message) are the first rows, because they have no step; a skill the model chooses appears where it happened (append-only while streaming). A skill the model loads twice is one row, at its first position.
+- **Collapsed headline**: the first segment or segments (section 4.5): `[academic-cap] Skill: Contract review · started manually`; three or more skills become `Skills: A, B, C`.
+- **A turn with a skill and nothing else still gets the activity block**: collapsed it is just the skill segment, expanded it is one row (mockup section 5, "A skill-only turn").
+- **Header block order**: Thinking process line, then the activity block (skill rows live inside it), then the answer. Nothing sits above the Thinking line.
+- **A status, not a control** (#3619: clickable = outlined, status = tinted): no border, no fill, no focus ring, no tab stop, no hover state, no `title`, no meaning in a tooltip.
+
+### 6.2 Staying recognisable without the pill
+
+The old pill was a filled purple capsule with a sparkles glyph. Recognition now comes from three signals, none of which is the fill:
+
+1. the glyph `academic-cap` at 16 px in purple (`text-purple-600 dark:text-purple-400`: 5.54:1 and 6.36:1 against the bubble);
+2. the name in purple medium weight (`font-medium text-purple-700 dark:text-purple-300`: 7.07:1 and 9.97:1);
+3. the word `Skill:` (or `Skills:`) before the name, in block grey. Colour is never the only signal: the word and the glyph carry it.
+
+A filled name (`bg-purple-100`, 5.99:1) was drawn on paper and rejected: next to the indigo query chip it reads as a second chip family and it brings the pill back. All five reason states use the same colours; the words carry the difference. "Skill:" and the reason stay in the usual greys (reason `text-gray-500 dark:text-gray-400`, the same secondary grey as every fact), so the only purple on a row is the glyph and the name.
+
+### 6.3 Row markup
+
+The normal row (section 5.1): icon column plus a hanging body with the 24 px strut.
 
 ```jsx
-<ul aria-label={t('toolActivity.skillsLabel')} className="mb-2 flex flex-wrap gap-1.5 text-xs">
-  <li className="inline-flex max-w-full items-start gap-1.5 rounded-lg bg-purple-100 px-2 py-1
-                 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-    <Icon name="academic-cap" size="xs" className="mt-0.5 shrink-0" />
-    <span className="min-w-0 break-words">
-      {t('toolActivity.skillLabel')} <span className="font-medium">{name}</span>
-      <span aria-hidden="true"> ·</span><span className="sr-only">, </span>
-      <span className="whitespace-nowrap">{reason}</span>
+<li>
+  <div className="flex items-start gap-1.5">
+    <span className="flex h-6 shrink-0 items-center">
+      <Icon name="academic-cap" size="sm" className="text-purple-600 dark:text-purple-400" />
     </span>
-  </li>
-</ul>
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5
+                    before:h-6 before:w-0 before:shrink-0 before:-me-1.5">
+      <span className="min-w-0 break-words">
+        {t('toolActivity.skillLabel')} <span className="font-medium text-purple-700 dark:text-purple-300">{name}</span>
+        {reason && <><span aria-hidden="true"> ·</span><span className="sr-only">, </span></>}
+      </span>
+      {reason && <span className="whitespace-nowrap text-gray-500 dark:text-gray-400">{reason}</span>}
+    </div>
+  </div>
+</li>
 ```
 
-- Anatomy: glyph (12 px), `Skill:` (regular), name (`font-medium`), a middle dot (hidden from screen readers; they hear a comma), reason (regular, `whitespace-nowrap` so it wraps under the name as a unit at 320 px).
-- Shape: `rounded-lg`, not today's `rounded-full`. A two-line pill at 320 px would become a blob; `rounded-lg` reads as a chip at one and at two lines. Padding `px-2 py-1` (on the 4 px grid; today `px-2.5`).
-- Colour: unchanged from today's pill (`purple-100/700`, dark `purple-900/30` and `purple-300`; 5.99:1 and 9.12:1, both pass). Purple is kept because users already know it as "skill" (also on `SkillCard`); the state is still carried by the word "Skill:" and the glyph, never by hue alone. All five reason states use the same colour.
-- Reason states (EN / DE, from UX 5.3): started manually / manuell gestartet; chosen by the model / vom Modell ausgewählt; set by the app / von der App festgelegt; kept from an earlier message / aus früherer Nachricht übernommen; unknown: no dot, no reason (nothing guessed).
-- Two or more chips: one `flex-wrap` row with 6 px gaps; they share a line when they fit (640 px) and wrap to their own rows at 320 px.
-- Spacing: the chip row is above the Thinking line and the activity line, each block keeps `mb-2` (8 px). Between two stacked disclosure buttons the 24 px boxes touch exactly (4 px box padding each side plus 8 px margin minus the `-my-1`); never reduce that margin or the boxes overlap.
-- Order in the header: skill chips, Thinking process, activity line, answer (UX D4).
+- The row is an `<li>` in the existing `<ol>`; it is plain text: **no tab stop**.
+- Reason states (EN / DE, from UX 5.3): started manually / manuell gestartet; chosen by the model / vom Modell ausgewählt; set by the app / von der App festgelegt; kept from an earlier message / aus früherer Nachricht übernommen; unknown (answers stored before the change): no dot, no reason, nothing guessed.
+- The reason is a `whitespace-nowrap` fact, so at 320 px it moves under the name as one unit (mockup section 8, "Skill rows, four routes").
+- A skill row has no technical details, so it never gets a `dl`; a turn with only skill rows does not render the Technical details switch.
 
-Mockup: section 5 (five states, two chips at 640 and 320, header in context) and section 8 (German).
+### 6.4 Streaming
+
+- For skills started manually, set by the app or kept from an earlier message, the skill row exists before the first call, so **the activity block exists from the first frame**: a skill row, then the idle or running lines. Nothing appears later and pushes the answer down (mockup section 4, first frame).
+- A skill the model chooses appends its row where it happens. The expanded list is append-only; the collapsed line groups skills first, so that segment is inserted before the origin segments (section 4.5).
+- Without a skill in force the block still appears when the first call arrives, as today.
+
+### 6.5 What it costs, and what it needs
+
+- The collapsed line is one segment longer (section 4.5; F1 at 640 px wraps to two lines).
+- A skill row adds 28 px to the expanded list (section 5.6).
+- App-set and carried-over skills have no step, so they sit first in the list instead of where they "happened".
+- Both still need the new server frames: `activatedBy: 'app'` and `'chat'` (UX brief G4), otherwise those two states cannot be shown and the row has no reason.
+- Three or more skills lose their reasons when collapsed (to be validated).
+
+Mockup: section 5 (the five reason states as rows; collapsed headlines with one, two and three skills; F1 with a skill row; a skill-only turn collapsed and expanded; a model-chosen skill in time order), section 4 (first frame: skill in force) and section 8 (German at 320 px: collapsed with a skill segment, expanded with two skills, four skill rows).
 
 ---
 
@@ -390,7 +457,7 @@ Restyled to the activity button's own classes, so the two disclosures read as on
 ```
 
 - Light-bulb lead (same glyph as the "Thinking…" idle line), label regular weight, chevron, focus ring, `aria-expanded`. No underline, no show/hide verbs.
-- Spacing: `mb-2` as today; the two disclosure lines stack with exactly touching 24 px boxes (section 6). Skill chips above it keep `mb-2`.
+- Spacing: `mb-2` as today; the two disclosure lines stack with exactly touching 24 px boxes (section 6). Nothing sits above it: the skill lives in the activity block below.
 - The open region is **unchanged** (`list-disc pl-4 mt-1 space-y-1`). Option for later: the same left rule as the activity list; not in this slice.
 - If the PM keeps the "no restyle" line (UX D4 fallback): only the label and `aria-expanded` change and the button stays an underlined text link; the family then rests on the word alone.
 
@@ -471,7 +538,7 @@ Mockup: section 7 (MVP on the left, Next on the right) and section 8 (German car
 
 ### 10.1 Surfaces
 
-Light: page and bubble `white`, borders `gray-200`. Dark: page and bubble `gray-900` (`#101828`), borders `gray-700` (the product's `data-theme="dark"` on `html`; the mockup supports both that attribute and `prefers-color-scheme`). Tints over `gray-900`: `indigo-900/30` = `#1a1f43`, `purple-900/30` = `#261746`, `indigo-900/40` = `#1d214c`.
+Light: page and bubble `white`, borders `gray-200`. Dark: page and bubble `gray-900` (`#101828`), borders `gray-700` (the product's `data-theme="dark"` on `html`; the mockup supports both that attribute and `prefers-color-scheme`). Tints over `gray-900`: `indigo-900/30` = `#1a1f43`, `indigo-900/40` = `#1d214c`. (The skill no longer uses a tint: its text sits directly on the bubble.)
 
 ### 10.2 Contrast (calculated with a script, WCAG relative luminance)
 
@@ -487,66 +554,68 @@ Text needs 4.5:1, UI components and graphics 3:1. Every pair used by the element
 | 6 | light | Query chip text indigo-600 on indigo-50 | `#4f46e5` | `#eef2ff` | 5.62:1 | 4.5:1 | pass |
 | 7 | light | Failed red-600 on white | `#e7000b` | `#ffffff` | 4.77:1 | 4.5:1 | pass |
 | 8 | light | Not opened / awaiting amber-700 on white | `#bb4c00` | `#ffffff` | 5.06:1 | 4.5:1 | pass |
-| 9 | light | Skill chip text purple-700 on purple-100 (unchanged from today) | `#8200db` | `#f3e8ff` | 5.99:1 | 4.5:1 | pass |
-| 10 | light | Mono detail chip gray-700 on gray-100 | `#364153` | `#f3f4f6` | 9.36:1 | 4.5:1 | pass |
-| 11 | light | Detail name gray-500 on white | `#6a7282` | `#ffffff` | 4.84:1 | 4.5:1 | pass |
-| 12 | light | Panel card noun gray-700 on white | `#364153` | `#ffffff` | 10.30:1 | 4.5:1 | pass |
-| 13 | light | Panel scope chip text gray-600 on gray-100 | `#4a5565` | `#f3f4f6` | 6.87:1 | 4.5:1 | pass |
-| 14 | light | Active pill indigo-700 on indigo-50 | `#4338ca` | `#eef2ff` | 7.07:1 | 4.5:1 | pass |
-| 15 | light | Inactive pill text gray-600 on white | `#4a5565` | `#ffffff` | 7.56:1 | 4.5:1 | pass |
-| 16 | light | Number badge indigo-700 on indigo-100 | `#4338ca` | `#e0e7ff` | 6.41:1 | 4.5:1 | pass |
-| 17 | light | Today: green "Read" emerald-700 on white (retires) | `#007a55` | `#ffffff` | 5.36:1 | 4.5:1 | pass |
-| 18 | light | Today: "truncated" amber-700 on white (retires) | `#bb4c00` | `#ffffff` | 5.06:1 | 4.5:1 | pass |
-| 19 | light | Switch label gray-700 on white | `#364153` | `#ffffff` | 10.30:1 | 4.5:1 | pass |
-| 20 | light | Chevron / lead icon gray-500 on white | `#6a7282` | `#ffffff` | 4.84:1 | 3:1 | pass |
-| 21 | light | Spinner / active icon indigo-600 on white | `#4f46e5` | `#ffffff` | 6.29:1 | 3:1 | pass |
-| 22 | light | Error icon red-500 on white | `#fb2c36` | `#ffffff` | 3.81:1 | 3:1 | pass |
-| 23 | light | Awaiting icon amber-700 on white | `#bb4c00` | `#ffffff` | 5.06:1 | 3:1 | pass |
-| 24 | light | Focus ring indigo-500 on white | `#6366f1` | `#ffffff` | 4.47:1 | 3:1 | pass |
-| 25 | light | Switch OFF: border/thumb gray-500 on white | `#6a7282` | `#ffffff` | 4.84:1 | 3:1 | pass |
-| 26 | light | Switch ON: track indigo-600 on white | `#4f46e5` | `#ffffff` | 6.29:1 | 3:1 | pass |
-| 27 | light | Switch ON: white thumb on indigo-600 track | `#ffffff` | `#4f46e5` | 6.29:1 | 3:1 | pass |
-| 28 | light | Inactive pill border gray-200 on white (existing ScopeFilter) | `#e5e7eb` | `#ffffff` | 1.24:1 | 3:1 | FAIL (existing) |
-| 29 | light | Inactive pill border gray-500 on white (fix) | `#6a7282` | `#ffffff` | 4.84:1 | 3:1 | pass |
-| 30 | light | Active pill border indigo-500 on white | `#6366f1` | `#ffffff` | 4.47:1 | 3:1 | pass |
-| 31 | light | List rule gray-200 on white (decorative) | `#e5e7eb` | `#ffffff` | 1.24:1 | n/a | decorative |
-| 32 | dark | Phrase / facts text (inherited) gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 4.5:1 | pass |
-| 33 | dark | Noun, running label gray-200 on gray-900 | `#e5e7eb` | `#101828` | 14.33:1 | 4.5:1 | pass |
-| 34 | dark | Secondary fact gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 4.5:1 | pass |
-| 35 | dark | "no results" gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
-| 36 | dark | Hit / page link indigo-400 on gray-900 | `#818cf8` | `#101828` | 5.95:1 | 4.5:1 | pass |
-| 37 | dark | Query chip text indigo-300 on indigo-900/30 | `#a5b4fc` | `#1a1f43` | 7.97:1 | 4.5:1 | pass |
-| 38 | dark | Failed red-400 on gray-900 | `#ff6467` | `#101828` | 6.14:1 | 4.5:1 | pass |
-| 39 | dark | Not opened / awaiting amber-400 on gray-900 | `#ffb900` | `#101828` | 10.30:1 | 4.5:1 | pass |
-| 40 | dark | Skill chip text purple-300 on purple-900/30 (unchanged from today) | `#dab2ff` | `#261746` | 9.12:1 | 4.5:1 | pass |
-| 41 | dark | Mono detail chip gray-300 on gray-800 | `#d1d5dc` | `#1e2939` | 9.96:1 | 4.5:1 | pass |
-| 42 | dark | Panel card noun gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
-| 43 | dark | Panel scope chip text gray-300 on gray-800 | `#d1d5dc` | `#1e2939` | 9.96:1 | 4.5:1 | pass |
-| 44 | dark | Active pill indigo-200 on indigo-900/40 | `#c7d2fe` | `#1d214c` | 10.25:1 | 4.5:1 | pass |
-| 45 | dark | Inactive pill text gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
-| 46 | dark | Number badge indigo-200 on indigo-900/60 | `#c7d2fe` | `#24255d` | 9.40:1 | 4.5:1 | pass |
-| 47 | dark | Today: green "Read" emerald-400 on gray-900 (retires) | `#00d492` | `#101828` | 9.15:1 | 4.5:1 | pass |
-| 48 | dark | Switch label gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
-| 49 | dark | Chevron / lead icon gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 3:1 | pass |
-| 50 | dark | Spinner / active icon indigo-400 on gray-900 | `#818cf8` | `#101828` | 5.95:1 | 3:1 | pass |
-| 51 | dark | Error icon red-500 on gray-900 | `#fb2c36` | `#101828` | 4.66:1 | 3:1 | pass |
-| 52 | dark | Awaiting icon amber-400 on gray-900 | `#ffb900` | `#101828` | 10.30:1 | 3:1 | pass |
-| 53 | dark | Focus ring indigo-500 on gray-900 | `#6366f1` | `#101828` | 3.97:1 | 3:1 | pass |
-| 54 | dark | Switch OFF: border/thumb gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 3:1 | pass |
-| 55 | dark | Switch ON: track indigo-500 on gray-900 | `#6366f1` | `#101828` | 3.97:1 | 3:1 | pass |
-| 56 | dark | Switch ON: white thumb on indigo-500 track | `#ffffff` | `#6366f1` | 4.47:1 | 3:1 | pass |
-| 57 | dark | Inactive pill border gray-700 on gray-900 (existing ScopeFilter) | `#364153` | `#101828` | 1.72:1 | 3:1 | FAIL (existing) |
-| 58 | dark | Inactive pill border gray-500 on gray-900 (fix) | `#6a7282` | `#101828` | 3.67:1 | 3:1 | pass |
-| 59 | dark | Active pill border indigo-400 on gray-900 | `#818cf8` | `#101828` | 5.95:1 | 3:1 | pass |
-| 60 | dark | List rule gray-700 on gray-900 (decorative) | `#364153` | `#101828` | 1.72:1 | n/a | decorative |
-| 61 | light | EDGE secondary gray-500 on indigo-50 (highlighted source card, today) | `#6a7282` | `#eef2ff` | 4.33:1 | 4.5:1 | FAIL (existing) |
-| 62 | light | EDGE secondary gray-600 on indigo-50 (fix for card meta) | `#4a5565` | `#eef2ff` | 6.76:1 | 4.5:1 | pass |
-| 63 | light | EDGE secondary gray-500 on gray-100 (not allowed) | `#6a7282` | `#f3f4f6` | 4.39:1 | 4.5:1 | FAIL (existing) |
-| 64 | light | Switch OFF track gray-300 on white (rejected design) | `#d1d5dc` | `#ffffff` | 1.47:1 | 3:1 | FAIL (rejected) |
-| 65 | dark | Switch OFF track gray-600 on gray-900 (rejected design) | `#4a5565` | `#101828` | 2.35:1 | 3:1 | FAIL (rejected) |
-| 66 | dark | EDGE secondary gray-400 on indigo-900/30 (highlighted card) | `#99a1af` | `#1a1f43` | 6.11:1 | 4.5:1 | pass |
-| 67 | light | Avatar initial white on indigo-500 (aria-hidden, decorative) | `#ffffff` | `#6366f1` | 4.47:1 | 4.5:1 | FAIL (existing) |
-| 68 | light | Avatar initial white on amber-500 (aria-hidden, decorative) | `#ffffff` | `#fe9a00` | 2.13:1 | 4.5:1 | FAIL (existing) |
+| 9 | light | Skill name (row and headline) purple-700 on white bubble | `#8200db` | `#ffffff` | 7.07:1 | 4.5:1 | pass |
+| 10 | light | Skill glyph purple-600 on white bubble | `#9810fa` | `#ffffff` | 5.54:1 | 3:1 | pass |
+| 11 | light | Mono detail chip gray-700 on gray-100 | `#364153` | `#f3f4f6` | 9.36:1 | 4.5:1 | pass |
+| 12 | light | Detail name gray-500 on white | `#6a7282` | `#ffffff` | 4.84:1 | 4.5:1 | pass |
+| 13 | light | Panel card noun gray-700 on white | `#364153` | `#ffffff` | 10.30:1 | 4.5:1 | pass |
+| 14 | light | Panel scope chip text gray-600 on gray-100 | `#4a5565` | `#f3f4f6` | 6.87:1 | 4.5:1 | pass |
+| 15 | light | Active pill indigo-700 on indigo-50 | `#4338ca` | `#eef2ff` | 7.07:1 | 4.5:1 | pass |
+| 16 | light | Inactive pill text gray-600 on white | `#4a5565` | `#ffffff` | 7.56:1 | 4.5:1 | pass |
+| 17 | light | Number badge indigo-700 on indigo-100 | `#4338ca` | `#e0e7ff` | 6.41:1 | 4.5:1 | pass |
+| 18 | light | Today: green "Read" emerald-700 on white (retires) | `#007a55` | `#ffffff` | 5.36:1 | 4.5:1 | pass |
+| 19 | light | Today: "truncated" amber-700 on white (retires) | `#bb4c00` | `#ffffff` | 5.06:1 | 4.5:1 | pass |
+| 20 | light | Switch label gray-700 on white | `#364153` | `#ffffff` | 10.30:1 | 4.5:1 | pass |
+| 21 | light | Chevron / lead icon gray-500 on white | `#6a7282` | `#ffffff` | 4.84:1 | 3:1 | pass |
+| 22 | light | Spinner / active icon indigo-600 on white | `#4f46e5` | `#ffffff` | 6.29:1 | 3:1 | pass |
+| 23 | light | Error icon red-500 on white | `#fb2c36` | `#ffffff` | 3.81:1 | 3:1 | pass |
+| 24 | light | Awaiting icon amber-700 on white | `#bb4c00` | `#ffffff` | 5.06:1 | 3:1 | pass |
+| 25 | light | Focus ring indigo-500 on white | `#6366f1` | `#ffffff` | 4.47:1 | 3:1 | pass |
+| 26 | light | Switch OFF: border/thumb gray-500 on white | `#6a7282` | `#ffffff` | 4.84:1 | 3:1 | pass |
+| 27 | light | Switch ON: track indigo-600 on white | `#4f46e5` | `#ffffff` | 6.29:1 | 3:1 | pass |
+| 28 | light | Switch ON: white thumb on indigo-600 track | `#ffffff` | `#4f46e5` | 6.29:1 | 3:1 | pass |
+| 29 | light | Inactive pill border gray-200 on white (existing ScopeFilter) | `#e5e7eb` | `#ffffff` | 1.24:1 | 3:1 | FAIL (existing) |
+| 30 | light | Inactive pill border gray-500 on white (fix) | `#6a7282` | `#ffffff` | 4.84:1 | 3:1 | pass |
+| 31 | light | Active pill border indigo-500 on white | `#6366f1` | `#ffffff` | 4.47:1 | 3:1 | pass |
+| 32 | light | List rule gray-200 on white (decorative) | `#e5e7eb` | `#ffffff` | 1.24:1 | n/a | decorative |
+| 33 | dark | Phrase / facts text (inherited) gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 4.5:1 | pass |
+| 34 | dark | Noun, running label gray-200 on gray-900 | `#e5e7eb` | `#101828` | 14.33:1 | 4.5:1 | pass |
+| 35 | dark | Secondary fact gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 4.5:1 | pass |
+| 36 | dark | "no results" gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
+| 37 | dark | Hit / page link indigo-400 on gray-900 | `#818cf8` | `#101828` | 5.95:1 | 4.5:1 | pass |
+| 38 | dark | Query chip text indigo-300 on indigo-900/30 | `#a5b4fc` | `#1a1f43` | 7.97:1 | 4.5:1 | pass |
+| 39 | dark | Failed red-400 on gray-900 | `#ff6467` | `#101828` | 6.14:1 | 4.5:1 | pass |
+| 40 | dark | Not opened / awaiting amber-400 on gray-900 | `#ffb900` | `#101828` | 10.30:1 | 4.5:1 | pass |
+| 41 | dark | Skill name (row and headline) purple-300 on gray-900 bubble | `#dab2ff` | `#101828` | 9.97:1 | 4.5:1 | pass |
+| 42 | dark | Skill glyph purple-400 on gray-900 bubble | `#c27aff` | `#101828` | 6.36:1 | 3:1 | pass |
+| 43 | dark | Mono detail chip gray-300 on gray-800 | `#d1d5dc` | `#1e2939` | 9.96:1 | 4.5:1 | pass |
+| 44 | dark | Panel card noun gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
+| 45 | dark | Panel scope chip text gray-300 on gray-800 | `#d1d5dc` | `#1e2939` | 9.96:1 | 4.5:1 | pass |
+| 46 | dark | Active pill indigo-200 on indigo-900/40 | `#c7d2fe` | `#1d214c` | 10.25:1 | 4.5:1 | pass |
+| 47 | dark | Inactive pill text gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
+| 48 | dark | Number badge indigo-200 on indigo-900/60 | `#c7d2fe` | `#24255d` | 9.40:1 | 4.5:1 | pass |
+| 49 | dark | Today: green "Read" emerald-400 on gray-900 (retires) | `#00d492` | `#101828` | 9.15:1 | 4.5:1 | pass |
+| 50 | dark | Switch label gray-300 on gray-900 | `#d1d5dc` | `#101828` | 12.05:1 | 4.5:1 | pass |
+| 51 | dark | Chevron / lead icon gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 3:1 | pass |
+| 52 | dark | Spinner / active icon indigo-400 on gray-900 | `#818cf8` | `#101828` | 5.95:1 | 3:1 | pass |
+| 53 | dark | Error icon red-500 on gray-900 | `#fb2c36` | `#101828` | 4.66:1 | 3:1 | pass |
+| 54 | dark | Awaiting icon amber-400 on gray-900 | `#ffb900` | `#101828` | 10.30:1 | 3:1 | pass |
+| 55 | dark | Focus ring indigo-500 on gray-900 | `#6366f1` | `#101828` | 3.97:1 | 3:1 | pass |
+| 56 | dark | Switch OFF: border/thumb gray-400 on gray-900 | `#99a1af` | `#101828` | 6.82:1 | 3:1 | pass |
+| 57 | dark | Switch ON: track indigo-500 on gray-900 | `#6366f1` | `#101828` | 3.97:1 | 3:1 | pass |
+| 58 | dark | Switch ON: white thumb on indigo-500 track | `#ffffff` | `#6366f1` | 4.47:1 | 3:1 | pass |
+| 59 | dark | Inactive pill border gray-700 on gray-900 (existing ScopeFilter) | `#364153` | `#101828` | 1.72:1 | 3:1 | FAIL (existing) |
+| 60 | dark | Inactive pill border gray-500 on gray-900 (fix) | `#6a7282` | `#101828` | 3.67:1 | 3:1 | pass |
+| 61 | dark | Active pill border indigo-400 on gray-900 | `#818cf8` | `#101828` | 5.95:1 | 3:1 | pass |
+| 62 | dark | List rule gray-700 on gray-900 (decorative) | `#364153` | `#101828` | 1.72:1 | n/a | decorative |
+| 63 | light | EDGE secondary gray-500 on indigo-50 (highlighted source card, today) | `#6a7282` | `#eef2ff` | 4.33:1 | 4.5:1 | FAIL (existing) |
+| 64 | light | EDGE secondary gray-600 on indigo-50 (fix for card meta) | `#4a5565` | `#eef2ff` | 6.76:1 | 4.5:1 | pass |
+| 65 | light | EDGE secondary gray-500 on gray-100 (not allowed) | `#6a7282` | `#f3f4f6` | 4.39:1 | 4.5:1 | FAIL (existing) |
+| 66 | light | Switch OFF track gray-300 on white (rejected design) | `#d1d5dc` | `#ffffff` | 1.47:1 | 3:1 | FAIL (rejected) |
+| 67 | dark | Switch OFF track gray-600 on gray-900 (rejected design) | `#4a5565` | `#101828` | 2.35:1 | 3:1 | FAIL (rejected) |
+| 68 | dark | EDGE secondary gray-400 on indigo-900/30 (highlighted card) | `#99a1af` | `#1a1f43` | 6.11:1 | 4.5:1 | pass |
+| 69 | light | Avatar initial white on indigo-500 (aria-hidden, decorative) | `#ffffff` | `#6366f1` | 4.47:1 | 4.5:1 | FAIL (existing) |
+| 70 | light | Avatar initial white on amber-500 (aria-hidden, decorative) | `#ffffff` | `#fe9a00` | 2.13:1 | 4.5:1 | FAIL (existing) |
 
 Failures found and what I did:
 
@@ -559,7 +628,7 @@ Failures found and what I did:
 
 Everything else in the table passes, including the tight ones (`gray-500` on white 4.84, `red-600` on white 4.77, focus ring on white 4.47 against the 3:1 it needs).
 
-A second, independent check ran on the **rendered** page: a script computed the contrast of every text node's computed colour against its effective background (alpha blended), in light and dark, at 1100 px and at 320 px: 941 text nodes per run, one below 4.5:1 (the decorative avatar initial above), zero elsewhere.
+A second, independent check ran on the **rendered** page: a script computed the contrast of every text node's computed colour against its effective background (alpha blended), in light and dark, at 1100 px and at 320 px: 1,154 text nodes per run (after the skill change), one below 4.5:1 (the decorative avatar initial above), zero elsewhere. The skill pairs are new rows in the table: name `purple-700` on the white bubble 7.07:1, `purple-300` on the `gray-900` bubble 9.97:1; glyph `purple-600` 5.54:1 and `purple-400` 6.36:1 (3:1 needed). None failed, so nothing had to be fixed for the skill.
 
 ### 10.3 Reduced motion
 
@@ -571,17 +640,17 @@ A second, independent check ran on the **rendered** page: a script computed the 
 | Rows appearing | no animation (none exists) | same; no auto-scrolling |
 | Streaming caret in the answer | n/a (not part of this change) | n/a |
 
-Verified in Chromium with `reducedMotion: 'reduce'`: 0 spinners visible, 10 static clocks, thumb transition 0 s (mockup frame "Reduced motion, t = 1.4 s" in section 4).
+Verified in Chromium with `reducedMotion: 'reduce'`: 0 spinners visible, 11 static clocks, thumb transition 0 s (mockup frame "Reduced motion, t = 1.4 s" in section 4).
 
 ### 10.4 320 px frames
 
-Mockup section 8 (German, 320 px: collapsed with a skill chip, expanded F1, a sources card, four skill chips) and section 4 (German streaming frame). The page itself was also rendered at a 320 px viewport: no horizontal scroll.
+Mockup section 8 (German, 320 px: collapsed with a skill segment, expanded F1 with two skill rows, a sources card, four skill rows) and section 4 (German streaming frame). The page itself was also rendered at a 320 px viewport: no horizontal scroll.
 
 What the 320 px frames show, as rules:
 - headline: segments on their own lines when they do not fit, facts wrap under the noun, chevron top right;
 - rows: phrase, then the query chip (`break-all`), then the facts, all under the phrase (hanging indent);
 - hits: title clamps at two lines, the host drops to its own line, 6 px between hits;
-- skill chip: the reason wraps under the name as one unit;
+- skill row and skill segment: the reason wraps under the name as one unit;
 - sources card: meta line wraps, title clamps at two lines.
 
 ---
@@ -597,12 +666,13 @@ Line numbers are from the files as I read them today.
 | Wrapper (L73) | `mb-2 text-xs text-gray-600 dark:text-gray-400` | unchanged |
 | Headline button (L79) | `group inline-flex items-center gap-1.5 max-w-full py-1 -my-1 rounded-sm text-start hover:text-gray-900 dark:hover:text-gray-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500` | `items-center` -> **`items-start`**, rest unchanged |
 | Headline label (L82-91) | `<span title=... className="min-w-0 truncate [ACTIVE_LABEL ...]">` | running/between: `<span className="min-w-0 break-words [ACTIVE_LABEL ...]">` (no `title`). Finished: segment row `flex min-w-0 flex-wrap gap-x-4 gap-y-1`, segment `inline-flex min-w-0 items-start gap-1.5`, noun `font-medium text-gray-800 group-hover:text-gray-900 dark:text-gray-200 dark:group-hover:text-gray-100 me-0.5`, fact `whitespace-nowrap`, `+N` `shrink-0 whitespace-nowrap text-gray-500 dark:text-gray-400` |
+| Headline segments, skills (new) | none | skill segments first, section 4.5: `inline-flex min-w-0 items-start gap-1.5`, glyph `text-purple-600 dark:text-purple-400`, name `font-medium text-purple-700 dark:text-purple-300`; three or more: one `Skills:` segment, names only; not counted in `+N` |
 | `HeadlineIcon` (L173-192) | one summary icon, red when failed | removed for finished (each segment draws its own); busy keeps `BusyIcon` as the first segment's icon; awaiting keeps the shield |
 | Switch | none | new, section 7, between the button and the list |
 | List `ol` (L131) | `mt-1.5 ms-1.5 ps-3 border-s border-gray-200 dark:border-gray-700 space-y-2` | `space-y-2` -> **`space-y-1`**; `mt-1.5` -> `mt-1` when the switch row is rendered |
 | Row line (L232, L264, L308, L362) | `flex flex-wrap items-center gap-1.5` | icon column + wrapping body (section 5.1) |
 | `StatusIcon` (L194-215) | fallback `'search'` / `'document-text'` / `'wrench'` / `'sparkles'` | fallback = `KIND_ICON[item.origin.kind]`; unknown origin: `search` / `document` / `wrench` |
-| `SkillRow` (L228-251) | purple bordered chip in the list | **delete** (the chip lives in `ChatMessage.jsx`) |
+| `SkillRow` (L228-251) | `<div className="flex flex-wrap items-center gap-1.5">` with `StatusIcon fallback="sparkles"`, the text `Used skill`, a chip `inline-flex items-center px-2 py-0.5 rounded-md bg-purple-50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-700/50`, and `text-gray-500 dark:text-gray-400` reasons for `user` and `model` only | **restyle, do not delete**: the normal row (icon column + hanging body, section 6.3): `academic-cap` `size="sm"` `text-purple-600 dark:text-purple-400`, `Skill:` in block grey, the name `font-medium text-purple-700 dark:text-purple-300`, the reason `whitespace-nowrap text-gray-500 dark:text-gray-400` for all four states; no border, no fill, no tab stop. `toolActivity.usedSkill` is replaced by `toolActivity.skillLabel` ("Skill:") |
 | Query chip (L274) | `inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-700/50 break-all` | unchanged |
 | Results (L280) | `text-gray-500 dark:text-gray-400` | facts block, trailing dots; "no results" `text-gray-700 dark:text-gray-300` |
 | `IntegrationChip` (L467-478) | `RowChip` with `link` icon, `title` | plain fact `via {name}`, `text-gray-500 dark:text-gray-400` |
@@ -620,12 +690,12 @@ Line numbers are from the files as I read them today.
 `RowChip` (L189-197) stays for `No. 2` (see flag F-2). `ActivityHint` (L211): `mt-1 ms-5` -> `ms-5.5`. `BusyIcon` unchanged.
 
 ### `client/src/features/chat/activityHeadline.js`
-`OUTPUT_GLYPHS` (L30-38): `pdf` and `document` -> `'document-plus'` (collision C2). `lookedAtIcon` (L338-344) goes with the single summary icon.
+`OUTPUT_GLYPHS` (L30-38): `pdf` and `document` -> `'document-plus'` (collision C2). `lookedAtIcon` (L338-344) goes with the single summary icon. **Gains a leading skills segment** in the segment model (UX brief section 9, step 1): skill segments first, one per skill for one or two skills with their reason, one names-only `Skills:` segment for three or more, not counted against `MAX_NAMED_KINDS`; the "N skills" part of today's `finishedHeadline` (skills count, L303-306) is removed. The activity block must render for a turn whose only item is a skill row.
 
 ### `client/src/features/chat/components/ChatMessage.jsx`
 | Element | Today | New |
 |---|---|---|
-| Skill pills (L972-984) | `flex flex-wrap gap-2 mb-2` > `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300` with `sparkles` `w-3 h-3` | section 6: `ul` `mb-2 flex flex-wrap gap-1.5 text-xs`, `li` `inline-flex max-w-full items-start gap-1.5 rounded-lg bg-purple-100 px-2 py-1 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300`, `academic-cap` `xs` |
+| Skill pills (L972-984) | `flex flex-wrap gap-2 mb-2` > `inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300` with `sparkles` `w-3 h-3` | **removed** (owner decision: no header chip). `distinctSkills` is no longer rendered here; the skills come from the activity data (`ToolActivity` rows and the headline segments) |
 | Thoughts button (L1000) | `<button onClick=... className="underline">` | section 8 |
 
 ### `client/src/features/chat/components/AnswerSources.jsx`
@@ -641,7 +711,7 @@ Line numbers are from the files as I read them today.
 `answerBasisModel.js` (`KIND_ICON`, `MAX_NAMED_KINDS`), `AnswerBasis.jsx` (the footer chip, `h-6 rounded-full border`, sparkles AI segment), the card's `ReadStatus`, `RunAnnouncer`.
 
 ### Strings and tests
-EN and DE keys: UX brief section 5 (EN and DE parity test must stay green). New tests: segment wrapping markup, the switch (`role="switch"`, `aria-checked`), the focus move on automatic close, a 320 px layout check, axe. Add the SPDX header to any new file.
+EN and DE keys: UX brief section 5 (EN and DE parity test must stay green). New tests: segment wrapping markup, the switch (`role="switch"`, `aria-checked`), the focus move on automatic close, a 320 px layout check, axe, a turn whose only item is a skill row (the block renders), the skill segment in the headline's accessible name, no tab stop on a skill row. Add the SPDX header to any new file.
 
 ---
 
@@ -656,13 +726,13 @@ EN and DE keys: UX brief section 5 (EN and DE parity test must stay green). New 
 | D-5 | Unknown-origin rows: `search` / `document` / `wrench`; no-origin segment keeps an empty 16 px slot | UX said "no icon"; an empty slot keeps the text aligned with the rows and avoids a jump from spinner to text. No origin is guessed. |
 | D-6 | Origin summary sits directly under the panel title, not after the query chips | The chips can wrap to several lines and push the summary away from the heading it explains. (UX text says "under the title"; only its wireframe differs.) |
 | D-7 | Origin filter + profile filter as **two rows**, not "one row at a time" | One row would hide the other origins and offer no way back to Web. |
-| D-8 | Skill chip `rounded-lg` (not `rounded-full`), `academic-cap`, colour unchanged | A rounded-full pill turns into a blob at two lines. Colour kept so users keep recognising skills. |
+| D-8 | **Owner decision: the skill moves from a header chip into the activity block** (overrides UX D1 and my earlier chip spec). Row in the list, first segment(s) in the headline; glyph `academic-cap` (not `sparkles`); recognised by a purple glyph and a purple name with **no fill and no border**; three or more skills collapse to one names-only segment; skills are not origins and do not count in `+N` | A fill or border would bring the pill (and the "outlined = clickable" misread, #3619) back and would look like the indigo query chip next to it. Purple text on the bubble is calculated: 7.07:1 / 9.97:1 (name), 5.54:1 / 6.36:1 (glyph). The visual consequence is a longer collapsed line and a 28 px row (section 6.5). |
 | D-9 | Hit links get the shared focus ring | They become 24 px targets in this change; today they only have the browser outline. |
 | D-10 | Filter-pill border and card meta colour changed | Calculated contrast failures (section 10.2). |
 | D-11 | Headline icon never turns red | A red globe on a multi-origin headline claims too much; "1 failed" in red text with words carries it. |
 | D-12 | Segments separated by 16 px, facts by a trailing dot | Needed so wrapping never starts a line with a dot (UX 3.1 wireframe does the same). |
 
-Followed from the UX brief where the PM brief differs: Technical details at the top (PM: end of the list); the hit-level "Read" marker retired (PM: unchanged); skill reasons in person-neutral words; skill glyph not `sparkles`; "via" and "N opened" instead of a bare provider and "N pages read".
+Followed from the UX brief where the PM brief differs: Technical details at the top (PM: end of the list); the hit-level "Read" marker retired (PM: unchanged); skill reasons in person-neutral words and always shown (rows) or shown for one or two skills (collapsed); skill glyph not `sparkles` (the PM's chip used it); "via" and "N opened" instead of a bare provider and "N pages read".
 
 Flags (existing, kept because the task said "keep current look"; one-class fixes for later):
 - **F-1** The query chip is outlined (`border-indigo-200`) but not clickable: #3619 says outlined = clickable. Dropping the border (keep the tint) fixes it.
@@ -676,7 +746,7 @@ Flags (existing, kept because the task said "keep current look"; one-class fixes
 What I did (Chromium via the pre-installed Playwright, Inter installed, 107 screenshots that are not kept in the repo):
 
 1. Rendered `mockups.html` at 1100 px (light, dark), 320 px (light, dark) and 2200 px (light, to check the side-by-side comparison); per-section images and per-frame images at 320 px. Looked at the section images and the 320 px frames.
-2. DOM audit at all four size/theme combinations: horizontal overflow of any element beyond its bubble or panel (0), page horizontal scroll (none at 320 or 1100), contrast of every text node's computed colour against its blended background (941 nodes; one decorative exception, section 10.2).
+2. DOM audit at all four size/theme combinations: horizontal overflow of any element beyond its bubble or panel (0), page horizontal scroll (none at 320 or 1100), contrast of every text node's computed colour against its blended background (1,154 nodes after the skill change, 941 before; one decorative exception, section 10.2).
 3. Network: zero requests; no URL in the file; one inline script (theme toggle and the demo switches).
 4. Theme toggle works from both system schemes and sets `data-theme`; the demo switches toggle `aria-checked`; no console errors.
 5. Reduced motion emulated: spinners hidden, static clocks shown, thumb transition off.
@@ -689,9 +759,17 @@ What the first renders showed and I fixed:
 - The uppercase frame label turned "t = 1.4 s" into "T = 1.4 S" -> no-transform span.
 - The reduced-motion rule for the switch lost to a later rule of the same specificity (thumb still animated under reduce) -> moved after it. (In Tailwind the `motion-reduce:` variant is emitted after the base utility, so the product is not exposed to this; it is recorded so nobody copies the CSS instead of the classes.)
 - The focus ring was drawn nowhere -> added a frame (section 6) and a ring on hit links.
-- Skill chip colour: my first version used `purple-800/200`; today's `purple-700/300` already passes, so I reverted to avoid churn.
+- Skill chip colour (before the owner decision): my first version used `purple-800/200`; today's `purple-700/300` already passes, so I reverted to avoid churn. After the decision the chip is gone; see the re-check below.
 - Contrast: section 10.2.
 - The sticky page header covered section titles in element screenshots and anchor jumps -> `scroll-margin-top`.
+
+Re-check after the owner decision (skill from header chip to activity block):
+
+1. Rebuilt the mockup: the `ul.skills` chip list is gone from every frame; section 5 is now "Skill in the activity block" with eight frames (five reason states as rows, collapsed headlines with one, two and three skills, F1 with a skill row, a skill-only turn collapsed and expanded, a model-chosen skill in time order); section 8 converted (collapsed with a skill segment, expanded with two skill rows, four skill rows); section 4 gained a first frame (skill in force at t = 0.0 s).
+2. Looked at the new frames in light and dark at 1100 px and at 320 px (the F1 frame with a skill row at 320 px in dark).
+3. Re-ran the audits: no horizontal overflow at 320 or 1100 in light and dark, zero external requests, 1,154 text nodes with one decorative exception, theme toggle and demo switches still work, reduced motion still swaps the spinners (11 static clocks).
+4. Re-measured with the two-pass build; the heights in 4.5, 5.6 and the captions are measured, not estimated.
+5. What the first render of the new frames showed and I fixed: the frame label "t = 0.0 s , skill in force" had a stray space before the comma (flex gap between a span and a text node) -> one wrapping span.
 
 ---
 
@@ -705,6 +783,11 @@ What the first renders showed and I fixed:
 - **German strings** are the UX brief's, not reviewed by a native speaker; the mockup uses them as given.
 - **Longer data.** Real runs have longer queries and 10 hits; I used the screenshot's data. A 10-hit run at 320 px is about 2 x 5 hits tall.
 - **The skill glyph** `academic-cap` is my judgment; it is not tested (UX V3/V10 could include it).
+- **Recognisability of an unfilled purple name.** I removed the fill on purpose (status, not control). Whether a purple glyph and name read as "a skill" and not as plain emphasis is a judgment, not a test; the label and glyph test should show the skill row among ordinary rows.
+- **Three or more skills collapsed** show names without reasons; whether anyone needs the reason without expanding is open (to be validated).
+- **A model-chosen skill inserting a segment into the collapsed headline** is shown as static frames only; the one-line reflow while streaming needs a recording (UX V8).
+- **Server data.** The `app` and `chat` reasons need new server frames (UX brief G4); until they exist the mockup shows states that the product cannot yet produce.
+- **Screen reader behaviour of the skill segment** (the accessible name of the headline button including "Skill: Contract review, started manually.") is specified, not tested.
 - **Hit link height.** `min-h-6` on every hit makes the hit list 6 px taller per hit at 640 px than today (24 vs 18 px). It is the cost of the 24 px target rule; if the PO prefers density, the alternative is the spacing exception of 2.5.8 (16 px targets at 24 px pitch, which is not met at today's 18 px).
 
 ---
@@ -714,5 +797,5 @@ What the first renders showed and I fixed:
 1. Open `mockups.html` in a browser. Press "Dark theme" to flip; every frame is a real component state. Section numbers match sections 2 to 9 of this spec.
 2. `mockups.html` is a static file. It was generated by build scripts that are not part of the repo; edit the HTML directly, or rebuild the frames from the spec if it changes a lot.
 3. Build order for the real code is `03-ux-brief.md` section 9; this spec's section 11 gives the class strings per element.
-4. Do not: use colour to tell origins apart; reuse `sparkles` outside the footer's AI segment; make the skill chip or the provider look clickable (no border, no ring); put anything only in a `title`; shrink the `mb-2` between the disclosure lines; use `truncate` on a finished headline or a hit title.
+4. Do not: use colour to tell origins apart; reuse `sparkles` outside the footer's AI segment; make a skill row, a skill segment or the provider look clickable (no border, no fill, no ring); put a skill chip back above the answer (owner decision: a skill appears once, in the activity block); put anything only in a `title`; shrink the `mb-2` between the disclosure lines; use `truncate` on a finished headline or a hit title.
 5. Open decisions are the UX brief's O-1 to O-5; none of mine blocks the build. If the PO picks A-prime instead of C, the row and headline specs here still hold; only the list changes (section headers `[icon] Noun via Provider`, rows indented 22 px under them: see the frame in mockup section 1).
