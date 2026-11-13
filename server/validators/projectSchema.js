@@ -20,7 +20,6 @@ import {
   PROJECT_TIERS
 } from '../services/projects/projectConstants.js';
 import {
-  MAX_CONVERT_CONCURRENCY,
   MAX_FETCH_CONCURRENCY,
   MAX_REFRESH_WAIT_SECONDS,
   zRefreshMode,
@@ -599,12 +598,10 @@ export const projectSharingSettingsSchema = z
     refreshMode: zRefreshMode.optional(),
     refreshIdleDays: z.number().int().min(0).max(3650).optional(),
     // How long a reader waits for outdated documents before it reads them
-    // (0: not at all), and the checks and conversions at once per server
-    // process (#3622).
+    // (0: not at all), and the checks at once per server process (#3622).
     refreshWaitSeconds: z.number().int().min(0).max(MAX_REFRESH_WAIT_SECONDS).optional(),
     ingest: z
       .object({
-        concurrency: z.number().int().min(1).max(MAX_CONVERT_CONCURRENCY),
         fetchConcurrency: z.number().int().min(1).max(MAX_FETCH_CONCURRENCY)
       })
       .partial()

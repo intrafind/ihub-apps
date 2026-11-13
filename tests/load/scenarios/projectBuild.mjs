@@ -6,7 +6,7 @@
  *   create → upload N documents → wait for ingestion → crawl a site →
  *   add the found pages as URL items → chat in the project → delete it.
  *
- * Ingestion runs on a per-worker queue (`projects.ingest.concurrency`, default 2)
+ * Ingestion runs on a per-worker queue (one file read at a time per worker)
  * and extraction is CPU on the event loop, so this scenario is what interferes
  * with chat latency. The crawl is synchronous (≤ 25 s, one per user per process).
  */

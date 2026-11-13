@@ -20,9 +20,10 @@ import { projectSettings } from './projectSettings.js';
  *
  * One job runs on one thread at a time; the rest wait in a queue, and the time
  * budget starts when the job does. A thread that times out, crashes or runs
- * out of memory is replaced by the next job. Settings are `projects.extraction`
- * in platform.json (`threads`, `timeoutMs`, `memoryMb`); `threads: 0` turns the
- * pool off and callers read on the event loop, as before.
+ * out of memory is replaced by the next job. A server process has one thread
+ * (`CONVERSIONS_PER_PROCESS`); the time and heap budgets are
+ * `projects.extraction` (`timeoutMs`, `memoryMb`).
+ * Tests can set `threads: 0` to read on the event loop.
  *
  * @module services/projects/extractionPool
  */
@@ -51,7 +52,7 @@ export function extractionSettings() {
   return projectSettings(configCache.getPlatform?.() || {}).extraction;
 }
 
-/** Whether files are read in threads (`projects.extraction.threads` > 0). */
+/** Whether files are read in threads (always, except when a test sets `threads: 0`). */
 export function extractionThreadsEnabled() {
   return extractionSettings().threads > 0;
 }

@@ -14,7 +14,6 @@ import { knowledgeModeDescription, knowledgeModeLabel } from '../../projects/uti
 import { KNOWLEDGE_MODES } from '../../../../../shared/knowledgeModes.js';
 import { LIMIT_FIELDS, LIMIT_LABELS, limitInputsOf, parseLimits } from '../utils/projectLimits';
 import {
-  CONVERT_CONCURRENCY_RANGE,
   FETCH_CONCURRENCY_RANGE,
   parseRefreshTtl,
   parseWholeNumber,
@@ -489,33 +488,20 @@ function ProjectSharingSettingsPanel() {
           />
         )}
         {draft.ingest && (
-          <>
-            <NumberSetting
-              id="project-settings-fetch-concurrency"
-              label={t(
-                'admin.projects.fetchConcurrency.label',
-                'Files and web pages checked at once'
-              )}
-              help={t(
-                'admin.projects.fetchConcurrency.help',
-                'Per server process. Checking whether a file or page changed takes little memory; at least as many as conversions at once.'
-              )}
-              value={draft.ingest.fetchConcurrency}
-              range={FETCH_CONCURRENCY_RANGE}
-              onChange={value => updateIngest('fetchConcurrency', FETCH_CONCURRENCY_RANGE, value)}
-            />
-            <NumberSetting
-              id="project-settings-convert-concurrency"
-              label={t('admin.projects.convertConcurrency.label', 'Documents converted at once')}
-              help={t(
-                'admin.projects.convertConcurrency.help',
-                'Per server process: uploads, and files and web pages that changed, are read into text this many at a time. Each conversion can take a lot of memory.'
-              )}
-              value={draft.ingest.concurrency}
-              range={CONVERT_CONCURRENCY_RANGE}
-              onChange={value => updateIngest('concurrency', CONVERT_CONCURRENCY_RANGE, value)}
-            />
-          </>
+          <NumberSetting
+            id="project-settings-fetch-concurrency"
+            label={t(
+              'admin.projects.fetchConcurrency.label',
+              'Files and web pages checked at once'
+            )}
+            help={t(
+              'admin.projects.fetchConcurrency.help',
+              'Per server process. Checking whether a file or page changed takes little memory; what changed is then read into text one file at a time per server process.'
+            )}
+            value={draft.ingest.fetchConcurrency}
+            range={FETCH_CONCURRENCY_RANGE}
+            onChange={value => updateIngest('fetchConcurrency', FETCH_CONCURRENCY_RANGE, value)}
+          />
         )}
         {draft.indexCache && (
           <fieldset className="space-y-3">
