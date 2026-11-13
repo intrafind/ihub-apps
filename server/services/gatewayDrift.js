@@ -183,6 +183,22 @@ function freeModelId(providerId, remoteId, taken) {
 }
 
 /**
+ * The listed entries by the id a config can name them with. Anthropic lists a model
+ * before the 4.6 generation by its dated snapshot (`claude-haiku-4-5-20251001`),
+ * which also answers to the dateless alias (`claude-haiku-4-5`) that configs use,
+ * so the alias finds the same entry. An id the listing names itself always wins.
+ */
+function remoteIndex(entries, apiType) {
+  const byId = new Map(entries.map(entry => [entry.id, entry]));
+  if (apiType !== 'anthropic') return byId;
+  for (const entry of entries) {
+    const alias = /^(.+)-\d{8}$/.exec(entry.id)?.[1];
+    if (alias && !byId.has(alias)) byId.set(alias, entry);
+  }
+  return byId;
+}
+
+/**
  * Compare the provider's listing with the models imported from it.
  *
  * @param {Object} params
@@ -201,7 +217,7 @@ function freeModelId(providerId, remoteId, taken) {
 export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
   const apiType = getProviderApiType(provider);
   const linked = getLinkedModels(provider.id, models);
-  const byRemoteId = new Map(entries.map(entry => [entry.id, entry]));
+  const byRemoteId = remoteIndex(entries, apiType);
   const reportMissing = listingNamesEveryModel(provider);
   const items = [];
 
@@ -226,6 +242,8 @@ export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
   }
 
   const linkedRemoteIds = new Set(linked.map(model => model.modelId));
+  // A model imported under an alias counts as importing the entry the alias resolves to.
+  const linkedEntries = new Set(linked.map(model => byRemoteId.get(model.modelId)));
   // A model configured by hand for the same endpoint counts as imported, as it
   // does for the import dialog's "Already added".
   const configured = new Set(models.map(m => `${m.modelId}\n${comparableUrl(m.url)}`));
@@ -233,7 +251,7 @@ export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
 
   for (const entry of entries) {
     if (!entryClass(entry)) continue;
-    if (linkedRemoteIds.has(entry.id)) continue;
+    if (linkedRemoteIds.has(entry.id) || linkedEntries.has(entry)) continue;
     if (configured.has(`${entry.id}\n${comparableUrl(entry.url)}`)) continue;
     const id = freeModelId(provider.id, entry.id, taken);
     if (!id) continue;

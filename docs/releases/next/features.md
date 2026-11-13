@@ -194,15 +194,18 @@ See [Models](../../models.md#importing-models-from-an-endpoint).
 
 ## Models Imported From Google and Anthropic Come With Their EU AI Act Marking
 
-A Gemini model imported from a Google provider, and a Claude model Anthropic names as watermarked, no
+A Gemini model imported from a Google provider, and a Claude model Anthropic's page names as watermarked, no
 longer start as "Not marked". They are imported with the output marking their provider declares, so the
 EU AI Act records name the mark without anyone entering it model by model:
 
 - **Google, text:** `contentMarking.text` is `provider` with the scheme `synthid`.
 - **Google, images:** a Gemini image model (Nano Banana) also gets `contentMarking.image` the same way, and is
   imported with **Supports Image Generation** switched on.
-- **Anthropic, text:** Claude Opus 5.5, Mythos 5, Opus 4.7, Opus 4.6 and Sonnet 4.6 get `contentMarking.text`
-  with the scheme `synthid-text`, Anthropic's text watermark. Every other Claude model gets none.
+- **Anthropic, text:** the Claude models Anthropic's page marks for text (Fable 5.2, 5.1 and 5; Mythos 5.2, 5.1
+  and 5; Opus 5.5, 5, 4.8, 4.7, 4.6 and 4.5; Sonnet 5.5, 5, 4.6 and 4.5; Haiku 5.5 and 4.5) get
+  `contentMarking.text` with the scheme `synthid-text`, Anthropic's text watermark. Opus 4.6, Opus 4.5,
+  Sonnet 4.5 and Haiku 4.5 only when the provider points at `api.anthropic.com`, because the page lists them
+  for Anthropic's own API but not for cloud partners. Every other Claude model gets none.
   Sonnet 4.6 may not carry the watermark when `temperature`, `top_p` or `top_k` is set to a non-default value,
   so **Sync models** does not offer the declaration to a Sonnet 4.6 that sets one.
 - **Mistral:** nothing. Mistral publishes no technical description of a mark for its API, so no declaration is
@@ -211,8 +214,8 @@ EU AI Act records name the mark without anyone entering it model by model:
 - **Models you already have:** **Sync models** on the Google or Anthropic provider's page offers the
   declaration to models that do not declare one yet, shown as "EU AI Act marking" with the old and the new
   value. A marking you entered is never replaced. It starts ticked like any change, so read the list before
-  you apply. On Anthropic a model missing from the listing is never reported as gone, because the listing names
-  the dated snapshot where a config uses the alias.
+  you apply. On Anthropic a config that uses the alias (`claude-haiku-4-5`) is matched to the dated snapshot the
+  listing names, and a model missing from the listing is never reported as gone.
 
 iHub cannot detect either mark, so the records say the provider declared it. Each declaration points at the
 provider's own page and can be changed under **Admin → Models → Output marking**. The Gemini models of the

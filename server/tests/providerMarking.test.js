@@ -107,38 +107,105 @@ const WATERMARK = {
   statementRef: ANTHROPIC_WATERMARK_STATEMENT_REF
 };
 
-test('a Claude model Anthropic names is declared watermarked for its text', () => {
-  const named = [
-    ['claude-opus-5-5', 'Claude Opus 5.5'],
-    ['claude-mythos-5', 'Claude Mythos 5'],
-    ['claude-opus-4-7', 'Claude Opus 4.7'],
-    ['claude-opus-4-6', 'Claude Opus 4.6']
+const FIRST_PARTY = { baseUrl: 'https://api.anthropic.com/v1' };
+
+/** The models Anthropic's page marks for first-party text, as (name, API id). */
+const PAGE_LIST = [
+  ['Claude Fable 5.2', 'claude-fable-5-2'],
+  ['Claude Fable 5.1', 'claude-fable-5-1'],
+  ['Claude Fable 5', 'claude-fable-5'],
+  ['Claude Mythos 5.2', 'claude-mythos-5-2'],
+  ['Claude Mythos 5.1', 'claude-mythos-5-1'],
+  ['Claude Mythos 5', 'claude-mythos-5'],
+  ['Claude Opus 5.5', 'claude-opus-5-5'],
+  ['Claude Opus 5', 'claude-opus-5'],
+  ['Claude Opus 4.8', 'claude-opus-4-8'],
+  ['Claude Opus 4.7', 'claude-opus-4-7'],
+  ['Claude Opus 4.6', 'claude-opus-4-6'],
+  ['Claude Opus 4.5', 'claude-opus-4-5'],
+  ['Claude Sonnet 5.5', 'claude-sonnet-5-5'],
+  ['Claude Sonnet 5', 'claude-sonnet-5'],
+  ['Claude Sonnet 4.6', 'claude-sonnet-4-6'],
+  ['Claude Sonnet 4.5', 'claude-sonnet-4-5'],
+  ['Claude Haiku 5.5', 'claude-haiku-5-5'],
+  ['Claude Haiku 4.5', 'claude-haiku-4-5']
+];
+
+/** Listed for first-party text only: Anthropic's page has no cloud-partner mark for them. */
+const FIRST_PARTY_ONLY = [
+  'claude-opus-4-6',
+  'claude-opus-4-5',
+  'claude-sonnet-4-5',
+  'claude-haiku-4-5'
+];
+
+test('the list is the one of Anthropic\u2019s page, no more and no less', () => {
+  assert.deepEqual(
+    ANTHROPIC_MARKED_MODELS.map(m => [m.name, m.id]),
+    PAGE_LIST
+  );
+  assert.deepEqual(
+    ANTHROPIC_MARKED_MODELS.filter(m => m.firstPartyOnly).map(m => m.id),
+    FIRST_PARTY_ONLY
+  );
+});
+
+test('every Claude model Anthropic names is declared watermarked for its text on its own API', () => {
+  for (const [name, id] of PAGE_LIST) {
+    const facts = providerMarkingFacts('anthropic', { id, name, type: 'chat' }, FIRST_PARTY);
+    assert.deepEqual(facts.contentMarking, { text: WATERMARK }, id);
+  }
+});
+
+test('a model before the 4.6 generation is found by its dated snapshot as well', () => {
+  const snapshots = [
+    'claude-haiku-4-5-20251001',
+    'claude-opus-4-5-20251101',
+    'claude-sonnet-4-5-20250929'
   ];
-  for (const [id, name] of named) {
-    assert.deepEqual(
-      providerMarkingFacts('anthropic', { id, name, type: 'chat' }),
-      { contentMarking: { text: WATERMARK } },
-      id
-    );
+  for (const id of snapshots) {
+    // By id alone, so a listing without display names still finds it.
+    const facts = providerMarkingFacts('anthropic', { id, name: id, type: 'chat' }, FIRST_PARTY);
+    assert.deepEqual(facts.contentMarking, { text: WATERMARK }, id);
+  }
+});
+
+test('four models carry the mark on Anthropic\u2019s own API only, not through a cloud partner', () => {
+  const elsewhere = [
+    { baseUrl: 'https://my-resource.services.ai.azure.com/anthropic/v1' },
+    { baseUrl: 'https://llm-proxy.example.com/v1' },
+    { baseUrl: 'not a url' },
+    {}
+  ];
+  for (const [name, id] of PAGE_LIST) {
+    const entry = { id, name, type: 'chat' };
+    for (const context of elsewhere) {
+      const declared = providerMarkingFacts('anthropic', entry, context).contentMarking;
+      if (FIRST_PARTY_ONLY.includes(id)) {
+        assert.equal(declared, undefined, `${id} via ${context.baseUrl}`);
+      } else {
+        assert.deepEqual(declared, { text: WATERMARK }, `${id} via ${context.baseUrl}`);
+      }
+    }
   }
 });
 
 test('a Claude model is found by its display name when the id is not the known one', () => {
-  const facts = providerMarkingFacts('anthropic', {
-    id: 'some-proxy-id',
-    name: 'Claude Opus 5.5',
-    type: 'chat'
-  });
+  const facts = providerMarkingFacts(
+    'anthropic',
+    { id: 'some-proxy-id', name: 'Claude Opus 5.5', type: 'chat' },
+    FIRST_PARTY
+  );
   assert.deepEqual(facts.contentMarking, { text: WATERMARK });
 });
 
 test('Sonnet 4.6 is declared, and flagged as marked only under default sampling', () => {
   assert.deepEqual(
-    providerMarkingFacts('anthropic', {
-      id: 'claude-sonnet-4-6',
-      name: 'Claude Sonnet 4.6',
-      type: 'chat'
-    }),
+    providerMarkingFacts(
+      'anthropic',
+      { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', type: 'chat' },
+      FIRST_PARTY
+    ),
     { contentMarking: { text: WATERMARK }, markingNeedsDefaultSampling: true }
   );
   // No other model carries the flag.
@@ -151,25 +218,30 @@ test('Sonnet 4.6 is declared, and flagged as marked only under default sampling'
 
 test('no claim for a Claude model that is not named, however similar', () => {
   const unnamed = [
-    ['claude-haiku-4-5-20251001', 'Claude Haiku 4.5'],
-    ['claude-haiku-4-5', 'Claude Haiku 4.5'],
-    ['claude-opus-4-5-20251101', 'Claude Opus 4.5'],
-    ['claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5'],
+    ['claude-opus-4-1-20250805', 'Claude Opus 4.1'],
+    ['claude-sonnet-4-20250514', 'Claude Sonnet 4'],
+    ['claude-3-7-sonnet-20250219', 'Claude Sonnet 3.7'],
     ['claude-opus-5-5-preview', 'Claude Opus 5.5 Preview'],
-    ['claude-mythos-5-1', 'Claude Mythos 5.1'],
-    ['claude-opus-4-60', 'Claude Opus 4.60']
+    ['claude-opus-4-60', 'Claude Opus 4.60'],
+    ['claude-haiku-4-5-2025100', 'Claude Haiku 4.5 (7-digit date)'],
+    ['claude-fable-5-3', 'Claude Fable 5.3'],
+    ['claude-mythos-6', 'Claude Mythos 6']
   ];
   for (const [id, name] of unnamed) {
-    assert.deepEqual(providerMarkingFacts('anthropic', { id, name, type: 'chat' }), {}, id);
+    assert.deepEqual(
+      providerMarkingFacts('anthropic', { id, name, type: 'chat' }, FIRST_PARTY),
+      {},
+      id
+    );
   }
 });
 
 test('Anthropic declares text only: never an image mark or image generation', () => {
-  const facts = providerMarkingFacts('anthropic', {
-    id: 'claude-opus-5-5',
-    name: 'Claude Opus 5.5',
-    type: 'chat'
-  });
+  const facts = providerMarkingFacts(
+    'anthropic',
+    { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', type: 'chat' },
+    FIRST_PARTY
+  );
   assert.equal(facts.contentMarking.image, undefined);
   assert.equal(facts.supportsImageGeneration, undefined);
 });
@@ -187,11 +259,11 @@ test('Mistral declares nothing: it publishes no technical description of a mark'
 });
 
 test('the Anthropic declaration is a valid model config as it stands', () => {
-  const facts = providerMarkingFacts('anthropic', {
-    id: 'claude-opus-5-5',
-    name: 'Claude Opus 5.5',
-    type: 'chat'
-  });
+  const facts = providerMarkingFacts(
+    'anthropic',
+    { id: 'claude-opus-5-5', name: 'Claude Opus 5.5', type: 'chat' },
+    FIRST_PARTY
+  );
   const result = modelConfigSchema.safeParse({
     id: 'anthropic-claude-opus-5-5',
     modelId: 'claude-opus-5-5',

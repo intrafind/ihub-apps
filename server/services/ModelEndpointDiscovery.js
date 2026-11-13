@@ -968,7 +968,7 @@ export async function discoverModels(
         ...entry,
         // What the provider says about marking this model's output (EU AI Act
         // Art. 50(2)); the import and the model sync copy it into the config.
-        ...providerMarkingFacts(provider, entry),
+        ...providerMarkingFacts(provider, entry, { baseUrl }),
         url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type, { azureApiVersion })
       };
     }

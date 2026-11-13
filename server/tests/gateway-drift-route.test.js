@@ -652,16 +652,21 @@ describe('an Anthropic provider', () => {
     expect(gatewayCalls[0].init.headers['anthropic-version']).toBeDefined();
 
     const changed = res.body.items.filter(item => item.kind === 'changed');
-    expect(changed).toHaveLength(1);
-    expect(changed[0]).toMatchObject({ modelId: 'claude-opus', remoteId: 'claude-opus-5-5' });
-    expect(changed[0].changes).toEqual([
+    expect(changed.map(item => item.modelId).sort()).toEqual(['claude-haiku', 'claude-opus']);
+    const opus = changed.find(item => item.modelId === 'claude-opus');
+    expect(opus).toMatchObject({ remoteId: 'claude-opus-5-5' });
+    expect(opus.changes).toEqual([
       expect.objectContaining({
         field: 'contentMarking',
         from: { text: { by: 'none' } },
         to: { text: expect.objectContaining({ by: 'provider', scheme: 'synthid-text' }) }
       })
     ]);
-    // The alias is not in the listing, which proves nothing: not reported as gone.
+    // The alias `claude-haiku-4-5` is the dated snapshot the listing names: it is offered the
+    // declaration, not offered again as a new model, and not reported as gone.
+    const haiku = changed.find(item => item.modelId === 'claude-haiku');
+    expect(haiku.changes.map(change => change.field)).toEqual(['contentMarking']);
+    expect(res.body.items.filter(item => item.kind === 'added')).toEqual([]);
     expect(res.body.items.filter(item => item.kind === 'removed')).toEqual([]);
     expect(writes).toBe(0);
   });

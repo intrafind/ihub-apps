@@ -108,8 +108,9 @@ from a provider's name: only the providers and models below get one.
 | Google | Gemini chat model (`gemini-…`) | `contentMarking.text`: `{ "by": "provider", "scheme": "synthid", "statementRef": … }` |
 | Google | Gemini image model (`gemini-…-image…`, Nano Banana) | The same under `text` and `image`, and `supportsImageGeneration: true` |
 | Google | Gemma and other open models, embeddings, speech, Imagen | Nothing |
-| Anthropic | Claude Opus 5.5, Mythos 5, Opus 4.7, Opus 4.6, Sonnet 4.6 | `contentMarking.text`: `{ "by": "provider", "scheme": "synthid-text", "statementRef": … }` |
-| Anthropic | Every other Claude model | Nothing |
+| Anthropic | The Claude models Anthropic's page marks for text: Fable 5.2, 5.1 and 5; Mythos 5.2, 5.1 and 5; Opus 5.5, 5, 4.8, 4.7, 4.6 and 4.5; Sonnet 5.5, 5, 4.6 and 4.5; Haiku 5.5 and 4.5 | `contentMarking.text`: `{ "by": "provider", "scheme": "synthid-text", "statementRef": … }` |
+| Anthropic | Opus 4.6, Opus 4.5, Sonnet 4.5 and Haiku 4.5 | The same, but only when the provider's base URL is `api.anthropic.com`: the page lists these four for Anthropic's own API only, not for the cloud partners (AWS, Google Cloud, Microsoft Foundry) |
+| Anthropic | Every other Claude model (for example Opus 4.1, Sonnet 4) | Nothing |
 | Mistral | All | Nothing: Mistral signed Section 1 of the Code of Practice (marking and detection), but publishes no technical description of a mark for its API or Le Chat |
 | Any other provider | All | Nothing |
 
@@ -125,9 +126,9 @@ What iHub can and cannot do with it:
   measured.
 - **Anthropic's watermark** is always on (there is no setting to switch it off) and a version of the SynthID-Text
   approach. It is statistical: it is not applied where an exact output is required (code syntax, arithmetic), and
-  heavily edited, paraphrased or translated text may lose it. Only the models named above are declared; a Claude
-  model Anthropic does not name there (for example Opus 4.5, Sonnet 4.5 and Haiku 4.5) is left without one, and you
-  can declare it by hand once Anthropic names it.
+  heavily edited, paraphrased or translated text may lose it. Only the models named above are declared, which is the
+  list of Anthropic's page; a Claude model Anthropic does not name there (for example Opus 4.1) is left without one,
+  and you can declare it by hand once Anthropic names it. New models are added to the list as the page names them.
 - **Claude Sonnet 4.6** may not carry the watermark when `temperature`, `top_p` or `top_k` is set to a non-default
   value. The import sets none of them, and **Sync models** does not offer the declaration to a Sonnet 4.6 that sets
   one under [Sampling Parameters](#sampling-parameters). If you set one later on a model that declares the
@@ -438,9 +439,10 @@ the vLLM adapter instead of the OpenAI one for an OpenAI-dialect model is your c
 reported. A context window the provider does not report is left as you set it, and so is image input: Google's
 listing does not report it, so a Google model is never changed on that account. The marking is only ever
 added to a member that does not declare one (see [Filled in on import](#filled-in-on-import)). Anthropic's listing names
-the dated snapshot of a model before the 4.6 generation, while a config often uses the alias (`claude-haiku-4-5`), so a
-model that is missing from an Anthropic listing is never reported as gone. Each applied
-item has its own result, so one failure does not stop the others.
+the dated snapshot of a model before the 4.6 generation (`claude-haiku-4-5-20251001`), while a config often uses the
+alias (`claude-haiku-4-5`): an alias is matched to its snapshot, so that model is compared like any other and the
+snapshot is not offered again as a new model. A model that is missing from an Anthropic listing is never reported as
+gone. Each applied item has its own result, so one failure does not stop the others.
 
 Two iHub models can point at one gateway model (**Clone** keeps the model ID and the provider). Each is its own item and its own pick: a changed or gone model is named by its iHub model, in `modelId`, which a `changed` or `removed` pick must carry.
 
