@@ -157,6 +157,26 @@ export async function assertSafePackage(bytes, limits = PACKAGE_LIMITS) {
   if (at !== end || seen !== count) fail('damaged zip directory');
 }
 
+/**
+ * A `DOMParser` for the Word path that sends each kind of text to the parser that is built for it:
+ * HTML (mammoth's output, only to be fed to Turndown) to domino, which Turndown itself ships and
+ * which is several times cheaper than a jsdom window; XML (the package parts, namespace-aware)
+ * to jsdom. domino builds a static document: it runs no scripts and loads no resources (it has
+ * no browsing context, no network and no `<script>`/`<img>` fetching), so user-supplied HTML
+ * cannot cause an outbound connection.
+ *
+ * @param {Function} XmlDOMParser - jsdom's DOMParser, for `application/xml`
+ * @param {{createDocument: Function}} domino
+ */
+function splitDomParser(XmlDOMParser, domino) {
+  return class SplitDOMParser {
+    parseFromString(text, type) {
+      if (type === 'text/html') return domino.createDocument(String(text));
+      return new XmlDOMParser().parseFromString(text, type);
+    }
+  };
+}
+
 let domWindow;
 async function loadDom() {
   if (!domWindow) {
@@ -177,8 +197,14 @@ async function loadDom() {
  */
 export async function extractDocxDocument(bytes, options = {}) {
   await assertSafePackage(bytes);
-  const [{ default: JSZip }, { default: mammoth }, { default: TurndownService }, window] =
-    await Promise.all([import('jszip'), import('mammoth'), import('turndown'), loadDom()]);
+  const [{ default: JSZip }, { default: mammoth }, { default: TurndownService }, window, domino] =
+    await Promise.all([
+      import('jszip'),
+      import('mammoth'),
+      import('turndown'),
+      loadDom(),
+      import('@mixmark-io/domino')
+    ]);
   // The shared code uses mammoth's browser interface (`{ arrayBuffer }`).
   const nodeMammoth = {
     images: mammoth.images,
@@ -192,7 +218,7 @@ export async function extractDocxDocument(bytes, options = {}) {
       JSZip,
       mammoth: nodeMammoth,
       TurndownService,
-      DOMParser: window.DOMParser,
+      DOMParser: splitDomParser(window.DOMParser, domino.default ?? domino),
       XMLSerializer: window.XMLSerializer,
       trackedChanges: options.trackedChanges,
       comments: options.comments

@@ -1,0 +1,4 @@
+plain **bold** *italic* ***both*** strike sup sub markdown chars: * _ # [ ] ` \ < > & ~
+after break after tab
+
+leading and trailing spaces
