@@ -63,6 +63,21 @@ function isZipPackage(data) {
 }
 
 /**
+ * Whether a bounded read (`sheetRows` = limit + 1) tells the whole story of a sheet:
+ * - `!fullref` is set when SheetJS cut the sheet; it is trusted unless the data starts below
+ *   row 1 (the count is absolute, so leading blank rows would eat into the limit);
+ * - a sheet that stopped short of the window was read completely;
+ * - anything else (no `!ref` at all, or one that reaches the window without a `!fullref`, as a
+ *   sheet without a `<dimension>` tag does) may have lost rows or been cut without a mark.
+ */
+function extentIsKnown(XLSX, sheet, rowLimit) {
+  if (!sheet) return true;
+  if (sheet['!fullref']) return XLSX.utils.decode_range(sheet['!fullref']).s.r === 0;
+  if (!sheet['!ref']) return false;
+  return XLSX.utils.decode_range(sheet['!ref']).e.r < rowLimit;
+}
+
+/**
  * Reads a workbook, parsing only the rows `extractXlsxText` can use. SheetJS otherwise parses
  * every row of every sheet (up to ~1 s of blocked event loop for 30,000 rows) and the row limit
  * throws most of them away afterwards.
@@ -70,10 +85,10 @@ function isZipPackage(data) {
  * `sheetRows` is the number of rows to read counted from row 1 of the sheet, header included:
  * one more than the row limit, so a sheet that is exactly at the limit is not flagged as cut.
  * SheetJS then shortens `!ref` and keeps the real range in `!fullref`, which
- * `extractXlsxText` reads to report what was left out. Two cases are read in full instead, as
- * before: a file that is not an .xlsx package (its readers do not all keep `!fullref`), and a
- * sheet whose data starts below row 1 (the count is absolute, so leading blank rows would eat
- * into the limit).
+ * `extractXlsxText` reads to report what was left out. Read in full instead, as before: a file
+ * that is not an .xlsx package (its readers do not all keep `!fullref`), and each sheet whose
+ * extent the bounded read cannot establish (see `extentIsKnown`: data starting below row 1, a
+ * sheet without a `<dimension>` tag).
  *
  * @param {Object} args
  * @param {Object} args.XLSX - SheetJS
@@ -86,10 +101,14 @@ export function readWorkbook({ XLSX, data, readOptions = {}, limits = {} }) {
   if (!isZipPackage(data)) return XLSX.read(data, readOptions);
   const rowLimit = limits.sheetRows ?? MAX_SHEET_ROWS;
   const workbook = XLSX.read(data, { ...readOptions, sheetRows: rowLimit + 1 });
-  const shifted = Object.values(workbook.Sheets).some(
-    sheet => sheet?.['!fullref'] && XLSX.utils.decode_range(sheet['!fullref']).s.r > 0
-  );
-  return shifted ? XLSX.read(data, readOptions) : workbook;
+  // A sheet whose extent the bounded read cannot establish is read again, alone and in full.
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+    if (extentIsKnown(XLSX, sheet, rowLimit)) continue;
+    const whole = XLSX.read(data, { ...readOptions, sheets: name });
+    if (whole.Sheets[name]) workbook.Sheets[name] = whole.Sheets[name];
+  }
+  return workbook;
 }
 
 /**

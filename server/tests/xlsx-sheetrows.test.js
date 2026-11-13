@@ -7,6 +7,7 @@
  * truncated (through `!fullref`) and its text is identical to the text of a full read.
  */
 import { describe, it } from 'node:test';
+import JSZip from 'jszip';
 import assert from 'node:assert/strict';
 
 import { extractText } from '../services/projects/extractText.js';
@@ -26,6 +27,18 @@ function makeBook(sheets, { merges = {} } = {}) {
     XLSX.utils.book_append_sheet(workbook, sheet, name);
   }
   return Buffer.from(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }));
+}
+
+/** The same workbook with the `<dimension>` tag removed from every sheet, as some writers do. */
+async function withoutDimension(bytes) {
+  const zip = await JSZip.loadAsync(bytes);
+  for (const name of Object.keys(zip.files).filter(n =>
+    /^xl\/worksheets\/sheet\d+\.xml$/.test(n)
+  )) {
+    const xml = await zip.file(name).async('string');
+    zip.file(name, xml.replace(/<dimension[^>]*\/>/, ''));
+  }
+  return zip.generateAsync({ type: 'nodebuffer' });
 }
 
 const table = (rows, cols = 3) => [
@@ -122,5 +135,28 @@ describe('xlsx read with sheetRows', () => {
       limits: { sheetRows: 1 }
     });
     assert.equal(XLSX.utils.decode_range(workbook.Sheets.Sheet1['!ref']).e.r, 3);
+  });
+
+  it('reads a sheet without a <dimension> tag as before, truncation notice included', async () => {
+    const bytes = await withoutDimension(makeBook({ S: table(MAX_SHEET_ROWS + 500) }));
+    const expected = baseline(bytes);
+    assert.match(expected.text, /\[… 501 more rows omitted\]/);
+    assert.deepEqual(await extracted(bytes), expected);
+    const short = await withoutDimension(makeBook({ S: table(5) }));
+    assert.deepEqual(await extracted(short), baseline(short));
+  });
+
+  it('keeps a dimensionless sheet whose first populated row is past the limit', async () => {
+    const rows = [...Array.from({ length: MAX_SHEET_ROWS + 10 }, () => []), ['Late', 'Data']];
+    const bytes = await withoutDimension(makeBook({ Late: rows, Plain: table(3) }));
+    const expected = baseline(bytes);
+    assert.match(expected.text, /Late/);
+    assert.deepEqual(await extracted(bytes), expected);
+  });
+
+  it('only re-reads the sheets whose extent is unknown', async () => {
+    const bytes = makeBook({ Big: table(MAX_SHEET_ROWS + 500), Small: table(3) });
+    const workbook = readWorkbook({ XLSX, data: bytes, readOptions: { type: 'buffer' } });
+    assert.equal(XLSX.utils.decode_range(workbook.Sheets.Big['!ref']).e.r, MAX_SHEET_ROWS);
   });
 });
