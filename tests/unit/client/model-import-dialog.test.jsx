@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 /**
@@ -325,9 +325,8 @@ test('a model the provider declares as marked is imported with that declaration 
   fireEvent.click(screen.getByRole('checkbox', { name: 'Gemini 2.5 Flash' }));
   expect(screen.getByRole('note')).toHaveTextContent(/EU AI Act, Art\. 50/);
 
-  await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: 'Import 2 models' }));
-  });
+  fireEvent.click(screen.getByRole('button', { name: 'Import 2 models' }));
+  await waitFor(() => expect(calls('/admin/models', 'POST')).toHaveLength(2));
   const bodies = calls('/admin/models', 'POST').map(([, options]) => options.body);
   const gemini = bodies.find(body => body.modelId === 'gemini-2.5-flash');
   const gemma = bodies.find(body => body.modelId === 'gemma-3-27b-it');

@@ -49,9 +49,8 @@ function formatContentMarking(value, labels) {
   ]) {
     const marking = value?.[kind];
     if (!marking || marking.by === 'none') continue;
-    parts.push(
-      `${label}: ${marking.scheme || marking.by}${marking.scheme ? ` (${marking.by})` : ''}`
-    );
+    const scheme = marking.scheme ? `${marking.scheme} (${marking.by})` : marking.by;
+    parts.push(`${label}: ${scheme}`);
   }
   return parts.length > 0 ? parts.join(', ') : '—';
 }
