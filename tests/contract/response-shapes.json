@@ -3408,11 +3408,23 @@
         "platform": "string",
         "uptimeSeconds": "number"
       },
+      "knowledge": {
+        "indexCache": {
+          "builds": "number",
+          "chars": "number",
+          "entries": "number",
+          "evictions": "number",
+          "hitRate": "null",
+          "hits": "number",
+          "misses": "number"
+        }
+      },
       "processes": [
         {
           "cpuPercent": "number",
           "current": "boolean",
           "eventLoopDelayMs": "null|object",
+          "indexCache": "object",
           "memory": "object",
           "pid": "number",
           "role": "string",
@@ -3428,6 +3440,9 @@
           "warningPercent": "number"
         },
         "volumes": ["object"]
+      },
+      "workingSet": {
+        "windows": ["object"]
       }
     }
   },

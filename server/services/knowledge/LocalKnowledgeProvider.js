@@ -32,6 +32,14 @@ import { KnowledgeProvider } from './KnowledgeProvider.js';
 import { getItemText } from './ItemTextService.js';
 import { KnowledgeError, docOf, isUsable } from './types.js';
 import { searchIndexCacheChars } from '../../utils/cacheBudgets.js';
+import projectActivityTracker from '../../telemetry/ProjectActivityTracker.js';
+import {
+  countIndexBuild,
+  countIndexCacheEvictions,
+  countIndexCacheHit,
+  countIndexCacheMiss,
+  setIndexCacheSizeProbe
+} from './indexCacheStats.js';
 
 /**
  * Corpus indexes kept per process, and the characters they may stand for
@@ -40,6 +48,19 @@ import { searchIndexCacheChars } from '../../utils/cacheBudgets.js';
 const INDEX_CACHE_SIZE = 32;
 export const INDEX_CACHE_MAX_CHARS = searchIndexCacheChars();
 const indexCache = new Map();
+
+function cachedChars() {
+  let weight = 0;
+  for (const entry of indexCache.values()) weight += entry?.characters || 0;
+  return weight;
+}
+
+setIndexCacheSizeProbe(() => ({
+  entries: indexCache.size,
+  chars: cachedChars(),
+  maxEntries: INDEX_CACHE_SIZE,
+  maxChars: INDEX_CACHE_MAX_CHARS
+}));
 
 function cacheGet(key) {
   const entry = indexCache.get(key);
@@ -51,16 +72,23 @@ function cacheGet(key) {
 
 function cacheSet(key, value) {
   indexCache.set(key, value);
-  while (indexCache.size > INDEX_CACHE_SIZE) indexCache.delete(indexCache.keys().next().value);
+  let evicted = 0;
+  while (indexCache.size > INDEX_CACHE_SIZE) {
+    indexCache.delete(indexCache.keys().next().value);
+    evicted += 1;
+  }
   // A 10 MB text takes about 55 MB of heap as an index: hold the cache to a
   // weight too, dropping the oldest, never the entry just added.
-  let weight = 0;
-  for (const entry of indexCache.values()) weight += entry?.characters || 0;
+  let weight = cachedChars();
   for (const oldest of [...indexCache.keys()]) {
     if (weight <= INDEX_CACHE_MAX_CHARS || indexCache.size <= 1) break;
     weight -= indexCache.get(oldest)?.characters || 0;
     indexCache.delete(oldest);
+    evicted += 1;
   }
+  // Only drops made to fit the limits count; `evictProjectIndex` is an
+  // invalidation after a change, not cache pressure.
+  countIndexCacheEvictions(evicted);
 }
 
 /** Test and cascade hook: forget every cached index of a project (or all). */
@@ -221,16 +249,23 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
       usable.push({ item, text: null, truncated: item.text.truncated === true, failed: [] });
     }
     const index = cacheGet(this._indexKey(project, ctx, usable));
+    if (index) countIndexCacheHit();
     return index ? { index, texts: usable, unavailable } : null;
   }
 
   _index(project, ctx, texts) {
     const key = this._indexKey(project, ctx, texts);
     const cached = cacheGet(key);
-    if (cached) return cached;
+    if (cached) {
+      countIndexCacheHit();
+      return cached;
+    }
+    countIndexCacheMiss();
+    const started = performance.now();
     const index = buildCorpusIndex(
       texts.map(({ item, text }) => ({ id: item.id, name: item.name, text }))
     );
+    countIndexBuild((performance.now() - started) / 1000);
     cacheSet(key, index);
     return index;
   }
@@ -269,6 +304,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     ctx,
     { query, limit = 8, itemIds, docIds, budgetChars = RESULT_BUDGET_CHARS } = {}
   ) {
+    projectActivityTracker.recordProjectUse(project);
     const q = typeof query === 'string' ? query.trim() : '';
     if (!q) throw new KnowledgeError('INVALID_REF', 'A query is needed', { projectId: project.id });
     // A warm index needs no text: searching a large, unchanged project does
@@ -323,6 +359,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     { itemId },
     { section, focus, budgetChars = RESULT_BUDGET_CHARS, budgetBytes } = {}
   ) {
+    projectActivityTracker.recordProjectUse(project);
     const item = (project.items || []).find(entry => entry.id === itemId);
     if (!item)
       throw new KnowledgeError('ITEM_NOT_FOUND', 'Document not found', {
@@ -356,6 +393,7 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
   }
 
   async loadAll(project, ctx, { itemIds } = {}) {
+    projectActivityTracker.recordProjectUse(project);
     const { texts, unavailable } = await this.texts(project, ctx, { itemIds });
     let tokens = 0;
     const docs = texts.map(({ item, text, truncated, failed }) => {

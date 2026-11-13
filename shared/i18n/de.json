@@ -3123,6 +3123,26 @@
         "delay": "{{mean}} ms (max. {{max}})",
         "missing": "Keine Antwort. Der Worker startet möglicherweise neu oder ist überlastet.",
         "missingAlert": "{{count}} von {{total}} Workern haben nicht geantwortet."
+      },
+      "knowledge": {
+        "title": "Projektwissen",
+        "description": "Projekte, die zuletzt von einem Chat-Zug oder einem Wissens-Tool genutzt wurden, über alle Worker hinweg einmal gezählt, und wie der Suchindex-Cache damit zurechtkommt. Damit lässt sich der Cache dimensionieren.",
+        "exceedsCache": "Die in den letzten {{minutes}} Minuten genutzten Projekte enthalten mehr Text ({{working}} Zeichen), als ein Worker im Cache hält ({{capacity}}). Erwarten Sie Cache-Fehlzugriffe und Index-Neuaufbauten; jeder Worker hat seinen eigenen Cache.",
+        "workingSet": "Aktive Projekte",
+        "window": "Letzte",
+        "projects": "Projekte",
+        "chars": "Text (Zeichen)",
+        "indexMemory": "Benötigter Indexspeicher",
+        "minutes": "{{count}} Min.",
+        "indexCache": "Suchindex-Cache",
+        "hitRate": "Trefferquote",
+        "hits": "Treffer",
+        "misses": "Fehlzugriffe (Index-Aufbauten)",
+        "evictions": "Verdrängungen",
+        "entries": "Indizes im Cache",
+        "cachedChars": "Gecachter Text",
+        "characters": "{{count}} Zeichen",
+        "capacity": "Jeder Worker cacht höchstens {{chars}} Zeichen (etwa {{bytes}} Speicher). Die Summen oben addieren alle Worker seit deren Start."
       }
     },
     "storageAlert": {

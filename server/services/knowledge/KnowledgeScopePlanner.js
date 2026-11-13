@@ -61,6 +61,7 @@ import { neutralizeStructuralTags } from '../../../shared/promptContext.js';
 import { projectDescription, projectName } from '../projects/projectView.js';
 import { providerFor } from './registry.js';
 import configCache from '../../configCache.js';
+import projectActivityTracker from '../../telemetry/ProjectActivityTracker.js';
 import { isRefreshExpired } from '../projects/refreshTtl.js';
 import { projectSettings } from '../projects/projectSettings.js';
 import { docOf } from './types.js';
@@ -400,6 +401,9 @@ export async function planKnowledgeScope(
       });
       continue;
     }
+    // A project in the scope of a chat turn is part of the working set, whether
+    // or not this turn ends up reading it (a `tools` project is searched later).
+    projectActivityTracker.recordProjectUse(project);
     const capabilities = provider.capabilities(project);
     const usable = (project.items || []).filter(
       item => item.status === 'ready' || item.status === 'stale'

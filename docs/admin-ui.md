@@ -426,6 +426,10 @@ For each process: CPU (percent of one core, averaged over the last five seconds)
 
 The page is hidden, together with the other system pages, when `admin.pages.system` is `false` in `platform.json`. The data comes from `GET /api/admin/system/resources` (admin only).
 
+**Project knowledge.** Below the processes, the page shows the project working set (projects used by a chat turn or knowledge tool in the last 5, 15 and 60 minutes, counted once across all workers, with their text size and the index memory it needs) next to the search-index cache (hit rate, hits, misses, evictions, cached indexes). It warns when the projects of the last 15 minutes hold more text than one worker's cache, since every worker keeps its own cache. Use it to judge whether the cache is large enough.
+
+The response also carries what the knowledge search-index cache has to hold, so operators can size it from data and load tests can report the hit rate: `workingSet.windows` (per 5, 15 and 60 minutes: `projects` used by a chat turn or knowledge tool, and their text `chars`, as a union over all workers), `knowledge.indexCache` (entries, characters, hits, misses, evictions, builds and `hitRate`, added up over the processes) and `processes[].indexCache` (the same for one process, with build time average and maximum and the cache limits). These fields are additive; the metrics are also exported as `ihub.projects.active*` and `ihub.knowledge.index.*` (see [Telemetry](telemetry.md#metrics)).
+
 ### Low-disk warnings
 
 Nobody may open the admin UI for weeks on a small installation, so a full disk is reported in two more places:

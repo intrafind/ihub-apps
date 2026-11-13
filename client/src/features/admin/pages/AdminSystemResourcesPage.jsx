@@ -8,14 +8,19 @@ import {
   CircleStackIcon,
   CpuChipIcon,
   ExclamationTriangleIcon,
+  FolderOpenIcon,
   ServerStackIcon
 } from '@heroicons/react/24/outline';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import {
   STORAGE_STATUS_STYLES,
+  estimateIndexBytes,
   formatBytes,
+  formatCount,
+  formatHitRate,
   formatPercent,
-  formatUptime
+  formatUptime,
+  indexCacheCapacityChars
 } from '../utils/systemResourcesFormat';
 
 /** How often the page re-reads the numbers while it is visible. */
@@ -385,6 +390,145 @@ function ProcessesSection({ processes, cluster }) {
   );
 }
 
+/** The window the cache is sized against: what was used in the last quarter hour. */
+const SIZING_WINDOW_MINUTES = 15;
+
+function KnowledgeSection({ workingSet, knowledge, processes }) {
+  const { t } = useTranslation();
+  const windows = workingSet?.windows || [];
+  const cache = knowledge?.indexCache;
+  const capacityChars = indexCacheCapacityChars(processes);
+  const sizing = windows.find(w => w.minutes === SIZING_WINDOW_MINUTES);
+  const exceedsCache = Boolean(sizing && capacityChars > 0 && sizing.chars > capacityChars);
+
+  const stats = cache
+    ? [
+        [t('admin.systemResources.knowledge.hitRate', 'Hit rate'), formatHitRate(cache.hitRate)],
+        [t('admin.systemResources.knowledge.hits', 'Hits'), formatCount(cache.hits)],
+        [
+          t('admin.systemResources.knowledge.misses', 'Misses (index builds)'),
+          formatCount(cache.misses)
+        ],
+        [t('admin.systemResources.knowledge.evictions', 'Evictions'), formatCount(cache.evictions)],
+        [
+          t('admin.systemResources.knowledge.entries', 'Indexes cached'),
+          formatCount(cache.entries)
+        ],
+        [
+          t('admin.systemResources.knowledge.cachedChars', 'Cached text'),
+          t('admin.systemResources.knowledge.characters', '{{count}} characters', {
+            count: formatCount(cache.chars)
+          })
+        ]
+      ]
+    : [];
+
+  return (
+    <Section
+      icon={FolderOpenIcon}
+      title={t('admin.systemResources.knowledge.title', 'Project knowledge')}
+      description={t(
+        'admin.systemResources.knowledge.description',
+        'Projects used by a chat turn or a knowledge tool lately, counted once across all workers, and how the search-index cache copes. Use it to size the cache.'
+      )}
+    >
+      {exceedsCache && (
+        <div
+          role="alert"
+          className="mb-5 flex items-start gap-3 p-3 rounded-md border bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200"
+        >
+          <ExclamationTriangleIcon className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
+          <p className="text-sm">
+            {t(
+              'admin.systemResources.knowledge.exceedsCache',
+              'The projects used in the last {{minutes}} minutes hold more text ({{working}} characters) than one worker caches ({{capacity}}). Expect cache misses and index rebuilds; every worker keeps its own cache.',
+              {
+                minutes: SIZING_WINDOW_MINUTES,
+                working: formatCount(sizing.chars),
+                capacity: formatCount(capacityChars)
+              }
+            )}
+          </p>
+        </div>
+      )}
+
+      <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+        {t('admin.systemResources.knowledge.workingSet', 'Active projects')}
+      </h3>
+      <div className="overflow-x-auto mb-6">
+        <table className="min-w-full text-sm">
+          <thead className="text-left text-xs uppercase text-gray-500 dark:text-gray-400">
+            <tr>
+              <th scope="col" className="pr-4 py-2 font-medium">
+                {t('admin.systemResources.knowledge.window', 'Last')}
+              </th>
+              <th scope="col" className="pr-4 py-2 font-medium">
+                {t('admin.systemResources.knowledge.projects', 'Projects')}
+              </th>
+              <th scope="col" className="pr-4 py-2 font-medium">
+                {t('admin.systemResources.knowledge.chars', 'Text (characters)')}
+              </th>
+              <th scope="col" className="py-2 font-medium">
+                {t('admin.systemResources.knowledge.indexMemory', 'Index memory needed')}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {windows.map(w => (
+              <tr key={w.minutes}>
+                <td className="pr-4 py-2 font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.systemResources.knowledge.minutes', '{{count}} min', {
+                    count: w.minutes
+                  })}
+                </td>
+                <td className="pr-4 py-2 tabular-nums text-gray-700 dark:text-gray-300">
+                  {formatCount(w.projects)}
+                </td>
+                <td className="pr-4 py-2 tabular-nums text-gray-700 dark:text-gray-300">
+                  {formatCount(w.chars)}
+                </td>
+                <td className="py-2 tabular-nums text-gray-700 dark:text-gray-300">
+                  {formatBytes(estimateIndexBytes(w.chars))}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {cache && (
+        <>
+          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            {t('admin.systemResources.knowledge.indexCache', 'Search-index cache')}
+          </h3>
+          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+            {stats.map(([label, value]) => (
+              <div key={label}>
+                <dt className="text-gray-500 dark:text-gray-400">{label}</dt>
+                <dd className="font-medium tabular-nums text-gray-900 dark:text-gray-100">
+                  {value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          {capacityChars > 0 && (
+            <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.systemResources.knowledge.capacity',
+                'Each worker caches at most {{chars}} characters (about {{bytes}} of memory). Totals above add up all workers since they started.',
+                {
+                  chars: formatCount(capacityChars),
+                  bytes: formatBytes(estimateIndexBytes(capacityChars))
+                }
+              )}
+            </p>
+          )}
+        </>
+      )}
+    </Section>
+  );
+}
+
 function AdminSystemResourcesPage() {
   const { t } = useTranslation();
   const [data, setData] = useState(null);
@@ -527,6 +671,13 @@ function AdminSystemResourcesPage() {
           <StorageSection storage={data.storage} />
           <HostSection host={data.host} />
           <ProcessesSection processes={data.processes} cluster={data.cluster} />
+          {data.workingSet && (
+            <KnowledgeSection
+              workingSet={data.workingSet}
+              knowledge={data.knowledge}
+              processes={data.processes}
+            />
+          )}
         </div>
       )}
     </div>

@@ -76,6 +76,10 @@ const BYTE_SIZE_BUCKETS = [
   1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 16777216, 67108864, 268435456
 ];
 
+// Index builds and extractions run from milliseconds to tens of seconds (a 10 MB text
+// takes about a second to index, a large PDF several to extract).
+const WORK_DURATION_BUCKETS = [0.005, 0.025, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120];
+
 // Histogram bucket boundaries for short-lived sub-second operations (config reload,
 // auth events, etc.) - similar to standard HTTP request duration buckets.
 const SHORT_DURATION_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
@@ -100,6 +104,18 @@ let magicPromptUsageCounter = null;
 let feedbackCounter = null;
 let feedbackRatingHistogram = null;
 let structuredOutputCounter = null;
+
+// Project working set, knowledge index cache and extraction (#3652)
+let projectsActiveGauge = null;
+let projectsActiveCharsGauge = null;
+let indexCacheHitsCounter = null;
+let indexCacheMissesCounter = null;
+let indexCacheEvictionsCounter = null;
+let indexCacheEntriesGauge = null;
+let indexCacheCharsGauge = null;
+let indexBuildDurationHistogram = null;
+let extractionDurationHistogram = null;
+let pendingIndexCacheProvider = null;
 
 /**
  * Initialize metrics from a meter source. Accepts anything with a
@@ -220,6 +236,59 @@ export function initializeMetrics(meterSource) {
     advice: { explicitBucketBoundaries: [1, 2, 3, 4, 5] }
   });
 
+  // ---- Project working set, index cache, extraction (#3652) ----
+
+  projectsActiveGauge = meter.createObservableGauge('ihub.projects.active', {
+    description:
+      'Distinct projects used by a chat turn or a knowledge tool in the window (union across workers)',
+    unit: '{project}'
+  });
+
+  projectsActiveCharsGauge = meter.createObservableGauge('ihub.projects.active.chars', {
+    description:
+      'Text characters of the active projects: the index memory the working set needs (about 4.5 bytes each)',
+    unit: '{character}'
+  });
+
+  indexCacheHitsCounter = meter.createCounter('ihub.knowledge.index.cache.hits', {
+    description: 'Knowledge search-index cache hits (per process)',
+    unit: '{lookup}'
+  });
+
+  indexCacheMissesCounter = meter.createCounter('ihub.knowledge.index.cache.misses', {
+    description: 'Knowledge search-index cache misses, each one an index build (per process)',
+    unit: '{lookup}'
+  });
+
+  indexCacheEvictionsCounter = meter.createCounter('ihub.knowledge.index.cache.evictions', {
+    description: 'Knowledge search indexes dropped to stay within the cache limits (per process)',
+    unit: '{index}'
+  });
+
+  indexCacheEntriesGauge = meter.createObservableGauge('ihub.knowledge.index.cache.entries', {
+    description: 'Knowledge search indexes currently cached (per process)',
+    unit: '{index}'
+  });
+
+  indexCacheCharsGauge = meter.createObservableGauge('ihub.knowledge.index.cache.chars', {
+    description: 'Characters the cached knowledge search indexes stand for (per process)',
+    unit: '{character}'
+  });
+
+  indexBuildDurationHistogram = meter.createHistogram('ihub.knowledge.index.build.duration', {
+    description: 'Time to build a knowledge search index (blocks the event loop)',
+    unit: 's',
+    advice: { explicitBucketBoundaries: WORK_DURATION_BUCKETS }
+  });
+
+  extractionDurationHistogram = meter.createHistogram('ihub.extraction.duration', {
+    description: 'Time to extract the text of a file, by format',
+    unit: 's',
+    advice: { explicitBucketBoundaries: WORK_DURATION_BUCKETS }
+  });
+
+  attachIndexCacheObservers();
+
   console.info(
     `GenAI metrics initialized - allowed labels: ${[...ALLOWED_METRIC_LABELS].join(', ')}`
   );
@@ -264,6 +333,88 @@ export function registerActivityObservers(provider) {
       console.warn('Failed to observe active chats:', error.message);
     }
   });
+}
+
+/**
+ * Register the observable callbacks for the project working-set gauges.
+ *
+ * @param {Object} provider
+ * @param {() => Array<{minutes: number, projects: number, chars: number}>} provider.getWorkingSet
+ */
+export function registerProjectObservers(provider) {
+  if (!projectsActiveGauge || !projectsActiveCharsGauge || !provider) return;
+  projectsActiveGauge.addCallback(result => {
+    try {
+      for (const w of provider.getWorkingSet()) {
+        result.observe(w.projects, { 'window.minutes': w.minutes });
+      }
+    } catch (error) {
+      console.warn('Failed to observe active projects:', error.message);
+    }
+  });
+  projectsActiveCharsGauge.addCallback(result => {
+    try {
+      for (const w of provider.getWorkingSet()) {
+        result.observe(w.chars, { 'window.minutes': w.minutes });
+      }
+    } catch (error) {
+      console.warn('Failed to observe active project characters:', error.message);
+    }
+  });
+}
+
+/**
+ * Register the observable callbacks for the index-cache size gauges.
+ *
+ * @param {Object} provider
+ * @param {() => {entries: number, chars: number}} provider.getStats
+ */
+export function registerIndexCacheObservers(provider) {
+  if (!provider) return;
+  // The cache module is loaded before telemetry is initialised: keep the
+  // provider and attach it as soon as the gauges exist.
+  pendingIndexCacheProvider = provider;
+  attachIndexCacheObservers();
+}
+
+function attachIndexCacheObservers() {
+  const provider = pendingIndexCacheProvider;
+  if (!provider || !indexCacheEntriesGauge || !indexCacheCharsGauge) return;
+  pendingIndexCacheProvider = null;
+  indexCacheEntriesGauge.addCallback(result => result.observe(provider.getStats().entries));
+  indexCacheCharsGauge.addCallback(result => result.observe(provider.getStats().chars));
+}
+
+/**
+ * Count an index-cache lookup or eviction.
+ * @param {'hit'|'miss'|'eviction'} outcome
+ * @param {number} [count=1]
+ */
+export function recordIndexCacheEvent(outcome, count = 1) {
+  const counters = {
+    hit: indexCacheHitsCounter,
+    miss: indexCacheMissesCounter,
+    eviction: indexCacheEvictionsCounter
+  };
+  const counter = counters[outcome];
+  if (counter && count > 0) counter.add(count);
+}
+
+/** @param {number} durationSeconds */
+export function recordIndexBuildDuration(durationSeconds) {
+  if (indexBuildDurationHistogram && Number.isFinite(durationSeconds)) {
+    indexBuildDurationHistogram.record(durationSeconds);
+  }
+}
+
+/**
+ * @param {string} format - Short, bounded format name (`pdf`, `docx`, `text`, ...)
+ * @param {number} durationSeconds
+ */
+export function recordExtractionDuration(format, durationSeconds) {
+  if (extractionDurationHistogram && Number.isFinite(durationSeconds)) {
+    extractionDurationHistogram.record(durationSeconds, { format });
+  }
 }
 
 /**

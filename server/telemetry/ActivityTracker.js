@@ -3,6 +3,15 @@
 
 import logger from '../utils/logger.js';
 import { registerActivityObservers } from './metrics.js';
+import { createClusterUnion } from './clusterUnion.js';
+import { getConfiguredWorkerCount } from './workerCount.js';
+
+/** Cluster-bus channels on which workers report the users / chats they saw. */
+export const ACTIVE_USERS_CHANNEL = 'metrics:active-users';
+export const ACTIVE_CHATS_CHANNEL = 'metrics:active-chats';
+
+const entriesOf = map => () => [...map].map(([id, ts]) => [id, ts]);
+const otherWorkers = () => Math.max(0, getConfiguredWorkerCount() - 1);
 
 /**
  * Tracks active users and chats over a rolling time window.
@@ -10,6 +19,11 @@ import { registerActivityObservers } from './metrics.js';
  * Drives both the OpenTelemetry observable gauges (`ihub.active.users`,
  * `ihub.active.chats`) and a periodic informational log line that lets
  * operators see activity even without a metrics backend.
+ *
+ * In cluster mode each worker only sees its own requests, so the counts are the
+ * union of the ids across all workers (`clusterUnion.js`), not one worker's
+ * share. `start()` joins the exchange; before that, or outside cluster mode,
+ * the counts are this process's own.
  */
 class ActivityTracker {
   constructor() {
@@ -23,6 +37,24 @@ class ActivityTracker {
     // Keep counts for the previous window so we can report a delta in the log line
     this.lastReportedUsers = 0;
     this.lastReportedChats = 0;
+    this.userUnion = createClusterUnion({
+      channel: ACTIVE_USERS_CHANNEL,
+      getLocalEntries: entriesOf(this.userTimestamps),
+      expectedPeers: otherWorkers,
+      retainMs: () => this.windowMs
+    });
+    this.chatUnion = createClusterUnion({
+      channel: ACTIVE_CHATS_CHANNEL,
+      getLocalEntries: entriesOf(this.chatTimestamps),
+      expectedPeers: otherWorkers,
+      retainMs: () => this.windowMs
+    });
+  }
+
+  /** Join the cross-worker exchange (cluster workers only; elsewhere a no-op). */
+  start() {
+    this.userUnion.start();
+    this.chatUnion.start();
   }
 
   /**
@@ -89,12 +121,21 @@ class ActivityTracker {
 
   getActiveUsers() {
     this._prune(Date.now());
-    return this.userTimestamps.size;
+    return this._countWithinWindow(this.userUnion);
   }
 
   getActiveChats() {
     this._prune(Date.now());
-    return this.chatTimestamps.size;
+    return this._countWithinWindow(this.chatUnion);
+  }
+
+  _countWithinWindow(union) {
+    const cutoff = Date.now() - this.windowMs;
+    let count = 0;
+    for (const { ts } of union.entries().values()) {
+      if (ts >= cutoff) count += 1;
+    }
+    return count;
   }
 
   logSummary() {
@@ -115,6 +156,8 @@ class ActivityTracker {
   }
 
   shutdown() {
+    this.userUnion.stop();
+    this.chatUnion.stop();
     if (this.summaryTimer) {
       clearInterval(this.summaryTimer);
       this.summaryTimer = null;
