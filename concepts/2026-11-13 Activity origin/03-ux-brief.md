@@ -29,7 +29,7 @@ What the owner's idea gets right and C keeps: origin unmistakable (icon + noun i
 
 PM objections, scored honestly: valid against A (reorders, lies about order while streaming, needs an "Other" group, F3 explodes); **overstated against A-prime** (A-prime handles web-project-web by design with three sections and only appends, so the "breaks on interleaving" and "layout churn" objections do not hold for it; its real cost is header weight and the F3 grammar split). "Cost most" is true for A and only moderately true for A-prime (same data, different renderer); my recommendation does not rest on cost.
 
-Other decisions in one line each (details in section 1): the skill appears **once, as a header chip, always with who in plain words** (started manually / chosen by the model / set by the app / kept from an earlier message); **"Read" is retired**: the hit-level eye marker goes, page reads become "Opened web page" rows, the headline counts "N opened" (the later merge shows a page once); **Technical details** is a switch at the top of the open list, finished turns only, off by default, remembered, applies to all messages; the reasoning disclosure is renamed **"Thinking process" / "Denkprozess"** (the product's own settings vocabulary) and given the same shape and `aria-expanded` as the activity line; no actor is ever shown on search or read rows.
+Other decisions in one line each (details in section 1): the skill appears **once, in the activity block (a row in the list and a leading segment in the collapsed line), always with who in plain words** (started manually / chosen by the model / set by the app / kept from an earlier message); the first version of this brief used a header chip, and the product owner moved it into the activity block on 2026-11-13 (D1); **"Read" is retired**: the hit-level eye marker goes, page reads become "Opened web page" rows, the headline counts "N opened" (the later merge shows a page once); **Technical details** is a switch at the top of the open list, finished turns only, off by default, remembered, applies to all messages; the reasoning disclosure is renamed **"Thinking process" / "Denkprozess"** (the product's own settings vocabulary) and given the same shape and `aria-expanded` as the activity line; no actor is ever shown on search or read rows.
 
 Corrections to inputs: (a) German register is formal, confirmed (my count over `de.json` values: about 986 strings with Sie/Ihr-forms against 22 with du-forms, consistent with the 970/23 you gave); the PM's informal-du copy is replaced. (b) The brief's premise that carried-over skills "show nowhere but the header pill" is not confirmed by the code: the pill is built from `run.skills`, which is folded only from `skill.activation` frames (`shared/run/runReducer.js:529-532`), and carried skills emit no frame (`announcedSkills`, `sessionRoutes.js:134-137`). Per my reading they show nowhere at all (same as PM verification item V3; verify).
 
@@ -60,7 +60,16 @@ Format: decision, reason, rejected alternative, and where it matters, what would
 
 ### D1. Skill: one home, one rule
 
-**Decision.** A skill that shaped the answer appears **exactly once, as a chip in the message header, above the reasoning and activity lines**. It never appears in the activity list or the activity headline. The chip says what it is and who brought it in, always, in plain words:
+**Revision 2026-11-13 (product-owner decision).** The first version of this brief put the skill in a header chip. The product owner asked for one place that shows what happened, and the skill now lives in the activity block. This section is the revised rule; the first version's reasoning is kept under "Rejected" so the trade-off stays visible. Wherever this brief still says "chip" for a skill, read "skill row and headline segment"; the passages that matter have been changed.
+
+**Decision.** A skill that shaped the answer appears **exactly once, in the activity block**. It is never a header chip and never a chip plus a row.
+
+- **Expanded list:** one row per distinct skill in the flat, time-ordered list. Skills in force from the start (started manually, set by the app, kept from an earlier message) are the first rows. A skill the model chooses appears where it happened. Rows only append while streaming.
+- **Collapsed line:** skills come first, as segments in the same grammar as the origin segments: `[skill] Skill: Contract review · started manually`. One or two skills: a segment each, with the reason. Three or more: one segment `Skills: A, B, C`, names only (the reasons are in the expanded rows). Skills are not origins, so they do not count against the limit of two named origins.
+- **A turn with a skill and no search or tool call** still gets the activity block: collapsed it is the skill segment, expanded it is one row.
+- **Header block order:** Thinking process, then the activity block, then the answer.
+
+The row and the segment say what it is and who brought it in, always, in plain words:
 
 | Route on the server (O: `skillAccess.js:571-640`, `sessionRoutes.js:134-143`) | Wire value (`activatedBy`) | EN | DE |
 |---|---|---|---|
@@ -72,21 +81,34 @@ Format: decision, reason, rejected alternative, and where it matters, what would
 
 Rules:
 - If the same skill came in by several routes, the earliest and most explicit wins: user over app over model (extends `foldSkill`, `runReducer.js:261-277`, which today has user over model).
-- One chip per distinct skill. Two skills are two chips that wrap. The model loading a skill twice is one chip.
-- Visible separator between name and reason is a middle dot; a screen reader hears a comma (visually hidden).
-- The chip is static text, not a button: not focusable, no outline, no `title`. It carries the noun "Skill:" so it cannot be mistaken for the app name or a mode (F9). Icon: the UI designer must not reuse `sparkles` (the footer's AI segment reserves it, `answerBasisModel.js:17-33`).
-- The wording is person-neutral on purpose: no "you", no "du", no "Sie". Reasons: a shared read-only chat is read by someone who did not start the skill, so "started by you" is false there (the current `SkillRow` has no read-only branch, `ToolActivity.jsx:228-251`); the DE register problem disappears; one string per state, no `readOnly` branching.
-- Carried-over skills: **show them** (same chip, "kept from an earlier message"). A rule with a hole ("every skill that shaped this answer, except the ones from earlier turns") is the original bug in a new place. This needs the server to announce them (section 7, G4). If the PO defers it (PM question 7), ship the other four states and say in the release note that a skill kept from an earlier message is not shown yet.
-- What shows for the default case: there is no single default route. The chip always carries its reason, so nothing has to be inferred from absence.
+- One row per distinct skill. The model loading a skill twice is one row, at its first activation.
+- The visible separator between name and reason is a middle dot; a screen reader hears a comma (visually hidden).
+- The row is static text in the normal row grammar: not focusable, no outline, no `title`. It carries the noun "Skill:" so it cannot be mistaken for the app name or a mode (F9). Icon: the UI designer must not reuse `sparkles` (the footer's AI segment reserves it, `answerBasisModel.js:17-33`).
+- The wording is person-neutral on purpose: no "you", no "du", no "Sie". A shared read-only chat is read by someone who did not start the skill, so "started by you" is false there (the old `SkillRow` has no read-only branch, `ToolActivity.jsx:228-251`); the DE register problem disappears; one string per state, no `readOnly` branching.
+- Carried-over skills: **show them** (same row, "kept from an earlier message"). A rule with a hole ("every skill that shaped this answer, except the ones from earlier turns") is the original bug in a new place. This needs the server to announce them (section 7, G4). If the PO defers it (PM question 7), ship the other four states and say in the release note that a skill kept from an earlier message is not shown yet.
+- There is no single default route, so the row always carries its reason and nothing has to be inferred from absence.
 
-**Reason.** The user's complaint ("sometimes a chip on top, sometimes also in the thought chain") has a precise cause in code: the chip and the row are two renderings of the same `skill.activation` frame, and the rows exist only for skills with a frame (O). A skill is a state of the whole answer ("how it was instructed"), not a step in a sequence; the header is visible whether the list is open or closed. "Always say who" beats "only when exceptional" because absence of a label is ambiguous (model or app? carried?), and because the app-set and carried cases are exactly the ones the researcher's own hypothesis calls surprising (H6).
+**Reason.** The user's complaint ("sometimes a chip on top, sometimes also in the thought chain") has a precise cause in code: the chip and the row are two renderings of the same `skill.activation` frame, and the rows exist only for skills with a frame (O). The product owner's fix is one place, and the activity block is the place that already answers "what happened". The objections to putting a skill there are answered like this:
+- *A skill is a state of the whole answer, not a step.* A skill in force from the start is the first row, at time zero. The list stays a log of what the answer used.
+- *It must stay visible when the list is collapsed.* The leading headline segment does that.
+- *It must not compete with the origin segments.* It leads, and it uses the same grammar, so the line stays one grammar.
+- *The header block gets lighter.* Three stacked things above the answer (chips, Thinking process, activity line) become two.
+
+**Costs.**
+- The collapsed line is one segment longer and wraps.
+- A skill with no step sits first rather than at a time; the reason text ("set by the app", "kept from an earlier message") is what tells the reader it was in force from the start.
+- With three or more skills the collapsed line does not show who started each one (to validate, section 8, V3).
+- App-set and carried-over skills still need the new server frames (G4).
+- A skill-only answer now carries an activity block it did not have before (to validate).
+- A chat-launched workflow keeps its own indicator above the answer. Workflows are not in the timeline today (`shared/run/toolActivity.js` leaves them out); merging them is a separate redesign.
 
 **Rejected.**
-- Researcher: "one `Skill: X` line in the activity, actor only when exceptional." Puts a state into a sequence, leaves the list's collapsed line to name it (making it longer), cannot show carried or app-set skills (they have no step), and leaves absence ambiguous.
-- PM: "started by you / loaded by the model" wording. "You" is wrong in shares; "loaded" is engineering vocabulary (research section 4); "von dir" is the wrong register.
-- Chip as a button opening an explanation: scope creep and it turns provenance into a control (outlined = clickable, #3619).
+- *Header chip (this brief's first version).* Visible when collapsed and independent of the list, but a third element above the answer and a second home for the same fact, which is the confusion the owner reported.
+- *Researcher: "actor only when exceptional".* Absence of a label is ambiguous (model or app? carried?), so the row always carries its reason.
+- *PM: "started by you / loaded by the model" wording.* "You" is wrong in shares; "loaded" is engineering vocabulary (research section 4); "von dir" is the wrong register.
+- *A row that is a button opening an explanation.* Scope creep, and it turns provenance into a control (outlined = clickable, #3619).
 
-**Risks.** (1) A model-chosen skill inserts the chip above the activity line mid-turn. A one-time shift of one line, usually before the first row paints (J, unverified: the model normally loads a skill before it searches). Mitigation if it bites: render the chip row below the activity block. (2) An app that auto-activates a skill shows the same chip on every answer; habituation is possible (validate, section 8).
+**Risks.** (1) An app that auto-activates a skill shows the same row on every answer; habituation is possible (validate, section 8). (2) A model-chosen skill appends a row mid-list; it only appends, so nothing above it moves.
 
 ### D2. "Read": retire the word, show a page once
 
@@ -134,7 +156,7 @@ Later (needs no new server data, only stable-rendering care): **merge hit and re
 **Decision.** Three small changes, one fallback, one separate ticket.
 1. **Rename.** EN "Thinking process", DE "Denkprozess". Drop the show/hide verbs: state is carried by the chevron and `aria-expanded`, exactly as the activity line does it.
 2. **Same affordance.** Use the activity button's own classes: light-bulb icon (already the icon of the "Thinking..." idle line, `ToolActivity.jsx:143-146`), label, chevron, focus ring. Add `aria-expanded` and `aria-controls` (today the plain underlined button exposes no state: WCAG 4.1.2, `ChatMessage.jsx:1000`; that part is a defect fix, not a restyle).
-3. **Order unchanged.** Skill chips, then Thinking process, then the activity line, then the answer. Reasoning first because it is usually first in time; both lines are appended in that order, so neither pushes the other. Putting the activity first would insert the reasoning line above it when thoughts arrive later.
+3. **Order.** Thinking process, then the activity block (which holds the skill rows), then the answer (revised 2026-11-13: the skill chips above them are gone, see D1). Reasoning first because it is usually first in time; both lines are appended in that order, so neither pushes the other. Putting the activity first would insert the reasoning line above it when thoughts arrive later.
 
 **Reason for "Thinking process" over the researcher's "Reasoning / Gedankengang".** The product already has this vocabulary in the setting that switches the disclosure on: EN "Show thinking process" (`en.json:6907`), DE "Denkprozess anzeigen" (`de.json:668`), "Denkmodus aktivieren", the idle line "Thinking... / Denkt nach...". The message link is the only outlier ("thinking analysis"). "Reasoning" is also already taken in the admin UI as a model-capability label (`de.json:1809`, `"thinking": "Reasoning"`), so it would mean two things. Reusing existing words adds none. I am deviating from the researcher and from the example in the task; "Reasoning / Gedankengang" stays in the label test as the alternative.
 
@@ -322,8 +344,8 @@ Legend: `[g]` globe (Web), `[f]` folder (Project), `[i]` iFinder document, `[k]`
 EN, desktop, F1 (project search returned nothing):
 
 ```
- [s] Skill: Contract review . started manually
  [b] Thinking process  v
+ [s] Skill: Contract review . started manually
  [g] Web  5 results . 3 opened . via Brave Search     [f] Project  no results      v
  iFinder 6 is the newest generation of enterprise search software ...
 ```
@@ -332,10 +354,10 @@ DE, 320 (segments wrap at segment boundaries; chevron stays at the top right of 
 
 ```
 +--------------------------------------+
-| [s] Skill: Vertragsprüfung .         |
+| [b] Denkprozess                      |
+| [s] Skill: Vertragsprüfung .       v |
 |     manuell gestartet                |
-| [b] Denkprozess                    v |
-| [g] Web  5 Ergebnisse . 3 geöffnet . v
+| [g] Web  5 Ergebnisse . 3 geöffnet . |
 |     über Brave Search                |
 | [f] Projekt  keine Ergebnisse        |
 | iFinder 6 ist die neueste Generation |
@@ -348,7 +370,7 @@ Segment grammar (the owner's wish: origin first, provider at the end of its own 
 [icon] Noun   results . searches (only if 2+) . opened . failed . via Provider
 ```
 - Noun in medium weight, facts in the secondary colour; facts are separated by a middle dot, segments by space only (no dot between segments: one separator, one meaning).
-- Order of segments: first use. Outputs (Created PDF) after the origin segments, always shown.
+- Order of segments: skills first (D1), then the origins by first use. Outputs (Created PDF) after the origin segments, always shown.
 - At most two origin segments are named, the rest as `+N` (same rule as the footer chip, `MAX_NAMED_KINDS = 2`, `answerBasisModel.js:66`). The `+N` carries visually hidden text naming what it hides, so the button's accessible name still lists everything and still contains the visible text (WCAG 2.5.3). **Known limit:** a sighted reader does not see the names that the `+N` hides; they are in the accessible name and in the expanded list. With three or more origins the collapsed line is therefore not the full "what was used" check, and the expanded list is. Because the finished headline wraps instead of truncating, it could name more than two origins; whether to raise the limit (for example to four) is open question V12 in section 8.
 - Connected systems: `[k] Jira  2 calls`, noun = the system label from the server; no "via".
 - Rows without origin (older chats): one neutral segment, `2 searches . 5 results`, no icon, nothing guessed.
@@ -465,32 +487,53 @@ DE, 320, the same frame at t=3.1 s:
 
 The streaming headline may take two lines at 320 px (it wraps; the list below moves by at most one line when it changes length). Accepted and flagged in section 8.
 
-### 3.4 Skill display
+### 3.4 Skill display (revised 2026-11-13: in the activity block, no header chip)
 
-Header block, finished, EN desktop (a skill from every route, one chip each):
+Collapsed, finished, EN desktop. One segment per skill (up to two), first in the line:
 
 ```
- [s] Skill: Contract review . started manually
- [s] Skill: Brand voice . set by the app
- [s] Skill: Summaries . chosen by the model
- [s] Skill: Legal tone . kept from an earlier message
  [b] Thinking process  v
- [g] Web  5 results ...  v
+ [s] Skill: Contract review . started manually     [s] Skill: Brand voice . set by the app
+ [g] Web  5 results . 3 opened . via Brave Search     [f] Project  no results           v
 ```
-Several chips share a row when they fit and wrap when they do not. DE, 320:
+
+Three or more skills: one segment, names only; the reasons are in the expanded rows:
+
+```
+ [s] Skills: Contract review, Brand voice, Summaries     [g] Web  5 results . via Brave Search     v
+```
+
+Expanded. The first three skills are in force from the start, so they are the first rows; the model-chosen skill sits where it happened:
+
+```
+   |  [s] Skill: Contract review . started manually
+   |  [s] Skill: Brand voice . set by the app
+   |  [s] Skill: Legal tone . kept from an earlier message
+   |  [f] Searched the project for [iFinder6] . no results
+   |  [s] Skill: Summaries . chosen by the model
+   |  [g] Searched the web for [IntraFind iFinder6] . 5 results . via Brave Search
+```
+
+A skill and no search or tool call: the activity block still exists.
+
+```
+   collapsed:  [s] Skill: Contract review . started manually           v
+   expanded:   |  [s] Skill: Contract review . started manually
+```
+
+DE, 320, collapsed with two skills (the headline wraps at segment boundaries; the one disclosure is the headline button):
 
 ```
 +----------------------------------------+
-| [s] Skill: Vertragsprüfung .           |
+| [b] Denkprozess                      v |
+| [s] Skill: Vertragsprüfung .         v |
 |     manuell gestartet                  |
 | [s] Skill: Markenstimme .              |
 |     von der App festgelegt             |
-| [s] Skill: Zusammenfassung .           |
-|     vom Modell ausgewählt              |
-| [b] Denkprozess                      v |
 +----------------------------------------+
 ```
-No skill row in the list and no "N skills" in the headline. In a shared chat the same text is correct because it names no person.
+
+A skill row has no second rendering: no header chip and no "N skills" count in the headline (the old count of skills is replaced by the segment). In a shared chat the same text is correct because it names no person.
 
 ### 3.5 Technical details off and on
 
@@ -604,6 +647,7 @@ Card meta line order: `[n badge] [SourceIcon] Origin noun . identity (site, proj
 | failed | "Searched the web for [q] . Failed" + reason line | red exclamation | red, with words | `RunAnnouncer`: existing failed announcement | never "no results" |
 | stopped by the user | "... . Stopped" | clock or origin icon | grey | existing | |
 | read, partly | "Opened web page <title> host . partly read" | origin icon | neutral | read with the row | words and depth in Technical details |
+| read, no text | "Web page returned no text <title> host" (not "Opened") | origin icon | neutral | read with the row | a completed fetch that delivered no text, for example `read_url` with `offset` at or past the end; not counted in "N opened"; needs the declared read outcome (G10) |
 | read, limit reached | "Not opened <title>" + the existing page-read-limit sentence | origin icon | amber, sentence visible | read with the row | existing behaviour, wording changed |
 | read failed | "Opened web page ... . Failed" + the existing reason line | red exclamation | red, with words | `RunAnnouncer`: existing failed announcement | the fetch row's own Failed state; the hit-level "Not readable" is removed with the hit-level marker |
 | hit | title link, host | none | link | link name = title | no read marker in the MVP |
@@ -623,7 +667,7 @@ Card meta line order: `[n badge] [SourceIcon] Origin noun . identity (site, proj
 | finished, only creators | only a PDF | "Created PDF" (unchanged) | "PDF erstellt" | no origin segment |
 | finished, no origin | old chats | `2 searches . 5 results`, no icon | `2 Suchen . 5 Ergebnisse` | nothing guessed |
 
-### 4.3 Skill chip states
+### 4.3 Skill row and segment states
 
 | State | Text | Notes |
 |---|---|---|
@@ -667,8 +711,12 @@ Reads (live and done):
 | DE headline, running | same keys | Öffnet {{host}} | Öffnet „{{title}}“ | Öffnet „{{title}}“ | Öffnet „{{title}}“ | Öffnet „{{title}}“ |
 | DE row, running | same keys | Öffnet Webseite | Öffnet Dokument im Projekt | Öffnet Dokument in iFinder | Öffnet Dokument in iAssistant | Öffnet Dokument |
 | DE row, done | same keys | Webseite geöffnet | Dokument im Projekt geöffnet | Dokument in iFinder geöffnet | Dokument in iAssistant geöffnet | Dokument geöffnet |
+| EN row, done, no text | `toolActivity.origin.<origin>.rowOpenedEmpty` | Web page returned no text | Document in the project returned no text | Document in iFinder returned no text | Document in iAssistant returned no text | Document returned no text |
+| DE row, done, no text | same keys | Webseite lieferte keinen Text | Dokument im Projekt lieferte keinen Text | Dokument in iFinder lieferte keinen Text | Dokument in iAssistant lieferte keinen Text | Dokument lieferte keinen Text |
 
 When a page has no host yet or a document no title: `toolActivity.openingGeneric` "Opening…" / "Öffnet…".
+
+A read that completed but delivered no text (G10, for example `read_url` with `offset` at or past the end of the page) uses `rowOpenedEmpty`, never `rowOpened`, so the row and the "N opened" count agree.
 
 Segment nouns (headline): reuse `chatMessage.answerBasis.kind.web|project|ifinder|iassistant` (EN Web, Project, iFinder, iAssistant; DE Web, Projekt, iFinder, iAssistant). For `documents` use new `toolActivity.originDocuments`: "Document sources" / "Dokumentquellen" (see O-1). For `integration` the noun is the server's label (Jira, Munich AD).
 
@@ -699,7 +747,7 @@ Segment nouns (headline): reuse `chatMessage.answerBasis.kind.web|project|ifinde
 | `toolActivity.skillByModel` (value changes) | chosen by the model | vom Modell ausgewählt |
 | `toolActivity.skillByApp` (new) | set by the app | von der App festgelegt |
 | `toolActivity.skillByChat` (new) | kept from an earlier message | aus früherer Nachricht übernommen |
-| `toolActivity.skillsLabel` (new, accessible name of the chip list) | Skills | Skills |
+| `toolActivity.skillsLabel` (new, the collapsed segment for three or more skills) | Skills: {{names}} | Skills: {{names}} |
 
 ### 5.4 Disclosures
 
@@ -759,7 +807,7 @@ Target: WCAG 2.2 AA, 320 CSS px reflow, dark mode, reduced motion, screen reader
 
 | Element | Markup | Accessible name and state |
 |---|---|---|
-| Skill chips | `<ul aria-label="Skills">`, each `<li>` plain text, not focusable | "Skill: Contract review, started manually" (visually hidden comma after the name so it is read as two phrases) |
+| Skill rows | `<li>` in the activity `<ol>`, plain text, not focusable, no `title` | "Skill: Contract review, started manually" (visually hidden comma after the name so it is read as two phrases). The headline button's name also contains the skill segment, so it is heard without expanding. |
 | Thinking process | `<button aria-expanded aria-controls>` + region `id` | "Thinking process, collapsed/expanded"; icon `aria-hidden`; same classes as the activity button (D4) |
 | Activity headline | existing `<button aria-expanded aria-controls>` | Name = its visible text, nothing else (no `aria-label`, so WCAG 2.5.3 holds). Segments are separated by a visually hidden full stop; a noun is followed by a visually hidden colon; `+N` carries visually hidden text naming what it hides. Example name: "Web: 5 results, 3 opened, via Brave Search. Project: no results." |
 | Technical details | `<button role="switch" aria-checked aria-describedby>` | "Technical details, switch, on/off"; hint from section 5.4 |
@@ -771,13 +819,12 @@ No headings inside a message: they would pollute the page's heading outline. Ori
 
 ### 6.2 Reading order and keyboard order (same as the visual order)
 
-1. Skill chips (static text, no tab stop)
-2. Thinking process button, then its text when open
-3. Activity headline button
-4. Technical details switch (only when finished and open)
-5. Rows in time order; the tab stops inside are the hit links and page links
-6. Message text
-7. Footer chip, results tile
+1. Thinking process button, then its text when open
+2. Activity headline button (its name includes the skill segment)
+3. Technical details switch (only when finished and open)
+4. Rows in time order, with the skills in force from the start first; the tab stops inside are the hit links and page links (a skill row has none)
+5. Message text
+6. Footer chip, results tile
 
 Keys: Enter and Space on the two disclosure buttons and on the switch; Tab and Shift+Tab through links; no custom shortcuts; no focus trap (the sources panel keeps its existing trap on narrow screens).
 
@@ -788,7 +835,7 @@ Keys: Enter and Space on the two disclosure buttons and on the switch; Tab and S
 | a call starts | the active label with its origin, no ellipsis, no numbers: "Searching the web for iFinder6" | existing `activeLabel` via `spoken()` (`deriveAnnouncements.js:101-115`); the origin comes from the new phrases |
 | a search ends with a declared zero count | "The project search returned no results" | new, priority normal, once per call (`<callId>:empty`) |
 | a call fails, is stopped, awaits approval | existing texts | unchanged |
-| a skill is activated | nothing (the chip is static; skill rows were already skipped, `deriveAnnouncements.js:172`) | unchanged |
+| a skill is activated | nothing (the skill row is static text; skill rows are already skipped, `deriveAnnouncements.js:172`); the headline's accessible name carries the skill segment | unchanged |
 | the turn ends | nothing new (the footer chip's label already names the basis) | decision D7; validate with a screen-reader user |
 | the Technical details switch changes | the switch's own state change | native, no announcer text |
 
@@ -803,10 +850,10 @@ Never announced: clocks, byte counts, hit counts as they tick, the reasoning tex
 ### 6.5 Targets, reflow, motion, colour
 
 - **Target size (WCAG 2.5.8, #3619):** the headline button is `py-1 -my-1` (about 24 px) and stays; the switch is at least 24 px high; hit and page links get `min-h-6` (they are now 16 px lines separated by 2 px, which fails the spacing exception); the origin and profile filter pills get `min-h-6` (`ScopeFilter` pills are about 22 px today).
-- **Reflow (1.4.10) at 320 px and text resize to 200%:** the finished headline wraps at segment boundaries, never `truncate`; query chips keep `break-all`; hit titles use a two-line clamp with `break-words`, not `truncate`; the chevron is top-aligned and never alone on a line; no horizontal scroll. A skill chip wraps under its name.
+- **Reflow (1.4.10) at 320 px and text resize to 200%:** the finished headline wraps at segment boundaries, never `truncate`; query chips keep `break-all`; hit titles use a two-line clamp with `break-words`, not `truncate`; the chevron is top-aligned and never alone on a line; no horizontal scroll. A skill row's reason wraps under its name.
 - **Text spacing (1.4.12):** no fixed heights on rows or chips.
 - **No hover-only content (1.4.13) and nothing only in `title`:** retire the title-only meanings: `IntegrationChip` ("Data from X" becomes visible "via X"), "truncated" tooltip ("partly read" is visible), the read-marker tooltips (the marker is gone), `ToolLabel`'s tool id (moves to Technical details), the headline's duplicate `title`. The hit link's `title={url}` may stay as a duplicate, not as the only source of a fact.
-- **Colour (1.4.1, #3619):** status is tinted and always has words (Failed, no results, partly read, Not opened); origin is distinguished by icon and noun, never by colour. No outlined element is non-interactive: the provider is no longer an outlined chip (it looked clickable, `ToolActivity.jsx:467-478`), the skill chip is not outlined. Text contrast at least 4.5:1 in light and dark for grey secondary text on the page background (UI designer to verify the tokens).
+- **Colour (1.4.1, #3619):** status is tinted and always has words (Failed, no results, partly read, Not opened); origin is distinguished by icon and noun, never by colour. No outlined element is non-interactive: the provider is no longer an outlined chip (it looked clickable, `ToolActivity.jsx:467-478`), the skill row is not outlined. Text contrast at least 4.5:1 in light and dark for grey secondary text on the page background (UI designer to verify the tokens).
 - **Reduced motion:** spinners become the static clock (existing `BusyIcon` behaviour); the chevron and the switch thumb use `motion-reduce:transition-none`; rows appear without animation; no auto-scrolling.
 - **Language (3.1.2):** provider and product names (Brave Search, iFinder) are proper nouns and need no `lang`.
 
@@ -845,7 +892,7 @@ All of this is a plan, not evidence. Reuse the research script (`01-research.md`
 |---|---|---|---|
 | V1 | **Structure (D0).** Flat origin-worded list versus A-prime sections. | F1 and F2, expanded; task "Which origin did the three page openings come from?" and "In what order did it look?" | Fewer than 5 of 6 say "web" for the three openings with the flat list, or any compliance participant is confidently wrong: switch the expanded list to A-prime (renderer-only). Otherwise keep C. |
 | V2 | "Opened" vs "geöffnet" vs "abgerufen"; "partly read" vs "teilweise gelesen"; does removing the hit marker leave a gap ("did it read the other two?"); does "3 opened" versus the panel's "Read (5)" confuse? | label test plus F1 | If many ask about the other two hits, add the "Excerpt" marker (D2 fallback). |
-| V3 | Skill chip: "started manually / manuell gestartet" vs "started by you / von Ihnen gestartet"; does the chip on every answer of an app-set skill annoy; does "kept from an earlier message" make sense; is a chip on top mistaken for the app name. | F-skill (all four routes) | If "manuell" is misread, use "you" in own chats and "by the user" in shares. |
+| V3 | Skill row and segment: "started manually / manuell gestartet" vs "started by you / von Ihnen gestartet"; does the row on every answer of an app-set skill annoy; does "kept from an earlier message" make sense; with three or more skills, does the collapsed line hide the reasons too much; do people see that the first rows were in force from the start. | F-skill (all four routes) | If "manuell" is misread, use "you" in own chats and "by the user" in shares. |
 | V4 | "Thinking process / Denkprozess" vs "Reasoning / Gedankengang"; do the two lines read as a family; order. | label test and screenshot | Pick the winner of the label test; if the PM refuses restyle, check the label-only version. |
 | V5 | "no results / keine Ergebnisse" vs "no matches / keine Treffer"; "Web" vs "Internet"; "Dokumentquellen" comprehension; "the project" when two projects are attached. | label test | |
 | V6 | "via Brave Search": does "via" read as the recipient of the query (the egress reading, P2) or as the source? | compliance participants | If read as a source only, try "sent to / gesendet an". |
@@ -866,11 +913,12 @@ Open decisions for the product owner (decide before the build is sliced):
 - **O-3.** Is the small restyle of the reasoning disclosure (D4 steps 1 and 2) in this slice, or label and `aria-expanded` only.
 - **O-4.** Chats stored before the change: clean break (PM recommendation; I agree). Old rows show generic phrases and a neutral segment.
 - **O-5.** Person-neutral skill wording (D1) versus "you".
+- **O-6.** Decided by the product owner on 2026-11-13: the skill lives in the activity block (row plus leading headline segment), not in a header chip (D1). V3 tests it.
 
 Build order (renderer side; the server slice is the PM's MVP-1 plus G1-G4):
-1. `client/src/features/chat/activityHeadline.js`: replace the `scope` guess in `searchLabel`, `fetchLabel`, `activeLabel` with origin-keyed phrases; rewrite `finishedHeadline` and `searchedParts` into a segment model (an array, not a string); delete `lookedAtIcon`'s globe default; `countRead` becomes `openedCount` from `fetch` rows.
-2. `client/src/features/chat/components/ToolActivity.jsx`: segment rendering with wrap and the `+N`; row grammar (`SearchRow`, `FetchRow`); drop `SkillRow`, `IntegrationChip` becomes text ("via"), `ItemDetails` behind the switch, hit link wrapping and 24 px targets, focus move on automatic close.
-3. `client/src/features/chat/components/ChatMessage.jsx` (about lines 971-1020): the skill chips with who; the Thinking process button (same classes as the activity button, `aria-expanded`).
+1. `client/src/features/chat/activityHeadline.js`: replace the `scope` guess in `searchLabel`, `fetchLabel`, `activeLabel` with origin-keyed phrases; rewrite `finishedHeadline` and `searchedParts` into a segment model (an array, not a string); delete `lookedAtIcon`'s globe default; `countRead` becomes `openedCount` from `fetch` rows. Add a leading skills segment: one per skill up to two, `Skills: A, B, C` for three or more, not counted against the limit of two named origins.
+2. `client/src/features/chat/components/ToolActivity.jsx`: segment rendering with wrap and the `+N`; row grammar (`SearchRow`, `FetchRow`); restyle `SkillRow` to the row grammar (no outline, `Skill: <name> · <reason>`, skills in force from the start first), `IntegrationChip` becomes text ("via"), `ItemDetails` behind the switch, hit link wrapping and 24 px targets, focus move on automatic close.
+3. `client/src/features/chat/components/ChatMessage.jsx` (about lines 971-1020): the skill chips are removed (skills are rows in `ToolActivity`); the Thinking process button (same classes as the activity button, `aria-expanded`).
 4. `client/src/features/chat/deriveAnnouncements.js`: one new announcement per declared-empty search.
 5. `client/src/features/chat/components/AnswerSources.jsx`: origin noun on `SourceCard`, the summary line; Next: origin filter beside `ScopeFilter`.
 6. `shared/i18n/en.json` and `de.json`: section 5; retire section 5.7 keys; keep EN/DE parity.

@@ -2,6 +2,8 @@
 
 Status: proposal for product-owner review, 2026-11-13. No source code was changed.
 
+**Revision 2026-11-13 (product-owner decision):** the skill lives in the activity block (a row in the list and a leading segment in the collapsed line), not in a header chip. The first version of this proposal recommended the chip; `03-ux-brief.md` D1 holds both the revised rule and the trade-off.
+
 ## The request
 
 When the model searches the web, a project, iFinder or any other integration, the chat should say so. The Sources panel should show which system each result came from. In the thought chain, web search and project search sit in one flat timeline, and it is not clear who started a step or where it searched. A skill shows up sometimes as a chip on top and sometimes in the thought chain too. The product owner asked for a solution and a design proposal after consulting a product manager, a UX designer and a UI designer, with user research.
@@ -51,7 +53,7 @@ One origin vocabulary, decided by the server and shared by the activity line, th
 | While running | `Searching for “iFinder6”` | `Searching the project for “iFinder6”` |
 | Rows | `Searched for` on every origin | origin in the phrase and an origin icon: `Searched the project for [iFinder6] · no results` |
 | Sources panel | site and date | origin noun on every card (`Web · intrafind.com`, `Project · Project Alpha`) and a summary `Web 5 · Project 3`; an origin filter next |
-| Skills | pill on top plus a row in the list | one static chip: `Skill: Contract review · started manually` (also: chosen by the model, set by the app, kept from an earlier message) |
+| Skills | pill on top plus a row in the list | once, in the activity block: a row `Skill: Contract review · started manually` (also: chosen by the model, set by the app, kept from an earlier message) and a leading segment in the collapsed line; no header chip |
 | Raw arguments | on every row | behind a "Technical details" switch, off by default |
 | Reasoning link | `Show thinking analysis` | `Thinking process`, same shape as the activity line |
 | "Read" | green eye on hits, "Read" rows, "5 pages read" | retired: "Opened web page" rows and "N opened" (counts only fetches that succeeded) |
@@ -72,7 +74,7 @@ Other disagreements, resolved by UX:
 
 | Question | Inputs | Call |
 |---|---|---|
-| Where does a skill live | researcher: one line in the activity, actor only when unusual. PM: header chip, always says who | header chip, always says why, in person-neutral words (a shared chat is read by someone who did not start it) |
+| Where does a skill live | researcher: one line in the activity, actor only when unusual. PM and UX: header chip, always says who | **the activity block** (row plus leading headline segment), always says why, in person-neutral words (a shared chat is read by someone who did not start it). UX had recommended the chip; the product owner moved it into the activity block on 2026-11-13 so there is one place that shows what happened |
 | Rename of "Show thinking analysis" | researcher: Reasoning / Gedankengang | "Thinking process" / "Denkprozess", the product's own settings vocabulary |
 | "Read" | PM: leave for research | retire the hit-level marker, rows say "Opened", headline counts "N opened"; a page shown once (merge hit and row) comes later |
 | Technical details toggle | PM: end of list, `aria-pressed` | top of the open list, finished turns only, `role="switch"`, remembered |
@@ -89,6 +91,7 @@ Other disagreements, resolved by UX:
 - At 320 px the recommended list is **taller than today**. Today's hit titles are truncated to one line; the proposal wraps them to two, so no title is cut off. If the Outlook pane complains, clamp the title to one line. That is a one-class change.
 - On the screenshot run the flat list loses one thing to the sketch: the three page openings still sit under the project search, marked only by a globe icon and the words "Opened web page", until the later merge folds them into their hits.
 - 24 px targets make each hit 6 px taller at 640 px.
+- **Skills in the activity block** add one row per skill and one segment to the collapsed line, which wraps. Skills in force from the start (started manually, set by the app, kept from an earlier message) are the first rows; a skill the model chooses appears where it happened. With three or more skills the collapsed line names them without the reasons. A skill-only answer now has an activity block it did not have before. A chat-launched workflow keeps its own indicator above the answer; workflows are not in the timeline today and merging them is a separate redesign.
 
 ## Decisions for the product owner
 
@@ -107,7 +110,7 @@ Other disagreements, resolved by UX:
 Three shippable pull requests, additive on the wire, no config migration (see `02-product-brief.md` section 8 and `03-ux-brief.md` sections 7 and 9):
 
 1. **Server and shared (M).** `activityOrigin` on `tool/started`, the `args` progress frames and the ledger, derived from the classifier the footer already uses. A server-declared result count per search (so "no results" is never inferred from an empty list). A declared outcome for reads that delivered no text (G10), so "N opened" never counts an empty read; `read_url` with `offset` at or past the end of a page is such a case today. Origin on the synthesized native web-search row. `Source.origin`. `activatedBy: 'app'` (and `'chat'`). Stored and shared activity keeps the new fields; shares carry the origin type but no project or profile names.
-2. **Client activity (M).** Segments, streaming wording, rows, "no results", the skill chip, the Technical details switch, the Thinking process button, EN/DE strings, announcer text.
+2. **Client activity (M).** Segments, streaming wording, rows, "no results", skill rows and a leading skills segment, the Technical details switch, the Thinking process button, EN/DE strings, announcer text.
 3. **Client sources (S).** Origin on cards and the summary line.
 
 Next: origin filter pills, project and profile names on rows (with share scrubbing), merge of hit and read rows, the metrics in `02-product-brief.md` section 9.

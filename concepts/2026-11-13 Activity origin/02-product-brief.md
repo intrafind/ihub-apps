@@ -20,7 +20,7 @@ Recommended: **Option C, "origin-aware flat timeline"**.
 3. The expanded list stays **chronological and flat**; every row says its origin in words (icon is decoration), says "no matches" when a search found nothing, and keeps the provider at the end of its own row.
 4. While streaming, the headline names the origin: "Searching the web for ...", "Searching project documents for ...". Today it does not (O4).
 5. Sources panel cards get an origin label (MVP); an origin filter follows (Next).
-6. **A skill gets one home: the header chip**, with who started it in words ("started by you / loaded by the model / set by the app"). The skill row and the "N skills" count leave the timeline.
+6. **A skill gets one home.** (Original recommendation: the header chip. Revised 2026-11-13: the activity block, as a row and a leading headline segment; see 6.4.) It always says who started it, in words.
 7. Raw tool arguments (`extractContent`, `maxLength`, `offset`, `limit`) go behind a **"Technical details" toggle for everyone**, default off. Not admin-gated.
 
 Not building: per-origin groups in the expanded timeline, "triggered by" on search rows, colour per origin, merging "Show thinking analysis" into the timeline, any client-side guessing of origin, a compat mapping for old chats (recommendation: clean break).
@@ -235,6 +235,8 @@ Rules:
 - Hit-level "Read" marker unchanged (O13 handled in research, not in the MVP).
 
 ### 6.4 Skill: one home
+> **Revised 2026-11-13 (product-owner decision).** The skill lives in the activity block, as a row in the list and a leading segment in the collapsed line, not in a header chip. The flip rule of open decision 3 fired: the owner wants one place that shows what happened. The text below is the PM's original recommendation; the revised rule is in `03-ux-brief.md` D1 and in the README, and the "chip" wording in these stories reads "skill row and headline segment".
+
 - Home = the header chip. Text: `[sparkles] Contract review  started by you | loaded by the model | set by the app`. Wraps under the name at 320 px.
 - Removed: `SkillRow`, the "N skills" part of the headline. Old stored `kind: 'skill'` rows are simply not drawn.
 - Why the chip and not the timeline: a skill is not an origin of information; it is how the whole answer was instructed (like model or app). It must stay visible when the timeline is collapsed, and it must not compete with origin segments. For `/name` the user's own message already shows the trigger; for model-loaded and app-set skills the chip is the only evidence.
@@ -277,9 +279,9 @@ Priorities: M = Must (MVP), S = Should, C = Could. "Verify" names where the test
 - Verify: `tool-activity.test.jsx`.
 
 **US-4 (M) A skill has one home.** As a user, I want a skill shown once, so that I am not confused by two displays.
-- Given a skill activated live, in a stored chat, and in a shared chat, Then it is rendered exactly once (the header chip) and not in the timeline or in the headline count.
-- Given a stored answer whose `toolActivity.items` still contains a `skill` row, Then that row is not drawn.
-- Given the model loads the same skill twice, Then one chip shows.
+- Given a skill activated live, in a stored chat, and in a shared chat, Then it is rendered exactly once, in the activity block (a row and a leading headline segment), and never as a header chip. (Original wording: exactly once as the header chip, not in the timeline.)
+- Given a stored answer whose `toolActivity.items` contains a `skill` row, Then it is drawn once, as the skill row. (Original wording: not drawn.)
+- Given the model loads the same skill twice, Then one row shows.
 - Verify: `tool-activity.test.jsx`, `stored-run-activity.test.jsx`, a message-level test in `chat-message-sources-layout.test.jsx` or a new one.
 
 **US-5 (M) The chip says who started the skill.** As a user, I want to know whether I, the model or the app started a skill.
@@ -324,7 +326,7 @@ Sizes are relative (S/M/L), not durations. Server PR first (additive, invisible)
 | Slice | Content | Server | Client | Size |
 |---|---|---|---|---|
 | **MVP-1 server/shared** | `activityOriginOf` in `toolDisplay.js` on `tool/started`, `args` frames, ledger `tool/call`; schemas; reducer (`argDisplayFields`, `TOOL_STARTED`); `buildToolActivity` item `origin`; stored and share whitelists; persist `integration` (O9); `activatedBy: 'app'` through `announcedSkills`, schema, reducer, store and share; `read_url` counted as web in the basis (O10); `Source.origin` from producers and its normalisation | yes (about 10 files) | shared reducer | M |
-| **MVP-2 client activity** | Streaming headline with origin; per-origin segments; row grammar with origin words and icon; "no matches"; skill chip with who, `SkillRow` and skills count removed; Technical details toggle; EN/DE strings (about 20 to 25 keys); tests | none | `ToolActivity.jsx`, `activityHeadline.js`, `ChatMessage.jsx`, i18n | M |
+| **MVP-2 client activity** | Streaming headline with origin; per-origin segments; row grammar with origin words and icon; "no matches"; skill rows and a leading skills segment, each with who (revised 2026-11-13; the original said: skill chip with who, `SkillRow` and skills count removed); Technical details toggle; EN/DE strings (about 20 to 25 keys); tests | none | `ToolActivity.jsx`, `activityHeadline.js`, `ChatMessage.jsx`, i18n | M |
 | **MVP-3 client sources** | Origin label on source cards; tests; strings | none | `AnswerSources.jsx` | S |
 | **MVP-4 docs** | Release note, docs (section 12) | none | none | S |
 | **Next** | Origin filter in Sources panel (S); metrics M1 to M5 (S to M, server); instance names on rows (project name, iFinder profile) with share scrubbing (M); voice-mode wording from origin (S); carried-over skill indicator after Q7 (S to M); "Show thinking analysis" restyle as part of the activity disclosure family, the #3521 follow-up (M) | partly | partly | S to M each |
@@ -378,7 +380,7 @@ Validation that is research, not telemetry (section 13): comprehension accuracy 
 2. **Raw tool arguments: behind "Technical details" for everyone, or only for admins?**
    **Recommendation: for everyone, default off.** Admin-only means two UIs and unreproducible screenshots; some arguments (filters, search profile) are legitimate transparency for compliance; shares already hide them for private calls; admins keep the run ledger for depth. Revisit admin-only only if an argument-exposure concern is raised.
 3. **Where does a skill live: header chip, timeline row, or the footer popover?**
-   **Recommendation: the header chip, with who in words.** A skill is how the answer was instructed, not an origin of information; the chip stays visible when the timeline is collapsed. Flip rule: if research shows people look for "what happened" in the timeline, move it there and name it in the summary instead.
+   **Decided 2026-11-13 by the product owner: the activity block** (a row and a leading headline segment, with who in words). Original recommendation: the header chip, with who in words. A skill is how the answer was instructed, not an origin of information; the chip stays visible when the timeline is collapsed. Flip rule: if research shows people look for "what happened" in the timeline, move it there and name it in the summary instead.
 4. **Keep `activityScope` on the wire after `activityOrigin` ships?**
    **Recommendation: keep it for this release, with no new consumer;** remove it later as a deliberate breaking cleanup (extension and Outlook bundles may be older than the server). Removing now would make cached clients draw every call as web.
 5. **Fix the footer for answers whose only retrieval was `read_url`?** (O10; change of footer semantics.)
@@ -435,7 +437,7 @@ Then build in this order:
 4. `server/routes/chat/sessionRoutes.js` (`announcedSkills`) plus the `activatedBy` enums (schema, reducer, `boundStoredActivity.activeSkills`): add `app`.
 5. `server/services/loop/seams/knowledgeSourceSeam.js`: classify `read_url` as `websearch`; update `server/tests/answerBasis.test.js`.
 6. `server/services/sources/producers/*` and `shared/sources/source.js`: set and normalise `Source.origin`.
-7. Client: `activityHeadline.js` (`searchLabel`, `activeLabel`, `searchedParts`, `finishedHeadline`, `lookedAtIcon`), `ToolActivity.jsx` (segments, row grammar, details toggle, remove `SkillRow`), `ChatMessage.jsx:971-985` (chip with who), `AnswerSources.jsx` `SourceCard` (origin label), `shared/i18n/{en,de}.json`.
+7. Client: `activityHeadline.js` (`searchLabel`, `activeLabel`, `searchedParts`, `finishedHeadline`, `lookedAtIcon`), `ToolActivity.jsx` (segments, row grammar, details toggle, restyle `SkillRow` instead of removing it (revised 2026-11-13)), `ChatMessage.jsx:971-985` (chip with who), `AnswerSources.jsx` `SourceCard` (origin label), `shared/i18n/{en,de}.json`.
 8. Tests listed under each story; run `npm run lint:fix && npm run format:fix`; add the SPDX header to any new file.
 9. Docs and release note as in section 12.
 
