@@ -32,7 +32,7 @@ process: it runs in a worker thread, so chat streams and other requests on the s
 pace while documents are ingested. The result is the same text as before.
 
 - `platform.json` → `projects.extraction`: `threads` (default 1, `0` reads on the event loop as before),
-  `timeoutMs` (default 60 s per file) and `memoryMb` (default 1024 per thread). Each thread adds about
+  `timeoutMs` (default 60 s per file) and `memoryMb` (default 1024 per thread, at most half the process heap). Each thread adds about
   100 MB per server process.
 - A file that takes longer than the time budget is stopped and fails with `EXTRACTION_TIMEOUT`; before,
   a pathological file could occupy the process indefinitely.

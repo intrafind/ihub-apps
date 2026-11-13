@@ -66,7 +66,7 @@ export const MSG_MIME = 'application/vnd.ms-outlook';
 /** An extraction failure the pipeline records on the item. */
 export class ExtractionError extends Error {
   /**
-   * @param {'UNSUPPORTED_TYPE'|'EXTRACTION_FAILED'|'EXTRACTION_TIMEOUT'|'NO_TEXT'} code
+   * @param {'UNSUPPORTED_TYPE'|'EXTRACTION_FAILED'|'EXTRACTION_TIMEOUT'|'INTERRUPTED'|'NO_TEXT'} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -1009,6 +1009,14 @@ function poolFailure(error, name) {
     return new ExtractionError(
       'EXTRACTION_TIMEOUT',
       `${file} took longer than ${seconds} s to read and was stopped. Split it or remove what it does not need.`
+    );
+  }
+  if (error.code === 'shutdown') {
+    // The server is stopping: the item is interrupted, not unreadable, and
+    // the reconciler or the user retries it (`INTERRUPTED`).
+    return new ExtractionError(
+      'INTERRUPTED',
+      `${file} was not read: the server was restarting. Add it again.`
     );
   }
   if (error.code === 'memory') {

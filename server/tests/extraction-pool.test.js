@@ -10,6 +10,7 @@
  */
 import { after, afterEach, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import v8 from 'node:v8';
 
 import {
   ExtractionError,
@@ -265,7 +266,7 @@ describe('extraction in worker threads', () => {
     await shutdownExtractionPool();
     for (const error of await Promise.all([running, waiting])) {
       assert.ok(error instanceof ExtractionError);
-      assert.equal(error.code, 'EXTRACTION_FAILED');
+      assert.equal(error.code, 'INTERRUPTED');
     }
     assert.equal(extractionPoolStats().threads, 0);
     await assert.rejects(
@@ -315,10 +316,11 @@ describe('the event loop', () => {
       extractText({ bytes: Buffer.from(bytes), name: 'large.xlsx' })
     );
     // The copy of the bytes and the result's structured clone stay on the loop; the parse does not.
-    assert.ok(inProcess > 60, `reading in process stalls the loop (${inProcess.toFixed(0)} ms)`);
+    // A fast runner may stall little in process; then there is nothing to compare, and
+    // the thread must still be quiet in absolute terms.
     assert.ok(
-      inThread < inProcess / 3 && inThread < 100,
-      `reading in a thread does not (${inThread.toFixed(0)} ms vs ${inProcess.toFixed(0)} ms)`
+      inThread < 100 && (inProcess < 40 || inThread < inProcess / 3),
+      `reading in a thread does not stall the loop (${inThread.toFixed(0)} ms vs ${inProcess.toFixed(0)} ms in process)`
     );
   });
 });
@@ -326,7 +328,7 @@ describe('the event loop', () => {
 describe('extraction metrics', () => {
   it('records the duration of the extraction proper per format, and the queue wait', async () => {
     const records = [];
-    const instrument = name => ({
+    const instrument = (name, _options) => ({
       record: (value, attributes) => records.push({ name, value, attributes }),
       add() {},
       addCallback() {}
@@ -369,7 +371,8 @@ describe('projects.extraction settings', () => {
     const defaults = read(undefined);
     assert.equal(defaults.threads, 1);
     assert.equal(defaults.timeoutMs, 60_000);
-    assert.equal(defaults.memoryMb, 1024);
+    const heapMb = Math.floor(v8.getHeapStatistics().heap_size_limit / (1024 * 1024));
+    assert.equal(defaults.memoryMb, Math.min(1024, Math.max(128, Math.floor(heapMb / 2))));
     assert.deepEqual(read({ threads: null, timeoutMs: '', memoryMb: 'lots' }), defaults);
     assert.equal(read({ threads: 0 }).threads, 0, '0 turns the threads off');
     assert.equal(read({ threads: 99 }).threads, 4);
