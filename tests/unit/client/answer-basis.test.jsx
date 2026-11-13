@@ -3,7 +3,7 @@
 
 /**
  * The chip under an answer says that it is AI-generated and what it is based on:
- * a fixed AI segment, then "Based on" and only the kinds of source the server
+ * a fixed AI segment, then only the kinds of source the server
  * named (`run/ended.answerBasis`); "About this answer" opens behind it. Every state of the design (#3619) in English and German, and the
  * keyboard and screen-reader behaviour of the popover.
  */
@@ -89,7 +89,7 @@ describe('the chip says AI-generated, then names the kinds of source, nothing el
 
   it('project and web search: "Project · Web", never "multiple sources"', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
-    expect(kinds().textContent).toBe('Based onProject·Web');
+    expect(kinds().textContent).toBe('Project·Web');
     expect(screen.queryByText(/multiple sources/i)).not.toBeInTheDocument();
     expect(chip()).toHaveAccessibleName(
       'AI-generated, based on project and web. About this answer'
@@ -103,7 +103,7 @@ describe('the chip says AI-generated, then names the kinds of source, nothing el
         { kind: 'integration', label: 'Munich AD' }
       ]
     });
-    expect(kinds().textContent).toBe('Based onJira·Munich AD');
+    expect(kinds().textContent).toBe('Jira·Munich AD');
     expect(chip()).toHaveAccessibleName(
       'AI-generated, based on Jira and Munich AD. About this answer'
     );
@@ -113,7 +113,7 @@ describe('the chip says AI-generated, then names the kinds of source, nothing el
     renderBasis({
       answerBasis: [{ kind: 'project' }, { kind: 'web' }, { kind: 'integration', label: 'Jira' }]
     });
-    expect(kinds().textContent).toBe('Based onProject·Web+1');
+    expect(kinds().textContent).toBe('Project·Web+1');
     expect(screen.getByTestId('answer-basis-more')).toHaveTextContent('+1');
     expect(chip()).toHaveAccessibleName(
       'AI-generated, based on project, web, and Jira. About this answer'
@@ -168,9 +168,10 @@ describe('the chip says AI-generated, then names the kinds of source, nothing el
     }
   });
 
-  it('leads the kinds with "Based on"; model knowledge reads "Based on Model knowledge"', () => {
+  it('the chip has no "Based on" lead-in; model knowledge reads "Model knowledge"', () => {
     renderBasis({ answerBasis: [{ kind: 'model' }] });
-    expect(kinds()).toHaveTextContent('Based onModel knowledge');
+    expect(kinds().textContent).toBe('Model knowledge');
+    expect(chip()).not.toHaveTextContent('Based on');
     expect(chip()).toHaveAccessibleName(
       "AI-generated, based on the model's knowledge. About this answer"
     );
@@ -342,7 +343,7 @@ describe('a narrow pane drops the nouns, not the information', () => {
     );
   });
 
-  it('the AI statement shortens to "AI" and "Based on" goes; neither is dropped for a reader', () => {
+  it('the AI statement shortens to "AI"; it is not dropped for a reader', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
     const ai = within(chip()).getByTestId('answer-basis-ai-label');
     const full = within(ai).getByText('AI-generated');
@@ -351,7 +352,6 @@ describe('a narrow pane drops the nouns, not the information', () => {
     expect(short).toHaveClass('hidden', '@max-sm:inline');
     // The short text is for the eye; the accessible name already carries the full one.
     expect(short).toHaveAttribute('aria-hidden', 'true');
-    expect(within(kinds()).getByText('Based on')).toHaveClass('@max-sm:hidden');
   });
 
   it('a single kind is short and keeps its noun', () => {
@@ -371,7 +371,7 @@ describe('German', () => {
     mockLanguage = 'de';
   });
 
-  it('says "KI-generiert" on the chip, "Grundlage:" before the kinds, and "KI" when narrow', () => {
+  it('says "KI-generiert" on the chip and "KI" when narrow', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
     const ai = within(chip()).getByTestId('answer-basis-ai-label');
     expect(ai).toHaveTextContent('KI-generiert');
@@ -390,7 +390,7 @@ describe('German', () => {
 
   it('names the kinds and words the sentence in German', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
-    expect(kinds().textContent).toBe('Grundlage:Projekt·Web');
+    expect(kinds().textContent).toBe('Projekt·Web');
     open();
     expect(
       screen.getByText(
@@ -649,7 +649,6 @@ describe('a workflow answer', () => {
     renderBasis({ workflowResult, answerBasis: [{ kind: 'web' }], provenance: PROVENANCE });
     expect(chip()).toHaveTextContent('Workflow');
     expect(chip()).not.toHaveTextContent('Web');
-    // A workflow is not a basis: it stands without "Based on".
     expect(chip()).not.toHaveTextContent('Based on');
     expect(chip()).toHaveTextContent('AI-generated');
     expect(chip()).toHaveAccessibleName('AI-generated in a workflow. About this answer');

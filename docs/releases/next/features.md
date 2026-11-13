@@ -1943,13 +1943,13 @@ also used a web search, the project disappeared into **Based on multiple sources
 replaces all of them.
 
 - **The chip says the answer is AI-generated and what it is based on.** A first segment reads
-  **AI-generated** (German: "KI-generiert") on every answer. The second reads **Based on** and
-  names only the kinds of source the answer used: Project, Web, iFinder, iAssistant, Documents,
+  **AI-generated** (German: "KI-generiert") on every answer. The second names only the kinds of
+  source the answer used, without a "Based on" lead-in (the popover says it):
+  Project, Web, iFinder, iAssistant, Documents,
   File, Email, Recording, or the name of an integration, MCP server or remote agent, for example
   **Jira**. Two integrations are two entries. At most two kinds are named, then **+N**.
   A workflow answer reads **AI-generated · Workflow**.
-- **Nothing retrieved reads "Based on Model knowledge"** (German: "Grundlage: Modellwissen"),
-  never "no sources".
+- **Nothing retrieved reads "Model knowledge"** (German: "Modellwissen"), never "no sources".
 - **A project counts only when the answer used it.** A project that was in scope but whose text
   neither went into the prompt nor came back from a search is not named on the chip. It is listed
   as not used.
