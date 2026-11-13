@@ -6,6 +6,7 @@
  * share is typed as a percentage, empty meaning the built-in budget.
  */
 import {
+  cacheSettingsPatch,
   parsePercentShare,
   shareToPercentText
 } from '../../../client/src/features/admin/utils/cacheSettings';
@@ -43,5 +44,34 @@ describe('parsePercentShare', () => {
     for (const share of [0.01, 0.06, 0.1, 0.25, 0.5]) {
       expect(parsePercentShare(shareToPercentText(share)).share).toBe(share);
     }
+  });
+});
+
+describe('cacheSettingsPatch', () => {
+  const stored = {
+    indexCache: { maxEntries: 32, maxHeapShare: null },
+    textCache: { maxHeapShare: 0.06 }
+  };
+  const same = { indexShare: { share: null }, textShare: { share: 0.06 } };
+
+  test('sends nothing when nothing changed', () => {
+    expect(cacheSettingsPatch({ draftIndex: { maxEntries: 32 }, stored, ...same })).toEqual({});
+  });
+
+  test('sends only the changed fields, null for a cleared share', () => {
+    expect(
+      cacheSettingsPatch({
+        draftIndex: { maxEntries: 100 },
+        stored,
+        indexShare: { share: 0.2 },
+        textShare: { share: null }
+      })
+    ).toEqual({
+      indexCache: { maxEntries: 100, maxHeapShare: 0.2 },
+      textCache: { maxHeapShare: null }
+    });
+    expect(cacheSettingsPatch({ draftIndex: { maxEntries: 50 }, stored, ...same })).toEqual({
+      indexCache: { maxEntries: 50 }
+    });
   });
 });

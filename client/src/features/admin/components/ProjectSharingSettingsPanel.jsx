@@ -27,6 +27,7 @@ import {
 } from '../../projects/utils/refreshTtl';
 
 import {
+  cacheSettingsPatch,
   HEAP_SHARE_PERCENT_RANGE,
   INDEX_CACHE_ENTRIES_RANGE,
   parsePercentShare,
@@ -262,10 +263,6 @@ function ProjectSharingSettingsPanel() {
         indexCache,
         knowledgeModes
       } = draft;
-      const sharePatch = (parsed, storedShare) =>
-        parsed.share !== (storedShare ?? null) ? { maxHeapShare: parsed.share } : null;
-      const indexSharePatch = sharePatch(indexShare, stored.indexCache?.maxHeapShare);
-      const textSharePatch = sharePatch(textShare, stored.textCache?.maxHeapShare);
       const ingestChanged = JSON.stringify(ingest) !== JSON.stringify(stored.ingest);
       const modesChanged =
         Array.isArray(knowledgeModes) &&
@@ -284,18 +281,7 @@ function ProjectSharingSettingsPanel() {
           ? { refreshWaitSeconds }
           : {}),
         ...(ingest && ingestChanged ? { ingest } : {}),
-        ...(indexCache &&
-        (indexCache.maxEntries !== stored.indexCache?.maxEntries || indexSharePatch)
-          ? {
-              indexCache: {
-                ...(indexCache.maxEntries !== stored.indexCache?.maxEntries
-                  ? { maxEntries: indexCache.maxEntries }
-                  : {}),
-                ...indexSharePatch
-              }
-            }
-          : {}),
-        ...(textSharePatch ? { textCache: textSharePatch } : {}),
+        ...cacheSettingsPatch({ draftIndex: indexCache, stored, indexShare, textShare }),
         ...(limitsChanged ? { limits: limits.values } : {})
       });
       // The default app and the limits reach the project pages through the platform config.
