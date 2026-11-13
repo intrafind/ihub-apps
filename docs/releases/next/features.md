@@ -15,6 +15,16 @@ across all workers of a pod (each user or project once) instead of one worker's 
 same pod-wide number, so a dashboard must not sum these gauges over workers: pick one worker's series or use
 `max` per pod. Only the per-process cache counters (`ihub.knowledge.index.cache.*`) are meant to be summed. See [Telemetry](../../telemetry.md#metrics).
 
+## Configurable Project Index and Item-Text Caches
+
+`platform.json` → `projects.indexCache` (`maxEntries`, `maxHeapShare`) and `projects.textCache`
+(`maxHeapShare`) now set how many project search indexes a server process keeps and how much of its heap the
+indexes and the decrypted item texts may use. Without them nothing changes (32 indexes, 10 % and 6 % of the
+heap, with the old ceilings); a configured share replaces the ceiling so an installation with many active
+projects can avoid rebuilding indexes on most turns. The index memory estimate per character is corrected from
+5.5 to 4.5 bytes, so the same share now holds about 20 % more indexed text (the budget now counts 4.5 bytes where it counted 5.5). Use the index-cache hit rate and
+working-set metrics to size them. See [Projects](../../projects.md#platform-settings).
+
 ## Workers and Their Memory Follow the Container's Memory Limit
 
 In a container with a memory limit, iHub no longer starts four workers that each size their memory as if they

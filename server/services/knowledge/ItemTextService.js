@@ -28,6 +28,7 @@ import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { KnowledgeError } from './types.js';
 import { PROJECT_ITEM_KIND, loadLinkedItem } from '../projects/projectItemLinks.js';
+import { projectSettings } from '../projects/projectSettings.js';
 import { itemTextCacheBytes } from '../../utils/cacheBudgets.js';
 
 const COMPONENT = 'ItemTextService';
@@ -37,8 +38,17 @@ const COMPONENT = 'ItemTextService';
  * of this process's heap limit (utils/cacheBudgets.js).
  */
 const TEXT_CACHE_ENTRIES = 64;
-export const ITEM_TEXT_CACHE_BYTES = itemTextCacheBytes();
-const TEXT_CACHE_BYTES = ITEM_TEXT_CACHE_BYTES;
+
+/**
+ * The byte budget of the text cache: `projects.textCache.maxHeapShare` of the
+ * heap (#3650), read when the cache is used; absent, the built-in budget.
+ *
+ * @param {Object} [platformConfig] - Platform configuration; the loaded one by default
+ * @returns {number} Bytes
+ */
+export function textCacheBudgetBytes(platformConfig = configCache.getPlatform?.()) {
+  return itemTextCacheBytes(undefined, projectSettings(platformConfig).textCache.maxHeapShare);
+}
 
 const textCache = new Map();
 let textCacheBytes = 0;
@@ -54,12 +64,13 @@ function cacheGet(key) {
 
 function cacheSet(key, text) {
   const bytes = text.length * 2;
+  const budget = textCacheBudgetBytes();
   // A 10 MB text (20 MB as UTF-16) must fit: it is read on every search.
-  if (bytes > TEXT_CACHE_BYTES / 2) return;
+  if (bytes > budget / 2) return;
   if (textCache.has(key)) textCacheBytes -= textCache.get(key).bytes;
   textCache.set(key, { text, bytes });
   textCacheBytes += bytes;
-  while (textCache.size > TEXT_CACHE_ENTRIES || textCacheBytes > TEXT_CACHE_BYTES) {
+  while (textCache.size > TEXT_CACHE_ENTRIES || textCacheBytes > budget) {
     const [oldest] = textCache.keys();
     textCacheBytes -= textCache.get(oldest).bytes;
     textCache.delete(oldest);

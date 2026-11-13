@@ -4,7 +4,13 @@
 import { z } from 'zod';
 import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { usageLimitBucketSchema } from './common.js';
-import { KNOWLEDGE_MODES, MAX_FILES_CEILING } from '../services/projects/projectConstants.js';
+import {
+  KNOWLEDGE_MODES,
+  MAX_CACHE_HEAP_SHARE,
+  MAX_FILES_CEILING,
+  MAX_INDEX_CACHE_ENTRIES,
+  MIN_CACHE_HEAP_SHARE
+} from '../services/projects/projectConstants.js';
 import {
   DEFAULT_FETCH_CONCURRENCY,
   DEFAULT_REFRESH_IDLE_DAYS,
@@ -852,6 +858,23 @@ export const platformConfigSchema = z
           .min(0)
           .max(MAX_REFRESH_WAIT_SECONDS)
           .prefault(DEFAULT_REFRESH_WAIT_SECONDS),
+        // Per-process caches of project knowledge (#3650). Absent: 32 indexes
+        // within 10 % of the heap, item text within 6 % (the built-in budgets,
+        // which keep their old ceilings). A set `maxHeapShare` replaces the
+        // ceiling, so a larger heap can hold a larger working set.
+        indexCache: z
+          .object({
+            maxEntries: z.number().int().min(1).max(MAX_INDEX_CACHE_ENTRIES).optional(),
+            maxHeapShare: z.number().min(MIN_CACHE_HEAP_SHARE).max(MAX_CACHE_HEAP_SHARE).optional()
+          })
+          .passthrough()
+          .optional(),
+        textCache: z
+          .object({
+            maxHeapShare: z.number().min(MIN_CACHE_HEAP_SHARE).max(MAX_CACHE_HEAP_SHARE).optional()
+          })
+          .passthrough()
+          .optional(),
         kinds: z.record(z.string(), z.boolean()).prefault({}),
         encryption: z
           .object({ keyProvider: z.string().prefault('local-file') })

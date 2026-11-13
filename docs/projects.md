@@ -1262,7 +1262,9 @@ would go past it.
     "kinds": {},
     "encryption": { "keyProvider": "local-file" },
     "scan": { "provider": "none", "command": "", "timeoutMs": 30000, "onError": "reject" },
-    "ingest": { "concurrency": 2, "staleAfterMinutes": 30 }
+    "ingest": { "concurrency": 2, "staleAfterMinutes": 30 },
+    "indexCache": { "maxEntries": 32, "maxHeapShare": 0.1 },
+    "textCache": { "maxHeapShare": 0.06 }
   }
 }
 ```
@@ -1292,9 +1294,22 @@ would go past it.
 | `ingest.concurrency`        | `2`                 | Conversions (scan and extraction) at once per server process, at most 8. **Admin → Projects → Project settings**. |
 | `ingest.fetchConcurrency`   | `8`                 | Jobs at once per server process, each fetching its source before it waits for a conversion; at most 32, never fewer than `ingest.concurrency`. **Admin → Projects → Project settings**. |
 | `ingest.staleAfterMinutes`  | `30`                | After how long a waiting or extracting item counts as interrupted.                                       |
+| `indexCache.maxEntries`     | `32`                | Search indexes (one per project and version) a server process keeps; 1 to 10000. A miss rebuilds the index on the event loop (60–90 ms for a 590,000-character project) and reads the texts again. Size it from the working set: `ihub.projects.active` and the index-cache hit rate in [Telemetry](telemetry.md). File only. |
+| `indexCache.maxHeapShare`   | built-in (see below) | Share of the process's heap limit the cached indexes may use, 0.01 to 0.5; an index character is counted as 4.5 bytes of heap. |
+| `textCache.maxHeapShare`    | built-in (see below) | Share of the process's heap limit the decrypted item texts may use, 0.01 to 0.5; at least 16 MB. |
 | `tierPolicy`                | `ihub`              | `ihub`: local projects only. `both` and `ifinder`: users add their iFinder smart collections to their projects from the catalog, and create, rename, configure and delete them (see [The iFinder tier](#the-ifinder-tier-smart-collections)). Local projects stay creatable under every value. |
 | `defaultAppId`              | —                   | The app a chat in a project starts in when the project has no default app of its own (or the user cannot use it). Without it, the first app that allows projects. **Admin → Projects → Project settings**. |
 | `encryption.keyProvider`    | `local-file`        | The key provider for document keys; `local-file` is the only one in this version.                        |
+
+**Cache budgets.** Without `maxHeapShare` the built-in budgets apply: 10 % of the heap for indexes (at most
+30 million characters) and 6 % for item texts (at most 96 MB). Setting a share replaces both the percentage
+and that ceiling, so an installation with a large heap and many active projects can hold them all. The
+entry limit and the share both apply; whichever is reached first evicts the oldest index. The caches are
+per process: with several workers each holds its own copy, so memory grows with the number of workers.
+Index memory is roughly characters × 4.5 bytes for typical text, more for code-like text with many distinct
+terms; check `ihub.knowledge.index.cache.chars` against the heap before raising the limits. Missing or
+non-numeric values fall back to the defaults, out-of-range values are clamped on read; the platform
+config schema rejects them when saved through the admin API.
 
 A scanner configuration, for example with ClamAV:
 
