@@ -106,7 +106,7 @@ Other disagreements, resolved by UX:
 
 Three shippable pull requests, additive on the wire, no config migration (see `02-product-brief.md` section 8 and `03-ux-brief.md` sections 7 and 9):
 
-1. **Server and shared (M).** `activityOrigin` on `tool/started`, the `args` progress frames and the ledger, derived from the classifier the footer already uses. A server-declared result count per search (so "no results" is never inferred from an empty list). Origin on the synthesized native web-search row. `Source.origin`. `activatedBy: 'app'` (and `'chat'`). Stored and shared activity keeps the new fields; shares carry the origin type but no project or profile names.
+1. **Server and shared (M).** `activityOrigin` on `tool/started`, the `args` progress frames and the ledger, derived from the classifier the footer already uses. A server-declared result count per search (so "no results" is never inferred from an empty list). A declared outcome for reads that delivered no text (G10), so "N opened" never counts an empty read; `read_url` with `offset` at or past the end of a page is such a case today. Origin on the synthesized native web-search row. `Source.origin`. `activatedBy: 'app'` (and `'chat'`). Stored and shared activity keeps the new fields; shares carry the origin type but no project or profile names.
 2. **Client activity (M).** Segments, streaming wording, rows, "no results", the skill chip, the Technical details switch, the Thinking process button, EN/DE strings, announcer text.
 3. **Client sources (S).** Origin on cards and the summary line.
 
