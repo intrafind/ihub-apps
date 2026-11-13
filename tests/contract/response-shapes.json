@@ -2588,6 +2588,10 @@
     "status": 200,
     "shape": {
       "defaultAppId": "string",
+      "indexCache": {
+        "maxEntries": "number",
+        "maxHeapShare": "null"
+      },
       "ingest": {
         "concurrency": "number",
         "fetchConcurrency": "number"
@@ -2609,6 +2613,9 @@
         "allowEveryone": "boolean",
         "allowGroups": "boolean",
         "allowUsers": "boolean"
+      },
+      "textCache": {
+        "maxHeapShare": "null"
       },
       "tierPolicy": "string"
     }
