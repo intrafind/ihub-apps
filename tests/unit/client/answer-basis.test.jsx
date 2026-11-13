@@ -371,7 +371,7 @@ describe('German', () => {
     mockLanguage = 'de';
   });
 
-  it('says "KI-generiert" on the chip, "Grundlage:" before the kinds, and "KI" when narrow', () => {
+  it('says "KI-generiert" on the chip and "KI" when narrow', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
     const ai = within(chip()).getByTestId('answer-basis-ai-label');
     expect(ai).toHaveTextContent('KI-generiert');
@@ -390,7 +390,7 @@ describe('German', () => {
 
   it('names the kinds and words the sentence in German', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
-    expect(kinds().textContent).toBe('Grundlage:Projekt·Web');
+    expect(kinds().textContent).toBe('Projekt·Web');
     open();
     expect(
       screen.getByText(
