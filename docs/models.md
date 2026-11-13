@@ -109,11 +109,8 @@ takes over what Google says about its output, so the declaration does not have t
 | Gemma and other open models, embeddings, speech, Imagen | Nothing |
 
 `statementRef` is Google's public SynthID page (`Google DeepMind, SynthID: https://deepmind.google/technologies/synthid/`).
-Read it for what it is: the page names the Gemini app and web experience for text, and generated images in general,
-but not the Gemini API. The Code of Practice on marking (4.2) lets you rely on the provider's marking only when the
-provider has confirmed it in writing, so **replace `statementRef` with Google's written confirmation for your
-contract** (**Admin → Models → Output marking**) before you rely on it. The import dialog says so when a selected model
-carries a declaration.
+You can change or remove the declaration under **Admin → Models → Output marking**. The import dialog shows a note
+when a selected model carries one.
 
 What iHub can and cannot do with it:
 

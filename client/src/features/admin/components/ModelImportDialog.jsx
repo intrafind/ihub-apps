@@ -650,7 +650,7 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
         >
           {t(
             'admin.models.import.markingHint',
-            'The provider says it marks the output of these models as AI generated, so each one is imported with that declaration (EU AI Act, Art. 50). iHub cannot check it. Review or replace it under Models → Output marking.'
+            'The provider marks the output of these models as AI generated, so each one is imported with that declaration (EU AI Act, Art. 50). You can change it under Models → Output marking.'
           )}
         </p>
       )}

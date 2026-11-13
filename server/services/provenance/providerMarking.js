@@ -9,9 +9,8 @@
  * iHub records is the provider's claim (`contentMarking.<kind>.by: "provider"`),
  * which the operator vouches for. Importing a model from a provider that
  * publishes such a claim fills that declaration in, so the admin does not have to
- * enter it model by model. It is a starting point: the admin can change or remove
- * it in **Admin → Models → Output marking**, and should replace the reference
- * with the provider's written confirmation for their own contract.
+ * enter it model by model. The admin can change or remove it in
+ * **Admin → Models → Output marking**.
  *
  * Google (Gemini API):
  *   - Text: Gemini marks its text with SynthID-Text. There is no public detector
@@ -29,12 +28,6 @@
 /**
  * Where Google states that its generative output is marked with SynthID. Kept as
  * the `statementRef` of the declarations below (a reference only, never fetched).
- *
- * The page is Google's public statement. It names the Gemini app and web
- * experience for text and generated images in general; it does not mention the
- * Gemini API by name. An operator who relies on the marking for API output should
- * point `statementRef` at Google's written confirmation instead (Code of
- * Practice on marking, 4.2).
  */
 export const GOOGLE_SYNTHID_STATEMENT_REF =
   'Google DeepMind, SynthID: https://deepmind.google/technologies/synthid/';

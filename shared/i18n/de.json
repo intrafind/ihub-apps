@@ -1885,7 +1885,7 @@
         "context": "Kontext",
         "targetId": "iHub-Modell-ID",
         "targetIdFor": "iHub-Modell-ID für {{name}}",
-        "markingHint": "Der Provider gibt an, die Ausgabe dieser Modelle als KI-generiert zu kennzeichnen. Jedes Modell wird deshalb mit dieser Angabe importiert (EU-KI-Verordnung, Art. 50). iHub kann sie nicht prüfen. Prüfen oder ersetzen Sie sie unter Modelle → Ausgabekennzeichnung.",
+        "markingHint": "Der Provider kennzeichnet die Ausgabe dieser Modelle als KI-generiert. Jedes Modell wird deshalb mit dieser Angabe importiert (EU-KI-Verordnung, Art. 50). Sie können sie unter Modelle → Ausgabekennzeichnung ändern.",
         "azureHint": "Azure listet die Modelle Ihrer Ressource, nicht Ihre Deployments. Geben Sie für jedes gewählte Modell den Namen des Deployments ein; er wird als Modellname gesendet.",
         "deploymentName": "Deployment-Name",
         "deploymentNameFor": "Deployment-Name für {{name}}",

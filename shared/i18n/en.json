@@ -1430,7 +1430,7 @@
         "context": "Context",
         "targetId": "iHub model ID",
         "targetIdFor": "iHub model ID for {{name}}",
-        "markingHint": "The provider says it marks the output of these models as AI generated, so each one is imported with that declaration (EU AI Act, Art. 50). iHub cannot check it. Review or replace it under Models → Output marking.",
+        "markingHint": "The provider marks the output of these models as AI generated, so each one is imported with that declaration (EU AI Act, Art. 50). You can change it under Models → Output marking.",
         "azureHint": "Azure lists the models your resource offers, not your deployments. Enter the name of the deployment for each model you pick; it is sent as the model name.",
         "deploymentName": "Deployment name",
         "deploymentNameFor": "Deployment name for {{name}}",

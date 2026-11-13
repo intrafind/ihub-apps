@@ -207,9 +207,8 @@ model by model:
   A marking you entered is never replaced. It starts ticked like any change, so read the list before you apply.
 
 iHub cannot detect SynthID, so the records say the provider declared it. The declaration points at
-Google's public SynthID page, which names the Gemini app and web experience for text, not the Gemini
-API. Replace the reference under **Admin → Models → Output marking** with Google's written
-confirmation for your contract before you rely on it. See [Models](../../models.md#filled-in-on-import-google).
+Google's public SynthID page and can be changed under **Admin → Models → Output marking**. The models of
+the iHub marketplace carry it too. See [Models](../../models.md#filled-in-on-import-google).
 
 ## Integrations: Install from a Catalog, Configure, Bind to Apps
 
