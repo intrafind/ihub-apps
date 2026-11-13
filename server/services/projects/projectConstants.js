@@ -136,3 +136,11 @@ export const MAX_MEMBERS = 100;
  * chat may declare (`shared/knowledgeModes.js`, one list for server and client).
  */
 export { KNOWLEDGE_MODES } from '../../../shared/knowledgeModes.js';
+
+/** Search indexes kept per process unless `projects.indexCache.maxEntries` says otherwise. */
+export const DEFAULT_INDEX_CACHE_ENTRIES = 32;
+/** Upper bound of `projects.indexCache.maxEntries`. */
+export const MAX_INDEX_CACHE_ENTRIES = 10000;
+/** Bounds of `projects.indexCache.maxHeapShare` and `projects.textCache.maxHeapShare`. */
+export const MIN_CACHE_HEAP_SHARE = 0.01;
+export const MAX_CACHE_HEAP_SHARE = 0.5;

@@ -7,7 +7,10 @@ import { SAFE_ID_PATTERN, isValidId } from '../utils/pathSecurity.js';
 import { MAX_ITEM_DESCRIPTION_CHARS, MAX_ITEM_TITLE_CHARS } from '../services/projects/itemInfo.js';
 import {
   KNOWLEDGE_MODES,
+  MAX_CACHE_HEAP_SHARE,
   MAX_FILES_CEILING,
+  MAX_INDEX_CACHE_ENTRIES,
+  MIN_CACHE_HEAP_SHARE,
   MAX_ATTACHED_PROJECTS,
   MAX_ITEM_TEXT_CHARS,
   MAX_MEMBERS,
@@ -608,7 +611,23 @@ export const projectSharingSettingsSchema = z
       .strict()
       .optional(),
     // The knowledge modes users may choose (#3538); `auto` is always offered.
-    knowledgeModes: z.array(knowledgeModeSchema).min(1).max(KNOWLEDGE_MODES.length).optional()
+    knowledgeModes: z.array(knowledgeModeSchema).min(1).max(KNOWLEDGE_MODES.length).optional(),
+    // Per-process caches (#3650). `maxHeapShare: null` goes back to the built-in budget.
+    indexCache: z
+      .object({
+        maxEntries: z.number().int().min(1).max(MAX_INDEX_CACHE_ENTRIES),
+        maxHeapShare: z.number().min(MIN_CACHE_HEAP_SHARE).max(MAX_CACHE_HEAP_SHARE).nullable()
+      })
+      .partial()
+      .strict()
+      .optional(),
+    textCache: z
+      .object({
+        maxHeapShare: z.number().min(MIN_CACHE_HEAP_SHARE).max(MAX_CACHE_HEAP_SHARE).nullable()
+      })
+      .partial()
+      .strict()
+      .optional()
   })
   .strict()
   .refine(
@@ -622,9 +641,11 @@ export const projectSharingSettingsSchema = z
       body.refreshIdleDays !== undefined ||
       body.refreshWaitSeconds !== undefined ||
       body.ingest !== undefined ||
+      body.indexCache !== undefined ||
+      body.textCache !== undefined ||
       body.knowledgeModes !== undefined,
     {
       message:
-        'Send sharing, tierPolicy, defaultAppId, limits, refreshTtl, refreshMode, refreshIdleDays, refreshWaitSeconds, ingest or knowledgeModes'
+        'Send sharing, tierPolicy, defaultAppId, limits, refreshTtl, refreshMode, refreshIdleDays, refreshWaitSeconds, ingest, indexCache, textCache or knowledgeModes'
     }
   );

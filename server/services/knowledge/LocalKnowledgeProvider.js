@@ -31,6 +31,8 @@ import { getProjectService } from '../projects/ProjectService.js';
 import { KnowledgeProvider } from './KnowledgeProvider.js';
 import { getItemText } from './ItemTextService.js';
 import { KnowledgeError, docOf, isUsable } from './types.js';
+import configCache from '../../configCache.js';
+import { projectSettings } from '../projects/projectSettings.js';
 import { searchIndexCacheChars } from '../../utils/cacheBudgets.js';
 import projectActivityTracker from '../../telemetry/ProjectActivityTracker.js';
 import {
@@ -44,9 +46,21 @@ import {
 /**
  * Corpus indexes kept per process, and the characters they may stand for
  * together — a share of this process's heap limit (utils/cacheBudgets.js).
+ * Both come from `platform.json` → `projects.indexCache` (#3650), read when the
+ * cache is used so the configuration need not be loaded at import time; absent,
+ * they are 32 entries and the built-in heap budget.
+ *
+ * @param {Object} [platformConfig] - Platform configuration; the loaded one by default
+ * @returns {{maxEntries: number, maxChars: number}}
  */
-const INDEX_CACHE_SIZE = 32;
-export const INDEX_CACHE_MAX_CHARS = searchIndexCacheChars();
+export function indexCacheLimits(platformConfig = configCache.getPlatform?.()) {
+  const { indexCache: settings } = projectSettings(platformConfig);
+  return {
+    maxEntries: settings.maxEntries,
+    maxChars: searchIndexCacheChars(undefined, settings.maxHeapShare)
+  };
+}
+
 const indexCache = new Map();
 
 function cachedChars() {
@@ -58,8 +72,7 @@ function cachedChars() {
 setIndexCacheSizeProbe(() => ({
   entries: indexCache.size,
   chars: cachedChars(),
-  maxEntries: INDEX_CACHE_SIZE,
-  maxChars: INDEX_CACHE_MAX_CHARS
+  ...indexCacheLimits()
 }));
 
 function cacheGet(key) {
@@ -72,8 +85,9 @@ function cacheGet(key) {
 
 function cacheSet(key, value) {
   indexCache.set(key, value);
+  const { maxEntries, maxChars } = indexCacheLimits();
   let evicted = 0;
-  while (indexCache.size > INDEX_CACHE_SIZE) {
+  while (indexCache.size > maxEntries) {
     indexCache.delete(indexCache.keys().next().value);
     evicted += 1;
   }
@@ -81,7 +95,7 @@ function cacheSet(key, value) {
   // weight too, dropping the oldest, never the entry just added.
   let weight = cachedChars();
   for (const oldest of [...indexCache.keys()]) {
-    if (weight <= INDEX_CACHE_MAX_CHARS || indexCache.size <= 1) break;
+    if (weight <= maxChars || indexCache.size <= 1) break;
     weight -= indexCache.get(oldest)?.characters || 0;
     indexCache.delete(oldest);
     evicted += 1;

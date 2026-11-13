@@ -26,6 +26,14 @@ import {
   refreshTtlLabel
 } from '../../projects/utils/refreshTtl';
 
+import {
+  cacheSettingsPatch,
+  HEAP_SHARE_PERCENT_RANGE,
+  INDEX_CACHE_ENTRIES_RANGE,
+  parsePercentShare,
+  shareToPercentText
+} from '../utils/cacheSettings';
+
 const NUMBER_INPUT_CLASS =
   'block w-32 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2';
 
@@ -102,11 +110,20 @@ const TIER_POLICIES = [
  *
  * @returns {JSX.Element|null}
  */
+function shareInputsOf(settings) {
+  return {
+    index: shareToPercentText(settings?.indexCache?.maxHeapShare),
+    text: shareToPercentText(settings?.textCache?.maxHeapShare)
+  };
+}
+
 function ProjectSharingSettingsPanel() {
   const { t } = useTranslation();
   const [stored, setStored] = useState(null);
   const [draft, setDraft] = useState(null);
   const [limitInputs, setLimitInputs] = useState({});
+  // The heap shares of the caches, as typed (percent; empty: built-in budget).
+  const [shareInputs, setShareInputs] = useState({ index: '', text: '' });
   const [forbidden, setForbidden] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -122,6 +139,7 @@ function ProjectSharingSettingsPanel() {
         setStored(settings);
         setDraft(settings);
         setLimitInputs(limitInputsOf(settings.limits));
+        setShareInputs(shareInputsOf(settings));
       })
       .catch(err => {
         if (!active) return;
@@ -147,7 +165,14 @@ function ProjectSharingSettingsPanel() {
   const limitsChanged = LIMIT_FIELDS.some(
     ({ key }) => limits.invalid.includes(key) || limits.values[key] !== stored.limits?.[key]
   );
-  const dirty = JSON.stringify(draft) !== JSON.stringify(stored) || limitsChanged;
+  const indexShare = parsePercentShare(shareInputs.index);
+  const textShare = parsePercentShare(shareInputs.text);
+  const sharesChanged =
+    (indexShare.valid ? indexShare.share : undefined) !==
+      (stored.indexCache?.maxHeapShare ?? null) ||
+    (textShare.valid ? textShare.share : undefined) !== (stored.textCache?.maxHeapShare ?? null);
+  const sharesInvalid = !indexShare.valid || !textShare.valid;
+  const dirty = JSON.stringify(draft) !== JSON.stringify(stored) || limitsChanged || sharesChanged;
   const updateLimit = (key, text) => {
     setLimitInputs(previous => ({ ...previous, [key]: text }));
     setSaved(false);
@@ -201,6 +226,20 @@ function ProjectSharingSettingsPanel() {
     setDraft(previous => ({ ...previous, refreshWaitSeconds: seconds }));
     setSaved(false);
   };
+  const updateShareInput = (key, text) => {
+    setShareInputs(previous => ({ ...previous, [key]: text }));
+    setSaved(false);
+  };
+  const updateIndexEntries = value => {
+    const maxEntries = parseWholeNumber(
+      value,
+      INDEX_CACHE_ENTRIES_RANGE.min,
+      INDEX_CACHE_ENTRIES_RANGE.max
+    );
+    if (maxEntries === null) return;
+    setDraft(previous => ({ ...previous, indexCache: { ...previous.indexCache, maxEntries } }));
+    setSaved(false);
+  };
   const updateIngest = (key, range, value) => {
     const number = parseWholeNumber(value, range.min, range.max);
     if (number === null) return;
@@ -221,6 +260,7 @@ function ProjectSharingSettingsPanel() {
         refreshIdleDays,
         refreshWaitSeconds,
         ingest,
+        indexCache,
         knowledgeModes
       } = draft;
       const ingestChanged = JSON.stringify(ingest) !== JSON.stringify(stored.ingest);
@@ -241,6 +281,7 @@ function ProjectSharingSettingsPanel() {
           ? { refreshWaitSeconds }
           : {}),
         ...(ingest && ingestChanged ? { ingest } : {}),
+        ...cacheSettingsPatch({ draftIndex: indexCache, stored, indexShare, textShare }),
         ...(limitsChanged ? { limits: limits.values } : {})
       });
       // The default app and the limits reach the project pages through the platform config.
@@ -255,6 +296,7 @@ function ProjectSharingSettingsPanel() {
       setStored(settings);
       setDraft(settings);
       setLimitInputs(limitInputsOf(settings.limits));
+      setShareInputs(shareInputsOf(settings));
       setSaved(true);
     } catch (err) {
       setError(getAdminApiErrorMessage(err));
@@ -475,6 +517,73 @@ function ProjectSharingSettingsPanel() {
             />
           </>
         )}
+        {draft.indexCache && (
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              {t('admin.projects.caches.legend', 'Memory of project search')}
+            </legend>
+            <NumberSetting
+              id="project-settings-index-entries"
+              label={t('admin.projects.caches.indexEntries.label', 'Search indexes kept in memory')}
+              help={t(
+                'admin.projects.caches.indexEntries.help',
+                'Per server process, one per project. A project whose index is not in memory is indexed again on its next question, which takes 60 to 90 ms of processing time for a large project. Raise it when many projects are in use at the same time.'
+              )}
+              value={draft.indexCache.maxEntries}
+              range={INDEX_CACHE_ENTRIES_RANGE}
+              onChange={updateIndexEntries}
+            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              {[
+                ['index', 'indexShare', 'Memory share of the search indexes (%)'],
+                ['text', 'textShare', 'Memory share of the cached document texts (%)']
+              ].map(([key, name, fallback]) => {
+                const id = `project-settings-${key}-share`;
+                const invalid = !(key === 'index' ? indexShare : textShare).valid;
+                return (
+                  <div key={key} className="space-y-1">
+                    <label htmlFor={id} className="block text-sm text-gray-700 dark:text-gray-300">
+                      {t(`admin.projects.caches.${name}.label`, fallback)}
+                    </label>
+                    <input
+                      id={id}
+                      type="number"
+                      inputMode="decimal"
+                      min={HEAP_SHARE_PERCENT_RANGE.min}
+                      max={HEAP_SHARE_PERCENT_RANGE.max}
+                      step="any"
+                      placeholder={t('admin.projects.caches.builtIn', 'Built-in')}
+                      value={shareInputs[key]}
+                      onChange={e => updateShareInput(key, e.target.value)}
+                      aria-invalid={invalid || undefined}
+                      aria-describedby={`${id}-help`}
+                      className="block w-full max-w-[12rem] rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2 aria-[invalid=true]:border-red-500"
+                    />
+                    <p id={`${id}-help`} className="text-xs text-gray-500 dark:text-gray-400">
+                      {invalid && (
+                        <span className="block text-red-600 dark:text-red-400">
+                          {t('admin.projects.caches.invalid', 'Enter 1 to 50, or leave empty.')}
+                        </span>
+                      )}
+                      {t(
+                        `admin.projects.caches.${name}.help`,
+                        key === 'index'
+                          ? "Share of the server process's memory the indexes may use. Empty: 10 %, at most about 135 MB."
+                          : "Share of the server process's memory the decrypted texts may use. Empty: 6 %, at most 96 MB."
+                      )}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {t(
+                'admin.projects.caches.hint',
+                'Each server process (worker) holds its own copy, so memory grows with the number of workers. A share you enter replaces the built-in maximum. Check the cache metrics before raising it.'
+              )}
+            </p>
+          </fieldset>
+        )}
         {Array.isArray(draft.knowledgeModes) && (
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -596,7 +705,7 @@ function ProjectSharingSettingsPanel() {
           <button
             type="button"
             onClick={save}
-            disabled={!dirty || saving || limits.invalid.length > 0}
+            disabled={!dirty || saving || limits.invalid.length > 0 || sharesInvalid}
             className="px-4 py-2 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
           >
             {t('common.save', 'Save')}

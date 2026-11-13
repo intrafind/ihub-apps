@@ -24,6 +24,14 @@ import {
   searchIndexCacheChars,
   sourceCacheBytes
 } from '../utils/cacheBudgets.js';
+import { projectSettings } from '../services/projects/projectSettings.js';
+import {
+  MAX_CACHE_HEAP_SHARE,
+  MAX_INDEX_CACHE_ENTRIES,
+  MIN_CACHE_HEAP_SHARE
+} from '../services/projects/projectConstants.js';
+import { platformConfigSchema } from '../validators/platformConfigSchema.js';
+import { indexCacheLimits as indexCacheLimitsFor } from '../services/knowledge/LocalKnowledgeProvider.js';
 import { BoundedSourceCache } from '../sources/boundedSourceCache.js';
 
 const MB = 1024 * 1024;
@@ -65,10 +73,10 @@ test('without an argument the budgets read this process’s heap limit', () => {
 
 test('the item text cache module holds to the budget of this process', async () => {
   const service = await import('../services/knowledge/ItemTextService.js');
-  assert.equal(service.ITEM_TEXT_CACHE_BYTES, itemTextCacheBytes());
+  assert.equal(service.textCacheBudgetBytes({}), itemTextCacheBytes());
 
   // Texts a third of the budget each (UTF-16): after four, the first is gone.
-  const chars = Math.floor(service.ITEM_TEXT_CACHE_BYTES / 2 / 3);
+  const chars = Math.floor(service.textCacheBudgetBytes() / 2 / 3);
   const reads = [];
   service.setTextReader(async (_project, item) => {
     reads.push(item.text.blobKey);
@@ -91,7 +99,101 @@ test('the item text cache module holds to the budget of this process', async () 
 
 test('the search index cache module uses the budget of this process', async () => {
   const provider = await import('../services/knowledge/LocalKnowledgeProvider.js');
-  assert.equal(provider.INDEX_CACHE_MAX_CHARS, searchIndexCacheChars());
+  assert.deepEqual(provider.indexCacheLimits({}), {
+    maxEntries: 32,
+    maxChars: searchIndexCacheChars()
+  });
+});
+
+test('an index character is budgeted at 4.5 bytes of heap (#3650)', () => {
+  assert.equal(INDEX_HEAP_BYTES_PER_CHAR, 4.5);
+  const worker = 716 * MB;
+  // 10 % of the heap, in characters at the measured cost.
+  assert.equal(
+    searchIndexCacheChars(worker),
+    Math.floor(Math.floor(worker * 0.1) / INDEX_HEAP_BYTES_PER_CHAR)
+  );
+  // Same ceiling in characters as before: 30 million.
+  assert.equal(searchIndexCacheChars(16 * 1024 * MB), 30_000_000);
+  assert.equal(SEARCH_INDEX_CACHE.max, 30_000_000 * 4.5);
+});
+
+test('a configured heap share replaces the share and the old ceiling, keeps the floor', () => {
+  const big = 16 * 1024 * MB;
+  assert.equal(searchIndexCacheChars(big, 0.1), Math.floor((big * 0.1) / 4.5));
+  assert.ok(searchIndexCacheChars(big, 0.1) > 30_000_000);
+  assert.equal(itemTextCacheBytes(big, 0.06), Math.floor(big * 0.06));
+  assert.equal(itemTextCacheBytes(64 * MB, 0.01), ITEM_TEXT_CACHE.min);
+  assert.equal(searchIndexCacheChars(undefined, null), searchIndexCacheChars());
+});
+
+test('projects.indexCache and textCache are read with fallbacks and clamped', () => {
+  const defaults = projectSettings({});
+  assert.deepEqual(defaults.indexCache, { maxEntries: 32, maxHeapShare: null });
+  assert.deepEqual(defaults.textCache, { maxHeapShare: null });
+  assert.deepEqual(
+    projectSettings({ projects: { indexCache: {} } }).indexCache,
+    defaults.indexCache
+  );
+
+  const set = projectSettings({
+    projects: {
+      indexCache: { maxEntries: 100, maxHeapShare: 0.2 },
+      textCache: { maxHeapShare: 0.1 }
+    }
+  });
+  assert.deepEqual(set.indexCache, { maxEntries: 100, maxHeapShare: 0.2 });
+  assert.deepEqual(set.textCache, { maxHeapShare: 0.1 });
+
+  const wild = projectSettings({
+    projects: {
+      indexCache: { maxEntries: 'many', maxHeapShare: 9 },
+      textCache: { maxHeapShare: 0 }
+    }
+  });
+  assert.equal(wild.indexCache.maxEntries, 32, 'a non-number falls back');
+  assert.equal(wild.indexCache.maxHeapShare, MAX_CACHE_HEAP_SHARE);
+  assert.equal(wild.textCache.maxHeapShare, MIN_CACHE_HEAP_SHARE);
+  assert.equal(
+    projectSettings({ projects: { indexCache: { maxEntries: 1e9 } } }).indexCache.maxEntries,
+    MAX_INDEX_CACHE_ENTRIES
+  );
+  assert.equal(
+    projectSettings({ projects: { indexCache: { maxEntries: -3 } } }).indexCache.maxEntries,
+    32
+  );
+
+  const provider = indexCacheLimitsFor({ projects: { indexCache: { maxEntries: 5 } } });
+  assert.equal(provider.maxEntries, 5);
+});
+
+test('platform schema validates the cache bounds', () => {
+  const parse = projects => platformConfigSchema.safeParse({ projects });
+  assert.ok(
+    parse({ indexCache: { maxEntries: 100, maxHeapShare: 0.2 }, textCache: { maxHeapShare: 0.1 } })
+      .success
+  );
+  assert.ok(parse({}).success, 'both blocks are optional');
+  for (const bad of [
+    { indexCache: { maxEntries: 0 } },
+    { indexCache: { maxEntries: 1.5 } },
+    { indexCache: { maxEntries: MAX_INDEX_CACHE_ENTRIES + 1 } },
+    { indexCache: { maxHeapShare: 0.9 } },
+    { indexCache: { maxHeapShare: 0 } },
+    { textCache: { maxHeapShare: 0.6 } },
+    { textCache: { maxHeapShare: 'half' } }
+  ]) {
+    assert.equal(parse(bad).success, false, JSON.stringify(bad));
+  }
+});
+
+test('the text cache holds to a configured share', async () => {
+  const service = await import('../services/knowledge/ItemTextService.js');
+  const heap = v8.getHeapStatistics().heap_size_limit;
+  assert.equal(
+    service.textCacheBudgetBytes({ projects: { textCache: { maxHeapShare: 0.2 } } }),
+    Math.max(ITEM_TEXT_CACHE.min, Math.floor(heap * 0.2))
+  );
 });
 
 test('the URL source cache evicts the oldest entries by count', () => {

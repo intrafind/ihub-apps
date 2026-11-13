@@ -6058,6 +6058,24 @@
       "convertConcurrency": {
         "label": "Gleichzeitig umgewandelte Dokumente",
         "help": "Pro Serverprozess: Uploads sowie geänderte Dateien und Webseiten werden so viele auf einmal in Text umgewandelt. Jede Umwandlung kann viel Speicher brauchen."
+      },
+      "caches": {
+        "legend": "Arbeitsspeicher der Projektsuche",
+        "indexEntries": {
+          "label": "Suchindizes im Arbeitsspeicher",
+          "help": "Pro Serverprozess, einer je Projekt. Ein Projekt, dessen Index nicht im Arbeitsspeicher liegt, wird bei der nächsten Frage neu indiziert; das dauert bei einem großen Projekt 60 bis 90 ms Rechenzeit. Erhöhen, wenn viele Projekte gleichzeitig genutzt werden."
+        },
+        "indexShare": {
+          "label": "Speicheranteil der Suchindizes (%)",
+          "help": "Anteil des Arbeitsspeichers des Serverprozesses, den die Indizes belegen dürfen. Leer: 10 %, höchstens etwa 135 MB."
+        },
+        "textShare": {
+          "label": "Speicheranteil der zwischengespeicherten Dokumenttexte (%)",
+          "help": "Anteil des Arbeitsspeichers des Serverprozesses, den die entschlüsselten Texte belegen dürfen. Leer: 6 %, höchstens 96 MB."
+        },
+        "builtIn": "Standard",
+        "invalid": "1 bis 50 eingeben oder leer lassen.",
+        "hint": "Jeder Serverprozess (Worker) hält eine eigene Kopie, der Speicherbedarf wächst also mit der Zahl der Worker. Ein eingegebener Anteil ersetzt das eingebaute Maximum. Vor dem Erhöhen die Cache-Kennzahlen prüfen."
       }
     },
     "updates": {

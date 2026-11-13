@@ -45,13 +45,19 @@ import {
   normalizeRefreshTtl
 } from './refreshTtl.js';
 import {
+  DEFAULT_INDEX_CACHE_ENTRIES,
+  MAX_CACHE_HEAP_SHARE,
   MAX_FILES_CEILING,
+  MAX_INDEX_CACHE_ENTRIES,
   MAX_MEMBERS,
+  MIN_CACHE_HEAP_SHARE,
   PROJECT_TIERS,
   TIER_POLICIES
 } from './projectConstants.js';
 
 export { MAX_FILES_CEILING, MAX_MEMBERS, PROJECT_TIERS, TIER_POLICIES };
+
+export { DEFAULT_INDEX_CACHE_ENTRIES };
 
 /** Built-in `platform.projects` values. */
 export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
@@ -191,8 +197,28 @@ export function projectSettings(platformConfig) {
       timeoutMs: readPositive(block.scan?.timeoutMs, defaults.scan.timeoutMs),
       onError: block.scan?.onError === 'allow' ? 'allow' : 'reject'
     },
-    ingest: ingestSettings(block.ingest, defaults.ingest)
+    ingest: ingestSettings(block.ingest, defaults.ingest),
+    indexCache: {
+      maxEntries: Math.min(
+        MAX_INDEX_CACHE_ENTRIES,
+        readPositive(block.indexCache?.maxEntries, DEFAULT_INDEX_CACHE_ENTRIES)
+      ),
+      maxHeapShare: readHeapShare(block.indexCache?.maxHeapShare)
+    },
+    textCache: { maxHeapShare: readHeapShare(block.textCache?.maxHeapShare) }
   };
+}
+
+/**
+ * A configured heap share inside `[MIN_CACHE_HEAP_SHARE, MAX_CACHE_HEAP_SHARE]`,
+ * or `null` when none is set (the built-in budget with its old ceiling applies).
+ * A value outside the range is clamped, a non-number is ignored.
+ */
+function readHeapShare(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.min(MAX_CACHE_HEAP_SHARE, Math.max(MIN_CACHE_HEAP_SHARE, parsed));
 }
 
 /**
