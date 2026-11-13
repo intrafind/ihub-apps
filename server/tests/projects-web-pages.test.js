@@ -361,6 +361,9 @@ describe('a web page is a stored snapshot', () => {
     const ingest = getIngestService();
     const settings = projectSettings(platform);
     assert.equal(refreshScheduleOf(first, project, settings).scheduled, true);
+    // The stored item can settle before its job leaves the worker's active set, and a busy
+    // item is not refreshed: wait for the job to be gone before asking for a refresh.
+    await waitFor(() => !ingest.isActive(item.id));
 
     seen.length = 0;
     const current = await getProjectRepository().get(project.id);

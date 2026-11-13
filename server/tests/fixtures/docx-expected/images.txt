@@ -1,0 +1,3 @@
+Before image [Image: Alt text 1] after.
+
+[Image: Alt text 2]

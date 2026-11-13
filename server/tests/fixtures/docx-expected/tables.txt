@@ -1,0 +1,12 @@
+Before
+
+| Head A | Head B |
+| --- | --- |
+| a1 | b1 \| pipe |
+| a2 | b2 |
+
+| Merged |  |
+| --- | --- |
+| x | y |
+
+After
