@@ -17,11 +17,11 @@
  *    `activityScope` on `tool/started`, see server `utils/toolDisplay.js`):
  *    nothing here infers it from the tool id. Clarifications (`ask_user`) and
  *    chat-launched workflows are left out: each has its own UI.
- *  - `tool/progress{skill.activation}` frames: one `skill` row per activation,
- *    placed among the tool calls by time, saying who brought the skill in (the
- *    user with `/name`, the app, the model, or an earlier message of the chat). The `activate_skill` call itself is not a
- *    row, so a skill the model loads twice shows twice here but only once in
- *    `run.skills`, the set the message header lists.
+ *  - `tool/progress{skill.activation}` frames: one `skill` row per distinct
+ *    skill (`foldSkillItems`), placed among the tool calls by time at its first
+ *    activation, saying who brought it in (the user with `/name`, the app, the
+ *    model, or an earlier message of the chat; the earliest and most explicit
+ *    route wins). The `activate_skill` call itself is not a row.
  *  - provider-run web search (Google Search grounding, Anthropic web search):
  *    the queries the provider reports on the grounding metadata
  *    (`webSearchQueries`). Its sources are listed in the sources panel.
@@ -272,6 +272,38 @@ function mergeSkillRows(toolRows, skills) {
   return rows;
 }
 
+/**
+ * One row per distinct skill, at its first position: a skill the model loads
+ * twice, or one that came in by two routes (`/name`, then the model), is one
+ * row saying the earliest and most explicit route (`SKILL_ACTIVATORS`: user,
+ * app, model, chat). Rows of stored chats may repeat a skill; this folds those
+ * too. Every other row is kept as it is.
+ *
+ * @param {Array<Object>} items - rows of `buildToolActivity`
+ * @returns {Array<Object>}
+ */
+export function foldSkillItems(items) {
+  const first = new Map();
+  const out = [];
+  for (const item of items) {
+    if (item.kind !== 'skill') {
+      out.push(item);
+      continue;
+    }
+    const key = item.skillId || item.name;
+    const known = first.get(key);
+    if (!known) {
+      const copy = { ...item };
+      first.set(key, copy);
+      out.push(copy);
+      continue;
+    }
+    const rank = by => (SKILL_ACTIVATORS.includes(by) ? SKILL_ACTIVATORS.indexOf(by) : Infinity);
+    if (rank(item.activatedBy) < rank(known.activatedBy)) known.activatedBy = item.activatedBy;
+  }
+  return out;
+}
+
 /** Whether an interaction of the run waits for the user to decide about this call. */
 function hasPendingApproval(run, callId) {
   return Object.values(run.interactions || {}).some(
@@ -508,7 +540,7 @@ export function buildToolActivity(run) {
   const toolRows = callsInOrder(run)
     .map(call => callRow(run, call, finished))
     .filter(Boolean);
-  const items = mergeSkillRows(toolRows, skillRows(run)).map(row => row.item);
+  const items = foldSkillItems(mergeSkillRows(toolRows, skillRows(run)).map(row => row.item));
   const native = nativeSearchRow(run, finished);
   if (native) items.push(native);
 

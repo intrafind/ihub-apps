@@ -8,12 +8,15 @@
  * (`ToolActivity`), the three-dot loader in `ChatMessage` and the screen-reader
  * announcer all read the same answers from here, so they cannot disagree.
  *
- * Nothing here infers what a call is from its tool id: a row is what the
- * server said it is (`activityKind`, `outputKind`, the title).
+ * Nothing here infers what a call is from its tool id, a provider or the old
+ * `scope`: a row is what the server said it is (`activityKind`, `activityOrigin`
+ * as `origin`, `outputKind`, the title), and a row it said nothing about is
+ * worded generically.
  *
  * @module features/chat/activityHeadline
  */
 import { hostnameOf } from '../../../../shared/run/groundingSources.js';
+import { KIND_ICON, MAX_NAMED_KINDS } from './components/answerBasisModel';
 
 /** `outputKind` the server sends, to the string key and English default of its noun. */
 const OUTPUT_NOUNS = {
@@ -29,8 +32,8 @@ const OUTPUT_NOUNS = {
 /** `outputKind` to the glyph of a finished row; the server chooses the kind, the client only draws it. */
 const OUTPUT_GLYPHS = {
   webArtifact: 'code-bracket',
-  document: 'document-text',
-  pdf: 'document-text',
+  document: 'document-plus',
+  pdf: 'document-plus',
   presentation: 'presentation-chart-bar',
   workbook: 'table-cells',
   archive: 'archive-box',
@@ -169,37 +172,294 @@ export function stripEllipsis(text) {
   return plain.trim();
 }
 
-/** Sources read, by scope — a document shows up on its search hit and on the read that fetched it. */
-function countRead(items, scope) {
-  const keys = items
-    .filter(item => (item.scope === 'documents') === (scope === 'documents'))
-    .flatMap(item => item.sources.filter(source => source.read?.ok).map(source => source.id));
-  return new Set(keys).size;
+/** The origins that have phrases of their own (`toolActivity.origin.<origin>.*`); an integration is named by its label. */
+const PHRASED_ORIGINS = ['web', 'project', 'ifinder', 'iassistant', 'documents'];
+
+/** The origin of a row when it has phrases of its own, else null (older server, unclassified call). */
+function phrasedOrigin(item) {
+  return PHRASED_ORIGINS.includes(item?.origin) ? item.origin : null;
 }
 
-function countSources(items) {
-  return new Set(items.flatMap(item => item.sources.map(source => source.id))).size;
+/** The icon of a row's origin (the footer's glyph for the kind), or null. */
+export function originIconOf(item) {
+  return item?.origin ? KIND_ICON[item.origin] || null : null;
 }
 
-/** "Searching for “query”", or what kind of search it is when its query is not known. */
+/**
+ * The noun of an origin, as the footer says it: "Web", "Project", "Document
+ * sources", and for a connected system its own label ("Jira").
+ */
+export function originNounOf(t, item) {
+  if (item.origin === 'integration') {
+    return item.integration || t('chatMessage.answerBasis.kind.integration');
+  }
+  if (item.origin === 'documents') return t('toolActivity.originDocuments');
+  return t(`chatMessage.answerBasis.kind.${item.origin}`);
+}
+
+/** "Searching the web for “q”", "Searching the project…"; generic when the origin is unknown. */
 function searchLabel(t, item) {
   const query = item.query || item.queries?.[item.queries.length - 1];
-  if (query) return t('toolActivity.searchingFor', 'Searching for “{{query}}”', { query });
-  return item.scope === 'documents'
-    ? t('toolActivity.searchingDocuments', 'Searching documents…')
-    : t('toolActivity.searching', 'Searching the web…');
+  const origin = phrasedOrigin(item);
+  if (origin) {
+    return query
+      ? t(`toolActivity.origin.${origin}.searchingFor`, { query })
+      : t(`toolActivity.origin.${origin}.searching`);
+  }
+  return query
+    ? t('toolActivity.searchingFor', 'Searching for “{{query}}”', { query })
+    : t('toolActivity.searchingGeneric');
 }
 
-/** "Reading “title”" for a document, "Reading host" for a page. */
+/** "Opening host" for a web page, "Opening “title”" for a document; generic when not yet known. */
 function fetchLabel(t, item) {
-  if (item.scope === 'documents') {
-    return item.title
-      ? t('toolActivity.readingDocument', 'Reading “{{title}}”', { title: item.title })
-      : t('toolActivity.readingDocuments', 'Reading documents…');
+  const origin = phrasedOrigin(item);
+  const host = item.url ? hostnameOf(item.url) : null;
+  if (origin === 'web' && host) return t('toolActivity.origin.web.opening', { host });
+  if (origin && origin !== 'web' && item.title) {
+    return t(`toolActivity.origin.${origin}.opening`, { title: item.title });
   }
-  return item.url
-    ? t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(item.url) })
-    : t('toolActivity.searching', 'Searching the web…');
+  if (!origin && host) return t('toolActivity.openingHost', { host });
+  return t('toolActivity.openingGeneric');
+}
+
+/**
+ * The phrase of a finished or running search row, before its query chip:
+ * "Searched the project for". Generic ("Searched for") when the server named no origin.
+ */
+export function searchRowPhrase(t, item) {
+  const origin = phrasedOrigin(item);
+  const running = item.status === 'running';
+  if (!origin) return t('toolActivity.searchedFor', 'Searched for');
+  return t(`toolActivity.origin.${origin}.${running ? 'rowSearching' : 'rowSearched'}`);
+}
+
+/** The phrase of a page or document read row: "Opened web page", "Web page returned no text", "Opening…". */
+export function openRowPhrase(t, item) {
+  const origin = phrasedOrigin(item);
+  if (item.limitReached) return t('toolActivity.notOpened');
+  const running = item.status === 'running';
+  if (!origin) return running ? t('toolActivity.openingGeneric') : t('toolActivity.openedGeneric');
+  if (running) return t(`toolActivity.origin.${origin}.rowOpening`);
+  if (item.readOutcome === 'empty') return t(`toolActivity.origin.${origin}.rowOpenedEmpty`);
+  return t(`toolActivity.origin.${origin}.rowOpened`);
+}
+
+/**
+ * Whether a read counts as opened: it completed, did not hit the page-read
+ * limit, the source did not report `read.ok === false`, and the server did not
+ * declare that it delivered no text (`readOutcome: 'empty'`).
+ */
+export function isOpened(item) {
+  return (
+    item.kind === 'fetch' &&
+    item.status === 'completed' &&
+    !item.limitReached &&
+    item.readOutcome !== 'empty' &&
+    item.sources?.[0]?.read?.ok !== false
+  );
+}
+
+/** The reason a skill is in the answer, in words, or null when the actor is unknown. */
+export function skillReasonOf(t, activatedBy) {
+  const key = {
+    user: 'skillByUser',
+    app: 'skillByApp',
+    model: 'skillByModel',
+    chat: 'skillByChat'
+  }[activatedBy];
+  return key ? t(`toolActivity.${key}`) : null;
+}
+
+/** Facts of one origin's searches: how many results, whether the server declared none. */
+function resultFacts(searches) {
+  const sourceIds = new Set(searches.flatMap(item => item.sources.map(source => source.id)));
+  const declared = searches.reduce((sum, item) => sum + (item.resultCount || 0), 0);
+  const results = sourceIds.size || declared;
+  const queryCount = searches.reduce(
+    (sum, item) => sum + (item.native ? item.queries.length : 1),
+    0
+  );
+  return { results, queryCount };
+}
+
+/**
+ * The facts of one segment: results (or a declared "no results"), searches
+ * (only from two on), opened, calls, failed, and the provider last.
+ */
+function factsOf(t, group, { alwaysCountSearches = false } = {}) {
+  const searches = group.filter(item => item.kind === 'search');
+  const opened = group.filter(item => isOpened(item)).length;
+  const calls = group.filter(item => item.kind === 'tool').length;
+  const failed = group.filter(item => item.status === 'error').length;
+  const { results, queryCount } = resultFacts(searches);
+  const facts = [];
+  // A server-declared zero is the only "no results": an empty list is not.
+  const declaredEmpty =
+    searches.length > 0 &&
+    results === 0 &&
+    failed === 0 &&
+    searches.every(item => item.resultCount === 0);
+  if (results > 0)
+    facts.push({ key: 'results', text: t('toolActivity.results', { count: results }) });
+  else if (declaredEmpty) {
+    facts.push({ key: 'noResults', text: t('toolActivity.noResults'), tone: 'empty' });
+  }
+  if (searches.length && (queryCount >= 2 || alwaysCountSearches)) {
+    facts.push({ key: 'searches', text: t('toolActivity.searches', { count: queryCount }) });
+  }
+  if (opened) facts.push({ key: 'opened', text: t('toolActivity.openedCount', { count: opened }) });
+  if (calls) facts.push({ key: 'calls', text: t('toolActivity.calls', { count: calls }) });
+  if (failed) {
+    facts.push({
+      key: 'failed',
+      text: t('toolActivity.failedCount', { count: failed }),
+      tone: 'failed'
+    });
+  }
+  const providers = [
+    ...new Set(
+      group
+        .filter(item => item.kind !== 'tool')
+        .map(item => item.integration)
+        .filter(Boolean)
+    )
+  ];
+  if (providers.length) {
+    facts.push({
+      key: 'via',
+      text: t('toolActivity.via', { name: providers.join(', ') }),
+      tone: 'provider'
+    });
+  }
+  return facts;
+}
+
+/** What the calls that made something made, and how they ended: "Created web artifact", "Failed", "Stopped". */
+function outputSegments(t, items) {
+  const made = items.filter(item => hasOutputKind(item));
+  const segments = [];
+  for (const kind of new Set(made.map(item => item.outputKind))) {
+    if (made.some(item => item.outputKind === kind && item.status === 'completed')) {
+      segments.push({
+        key: `output:${kind}`,
+        type: 'output',
+        icon: OUTPUT_GLYPHS[kind] || 'wrench',
+        noun: createdLabel(t, outputNounOf(t, kind)),
+        facts: []
+      });
+    }
+  }
+  const failed = made.some(item => item.status === 'error');
+  const stopped = made.some(item => item.status === 'stopped');
+  if (failed || stopped) {
+    segments.push({
+      key: 'output:status',
+      type: 'output',
+      icon: failed ? 'exclamation-circle' : 'wrench',
+      noun: failed ? failedLabel(t) : stoppedLabel(t),
+      tone: failed ? 'failed' : null,
+      facts: []
+    });
+  }
+  return segments;
+}
+
+/** The skills of the turn, once each, as segments: one each up to two, then one names-only segment. */
+function skillSegments(t, items) {
+  const skills = items.filter(item => item.kind === 'skill');
+  if (skills.length === 0) return [];
+  if (skills.length >= 3) {
+    return [
+      {
+        key: 'skills',
+        type: 'skills',
+        icon: 'academic-cap',
+        names: skills.map(skill => skill.name),
+        facts: []
+      }
+    ];
+  }
+  return skills.map(skill => ({
+    key: `skill:${skill.skillId || skill.name}`,
+    type: 'skill',
+    icon: 'academic-cap',
+    name: skill.name,
+    reason: skillReasonOf(t, skill.activatedBy),
+    facts: []
+  }));
+}
+
+/**
+ * The segments of the finished headline, one per place the turn looked, in the
+ * order it first looked there: skills first (not origins, so they never count
+ * against the limit of named origins), then one segment per origin with its own
+ * facts, a neutral one for rows the server said nothing about, then what the
+ * turn made. Counts belong to their segment only.
+ *
+ * @param {Function} t
+ * @param {Object[]} items - rows of `buildToolActivity`
+ * @returns {{segments: Object[], named: Object[], more: Object[]}}
+ *   `named` are the origin and neutral segments shown, `more` the ones the
+ *   `+N` stands for; `segments` is the whole headline in order
+ */
+export function headlineSegments(t, items) {
+  const groups = new Map();
+  const place = (key, item, meta) => {
+    if (!groups.has(key)) groups.set(key, { ...meta, items: [] });
+    groups.get(key).items.push(item);
+  };
+  for (const item of items) {
+    if (item.kind === 'skill' || hasOutputKind(item)) continue;
+    if (item.origin) {
+      const key =
+        item.origin === 'integration' ? `integration:${item.integration || ''}` : item.origin;
+      place(key, item, { type: 'origin', origin: item.origin, sample: item });
+    } else {
+      place('neutral', item, { type: 'neutral' });
+    }
+  }
+  const origins = [...groups.entries()].map(([key, group]) => {
+    if (group.type === 'neutral') {
+      return {
+        key,
+        type: 'neutral',
+        icon: null,
+        noun: null,
+        facts: factsOf(t, group.items, { alwaysCountSearches: true })
+      };
+    }
+    return {
+      key,
+      type: 'origin',
+      origin: group.origin,
+      icon: originIconOf(group.sample),
+      noun: originNounOf(t, group.sample),
+      // A connected system is named by its label already; its calls carry no provider.
+      facts: factsOf(t, group.items)
+    };
+  });
+  const named = origins.slice(0, MAX_NAMED_KINDS);
+  const more = origins.slice(MAX_NAMED_KINDS);
+  return {
+    segments: [...skillSegments(t, items), ...named, ...outputSegments(t, items)],
+    named,
+    more
+  };
+}
+
+/** A segment as plain text: "Web 5 results · 3 opened · via Brave Search". */
+export function segmentText(t, segment) {
+  const facts = segment.facts.map(fact => fact.text).join(' · ');
+  if (segment.type === 'skill') {
+    return [`${t('toolActivity.skillLabel')} ${segment.name}`, segment.reason]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  if (segment.type === 'skills') {
+    return `${t('toolActivity.skillsLabel')} ${segment.names.join(', ')}`;
+  }
+  return [segment.noun, facts].filter(Boolean).join(' ');
 }
 
 /**
@@ -217,7 +477,7 @@ export function activeLabel(t, item, reading = null) {
   if (item?.status === 'preparing') {
     return t('toolActivity.preparingTool', 'Preparing {{name}}…', { name: item.name });
   }
-  if (reading) return t('toolActivity.reading', 'Reading {{host}}', { host: hostnameOf(reading) });
+  if (reading) return t('toolActivity.openingHost', { host: hostnameOf(reading) });
   if (item?.kind === 'search') return searchLabel(t, item);
   if (item?.kind === 'fetch') return fetchLabel(t, item);
   if (item?.integration) {
@@ -236,111 +496,16 @@ export function runningHeadline(t, items, reading) {
   return activeLabel(t, current, reading);
 }
 
-/** "Searched the web · 1 search · 5 results", or what was read when the turn only read. */
-function searchedParts(t, items, searches) {
-  const parts = [];
-  if (!searches.length) {
-    const fetches = items.filter(item => item.kind === 'fetch');
-    if (fetches.some(item => item.scope !== 'documents')) {
-      parts.push(t('toolActivity.readWeb', 'Read the web'));
-    }
-    if (fetches.some(item => item.scope === 'documents')) {
-      parts.push(t('toolActivity.readDocuments', 'Read documents'));
-    }
-    return parts;
-  }
-  if (searches.some(item => item.scope !== 'documents')) {
-    parts.push(t('toolActivity.searchedWeb', 'Searched the web'));
-  }
-  if (searches.some(item => item.scope === 'documents')) {
-    parts.push(t('toolActivity.searchedDocuments', 'Searched documents'));
-  }
-  const queryCount = searches.reduce(
-    (sum, item) => sum + (item.native ? item.queries.length : 1),
-    0
-  );
-  parts.push(t('toolActivity.searches', { count: queryCount }));
-  // Results, not sources: only what the answer cites is a source of it.
-  const results = countSources(items);
-  if (results) parts.push(t('toolActivity.results', { count: results }));
-  return parts;
-}
-
-/** "1 page read", "2 documents read". */
-function readParts(t, items) {
-  const parts = [];
-  const pagesRead = countRead(items, 'web');
-  if (pagesRead) parts.push(t('toolActivity.pagesRead', { count: pagesRead }));
-  const documentsRead = countRead(items, 'documents');
-  if (documentsRead) parts.push(t('toolActivity.documentsRead', { count: documentsRead }));
-  return parts;
-}
-
-/** What the calls that made something made, and how they ended: "Created web artifact · Stopped". */
-function madeParts(t, items) {
-  const made = items.filter(item => hasOutputKind(item));
-  const parts = [];
-  for (const kind of new Set(made.map(item => item.outputKind))) {
-    if (made.some(item => item.outputKind === kind && item.status === 'completed')) {
-      parts.push(createdLabel(t, outputNounOf(t, kind)));
-    }
-  }
-  if (made.some(item => item.status === 'error')) parts.push(failedLabel(t));
-  if (made.some(item => item.status === 'stopped')) parts.push(stoppedLabel(t));
-  return parts;
-}
-
 /**
- * The summary of what the turn did: "Searched the web · 1 search · 5 results ·
- * Created web artifact". A call that made something is named by what it made
- * and how it ended, not counted as a tool call: "1 tool call" says nothing
- * about the thing the user asked for, and a stopped or failed turn must not
- * read like success.
+ * The summary of what the turn did as one plain string (the segments of
+ * {@link headlineSegments} joined): "Web 5 results · via Brave Search  Project
+ * no results". The component draws the segments themselves.
  */
-export function finishedHeadline(t, items, searches) {
-  const parts = [...searchedParts(t, items, searches), ...readParts(t, items)];
-  // Distinct skills: one that was activated twice is still one skill.
-  const skills = new Set(
-    items.filter(item => item.kind === 'skill').map(item => item.skillId || item.name)
-  ).size;
-  if (skills) parts.push(t('toolActivity.skills', { count: skills }));
-  const others = items.filter(item => item.kind === 'tool' && !hasOutputKind(item));
-  if (others.length) parts.push(t('toolActivity.toolCalls', { count: others.length }));
-  parts.push(...madeParts(t, items));
-  // The systems the turn asked, so the summary says where the answer came from.
-  const integrations = [...new Set(items.map(item => item.integration).filter(Boolean))];
-  if (integrations.length) parts.push(integrations.join(', '));
-  return parts.join(' · ');
-}
-
-/**
- * The icon of the summary line: what the turn made, a failure of it, or where
- * it looked.
- *
- * @returns {{name: string, failed: boolean}}
- */
-export function summaryIconOf(items) {
-  const made = items.filter(item => hasOutputKind(item));
-  if (made.some(item => item.status === 'error')) {
-    return { name: 'exclamation-circle', failed: true };
-  }
-  if (items.length && made.length === items.length) {
-    return { name: outputGlyphOf(made[made.length - 1], 'wrench'), failed: false };
-  }
-  return { name: lookedAtIcon(items), failed: false };
-}
-
-/**
- * The icon of a turn that made nothing: where it looked. Skill and plain tool
- * rows do not say where the turn looked, so they do not decide the icon
- * between the web and the organisation's documents.
- */
-function lookedAtIcon(items) {
-  if (items.every(item => item.kind === 'skill')) return 'sparkles';
-  const isPlain = item => item.kind === 'tool' || item.kind === 'skill';
-  if (items.every(item => isPlain(item))) return 'wrench';
-  const onlyDocuments = items.every(item => isPlain(item) || item.scope === 'documents');
-  return onlyDocuments ? 'document-text' : 'globe-alt';
+export function finishedHeadline(t, items) {
+  const { segments, more } = headlineSegments(t, items);
+  const text = segments.map(segment => segmentText(t, segment));
+  if (more.length) text.push(t('chatMessage.answerBasis.more', { count: more.length }));
+  return text.join('  ');
 }
 
 const lastWhere = (list, matches) => [...list].reverse().find(item => matches(item)) || null;
@@ -416,7 +581,6 @@ export function isActivityLineBusy(activity, loading) {
 export function headlineOf(t, activity, loading) {
   const items = activity?.items || [];
   const headline = headlineModeOf(activity, loading);
-  const searches = items.filter(item => item.kind === 'search');
   let label;
   switch (headline.mode) {
     case 'awaiting':
@@ -432,7 +596,7 @@ export function headlineOf(t, activity, loading) {
       label = idleLabel(t, activity.idle.kind, activity.idle);
       break;
     default:
-      label = finishedHeadline(t, items, searches);
+      label = finishedHeadline(t, items);
   }
   return { ...headline, label };
 }

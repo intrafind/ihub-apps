@@ -234,8 +234,8 @@ URLs" or a list of sources: the chat lists them.
 
 ### Sources and Citations
 
-How the answer searched stays above it: **Searched the web · 2 searches · 10 results · 3 pages
-read**, which unfolds into each search and the pages it read. Everything about the sources is at
+How the answer searched stays above it, one segment per place it looked: **Web 10 results · 3
+opened · via Brave Search**, which unfolds into each search and the pages it opened. Everything about the sources is at
 the answer's end: the list of the sources it cites, then one row with an **N results** entry, with
 the icons of the sites it found, and the **Based on web search** badge. *Results*, not *sources*:
 the count includes everything the searches found, and only what the answer cites is a source of
