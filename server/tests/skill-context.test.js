@@ -335,6 +335,42 @@ describe('skills stay active across a chat', () => {
     ]);
   });
 
+  test('a skill kept from an earlier message does not change which skill reads as the newest', () => {
+    // Turn 1 `/a`, turn 2 `/b`: turn 2 records [b, a] (its own first, then the
+    // carried one as 'chat'); turn 3 must still read b as newer than a.
+    const history = [
+      user('/a start'),
+      answer('ok', [{ name: 'a', id: 'a', activatedBy: 'user' }]),
+      user('/b next'),
+      answer('ok', [
+        { name: 'b', id: 'b', activatedBy: 'user' },
+        { name: 'a', id: 'a', activatedBy: 'chat' }
+      ]),
+      user('and now')
+    ];
+    const refs = skillAccess.earlierSkillRefs(history);
+    assert.deepEqual(
+      refs.filter(ref => ref.id).map(ref => ref.id),
+      ['b', 'a']
+    );
+    // Reading it back again after another carried turn gives the same order.
+    const longer = [
+      ...history,
+      answer('ok', [
+        { name: 'b', id: 'b', activatedBy: 'chat' },
+        { name: 'a', id: 'a', activatedBy: 'chat' }
+      ]),
+      user('once more')
+    ];
+    assert.deepEqual(
+      skillAccess
+        .earlierSkillRefs(longer)
+        .filter(ref => ref.id)
+        .map(ref => ref.id),
+      ['b', 'a']
+    );
+  });
+
   test('a skill only users may start stays active only when a user started it', async () => {
     const turn = activatedBy =>
       systemPromptFor([
