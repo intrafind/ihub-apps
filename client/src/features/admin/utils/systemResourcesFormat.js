@@ -54,6 +54,51 @@ export function formatPercent(value) {
   return `${Math.round(value * 10) / 10}%`;
 }
 
+/** Heap bytes one indexed character costs (server `utils/cacheBudgets.js` assumes the same). */
+export const INDEX_BYTES_PER_CHAR = 4.5;
+
+/**
+ * A count with thousands separators, or an em dash when unknown.
+ *
+ * @param {number|null} value
+ * @returns {string}
+ */
+export function formatCount(value) {
+  if (!Number.isFinite(value)) return '—';
+  return Math.round(value).toLocaleString();
+}
+
+/**
+ * Memory a search index over `chars` characters of text needs.
+ *
+ * @param {number} chars
+ * @returns {number|null}
+ */
+export function estimateIndexBytes(chars) {
+  return Number.isFinite(chars) ? chars * INDEX_BYTES_PER_CHAR : null;
+}
+
+/**
+ * Index-cache hit rate (0-1) as a percentage, or an em dash before any lookup.
+ *
+ * @param {number|null} hitRate
+ * @returns {string}
+ */
+export function formatHitRate(hitRate) {
+  return Number.isFinite(hitRate) ? formatPercent(hitRate * 100) : '—';
+}
+
+/**
+ * The index-cache capacity (characters) of one worker: the largest any process
+ * reports, since every worker has its own cache of the same size.
+ *
+ * @param {Array<{indexCache?: {maxChars?: number}}>} processes
+ * @returns {number}
+ */
+export function indexCacheCapacityChars(processes = []) {
+  return processes.reduce((max, proc) => Math.max(max, proc?.indexCache?.maxChars || 0), 0);
+}
+
 /** Tailwind classes per storage status, shared by the page and the Overview. */
 export const STORAGE_STATUS_STYLES = {
   ok: {

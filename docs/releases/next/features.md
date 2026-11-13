@@ -8,6 +8,7 @@ projects used by a chat turn or a knowledge tool in the last 5, 15 and 60 minute
 `ihub.knowledge.index.cache.{hits,misses,evictions,entries,chars}`, `ihub.knowledge.index.build.duration` and
 `ihub.extraction.duration` per file format. The same numbers are part of `GET /api/admin/system/resources`
 (`workingSet`, `knowledge.indexCache`, and `indexCache` per process), which the load-test harness samples.
+Admin → System resources shows them in a new "Project knowledge" section: the working set per window next to the cache hit rate, with a warning when the last 15 minutes of projects outgrow one worker's cache.
 
 In cluster mode, `ihub.active.users`, `ihub.active.chats` and the project working set are now the union
 across all workers of a pod (each user or project once) instead of one worker's share. Every worker reports the

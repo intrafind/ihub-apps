@@ -2641,6 +2641,26 @@
         "delay": "{{mean}} ms (max {{max}})",
         "missing": "Did not respond. The worker may be restarting or overloaded.",
         "missingAlert": "{{count}} of {{total}} workers did not report back."
+      },
+      "knowledge": {
+        "title": "Project knowledge",
+        "description": "Projects used by a chat turn or a knowledge tool lately, counted once across all workers, and how the search-index cache copes. Use it to size the cache.",
+        "exceedsCache": "The projects used in the last {{minutes}} minutes hold more text ({{working}} characters) than one worker caches ({{capacity}}). Expect cache misses and index rebuilds; every worker keeps its own cache.",
+        "workingSet": "Active projects",
+        "window": "Last",
+        "projects": "Projects",
+        "chars": "Text (characters)",
+        "indexMemory": "Index memory needed",
+        "minutes": "{{count}} min",
+        "indexCache": "Search-index cache",
+        "hitRate": "Hit rate",
+        "hits": "Hits",
+        "misses": "Misses (index builds)",
+        "evictions": "Evictions",
+        "entries": "Indexes cached",
+        "cachedChars": "Cached text",
+        "characters": "{{count}} characters",
+        "capacity": "Each worker caches at most {{chars}} characters (about {{bytes}} of memory). Totals above add up all workers since they started."
       }
     },
     "storageAlert": {
