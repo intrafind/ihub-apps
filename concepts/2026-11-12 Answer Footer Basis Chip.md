@@ -1,6 +1,6 @@
 # Answer footer: one basis chip instead of duplicate badges
 
-Status: implemented (issue #3619). The product, UX and UI review and the product owner's decisions are from 2026-11-12. The product owner later cut the chip down to source kinds only.
+Status: implemented (issue #3619). The product, UX and UI review and the product owner's decisions are from 2026-11-12. The product owner later cut the chip down to source kinds only. On 2026-11-13 that was revised: users did not see that the answer is AI-generated, because the statement lived only in the popover. The chip now has a fixed **AI-generated** segment before the kinds (see "Revision 2026-11-13" at the end); decision 2 below is superseded.
 
 ## Problem
 
@@ -59,7 +59,7 @@ Workflow                                            [⚙ Workflow ▾]
 | Email (Office add-in) | Email | E-Mail | `mail` |
 | Audio recording | Recording | Aufnahme | `microphone` |
 | An integration, MCP server or remote agent | its own label, e.g. "Jira", "Confluence", "Munich AD" | same | `link` or the integration's icon |
-| Nothing retrieved | Model knowledge | Modellwissen | `sparkles` |
+| Nothing retrieved | Model knowledge | Modellwissen | `cpu-chip` |
 
 **Model knowledge.** When no source was used, the chip says "Model knowledge" ("Modellwissen"). It never says "no sources", because the user must learn that the answer rests on the model's own knowledge.
 
@@ -154,3 +154,24 @@ These follow the CLAUDE.md rule "the server decides, the client renders".
   - `client/src/features/chat/components/ChatMessage.jsx`
   - `shared/run/runReducer.js`
 - Strings: `shared/i18n/en.json`, `shared/i18n/de.json`
+
+## Revision 2026-11-13: the chip says "AI-generated"
+
+Problem: the chip named only the kinds ("Project · Web"). Users did not read it as "this answer is AI-generated, based on these", because the AI statement was only in the popover, and a noun without a verb does not say what it is the basis of.
+
+Decision (product, UX, UI and technical-writing review): one chip with two segments. This is a client-only change; `run/ended.answerBasis` is unchanged.
+
+```
+[ ✦ AI-generated │ Based on 📁 Project · 🌐 Web ▾ ]
+[ ✦ AI-generated │ Based on ⌁ Model knowledge ▾ ]
+[ ✦ AI-generated │ ⚙ Workflow ▾ ]
+[ ✦ AI │ 📁 🌐 ▾ ]                      narrow pane (320px)
+```
+
+- **AI segment:** the same on every answer, tinted indigo, text plus `sparkles`. On a narrow pane it shortens to "AI" ("KI"); it is never icon-only and never dropped.
+- **Kinds segment:** "Based on" (German "Grundlage:") and the kinds, as before. "Based on" goes on a narrow pane. A workflow answer has no "Based on".
+- **`sparkles` belongs to the AI segment.** "Model knowledge" moves to `cpu-chip`, so it no longer looks more "AI" than a web answer.
+- **Accessible name:** "AI-generated, based on project and web. About this answer" ("KI-generiert, auf Grundlage von Projekt und Web. Zu dieser Antwort").
+- **Words match the popover:** the chip is the short form of the popover sentence.
+- **Popover:** unchanged. Its "AI-generated" section repeats the chip and can be trimmed later.
+- **Open:** a message stored without `answerBasis` still shows no chip, so no AI label either. Decide separately whether the AI segment should show alone on those messages.

@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The chip under an answer says what it is based on: only the kinds of source
- * the server named (`run/ended.answerBasis`), and "About this answer" opens
- * behind it. Every state of the design (#3619) in English and German, and the
+ * The chip under an answer says that it is AI-generated and what it is based on:
+ * a fixed AI segment, then "Based on" and only the kinds of source the server
+ * named (`run/ended.answerBasis`); "About this answer" opens behind it. Every state of the design (#3619) in English and German, and the
  * keyboard and screen-reader behaviour of the popover.
  */
 import { fireEvent, render, screen, within } from '@testing-library/react';
@@ -45,6 +45,7 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
 }));
 
 const AnswerBasis = require('../../../client/src/features/chat/components/AnswerBasis').default;
+const { KIND_ICON } = require('../../../client/src/features/chat/components/answerBasisModel');
 
 const renderBasis = props =>
   render(
@@ -55,6 +56,7 @@ const renderBasis = props =>
 
 const chip = () => screen.getByTestId('answer-basis-chip');
 const open = () => fireEvent.click(chip());
+const kinds = () => within(chip()).getByTestId('answer-basis-kinds');
 const panel = () => screen.getByTestId('answer-basis-panel');
 const headings = () =>
   within(panel())
@@ -75,21 +77,23 @@ beforeEach(() => {
   mockFetchChatArtifactProvenance.mockRejectedValue(new Error('404'));
 });
 
-describe('the chip names the kinds of source, nothing else', () => {
+describe('the chip says AI-generated, then names the kinds of source, nothing else', () => {
   it('project only: "Project", no mode, no name, no "configured sources"', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }], knowledgeScope: { projects: [PROJECT] } });
     expect(chip()).toHaveTextContent('Project');
     expect(chip()).not.toHaveTextContent('Case 2026-114');
     expect(chip()).not.toHaveTextContent(/loaded|all documents|searched/i);
     expect(screen.queryByText(/configured sources/i)).not.toBeInTheDocument();
-    expect(chip()).toHaveAccessibleName('About this answer: based on project');
+    expect(chip()).toHaveAccessibleName('AI-generated, based on project. About this answer');
   });
 
   it('project and web search: "Project · Web", never "multiple sources"', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
-    expect(chip().textContent).toBe('Project·Web');
+    expect(kinds().textContent).toBe('Based onProject·Web');
     expect(screen.queryByText(/multiple sources/i)).not.toBeInTheDocument();
-    expect(chip()).toHaveAccessibleName('About this answer: based on project and web');
+    expect(chip()).toHaveAccessibleName(
+      'AI-generated, based on project and web. About this answer'
+    );
   });
 
   it('an integration is named by its own label, and two integrations are two entries', () => {
@@ -99,17 +103,21 @@ describe('the chip names the kinds of source, nothing else', () => {
         { kind: 'integration', label: 'Munich AD' }
       ]
     });
-    expect(chip().textContent).toBe('Jira·Munich AD');
-    expect(chip()).toHaveAccessibleName('About this answer: based on Jira and Munich AD');
+    expect(kinds().textContent).toBe('Based onJira·Munich AD');
+    expect(chip()).toHaveAccessibleName(
+      'AI-generated, based on Jira and Munich AD. About this answer'
+    );
   });
 
   it('names at most two kinds, then "+N"; the accessible name keeps all of them', () => {
     renderBasis({
       answerBasis: [{ kind: 'project' }, { kind: 'web' }, { kind: 'integration', label: 'Jira' }]
     });
-    expect(chip().textContent).toBe('Project·Web+1');
+    expect(kinds().textContent).toBe('Based onProject·Web+1');
     expect(screen.getByTestId('answer-basis-more')).toHaveTextContent('+1');
-    expect(chip()).toHaveAccessibleName('About this answer: based on project, web, and Jira');
+    expect(chip()).toHaveAccessibleName(
+      'AI-generated, based on project, web, and Jira. About this answer'
+    );
   });
 
   it('draws every kind with its own icon and noun', () => {
@@ -123,12 +131,13 @@ describe('the chip names the kinds of source, nothing else', () => {
       ['file', 'File', 'paper-clip'],
       ['audio', 'Recording', 'microphone'],
       ['integration', 'Integration', 'link'],
-      ['model', 'Model knowledge', 'sparkles']
+      ['model', 'Model knowledge', 'cpu-chip']
     ];
     for (const [kind, noun, icon] of cases) {
       const { unmount } = renderBasis({ answerBasis: [{ kind }] });
       expect(chip()).toHaveTextContent(noun);
-      expect(within(chip()).getAllByTestId('icon')[0]).toHaveAttribute('data-name', icon);
+      // The first icon is the AI segment's; the kind's own follows it.
+      expect(within(kinds()).getAllByTestId('icon')[0]).toHaveAttribute('data-name', icon);
       unmount();
     }
   });
@@ -139,6 +148,36 @@ describe('the chip names the kinds of source, nothing else', () => {
     expect(chip()).toHaveClass('text-gray-600');
     expect(chip()).not.toHaveClass('text-indigo-700');
     expect(screen.queryByText(/no sources/i)).not.toBeInTheDocument();
+  });
+
+  it('says "AI-generated" on every answer, as text and with the sparkles, ahead of the sources', () => {
+    const states = [
+      [{ kind: 'project' }],
+      [{ kind: 'project' }, { kind: 'web' }],
+      [{ kind: 'model' }],
+      [{ kind: 'integration', label: 'Jira' }]
+    ];
+    for (const answerBasis of states) {
+      const { unmount } = renderBasis({ answerBasis });
+      const ai = within(chip()).getByTestId('answer-basis-ai-label');
+      expect(ai).toHaveTextContent('AI-generated');
+      expect(within(ai).getByTestId('icon')).toHaveAttribute('data-name', 'sparkles');
+      // First in reading order: the AI segment comes before the kinds.
+      expect(chip().firstElementChild).toBe(ai);
+      unmount();
+    }
+  });
+
+  it('leads the kinds with "Based on"; model knowledge reads "Based on Model knowledge"', () => {
+    renderBasis({ answerBasis: [{ kind: 'model' }] });
+    expect(kinds()).toHaveTextContent('Based onModel knowledge');
+    expect(chip()).toHaveAccessibleName(
+      "AI-generated, based on the model's knowledge. About this answer"
+    );
+  });
+
+  it('keeps the sparkles for the AI segment alone: no kind uses it', () => {
+    for (const kind of Object.keys(KIND_ICON)) expect(KIND_ICON[kind]).not.toBe('sparkles');
   });
 
   it('sources used: indigo', () => {
@@ -298,7 +337,21 @@ describe('a narrow pane drops the nouns, not the information', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
     const nouns = within(chip()).getAllByText(/^(Project|Web)$/);
     for (const noun of nouns) expect(noun).toHaveClass('@max-sm:sr-only');
-    expect(chip()).toHaveAccessibleName('About this answer: based on project and web');
+    expect(chip()).toHaveAccessibleName(
+      'AI-generated, based on project and web. About this answer'
+    );
+  });
+
+  it('the AI statement shortens to "AI" and "Based on" goes; neither is dropped for a reader', () => {
+    renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
+    const ai = within(chip()).getByTestId('answer-basis-ai-label');
+    const full = within(ai).getByText('AI-generated');
+    expect(full).toHaveClass('@max-sm:hidden');
+    const short = within(ai).getByText('AI');
+    expect(short).toHaveClass('hidden', '@max-sm:inline');
+    // The short text is for the eye; the accessible name already carries the full one.
+    expect(short).toHaveAttribute('aria-hidden', 'true');
+    expect(within(kinds()).getByText('Based on')).toHaveClass('@max-sm:hidden');
   });
 
   it('a single kind is short and keeps its noun', () => {
@@ -318,6 +371,16 @@ describe('German', () => {
     mockLanguage = 'de';
   });
 
+  it('says "KI-generiert" on the chip, "Grundlage:" before the kinds, and "KI" when narrow', () => {
+    renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
+    const ai = within(chip()).getByTestId('answer-basis-ai-label');
+    expect(ai).toHaveTextContent('KI-generiert');
+    expect(within(ai).getByText('KI')).toHaveClass('@max-sm:inline');
+    expect(chip()).toHaveAccessibleName(
+      'KI-generiert, auf Grundlage von Projekt und Web. Zu dieser Antwort'
+    );
+  });
+
   it('says "Modellwissen" when nothing was retrieved', () => {
     renderBasis({ answerBasis: [{ kind: 'model' }] });
     expect(chip()).toHaveTextContent('Modellwissen');
@@ -327,7 +390,7 @@ describe('German', () => {
 
   it('names the kinds and words the sentence in German', () => {
     renderBasis({ answerBasis: [{ kind: 'project' }, { kind: 'web' }] });
-    expect(chip().textContent).toBe('Projekt·Web');
+    expect(kinds().textContent).toBe('Grundlage:Projekt·Web');
     open();
     expect(
       screen.getByText(
@@ -586,6 +649,10 @@ describe('a workflow answer', () => {
     renderBasis({ workflowResult, answerBasis: [{ kind: 'web' }], provenance: PROVENANCE });
     expect(chip()).toHaveTextContent('Workflow');
     expect(chip()).not.toHaveTextContent('Web');
+    // A workflow is not a basis: it stands without "Based on".
+    expect(chip()).not.toHaveTextContent('Based on');
+    expect(chip()).toHaveTextContent('AI-generated');
+    expect(chip()).toHaveAccessibleName('AI-generated in a workflow. About this answer');
     open();
     expect(screen.getByText('This answer was generated by AI in a workflow.')).toBeInTheDocument();
     const link = within(screen.getByTestId('answer-basis-workflow')).getByRole('link', {

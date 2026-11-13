@@ -18,6 +18,7 @@ import {
   entryLabel,
   isModelOnly,
   isUserProject,
+  isWorkflowOnly,
   projectDiagnostics,
   projectModeText,
   projectName,
@@ -216,7 +217,7 @@ function BasisPopover({
   const records = provenanceRecords(provenance, images);
   const titleId = useId();
   const modelOnly = isModelOnly(entries);
-  const isWorkflow = entries.length === 1 && entries[0].kind === 'workflow';
+  const isWorkflow = isWorkflowOnly(entries);
   let sentence;
   if (isWorkflow) {
     sentence = t(
@@ -313,9 +314,9 @@ function BasisPopover({
 }
 
 /**
- * The one chip that says what the answer is based on: the kinds of source it
- * used, and nothing else (no names, modes or prefix). Opening it shows "About
- * this answer".
+ * The one chip that says the answer is AI-generated and what it is based on:
+ * a fixed "AI-generated" segment, then "Based on" and the kinds of source it
+ * used (no names or modes). Opening it shows "About this answer".
  */
 function BasisChip({
   entries,
@@ -335,6 +336,8 @@ function BasisChip({
   // Two or more kinds drop their nouns on a narrow pane: the icons stay and the
   // accessible name keeps the full text. A single kind is short enough to stay.
   const nounClass = entries.length > 1 ? '@max-sm:sr-only' : '';
+  // "Based on" leads the kinds. A workflow is not a basis, so it stands without it.
+  const showLeadIn = !isWorkflowOnly(entries);
 
   return (
     <div className={`relative inline-flex min-w-0 max-w-full ${className}`} ref={rootRef}>
@@ -347,31 +350,56 @@ function BasisChip({
         aria-haspopup="dialog"
         aria-label={chipAccessibleName(entries, t, i18n?.language)}
         data-testid="answer-basis-chip"
-        className={`inline-flex h-6 min-w-0 max-w-full items-center gap-1.5 whitespace-nowrap rounded-full border bg-white ps-2 pe-1.5 text-xs shadow-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 dark:bg-gray-800 dark:focus-visible:ring-offset-gray-900 ${tone}`}
+        className={`inline-flex h-6 min-w-0 max-w-full items-center overflow-hidden whitespace-nowrap rounded-full border bg-white text-xs shadow-xs focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 dark:bg-gray-800 dark:focus-visible:ring-offset-gray-900 ${tone}`}
       >
-        {named.map((entry, index) => (
-          <span
-            key={`${entry.kind}:${entry.label || ''}`}
-            className="inline-flex items-center gap-1"
-          >
-            {index > 0 && (
-              <span aria-hidden="true" className={nounClass ? '@max-sm:hidden' : undefined}>
-                ·
-              </span>
-            )}
-            <Icon name={KIND_ICON[entry.kind] || 'link'} className="h-3 w-3 shrink-0" />
-            <span className={`truncate ${nounClass}`}>{entryLabel(entry, t)}</span>
+        {/* The AI statement: the same on every answer, so it is the first thing read and
+            never the part that is skipped. Text, not only an icon. On a narrow pane it is
+            short ("AI"), never dropped. */}
+        <span
+          data-testid="answer-basis-ai-label"
+          className="inline-flex h-full shrink-0 items-center gap-1 border-e border-indigo-200 bg-indigo-50 ps-2 pe-1.5 font-medium text-indigo-700 dark:border-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300"
+        >
+          <Icon name="sparkles" className="h-3 w-3 shrink-0" />
+          <span className="@max-sm:hidden">
+            {t('chatMessage.answerBasis.aiGenerated', 'AI-generated')}
           </span>
-        ))}
-        {more > 0 && (
-          <span data-testid="answer-basis-more">
-            {t('chatMessage.answerBasis.more', '+{{count}}', { count: more })}
+          <span aria-hidden="true" className="hidden @max-sm:inline">
+            {t('chatMessage.answerBasis.aiShort', 'AI')}
           </span>
-        )}
-        <Icon
-          name="chevron-down"
-          className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
-        />
+        </span>
+        <span
+          data-testid="answer-basis-kinds"
+          className="inline-flex h-full min-w-0 items-center gap-1.5 ps-1.5 pe-1.5"
+        >
+          {showLeadIn && (
+            <span className="shrink-0 font-normal text-gray-500 @max-sm:hidden dark:text-gray-400">
+              {t('chatMessage.answerBasis.basedOn', 'Based on')}
+            </span>
+          )}
+          {named.map((entry, index) => (
+            <span
+              key={`${entry.kind}:${entry.label || ''}`}
+              className="inline-flex min-w-0 items-center gap-1"
+            >
+              {index > 0 && (
+                <span aria-hidden="true" className={nounClass ? '@max-sm:hidden' : undefined}>
+                  ·
+                </span>
+              )}
+              <Icon name={KIND_ICON[entry.kind] || 'link'} className="h-3 w-3 shrink-0" />
+              <span className={`truncate ${nounClass}`}>{entryLabel(entry, t)}</span>
+            </span>
+          ))}
+          {more > 0 && (
+            <span data-testid="answer-basis-more">
+              {t('chatMessage.answerBasis.more', '+{{count}}', { count: more })}
+            </span>
+          )}
+          <Icon
+            name="chevron-down"
+            className={`h-3 w-3 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+        </span>
       </button>
       {open && (
         <BasisPopover

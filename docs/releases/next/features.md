@@ -1903,11 +1903,14 @@ badge, **Based on configured sources**, and an icon-only ⓘ for **AI generated*
 also used a web search, the project disappeared into **Based on multiple sources**. One chip now
 replaces all of them.
 
-- **The chip names only the kinds of source the answer used:** Project, Web, iFinder, iAssistant,
-  Documents, File, Email, Recording, or the name of an integration, MCP server or remote agent, for
-  example **Jira**. Two integrations are two entries. At most two kinds are named, then **+N**.
-  A workflow answer reads **Workflow**.
-- **Nothing retrieved reads "Model knowledge"** (German: "Modellwissen"), never "no sources".
+- **The chip says the answer is AI-generated and what it is based on.** A first segment reads
+  **AI-generated** (German: "KI-generiert") on every answer. The second reads **Based on** and
+  names only the kinds of source the answer used: Project, Web, iFinder, iAssistant, Documents,
+  File, Email, Recording, or the name of an integration, MCP server or remote agent, for example
+  **Jira**. Two integrations are two entries. At most two kinds are named, then **+N**.
+  A workflow answer reads **AI-generated · Workflow**.
+- **Nothing retrieved reads "Based on Model knowledge"** (German: "Grundlage: Modellwissen"),
+  never "no sources".
 - **A project counts only when the answer used it.** A project that was in scope but whose text
   neither went into the prompt nor came back from a search is not named on the chip. It is listed
   as not used.
@@ -1927,8 +1930,8 @@ replaces all of them.
   and the provenance record, watermark and headers are unchanged.
 - **Keyboard and narrow panes.** The chip is a button. Opening the popover moves the focus into it,
   without trapping it: Escape closes it and returns the focus to the chip. Nothing is only in a
-  tooltip. In a narrow pane (Outlook) a chip with several kinds
-  shows icons only; its accessible name keeps the full text.
+  tooltip. In a narrow pane (Outlook) the chip shortens to **AI** (German: "KI") and icons; its
+  accessible name keeps the full text.
 - **After a tool approval the chip covers the whole turn.** An answer that continues after you
   approved or rejected a tool call is based on everything the turn used before it paused, for
   example a project search or a Jira lookup, and not only on the approved call.

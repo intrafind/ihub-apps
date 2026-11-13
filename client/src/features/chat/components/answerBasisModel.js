@@ -13,7 +13,11 @@
 
 import { knowledgeModeLabel } from '../../projects/utils/knowledgeModes';
 
-/** The icon of each kind. Colour does not tell the kinds apart: the icon and the noun do. */
+/**
+ * The icon of each kind. Colour does not tell the kinds apart: the icon and the noun do.
+ * `sparkles` is the chip's AI segment on every answer, so no kind uses it: model knowledge
+ * would otherwise look more "AI" than a web answer.
+ */
 export const KIND_ICON = Object.freeze({
   project: 'folder',
   web: 'globe-alt',
@@ -24,7 +28,7 @@ export const KIND_ICON = Object.freeze({
   email: 'mail',
   file: 'paper-clip',
   audio: 'microphone',
-  model: 'sparkles',
+  model: 'cpu-chip',
   workflow: 'cog'
 });
 
@@ -132,15 +136,31 @@ export function basisPhrase(entries, t, language) {
   );
 }
 
-/** The chip's accessible name: it keeps the full text when the nouns are dropped. */
+/**
+ * The chip's accessible name: the AI statement and the basis in full, which the
+ * narrow pane's "AI" and icons only do not carry, and where the chip leads.
+ */
 export function chipAccessibleName(entries, t, language) {
-  return t('chatMessage.answerBasis.chipLabel', 'About this answer: based on {{what}}', {
-    what: basisPhrase(entries, t, language)
-  });
+  if (isWorkflowOnly(entries)) {
+    return t(
+      'chatMessage.answerBasis.chipLabelWorkflow',
+      'AI-generated in a workflow. About this answer'
+    );
+  }
+  return t(
+    'chatMessage.answerBasis.chipLabel',
+    'AI-generated, based on {{what}}. About this answer',
+    {
+      what: basisPhrase(entries, t, language)
+    }
+  );
 }
 
 /** Whether the answer used no source at all: the model's own knowledge. */
 export const isModelOnly = entries => entries.length === 1 && entries[0].kind === 'model';
+
+/** Whether a workflow run produced the answer: it is named by the workflow alone. */
+export const isWorkflowOnly = entries => entries.length === 1 && entries[0].kind === 'workflow';
 
 // ── the projects of the scope ───────────────────────────────────────────────
 
