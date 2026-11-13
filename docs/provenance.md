@@ -43,7 +43,7 @@ Set per model with `contentMarking.text` (see [Models](models.md#output-marking-
 | `by` | Meaning | `applied` |
 | --- | --- | --- |
 | `none` (default) | No marking. | `false` |
-| `provider` | The operator states that the provider marks the output (for example SynthID). | `true`, on the operator's written statement. iHub cannot check it. |
+| `provider` | The operator states that the provider marks the output (for example SynthID). Models imported from Google are [filled in](models.md#filled-in-on-import-google). | `true`, on the operator's written statement. iHub cannot check it. |
 | `ihub` | iHub's own text watermark for self-hosted vLLM models ([Text Watermarking](ai-act-text-watermarking.md)). | `true` only when the request asked vLLM to mark and was neither greedy nor structured output; else `false` with a `reason` (`greedy`, `structured_output`, `no_active_key`). `key_id` names the key used. |
 
 ## `nfc-trim`

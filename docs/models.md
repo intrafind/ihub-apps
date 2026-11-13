@@ -89,12 +89,43 @@ Image-generating models declare what the provider embeds under `image`, the same
 `image` applies to a model with `supportsImageGeneration`; **Admin → Models** shows an *Image marking* section
 for such a model, and choosing *Not marked* removes the member. The value appears as
 `provider_marking.declared` in the record of each generated image; see
-[Provenance Records](provenance.md#images-provider-marks-3328). No model is preset: a Google image model counts
-as `none` until you declare it. Read aloud (text-to-speech) has no marking and no record.
+[Provenance Records](provenance.md#images-provider-marks-3328). A model you create by hand counts as `none` until
+you declare it; models imported from Google are filled in, see [below](#filled-in-on-import-google). Read aloud
+(text-to-speech) has no marking and no record.
 
 A model without the block counts as `none`. **Admin → Models** shows "Not marked" in the *Output marking*
 column as a hint and has an *Output marking* section in the editor. There is no gate: a model that is not
 marked still works.
+
+#### Filled in on import (Google)
+
+A Gemini model imported from a Google provider (**Import from URL**, or **Sync models** on the provider's page)
+takes over what Google says about its output, so the declaration does not have to be entered model by model:
+
+| Model | Declared |
+| --- | --- |
+| Gemini chat model (`gemini-…`) | `contentMarking.text`: `{ "by": "provider", "scheme": "synthid", "statementRef": … }` |
+| Gemini image model (`gemini-…-image…`, Nano Banana) | The same under `text` and `image`, and `supportsImageGeneration: true` |
+| Gemma and other open models, embeddings, speech, Imagen | Nothing |
+
+`statementRef` is Google's public SynthID page (`Google DeepMind, SynthID: https://deepmind.google/technologies/synthid/`).
+Read it for what it is: the page names the Gemini app and web experience for text, and generated images in general,
+but not the Gemini API. The Code of Practice on marking (4.2) lets you rely on the provider's marking only when the
+provider has confirmed it in writing, so **replace `statementRef` with Google's written confirmation for your
+contract** (**Admin → Models → Output marking**) before you rely on it. The import dialog says so when a selected model
+carries a declaration.
+
+What iHub can and cannot do with it:
+
+- **Text:** only the provider's statement is recorded. There is no public detector for SynthID-Text on API output, so
+  `_verify` reports the declared scheme and nothing it measured.
+- **Images:** SynthID cannot be detected by iHub either, so the record says `declared`. If an image also carries a
+  C2PA manifest (some Google and OpenAI image models), iHub reads it from the stored bytes and records issuer,
+  `digitalSourceType` and whether one is present, see [Provenance Records](provenance.md#images-provider-marks-3328).
+  The image bytes are never decoded or re-encoded between Google's answer and the download, so the marks survive.
+- **Sync only fills in what is missing.** A member that is absent or `none` is offered the declaration; a marking you
+  entered stays. A "Not marked" you chose on purpose looks the same as the default `none` and is offered again:
+  untick it in the dialog.
 
 ### Sampling Parameters
 
@@ -291,7 +322,8 @@ you pick, so they need not be typed in one by one.
    `max_model_len`, LLM Hub `meta_data`, Mistral `max_context_length`, Google token limits),
    image input, tool support and end-of-life date. Embedding, transcription, audio, image and
    moderation models are marked and not selected by **Select all**. Models already configured for
-   the same endpoint show as **Already added**.
+   the same endpoint show as **Already added**. Gemini models come with the output marking Google declares
+   for them ([EU AI Act](#filled-in-on-import-google)), shown in a note under the list.
 
    Speech models are imported for the backend that runs them, ready for voice input, recording
    and read aloud. With the provider they keep the provider's key.
@@ -374,28 +406,31 @@ support tool calling yet, so imported chat models have **Tool support** set to n
 a model once the gateway supports it. Realtime transcription needs `wss://` when a key is sent to the
 Mistral backend.
 
-**Keeping the models in line with the gateway.** A gateway's models change over time: deployments
-are added and retired, a context window is corrected, a model moves to another dialect. On the
-provider's page (**Admin → Providers →** the gateway **→ Linked models**), **Sync with gateway**
-asks the gateway what it lists now and compares that with the models imported from it. Nothing
-changes until you apply your choice. The dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
+**Keeping the models in line with the provider.** A provider's models change over time: on an iFinder
+Model Gateway deployments are added and retired, a context window is corrected, a model moves to another
+dialect; on Google, Gemini versions are retired and new ones appear. On the provider's page
+(**Admin → Providers →** the gateway or **Google → Linked models**), **Sync models** asks the provider what it
+lists now and compares that with the models imported from it. Nothing changes until you apply your choice. The
+dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
 
 | Group                       | What it means                                                                                     | When applied                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Changed on the gateway**  | An imported model differs from the gateway: URL, adapter, context window or image input           | The model is updated to match; the old and new values are shown                  |
-| **New on the gateway**      | The gateway lists a model nobody imported                                                         | The model is imported, as in **Import from URL**                                 |
-| **No longer available**     | An enabled imported model the gateway no longer lists, or now lists as something iHub cannot run  | The model is **disabled**, not deleted: apps may still use it                    |
+| **Changed at the provider** | An imported model differs from the provider: URL, adapter, context window, image input (gateway only) or, for Google, the EU AI Act marking it does not declare yet | The model is updated to match; the old and new values are shown                  |
+| **New at the provider**     | The provider lists a model nobody imported                                                        | The model is imported, as in **Import from URL**                                 |
+| **No longer available**     | An enabled imported model the provider no longer lists, or now lists as something iHub cannot run | The model is **disabled**, not deleted: apps may still use it                    |
 
 Models iHub cannot run (embedding, NER) are never offered, a model you disabled yourself is not
 reported as gone, and a model you configured by hand for the same endpoint counts as imported. Using
 the vLLM adapter instead of the OpenAI one for an OpenAI-dialect model is your choice and is not
-reported. A context window the gateway does not report is left as you set it. Each applied item has
-its own result, so one failure does not stop the others.
+reported. A context window the provider does not report is left as you set it, and so is image input: Google's
+listing does not report it, so a Google model is never changed on that account. The marking is only ever
+added to a member that does not declare one (see [Filled in on import](#filled-in-on-import-google)). Each applied
+item has its own result, so one failure does not stop the others.
 
 Two iHub models can point at one gateway model (**Clone** keeps the model ID and the provider). Each is its own item and its own pick: a changed or gone model is named by its iHub model, in `modelId`, which a `changed` or `removed` pick must carry.
 
-Applying is done by the server, not by chaining model calls from the browser: it asks the gateway
-again, applies only the picks that still match what the gateway reports (anything else comes back
+Applying is done by the server, not by chaining model calls from the browser: it asks the provider
+again, applies only the picks that still match what the provider reports (anything else comes back
 `skipped`: run the sync again), and reads and writes each model's stored file. Each item has its own
 result and one failure does not stop the others. Every changed model is written to the audit log
 and the model's change history.
@@ -405,9 +440,9 @@ and the model's change history.
 | `GET /api/admin/providers/{providerId}/_model-drift`      | The comparison: `{ modelsUrl, items }`. Writes nothing                        |
 | `POST /api/admin/providers/{providerId}/_sync-models`     | Apply a pick: body `{ items: [{ kind, remoteId, modelId? }] }`, answer `{ items: [{ kind, remoteId, modelId, status, detail }] }` with `status` one of `applied`, `skipped`, `failed` |
 
-Both need an admin and answer `404` for an unknown provider, `400` for one that is no gateway or has
-no base URL, and `502` (`UPSTREAM_ERROR`, with `details.reason`) when the gateway cannot be asked, in
-which case nothing is changed.
+Both need an admin and answer `404` for an unknown provider, `400` for one that is neither a gateway nor a
+Google provider or has no base URL, and `502` (`UPSTREAM_ERROR`, with `details.reason`) when the provider
+cannot be asked, in which case nothing is changed.
 
 The import uses `POST /api/admin/models/_discover` (with `gateway: "ifinder-model-gateway"` for a gateway), which
 returns the normalized list without storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.

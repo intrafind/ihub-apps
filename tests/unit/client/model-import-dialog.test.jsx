@@ -300,3 +300,37 @@ test('an ordinary provider is discovered without a gateway marker', async () => 
   const [[, discover]] = calls('/admin/models/_discover', 'POST');
   expect(discover.body).not.toHaveProperty('gateway');
 });
+
+test('a model the provider declares as marked is imported with that declaration and the admin is told', async () => {
+  const marking = { by: 'provider', scheme: 'synthid', statementRef: 'Google DeepMind, SynthID' };
+  mockApi({
+    models: [
+      {
+        id: 'gemini-2.5-flash',
+        name: 'Gemini 2.5 Flash',
+        type: 'chat',
+        url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent',
+        contentMarking: { text: marking }
+      },
+      { id: 'gemma-3-27b-it', name: 'Gemma 3', type: 'chat' }
+    ]
+  });
+  await renderDialog();
+  await loadModelsForNewProvider();
+
+  // Nothing is declared for a model the provider says nothing about: no notice.
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Gemma 3' }));
+  expect(screen.queryByRole('note')).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Gemini 2.5 Flash' }));
+  expect(screen.getByRole('note')).toHaveTextContent(/EU AI Act, Art\. 50/);
+
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Import 2 models' }));
+  });
+  const bodies = calls('/admin/models', 'POST').map(([, options]) => options.body);
+  const gemini = bodies.find(body => body.modelId === 'gemini-2.5-flash');
+  const gemma = bodies.find(body => body.modelId === 'gemma-3-27b-it');
+  expect(gemini.contentMarking).toEqual({ text: marking });
+  expect(gemma).not.toHaveProperty('contentMarking');
+});

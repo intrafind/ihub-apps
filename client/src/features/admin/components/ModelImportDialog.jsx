@@ -643,6 +643,18 @@ function ModelImportDialog({ onClose, onImported, existingModelIds, initialProvi
         </p>
       )}
 
+      {selectedModels.some(model => model.contentMarking) && (
+        <p
+          role="note"
+          className="rounded-md bg-blue-50 dark:bg-blue-900/20 p-3 text-sm text-blue-800 dark:text-blue-300"
+        >
+          {t(
+            'admin.models.import.markingHint',
+            'The provider says it marks the output of these models as AI generated, so each one is imported with that declaration (EU AI Act, Art. 50). iHub cannot check it. Review or replace it under Models → Output marking.'
+          )}
+        </p>
+      )}
+
       {creatingProvider && (
         <p className="text-sm text-gray-600 dark:text-gray-400">
           {t(

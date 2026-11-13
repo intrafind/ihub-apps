@@ -27,7 +27,8 @@ import {
   linkedModelProvider,
   LLM_TIMEOUT_KEYS,
   LLM_TIMEOUT_MAX_MS,
-  resolveProviderApiKey
+  resolveProviderApiKey,
+  supportsModelSync
 } from '../../services/llmProviders.js';
 import {
   discoverModels,
@@ -201,25 +202,28 @@ function describeOutboundPath(providerId) {
 }
 
 /**
- * Ask a model gateway provider's gateway what it lists now and compare that with the models
- * imported from it. Shared by the drift report and by the sync that applies it, so both see
- * the same thing and fail the same way.
+ * Ask a provider (an iFinder Model Gateway, or Google) what it lists now and compare that with
+ * the models imported from it. Shared by the drift report and by the sync that applies it, so
+ * both see the same thing and fail the same way.
  *
  * @param {string} providerId
  * @returns {Promise<{ provider: Object, modelsUrl: string, items: Array<Object> }>}
- * @throws {ServiceError} `BAD_REQUEST` for an unusable id, a provider that is no gateway or has no
- *   base URL, `NOT_FOUND` for an unknown provider, `UPSTREAM_ERROR` when the gateway cannot be asked
+ * @throws {ServiceError} `BAD_REQUEST` for an unusable id, a provider whose models cannot be synced
+ *   or that has no base URL, `NOT_FOUND` for an unknown provider, `UPSTREAM_ERROR` when the
+ *   provider cannot be asked
  */
-async function loadGatewayDrift(providerId) {
+async function loadModelDrift(providerId) {
   if (!isValidId(providerId)) throw new ServiceError('BAD_REQUEST', 'Invalid provider ID');
 
   const { data: providers = [] } = configCache.getProviders(true);
   const provider = providers.find(p => p.id === providerId);
   if (!provider) throw new ServiceError('NOT_FOUND', `Provider ${providerId} not found`);
-  if (!isGatewayProvider(provider)) {
-    throw new ServiceError('BAD_REQUEST', `Provider ${providerId} is not a model gateway`, {
-      details: { providerId }
-    });
+  if (!supportsModelSync(provider)) {
+    throw new ServiceError(
+      'BAD_REQUEST',
+      `Provider ${providerId} is neither a model gateway nor a Google provider`,
+      { details: { providerId } }
+    );
   }
   if (!provider.baseUrl) {
     throw new ServiceError('BAD_REQUEST', `Provider ${providerId} has no base URL`, {
@@ -237,7 +241,7 @@ async function loadGatewayDrift(providerId) {
     });
   } catch (error) {
     if (!(error instanceof ModelDiscoveryError)) throw error;
-    // A URL the admin has to fix is theirs (400); anything else is the gateway's.
+    // A URL the admin has to fix is theirs (400); anything else is the provider's.
     throw new ServiceError(error.status === 400 ? 'BAD_REQUEST' : 'UPSTREAM_ERROR', error.message, {
       status: error.status,
       details: {
@@ -395,10 +399,10 @@ export default function registerAdminProvidersRoutes(app) {
    * @swagger
    * /admin/providers/{providerId}/_model-drift:
    *   get:
-   *     summary: Compare a model gateway with the models imported from it (Admin)
+   *     summary: Compare a provider's model listing with the models imported from it (Admin)
    *     description: |
-   *       Reads the model listing of an iFinder Model Gateway provider (its base URL
-   *       and stored project key) and compares it with the models linked to the
+   *       Reads the model listing of an iFinder Model Gateway or Google provider (its
+   *       base URL and stored key) and compares it with the models linked to the
    *       provider. Changes nothing: every item names what an admin could do. To apply
    *       a choice, send it to `POST /admin/providers/{providerId}/_sync-models`; do not
    *       replay it through the model endpoints, which read the config cache and can
@@ -406,8 +410,9 @@ export default function registerAdminProvidersRoutes(app) {
    *
    *       Item kinds: `added` (listed, not imported; `model` is a preview of the config
    *       that would be created, the sync builds it again from a fresh listing),
-   *       `changed` (an imported model differs from the gateway; carries `changes` as
-   *       `{ field, from, to }`), `removed` (an enabled imported model the gateway no
+   *       `changed` (an imported model differs from the provider; carries `changes` as
+   *       `{ field, from, to }`; for Google it also adopts the provider's EU AI Act marking
+   *       declaration as `contentMarking`), `removed` (an enabled imported model the provider no
    *       longer lists, or lists as something iHub cannot run; `reason` is `missing` or
    *       `unsupported`; the offer is to disable it).
    *
@@ -466,19 +471,19 @@ export default function registerAdminProvidersRoutes(app) {
    *                             from: {}
    *                             to: {}
    *       400:
-   *         description: "`BAD_REQUEST`: the provider is not a model gateway, has no base URL, or its URL is unusable"
+   *         description: "`BAD_REQUEST`: the provider is neither a model gateway nor a Google provider, has no base URL, or its URL is unusable"
    *       401:
    *         description: Admin authentication required
    *       404:
    *         description: "`NOT_FOUND`: no such provider"
    *       502:
-   *         description: "`UPSTREAM_ERROR`: the gateway could not be reached or rejected the request; `details.reason` names why (`authenticationFailed`, `apiKeyRequired`, `connectionRefused`, …)"
+   *         description: "`UPSTREAM_ERROR`: the provider could not be reached or rejected the request; `details.reason` names why (`authenticationFailed`, `apiKeyRequired`, `connectionRefused`, …)"
    */
   app.get(
     buildServerPath('/api/admin/providers/:providerId/_model-drift'),
     adminAuth,
     async (req, res) => {
-      const { modelsUrl, items } = await loadGatewayDrift(req.params.providerId);
+      const { modelsUrl, items } = await loadModelDrift(req.params.providerId);
       res.setHeader('Cache-Control', 'no-store');
       res.json({ modelsUrl, items });
     }
@@ -488,10 +493,10 @@ export default function registerAdminProvidersRoutes(app) {
    * @swagger
    * /admin/providers/{providerId}/_sync-models:
    *   post:
-   *     summary: Apply a pick of the gateway drift to the models (Admin)
+   *     summary: Apply a pick of the provider drift to the models (Admin)
    *     description: |
    *       Applies the items an admin picked from `GET /admin/providers/{providerId}/_model-drift`.
-   *       The server asks the gateway again and applies only picks that still match what it
+   *       The server asks the provider again and applies only picks that still match what it
    *       reports now; it never takes a model config from the request. `added` creates the
    *       model, `changed` sets the changed fields on the stored model, `removed` disables
    *       the model (it is never deleted). A `changed` or `removed` pick names the iHub
@@ -559,20 +564,20 @@ export default function registerAdminProvidersRoutes(app) {
    *                         type: string
    *                         description: "Why an item was not applied; `changedSinceReview` for a skipped one"
    *       400:
-   *         description: "`BAD_REQUEST`: the body is not a list of picks, or the provider is not a model gateway or has no base URL"
+   *         description: "`BAD_REQUEST`: the body is not a list of picks, or the provider is neither a model gateway nor a Google provider, or has no base URL"
    *       401:
    *         description: Admin authentication required
    *       404:
    *         description: "`NOT_FOUND`: no such provider"
    *       502:
-   *         description: "`UPSTREAM_ERROR`: the gateway could not be asked; nothing was changed"
+   *         description: "`UPSTREAM_ERROR`: the provider could not be asked; nothing was changed"
    */
   app.post(
     buildServerPath('/api/admin/providers/:providerId/_sync-models'),
     adminAuth,
     async (req, res) => {
       const picks = picksOf(req.body);
-      const { items } = await loadGatewayDrift(req.params.providerId);
+      const { items } = await loadModelDrift(req.params.providerId);
       const admin = req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown';
 
       const results = await applyGatewayDrift({

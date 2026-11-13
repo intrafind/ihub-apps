@@ -3,16 +3,19 @@
 
 /**
  * `GET /api/admin/providers/:providerId/_model-drift`: the comparison of an
- * iFinder Model Gateway with the models imported from it.
+ * iFinder Model Gateway, or of Google, with the models imported from it.
  *
  * What has to hold:
  *   - the gateway is asked on `/v1/gateway/models` with the provider's stored
  *     project key, and the answer is compared with the provider's models;
+ *   - Google is asked on its `/models` listing with the provider's stored key,
+ *     and a model that does not declare the provider's EU AI Act marking yet is
+ *     offered it;
  *   - nothing is written;
  *   - every failure is a thrown `ServiceError` with a registry `code`, which the
  *     error middleware answers with: 404 for an unknown provider, 400 for one that
- *     is no gateway or has no base URL, 502 for a gateway that cannot be reached
- *     or turns the key down. (The middleware does not send `application/problem+json`
+ *     is neither a gateway nor Google or has no base URL, 502 for a provider that
+ *     cannot be reached or turns the key down. (The middleware does not send `application/problem+json`
  *     yet, see docs/error-responses.md, so the body's media type is not asserted.)
  *
  * Native ESM: run with `node --experimental-vm-modules` (the test scripts do).
@@ -481,5 +484,117 @@ describe('POST /api/admin/providers/:providerId/_sync-models', () => {
       'removed=applied'
     ]);
     expect(res.body.items[0].detail).toMatch(/already exists/);
+  });
+});
+
+describe('a Google provider', () => {
+  const GOOGLE_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+  const SYNTHID = {
+    by: 'provider',
+    scheme: 'synthid',
+    statementRef: 'Google DeepMind, SynthID: https://deepmind.google/technologies/synthid/'
+  };
+
+  beforeEach(() => {
+    providers.push({
+      id: 'google',
+      name: 'Google',
+      baseUrl: GOOGLE_BASE,
+      apiKey: 'enc:google-key',
+      enabled: true
+    });
+    const model = {
+      id: 'gemini-flash',
+      modelId: 'gemini-2.5-flash',
+      provider: 'google',
+      url: `${GOOGLE_BASE}/models/gemini-2.5-flash:streamGenerateContent`,
+      contextWindow: 1048576,
+      supportsVision: true,
+      contentMarking: { text: { by: 'none' } },
+      enabled: true
+    };
+    models = [model];
+    files = new Map([[`models/${model.id}.json`, clone(model)]]);
+    gatewayAnswer = {
+      status: 200,
+      body: {
+        models: [
+          {
+            name: 'models/gemini-2.5-flash',
+            displayName: 'Gemini 2.5 Flash',
+            inputTokenLimit: 1048576,
+            outputTokenLimit: 65536,
+            supportedGenerationMethods: ['generateContent']
+          }
+        ]
+      }
+    };
+  });
+
+  it('is asked on its listing with the stored key and offered the SynthID marking', async () => {
+    const res = await drift('google');
+
+    expect(res.status).toBe(200);
+    expect(gatewayCalls).toHaveLength(1);
+    expect(gatewayCalls[0].url).toBe(`${GOOGLE_BASE}/models?pageSize=1000`);
+    expect(gatewayCalls[0].init.headers['x-goog-api-key']).toBe('google-key');
+    expect(res.body.items).toEqual([
+      {
+        kind: 'changed',
+        remoteId: 'gemini-2.5-flash',
+        modelId: 'gemini-flash',
+        changes: [
+          {
+            field: 'contentMarking',
+            from: { text: { by: 'none' } },
+            to: { text: SYNTHID }
+          }
+        ]
+      }
+    ]);
+    expect(writes).toBe(0);
+  });
+
+  it('writes the marking to the stored model when the admin picks it', async () => {
+    const res = await request(app)
+      .post('/api/admin/providers/google/_sync-models')
+      .send({
+        items: [{ kind: 'changed', remoteId: 'gemini-2.5-flash', modelId: 'gemini-flash' }]
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([
+      {
+        kind: 'changed',
+        remoteId: 'gemini-2.5-flash',
+        modelId: 'gemini-flash',
+        status: 'applied'
+      }
+    ]);
+    const stored = files.get('models/gemini-flash.json');
+    expect(stored.contentMarking).toEqual({ text: SYNTHID });
+    expect(stored.supportsVision).toBe(true);
+    expect(refreshes).toBe(1);
+    expect(audits).toHaveLength(1);
+    expect(snapshots).toHaveLength(1);
+  });
+
+  it('reports nothing once the model declares the marking', async () => {
+    const declared = {
+      ...files.get('models/gemini-flash.json'),
+      contentMarking: { text: SYNTHID }
+    };
+    models = [clone(declared)];
+    const res = await drift('google');
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([]);
+  });
+
+  it('answers 502 UPSTREAM_ERROR when Google turns the key down', async () => {
+    gatewayAnswer = { status: 403, body: {} };
+    const res = await drift('google');
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe('UPSTREAM_ERROR');
+    expect(writes).toBe(0);
   });
 });

@@ -184,12 +184,32 @@ project API key, and iHub lists the models the project may use.
 - **Tool calling:** the gateway does not support it yet, so imported models have tool support off.
 - **Existing providers:** **Admin → Providers** has a new **Model gateway** setting for turning a
   provider into a gateway provider.
-- **Sync with gateway:** on a gateway provider's page, **Sync with gateway** compares what the
-  gateway lists now with the models imported from it: new models, changed context window, image
-  input, URL or adapter, and models that are gone. Changes and gone models start ticked, new
+- **Sync models:** on the provider's page, **Sync models** compares what the provider lists now
+  with the models imported from it: new models, changed context window, image input, URL or
+  adapter, and models that are gone. It works for a gateway and for a Google provider, where
+  retired Gemini versions show up as gone. Changes and gone models start ticked, new
   models start unticked (importing one makes it available), and nothing happens until you apply. A model that is gone is disabled, never deleted.
 
 See [Models](../../models.md#importing-models-from-an-endpoint).
+
+## Models Imported From Google Come With Their EU AI Act Marking
+
+A Gemini model imported from a Google provider no longer starts as "Not marked". It is imported with
+the output marking Google declares, so the EU AI Act records name the mark without anyone entering it
+model by model:
+
+- **Text:** `contentMarking.text` is `provider` with the scheme `synthid`.
+- **Images:** a Gemini image model (Nano Banana) also gets `contentMarking.image` the same way, and is
+  imported with **Supports Image Generation** switched on.
+- **Not Gemini:** Gemma and other open models, embeddings, speech and Imagen get no declaration.
+- **Models you already have:** **Sync models** on the Google provider's page offers the declaration to
+  models that do not declare one yet, shown as "EU AI Act marking" with the old and the new value.
+  A marking you entered is never replaced. It starts ticked like any change, so read the list before you apply.
+
+iHub cannot detect SynthID, so the records say the provider declared it. The declaration points at
+Google's public SynthID page, which names the Gemini app and web experience for text, not the Gemini
+API. Replace the reference under **Admin → Models → Output marking** with Google's written
+confirmation for your contract before you rely on it. See [Models](../../models.md#filled-in-on-import-google).
 
 ## Integrations: Install from a Catalog, Configure, Bind to Apps
 
