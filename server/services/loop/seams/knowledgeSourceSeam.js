@@ -119,7 +119,9 @@ export const knowledgeSourceSeam = {
       if (recalled.length) outcome.knowledgeSource = recalled[0];
       // The origin of what it recalled, when that is one place; the call
       // started without one, only the result tells.
-      const origins = [...new Set(recalled.map(activityOriginOfSource))].filter(Boolean);
+      const origins = [...new Set(recalled.map(source => activityOriginOfSource(source)))].filter(
+        Boolean
+      );
       if (origins.length === 1) outcome.activityOrigin = origins[0];
       return;
     }
