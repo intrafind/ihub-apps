@@ -179,6 +179,10 @@ if (cfg.setup.gpu?.url && !flags['skip-models']) {
     maxOutputTokens: g.maxOutputTokens,
     supportsTools: g.supportsTools,
     concurrency: g.concurrency,
+    // Without it iHub never sends `enable_thinking`, so LT_THINKING has no effect
+    // and gpu-01's template default (no thinking) applies. With it, thinking is on
+    // unless a turn sends thinkingEnabled=false (LT_THINKING=off).
+    thinking: { enabled: true },
     enabled: true,
     ...(g.apiKey ? { apiKey: g.apiKey } : {})
   });
