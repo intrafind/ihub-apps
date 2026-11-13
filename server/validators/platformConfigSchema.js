@@ -21,7 +21,6 @@ import {
   DEFAULT_REFRESH_MODE,
   DEFAULT_REFRESH_TTL_SECONDS,
   DEFAULT_REFRESH_WAIT_SECONDS,
-  MAX_CONVERT_CONCURRENCY,
   MAX_FETCH_CONCURRENCY,
   MAX_REFRESH_WAIT_SECONDS,
   zRefreshMode,
@@ -879,9 +878,9 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .optional(),
-        // The threads that read uploaded files off the event loop (#3649): the
-        // time and heap one file may use. How many there are is
-        // `ingest.concurrency`. Absent: 60 s per file, 1 GB of heap per thread.
+        // The thread that reads uploaded files off the event loop (#3649), one
+        // per server process: the time and heap one file may use. Absent: 60 s
+        // per file, 1 GB of heap.
         extraction: z
           .object({
             timeoutMs: z
@@ -917,9 +916,6 @@ export const platformConfigSchema = z
           .prefault({}),
         ingest: z
           .object({
-            // Files read at once per server process — project items and chat
-            // uploads alike — and the number of extraction threads.
-            concurrency: z.number().int().min(1).max(MAX_CONVERT_CONCURRENCY).prefault(2),
             // Jobs at once per server process, each fetching its source first.
             fetchConcurrency: z
               .number()

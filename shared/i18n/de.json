@@ -6052,11 +6052,7 @@
       },
       "fetchConcurrency": {
         "label": "Gleichzeitig geprüfte Dateien und Webseiten",
-        "help": "Pro Serverprozess. Die Prüfung, ob sich eine Datei oder Seite geändert hat, braucht wenig Speicher; mindestens so viele wie gleichzeitige Umwandlungen."
-      },
-      "convertConcurrency": {
-        "label": "Gleichzeitig umgewandelte Dokumente",
-        "help": "Pro Serverprozess: Uploads in Projekte und Chats sowie geänderte Dateien und Webseiten werden so viele auf einmal in Text umgewandelt, jede in einem eigenen Thread. Jede belegt einen Prozessorkern und braucht etwa 100 MB mehr Speicher; nur erhöhen, wo Kerne frei sind. Ein kleinerer Wert wirkt nach einem Neustart."
+        "help": "Pro Serverprozess. Die Prüfung, ob sich eine Datei oder Seite geändert hat, braucht wenig Speicher; was sich geändert hat, wird danach pro Serverprozess eine Datei nach der anderen in Text umgewandelt."
       },
       "caches": {
         "legend": "Arbeitsspeicher der Projektsuche",

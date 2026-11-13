@@ -10,7 +10,7 @@
  * picked cloud document (a `fetch` the kind supplies, run with the picking
  * user's token), a refresh of such an item, a write-back from a workflow
  * (`text`), and an admin's pasted text. Jobs run on a per-worker queue
- * (concurrency from `projects.ingest.concurrency`, 2 by default) on the
+ * (one conversion at a time per server process, `CONVERSIONS_PER_PROCESS`) on the
  * worker that received the file: the temp file is local. A job holds no HTTP
  * connection; `item.status` moves `pending → extracting → ready | failed`
  * under the project lock, so a client polling the item sees progress and a
@@ -66,7 +66,7 @@ const INVENTORY_PAGE_SIZE = 10000;
 
 /**
  * Most expired files one reconciler tick queues for a refresh; the rest wait
- * for the next tick. The queue's `ingest.concurrency` bounds how many run.
+ * for the next tick. The queue's the conversion slot (`CONVERSIONS_PER_PROCESS`) bounds how many run.
  */
 export const MAX_SCHEDULED_REFRESHES = 50;
 
@@ -323,7 +323,7 @@ export class ProjectIngestService {
     /**
      * Jobs waiting for a conversion slot (#3622): a job holds one of the
      * `ingest.fetchConcurrency` job slots from its start, and one of the
-     * `ingest.concurrency` conversion slots only while it scans and extracts.
+     * the conversion slot (`CONVERSIONS_PER_PROCESS`) conversion slots only while it scans and extracts.
      * Checking a source is cheap; converting it is what costs memory.
      */
     this.convertQueue = [];
@@ -385,7 +385,7 @@ export class ProjectIngestService {
       startedAt: Date.now()
     };
     // Every job goes through the queue, so `ingest.fetchConcurrency` bounds
-    // the jobs and `ingest.concurrency` the scans and extractions of this
+    // the jobs and the conversion slot (`CONVERSIONS_PER_PROCESS`) the scans and extractions of this
     // worker whatever the route;
     // `inline` only decides whether the caller waits for the result.
     // An explicit `wait: false` wins even for text handed in.
@@ -436,7 +436,7 @@ export class ProjectIngestService {
   }
 
   /**
-   * Wait for a conversion slot (`ingest.concurrency`): jobs someone waits for
+   * Wait for a conversion slot (the conversion slot (`CONVERSIONS_PER_PROCESS`)): jobs someone waits for
    * first, background jobs never in the last slot when there is more than one.
    *
    * @param {Object} job
@@ -650,7 +650,7 @@ export class ProjectIngestService {
       if (!project) return null;
       this.service._checkItemQuota(withoutItem(project, itemId), { bytes: size });
 
-      // 3–4 hold a conversion slot (`ingest.concurrency`): the fetch above
+      // 3–4 hold a conversion slot (the conversion slot (`CONVERSIONS_PER_PROCESS`)): the fetch above
       //    ran under the job's slot only, so many sources are checked at once
       //    while few are converted.
       const maxChars = input.purpose === 'import' ? MAX_IMPORT_TEXT_CHARS : MAX_TEXT_CHARS;
@@ -1119,7 +1119,7 @@ export class ProjectIngestService {
    * Queue a refresh of every file from a website whose snapshot is older
    * than its refresh TTL (#3536), through `ProjectService.refreshItem`: the
    * same reservation, the same conditional download, the same queue (so
-   * `ingest.concurrency` bounds it). At most {@link MAX_SCHEDULED_REFRESHES}
+   * the conversion slot (`CONVERSIONS_PER_PROCESS`) bounds it). At most {@link MAX_SCHEDULED_REFRESHES}
    * per call. Items of a disabled admin project, a project being deleted, or
    * an item set to `never` are left alone; an item another worker reserved
    * meanwhile is skipped (`PROJECT_MISMATCH`).

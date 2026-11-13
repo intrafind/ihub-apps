@@ -1728,7 +1728,7 @@ describe('a reader waits for what is outdated, and fetching is bounded apart fro
       items.push(await settled(project.id, item.id));
     }
     setPlatform({
-      projects: { ...platform.projects, ingest: { concurrency: 1, fetchConcurrency: 4 } }
+      projects: { ...platform.projects, ingest: { fetchConcurrency: 4 } }
     });
     let converting = 0;
     let maxConverting = 0;
@@ -1769,16 +1769,16 @@ describe('a reader waits for what is outdated, and fetching is bounded apart fro
     }
   });
 
-  it('never runs fewer jobs than conversions, and bounds both', () => {
+  it('converts one file at a time per process and bounds the checks', () => {
     assert.deepEqual(projectSettings({}).ingest, {
-      concurrency: 2,
+      concurrency: 1,
       fetchConcurrency: 8,
       staleAfterMinutes: 30
     });
     assert.equal(
-      projectSettings({ projects: { ingest: { concurrency: 6, fetchConcurrency: 2 } } }).ingest
-        .fetchConcurrency,
-      6
+      projectSettings({ projects: { ingest: { concurrency: 6 } } }).ingest.concurrency,
+      1,
+      'not configurable'
     );
     assert.equal(
       projectSettings({ projects: { ingest: { fetchConcurrency: 500 } } }).ingest.fetchConcurrency,

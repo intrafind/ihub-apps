@@ -66,7 +66,6 @@ export function parseWholeNumber(value, min, max) {
 /** The bounds of the refresh wait and the ingest limits, as the server takes them (#3622). */
 export const REFRESH_WAIT_RANGE = Object.freeze({ min: 0, max: 120 });
 export const FETCH_CONCURRENCY_RANGE = Object.freeze({ min: 1, max: 32 });
-export const CONVERT_CONCURRENCY_RANGE = Object.freeze({ min: 1, max: 8 });
 
 /**
  * A mode select's value back to a mode: `''` is "inherit" (null).

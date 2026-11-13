@@ -164,9 +164,10 @@ answer from the stored text at once while the refresh runs behind. The project p
 refreshed when used**.
 
 **Checking and converting have separate limits** per server process: `ingest.fetchConcurrency`
-jobs run at once (8 by default, up to 32), each fetching its source, but only `ingest.concurrency`
-of them convert at once (2 by default, up to 8), the step that reads a document into text and needs
-the memory. Many pages are checked in parallel, while conversions stay few. Both are set in
+jobs run at once (8 by default, up to 32), each fetching its source, but only one of them converts
+at a time, the step that reads a document into text and needs the CPU and memory. Many pages are
+checked in parallel, while each server process reads one file at a time on its extraction thread;
+more `WORKERS` read more files at once. `ingest.fetchConcurrency` is set in
 **Admin → Projects → Project settings**.
 
 - **Files from websites** are refreshed on their own (in mode `always`, and in mode `auto` while
@@ -1293,8 +1294,7 @@ would go past it.
 | `scan.command`              | `""`                | The scanner command; `{path}` is replaced by the file, or the path is appended. Exit code 0 is clean, 1 infected, anything else an error. |
 | `scan.timeoutMs`            | `30000`             | How long the scanner may run.                                                                            |
 | `scan.onError`              | `reject`            | What a scanner error does to the file: `reject` fails it, `allow` lets it through.                       |
-| `ingest.concurrency`        | `2`                 | Files read at once per server process, at most 8: project items (scan and extraction) and chat uploads share it, and it is the number of extraction threads. Each thread keeps a core busy while it reads and loads its own copy of the extractors (about 100 MB), so raise it only where cores are spare. A higher value applies at once, a lower one after a restart. **Admin → Projects → Project settings**. |
-| `ingest.fetchConcurrency`   | `8`                 | Jobs at once per server process, each fetching its source before it waits for a conversion; at most 32, never fewer than `ingest.concurrency`. **Admin → Projects → Project settings**. |
+| `ingest.fetchConcurrency`   | `8`                 | Jobs at once per server process, each fetching its source before it waits for the conversion; 1 to 32. **Admin → Projects → Project settings**. |
 | `ingest.staleAfterMinutes`  | `30`                | After how long a waiting or extracting item counts as interrupted.                                       |
 | `indexCache.maxEntries`     | `32`                | Search indexes (one per project and version) a server process keeps; 1 to 10000. A miss rebuilds the index on the event loop (60–90 ms for a 590,000-character project) and reads the texts again. Size it from the working set: `ihub.projects.active` and the index-cache hit rate in [Telemetry](telemetry.md). **Admin → Projects → Project settings**. |
 | `indexCache.maxHeapShare`   | built-in (see below) | Share of the process's heap limit the cached indexes may use, 0.01 to 0.5; an index character is counted as 4.5 bytes of heap. Entered as a percentage in **Admin → Projects → Project settings**; empty is the built-in budget. |
@@ -1307,7 +1307,7 @@ would go past it.
 
 **Extraction threads.** Reading a file (SheetJS, Word, pdfium, …) is CPU work that used to run on the
 event loop, so every request of that process waited, chat streams included. It now runs in a small pool of
-worker threads per process, as many as `ingest.concurrency`: the bytes are copied to the thread (moved when the caller hands the buffer
+worker thread per process, which project items and chat uploads share: the bytes are copied to the thread (moved when the caller hands the buffer
 over), only the text comes back, and a scanned PDF's page images are rendered there too. A thread that
 times out, runs out of memory or dies is replaced by the next file; waiting files queue
 (`ihub.extraction.queue.duration` in [Telemetry](telemetry.md)). The zip-bomb checks run in the thread.

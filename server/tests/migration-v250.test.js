@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V250 specs — `projects.extraction.threads` folds into
- * `projects.ingest.concurrency`.
+ * Migration V250 specs — `projects.ingest.concurrency` and
+ * `projects.extraction.threads` are removed.
  */
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { up, version } from '../migrations/V250__one_file_concurrency_setting.js';
-import { setDefault, removeKey } from '../migrations/utils.js';
+import { up, version } from '../migrations/V250__remove_file_concurrency_settings.js';
+import { removeKey } from '../migrations/utils.js';
 
 function fakeCtx(platform) {
   const files = { 'config/platform.json': platform };
@@ -22,7 +22,6 @@ function fakeCtx(platform) {
       files[p] = d;
       this.written = true;
     },
-    setDefault,
     removeKey,
     log: () => {},
     warn: () => {}
@@ -33,28 +32,35 @@ test('version is 250', () => {
   assert.equal(version, '250');
 });
 
-test('removes threads and carries a larger value over to ingest.concurrency', async () => {
-  const ctx = fakeCtx({ projects: { extraction: { threads: 4, timeoutMs: 30000 } } });
+test('removes both settings and keeps the rest of their blocks', async () => {
+  const ctx = fakeCtx({
+    projects: {
+      ingest: { concurrency: 4, fetchConcurrency: 16 },
+      extraction: { threads: 2, timeoutMs: 30000 }
+    }
+  });
   await up(ctx);
   assert.deepEqual(ctx.files['config/platform.json'].projects, {
-    extraction: { timeoutMs: 30000 },
-    ingest: { concurrency: 4 }
+    ingest: { fetchConcurrency: 16 },
+    extraction: { timeoutMs: 30000 }
   });
 });
 
-test('keeps ingest.concurrency when it is already at least threads', async () => {
-  for (const threads of [0, 1, 3]) {
-    const ctx = fakeCtx({ projects: { extraction: { threads }, ingest: { concurrency: 3 } } });
-    await up(ctx);
-    assert.deepEqual(ctx.files['config/platform.json'].projects, {
-      extraction: {},
-      ingest: { concurrency: 3 }
-    });
-  }
+test('removes either one alone', async () => {
+  const a = fakeCtx({ projects: { ingest: { concurrency: 2 } } });
+  await up(a);
+  assert.deepEqual(a.files['config/platform.json'].projects, { ingest: {} });
+  const b = fakeCtx({ projects: { extraction: { threads: 0 } } });
+  await up(b);
+  assert.deepEqual(b.files['config/platform.json'].projects, { extraction: {} });
 });
 
-test('writes nothing without extraction.threads', async () => {
-  for (const platform of [{}, { projects: {} }, { projects: { extraction: { memoryMb: 512 } } }]) {
+test('writes nothing when neither is set', async () => {
+  for (const platform of [
+    {},
+    { projects: {} },
+    { projects: { ingest: { fetchConcurrency: 8 } } }
+  ]) {
     const ctx = fakeCtx(platform);
     await up(ctx);
     assert.equal(ctx.written, false);

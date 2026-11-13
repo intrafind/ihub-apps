@@ -38,7 +38,7 @@ import {
   DEFAULT_REFRESH_MODE,
   DEFAULT_REFRESH_TTL_SECONDS,
   DEFAULT_REFRESH_WAIT_SECONDS,
-  MAX_CONVERT_CONCURRENCY,
+  CONVERSIONS_PER_PROCESS,
   MAX_FETCH_CONCURRENCY,
   MAX_REFRESH_WAIT_SECONDS,
   normalizeRefreshMode,
@@ -95,11 +95,9 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   kinds: Object.freeze({}),
   encryption: Object.freeze({ keyProvider: 'local-file' }),
   scan: Object.freeze({ provider: 'none', command: '', timeoutMs: 30000, onError: 'reject' }),
-  // `concurrency`: conversions (scan and extraction) at once per server
-  // process; `fetchConcurrency`: jobs at once, each fetching its source before
-  // it waits for a conversion slot (#3622).
+  // `fetchConcurrency`: jobs at once per server process, each fetching its
+  // source before it waits for the conversion slot (#3622).
   ingest: Object.freeze({
-    concurrency: 2,
     fetchConcurrency: DEFAULT_FETCH_CONCURRENCY,
     staleAfterMinutes: 30
   })
@@ -214,17 +212,16 @@ export function projectSettings(platformConfig) {
       maxHeapShare: readHeapShare(block.indexCache?.maxHeapShare)
     },
     textCache: { maxHeapShare: readHeapShare(block.textCache?.maxHeapShare) },
-    extraction: extractionSettings(block.extraction, ingest)
+    extraction: extractionSettings(block.extraction)
   };
 }
 
 /**
- * The `extraction` block (#3649): the time one file may take and the heap one
- * thread may use. How many files are read at once is `ingest.concurrency`, the
- * one setting for uploads, chat files and ingestion alike: it is the number of
- * extraction threads per server process.
+ * The `extraction` block (#3649): the time one file may take and the heap the
+ * thread may use. Every server process has one extraction thread
+ * ({@link CONVERSIONS_PER_PROCESS}).
  */
-function extractionSettings(block, ingest) {
+function extractionSettings(block) {
   // `null` and '' mean "not set" (Number(null) would be 0 threads).
   const read = (value, fallback) =>
     value === null || value === '' ? fallback : readNumber(value, fallback);
@@ -238,8 +235,7 @@ function extractionSettings(block, ingest) {
   );
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Math.floor(value)));
   return {
-    // Every thread loads its own copy of the extractors (about 100 MB).
-    threads: ingest.concurrency,
+    threads: CONVERSIONS_PER_PROCESS,
     timeoutMs: clamp(
       read(block?.timeoutMs, DEFAULT_EXTRACTION_TIMEOUT_MS),
       MIN_EXTRACTION_TIMEOUT_MS,
@@ -266,22 +262,16 @@ function readHeapShare(value) {
 }
 
 /**
- * The `ingest` block: conversions at once, and jobs at once (each fetching
- * before it waits for a conversion), never fewer jobs than conversions.
+ * The `ingest` block: jobs at once, each fetching before it waits for the
+ * process's conversion slot. `concurrency` is that slot count, fixed at
+ * {@link CONVERSIONS_PER_PROCESS}.
  */
 function ingestSettings(block, defaults) {
-  const concurrency = Math.min(
-    MAX_CONVERT_CONCURRENCY,
-    readPositive(block?.concurrency, defaults.concurrency)
-  );
   return {
-    concurrency,
-    fetchConcurrency: Math.max(
-      concurrency,
-      Math.min(
-        MAX_FETCH_CONCURRENCY,
-        readPositive(block?.fetchConcurrency, defaults.fetchConcurrency)
-      )
+    concurrency: CONVERSIONS_PER_PROCESS,
+    fetchConcurrency: Math.min(
+      MAX_FETCH_CONCURRENCY,
+      readPositive(block?.fetchConcurrency, defaults.fetchConcurrency)
     ),
     staleAfterMinutes: readPositive(block?.staleAfterMinutes, defaults.staleAfterMinutes)
   };
