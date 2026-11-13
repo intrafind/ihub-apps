@@ -747,3 +747,21 @@ flag. Each of these routes now checks and changes the file under one lock.
   behind the file, and the first-run setup writes its API key to the stored list instead of the cache.
 - Installing, editing and removing integrations changes `integrations.json` and the managed
   credentials in `credentials.json` under the same lock, next to the credentials routes.
+
+## Reopened Chats Keep the Name of the Search Provider
+
+After a web search, the activity line of a chat that was reopened or shared no longer loses the name of
+the search provider (for example "Brave Search"). It showed up while the answer was live and was gone
+once the chat was stored.
+
+## An Answer Based on a Page the Model Opened Is Marked "Web"
+
+When the only thing the model did was open a page with the page reader (a pasted link, say), the footer
+named "Model knowledge". It now names "Web". A page that could not be opened, or came back without text
+(an offset at the end of the page), does not count.
+
+## Skills Set by an App No Longer Read "Started by You"
+
+A skill that an app switches on itself (`skillSettings.autoActivate`) is no longer announced as started by
+the user, and a skill kept from an earlier message of the chat is now announced too instead of being
+silent. The chat shows who brought each skill in once the activity line is updated.

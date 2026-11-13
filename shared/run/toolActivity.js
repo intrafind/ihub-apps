@@ -18,8 +18,8 @@
  *    nothing here infers it from the tool id. Clarifications (`ask_user`) and
  *    chat-launched workflows are left out: each has its own UI.
  *  - `tool/progress{skill.activation}` frames: one `skill` row per activation,
- *    placed among the tool calls by time, saying who activated the skill (the
- *    user with `/name`, or the model). The `activate_skill` call itself is not a
+ *    placed among the tool calls by time, saying who brought the skill in (the
+ *    user with `/name`, the app, the model, or an earlier message of the chat). The `activate_skill` call itself is not a
  *    row, so a skill the model loads twice shows twice here but only once in
  *    `run.skills`, the set the message header lists.
  *  - provider-run web search (Google Search grounding, Anthropic web search):
@@ -47,6 +47,7 @@
  * @module shared/run/toolActivity
  */
 
+import { SKILL_ACTIVATORS } from '../runEvents.js';
 import { ARGS_OUTCOMES, FAILED_ARGS_OUTCOMES } from './argProgress.js';
 
 /**
@@ -224,10 +225,9 @@ function skillRows(run) {
         toolId: 'activate_skill',
         name,
         skillId: typeof entry.data?.skillId === 'string' ? entry.data.skillId : null,
-        activatedBy:
-          entry.data?.activatedBy === 'user' || entry.data?.activatedBy === 'model'
-            ? entry.data.activatedBy
-            : null,
+        activatedBy: SKILL_ACTIVATORS.includes(entry.data?.activatedBy)
+          ? entry.data.activatedBy
+          : null,
         status: 'completed',
         scope: null,
         details: [],
@@ -248,12 +248,26 @@ function skillRows(run) {
  */
 function mergeSkillRows(toolRows, skills) {
   const rows = [...toolRows];
+  // Skills arrive in order, so each goes after the one before it: skills
+  // announced together (every skill in force when the turn starts) keep their order.
+  let from = 0;
   for (const skill of skills) {
-    const index = Number.isNaN(skill.at)
-      ? -1
-      : rows.findIndex(row => !Number.isNaN(row.at) && row.at >= skill.at);
-    if (index < 0) rows.push(skill);
-    else rows.splice(index, 0, skill);
+    let index = -1;
+    if (!Number.isNaN(skill.at)) {
+      for (let i = from; i < rows.length; i++) {
+        if (!Number.isNaN(rows[i].at) && rows[i].at >= skill.at) {
+          index = i;
+          break;
+        }
+      }
+    }
+    if (index < 0) {
+      rows.push(skill);
+      from = rows.length;
+    } else {
+      rows.splice(index, 0, skill);
+      from = index + 1;
+    }
   }
   return rows;
 }
@@ -384,6 +398,14 @@ function callRow(run, { tool, stream }, finished) {
       integration: tool?.integration || stream?.integration || null,
       status,
       scope: scopeOf(kind, tool),
+      // Where the server says the call looked (`activityOrigin`): never worked
+      // out here from the tool id, the provider or `scope`. null = not said.
+      origin: tool?.activityOrigin || stream?.activityOrigin || null,
+      // What the server declared the call came to: the hits of a search (0
+      // included), whether a read delivered text (`opened`, `empty`). null =
+      // not declared, never worked out from `sources`.
+      resultCount: kind === 'search' ? (tool?.resultCount ?? null) : null,
+      readOutcome: kind === 'fetch' ? (tool?.readOutcome ?? null) : null,
       query,
       url,
       documentId,
@@ -409,6 +431,10 @@ function nativeSearchRow(run, finished) {
     kind: 'search',
     native: true,
     scope: 'web',
+    // The provider's own search is the web: the grounding frame says so.
+    origin: 'web',
+    resultCount: null,
+    readOutcome: null,
     toolId: 'webSearch',
     name: 'webSearch',
     // The provider reports no end of its search; once the answer streams,

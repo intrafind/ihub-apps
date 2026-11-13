@@ -553,13 +553,20 @@ describe('activation records', () => {
     ]);
   });
 
-  test('a turn announces the skills it activates, not the ones carried over', () => {
+  test('a turn announces every skill in force, each with who brought it in', () => {
     assert.deepEqual(
       announcedSkills([
         { name: 'usk_1', displayName: 'Mine', description: 'd', origin: 'message' },
+        { name: 'beta', displayName: 'beta', description: '', origin: 'requested' },
+        { name: 'gamma', displayName: 'gamma', description: '', origin: 'app' },
         { name: 'alpha', displayName: 'alpha', description: '', origin: 'chat' }
       ]),
-      [{ skillName: 'Mine', skillId: 'usk_1', activatedBy: 'user', description: 'd' }]
+      [
+        { skillName: 'Mine', skillId: 'usk_1', activatedBy: 'user', description: 'd' },
+        { skillName: 'beta', skillId: 'beta', activatedBy: 'user', description: '' },
+        { skillName: 'gamma', skillId: 'gamma', activatedBy: 'app', description: '' },
+        { skillName: 'alpha', skillId: 'alpha', activatedBy: 'chat', description: '' }
+      ]
     );
   });
 });

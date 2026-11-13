@@ -123,23 +123,36 @@ export function historyForPrompt(stored) {
 }
 
 /**
- * The skills a turn announces as activated on its run: the ones it activates
- * itself (named in the request or the message), not the ones still active
- * from earlier turns.
+ * Who brought a skill into the turn, by the route `resolveSkillsForTurn`
+ * found it by: picked in the composer or `/name` in the message is the user's
+ * (`requested`, `message`), `skillSettings.autoActivate` is the app's, and one
+ * an earlier turn activated is kept (`chat`). The model's own activation is
+ * announced by the `activate_skill` tool, not here.
+ */
+const SKILL_ACTIVATOR_OF_ORIGIN = Object.freeze({
+  requested: 'user',
+  message: 'user',
+  app: 'app',
+  chat: 'chat'
+});
+
+/**
+ * The skills a turn announces on its run (`skill.activation`): every skill in
+ * force, each saying who brought it in: the user, the app, or an earlier
+ * message of the chat. A skill is shown once, in the activity block, with its
+ * reason, so a carried-over skill is announced too.
  *
  * @param {Array<{name: string, displayName: string, description?: string, origin: string}>} [skills]
  *   `activeSkills` of the prepared request
- * @returns {Array<{skillName: string, skillId: string, activatedBy: 'user', description: string}>}
+ * @returns {Array<{skillName: string, skillId: string, activatedBy: 'user'|'app'|'chat', description: string}>}
  */
 export function announcedSkills(skills) {
-  return (Array.isArray(skills) ? skills : [])
-    .filter(skill => skill.origin !== 'chat')
-    .map(skill => ({
-      skillName: skill.displayName,
-      skillId: skill.name,
-      activatedBy: 'user',
-      description: skill.description || ''
-    }));
+  return (Array.isArray(skills) ? skills : []).map(skill => ({
+    skillName: skill.displayName,
+    skillId: skill.name,
+    activatedBy: SKILL_ACTIVATOR_OF_ORIGIN[skill.origin] || 'user',
+    description: skill.description || ''
+  }));
 }
 
 /**
@@ -1484,11 +1497,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
           llmMessages = prep.data.llmMessages;
 
-          // Skills this turn activates (`/name` in the message, or
-          // `requestedSkills`) are announced on the run: the usable subset the
-          // request builder put in the system prompt, never a skill the app or
-          // the user may not use. Skills still active from earlier turns were
-          // announced when they were activated.
+          // Skills in force this turn are announced on the run: the usable
+          // subset the request builder put in the system prompt, never a skill
+          // the app or the user may not use. Each says who brought it in (the
+          // user's `/name` or composer pick, the app, or an earlier message).
           const activatedSkills = announcedSkills(prep.data.activeSkills);
 
           const outcome = await processChatRequest({

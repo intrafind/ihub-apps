@@ -62,7 +62,7 @@ Every new outbound connection — HTTP(S), WebSocket (`wss://`), a new SDK or cl
 
 ### Run Activity: the Server Decides, the Client Renders
 
-What a tool call was — a web search, a document search, a page read, a call to a connected system — and how it is labelled is decided on the server and sent with the event (`tool/started`: `title`, `integration`, `activityKind`, `activityScope`, from `server/utils/toolDisplay.js`; the answer's basis from `run/ended.answerBasis`). The client and `shared/run/` never infer it from a tool id; a new distinction gets a new server-sent field.
+What a tool call was — a web search, a document search, a page read, a call to a connected system — and how it is labelled is decided on the server and sent with the event (`tool/started`: `title`, `integration`, `activityKind`, `activityScope`, `activityOrigin`, from `server/utils/toolDisplay.js`; the answer's basis from `run/ended.answerBasis`). The client and `shared/run/` never infer it from a tool id; a new distinction gets a new server-sent field.
 
 ### REST API Design ⚠️
 

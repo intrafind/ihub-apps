@@ -138,6 +138,28 @@ function queryOf(args) {
 export const iFinderSourceProducer = {
   id: 'ifinder',
 
+  /**
+   * What the call came to, from the full result: the hits of a search, whether
+   * a document read delivered any text. Left out when the result does not say.
+   *
+   * @param {{toolId: string, result: unknown, failed?: boolean}} call
+   * @returns {{resultCount?: number, readOutcome?: 'opened'|'empty'}}
+   */
+  outcomeOf({ toolId, result, failed }) {
+    const parsed = parseResult(result);
+    if (failed || !parsed || typeof parsed !== 'object' || Array.isArray(parsed) || parsed.error) {
+      return {};
+    }
+    const tool = String(toolId).toLowerCase();
+    if (tool === 'ifinder_search') {
+      return Array.isArray(parsed.results) ? { resultCount: parsed.results.length } : {};
+    }
+    if (tool === 'ifinder_getcontent' && typeof parsed.content === 'string') {
+      return { readOutcome: parsed.content.trim() ? 'opened' : 'empty' };
+    }
+    return {};
+  },
+
   /** @param {{toolId: string}} call */
   matches({ toolId }) {
     return isIFinderDocumentTool(toolId);

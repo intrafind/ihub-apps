@@ -14,7 +14,8 @@ import {
   SSE_V2_EVENTS,
   STEP_DELTA_KINDS,
   RUN_STATUSES,
-  RUN_KINDS
+  RUN_KINDS,
+  ACTIVITY_ORIGINS
 } from '../../../../shared/runEvents.js';
 import {
   usageSchema,
@@ -171,6 +172,12 @@ export const toolStartedData = z.object({
   activityKind: z.enum(['search', 'fetch', 'tool']).optional(),
   /** For a search or fetch: the public web or the organisation's documents. */
   activityScope: z.enum(['web', 'documents']).optional(),
+  /**
+   * Where the call looked, in the footer's vocabulary (server `utils/toolDisplay`:
+   * `activityOriginOf`); absent when the server cannot place the call. Never
+   * inferred from the tool id by the client.
+   */
+  activityOrigin: z.enum(ACTIVITY_ORIGINS).optional(),
   args: z.any(),
   execution: z.enum(['server', 'caller', 'clarification', 'passthrough']).prefault('server'),
   mcpApp: mcpAppRefSchema.optional()
@@ -195,6 +202,12 @@ export const toolCompletedData = z.object({
   error: z.object({ code: z.string().optional(), message: z.string() }).optional(),
   durationMs: z.number().int().nonnegative().optional(),
   knowledgeSource: z.string().optional(),
+  /** Origin that only the result tells (the recall of earlier sources); see `toolStartedData`. */
+  activityOrigin: z.enum(ACTIVITY_ORIGINS).optional(),
+  /** Hits a search returned, `0` included; absent when the server does not know. Never inferred from `sources/added`. */
+  resultCount: z.number().int().nonnegative().optional(),
+  /** What a page or document read delivered: `opened` (text) or `empty` (completed, no text). */
+  readOutcome: z.enum(['opened', 'empty']).optional(),
   /** MCP App view drawn from this call's full result. */
   mcpApp: mcpAppViewSchema.optional(),
   /**

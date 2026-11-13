@@ -708,6 +708,7 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
     // The server decides how the chat draws the call: a web search.
     activityKind: 'search',
     activityScope: 'web',
+    activityOrigin: 'web',
     args: { query: 'berlin' },
     execution: 'server'
   });
@@ -722,6 +723,8 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
   assert.ok(Number.isInteger(done.durationMs) && done.durationMs >= 0);
   // knowledgeSourceSeam runs before chatToolSeam, so the per-tool hint is on the frame.
   assert.equal(done.knowledgeSource, 'websearch');
+  // The server declares what the search came to: one hit, from the full result.
+  assert.equal(done.resultCount, 1);
 
   assert.equal(round2.step, 2);
   assert.equal(round2.content, 'Sunny.');

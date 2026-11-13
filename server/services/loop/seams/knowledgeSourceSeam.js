@@ -13,9 +13,13 @@
 import { getDefinitionTypes } from '../../integrations/integrationTypes.js';
 import { classifyToolResult } from '../toolClassify.js';
 import { integrationLabelOf } from '../../../utils/toolIntegrationLabel.js';
+import { activityOriginOfSource } from '../../chat/answerBasis.js';
 
 /** iHub's own tools (scheduling, …) are not a connected system. */
 const IHUB_DEFINITION = 'com.intrafind/ihub';
+
+/** The page reader: opening a page the model was pointed at (or found) is the web. */
+const PAGE_READER_TOOL_ID = 'read_url';
 
 /**
  * The source of a tool, by its id alone: the built-in search and retrieval
@@ -27,6 +31,8 @@ const IHUB_DEFINITION = 'com.intrafind/ihub';
 export function classifyKnowledgeSource(toolId) {
   const id = String(toolId || '').toLowerCase();
   if (!id) return null;
+  // The page reader reads the open web.
+  if (id === PAGE_READER_TOOL_ID) return 'websearch';
   // iFinder searches the organisation's own document index, not the web.
   if (id.startsWith('ifinder')) return 'ifinder';
   // The project knowledge tools search the projects the chat was given.
@@ -111,12 +117,24 @@ export const knowledgeSourceSeam = {
       const recalled = recalledKnowledgeSources(outcome);
       for (const source of recalled) ctx.addKnowledgeSource(source);
       if (recalled.length) outcome.knowledgeSource = recalled[0];
+      // The origin of what it recalled, when that is one place; the call
+      // started without one, only the result tells.
+      const origins = [...new Set(recalled.map(activityOriginOfSource))].filter(Boolean);
+      if (origins.length === 1) outcome.activityOrigin = origins[0];
       return;
     }
     const source = classifyToolKnowledgeSource(info.toolId, info.toolDef);
     if (!source) return;
     // A connected system that returned nothing but an error informed nothing.
     if (source === 'integration' && (outcome.error || classifyToolResult(outcome.message).failed)) {
+      return;
+    }
+    // A page read that delivered no text (a failed fetch, an offset at the end
+    // of the page, a refusal) informed nothing: the answer does not rest on the web.
+    if (
+      String(info.toolId).toLowerCase() === PAGE_READER_TOOL_ID &&
+      outcome.readOutcome !== 'opened'
+    ) {
       return;
     }
     // A project search that found nothing, or a listing, read no project: the
