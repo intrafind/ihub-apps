@@ -40,7 +40,7 @@ import {
 import { extractXlsxText, readWorkbook } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
 import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
-import { recordExtractionDuration } from '../../telemetry/metrics.js';
+import { recordExtractionDuration, recordExtractionQueueWait } from '../../telemetry/metrics.js';
 import { extractHtmlPage } from '../pageReader/pageContent.js';
 import { cleanItemInfo, infoFromText } from './itemInfo.js';
 
@@ -66,7 +66,7 @@ export const MSG_MIME = 'application/vnd.ms-outlook';
 /** An extraction failure the pipeline records on the item. */
 export class ExtractionError extends Error {
   /**
-   * @param {'UNSUPPORTED_TYPE'|'EXTRACTION_FAILED'|'NO_TEXT'} code
+   * @param {'UNSUPPORTED_TYPE'|'EXTRACTION_FAILED'|'EXTRACTION_TIMEOUT'|'INTERRUPTED'|'NO_TEXT'} code
    * @param {string} message
    */
   constructor(code, message) {
@@ -919,20 +919,49 @@ export function normalizeText(text, { maxChars = MAX_TEXT_CHARS } = {}) {
  * (PDF pages past `maxPages`, spreadsheet rows past `sheetRows` or past the
  * workbook's character budget).
  *
+ * The work runs in an extraction thread (`extractionPool.js`, `projects.extraction`
+ * in platform.json) so the event loop stays free; the file is copied to the thread
+ * unless `transferBytes` hands the buffer over (it is then empty afterwards).
+ * `EXTRACTION_TIMEOUT` is a file that took longer than the time budget.
+ *
  * @param {{bytes: Buffer, contentType?: string, name?: string}} file
- * @param {{maxChars?: number, maxPages?: number, sheetRows?: number, speakerNotes?: 'include'|'ignore'}} [options]
+ * @param {{maxChars?: number, maxPages?: number, sheetRows?: number, speakerNotes?: 'include'|'ignore', transferBytes?: boolean}} [options]
  *   The limits; `maxPages` and `sheetRows` default to the extractors' own. `speakerNotes`
  *   (presentations) defaults to `include`.
  * @returns {Promise<{text: string, contentType: string, pages?: number, truncated: boolean,
  *   title?: string, description?: string}>} `title` and `description` from the document's
  *   metadata, or else from its first heading and paragraph.
- * @throws {ExtractionError} `UNSUPPORTED_TYPE`, `EXTRACTION_FAILED`, `NO_TEXT`
+ * @throws {ExtractionError} `UNSUPPORTED_TYPE`, `EXTRACTION_FAILED`, `EXTRACTION_TIMEOUT`, `NO_TEXT`
  */
 export async function extractText(input, options = {}) {
+  const { bytes } = input || {};
+  // Empty or invalid input needs no thread to be refused.
+  if (!Buffer.isBuffer(bytes) || bytes.length === 0) return extractTextInProcess(input, options);
+  // Loaded on first call so the extraction thread, which imports this module
+  // for `extractTextCore`, does not load the pool and its config readers.
+  const pool = await import('./extractionPool.js');
+  try {
+    pool.assertAcceptingJobs();
+  } catch (error) {
+    throw poolFailure(error, input?.name);
+  }
+  if (!pool.extractionThreadsEnabled()) return extractTextInProcess(input, options);
+  return extractInThread(pool, input, options);
+}
+
+/**
+ * Extract on the calling thread — the event loop. What `extractText` does with
+ * `projects.extraction.threads: 0`, and the reference the thread's output is
+ * tested against.
+ *
+ * @param {{bytes: Buffer, contentType?: string, name?: string}} input
+ * @param {Object} [options] - As {@link extractText}.
+ */
+export async function extractTextInProcess(input, options = {}) {
   const started = performance.now();
   let format = 'unknown';
   try {
-    return await extractTextOf(input, options, found => {
+    return await extractTextCore(input, options, found => {
       format = found;
     });
   } finally {
@@ -940,6 +969,74 @@ export async function extractText(input, options = {}) {
     // failing file blocks the event loop as much as a slow good one.
     recordExtractionDuration(format, (performance.now() - started) / 1000);
   }
+}
+
+/** The options the thread gets: plain data, whatever else the caller passed stays here. */
+function threadOptions({ maxChars, maxPages, sheetRows, speakerNotes }) {
+  return { maxChars, maxPages, sheetRows, speakerNotes };
+}
+
+async function extractInThread(pool, input, options) {
+  const { bytes, contentType, name } = input;
+  let outcome;
+  try {
+    outcome = await pool.runInThread(
+      'extract',
+      { contentType, name, options: threadOptions(options) },
+      // `transferBytes`: the caller does not use the buffer again.
+      { bytes, transfer: options.transferBytes === true }
+    );
+  } catch (error) {
+    if (!(error instanceof pool.ExtractionPoolError)) throw error;
+    // The thread never answered, so its format is not known.
+    recordExtractionDuration('unknown', (error.timeoutMs ?? 0) / 1000);
+    throw poolFailure(error, name);
+  }
+  const { envelope, queueMs } = outcome;
+  // The extraction itself, measured in the thread — what blocked the event
+  // loop before the threads — and, apart from it, the wait for a free thread.
+  recordExtractionDuration(envelope.format || 'unknown', (envelope.durationMs ?? 0) / 1000);
+  recordExtractionQueueWait(queueMs / 1000);
+  if (envelope.ok) return envelope.result;
+  const { name: errorName, code, message } = envelope.error || {};
+  if (errorName === 'ExtractionError' && code) throw new ExtractionError(code, message);
+  throw new ExtractionError(
+    'EXTRACTION_FAILED',
+    `${name || 'The file'} could not be read: ${message || 'extraction failed'}`
+  );
+}
+
+/**
+ * An `ExtractionError` for a thread that gave no answer: `EXTRACTION_TIMEOUT`,
+ * `INTERRUPTED` (shutdown) or `EXTRACTION_FAILED`.
+ */
+export function poolFailure(error, name) {
+  const file = name || 'The file';
+  if (error.code === 'timeout') {
+    const seconds = Math.round(error.timeoutMs / 100) / 10;
+    return new ExtractionError(
+      'EXTRACTION_TIMEOUT',
+      `${file} took longer than ${seconds} s to read and was stopped. Split it or remove what it does not need.`
+    );
+  }
+  if (error.code === 'shutdown') {
+    // The server is stopping: the item is interrupted, not unreadable, and
+    // the reconciler or the user retries it (`INTERRUPTED`).
+    return new ExtractionError(
+      'INTERRUPTED',
+      `${file} was not read: the server was restarting. Add it again.`
+    );
+  }
+  if (error.code === 'memory') {
+    return new ExtractionError(
+      'EXTRACTION_FAILED',
+      `${file} could not be read: it needs too much memory. Split it into smaller files.`
+    );
+  }
+  return new ExtractionError(
+    'EXTRACTION_FAILED',
+    `${file} could not be read: ${error.message || 'the extraction stopped'}`
+  );
 }
 
 /** Short, bounded metric label for a resolved content type. */
@@ -974,7 +1071,11 @@ async function readRawText(
   return { raw: decodeText(bytes, name) };
 }
 
-async function extractTextOf(
+/**
+ * The extraction proper, without metrics or threads: what runs in the extraction
+ * thread. `onFormat` gets the resolved format label as soon as it is known.
+ */
+export async function extractTextCore(
   { bytes, contentType, name },
   { maxChars = MAX_TEXT_CHARS, maxPages = MAX_PDF_PAGES, sheetRows, speakerNotes },
   onFormat

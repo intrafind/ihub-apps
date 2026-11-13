@@ -44,8 +44,16 @@ import {
   normalizeRefreshMode,
   normalizeRefreshTtl
 } from './refreshTtl.js';
+import v8 from 'node:v8';
 import {
+  DEFAULT_EXTRACTION_MEMORY_MB,
+  DEFAULT_EXTRACTION_TIMEOUT_MS,
   DEFAULT_INDEX_CACHE_ENTRIES,
+  MAX_EXTRACTION_MEMORY_MB,
+  MAX_EXTRACTION_THREADS,
+  MAX_EXTRACTION_TIMEOUT_MS,
+  MIN_EXTRACTION_MEMORY_MB,
+  MIN_EXTRACTION_TIMEOUT_MS,
   MAX_CACHE_HEAP_SHARE,
   MAX_FILES_CEILING,
   MAX_INDEX_CACHE_ENTRIES,
@@ -205,7 +213,46 @@ export function projectSettings(platformConfig) {
       ),
       maxHeapShare: readHeapShare(block.indexCache?.maxHeapShare)
     },
-    textCache: { maxHeapShare: readHeapShare(block.textCache?.maxHeapShare) }
+    textCache: { maxHeapShare: readHeapShare(block.textCache?.maxHeapShare) },
+    extraction: extractionSettings(block.extraction)
+  };
+}
+
+/**
+ * The `extraction` block (#3649): how many threads read files, the time one
+ * file may take, and the heap one thread may use. `threads: 0` reads on the
+ * event loop, as before the threads existed.
+ */
+function extractionSettings(block) {
+  // One thread keeps the event loop free and reads as fast as the event loop did;
+  // a second only adds throughput where a core is spare, and every thread loads
+  // its own copy of the extractors (about 100 MB).
+  const fallbackThreads = 1;
+  // `null` and '' mean "not set" (Number(null) would be 0 threads).
+  const read = (value, fallback) =>
+    value === null || value === '' ? fallback : readNumber(value, fallback);
+  // The thread's heap comes on top of the process's own, so unless set it never
+  // exceeds half of that heap: a container-sized worker (`utils/workerSizing.js`)
+  // keeps a small thread, a large heap gets the 1 GB default.
+  const processHeapMb = Math.floor(v8.getHeapStatistics().heap_size_limit / (1024 * 1024));
+  const fallbackMemoryMb = Math.min(
+    DEFAULT_EXTRACTION_MEMORY_MB,
+    Math.max(MIN_EXTRACTION_MEMORY_MB, Math.floor(processHeapMb / 2))
+  );
+  const threads = read(block?.threads, fallbackThreads);
+  const clamp = (value, min, max) => Math.min(max, Math.max(min, Math.floor(value)));
+  return {
+    threads: clamp(threads, 0, MAX_EXTRACTION_THREADS),
+    timeoutMs: clamp(
+      read(block?.timeoutMs, DEFAULT_EXTRACTION_TIMEOUT_MS),
+      MIN_EXTRACTION_TIMEOUT_MS,
+      MAX_EXTRACTION_TIMEOUT_MS
+    ),
+    memoryMb: clamp(
+      read(block?.memoryMb, fallbackMemoryMb),
+      MIN_EXTRACTION_MEMORY_MB,
+      MAX_EXTRACTION_MEMORY_MB
+    )
   };
 }
 

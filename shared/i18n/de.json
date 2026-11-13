@@ -10424,6 +10424,7 @@
     "SCAN_REJECTED": "Der Sicherheitsscanner hat die Datei abgelehnt.",
     "NO_TEXT": "Die Datei enthält keinen Text.",
     "EXTRACTION_FAILED": "Der Text konnte nicht aus der Datei extrahiert werden.",
+    "EXTRACTION_TIMEOUT": "Das Lesen der Datei hat zu lange gedauert und wurde abgebrochen. Teilen Sie die Datei auf oder entfernen Sie unnötige Inhalte.",
     "SOURCE_FORBIDDEN": "Sie dürfen keine Dateien aus diesem angebundenen System anhängen.",
     "SOURCE_GONE": "Die Datei existiert im angebundenen System nicht mehr.",
     "SOURCE_UNAVAILABLE": "Das angebundene System ist nicht verfügbar.",

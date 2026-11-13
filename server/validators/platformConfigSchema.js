@@ -6,6 +6,11 @@ import { LANGUAGE_CODE_PATTERN } from '../../shared/validationPatterns.js';
 import { usageLimitBucketSchema } from './common.js';
 import {
   KNOWLEDGE_MODES,
+  MAX_EXTRACTION_MEMORY_MB,
+  MAX_EXTRACTION_THREADS,
+  MAX_EXTRACTION_TIMEOUT_MS,
+  MIN_EXTRACTION_MEMORY_MB,
+  MIN_EXTRACTION_TIMEOUT_MS,
   MAX_CACHE_HEAP_SHARE,
   MAX_FILES_CEILING,
   MAX_INDEX_CACHE_ENTRIES,
@@ -872,6 +877,27 @@ export const platformConfigSchema = z
         textCache: z
           .object({
             maxHeapShare: z.number().min(MIN_CACHE_HEAP_SHARE).max(MAX_CACHE_HEAP_SHARE).optional()
+          })
+          .passthrough()
+          .optional(),
+        // Threads that read uploaded files off the event loop (#3649). Absent:
+        // 1 thread, 60 s per file, 1 GB of heap per thread.
+        // 0 threads reads on the event loop. A restart applies changes.
+        extraction: z
+          .object({
+            threads: z.number().int().min(0).max(MAX_EXTRACTION_THREADS).optional(),
+            timeoutMs: z
+              .number()
+              .int()
+              .min(MIN_EXTRACTION_TIMEOUT_MS)
+              .max(MAX_EXTRACTION_TIMEOUT_MS)
+              .optional(),
+            memoryMb: z
+              .number()
+              .int()
+              .min(MIN_EXTRACTION_MEMORY_MB)
+              .max(MAX_EXTRACTION_MEMORY_MB)
+              .optional()
           })
           .passthrough()
           .optional(),

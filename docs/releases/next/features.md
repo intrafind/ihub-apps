@@ -25,6 +25,20 @@ projects can avoid rebuilding indexes on most turns. The index memory estimate p
 5.5 to 4.5 bytes, so the same share now holds about 20 % more indexed text (the budget now counts 4.5 bytes where it counted 5.5). They are also on **Admin → Projects → Project settings** ("Memory of project search"), applied at once. Use the
 index-cache hit rate and working-set metrics to size them. See [Projects](../../projects.md#platform-settings).
 
+## Files Are Read in Worker Threads, Off the Event Loop
+
+Reading an uploaded file (Excel, Word, PDF, the pages of a scanned PDF, …) no longer blocks the server
+process: it runs in a worker thread, so chat streams and other requests on the same process keep their
+pace while documents are ingested. The result is the same text as before.
+
+- `platform.json` → `projects.extraction`: `threads` (default 1, `0` reads on the event loop as before),
+  `timeoutMs` (default 60 s per file) and `memoryMb` (default 1024 per thread, at most half the process heap). Each thread adds about
+  100 MB per server process.
+- A file that takes longer than the time budget is stopped and fails with `EXTRACTION_TIMEOUT`; before,
+  a pathological file could occupy the process indefinitely.
+- New metric `ihub.extraction.queue.duration` (wait for a free thread); `ihub.extraction.duration` now
+  measures the extraction in the thread. See [Projects](../../projects.md#platform-settings).
+
 ## Workers and Their Memory Follow the Container's Memory Limit
 
 In a container with a memory limit, iHub no longer starts four workers that each size their memory as if they
