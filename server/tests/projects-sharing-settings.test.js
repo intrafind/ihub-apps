@@ -256,4 +256,47 @@ describe('project sharing settings', () => {
     assert.equal(editor.statusCode, 403);
     assert.equal((await drive(route.get, { user: EDITOR })).statusCode, 403);
   });
+
+  it('reads and writes the cache settings, null going back to the built-in budget (#3650)', async () => {
+    const read = await drive(route.get, { user: ROOT });
+    assert.deepEqual(read.body.indexCache, { maxEntries: 32, maxHeapShare: null });
+    assert.deepEqual(read.body.textCache, { maxHeapShare: null });
+
+    const set = await drive(route.put, {
+      user: ROOT,
+      body: { indexCache: { maxEntries: 100, maxHeapShare: 0.2 }, textCache: { maxHeapShare: 0.1 } }
+    });
+    assert.equal(set.statusCode, 200, JSON.stringify(set.body));
+    assert.deepEqual(set.body.indexCache, { maxEntries: 100, maxHeapShare: 0.2 });
+    assert.deepEqual(set.body.textCache, { maxHeapShare: 0.1 });
+    const platform = () =>
+      fs.readFile(path.join(scratch, 'config', 'platform.json'), 'utf8').then(JSON.parse);
+    assert.deepEqual((await platform()).projects.indexCache, {
+      maxEntries: 100,
+      maxHeapShare: 0.2
+    });
+
+    // Only what is sent changes; null removes the share and keeps the entries.
+    const cleared = await drive(route.put, {
+      user: ROOT,
+      body: { indexCache: { maxHeapShare: null } }
+    });
+    assert.deepEqual(cleared.body.indexCache, { maxEntries: 100, maxHeapShare: null });
+    assert.deepEqual((await platform()).projects.indexCache, { maxEntries: 100 });
+    assert.deepEqual((await platform()).projects.textCache, { maxHeapShare: 0.1 });
+  });
+
+  it('refuses cache settings out of range or unknown (#3650)', async () => {
+    for (const body of [
+      { indexCache: { maxEntries: 0 } },
+      { indexCache: { maxEntries: 10001 } },
+      { indexCache: { maxEntries: 1.5 } },
+      { indexCache: { maxHeapShare: 0.9 } },
+      { textCache: { maxHeapShare: 0 } },
+      { textCache: { maxEntries: 5 } }
+    ]) {
+      const res = await drive(route.put, { user: ROOT, body });
+      assert.equal(res.statusCode, 400, JSON.stringify(body));
+    }
+  });
 });

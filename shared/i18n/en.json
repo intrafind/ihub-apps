@@ -5576,6 +5576,24 @@
       "convertConcurrency": {
         "label": "Documents converted at once",
         "help": "Per server process: uploads, and files and web pages that changed, are read into text this many at a time. Each conversion can take a lot of memory."
+      },
+      "caches": {
+        "legend": "Memory of project search",
+        "indexEntries": {
+          "label": "Search indexes kept in memory",
+          "help": "Per server process, one per project. A project whose index is not in memory is indexed again on its next question, which takes 60 to 90 ms of processing time for a large project. Raise it when many projects are in use at the same time."
+        },
+        "indexShare": {
+          "label": "Memory share of the search indexes (%)",
+          "help": "Share of the server process's memory the indexes may use. Empty: 10 %, at most about 135 MB."
+        },
+        "textShare": {
+          "label": "Memory share of the cached document texts (%)",
+          "help": "Share of the server process's memory the decrypted texts may use. Empty: 6 %, at most 96 MB."
+        },
+        "builtIn": "Built-in",
+        "invalid": "Enter 1 to 50, or leave empty.",
+        "hint": "Each server process (worker) holds its own copy, so memory grows with the number of workers. A share you enter replaces the built-in maximum. Check the cache metrics before raising it."
       }
     },
     "updates": {

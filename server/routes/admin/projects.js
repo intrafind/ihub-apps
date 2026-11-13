@@ -81,6 +81,26 @@ const ADMIN_PERMISSIONS = Object.freeze({
   role: 'admin'
 });
 
+/**
+ * A cache block of `platform.projects` with the sent fields applied. A
+ * `maxHeapShare` of null removes the key: the built-in budget applies again.
+ */
+function mergeCacheSettings(stored, sent) {
+  const merged = { ...stored, ...sent };
+  if (merged.maxHeapShare === null) delete merged.maxHeapShare;
+  return merged;
+}
+
+/** `{ 'indexCache.maxEntries': 5 }` for the audit summary. */
+function flatten(prefix, block) {
+  return Object.fromEntries(
+    Object.entries(block || {}).map(([key, value]) => [
+      `${prefix}.${key}`,
+      value === null ? 'built-in' : value
+    ])
+  );
+}
+
 async function snapshot(req, id, before, after) {
   try {
     await saveSnapshot({
@@ -270,6 +290,8 @@ export default function registerAdminProjectsRoutes(app) {
       refreshIdleDays,
       refreshWaitSeconds,
       ingest,
+      indexCache,
+      textCache,
       knowledgeModes
     } = projectSettings(platformConfig);
     return {
@@ -282,6 +304,8 @@ export default function registerAdminProjectsRoutes(app) {
       refreshIdleDays,
       refreshWaitSeconds,
       ingest: { concurrency: ingest.concurrency, fetchConcurrency: ingest.fetchConcurrency },
+      indexCache,
+      textCache,
       knowledgeModes,
       maxFilesCeiling: MAX_FILES_CEILING
     };
@@ -310,7 +334,10 @@ export default function registerAdminProjectsRoutes(app) {
    *       a chat turn or a workflow step waits for outdated documents before it
    *       reads them; 0 does not wait) and `ingest` (`fetchConcurrency`: pages
    *       and files checked at once per server process; `concurrency`:
-   *       conversions at once). Full admins only.
+   *       conversions at once) and `indexCache` (`maxEntries`, `maxHeapShare`)
+   *       and `textCache` (`maxHeapShare`): the per-process search-index and
+   *       item-text caches, a `maxHeapShare` of null being the built-in budget
+   *       (#3650). Full admins only.
    *     tags: [Admin Projects]
    *   put:
    *     summary: Change the sharing audiences, the tier policy, the default app and the limits
@@ -349,6 +376,12 @@ export default function registerAdminProjectsRoutes(app) {
             ? { refreshWaitSeconds: body.refreshWaitSeconds }
             : {}),
           ...(body.ingest ? { ingest: { ...stored.ingest, ...body.ingest } } : {}),
+          ...(body.indexCache
+            ? { indexCache: mergeCacheSettings(stored.indexCache, body.indexCache) }
+            : {}),
+          ...(body.textCache
+            ? { textCache: mergeCacheSettings(stored.textCache, body.textCache) }
+            : {}),
           ...(body.knowledgeModes ? { knowledgeModes: [...new Set(body.knowledgeModes)] } : {})
         }
       };
@@ -375,6 +408,8 @@ export default function registerAdminProjectsRoutes(app) {
         ...(body.ingest?.fetchConcurrency !== undefined
           ? { 'ingest.fetchConcurrency': body.ingest.fetchConcurrency }
           : {}),
+        ...flatten('indexCache', body.indexCache),
+        ...flatten('textCache', body.textCache),
         ...(body.knowledgeModes ? { knowledgeModes: body.knowledgeModes.join('|') } : {}),
         ...body.limits
       })
