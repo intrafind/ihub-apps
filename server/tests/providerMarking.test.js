@@ -18,6 +18,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  ANTHROPIC_MARKED_MODELS,
+  ANTHROPIC_WATERMARK_STATEMENT_REF,
   GOOGLE_SYNTHID_STATEMENT_REF,
   providerMarkingFacts
 } from '../services/provenance/providerMarking.js';
@@ -63,7 +65,7 @@ test('nothing is declared for open models, speech, embeddings or Imagen', () => 
 });
 
 test('nothing is declared for a provider that makes no claim', () => {
-  for (const apiType of ['openai', 'anthropic', 'mistral', 'local', 'openai-responses']) {
+  for (const apiType of ['openai', 'mistral', 'local', 'openai-responses']) {
     assert.deepEqual(providerMarkingFacts(apiType, { id: 'gemini-2.5-flash', type: 'chat' }), {});
   }
 });
@@ -97,4 +99,108 @@ test('the reference names Google’s statement, not a generic claim', () => {
     /^Google DeepMind, SynthID: https:\/\/deepmind\.google\//
   );
   assert.ok(GOOGLE_SYNTHID_STATEMENT_REF.length <= 500, 'fits statementRef');
+});
+
+const WATERMARK = {
+  by: 'provider',
+  scheme: 'synthid-text',
+  statementRef: ANTHROPIC_WATERMARK_STATEMENT_REF
+};
+
+test('a Claude model Anthropic names is declared watermarked for its text', () => {
+  const named = [
+    ['claude-opus-5-5', 'Claude Opus 5.5'],
+    ['claude-mythos-5', 'Claude Mythos 5'],
+    ['claude-opus-4-7', 'Claude Opus 4.7'],
+    ['claude-opus-4-6', 'Claude Opus 4.6']
+  ];
+  for (const [id, name] of named) {
+    assert.deepEqual(
+      providerMarkingFacts('anthropic', { id, name, type: 'chat' }),
+      { contentMarking: { text: WATERMARK } },
+      id
+    );
+  }
+});
+
+test('a Claude model is found by its display name when the id is not the known one', () => {
+  const facts = providerMarkingFacts('anthropic', {
+    id: 'some-proxy-id',
+    name: 'Claude Opus 5.5',
+    type: 'chat'
+  });
+  assert.deepEqual(facts.contentMarking, { text: WATERMARK });
+});
+
+test('Sonnet 4.6 is declared, and flagged as marked only under default sampling', () => {
+  assert.deepEqual(
+    providerMarkingFacts('anthropic', {
+      id: 'claude-sonnet-4-6',
+      name: 'Claude Sonnet 4.6',
+      type: 'chat'
+    }),
+    { contentMarking: { text: WATERMARK }, markingNeedsDefaultSampling: true }
+  );
+  // No other model carries the flag.
+  const flagged = ANTHROPIC_MARKED_MODELS.filter(m => m.defaultSamplingOnly);
+  assert.deepEqual(
+    flagged.map(m => m.id),
+    ['claude-sonnet-4-6']
+  );
+});
+
+test('no claim for a Claude model that is not named, however similar', () => {
+  const unnamed = [
+    ['claude-haiku-4-5-20251001', 'Claude Haiku 4.5'],
+    ['claude-haiku-4-5', 'Claude Haiku 4.5'],
+    ['claude-opus-4-5-20251101', 'Claude Opus 4.5'],
+    ['claude-sonnet-4-5-20250929', 'Claude Sonnet 4.5'],
+    ['claude-opus-5-5-preview', 'Claude Opus 5.5 Preview'],
+    ['claude-mythos-5-1', 'Claude Mythos 5.1'],
+    ['claude-opus-4-60', 'Claude Opus 4.60']
+  ];
+  for (const [id, name] of unnamed) {
+    assert.deepEqual(providerMarkingFacts('anthropic', { id, name, type: 'chat' }), {}, id);
+  }
+});
+
+test('Anthropic declares text only: never an image mark or image generation', () => {
+  const facts = providerMarkingFacts('anthropic', {
+    id: 'claude-opus-5-5',
+    name: 'Claude Opus 5.5',
+    type: 'chat'
+  });
+  assert.equal(facts.contentMarking.image, undefined);
+  assert.equal(facts.supportsImageGeneration, undefined);
+});
+
+test('Mistral declares nothing: it publishes no technical description of a mark', () => {
+  const entries = [
+    { id: 'mistral-large-latest', name: 'Mistral Large', type: 'chat' },
+    { id: 'mistral-small-2603', name: 'Mistral Small', type: 'chat' },
+    { id: 'pixtral-large-latest', name: 'Pixtral Large', type: 'chat' },
+    { id: 'codestral-latest', name: 'Codestral', type: 'chat' }
+  ];
+  for (const entry of entries) {
+    assert.deepEqual(providerMarkingFacts('mistral', entry), {}, entry.id);
+  }
+});
+
+test('the Anthropic declaration is a valid model config as it stands', () => {
+  const facts = providerMarkingFacts('anthropic', {
+    id: 'claude-opus-5-5',
+    name: 'Claude Opus 5.5',
+    type: 'chat'
+  });
+  const result = modelConfigSchema.safeParse({
+    id: 'anthropic-claude-opus-5-5',
+    modelId: 'claude-opus-5-5',
+    name: { en: 'Claude Opus 5.5' },
+    description: { en: 'Imported' },
+    url: 'https://api.anthropic.com/v1/messages',
+    provider: 'anthropic',
+    ...facts
+  });
+  assert.equal(result.success, true, result.success ? '' : JSON.stringify(result.error.issues));
+  assert.ok(ANTHROPIC_WATERMARK_STATEMENT_REF.length <= 500, 'fits statementRef');
 });

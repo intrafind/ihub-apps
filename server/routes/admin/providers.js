@@ -202,7 +202,7 @@ function describeOutboundPath(providerId) {
 }
 
 /**
- * Ask a provider (an iFinder Model Gateway, or Google) what it lists now and compare that with
+ * Ask a provider (an iFinder Model Gateway, Google or Anthropic) what it lists now and compare that with
  * the models imported from it. Shared by the drift report and by the sync that applies it, so
  * both see the same thing and fail the same way.
  *
@@ -221,7 +221,7 @@ async function loadModelDrift(providerId) {
   if (!supportsModelSync(provider)) {
     throw new ServiceError(
       'BAD_REQUEST',
-      `Provider ${providerId} is neither a model gateway nor a Google provider`,
+      `Provider ${providerId} is not a model gateway, Google or Anthropic provider`,
       { details: { providerId } }
     );
   }
@@ -401,7 +401,7 @@ export default function registerAdminProvidersRoutes(app) {
    *   get:
    *     summary: Compare a provider's model listing with the models imported from it (Admin)
    *     description: |
-   *       Reads the model listing of an iFinder Model Gateway or Google provider (its
+   *       Reads the model listing of an iFinder Model Gateway, Google or Anthropic provider (its
    *       base URL and stored key) and compares it with the models linked to the
    *       provider. Changes nothing: every item names what an admin could do. To apply
    *       a choice, send it to `POST /admin/providers/{providerId}/_sync-models`; do not
@@ -411,7 +411,7 @@ export default function registerAdminProvidersRoutes(app) {
    *       Item kinds: `added` (listed, not imported; `model` is a preview of the config
    *       that would be created, the sync builds it again from a fresh listing),
    *       `changed` (an imported model differs from the provider; carries `changes` as
-   *       `{ field, from, to }`; for Google it also adopts the provider's EU AI Act marking
+   *       `{ field, from, to }`; for Google and Anthropic it also adopts the provider's EU AI Act marking
    *       declaration as `contentMarking`), `removed` (an enabled imported model the provider no
    *       longer lists, or lists as something iHub cannot run; `reason` is `missing` or
    *       `unsupported`; the offer is to disable it).
@@ -471,7 +471,7 @@ export default function registerAdminProvidersRoutes(app) {
    *                             from: {}
    *                             to: {}
    *       400:
-   *         description: "`BAD_REQUEST`: the provider is neither a model gateway nor a Google provider, has no base URL, or its URL is unusable"
+   *         description: "`BAD_REQUEST`: the provider is not a model gateway, Google or Anthropic provider, has no base URL, or its URL is unusable"
    *       401:
    *         description: Admin authentication required
    *       404:
@@ -564,7 +564,7 @@ export default function registerAdminProvidersRoutes(app) {
    *                         type: string
    *                         description: "Why an item was not applied; `changedSinceReview` for a skipped one"
    *       400:
-   *         description: "`BAD_REQUEST`: the body is not a list of picks, or the provider is neither a model gateway nor a Google provider, or has no base URL"
+   *         description: "`BAD_REQUEST`: the body is not a list of picks, or the provider is not a model gateway, Google or Anthropic provider, or has no base URL"
    *       401:
    *         description: Admin authentication required
    *       404:

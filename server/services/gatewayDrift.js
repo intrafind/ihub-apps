@@ -3,7 +3,7 @@
 
 /**
  * Drift between a provider's model listing and the models imported from it.
- * Used for an iFinder Model Gateway and for Google (see `supportsModelSync`).
+ * Used for an iFinder Model Gateway, Google and Anthropic (see `supportsModelSync`).
  *
  * A provider's models come and go: deployments are registered and removed, their
  * context window or vision support is corrected, a model is moved to another
@@ -31,10 +31,20 @@
  * Only what a listing reports is compared. A gateway reports image input per
  * chat model, Google does not (`supportsVision` is then null and left alone).
  *
+ * A model missing from the listing is reported `removed` only where the listing
+ * names every model a config can point at (a gateway, Google). Anthropic names
+ * the dated snapshot of a model before the 4.6 generation, while a config often
+ * uses the alias (`claude-haiku-4-5`), so there a missing model proves nothing and
+ * is left alone.
+ *
  * @module server/services/gatewayDrift
  */
 
-import { getLinkedModels, getProviderApiType } from '../../shared/llmProviders.js';
+import {
+  getLinkedModels,
+  getProviderApiType,
+  isGatewayProvider
+} from '../../shared/llmProviders.js';
 import {
   buildImportedModelConfig,
   isValidId,
@@ -85,6 +95,19 @@ function isMarked(marking) {
   return Boolean(marking) && marking.by !== 'none';
 }
 
+/** Whether the model config sets a sampling parameter (see `samplingSchema`). */
+function hasSamplingOverride(model) {
+  return ['temperature', 'topP', 'topK'].some(key => model.sampling?.[key] !== undefined);
+}
+
+/**
+ * Whether the listing of this provider names every model a config can point at, so
+ * that a configured model missing from it is gone. See the module comment.
+ */
+function listingNamesEveryModel(provider) {
+  return isGatewayProvider(provider) || getProviderApiType(provider) === 'google';
+}
+
 /**
  * The `contentMarking` the model would have after taking over what the provider
  * declares for it (EU AI Act Art. 50(2)), or null when there is nothing to add.
@@ -98,6 +121,9 @@ function isMarked(marking) {
 function markingToAdopt(model, entry) {
   const declared = entry.contentMarking;
   if (!declared) return null;
+  // The provider's mark may not appear under a non-default sampling setting: a model
+  // that sets one is not offered a declaration the provider does not stand behind.
+  if (entry.markingNeedsDefaultSampling && hasSamplingOverride(model)) return null;
   const current = model.contentMarking || {};
   const next = { ...current };
   let adopted = false;
@@ -176,6 +202,7 @@ export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
   const apiType = getProviderApiType(provider);
   const linked = getLinkedModels(provider.id, models);
   const byRemoteId = new Map(entries.map(entry => [entry.id, entry]));
+  const reportMissing = listingNamesEveryModel(provider);
   const items = [];
 
   for (const model of linked) {
@@ -183,6 +210,7 @@ export function computeGatewayDrift({ provider, models, entries, modelsUrl }) {
     if (!entry || entryClass(entry) !== modelClass(model)) {
       // A model the admin has switched off is already handled.
       if (model.enabled === false) continue;
+      if (!entry && !reportMissing) continue;
       items.push({
         kind: 'removed',
         remoteId: model.modelId,

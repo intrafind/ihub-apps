@@ -598,3 +598,91 @@ describe('a Google provider', () => {
     expect(writes).toBe(0);
   });
 });
+
+describe('an Anthropic provider', () => {
+  const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
+
+  beforeEach(() => {
+    providers.push(
+      {
+        id: 'anthropic',
+        name: 'Anthropic',
+        baseUrl: ANTHROPIC_BASE,
+        apiKey: 'enc:anthropic-key',
+        enabled: true
+      },
+      { id: 'mistral', name: 'Mistral AI', baseUrl: 'https://api.mistral.ai/v1', enabled: true }
+    );
+    models = [
+      {
+        id: 'claude-opus',
+        modelId: 'claude-opus-5-5',
+        provider: 'anthropic',
+        url: `${ANTHROPIC_BASE}/messages`,
+        contentMarking: { text: { by: 'none' } },
+        enabled: true
+      },
+      // Configured with the alias; the listing names the dated snapshot.
+      {
+        id: 'claude-haiku',
+        modelId: 'claude-haiku-4-5',
+        provider: 'anthropic',
+        url: `${ANTHROPIC_BASE}/messages`,
+        enabled: true
+      }
+    ];
+    files = new Map(models.map(m => [`models/${m.id}.json`, clone(m)]));
+    gatewayAnswer = {
+      status: 200,
+      body: {
+        data: [
+          { type: 'model', id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5' },
+          { type: 'model', id: 'claude-haiku-4-5-20251001', display_name: 'Claude Haiku 4.5' }
+        ]
+      }
+    };
+  });
+
+  it('is asked on its listing with the stored key and offered the watermark declaration', async () => {
+    const res = await drift('anthropic');
+
+    expect(res.status).toBe(200);
+    expect(gatewayCalls[0].url).toBe(`${ANTHROPIC_BASE}/models?limit=1000`);
+    expect(gatewayCalls[0].init.headers['x-api-key']).toBe('anthropic-key');
+    expect(gatewayCalls[0].init.headers['anthropic-version']).toBeDefined();
+
+    const changed = res.body.items.filter(item => item.kind === 'changed');
+    expect(changed).toHaveLength(1);
+    expect(changed[0]).toMatchObject({ modelId: 'claude-opus', remoteId: 'claude-opus-5-5' });
+    expect(changed[0].changes).toEqual([
+      expect.objectContaining({
+        field: 'contentMarking',
+        from: { text: { by: 'none' } },
+        to: { text: expect.objectContaining({ by: 'provider', scheme: 'synthid-text' }) }
+      })
+    ]);
+    // The alias is not in the listing, which proves nothing: not reported as gone.
+    expect(res.body.items.filter(item => item.kind === 'removed')).toEqual([]);
+    expect(writes).toBe(0);
+  });
+
+  it('writes the declaration to the stored model when the admin picks it', async () => {
+    const res = await request(app)
+      .post('/api/admin/providers/anthropic/_sync-models')
+      .send({ items: [{ kind: 'changed', remoteId: 'claude-opus-5-5', modelId: 'claude-opus' }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items.map(item => item.status)).toEqual(['applied']);
+    expect(files.get('models/claude-opus.json').contentMarking.text).toMatchObject({
+      by: 'provider',
+      scheme: 'synthid-text'
+    });
+  });
+
+  it('answers 400 for Mistral, which has nothing to compare or declare', async () => {
+    const res = await drift('mistral');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('BAD_REQUEST');
+    expect(gatewayCalls).toHaveLength(0);
+  });
+});

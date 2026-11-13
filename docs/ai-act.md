@@ -179,8 +179,9 @@ it; "Not found" only means there is no record, not that a person wrote it.
 
 - **Per model:** `contentMarking.text.by` is `none` (default) or `provider` (**Admin → Models**, *Output
   marking*). Choose `provider` only with the provider's written statement; iHub cannot check it. The models
-  list shows "Not marked" as a hint, never as a block. Models imported from Google come with the SynthID
-  declaration filled in ([Models](models.md#filled-in-on-import-google)).
+  list shows "Not marked" as a hint, never as a block. Models imported from Google, and the Claude models
+  Anthropic names, come with the provider's declaration filled in ([Models](models.md#filled-in-on-import)); Mistral
+  documents no mark and gets none.
 - **Platform:** edit these in **Admin → EU AI Act → Provenance settings** (see below) or in `platform.json`.
   Defaults and bounds (the form and the server refuse values outside them):
 
