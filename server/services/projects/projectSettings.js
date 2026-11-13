@@ -50,7 +50,6 @@ import {
   DEFAULT_EXTRACTION_TIMEOUT_MS,
   DEFAULT_INDEX_CACHE_ENTRIES,
   MAX_EXTRACTION_MEMORY_MB,
-  MAX_EXTRACTION_THREADS,
   MAX_EXTRACTION_TIMEOUT_MS,
   MIN_EXTRACTION_MEMORY_MB,
   MIN_EXTRACTION_TIMEOUT_MS,
@@ -148,6 +147,7 @@ export function projectSettings(platformConfig) {
   const tierPolicy = TIER_POLICIES.includes(block.tierPolicy)
     ? block.tierPolicy
     : defaults.tierPolicy;
+  const ingest = ingestSettings(block.ingest, defaults.ingest);
   return {
     tierPolicy,
     // The app a project chat starts in when its project names none ('' for the
@@ -205,7 +205,7 @@ export function projectSettings(platformConfig) {
       timeoutMs: readPositive(block.scan?.timeoutMs, defaults.scan.timeoutMs),
       onError: block.scan?.onError === 'allow' ? 'allow' : 'reject'
     },
-    ingest: ingestSettings(block.ingest, defaults.ingest),
+    ingest,
     indexCache: {
       maxEntries: Math.min(
         MAX_INDEX_CACHE_ENTRIES,
@@ -214,20 +214,17 @@ export function projectSettings(platformConfig) {
       maxHeapShare: readHeapShare(block.indexCache?.maxHeapShare)
     },
     textCache: { maxHeapShare: readHeapShare(block.textCache?.maxHeapShare) },
-    extraction: extractionSettings(block.extraction)
+    extraction: extractionSettings(block.extraction, ingest)
   };
 }
 
 /**
- * The `extraction` block (#3649): how many threads read files, the time one
- * file may take, and the heap one thread may use. `threads: 0` reads on the
- * event loop, as before the threads existed.
+ * The `extraction` block (#3649): the time one file may take and the heap one
+ * thread may use. How many files are read at once is `ingest.concurrency`, the
+ * one setting for uploads, chat files and ingestion alike: it is the number of
+ * extraction threads per server process.
  */
-function extractionSettings(block) {
-  // One thread keeps the event loop free and reads as fast as the event loop did;
-  // a second only adds throughput where a core is spare, and every thread loads
-  // its own copy of the extractors (about 100 MB).
-  const fallbackThreads = 1;
+function extractionSettings(block, ingest) {
   // `null` and '' mean "not set" (Number(null) would be 0 threads).
   const read = (value, fallback) =>
     value === null || value === '' ? fallback : readNumber(value, fallback);
@@ -239,10 +236,10 @@ function extractionSettings(block) {
     DEFAULT_EXTRACTION_MEMORY_MB,
     Math.max(MIN_EXTRACTION_MEMORY_MB, Math.floor(processHeapMb / 2))
   );
-  const threads = read(block?.threads, fallbackThreads);
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Math.floor(value)));
   return {
-    threads: clamp(threads, 0, MAX_EXTRACTION_THREADS),
+    // Every thread loads its own copy of the extractors (about 100 MB).
+    threads: ingest.concurrency,
     timeoutMs: clamp(
       read(block?.timeoutMs, DEFAULT_EXTRACTION_TIMEOUT_MS),
       MIN_EXTRACTION_TIMEOUT_MS,

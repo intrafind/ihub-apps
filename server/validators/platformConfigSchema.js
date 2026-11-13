@@ -7,7 +7,6 @@ import { usageLimitBucketSchema } from './common.js';
 import {
   KNOWLEDGE_MODES,
   MAX_EXTRACTION_MEMORY_MB,
-  MAX_EXTRACTION_THREADS,
   MAX_EXTRACTION_TIMEOUT_MS,
   MIN_EXTRACTION_MEMORY_MB,
   MIN_EXTRACTION_TIMEOUT_MS,
@@ -880,12 +879,11 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .optional(),
-        // Threads that read uploaded files off the event loop (#3649). Absent:
-        // 1 thread, 60 s per file, 1 GB of heap per thread.
-        // 0 threads reads on the event loop. A restart applies changes.
+        // The threads that read uploaded files off the event loop (#3649): the
+        // time and heap one file may use. How many there are is
+        // `ingest.concurrency`. Absent: 60 s per file, 1 GB of heap per thread.
         extraction: z
           .object({
-            threads: z.number().int().min(0).max(MAX_EXTRACTION_THREADS).optional(),
             timeoutMs: z
               .number()
               .int()
@@ -919,7 +917,8 @@ export const platformConfigSchema = z
           .prefault({}),
         ingest: z
           .object({
-            // Conversions (scan and extraction) at once per server process.
+            // Files read at once per server process — project items and chat
+            // uploads alike — and the number of extraction threads.
             concurrency: z.number().int().min(1).max(MAX_CONVERT_CONCURRENCY).prefault(2),
             // Jobs at once per server process, each fetching its source first.
             fetchConcurrency: z

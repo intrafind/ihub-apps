@@ -6056,7 +6056,7 @@
       },
       "convertConcurrency": {
         "label": "Gleichzeitig umgewandelte Dokumente",
-        "help": "Pro Serverprozess: Uploads sowie geänderte Dateien und Webseiten werden so viele auf einmal in Text umgewandelt. Jede Umwandlung kann viel Speicher brauchen."
+        "help": "Pro Serverprozess: Uploads in Projekte und Chats sowie geänderte Dateien und Webseiten werden so viele auf einmal in Text umgewandelt, jede in einem eigenen Thread. Jede belegt einen Prozessorkern und braucht etwa 100 MB mehr Speicher; nur erhöhen, wo Kerne frei sind. Ein kleinerer Wert wirkt nach einem Neustart."
       },
       "caches": {
         "legend": "Arbeitsspeicher der Projektsuche",

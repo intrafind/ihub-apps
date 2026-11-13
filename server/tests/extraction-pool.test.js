@@ -392,18 +392,19 @@ describe('extraction metrics', () => {
 });
 
 describe('projects.extraction settings', () => {
-  const read = extraction => projectSettings({ projects: { extraction } }).extraction;
+  const read = (extraction, ingest) =>
+    projectSettings({ projects: { extraction, ingest } }).extraction;
 
   it('falls back to defaults and clamps what is out of range', () => {
     const defaults = read(undefined);
-    assert.equal(defaults.threads, 1);
+    assert.equal(defaults.threads, 2, 'as many threads as ingest.concurrency');
     assert.equal(defaults.timeoutMs, 60_000);
     const heapMb = Math.floor(v8.getHeapStatistics().heap_size_limit / (1024 * 1024));
     assert.equal(defaults.memoryMb, Math.min(1024, Math.max(128, Math.floor(heapMb / 2))));
-    assert.deepEqual(read({ threads: null, timeoutMs: '', memoryMb: 'lots' }), defaults);
-    assert.equal(read({ threads: 0 }).threads, 0, '0 turns the threads off');
-    assert.equal(read({ threads: 99 }).threads, 4);
-    assert.equal(read({ threads: -1 }).threads, 0);
+    assert.deepEqual(read({ timeoutMs: '', memoryMb: 'lots' }), defaults);
+    assert.equal(read({ threads: 0 }).threads, 2, 'extraction.threads is gone');
+    assert.equal(read(undefined, { concurrency: 3 }).threads, 3, 'ingest.concurrency sets it');
+    assert.equal(read(undefined, { concurrency: 99 }).threads, 8);
     assert.equal(read({ timeoutMs: 5 }).timeoutMs, 1000);
     assert.equal(read({ timeoutMs: 9e9 }).timeoutMs, 600_000);
     assert.equal(read({ memoryMb: 1 }).memoryMb, 128);
@@ -411,13 +412,9 @@ describe('projects.extraction settings', () => {
 
   it('is validated in the platform schema', () => {
     const parse = extraction => platformConfigSchema.safeParse({ projects: { extraction } });
-    assert.ok(parse({ threads: 2, timeoutMs: 30_000, memoryMb: 512 }).success);
-    assert.ok(parse({ threads: 0 }).success);
+    assert.ok(parse({ timeoutMs: 30_000, memoryMb: 512 }).success);
     assert.ok(parse(undefined).success, 'the block is optional');
     for (const bad of [
-      { threads: 5 },
-      { threads: -1 },
-      { threads: 1.5 },
       { timeoutMs: 10 },
       { timeoutMs: 700_000 },
       { memoryMb: 64 },

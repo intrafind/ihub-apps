@@ -31,9 +31,12 @@ Reading an uploaded file (Excel, Word, PDF, the pages of a scanned PDF, …) no 
 process: it runs in a worker thread, so chat streams and other requests on the same process keep their
 pace while documents are ingested. The result is the same text as before.
 
-- `platform.json` → `projects.extraction`: `threads` (default 1, `0` reads on the event loop as before),
-  `timeoutMs` (default 60 s per file) and `memoryMb` (default 1024 per thread, at most half the process heap). Each thread adds about
-  100 MB per server process.
+- One setting decides how many files a server process reads at once: **Admin → Projects → Project
+  settings → Documents converted at once** (`projects.ingest.concurrency`, default 2). Project uploads,
+  refreshed files and web pages, and chat uploads share it, and it is the number of extraction threads.
+  Each thread adds about 100 MB per server process.
+- `platform.json` → `projects.extraction`: `timeoutMs` (default 60 s per file) and `memoryMb` (default
+  1024 per thread, at most half the process heap).
 - A file that takes longer than the time budget is stopped and fails with `EXTRACTION_TIMEOUT`; before,
   a pathological file could occupy the process indefinitely.
 - New metric `ihub.extraction.queue.duration` (wait for a free thread); `ihub.extraction.duration` now

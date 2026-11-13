@@ -509,7 +509,7 @@ function ProjectSharingSettingsPanel() {
               label={t('admin.projects.convertConcurrency.label', 'Documents converted at once')}
               help={t(
                 'admin.projects.convertConcurrency.help',
-                'Per server process: uploads, and files and web pages that changed, are read into text this many at a time. Each conversion can take a lot of memory.'
+                'Per server process: uploads to projects and chats, and files and web pages that changed, are read into text this many at a time, each on its own thread. Each one keeps a processor core busy and uses about 100 MB more memory; raise it only where cores are spare. A lower value takes effect after a restart.'
               )}
               value={draft.ingest.concurrency}
               range={CONVERT_CONCURRENCY_RANGE}
