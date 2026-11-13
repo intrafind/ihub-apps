@@ -1,6 +1,6 @@
 # Load Test and Sizing Plan
 
-**Status:** prepared, ready to run. The harness is in `tests/load/`; see its README for how to run it.
+**Status:** first run done in a laptop lab (2026-11-12/13); results in section 12 and in [#3631](https://github.com/intrafind/ihub-apps/issues/3631#issuecomment-6847499731). Cluster runs are open. The harness is in `tests/load/`; see its README for how to run it.
 
 ## 1. What we want to know
 
@@ -166,3 +166,23 @@ The harness was checked end to end in a sandbox: 2 workers on 4 shared vCPU, the
 
 1. Does the DCGM exporter run on the gpu-01 node, and under which label? Without it the GPU section shows vLLM's view only (queueing, KV cache, tokens/s), which is enough to find the GPU limit, but not GPU utilisation.
 2. Is `trustProxy` set to the number of proxy hops in front of iHub? If not, every user shares one rate-limit counter today, regardless of the limit values.
+
+## 12. Results of the first lab run (2026-11-12/13)
+
+**Lab:** Docker Desktop on a laptop (8 CPUs; iHub ≤ 5 vCPU and 4 GiB), with the stub LLM for E1, E2, E5 and E7, and gpu-01 for E3. E4 and E6 were not run. The full write-up, every report and the run log are in [#3631](https://github.com/intrafind/ihub-apps/issues/3631#issuecomment-6847499731).
+
+| Experiment | Result |
+| --- | --- |
+| E1 worker sweep | 100 / 150 / 150 users at W = 1 / 2 / 4. Every run broke on the event-loop SLO at 16–48 % worker CPU. The primary's relay is not the limit (≤ 8 % CPU). W_max = 1 by the 80 % rule, but the cause is blocking work, not the relay |
+| E2 ingestion | Never queued (ready in 3.4 s at p95, up to 87 files/min/worker offered), but extraction breaks the event-loop SLO from 5 users. Concurrency 2 vs 4: no difference |
+| E3 GPU | Default mix: 10 users; project chats only: 30 (50k and 16k cap alike). Large prompts are prefill-bound at ~8.4k prompt tok/s. The KV cache holds 174k tokens. Thinking: 18–41 s to the first answer token; queueing from 10–20 users |
+| E5 rate limits | `publicApi` 500/min counts per worker: no 429 for 300 users behind one IP at W=4, but only ~90 at W=1 |
+| E7 spike | 20 → 200 → 20 users with no errors and immediate recovery (a mix without project builds) |
+
+**What we learned beyond the plan:**
+
+- **Section 3 overestimated two things.** The primary's relay never became the limit. Project-chat prompts stayed at ~14k tokens, because every test project exceeds the 50k load-all budget and falls back to excerpts.
+- **The first bottleneck is synchronous work on the event loop.** Excel extraction (up to ~1 s), Word extraction, scanned-PDF rendering and index rebuilds all block it. Follow-ups: [Event-Loop Blocking and Project Index Caching](2026-11-12%20Event-Loop%20Blocking%20and%20Project%20Index%20Caching.md), #3648–#3652.
+- **The harness's GPU model needed `thinking.enabled`** for `LT_THINKING` to have any effect; fixed in `setup.mjs`.
+
+**Next:** repeat E1–E3 in the cluster on the production storage class with a concurrency-tuned vLLM, then E4 and E6. Repeat E1 after the event-loop fixes.
