@@ -44,6 +44,13 @@ export async function shutdown() {
     .then(({ shutdownProjects }) => shutdownProjects())
     .catch(() => {});
   stopWorkflowStateRetention();
+  // The extraction threads: a file read in flight is dropped with the process.
+  try {
+    const { shutdownExtractionPool } = await import('../services/projects/extractionPool.js');
+    await shutdownExtractionPool();
+  } catch {
+    // The pool may never have been loaded
+  }
   // Conversation state coalesces its writes on a timer to keep document I/O
   // off the streaming path; drain what is still buffered, or a chat resumes
   // after the restart threaded onto a stale parent message.

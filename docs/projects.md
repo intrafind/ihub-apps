@@ -1264,7 +1264,8 @@ would go past it.
     "scan": { "provider": "none", "command": "", "timeoutMs": 30000, "onError": "reject" },
     "ingest": { "concurrency": 2, "staleAfterMinutes": 30 },
     "indexCache": { "maxEntries": 32, "maxHeapShare": 0.1 },
-    "textCache": { "maxHeapShare": 0.06 }
+    "textCache": { "maxHeapShare": 0.06 },
+    "extraction": { "threads": 1, "timeoutMs": 60000, "memoryMb": 1024 }
   }
 }
 ```
@@ -1297,9 +1298,20 @@ would go past it.
 | `indexCache.maxEntries`     | `32`                | Search indexes (one per project and version) a server process keeps; 1 to 10000. A miss rebuilds the index on the event loop (60–90 ms for a 590,000-character project) and reads the texts again. Size it from the working set: `ihub.projects.active` and the index-cache hit rate in [Telemetry](telemetry.md). **Admin → Projects → Project settings**. |
 | `indexCache.maxHeapShare`   | built-in (see below) | Share of the process's heap limit the cached indexes may use, 0.01 to 0.5; an index character is counted as 4.5 bytes of heap. Entered as a percentage in **Admin → Projects → Project settings**; empty is the built-in budget. |
 | `textCache.maxHeapShare`    | built-in (see below) | Share of the process's heap limit the decrypted item texts may use, 0.01 to 0.5; at least 16 MB. **Admin → Projects → Project settings** (percentage; empty is the built-in budget). |
+| `extraction.threads`        | `1`                 | Worker threads per server process that read uploaded files (all formats) and render the pages of scanned PDFs, so the event loop stays free; 0 to 4. `0` reads on the event loop as before. Each thread loads its own copy of the extractors (about 100 MB), so raise it only where cores are spare. Restart to apply. File only. |
+| `extraction.timeoutMs`      | `60000`             | Time one file may take in a thread, 1000 to 600000. The thread is terminated and the file fails with `EXTRACTION_TIMEOUT` (an item shows it as its error; a chat upload answers 400 with that code). The wait for a free thread does not count. |
+| `extraction.memoryMb`       | `1024`              | Heap limit of one extraction thread, 128 to 8192. A file that needs more fails with `EXTRACTION_FAILED` and the thread is replaced. |
 | `tierPolicy`                | `ihub`              | `ihub`: local projects only. `both` and `ifinder`: users add their iFinder smart collections to their projects from the catalog, and create, rename, configure and delete them (see [The iFinder tier](#the-ifinder-tier-smart-collections)). Local projects stay creatable under every value. |
 | `defaultAppId`              | —                   | The app a chat in a project starts in when the project has no default app of its own (or the user cannot use it). Without it, the first app that allows projects. **Admin → Projects → Project settings**. |
 | `encryption.keyProvider`    | `local-file`        | The key provider for document keys; `local-file` is the only one in this version.                        |
+
+**Extraction threads.** Reading a file (SheetJS, Word, pdfium, …) is CPU work that used to run on the
+event loop, so every request of that process waited, chat streams included. It now runs in a small pool of
+worker threads per process: the bytes are copied to the thread (moved when the caller hands the buffer
+over), only the text comes back, and a scanned PDF's page images are rendered there too. A thread that
+times out, runs out of memory or dies is replaced by the next file; waiting files queue
+(`ihub.extraction.queue.duration` in [Telemetry](telemetry.md)). The zip-bomb checks run in the thread.
+The threads read the bytes they are given and open no connections, so the SSL whitelist is not involved.
 
 **Cache budgets.** Without `maxHeapShare` the built-in budgets apply: 10 % of the heap for indexes (at most
 30 million characters) and 6 % for item texts (at most 96 MB). Setting a share replaces both the percentage

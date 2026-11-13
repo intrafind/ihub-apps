@@ -144,3 +144,12 @@ export const MAX_INDEX_CACHE_ENTRIES = 10000;
 /** Bounds of `projects.indexCache.maxHeapShare` and `projects.textCache.maxHeapShare`. */
 export const MIN_CACHE_HEAP_SHARE = 0.01;
 export const MAX_CACHE_HEAP_SHARE = 0.5;
+
+/** `projects.extraction`: the threads that read uploaded files off the event loop (#3649). */
+export const MAX_EXTRACTION_THREADS = 4;
+export const DEFAULT_EXTRACTION_TIMEOUT_MS = 60_000;
+export const MIN_EXTRACTION_TIMEOUT_MS = 1_000;
+export const MAX_EXTRACTION_TIMEOUT_MS = 600_000;
+export const DEFAULT_EXTRACTION_MEMORY_MB = 1024;
+export const MIN_EXTRACTION_MEMORY_MB = 128;
+export const MAX_EXTRACTION_MEMORY_MB = 8192;

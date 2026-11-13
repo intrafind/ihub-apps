@@ -115,6 +115,7 @@ let indexCacheEntriesGauge = null;
 let indexCacheCharsGauge = null;
 let indexBuildDurationHistogram = null;
 let extractionDurationHistogram = null;
+let extractionQueueHistogram = null;
 let pendingIndexCacheProvider = null;
 
 /**
@@ -287,6 +288,12 @@ export function initializeMetrics(meterSource) {
     advice: { explicitBucketBoundaries: WORK_DURATION_BUCKETS }
   });
 
+  extractionQueueHistogram = meter.createHistogram('ihub.extraction.queue.duration', {
+    description: 'Time a file waited for a free extraction thread',
+    unit: 's',
+    advice: { explicitBucketBoundaries: WORK_DURATION_BUCKETS }
+  });
+
   attachIndexCacheObservers();
 
   console.info(
@@ -414,6 +421,16 @@ export function recordIndexBuildDuration(durationSeconds) {
 export function recordExtractionDuration(format, durationSeconds) {
   if (extractionDurationHistogram && Number.isFinite(durationSeconds)) {
     extractionDurationHistogram.record(durationSeconds, { format });
+  }
+}
+
+/**
+ * Record the time a file waited for a free extraction thread (#3649).
+ * @param {number} waitSeconds
+ */
+export function recordExtractionQueueWait(waitSeconds) {
+  if (extractionQueueHistogram && Number.isFinite(waitSeconds)) {
+    extractionQueueHistogram.record(waitSeconds);
   }
 }
 

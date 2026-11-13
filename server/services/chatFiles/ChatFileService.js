@@ -37,7 +37,7 @@ import {
 } from '../projects/extractText.js';
 import { scannerFor } from '../projects/scan/MalwareScanner.js';
 import { projectSettings } from '../projects/projectSettings.js';
-import { renderPagePreview } from '../documents/pdf/PdfService.js';
+import { renderScannedPdfPages as renderPdfPagesInThread } from '../projects/extractionPool.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { normalizeChatFilePolicy } from './chatFilePolicy.js';
 import { decodeRasterDataUrl } from './rasterImage.js';
@@ -73,23 +73,13 @@ export class ChatFileError extends ServiceError {
 
 /**
  * Render up to `MAX_SCANNED_PDF_PAGES` pages of a scanned PDF as base64 images
- * using `@hyzyla/pdfium` (`renderPagePreview`).
+ * with pdfium, in an extraction thread (`extractionPool.js`).
  *
  * @param {Buffer} bytes
  * @returns {Promise<{pageImages: string[], pages: number}>}
  */
-async function renderScannedPdfPages(bytes) {
-  const pageImages = [];
-  let totalPages = 0;
-  const first = await renderPagePreview(bytes, 1);
-  totalPages = first.pages || 1;
-  pageImages.push(first.png.toString('base64'));
-  const limit = Math.min(totalPages, MAX_SCANNED_PDF_PAGES);
-  for (let p = 2; p <= limit; p += 1) {
-    const rendered = await renderPagePreview(bytes, p);
-    pageImages.push(rendered.png.toString('base64'));
-  }
-  return { pageImages, pages: totalPages };
+function renderScannedPdfPages(bytes) {
+  return renderPdfPagesInThread(bytes, MAX_SCANNED_PDF_PAGES);
 }
 
 /**
