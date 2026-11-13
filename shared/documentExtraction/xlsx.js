@@ -56,6 +56,61 @@ function withVerticalMerges(XLSX, sheet, lastRow, lastColumn = Infinity) {
   return filled;
 }
 
+/** True for a ZIP package (.xlsx): only its reader reliably sets `!fullref` when `sheetRows` cuts. */
+function isZipPackage(data) {
+  const head = ArrayBuffer.isView(data) ? data : new Uint8Array(data.buffer ?? data);
+  return head[0] === 0x50 && head[1] === 0x4b;
+}
+
+/**
+ * Whether a bounded read (`sheetRows` = limit + 1) tells the whole story of a sheet:
+ * - `!fullref` is set when SheetJS cut the sheet; it is trusted unless the data starts below
+ *   row 1 (the count is absolute, so leading blank rows would eat into the limit);
+ * - a sheet that stopped short of the window was read completely;
+ * - anything else (no `!ref` at all, or one that reaches the window without a `!fullref`, as a
+ *   sheet without a `<dimension>` tag does) may have lost rows or been cut without a mark.
+ */
+function extentIsKnown(XLSX, sheet, rowLimit) {
+  if (!sheet) return true;
+  if (sheet['!fullref']) return XLSX.utils.decode_range(sheet['!fullref']).s.r === 0;
+  if (!sheet['!ref']) return false;
+  return XLSX.utils.decode_range(sheet['!ref']).e.r < rowLimit;
+}
+
+/**
+ * Reads a workbook, parsing only the rows `extractXlsxText` can use. SheetJS otherwise parses
+ * every row of every sheet (up to ~1 s of blocked event loop for 30,000 rows) and the row limit
+ * throws most of them away afterwards.
+ *
+ * `sheetRows` is the number of rows to read counted from row 1 of the sheet, header included:
+ * one more than the row limit, so a sheet that is exactly at the limit is not flagged as cut.
+ * SheetJS then shortens `!ref` and keeps the real range in `!fullref`, which
+ * `extractXlsxText` reads to report what was left out. Read in full instead, as before: a file
+ * that is not an .xlsx package (its readers do not all keep `!fullref`), and each sheet whose
+ * extent the bounded read cannot establish (see `extentIsKnown`: data starting below row 1, a
+ * sheet without a `<dimension>` tag).
+ *
+ * @param {Object} args
+ * @param {Object} args.XLSX - SheetJS
+ * @param {ArrayBuffer|Uint8Array|Buffer} args.data
+ * @param {Object} [args.readOptions] - SheetJS read options (`type`, `cellDates`, …)
+ * @param {{sheetRows?: number}} [args.limits] - The limits later passed to `extractXlsxText`
+ * @returns {Object} The workbook
+ */
+export function readWorkbook({ XLSX, data, readOptions = {}, limits = {} }) {
+  if (!isZipPackage(data)) return XLSX.read(data, readOptions);
+  const rowLimit = limits.sheetRows ?? MAX_SHEET_ROWS;
+  const workbook = XLSX.read(data, { ...readOptions, sheetRows: rowLimit + 1 });
+  // A sheet whose extent the bounded read cannot establish is read again, alone and in full.
+  for (const name of workbook.SheetNames) {
+    const sheet = workbook.Sheets[name];
+    if (extentIsKnown(XLSX, sheet, rowLimit)) continue;
+    const whole = XLSX.read(data, { ...readOptions, sheets: name });
+    if (whole.Sheets[name]) workbook.Sheets[name] = whole.Sheets[name];
+  }
+  return workbook;
+}
+
 /**
  * @param {Object} args
  * @param {Object} args.XLSX - SheetJS
@@ -82,6 +137,10 @@ export function extractXlsxText({ XLSX, workbook, limits = {}, report = null }) 
       // have all of them turned into rows for the few that fit the budget.
       read: () => {
         const range = XLSX.utils.decode_range(sheet['!ref']);
+        // A read that stopped at `sheetRows` keeps the real extent in `!fullref`.
+        const lastSheetRow = sheet['!fullref']
+          ? XLSX.utils.decode_range(sheet['!fullref']).e.r
+          : range.e.r;
         // Width first, then as many rows as the cell limit leaves for that width.
         const width = Math.min(range.e.c - range.s.c + 1, sheetColumns);
         const lastColumn = range.s.c + width - 1;
@@ -112,7 +171,7 @@ export function extractXlsxText({ XLSX, workbook, limits = {}, report = null }) 
           if (cell && ['n', 'd', 'b'].includes(cell.t)) typed.add(c);
         }
         const notices = lastColumn < range.e.c ? [`[… columns beyond ${width} omitted]`] : [];
-        return { rows, covered, typed, rowsBeyond: Math.max(0, range.e.r - lastRow), notices };
+        return { rows, covered, typed, rowsBeyond: Math.max(0, lastSheetRow - lastRow), notices };
       }
     });
   });

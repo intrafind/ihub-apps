@@ -37,7 +37,7 @@ import {
   extractPdfDocument,
   extractPptxDocument
 } from '../documentExtraction.js';
-import { extractXlsxText } from '../../../shared/documentExtraction/xlsx.js';
+import { extractXlsxText, readWorkbook } from '../../../shared/documentExtraction/xlsx.js';
 import { MIN_REAL_TEXT_CHARS, realTextLength } from '../../../shared/documentExtraction/markers.js';
 import { MAX_ITEM_TEXT_CHARS } from './projectConstants.js';
 import { recordExtractionDuration } from '../../telemetry/metrics.js';
@@ -866,18 +866,19 @@ async function extractXlsx(bytes, { report, sheetRows } = {}) {
   await assertSafePackage(bytes);
   const XLSX = await import('xlsx');
   const lib = XLSX.default || XLSX;
+  const limits = sheetRows ? { sheetRows } : {};
   let workbook;
   try {
-    workbook = lib.read(bytes, { type: 'buffer', cellDates: true });
+    workbook = readWorkbook({
+      XLSX: lib,
+      data: bytes,
+      readOptions: { type: 'buffer', cellDates: true },
+      limits
+    });
   } catch (error) {
     throw new DocumentExtractionError(`not a readable Excel workbook (${error.message})`);
   }
-  return extractXlsxText({
-    XLSX: lib,
-    workbook,
-    limits: sheetRows ? { sheetRows } : {},
-    report
-  });
+  return extractXlsxText({ XLSX: lib, workbook, limits, report });
 }
 
 function countPages(text) {
