@@ -99,7 +99,7 @@ not send them. Logic and every timing: `server/services/chat/toolArgProgress.js`
   converters keep it even when a server repeats or changes the id with later
   fragments). Nothing is sent before the provider has sent the id.
 - **First frame** (the announcement): `name` (the name the model called),
-  `title` / `integration` / `activityKind` as on `tool/started` (from
+  `title` / `integration` / `activityKind` / `activityOrigin` as on `tool/started` (from
   `utils/toolDisplay.js`), `outputKind` for the built-in creators (`webArtifact`,
   `document`, `presentation`, `workbook`, `pdf`, `file`, `archive`; decided on the
   server, `undefined` for every other tool), `argBytes`, `elapsedMs`, and
@@ -208,6 +208,23 @@ the client alone.
 | `planCreated`     | workflow planner                    | the plan                                               |
 | `checkpointSaved` | workflow engine                     | `true`                                                 |
 
+
+## Where a Tool Call Looked
+
+`activityOrigin`, `resultCount`, `readOutcome` are optional and additive; a client keeps working when
+one is missing and never works them out from a tool id, a provider or `activityScope` (which stays for
+this release).
+
+- `tool/started`, the `args` progress frames and the ledger `tool/call` carry `activityOrigin`:
+  `project | web | ifinder | iassistant | documents | integration`, the kinds of the footer's
+  `answerBasis` (`activityOriginOf` in `utils/toolDisplay.js` reads the same classifier). Absent when
+  the server cannot place the call. `read_url` is `web`; an integration is named by `integration`.
+- `tool/completed` and the ledger `tool/result` may carry `resultCount` (hits a search returned, `0`
+  included; absent when unknown, so an empty source list is never "no results") and `readOutcome`
+  (`opened`: a page or document read delivered text; `empty`: it completed without, for example
+  `read_url` with an `offset` at the end of the page). They carry `activityOrigin` for a call whose
+  origin only the result tells (`chat_sources_read` recalling sources of one origin).
+- `skill.activation` `activatedBy`: `user | app | model | chat` (`chat`: kept from an earlier message).
 ## A chat turn on the wire
 
 ```

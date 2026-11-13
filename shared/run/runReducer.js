@@ -21,7 +21,7 @@
  *
  * @module shared/run/runReducer
  */
-import { SSE_V2_EVENTS } from '../runEvents.js';
+import { ACTIVITY_ORIGINS, SKILL_ACTIVATORS, SSE_V2_EVENTS } from '../runEvents.js';
 import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 import { generatedFilesOf } from '../generatedFiles.js';
 import { ARGS_OUTCOMES, KNOWN_ARGS_OUTCOMES, PROGRESS_PHASES } from './argProgress.js';
@@ -255,7 +255,7 @@ function appendThought(list, thought) {
  * start stays active in the next turns only when a user activated it.
  *
  * @param {Object[]} skills - the turn's skills so far
- * @param {{name: string, description: string, id?: string, activatedBy?: 'user'|'model'}} skill
+ * @param {{name: string, description: string, id?: string, activatedBy?: 'user'|'app'|'model'|'chat'}} skill
  * @returns {Object[]} a new list
  */
 export function foldSkill(skills, skill) {
@@ -264,10 +264,11 @@ export function foldSkill(skills, skill) {
   );
   if (index < 0) return [...skills, skill];
   const known = skills[index];
-  const activatedBy =
-    known.activatedBy === 'user' || skill.activatedBy === 'user'
-      ? 'user'
-      : known.activatedBy || skill.activatedBy;
+  // The earliest and most explicit route wins: user, then app, then model, then
+  // "kept from an earlier message" (`SKILL_ACTIVATORS`, strongest first).
+  const activatedBy = [known.activatedBy, skill.activatedBy]
+    .filter(by => SKILL_ACTIVATORS.includes(by))
+    .sort((a, b) => SKILL_ACTIVATORS.indexOf(a) - SKILL_ACTIVATORS.indexOf(b))[0];
   const merged = {
     ...known,
     description: known.description || skill.description,
@@ -285,6 +286,11 @@ function finiteOr(value, fallback) {
 /** A non-empty string, or null. */
 function textOrNull(value) {
   return typeof value === 'string' && value ? value : null;
+}
+
+/** A known origin kind, or null: the client draws what the server named and nothing else. */
+function originOrNull(value) {
+  return ACTIVITY_ORIGINS.includes(value) ? value : null;
 }
 
 /**
@@ -350,6 +356,7 @@ function argDisplayFields(frame, detail, known) {
     title: textOrNull(detail.title) || known?.title || null,
     integration: textOrNull(detail.integration) || known?.integration || null,
     activityKind: textOrNull(detail.activityKind) || known?.activityKind || null,
+    activityOrigin: originOrNull(detail.activityOrigin) || known?.activityOrigin || null,
     outputKind: textOrNull(detail.outputKind) || known?.outputKind || null,
     occurrence: occurrence > 1 ? occurrence : (known?.occurrence ?? null)
   };
@@ -500,9 +507,7 @@ function activatedSkillOf(frame) {
     ...(typeof detail?.skillId === 'string' && detail.skillId ? { id: detail.skillId } : {}),
     // Who activated it: a skill only users may start stays active only when a
     // user did.
-    ...(detail?.activatedBy === 'user' || detail?.activatedBy === 'model'
-      ? { activatedBy: detail.activatedBy }
-      : {})
+    ...(SKILL_ACTIVATORS.includes(detail?.activatedBy) ? { activatedBy: detail.activatedBy } : {})
   };
 }
 
@@ -731,6 +736,8 @@ export function reduceRunEvent(state, envelope) {
         // The row the server decided on (search / fetch / tool) and where it looked.
         activityKind: data.activityKind || null,
         activityScope: data.activityScope || null,
+        // Where it looked, in the footer's vocabulary (server `activityOriginOf`).
+        activityOrigin: originOrNull(data.activityOrigin),
         args: data.args,
         execution: data.execution || 'server',
         status: 'running',
@@ -775,6 +782,15 @@ export function reduceRunEvent(state, envelope) {
         error: data.error || null,
         durationMs: data.durationMs ?? null,
         knowledgeSource: data.knowledgeSource || null,
+        // An origin only the result tells (the recall of earlier sources); the
+        // one the call started with stays.
+        activityOrigin: base.activityOrigin || originOrNull(data.activityOrigin),
+        // What the server declared the call came to: the hits of a search (0
+        // included), whether a read delivered text. null = not declared.
+        resultCount:
+          Number.isInteger(data.resultCount) && data.resultCount >= 0 ? data.resultCount : null,
+        readOutcome:
+          data.readOutcome === 'opened' || data.readOutcome === 'empty' ? data.readOutcome : null,
         sources: Array.isArray(base.sources) ? base.sources : [],
         // The finished MCP App view: tool input + the full result it draws.
         mcpApp: data.mcpApp || base.mcpApp || null,

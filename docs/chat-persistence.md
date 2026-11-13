@@ -905,7 +905,10 @@ therefore shows what the live one showed, in the same components.
 - **Skills show once.** A skill activated several times in an answer (started with `/name`,
   loaded again by the model, loaded in several rounds) appears once above the answer; the thought
   chain lists every activation as a **Used skill** row, saying whether the user started it or the
-  model loaded it.
+  model loaded it. A skill's `activatedBy` is `user`, `app` (the app's `autoActivate`), `model` or
+  `chat` (kept from an earlier message); the stored activity items keep `integration`, `origin`,
+  `resultCount` and `readOutcome` (see [SSE v2](sse-v2.md#where-a-tool-call-looked)). A share keeps the
+  origin type and the counts, never the name of the integration, project or search profile.
 - **Recorded:** the turns of a persisted chat, and the workflow runs a tool
   started inside them. The answer text, reasoning and pictures are not — the
   transcript and the [artifact store](artifacts.md) hold those.

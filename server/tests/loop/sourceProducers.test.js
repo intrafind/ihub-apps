@@ -56,6 +56,7 @@ test('web: search results become public pages, in order, with the query', () => 
         id: 'url:example.com/a',
         provider: 'web',
         kind: 'page',
+        origin: { kind: 'web' },
         title: 'Example',
         url: 'https://example.com/a',
         snippet: 'x',
@@ -65,6 +66,7 @@ test('web: search results become public pages, in order, with the query', () => 
         id: 'url:other.org',
         provider: 'web',
         kind: 'page',
+        origin: { kind: 'web' },
         title: 'Other',
         url: 'https://other.org/',
         private: false
@@ -127,6 +129,7 @@ test('web: a page the reader read is private, with words read and truncation', (
     id: 'url:intranet.example/long',
     provider: 'web',
     kind: 'page',
+    origin: { kind: 'web' },
     title: 'Long page',
     url: 'https://intranet.example/long',
     read: { ok: true, words: 3, truncated: true },
@@ -316,6 +319,7 @@ test('envelope: MCP resource_link blocks and structuredContent.sources are sourc
     {
       id: 'url:docs.example/guide',
       provider: 'mcp:docs',
+      origin: { kind: 'integration', label: 'docs' },
       kind: 'page',
       title: 'Install guide',
       url: 'https://docs.example/guide',
@@ -324,6 +328,7 @@ test('envelope: MCP resource_link blocks and structuredContent.sources are sourc
     {
       id: 'mcp:docs:docs://reports/q3.pdf',
       provider: 'mcp:docs',
+      origin: { kind: 'integration', label: 'docs' },
       kind: 'document',
       title: 'Q3 report',
       snippet: 'Quarterly numbers',
@@ -433,7 +438,12 @@ const jiraTool = {
 test('declared: a tool maps its result to sources without code', () => {
   const frame = extractToolSources({
     toolId: 'jira_search',
-    toolDef: { ...jiraTool, id: 'jira_search', method: 'search' },
+    toolDef: {
+      ...jiraTool,
+      id: 'jira_search',
+      method: 'search',
+      _integration: { definition: 'com.example/jira' }
+    },
     args: { jql: 'project = ACME' },
     result: JSON.stringify({
       issues: [
@@ -451,6 +461,7 @@ test('declared: a tool maps its result to sources without code', () => {
       {
         id: 'jira:ACME-1',
         provider: 'jira',
+        origin: { kind: 'integration' },
         kind: 'item',
         title: 'Login fails',
         url: 'https://jira.example/browse/ACME-1',
@@ -458,7 +469,14 @@ test('declared: a tool maps its result to sources without code', () => {
         publishedDate: '2026-09-29T00:00:00.000Z',
         private: true
       },
-      { id: 'jira:ACME-2', provider: 'jira', kind: 'item', title: 'No link', private: true }
+      {
+        id: 'jira:ACME-2',
+        provider: 'jira',
+        origin: { kind: 'integration' },
+        kind: 'item',
+        title: 'No link',
+        private: true
+      }
     ],
     queries: ['project = ACME']
   });

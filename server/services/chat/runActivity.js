@@ -31,7 +31,7 @@
  *
  * @module services/chat/runActivity
  */
-import { SSE_V2_EVENTS } from '../../../shared/runEvents.js';
+import { ACTIVITY_ORIGINS, SKILL_ACTIVATORS, SSE_V2_EVENTS } from '../../../shared/runEvents.js';
 import {
   createStreamState,
   reduceRunEvent,
@@ -328,6 +328,12 @@ function boundSource(source) {
       typeof source.ref?.id === 'string'
         ? compact({ id: text(source.ref.id, MAX_LABEL_CHARS), scope: text(source.ref.scope, 256) })
         : undefined,
+    origin: ACTIVITY_ORIGINS.includes(source.origin?.kind)
+      ? compact({
+          kind: source.origin.kind,
+          label: source.origin.kind === 'integration' ? text(source.origin.label, 100) : undefined
+        })
+      : undefined,
     read:
       typeof source.read?.ok === 'boolean'
         ? compact({
@@ -358,12 +364,21 @@ function boundToolItem(item) {
     native: item.native === true ? true : undefined,
     toolId: text(item.toolId, MAX_LABEL_CHARS),
     name: text(item.name, MAX_LABEL_CHARS),
-    // A `skill` row: which skill, and who activated it (`user` or `model`).
+    // A `skill` row: which skill, and who brought it in (`SKILL_ACTIVATORS`).
     skillId: text(item.skillId, MAX_LABEL_CHARS),
-    activatedBy:
-      item.activatedBy === 'user' || item.activatedBy === 'model' ? item.activatedBy : undefined,
+    activatedBy: SKILL_ACTIVATORS.includes(item.activatedBy) ? item.activatedBy : undefined,
+    // The system a call ran against ("Brave Search"): kept, so a reopened chat
+    // names the provider as the live one did.
+    integration: text(item.integration, MAX_LABEL_CHARS),
     status: item.status,
     scope: item.scope,
+    // Where the server said the call looked, and what it declared the call
+    // came to (hits of a search, 0 included; whether a read delivered text).
+    origin: ACTIVITY_ORIGINS.includes(item.origin) ? item.origin : undefined,
+    resultCount:
+      Number.isInteger(item.resultCount) && item.resultCount >= 0 ? item.resultCount : undefined,
+    readOutcome:
+      item.readOutcome === 'opened' || item.readOutcome === 'empty' ? item.readOutcome : undefined,
     query: text(item.query),
     queries: item.queries ? strings(item.queries) : undefined,
     url: text(item.url),
@@ -433,10 +448,7 @@ export function boundStoredActivity(activity) {
         name: text(skill?.name, MAX_LABEL_CHARS) || '',
         description: text(skill?.description, MAX_LABEL_CHARS) || '',
         id: text(skill?.id, MAX_LABEL_CHARS),
-        activatedBy:
-          skill?.activatedBy === 'user' || skill?.activatedBy === 'model'
-            ? skill.activatedBy
-            : undefined
+        activatedBy: SKILL_ACTIVATORS.includes(skill?.activatedBy) ? skill.activatedBy : undefined
       })
     );
   }
@@ -561,6 +573,12 @@ export function shareableActivity(activity) {
               activatedBy: item?.activatedBy,
               status: item?.status,
               scope: item?.scope,
+              // The kind of system and what the call came to are the viewer's
+              // to read; the integration's name, a project's or a profile's
+              // never leave the owner's share (see the public web items above).
+              origin: item?.origin,
+              resultCount: item?.resultCount,
+              readOutcome: item?.readOutcome,
               query: item?.query,
               queries: item?.queries,
               details: [],
