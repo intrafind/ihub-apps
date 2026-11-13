@@ -254,6 +254,7 @@ The reasons a **Failed** item names:
 | `NO_TEXT`           | This PDF has no text layer (scanned). Run it through OCR and upload the result. |
 | `UNSUPPORTED_TYPE`  | This file type is not supported.                                            |
 | `EXTRACTION_FAILED` | The extractor's own message.                                                |
+| `EXTRACTION_TIMEOUT` | The file took longer than `extraction.timeoutMs` to read and was stopped.  |
 | `SCAN_REJECTED`     | Rejected by the malware scanner.                                            |
 | `INTERRUPTED`       | The upload was interrupted. Upload the file again.                          |
 | `SOURCE_FORBIDDEN`  | Connect the integration again; the document could not be read with your account. |

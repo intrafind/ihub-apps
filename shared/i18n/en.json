@@ -10425,6 +10425,7 @@
     "SCAN_REJECTED": "The security scanner rejected the file.",
     "NO_TEXT": "The file contains no text.",
     "EXTRACTION_FAILED": "The text could not be extracted from the file.",
+    "EXTRACTION_TIMEOUT": "Reading the file took too long and was stopped. Split it or remove what it does not need.",
     "SOURCE_FORBIDDEN": "You may not attach files from this connected system.",
     "SOURCE_GONE": "The file no longer exists in the connected system.",
     "SOURCE_UNAVAILABLE": "The connected system is not available.",
