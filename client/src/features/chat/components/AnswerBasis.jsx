@@ -315,8 +315,9 @@ function BasisPopover({
 
 /**
  * The one chip that says the answer is AI-generated and what it is based on:
- * a fixed "AI-generated" segment, then "Based on" and the kinds of source it
- * used (no names or modes). Opening it shows "About this answer".
+ * a fixed "AI-generated" segment, then the kinds of source it used (no names or
+ * modes). "Based on" lives in the popover sentence, not the chip, to keep the
+ * chip narrow. Opening it shows "About this answer".
  */
 function BasisChip({
   entries,
@@ -336,8 +337,6 @@ function BasisChip({
   // Two or more kinds drop their nouns on a narrow pane: the icons stay and the
   // accessible name keeps the full text. A single kind is short enough to stay.
   const nounClass = entries.length > 1 ? '@max-sm:sr-only' : '';
-  // "Based on" leads the kinds. A workflow is not a basis, so it stands without it.
-  const showLeadIn = !isWorkflowOnly(entries);
 
   return (
     <div className={`relative inline-flex min-w-0 max-w-full ${className}`} ref={rootRef}>
@@ -371,11 +370,6 @@ function BasisChip({
           data-testid="answer-basis-kinds"
           className="inline-flex h-full min-w-0 items-center gap-1.5 ps-1.5 pe-1.5"
         >
-          {showLeadIn && (
-            <span className="shrink-0 font-normal text-gray-500 @max-sm:hidden dark:text-gray-400">
-              {t('chatMessage.answerBasis.basedOn', 'Based on')}
-            </span>
-          )}
           {named.map((entry, index) => (
             <span
               key={`${entry.kind}:${entry.label || ''}`}

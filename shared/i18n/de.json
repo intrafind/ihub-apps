@@ -717,7 +717,6 @@
       "more": "+{{count}}",
       "aiGenerated": "KI-generiert",
       "aiShort": "KI",
-      "basedOn": "Grundlage:",
       "sentence": "Diese Antwort wurde von einer KI erstellt, auf Grundlage von {{what}}.",
       "sentenceModel": "Diese Antwort wurde von einer KI erstellt, auf Grundlage des Wissens des Modells.",
       "sentenceWorkflow": "Diese Antwort wurde von einer KI in einem Workflow erstellt.",
