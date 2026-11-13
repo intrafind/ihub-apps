@@ -1,6 +1,6 @@
 # Load Test and Sizing Plan
 
-**Status:** first run done in a laptop lab (2026-11-12/13); results in section 12 and in [#3631](https://github.com/intrafind/ihub-apps/issues/3631#issuecomment-6847499731). Cluster runs are open. The harness is in `tests/load/`; see its README for how to run it.
+**Status:** first run done in a laptop lab (2026-11-12/13); results in section 12 and in [#3631](https://github.com/intrafind/ihub-apps/issues/3631#issuecomment-6847499731). E1 and E2 repeated on 5.7.0-RC9 with the event-loop fixes (2026-11-13), section 13. Cluster runs are open. The harness is in `tests/load/`; see its README for how to run it.
 
 ## 1. What we want to know
 
@@ -186,3 +186,73 @@ The harness was checked end to end in a sandbox: 2 workers on 4 shared vCPU, the
 - **The harness's GPU model needed `thinking.enabled`** for `LT_THINKING` to have any effect; fixed in `setup.mjs`.
 
 **Next:** repeat E1–E3 in the cluster on the production storage class with a concurrency-tuned vLLM, then E4 and E6. Repeat E1 after the event-loop fixes.
+
+## 13. Re-run on 5.7.0-RC9: did the event-loop fixes help? (2026-11-13)
+
+RC9 contains #3653 (metrics), #3654 (Excel row limit), #3655 (configurable caches), #3656 (extraction in a worker thread) and #3660/#3661 (jsdom replaced). The one-index-per-pod change, #3651, is still open. Same lab, mix, SLOs, data volume and runner as section 12. The image was built locally from tag `v5.7.0-RC9`, because GHCR publishes amd64 only. Two changes to the setup:
+
+- **Docker Desktop at 12 CPUs** (was 8), so W=6 and W=8 fit. Every iHub container stays capped at W+1 vCPU, so W=1–4 compare with section 12.
+- **Stop-on-failure off.** Every stage is recorded, so the capacity can be read at the plan's 150 ms event-loop SLO and at 200 ms.
+
+E3 (GPU), E5 (rate limits) and E7 (spike) were not repeated; RC9 does not change them.
+
+### Event-loop stalls per file (host, Node 26)
+
+| Format | RC8, on the event loop | RC9 code, on the event loop | RC9 default, in the thread |
+| --- | ---: | ---: | ---: |
+| Excel, 30k rows | 728 ms | 192 ms | 1 ms |
+| Excel, 2k rows | 106–135 ms | 92–139 ms | ≤ 1 ms |
+| Word, 40 pages | 71–110 ms | 39–65 ms | ≤ 1 ms |
+| PowerPoint | 9–30 ms | 8–26 ms | ≤ 3 ms |
+| PDF (pdf.js) | 3–17 ms | 2–14 ms | ≤ 1 ms |
+
+Index rebuilds (48 ms average, up to 201 ms) still run on the event loop. At W=1, the 32-entry index cache hit only 52 % of lookups across 220 projects.
+
+### E1: worker scaling (stub LLM, `capacity-stub`)
+
+| W | vCPU | Memory | RC8 capacity | RC9 at 150 ms | RC9 at 200 ms | Breaks on | Worker CPU avg at capacity | RSS per worker |
+| ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | ---: |
+| 1 | 2 | 4 GiB | 100 | **150** | ≥ 200¹ | event loop 180 ms at 200 | 41 % | 1.7 GB |
+| 2 | 3 | 4 GiB | 150 | **~500**² | ~500 | CPU 98 % at 650 | 52 % | 1.45 GB |
+| 4 | 5 | 4 GiB | 150 | **650** | 800 | event loop 186 ms at 800 | 41 % | 1.07 GB |
+| 6 | 7 | 10 GiB | – | **800** | 800 | event loop 206 ms, overhead 485 ms at 1,000 | 48 % | 1.49 GB |
+| 8 | 9 | 10 GiB | – | 500 | 650 | event loop 186 ms at 650; collapse at 1,250 | 28 % | 1.31 GB |
+
+¹ The W=1 run still stopped at its first break.
+² Warm, stepped load passed 500 users with an event-loop peak of 84 ms. A cold jump from 0 to 500 users in 4 minutes failed at 206 ms.
+
+- **Capacity scales with workers again, up to W=6.** At W=2–4 the same pod carries 3–4× the users of RC8. Answers did not slow down: TTFT p95 was 0.90–0.97 s and overhead p95 195–275 ms in every passing stage, as at RC8's 100 users. API p95 stayed ≤ 61 ms. There were 0 errors up to 1,000 users.
+- **The limit is now CPU, then the event loop.** At W=2, CPU ran out at 650 users. At W=4 and W=6, the event-loop peak crossed 150 ms at 41–48 % average worker CPU. That is index rebuilds and garbage collection, not extraction.
+- **W=8 is worse than W=6 in this lab.** 9 vCPU for iHub, 8 extraction threads, 2 runner shards and the stubs shared 12 host cores. The event-loop peak was already 95 ms at 100 users, against 72 ms at W=4. The primary used 22 % CPU at 500 users, against ~4 % at W=4. Whether W=8 helps on dedicated nodes is open.
+- **Memory:** about 1.0–1.1 GB of RSS per worker in a 4 GiB pod, and 1.3–1.5 GB with more room. Only ~350–460 MB of that is JS heap; the rest is mostly the extraction thread. At W=4, the 4 GiB pod ran at 3.95 GiB from 300 users up, without being killed. #3673.
+- **Stream misses** (answers delivered without streaming) appear above ~500 users and grow with workers: W=6 had 38 at 800 users (0.7 %), W=8 had 16 at 500 users and 463 at 1,250 (6.5 %). RC8 never ran above 200 users, so it is not known whether this is new. #3674.
+
+### E2: ingestion (`ingest` mix: 70 % project build, 30 % chat upload)
+
+| Setup | RC8 capacity (event loop ≤ 300 ms) | RC9 capacity | First failure | Overhead p95 at 20 users | Ingest ready p95 at 20 users |
+| --- | ---: | ---: | --- | ---: | ---: |
+| W=4, 5 vCPU, `ingest.concurrency` 2 | 2 | **20** | CPU 91 % at 40 | 276 ms (RC8: 548) | 2.8 s |
+| W=4, 5 vCPU, `ingest.concurrency` 4 | 2 | **20** | CPU 93 % at 40 | 304 ms (RC8: 550) | 2.9 s |
+| W=4, 8 vCPU, 1 extraction thread per worker | – | **40**³ | CPU 143 % at 80 | 281 ms | 2.8 s |
+| W=4, 8 vCPU, 2 extraction threads per worker | – | **20** | CPU 114 %, event loop 264 ms at 40 | 353 ms | 2.9 s |
+
+³ At 80 users the only failing check was per-worker CPU (143 % ≈ 5.7 of 8 cores). That check counts the extraction thread against one core (#3675). The event loop (242 ms) and overhead (666 ms) passed.
+
+- **10× the ingestion load** before an SLO breaks, and the failure is now CPU, the real cost of reading files, instead of event-loop stalls.
+- **`ingest.concurrency` 2 vs 4 changes nothing:** both queue in front of the same thread.
+- **A second thread per worker is worse:** ingestion is no faster (ready p95 at 40 users 3.6 s, against 2.9 s), while the event-loop peak, TTFT overhead and RSS (+150–480 MB per worker) all rise. Both settings were therefore removed: every process reads one file at a time, and more workers read more (#3671).
+- **Chat uploads** wait for the same thread: p95 0.7 s at 20 users, 1.7–3.4 s at 80.
+
+### Sizing update (replaces the iHub rows of section 7's table from this lab)
+
+- **Per replica:** 70 % of the measured capacity, so ≈ 450 concurrent users at W=4 / 5 vCPU / 4 GiB, and ≈ 560 at W=6 / 7 vCPU. Section 12 gave ≈ 105. More than ~500 users per replica still needs more than one replica, or the cluster sweep to confirm W=6–8 on dedicated nodes.
+- **RAM:** plan **1.1 GB per worker + 0.2 GB primary + 1 GiB headroom**: 6 GiB for W=4, 8–9 GiB for W=6. Not the 768 MB that worker sizing assumes today (#3673).
+- **GPU:** unchanged from section 12. At 10 users per gpu-01 in the mixed workload, the GPU, not iHub, is the limit by a factor of ~50.
+
+### Open
+
+1. #3651: one project index per pod. Index rebuilds are now the largest remaining event-loop stalls.
+2. #3673: worker sizing does not count the extraction thread's memory.
+3. #3674: stream misses with more workers.
+4. #3675: the load test's CPU SLO counts the extraction thread against one core.
+5. Cluster runs: E1 at W=4/6/8/12 on dedicated nodes, then E3 with a tuned vLLM, E4 through the ingress and the E6 soak.
