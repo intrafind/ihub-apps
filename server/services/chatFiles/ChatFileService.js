@@ -33,11 +33,15 @@ import {
   PDF_MIME,
   acceptedTypeOf,
   extractText,
-  normalizeText
+  normalizeText,
+  poolFailure
 } from '../projects/extractText.js';
 import { scannerFor } from '../projects/scan/MalwareScanner.js';
 import { projectSettings } from '../projects/projectSettings.js';
-import { renderScannedPdfPages as renderPdfPagesInThread } from '../projects/extractionPool.js';
+import {
+  ExtractionPoolError,
+  renderScannedPdfPages as renderPdfPagesInThread
+} from '../projects/extractionPool.js';
 import { normalizeFiles } from '../../../shared/promptContext.js';
 import { normalizeChatFilePolicy } from './chatFilePolicy.js';
 import { decodeRasterDataUrl } from './rasterImage.js';
@@ -214,7 +218,13 @@ export async function ingestChatFile({
           resolvedPages = rendered.pages;
           resolvedMime = PDF_MIME;
           extractedText = '';
-        } catch {
+        } catch (renderError) {
+          // A thread that timed out, died or was stopped is a processing
+          // failure, not a PDF without content: keep its code.
+          if (renderError instanceof ExtractionPoolError) {
+            const failure = poolFailure(renderError, name);
+            throw new ChatFileError(failure.code, failure.message, 400);
+          }
           throw new ChatFileError(
             'NO_TEXT',
             error.message || 'The PDF contains no extractable text',

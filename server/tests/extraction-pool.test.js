@@ -15,7 +15,8 @@ import v8 from 'node:v8';
 import {
   ExtractionError,
   extractText,
-  extractTextInProcess
+  extractTextInProcess,
+  poolFailure
 } from '../services/projects/extractText.js';
 import {
   ExtractionPoolError,
@@ -273,6 +274,32 @@ describe('extraction in worker threads', () => {
       runInThread('extract', { name: 'x.txt', options: {} }, { bytes: Buffer.from('x') }),
       error => error instanceof ExtractionPoolError && error.code === 'shutdown'
     );
+  });
+
+  it('refuses new work after shutdown instead of reading it on the event loop', async () => {
+    await shutdownExtractionPool();
+    for (const threads of [1, 0]) {
+      configureExtractionPool({ ...SETTINGS, threads });
+      await shutdownExtractionPool();
+      const error = await extractText({ bytes: Buffer.from('late'), name: 'late.txt' }).catch(
+        e => e
+      );
+      assert.ok(error instanceof ExtractionError, `threads ${threads}: ${error}`);
+      assert.equal(error.code, 'INTERRUPTED', `threads ${threads}: no in-process fallback`);
+      await assert.rejects(
+        renderScannedPdfPages(Buffer.from('%PDF-'), 5),
+        e => e instanceof ExtractionPoolError && e.code === 'shutdown'
+      );
+    }
+  });
+
+  it('maps a thread that gave no answer to the ExtractionError codes callers translate', () => {
+    const code = poolCode =>
+      poolFailure(new ExtractionPoolError(poolCode, 'x', { timeoutMs: 5000 }), 'a.pdf').code;
+    assert.equal(code('timeout'), 'EXTRACTION_TIMEOUT');
+    assert.equal(code('shutdown'), 'INTERRUPTED');
+    assert.equal(code('memory'), 'EXTRACTION_FAILED');
+    assert.equal(code('crashed'), 'EXTRACTION_FAILED');
   });
 
   it('reads on the event loop with threads: 0', async () => {

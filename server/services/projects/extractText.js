@@ -940,6 +940,11 @@ export async function extractText(input, options = {}) {
   // Loaded on first call so the extraction thread, which imports this module
   // for `extractTextCore`, does not load the pool and its config readers.
   const pool = await import('./extractionPool.js');
+  try {
+    pool.assertAcceptingJobs();
+  } catch (error) {
+    throw poolFailure(error, input?.name);
+  }
   if (!pool.extractionThreadsEnabled()) return extractTextInProcess(input, options);
   return extractInThread(pool, input, options);
 }
@@ -1001,8 +1006,11 @@ async function extractInThread(pool, input, options) {
   );
 }
 
-/** An `ExtractionError` for a thread that gave no answer. */
-function poolFailure(error, name) {
+/**
+ * An `ExtractionError` for a thread that gave no answer: `EXTRACTION_TIMEOUT`,
+ * `INTERRUPTED` (shutdown) or `EXTRACTION_FAILED`.
+ */
+export function poolFailure(error, name) {
   const file = name || 'The file';
   if (error.code === 'timeout') {
     const seconds = Math.round(error.timeoutMs / 100) / 10;

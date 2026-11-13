@@ -53,7 +53,22 @@ export function extractionSettings() {
 
 /** Whether files are read in threads (`projects.extraction.threads` > 0). */
 export function extractionThreadsEnabled() {
-  return !closed && extractionSettings().threads > 0;
+  return extractionSettings().threads > 0;
+}
+
+/**
+ * Refuse new extraction and rendering work once shutdown has started, before
+ * a caller can take the in-process path, which has no time budget.
+ *
+ * @throws {ExtractionPoolError} `shutdown`
+ */
+export function assertAcceptingJobs() {
+  if (closed) {
+    throw new ExtractionPoolError(
+      'shutdown',
+      'The server is shutting down; try again in a moment.'
+    );
+  }
 }
 
 /**
@@ -249,6 +264,7 @@ export async function shutdownExtractionPool() {
  * @returns {Promise<{pageImages: string[], pages: number}>}
  */
 export async function renderScannedPdfPages(bytes, maxPages) {
+  assertAcceptingJobs();
   if (!extractionThreadsEnabled()) return renderScannedPdfPagesInProcess(bytes, maxPages);
   const { envelope } = await runInThread('renderPdfPages', { maxPages }, { bytes });
   if (!envelope.ok) throw new Error(envelope.error?.message || 'The PDF could not be rendered');
