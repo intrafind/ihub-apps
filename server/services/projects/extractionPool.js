@@ -10,13 +10,13 @@ import { projectSettings } from './projectSettings.js';
  * A small pool of worker threads that read uploaded files off the event loop
  * (#3649).
  *
- * Reading a file is CPU work — SheetJS, jsdom/mammoth, pdfium — that used to
+ * Reading a file is CPU work — SheetJS, mammoth, pdfium — that used to
  * run on the server's event loop, so every other request, chat streams
  * included, waited for it. The pool follows the document renderer
  * (`documents/renderService.js`): a worker thread, a time budget and a memory
  * cap, and the thread is terminated when the budget runs out. Unlike the
  * renderer the threads are reused, because a thread's start costs more than a
- * small file's extraction (it loads jsdom, mammoth and pdf.js on first use).
+ * small file's extraction (it loads mammoth and pdf.js on first use).
  *
  * One job runs on one thread at a time; the rest wait in a queue, and the time
  * budget starts when the job does. A thread that times out, crashes or runs

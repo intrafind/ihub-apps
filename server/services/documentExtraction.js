@@ -9,8 +9,8 @@
  * sends the file itself, so the server does the same — with the same code
  * (`shared/documentExtraction/`), so a file reads the same through the API as through the chat:
  * Markdown with headings, numbers and tables, `[Page N]` markers. The shared modules take their
- * libraries as arguments; this file supplies the Node ones (jszip, mammoth, turndown, jsdom's
- * DOM, pdf.js' legacy build) and loads them on first use, so the server starts without them.
+ * libraries as arguments; this file supplies the Node ones (jszip, mammoth, turndown, domino and
+ * xmldom for the DOM, pdf.js' legacy build) and loads them on first use, so the server starts without them.
  *
  * A file from a stranger is not a file from the user's own browser: an Office file is a zip, and a
  * zip that unpacks to gigabytes must never reach the code that unpacks it. {@link
@@ -158,14 +158,53 @@ export async function assertSafePackage(bytes, limits = PACKAGE_LIMITS) {
 }
 
 /**
- * A `DOMParser` for the Word path that sends each kind of text to the parser that is built for it:
- * HTML (mammoth's output, only to be fed to Turndown) to domino, which Turndown itself ships and
- * which is several times cheaper than a jsdom window; XML (the package parts, namespace-aware)
- * to jsdom. domino builds a static document: it runs no scripts and loads no resources (it has
- * no browsing context, no network and no `<script>`/`<img>` fetching), so user-supplied HTML
- * cannot cause an outbound connection.
+ * Characters XML 1.0 forbids (C0 controls other than tab, LF, CR; U+FFFE, U+FFFF). xmldom reads
+ * them silently; a strict parser (jsdom's, which this replaced) refuses the document.
+ */
+
+const ILLEGAL_XML_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/;
+
+/**
+ * `DOMParser` and `XMLSerializer` for the package parts (namespace-aware XML) of Word, PowerPoint
+ * and OpenDocument files, from `@xmldom/xmldom`.
  *
- * @param {Function} XmlDOMParser - jsdom's DOMParser, for `application/xml`
+ * xmldom is lenient where a conforming XML parser is not, so this wrapper restores the strictness
+ * the extraction relied on: every non-warning parse error is thrown (a part with an undefined
+ * entity, content after the root element, a tag mismatch is refused, as before), characters XML
+ * forbids are refused, and a leading byte order mark is skipped. A refused part reaches the
+ * caller as the same `Error('Malformed XML part')` `parseXml` raises for a `parsererror`
+ * document. xmldom reads no external entity or DTD and makes no request; it does not expand
+ * entities declared in a DOCTYPE either (that is reported as an error and refused).
+ *
+ * @param {{DOMParser: Function, XMLSerializer: Function}} xmldom
+ */
+export function strictXmlDom({ DOMParser: XmldomParser, XMLSerializer }) {
+  const options = {
+    onError(level, message) {
+      if (level !== 'warning') throw new Error(message);
+    }
+  };
+  class StrictDOMParser {
+    parseFromString(text, type) {
+      const source = String(text).replace(/^\uFEFF/, '');
+      if (ILLEGAL_XML_CHARS.test(source)) throw new Error('Malformed XML part');
+      try {
+        return new XmldomParser(options).parseFromString(source, type);
+      } catch {
+        throw new Error('Malformed XML part');
+      }
+    }
+  }
+  return { DOMParser: StrictDOMParser, XMLSerializer };
+}
+
+/**
+ * A `DOMParser` for the Word path that sends each kind of text to the parser built for it: HTML
+ * (mammoth's output, only to be fed to Turndown) to domino, which Turndown itself ships; XML (the
+ * package parts, namespace-aware) to {@link strictXmlDom}. Neither runs scripts, loads resources
+ * or opens a connection, so user-supplied markup cannot cause an outbound request.
+ *
+ * @param {Function} XmlDOMParser
  * @param {{createDocument: Function}} domino
  */
 function splitDomParser(XmlDOMParser, domino) {
@@ -177,14 +216,10 @@ function splitDomParser(XmlDOMParser, domino) {
   };
 }
 
-let domWindow;
-async function loadDom() {
-  if (!domWindow) {
-    const { JSDOM } = await import('jsdom');
-    // Only DOMParser and XMLSerializer are used, statelessly: one window serves every request.
-    domWindow = new JSDOM('').window;
-  }
-  return domWindow;
+let xmlDom;
+async function loadXmlDom() {
+  xmlDom ??= strictXmlDom(await import('@xmldom/xmldom'));
+  return xmlDom;
 }
 
 /**
@@ -197,12 +232,12 @@ async function loadDom() {
  */
 export async function extractDocxDocument(bytes, options = {}) {
   await assertSafePackage(bytes);
-  const [{ default: JSZip }, { default: mammoth }, { default: TurndownService }, window, domino] =
+  const [{ default: JSZip }, { default: mammoth }, { default: TurndownService }, xml, domino] =
     await Promise.all([
       import('jszip'),
       import('mammoth'),
       import('turndown'),
-      loadDom(),
+      loadXmlDom(),
       import('@mixmark-io/domino')
     ]);
   // The shared code uses mammoth's browser interface (`{ arrayBuffer }`).
@@ -218,8 +253,8 @@ export async function extractDocxDocument(bytes, options = {}) {
       JSZip,
       mammoth: nodeMammoth,
       TurndownService,
-      DOMParser: splitDomParser(window.DOMParser, domino.default ?? domino),
-      XMLSerializer: window.XMLSerializer,
+      DOMParser: splitDomParser(xml.DOMParser, domino.default ?? domino),
+      XMLSerializer: xml.XMLSerializer,
       trackedChanges: options.trackedChanges,
       comments: options.comments
     });
@@ -239,13 +274,13 @@ export async function extractDocxDocument(bytes, options = {}) {
  */
 export async function extractPptxDocument(bytes, options = {}) {
   await assertSafePackage(bytes);
-  const [{ default: JSZip }, window] = await Promise.all([import('jszip'), loadDom()]);
+  const [{ default: JSZip }, xml] = await Promise.all([import('jszip'), loadXmlDom()]);
   const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   try {
     return await extractPptxText({
       arrayBuffer,
       JSZip,
-      DOMParser: window.DOMParser,
+      DOMParser: xml.DOMParser,
       speakerNotes: options.speakerNotes
     });
   } catch (error) {
@@ -266,13 +301,13 @@ export async function extractPptxDocument(bytes, options = {}) {
  */
 export async function extractOdfDocument(bytes, options = {}) {
   await assertSafePackage(bytes);
-  const [{ default: JSZip }, window] = await Promise.all([import('jszip'), loadDom()]);
+  const [{ default: JSZip }, xml] = await Promise.all([import('jszip'), loadXmlDom()]);
   const arrayBuffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   try {
     return await extractOdfText({
       arrayBuffer,
       JSZip,
-      DOMParser: window.DOMParser,
+      DOMParser: xml.DOMParser,
       speakerNotes: options.speakerNotes,
       report: options.report
     });
