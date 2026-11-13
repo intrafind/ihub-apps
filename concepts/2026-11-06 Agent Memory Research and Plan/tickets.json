@@ -1,0 +1,1361 @@
+[
+  {
+    "key": "EPIC",
+    "parent": null,
+    "type": "Feature",
+    "title": "[Epic] Memory: personal memory, extraction, compaction and consolidation",
+    "labels": [
+      "epic",
+      "enhancement",
+      "backend",
+      "frontend",
+      "privacy",
+      "chat",
+      "agentic-workflows",
+      "planned"
+    ],
+    "size": "L",
+    "depends_on": [],
+    "stories": [],
+    "existing_issues": [
+      2522,
+      1039,
+      1465,
+      3192,
+      3196,
+      2389,
+      2906
+    ],
+    "body": "Tracking issue for the memory initiative (concept folder `concepts/2026-11-06 Agent Memory Research and Plan/`). Goal: give every signed-in person a private, reviewable **personal memory**, fill it from chats in the background within a budget, keep long chats working through LLM compaction, and give scheduled tasks and agents a reviewed consolidation pass with \"lessons\" — all on the `memoryService` and storage provider iHub already runs, with governance (opt-in at platform, group, app and user level; admins see metadata only; encryption at rest; deletion cascades) shipped before capability.\n\n## Findings in short\n\nBased on the research in `concepts/2026-11-06 Agent Memory Research and Plan/research/` and the audit of today's memory code (README §4):\n\n1. iHub already has the governance properties the research says are under-built elsewhere: scope from the principal (`server/services/memory/memoryService.js`), opt-in, owner-only content, versioned CAS writes, a budget the model can see (`<task_memory>`), a composer that never wipes. Personal memory is that design with entries instead of a markdown body.\n2. No open-source memory framework fits: mem0 OSS v3 is ADD-only with MD5 dedupe and undocumented tenant isolation; Letta is a harness; Graphiti/LangMem/Cognee are Python; Honcho is AGPL. We build on the service we own (README §3, §5 Decision 1).\n3. The 2026 product consensus (Claude, ChatGPT, Copilot) is a list of discrete, individually editable entries written by an explicit tool and by background extraction, injected as a budgeted block, with pause ≠ reset, per-chat off, sensitive categories off by default.\n4. Compaction summaries and memory are separate layers; summaries never become memory records. Consolidation (\"dreaming\") earns its cost only for free-text notes (tasks, agents), never applied in place.\n5. The hard privacy case is the run ledger, which records model-visible messages for owners **and admins**: a placeholder/redaction rule must land before the first `<user_memory>` block is ever recorded.\n\n## Order of work\n\n- **Phase 0 — prerequisites** (M, R1): service contract for entries, tool rename `read_memory`/`write_memory` → `memory_read`/`memory_write` (breaking, migrated), agent memory onto the provider (breaking, migrated), `activityKind: 'memory'`, `postTurn` registry, per-chat message `seq`/`revision`, ledger placeholder and redaction.\n- **Phase 1 — personal memory v1** (M, R1, closes #2522): repository, handler, tools, prompt injection, routes, Settings → Memory, admin page, group permission, app section, scheduled-task `usePersonal`, deletion/retention, docs, i18n, e2e, eval set.\n- **Phase 2 — extraction and review** (M, R2, closes the extraction part of #1465; #1039 closed as duplicate): extractor, budget, activity record, pending queue, import, usage line.\n- **Phase 3 — LLM compaction** (M, R2/R3, closes #3192): summariser, ledger checkpoint, `/compact`, flush before drop, tasks and agents.\n- **Phase 4 — consolidation and lessons** (L, R4, new issue to be opened): lessons, consolidator, sweep, proposal review, agent write approval.\n\n## Decisions already taken\n\nAll fifteen design decisions (README §5), the ten answers of 2026-11-06 (README §8: save-then-Undo; temporary chats read but never write; per-app opt-in; `permissions.memory`; account/app/project partitions; tool rename with no alias; close #1039; users pay for extraction; encryption always on; `task.memory.usePersonal` opt-in) and the twenty ADRs in `architecture.md` §11 are binding. `architecture.md` §0 corrections C1–C12 override the README where they conflict (no `MEMORY_VERSION_CONFLICT`; sub-agents excluded via `invokeAppInternal` context; keys `__a_`/`__p_`; pause/clear via `PATCH /api/memory-preferences` and `DELETE /api/memories?partition=`). Items marked **architect's call** there are decided; reopen them with an ADR, not in a PR.\n\n## Child issues\n\n**Phase 0** — P0: P0-01, P0-02, P0-03, P0-04, P0-05, P0-06, P0-07, P0-08\n**Phase 1** — P1: P1-01 … P1-21\n**Phase 2** — P2: P2-01 … P2-08\n**Phase 3** — P3: P3-01 … P3-05\n**Phase 4** — P4: P4-01 … P4-06\n\n## Documents\n\n- `concepts/2026-11-06 Agent Memory Research and Plan/README.md` — research and plan (binding: §5, §6, §7, §8)\n- `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` — implementation architecture (binding, overrides the README per §0; §12 build order)\n- `concepts/2026-11-06 Agent Memory Research and Plan/product-plan.md` — user stories, release packaging, metrics, definition of done\n- `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` — screens, components, i18n keys, interaction rules, accessibility\n- `concepts/2026-11-06 Agent Memory Research and Plan/engineering-plan.md` — team setup, local recipe, module guidance, tests, risks, glossary\n- `concepts/2026-11-06 Agent Memory Research and Plan/tickets.json` — this breakdown\n\n## Existing issues and how each is resolved\n\n- #2522 Personal memory — implemented by Phase 1 as the concrete v1 (entries with provenance and validity, multi-function `memory` tool, `<user_memory>` block, `/settings/memory`, flag off by default, admins get no content UI); its seven open questions are answered in README §8. Closed by the Phase 1 release.\n- #1039 Support a memory store — covered: ≤ 50 entries by `maxEntries`, natural-language save/update/delete by the tool, settings page, off inside agents (Decision 9). Closed as a duplicate after Phase 1 with the mapping comment (P2-US-11).\n- #1465 Long-term memory + summarisation — the extraction layer is Phase 2 (debounced, budgeted, schema-validated, review queue, import); the summarisation part is Phase 3 and summaries are **not** recalled as memory (Decision 10). Embeddings/recall `k=5` are out of scope. Closed after Phase 2/3 with a comment.\n- #3192 Compact long chats — Phase 3 as specified there (80 % threshold, ~40 % verbatim, cut at a user turn, ledger checkpoint on `context/compaction.summaryRef`, `/compact`, marker, tasks and agents).\n- #3196 Sub-agent delegation — its rule \"memory-writing tools are not available to children\" is implemented by the context exclusion (C6, ADR-M09); the rest of #3196 stays open.\n- #2389 / #2906 — agent memory moves onto the provider (one item of #2389, Phase 0); memory entries use the projects `KeyProvider` envelope (#2906's key provider). Both stay open for their remaining scope.\n\n## Out of scope\n\nRanked retrieval and embeddings; organisation/team/shared memory; an admin content viewer; memory for agents, sub-agents, anonymous users, OAuth clients and delegated tokens; per-topic spaces; consented impersonation; a generic job queue (#1495). See product-plan §3.\n"
+  },
+  {
+    "key": "P0",
+    "parent": "EPIC",
+    "type": "Feature",
+    "title": "[Memory] Phase 0 — prerequisites and refactors (no new user capability)",
+    "labels": [
+      "backend",
+      "architecture",
+      "refactor",
+      "tools"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P0-US-01",
+      "P0-US-02",
+      "P0-US-03",
+      "P0-US-04",
+      "P0-US-05",
+      "P0-US-06"
+    ],
+    "existing_issues": [
+      2389,
+      3196
+    ],
+    "body": "## Goal\n\nMake the existing memory plumbing ready for a third scope, entries, review and consolidation without changing what scheduled tasks and agents do today (README §7 Phase 0; architecture §12 P0a–P0f plus the per-chat `seq`/`revision` of §6.8). Ships with Phase 1 as release R1 (product-plan §5.1). No feature flag: everything here is either invisible or one of the two documented breaking changes.\n\n## Scope summary\n\n- `memoryService` contract: `shape`, `listEntries`, `applyOperations`, `resolve(user, context)`, `resolveMemoryScopeOfKind`; `memoryPrincipal.js`.\n- Tool rename `read_memory`/`write_memory` → `memory_read`/`memory_write`, clean break, migration (ADR-M17).\n- Agent memory onto the provider (`agent-memory`), write cap, version-safe `memory-finalize` (ADR-M18; D4 reversed).\n- `activityKind: 'memory'` end to end (ADR-M14).\n- `postTurn` registry in `ChatService` (C2: nothing moves onto it yet).\n- Per-chat message `seq` and `revision` counters in `ChatRepository`.\n- Run-ledger placeholder and redaction (`memoryLedger.js`, ADR-M12) — an R1 ship gate that must precede the first `<user_memory>` block (P1-09).\n\n## Children (in order)\n\n1. P0-01 — service contract + `memoryPrincipal.js`\n2. P0-02 — tool rename + migration + docs\n3. P0-06 — `postTurn` registry\n4. P0-08 — per-chat `seq` / `revision`\n5. P0-05 — `activityKind: 'memory'`\n6. P0-07 — ledger placeholder and redaction\n7. P0-03 — agent memory onto the provider\n8. P0-04 — version-safe `memory-finalize`\n\n## Acceptance (product-plan §8.1, corrected by architecture §0)\n\n- [ ] Handlers declare `shape`; `listEntries`/`applyOperations` exist; body scopes unchanged; contract tests pass.\n- [ ] Agent memory in `agent-memory`; import runs once and is tested; `maxChars` enforced; finalize passes `expectedVersion` with a one-shot re-read; the two-concurrent-writes test passes.\n- [ ] Rename applied everywhere in architecture §9.1; migration and fixture test pass; no alias; `builtin-app-tool-ids.json` updated.\n- [ ] No `MEMORY_VERSION_CONFLICT` (C3): the admin agent-memory route answers `VERSION_CONFLICT` as problem+json.\n- [ ] `activityKind: 'memory'` in `sseV2.js`, `runReducer.js`, `toolActivity.js`, `runActivity.js`, `toolDisplay.js`; snapshot and client test pass.\n- [ ] `postTurn` after `materializeAssistantTurn`; a slow or throwing handler does not delay `run/ended`.\n- [ ] `isMemoryPrincipal(user)` with the `checkTaskPrincipal` exclusions and a matrix test.\n- [ ] Ledger placeholder implemented and tested (expand with unchanged store, placeholder after edit/clear/deletion, no entry text in events or spill blobs).\n- [ ] `docs/agents.md` storage note; `docs/releases/next/breaking-changes.md` (rename, storage move) and `fixes.md` (write cap, version-safe finalize).\n- [ ] All existing scheduled-task and agent memory tests pass under the new ids.\n\n## Risks\n\nMoving the agent file breaks admins who edit it on disk (release note, directory renamed to `memory.imported/`); the rename breaks external callers of the old ids (documented, no alias); `postTurn` must never delay `run/ended`; three parallel migration branches must renumber on rebase (`migration-version-check.yml`).\n"
+  },
+  {
+    "key": "P1",
+    "parent": "EPIC",
+    "type": "Feature",
+    "title": "[Memory] Phase 1 — personal memory v1 (#2522)",
+    "labels": [
+      "enhancement",
+      "backend",
+      "frontend",
+      "privacy",
+      "chat",
+      "admin-ui",
+      "api"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P1-US-01",
+      "P1-US-02",
+      "P1-US-03",
+      "P1-US-04",
+      "P1-US-05",
+      "P1-US-06",
+      "P1-US-07",
+      "P1-US-08",
+      "P1-US-09",
+      "P1-US-10",
+      "P1-US-11",
+      "P1-US-12",
+      "P1-US-13",
+      "P1-US-14",
+      "P1-US-15",
+      "P1-US-16",
+      "P1-US-17",
+      "P1-US-18",
+      "P1-US-19",
+      "P1-US-20",
+      "P1-US-21",
+      "P1-US-22",
+      "P1-US-23",
+      "P1-US-24",
+      "P1-US-25",
+      "P1-US-26",
+      "P1-US-27",
+      "P1-US-28",
+      "P1-US-29"
+    ],
+    "existing_issues": [
+      2522,
+      1039
+    ],
+    "body": "## Goal\n\nExplicit personal memory: the model saves when asked through `memory_save/update/delete/list`, the person manages a list on Settings → Memory, the `<user_memory>` block is injected within a budget, admins gate it per platform, group and app and see metadata only (README §7 Phase 1; product-plan §3 Phase 1). No extraction. Ships dark behind `features.userMemory` + `platform.memory.enabled` as release R1 together with Phase 0; closes #2522 and lets #1039 be closed as a duplicate.\n\n## Scope summary\n\nConfig and permissions (platform schema, flag, `permissions.memory`, app `memory` section, three migrations); storage (`user-memory` namespace, sealed `UserMemoryRepository`, policy, block builder); scope (`userMemoryHandler` registered last with the fail-closed matrix); tools (`memory.json` + `userMemoryTools.js`, attach rules); prompt injection (`{{user_memory}}`, `memoryContext`, ledger wiring, `meta.extra.memory`, sub-agent exclusion); per-chat toggle; routes (`/api/memories`, `/api/memory-preferences`, admin metadata/clear); client (Settings page, chip + Undo, recalled chip, admin page, app editor section, group checkbox); scheduled-task `usePersonal` read-only; deletion cascades and retention; i18n EN+DE; `docs/memory.md`; e2e; eval set.\n\n## Children (in order)\n\nDay one (no Phase 0 dependency): P1-01, P1-02, P1-03, P1-04, P1-05, P1-06.\nThen: P1-07 (handler) → P1-08 (tools), P1-09 (prompt), P1-10 (per-chat setting), P1-16 (scheduled `usePersonal`), P1-11 (user routes), P1-12 (admin routes), P1-17 (deletion/retention) → P1-13 (Settings page), P1-14 (chat chip and recalled chip), P1-15 (admin page) → P1-18 (i18n), P1-19 (docs and release note), P1-20 (e2e and perf), P1-21 (eval set).\n\n## Acceptance (product-plan §8.2, corrected by architecture §0)\n\nEvery checkbox of product-plan §8.2 with: the error-code list per architecture §4.1 (no `MEMORY_VERSION_CONFLICT`; `VERSION_CONFLICT` is reused), the group checkbox in `GroupFormEditor.jsx` (C4), seven `authorization.js` sites (C4), keys `__a_`/`__p_` (C7), pause via `PATCH /api/memory-preferences` and clear via `DELETE /api/memories?partition=` (C11). Plus README §7 Phase 1 acceptance: with the flag on a user can ask the chat app to remember a preference, see it on Settings → Memory, edit, delete, export, pause, turn memory off for a chat; admins see counts only; a deleted account leaves no `user-memory` document; the block never exceeds `promptBudgetChars`; the tool is absent for agents, scheduled runs, sub-agents and anonymous users. Dogfood exit criteria (product-plan §5.5 step 1) before R1 GA.\n\n## Risks\n\nOver-eager saves by capable models (tool description, `writes` approval mode, undo rate as a gate); prompt-cache churn (block after projects, date-only `updated`); a missed `authorization.js` site (matrix test); the ledger placeholder must land first (P0-07 before P1-09).\n"
+  },
+  {
+    "key": "P2",
+    "parent": "EPIC",
+    "type": "Feature",
+    "title": "[Memory] Phase 2 — automatic extraction and background review (#1465)",
+    "labels": [
+      "enhancement",
+      "backend",
+      "frontend",
+      "privacy",
+      "chat",
+      "api"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P2-US-01",
+      "P2-US-02",
+      "P2-US-03",
+      "P2-US-04",
+      "P2-US-05",
+      "P2-US-06",
+      "P2-US-07",
+      "P2-US-08",
+      "P2-US-09",
+      "P2-US-10",
+      "P2-US-11"
+    ],
+    "existing_issues": [
+      1465,
+      1039
+    ],
+    "body": "## Goal\n\nThe platform notices durable facts the person states and proposes or saves them in the background — debounced, budgeted per user per day, schema-validated, `controlsVersion`-guarded, with review optional or required and a paste-import (README §7 Phase 2; architecture §5.3, §6.4, §8.3). Ships dark behind `platform.memory.extraction.enabled` as R2; closes the extraction part of #1465; #1039 is closed as a duplicate with the mapping comment.\n\n## Scope summary\n\n`UserMemoryBudgetRepository`; `memoryExtractor` on the `postTurn` registry (skip rules, debounce, batch by `seq` window, prompt + JSON schema, validation, `applyOperations` with snapshot checks, telemetry hash-only, model per C12); `memoryActivity` stored summary, `_activity`, cluster-bus channels, cancel wiring on pause/clear/delete; `pending[]`, `reviewMode`, `_pending/_accept/_reject`, `_import`; `SURFACES` `'memory'` and the Usage page line; client Pending tab, review switch, import, live polling, extraction row; admin extraction settings; i18n; docs; eval gate.\n\n## Children (in order)\n\nP2-01 → P2-02 → P2-03 → P2-04 → P2-06; P2-05 in parallel; P2-07 and P2-08 close.\n\n## Acceptance (product-plan §8.3)\n\nEvery checkbox of §8.3, with the pending pruning period fixed at 30 days (ux §8 Q6) and `budgetExceeded` exposed on `_activity`. README §7 Phase 2 acceptance: precision ≥ 0.8 on the 200-turn hand-labelled sample, zero sensitive-category saves without opt-in, p95 extraction latency invisible (off-turn), cost per active user per day visible on the usage page. Tests: duplicate → NOOP, contradiction → INVALIDATE + ADD, sensitive → dropped, malformed JSON → no write, daily cap → skipped, debounce, controls change → result dropped, two workers → one application, out-of-order windows, post-edit batch.\n\n## Risks\n\nJunk accumulation (cap, threshold, categories, review mode, the counter); model dependence on small local models (schema validation, retry, separate `extraction.modelId`); cost surprises (daily cap, usage line, off by default).\n"
+  },
+  {
+    "key": "P3",
+    "parent": "EPIC",
+    "type": "Feature",
+    "title": "[Memory] Phase 3 — LLM compaction and summaries (#3192)",
+    "labels": [
+      "enhancement",
+      "backend",
+      "frontend",
+      "chat",
+      "agentic-workflows"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P3-US-01",
+      "P3-US-02",
+      "P3-US-03",
+      "P3-US-04",
+      "P3-US-05",
+      "P3-US-06"
+    ],
+    "existing_issues": [
+      3192,
+      1465
+    ],
+    "body": "## Goal\n\nLong chats, scheduled runs and agent loops keep working past the context window by summarising the older part with the LLM, storing the summary as a ledger checkpoint on the existing `context/compaction` event (C8, ADR-M10) and continuing from it; `/compact` on demand; memory is flushed before turns are dropped (README §7 Phase 3; architecture §5.6). Independent of the memory flag; ships as R2 or R3; closes #3192.\n\n## Scope summary\n\n`summarizeIfOverBudget` with cut rules and `policies.context.summaryThresholdRatio`; checkpoint on `context/compaction.summaryRef` and prefix rebuild in `RequestBuilder`; `beforeCompaction` seam + `memoryExtractor.flushSync`; `/compact` (steer kind `compact` + `POST …/_compact`), marker, context indicator; same mechanism in `taskExecution.js` and `PromptNodeExecutor`; docs and release note; 200-turn e2e.\n\n## Children (in order)\n\nP3-01 → P3-02 → P3-04, P3-05; P3-03 after P2-02 (degrades to \"no flush\" without Phase 2).\n\n## Acceptance (product-plan §8.4)\n\nEvery checkbox of §8.4 with C8 applied (no new ledger event). README §7 Phase 3 acceptance: a 200-turn chat on a 32k model keeps working with tokens before/after recorded; a fact stated in turn 3 and dropped at turn 150 is in memory (if durable) or in the summary (if episodic); `/compact` works on cloud and local models; a test asserts no summary text ever lands in `user-memory` except through the extractor's operations.\n\n## Risks\n\nSummary quality on small models (acceptance on one local model); the summary must stay volatile (test); cut-point mistakes separating a tool call from its result (cut only at a user turn or after a complete tool batch).\n"
+  },
+  {
+    "key": "P4",
+    "parent": "EPIC",
+    "type": "Feature",
+    "title": "[Memory] Phase 4 — consolidation (dreaming) and lessons for tasks and agents",
+    "labels": [
+      "enhancement",
+      "backend",
+      "frontend",
+      "agentic-workflows",
+      "admin-ui",
+      "api"
+    ],
+    "size": "L",
+    "depends_on": [],
+    "stories": [
+      "P4-US-01",
+      "P4-US-02",
+      "P4-US-03",
+      "P4-US-04",
+      "P4-US-05",
+      "P4-US-06"
+    ],
+    "existing_issues": [],
+    "body": "## Goal\n\nA nightly, reviewable pass that merges and tidies the free-text notes of busy scheduled tasks and agent profiles and proposes procedural \"lessons\", stored as a `proposal { baseVersion, … }` with a diff and never applied without a human unless the admin allows notes-only auto-apply (README §7 Phase 4; architecture §2.4, §5.7, §6.5, ADR-M11). Ships dark behind `platform.memory.consolidation.enabled` as R4, after R2 has produced a month of task-memory data. A GitHub issue for Phase 4 is opened before work starts (product-plan §8.5).\n\n## Scope summary\n\n`lessons[]` and the `sealed` envelope on body documents, `<lessons>` block, lessons routes; `memoryConsolidator` + `memoryConsolidationSweep` under `ownsClusterSingletons`; proposal routes for tasks and agent profiles with `MEMORY_PROPOSAL_STALE` / `MEMORY_PROPOSAL_NOT_FOUND`; `ConsolidationProposalCard` + `NotesDiff`, `autoApply`; agent `memory.writeApproval` staging `memory_write` into `pending[]` with an admin queue; telemetry `purpose: 'memory-consolidation'`; docs; e2e three-run test.\n\n## Children (in order)\n\nP4-01 → P4-02 → P4-03 → P4-04; P4-05 after P4-01; P4-06 closes.\n\n## Acceptance (product-plan §8.5, corrected by architecture §0)\n\nEvery checkbox of §8.5 with C3 applied: a stale apply answers `409 MEMORY_PROPOSAL_STALE`. README §7 Phase 4 acceptance: for a task with ≥ 5 runs the proposal is shorter than the input notes, keeps every watermark, the owner can apply or discard it; no document changes without an explicit apply (or `notes-only` auto-apply); a lesson derived from an owner correction appears in the next run's prompt.\n\n## Risks\n\nToken cost for busy tasks (`maxRunsRead`, nightly cadence, eligibility); wrong generalisations (review gate, provenance drop); low value for sparse tasks (eligibility threshold).\n"
+  },
+  {
+    "key": "P0-01",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Extend memoryService contract for entries scopes and add memoryPrincipal.js",
+    "labels": [
+      "backend",
+      "architecture",
+      "refactor"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P1-US-26"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\n`server/services/memory/memoryService.js` registers two body-shaped scope handlers (agent `:50-87`, scheduled-task `:23, :95-98`) and resolves a scope from the principal alone (`resolveMemoryScope`, `:124-131`). Phase 1 adds an entries-shaped `user` scope that needs trusted **context** (app, chat, purpose) next to the principal. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §1.2, §3.1 (the contract), §3.2 (principal detection), §0 C1/C6; README §5 Decision 2.\n\n## Scope\n\nIn: the contract change, `resolveMemoryScopeOfKind`, `memoryPrincipal.js`, tests. Out: the user handler itself (P1-07), any store.\n\n## Tasks\n\n- [ ] `server/services/memory/memoryService.js`: handlers declare `shape: 'body' | 'entries'` (default `'body'` for the two existing handlers); `resolve(user, context = {})` — pass `context` through, existing handlers ignore it; add `resolveMemoryScopeOfKind(kind, user, context = {})` (one handler, no iteration); add `listEntries(scope, filter)` and `applyOperations(scope, ops, options)` that dispatch to entries handlers and throw `NOT_SUPPORTED` on body handlers; `read`/`write` throw `NOT_SUPPORTED` on entries handlers. Update the `MemoryScopeHandler` typedef (`:39-47`).\n- [ ] Keep registration order agent → scheduled-task (→ user later); `resolveMemoryScope(user)` without context behaves exactly as today.\n- [ ] New `server/services/memory/memoryPrincipal.js`: `isMemoryPrincipal(user)` = not anonymous (`isAnonymousUser` / `user.id === 'anonymous'`, `server/utils/authorization.js:715, :835`), not `user.isAgent`, not `user.isOAuthClient`, `authMode` not in `DELEGATED_AUTH_MODES` (`server/services/scheduler/tasks/taskPolicy.js:34`), and `user.permissions?.memory === true`; `memoryAccessOf(user, context)` → `'readwrite' | 'read' | 'none'` (`context.chat?.temporary` → `'read'`, `context.purpose === 'scheduled-run'` → `'read'`). Copy the exclusion list of `checkTaskPrincipal` (`taskPolicy.js:137-149`) minus its permission check. Pure; no config or storage imports.\n- [ ] SPDX headers; `@module` JSDoc.\n\n## Acceptance criteria\n\n- Given the two existing handlers, when `resolveMemoryScope(agentUser)` / `(scheduledRunUser)` run, then they return the same scopes as before and all existing memory tests pass unchanged.\n- Given a handler with `shape: 'entries'`, when `listEntries`/`applyOperations` are called, then they dispatch to it; when `readMemory`/`writeMemory` are called with its scope, then `NOT_SUPPORTED` is thrown.\n- Given each principal of architecture §3.2 (interactive user with/without `permissions.memory`, scheduled run, agent, OAuth client, both delegated modes, anonymous), when `isMemoryPrincipal` runs, then only the interactive user with the permission is `true`.\n\n## Tests\n\n- `server/tests/memory-service.test.js` (extend): `shape`, dispatch, `resolveMemoryScopeOfKind`, registration order, `NOT_SUPPORTED` paths.\n- `server/tests/memory/memoryPrincipal.test.js` (new): one row per exclusion, `permissions.memory` false, `memoryAccessOf` values.\n\n## Notes\n\nInvariants: scope from the principal (and later trusted context) only; the service knows no store and never imports routes, tools or `LLMClient` (architecture §1.3). ADR-M02. No `MEMORY_VERSION_CONFLICT` anywhere (C3). Unblocks P0-03 and P1-07.\n"
+  },
+  {
+    "key": "P0-02",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Rename read_memory/write_memory to memory_read/memory_write (breaking)",
+    "labels": [
+      "backend",
+      "tools",
+      "config",
+      "docs",
+      "agentic-workflows"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P0-US-01"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nDecision Q6 (README §8): all memory tools form one `memory_*` family, so the agent/task tools are renamed as a **clean break with no alias** (CLAUDE.md \"Breaking Changes\", ADR-M17). The grep-verified target list is `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §9.1 (including C9's additions: `setupUtils.js`, the test files, and scheduled-task runtime documents under `contents/data/scheduled-tasks/`).\n\n## Scope\n\nIn: rename shipped files and ids, every code/prompt/test/doc reference, the migration, the breaking-change note. Out: migrations `V042`, `V199`, `V202`, `V211` and their tests (frozen history), `docs/releases/5.4.0/`.\n\n## Tasks\n\n- [ ] Rename `server/defaults/tools/read_memory.json` → `memory_read.json`, `write_memory.json` → `memory_write.json`; rewrite `id`; reword descriptions to \"your own notes for this agent profile / scheduled task\" (architecture §4.5); keep `script`, `method`, `isAgentTool`, parameters.\n- [ ] Ids: `server/services/tools/platformTools.js:38-49` (`PLATFORM_TOOL_FILE_IDS`) and its header comment `:8, :25`; `server/agents/runtime/agentToolRegistrar.js:42` (`MEMORY_TOOLS`); `server/services/scheduler/tasks/runMemory.js:31` (`MEMORY_TOOL_IDS`) and the protocol note `:109-134`; `server/utils/setupUtils.js:53, :60`; `server/tools/agentTools.js` comments.\n- [ ] Prompt texts: `server/services/scheduler/tasks/memoryComposer.js`, `server/agents/profile/profileWorkflowSerializer.js:174-231`, `server/services/workflow/executors/PromptNodeExecutor.js` comments, `MemoryFinalizeNodeExecutor.js:15`, `server/agents/memory/memoryFile.js:159`, `client/src/features/tasks/components/TaskBadges.jsx:61` comment.\n- [ ] Tests and fixtures: `server/tests/fixtures/builtin-app-tool-ids.json`, `platform-tools.test.js`, `memory-agent-compat.test.js`, `scheduled-tasks-memory-{run,tools,composer}.test.js`, `claude-style-agent-profile.test.js`, `helpers/scheduledTaskHarness.js`, `integrations/ihubConnector.test.js`, `integrations/builderRoutes.test.js`.\n- [ ] Migration `V{NNN}__rename_memory_tools.js` (`create-migration` skill; self-contained): precondition any of `contents/tools/`, `contents/apps/`, `contents/agents/profiles/`, `contents/workflows/`, `contents/config/groups.json`, `contents/data/scheduled-tasks/` exists; `ctx.moveFile` `contents/tools/{read,write}_memory.json` → `memory_{read,write}.json` rewriting `id` when present; rewrite ids in apps `tools[]`, agent profiles `tools[]` and node `tools[]`, workflow node `tools[]`, groups `permissions.tools[]`, scheduled-task envelopes `data.enabledTools[]`; log every file touched; idempotent.\n- [ ] Docs: `docs/agents.md`, `docs/scheduled-tasks.md`, `docs/tool-calling.md`, `docs/integrations.md`; `docs/releases/next/breaking-changes.md` entry (old/new ids table, what is migrated automatically, what external callers — MCP clients, scripts calling `/api/tools/read_memory`, admin prompt texts — must change).\n\n## Acceptance criteria\n\n- Given an agent profile, an app `tools[]`, a workflow node, a group grant and a scheduled-task document naming the old ids, when the migration runs, then every id reads `memory_read`/`memory_write`, `contents/tools/{read,write}_memory.json` are renamed with their `id` rewritten, and a second run changes nothing.\n- Given the release, when an admin opens the changelog, then the breaking-change entry names both ids and the external-caller impact.\n- `grep -rn \"read_memory\\|write_memory\" server shared client docs` finds only the frozen migrations, their tests and `docs/releases/5.4.0/`.\n\n## Tests\n\n- `server/tests/migration-vNNN-rename-memory-tools.test.js` (new; `makeCtx` style of `migration-v216.test.js`): a fixture with the old ids in every location of §9.1; an admin-edited `contents/tools/read_memory.json`.\n- All existing memory tests green under the new ids; `server/tests/tool-ownership.test.js` passes.\n\n## Notes\n\nNo alias, no `Deprecation` header: the old `ALL /api/tools/read_memory` route answers 404 after the upgrade (documented). Unblocks P0-05. Number the migration at merge time (the number is assigned at merge from the highest on disk today).\n"
+  },
+  {
+    "key": "P0-03",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Move agent memory onto the storage provider with a write cap (breaking)",
+    "labels": [
+      "backend",
+      "architecture",
+      "refactor",
+      "config"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P0-01"
+    ],
+    "stories": [
+      "P0-US-02"
+    ],
+    "existing_issues": [
+      2389,
+      3230
+    ],
+    "body": "## Context\n\nAgent memory is one markdown file per profile under `contents/agents/memory/<profileId>.md` (`server/agents/memory/memoryFile.js:45-65, 107-146`) with no size cap on write (`memoryService.js:72`). Decision D4 of the task-memory concept is reversed (ADR-M18): the notes move into a provider namespace `agent-memory`, which is one item of #2389 and follows #3230's \"provider mandatory\" decision. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §9.2, §2.4 (fields that Phase 4 adds later), §7.5 (`maxChars`).\n\n## Scope\n\nIn: namespace, repository, handler move, migration import, write cap, admin route conversion. Out: encryption of body documents (Phase 4, P4-01), `expectedVersion` in finalize (P0-04).\n\n## Tasks\n\n- [ ] `server/storage/namespaces.js`: `agentMemory: 'agent-memory'` in `RUNTIME_NAMESPACES` (`:110-297`); key `profileId` (already `AGENT_PROFILE_ID_PATTERN`-validated); no owner (profiles are admin content). `docs/storage.md` table row.\n- [ ] New `server/agents/memory/AgentMemoryRepository.js` copied from `server/services/scheduler/tasks/TaskMemoryRepository.js` (lock `agent-memory:<profileId>`, `LOCK_OPTIONS` `:34`, `MAX_CAS_ATTEMPTS` `:36`, `VERSION_CONFLICT`, `MEMORY_TOO_LONG`); `maxChars` from `profile.memory.maxChars`.\n- [ ] `server/validators/agentProfileSchema.js:54-65` `memorySchema`: `maxChars: z.number().int().min(1000).max(200000).optional().prefault(32000)`.\n- [ ] New `server/agents/memory/agentMemoryHandler.js` (the `agentHandler` of `memoryService.js:50-87` using the repository, `shape: 'body'`); `memoryService.js` imports it; `memoryFile.js` keeps only the parsing helpers and is no longer imported at runtime; `PromptNodeExecutor.js:72, :311-317` and `server/routes/admin/agents.js:19, :317-348` call the repository.\n- [ ] `routes/admin/agents.js:345-348`: replace the hand-written conflict body with `sendErrorResponse(res, 409, …, { code: 'VERSION_CONFLICT' })` inside the `try` (CLAUDE.md REST rules; C3 — no `MEMORY_VERSION_CONFLICT`). `MemoryEditor.isVersionConflict` (`client/src/shared/components/MemoryEditor.jsx:16-24`) stays as is.\n- [ ] Migration `V{NNN}__agent_memory_to_provider.js` (self-contained): precondition `contents/agents/memory/*.md` exists; parse front matter with a snapshot of the `memoryFile.js:45-60` regex; write `contents/data/agent-memory/<profileId>.json` in the filesystem provider's envelope (`docs/storage.md:264, :489-492`) with `{ profileId, body, version, updatedAt, updatedBy, summary, chars }`; marker in `runtime-imports` (V219 pattern); rename the source directory to `contents/agents/memory.imported/`; log every file.\n- [ ] `docs/agents.md:125-166` storage note; `docs/releases/next/breaking-changes.md` entry (on-disk edits no longer apply; the admin page is the editor; backups include `contents/data`); `docs/releases/next/fixes.md` entry for the write cap.\n\n## Acceptance criteria\n\n- Given files in `contents/agents/memory/`, when the server starts after the upgrade, then each is imported once, a later edit of the `.md` has no effect on any run, and a second start imports nothing.\n- Given an agent memory write larger than `maxChars`, when attempted, then it is rejected with `MEMORY_TOO_LONG`.\n- Given a stale `expectedVersion` on the admin agent-memory route, then the response is `409` problem+json with `code: VERSION_CONFLICT`.\n- Given the agent prompt node, when memory is enabled, then the block comes from the repository and is byte-identical to before for an imported file.\n\n## Tests\n\n- `server/tests/agents/agentMemoryRepository.test.js` (new): CAS, `maxChars`, conflict code.\n- `server/tests/migration-vNNN-agent-memory-to-provider.test.js` (new): fixture `.md` with front matter → envelope document, marker, renamed directory, idempotence.\n- `server/tests/memory-agent-compat.test.js`, `memoryFinalizeNodeExecutor.test.js`, admin agent route tests updated.\n\n## Notes\n\nRuns in the primary before the provider exists (`docs/storage.md:326`), which is why the migration may touch `contents/data` directly. Unblocks P0-04 and P4-01.\n"
+  },
+  {
+    "key": "P0-04",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Version-safe memory-finalize: pass expectedVersion, re-read once on conflict",
+    "labels": [
+      "backend",
+      "agentic-workflows",
+      "refactor"
+    ],
+    "size": "S",
+    "depends_on": [
+      "P0-03"
+    ],
+    "stories": [
+      "P0-US-03"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\n`server/services/workflow/executors/MemoryFinalizeNodeExecutor.js:17-25` drains `_pendingMemoryUpdates` and writes without `expectedVersion` — last write wins, so two concurrent runs lose one run's notes. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §9.2 (third bullet) and README §7 Phase 0.\n\n## Scope\n\nIn: the finalize executor and the composer's `baseVersion`. Out: write approval (P4-05).\n\n## Tasks\n\n- [ ] `profileWorkflowSerializer.js:418-446, 671-686`: the `memory-compose` node carries the memory `version` it read as `_pendingMemoryUpdates[i].baseVersion`.\n- [ ] `MemoryFinalizeNodeExecutor.js`: pass `expectedVersion: baseVersion` to the repository; on `VERSION_CONFLICT` re-read once and re-apply an `append`; a `replace` on conflict is dropped with a `noopReason: 'conflict'` step log and SSE note (never last-write-wins).\n- [ ] `docs/agents.md` memory pipeline section; `docs/releases/next/fixes.md` entry.\n\n## Acceptance criteria\n\n- Given two `memory-finalize` nodes writing the same profile with the same `expectedVersion`, when both complete, then one succeeds, the other re-reads once and retries its `append`, and no write is lost.\n- Given a `replace` whose base is stale, then it is dropped with the `conflict` reason and the document keeps the newer version.\n\n## Tests\n\n- `server/tests/memoryFinalizeNodeExecutor.test.js` (extend): concurrent appends both land; stale replace dropped; step log asserted.\n\n## Notes\n\nError code is `VERSION_CONFLICT` (C3). Uses `AgentMemoryRepository` from P0-03.\n"
+  },
+  {
+    "key": "P0-05",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Add activityKind 'memory' to SSE contract, tool display, reducer and chat row",
+    "labels": [
+      "backend",
+      "frontend",
+      "chat",
+      "ui"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P0-02"
+    ],
+    "stories": [
+      "P0-US-04"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\nWhat a tool call was is decided on the server and sent with `tool/started` (`activityKind`, `title`, from `server/utils/toolDisplay.js`); the client and `shared/run/` never infer it from a tool id (CLAUDE.md \"Run Activity\", README §5 Decision 14, ADR-M14). Today `activityKind` is `search | fetch | tool` (`server/services/loop/contracts/sseV2.js:143`). See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §8.1, §10.2; `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3c for the row.\n\n## Scope\n\nIn: the enum value, server labelling for the six memory tool ids, reducer/activity folding, a plain `memory` row in the client for `memory_read`/`memory_write` (Undo and entry rendering come with P1-14). Out: `meta.extra.memory` (P1-09).\n\n## Tasks\n\n- [ ] `sseV2.js:143`: `activityKind: z.enum(['search', 'fetch', 'tool', 'memory'])`.\n- [ ] `server/utils/toolDisplay.js:42-49` `activityKindOf`: return `'memory'` for `MEMORY_TOOL_IDS = new Set(['memory_save', 'memory_update', 'memory_delete', 'memory_list', 'memory_read', 'memory_write'])` before the integration check; `toolDisplayOf` (`:72-101`) supplies the localised `title` from the tool file; no `activityScope` for memory rows.\n- [ ] `shared/run/runReducer.js:434` copies the value (verify); `shared/run/toolActivity.js:259`: `['search', 'fetch', 'memory'].includes(…)`; item gains `memory: { op, entry, before }` lifted from `tool.result` when present; `shared/run/runActivity.js:119` keeps it in the stored activity.\n- [ ] `client/src/features/chat/components/ToolActivity.jsx:184` `ActivityItem`: branch for `kind === 'memory'` with `Icon light-bulb`, indigo tone, headline contribution \"Memory updated\" (`toolActivity.memory.headline`, `…listed` for reads) — EN/DE keys from ux §4.7 for this row only.\n- [ ] Update the contract snapshot: `UPDATE_SNAPSHOTS=1 node --test server/tests/loop/contracts.test.js`; review the diff of `server/tests/loop/__snapshots__/contracts.schema.json`.\n- [ ] `docs/sse-v2.md`: `activityKind` value `memory`.\n\n## Acceptance criteria\n\n- Given a scheduled run or agent run that calls `memory_read`/`memory_write`, when `tool/started` is emitted, then it carries `activityKind: 'memory'` and a server title; the shared reducer folds it; a reopened chat/run view shows the same row from the stored activity.\n- Given any other tool, nothing changes.\n\n## Tests\n\n- `server/tests/loop/contracts.test.js` snapshot updated once.\n- `server/tests/toolDisplay.test.js` (new or extend): the six ids → `memory`; an integration tool unchanged.\n- `tests/unit/client/tool-activity-memory-row.test.jsx` (new): row rendered from a reduced run; nothing inferred from the id.\n\n## Notes\n\nUnblocks P1-08 and P1-14. Clients tolerate unknown enum values (`docs/api-guidelines.md` §5), so this is additive.\n"
+  },
+  {
+    "key": "P0-06",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Add a detached postTurn handler registry to ChatService.runTurn",
+    "labels": [
+      "backend",
+      "chat",
+      "architecture"
+    ],
+    "size": "S",
+    "depends_on": [],
+    "stories": [],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nPhase 2's extractor needs a seam that fires after a chat turn is materialised and never delays `run/ended`. `ChatService` has no chat title generator (C2: `server/agents/runtime/titleGenerator.js:57-75` titles agent runs), so `postTurn` is new plumbing whose first and only consumer is extraction; nothing moves onto it. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §0 C2, §1.3 rule 4, §5.3.\n\n## Scope\n\nIn: the registry module, the emit call, tests. Out: any handler (P2-02 registers the extractor from `server/startup/`).\n\n## Tasks\n\n- [ ] New `server/services/chat/postTurn.js`: `registerPostTurnHandler(fn)`, `unregisterPostTurnHandler(fn)`, `emitPostTurn(event)` — runs every handler in a detached promise (the `titleGenerator.js:64-75` discipline), catches and logs errors with `component: 'postTurn'`, never awaited by the caller, bounded by a per-handler timeout log (warn after 60 s, no cancellation).\n- [ ] `server/services/chat/ChatService.js`: after `materializeAssistantTurn` (`:1019`, and the error path `:1046` with `outcome.status: 'error'`) call `emitPostTurn({ chatId, runId, messageId, user, app, chat, prep, outcome })`. `invokeAppInternal` (`:1507`) does **not** emit (children never extract).\n- [ ] `docs/chat-persistence.md`: a paragraph on the seam.\n\n## Acceptance criteria\n\n- Given a registered handler that sleeps 5 s or throws, when a turn completes, then `run/ended` is emitted at the same time as without the handler and the turn's stored result is unaffected; the error is logged once.\n- Given a sub-agent child run, then no handler fires.\n\n## Tests\n\n- `server/tests/chat/postTurn.test.js` (new): slow handler, throwing handler, event shape, unregister; `run/ended` timing asserted with the chat-turn harness used by `server/tests/loop/chatTurn.test.js`.\n\n## Notes\n\n`ChatService` never names the extractor (import rule 4). Unblocks P2-02.\n"
+  },
+  {
+    "key": "P0-07",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Run-ledger placeholder and redaction for memory blocks and tool payloads",
+    "labels": [
+      "backend",
+      "privacy",
+      "security",
+      "architecture"
+    ],
+    "size": "L",
+    "depends_on": [],
+    "stories": [
+      "P0-US-05"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\n`request/header` records the model-visible messages in full on the first call and on every change (`server/services/loop/LLMClient.js:1526`, called at `:850`; `messagesHash`, `messages`, `messagesDelta` per `runLogEvents.js:179-199`) and `GET /api/runs/:runId/events` (`server/routes/runs.js:127-161`) serves them to the owner **and to admins**. The \"admins see metadata only\" promise therefore needs a ledger rule before the first `<user_memory>` block is ever recorded (README §6.7; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §8.2, §5.8, §0 C5; ADR-M12). This is an R1 ship gate and must land before P1-09.\n\n## Scope\n\nIn: `memoryLedger.js`, `LLMClient` redaction hook, `hash-only` telemetry mode, tool-definition `ledger: 'redact'`, the `redactions` contract member, replay expansion in the events route, tests. Out: the `<user_memory>` block itself (P1-06/P1-09); the owner's re-expansion needs the user handler (P1-07) — ship the expansion with a pluggable `renderBlock` resolver that P1-09 wires.\n\n## Tasks\n\n- [ ] New `server/services/memory/memoryLedger.js`: `registerRedaction(preparationId, { marker, text, placeholder, refs, chars })`; `applyLedgerRedactions(messages, redactions)` replacing the exact block text with `<user_memory ref=\"v<version>\" sha256=\"…\" chars=\"…\"/>` (also for `messagesDelta`); `expandRedactions(events, user, runMeta, { renderBlock })` — owner only, every ref's current version must equal `ref.version` and the rebuilt block must hash to `sha256`, else `state: 'changed'`; non-owners `state: 'redacted'`.\n- [ ] `LLMClient._recordRequestHeader`: keep `messagesHash = hashPayload(messages)` over the real messages; record redacted copies; add `redactions: [{ marker, refs, chars, placeholderHash }]`. `telemetry.redaction: { messages: 'hash-only' }`: record `messagesHash`, `messageCount`, `callConfig`, no `messages`; `message/assistant` records hash and byte count only.\n- [ ] Tool definitions may declare `ledger: 'redact'`: `tool/call` arguments, `tool/result` payloads and the `toolCalls` arguments inside `message/assistant` (`AgentLoop.js:621`) are recorded as `{ redacted: true, sha256, chars }` with no spill blob; the placeholder rule applies when they reappear in later `request/header` messages and deltas.\n- [ ] `runLogEvents.js:179-199` `requestHeaderData` gains `redactions`; update the contract snapshot.\n- [ ] `routes/runs.js:127-161`: pass events through `expandRedactions` for the JSON projection; `view=sse` (`:169-177`) never carries `request/header` and is untouched.\n- [ ] Utility runs (`parentRunId`) are deleted with their parent (`RunLog.deleteRun`, `RunLog.js:796`) — verify and add a test.\n- [ ] `docs/run-ledger.md`: the placeholder/redaction rule and \"replay is best-effort; deletion wins\".\n\n## Acceptance criteria\n\n- Given a prompt containing a registered block, when the ledger records `request/header`, then `messages` show the placeholder, `redactions` names marker/refs/chars, and `messagesHash` equals the hash of the real messages.\n- Given the owner replays with an unchanged store, then the block is rebuilt and the hash verified; given any later change (version differs), then the viewer gets the placeholder with `state: 'changed'`; an admin always gets `state: 'redacted'`.\n- Given a run that called a `ledger: 'redact'` tool, when the stored events and spill blobs are grepped for the argument text, then nothing is found.\n- Given `hash-only` mode, then no `messages` are recorded.\n\n## Tests\n\n- `server/tests/memory/memoryLedger.test.js` (new): redaction in `messages` and `messagesDelta`; hash unchanged; expansion for owner/matching version; placeholder after a version change; admin never expands; `hash-only`; grep over events and blobs.\n- `server/tests/loop/contracts.test.js` snapshot updated once.\n\n## Notes\n\nADR-M12. There is no `server/services/loop/replay/` module (C5) — the expansion is a projection step. Until this lands, `<task_memory>` remains readable by admins through the ledger and `docs/memory.md` (P1-19) says so.\n"
+  },
+  {
+    "key": "P0-08",
+    "parent": "P0",
+    "type": "Task",
+    "title": "[Memory P0] Add per-chat message seq and revision counters to ChatRepository",
+    "labels": [
+      "backend",
+      "chat",
+      "architecture"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P2-US-04"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nBackground extraction (Phase 2) must order turns chronologically across edits and discard results scheduled before a truncating edit. README §6.8 specifies a per-chat message sequence number `seq` and a per-chat `revision` counter; `ChatRepository.buildMessage` (`server/services/chat/ChatRepository.js:536`) keeps its UUID `id`, and `replaceFromMessageId` (`:1705-1799`) drops history from a message and appends the regenerated turn. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §8.3 and README §6.3/§6.8 (window and watermark rules).\n\n## Scope\n\nIn: `seq`, `nextSeq`, `revision`, backfill, tests. Out: the extraction watermark itself (P2-02 stores it on the memory document).\n\n## Tasks\n\n- [ ] `ChatRepository.js`: chat document gains `nextSeq` (integer, starts at 1) and `revision` (integer, starts at 0); `buildMessage` additionally takes `seq` assigned from `nextSeq` under the chat's write lock, never reused; messages that predate the field are backfilled from their array index on the first write to that chat.\n- [ ] `replaceFromMessageId` increments `revision`; a read API `getChatRevision(chatId)` / expose `revision` and the last surviving `seq` on the chat document so the extractor can reset its watermark.\n- [ ] `docs/chat-persistence.md`: document `seq`, `nextSeq`, `revision` and the edit semantics.\n\n## Acceptance criteria\n\n- Given a chat with messages written before this change, when a new message is appended, then every message has a strictly increasing `seq` and the old ones are backfilled in array order.\n- Given a truncating edit that removes `seq` 3–100, then `revision` increments, the surviving messages keep their `seq`, and the regenerated turn gets a new `seq` above the previous `nextSeq`.\n\n## Tests\n\n- `server/tests/chat-persistence-routes.test.js` or a new `server/tests/chat/chatSeq.test.js`: backfill, monotonic `seq`, `revision` on edit, no reuse after an edit.\n\n## Notes\n\nPure additive storage change; no API shape changes (the fields may appear on stored messages served by `GET` chat routes — additive per `docs/api-guidelines.md` §7). Unblocks P2-02.\n"
+  },
+  {
+    "key": "P1-01",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] platform.memory Zod section, userMemory flag, policy settings and migration",
+    "labels": [
+      "backend",
+      "config",
+      "admin"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P1-US-20"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nAdmin controls live in `platform.memory` (README §6.6) with the exact Zod shape, bounds and defaults of `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §7.1, a `userMemory` feature flag (default off, `preview: true`) and a `V{NNN}__user_memory.js` migration (§7.4). The migration number is assigned at merge time from the highest on disk.\n\n## Scope\n\nIn: schema, flag, `userMemoryPolicy.memorySettings` / `isUserMemoryConfigured` / `appMemoryMode` / `chatMemoryEnabled`, migration. Out: `sensitiveFilter` (P1-05), the admin page (P1-15).\n\n## Tasks\n\n- [ ] `server/validators/platformConfigSchema.js`: `memory` section next to `scheduledTasks` (`:672`) exactly as architecture §7.1 (`enabled false`, `maxEntries 100`, `maxEntryLength 500`, `promptBudgetChars 4000`, `retentionDays 0`, `sensitiveCategories 'allowOptIn'`, `extraction { enabled false, modelId?, maxCallsPerUserPerDay 50, maxInputTokens 12000, debounceSeconds 30, messageWindowSize 6, reviewMode 'optional' }`, `consolidation { enabled false, modelId?, minRunsSinceLast 5, maxRunsRead 10, maxPriorEntryLossFraction 0.25, schedule '03:00' }`), `.passthrough().prefault({})`.\n- [ ] `server/featureRegistry.js`: `{ id: 'userMemory', name: 'Personal memory', category: 'chat', default: false, preview: true }` (the `scheduledTasks` entry at `:147` is the shape); `FEATURE_IDS` feeds `app.requiredFeatures` automatically (`appConfigSchema.js:644`).\n- [ ] New `server/services/memory/userMemoryPolicy.js`: `memorySettings(platform)` with clamps (`[min, max]` tables and `clampNumber` as `taskPolicy.js:70-80`; bounds 10–1000, 50–2000, 500–20000, 2000–64000, 5–600, 2–20), `isUserMemoryConfigured(features, platform)` (registration check first — `FEATURE_IDS.includes('userMemory') && isFeatureEnabled(...) && settings.enabled`, see `chatPersistence.js:94-96`), `appMemoryMode(app)`, `chatMemoryEnabled(chat)`, `effectiveReviewMode(platformMode, userMode)`.\n- [ ] Migration `V{NNN}__user_memory.js`: precondition `config/platform.json` exists; `ctx.setDefault(platform, 'memory.<key>', value)` key by key so an early admin edit survives; no `features.json` change.\n- [ ] `docs/memory.md` admin section stub (full doc in P1-19); `docs/configuration-migrations.md` unchanged.\n\n## Acceptance criteria\n\n- Given a fresh or upgraded installation, when the server starts, then `userMemory` is `false`, `platform.memory.enabled` is `false`, and no memory surface is visible.\n- Given out-of-range values in `platform.json`, when `memorySettings` runs, then they are clamped to the bounds.\n- Given the flag registered but off, or on with `platform.memory.enabled: false`, then `isUserMemoryConfigured` is `false`; given an unregistered id, `false`.\n\n## Tests\n\n- `server/tests/memory/userMemoryPolicy.test.js` (new): clamps; gating incl. unregistered flag; `appMemoryMode` for absent/`enabled:false`/`read`/`readwrite`.\n- `server/tests/migration-vNNN-user-memory.test.js` (new): defaults set, existing admin values kept, idempotent.\n- `tests/unit/server/default-config-schema-validation.test.js` stays green.\n\n## Notes\n\nRead via `configCache.getPlatform()` on every use (no restart); `npm run lint:config-access` green. Harmless with the flag off; can merge first.\n"
+  },
+  {
+    "key": "P1-02",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] permissions.memory in schema, authorization.js, group editor and migration",
+    "labels": [
+      "backend",
+      "frontend",
+      "admin-ui",
+      "config",
+      "security"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P1-US-21"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nDecision Q4 (README §8): a `permissions.memory` boolean like `scheduledTasks`, granted to `admins|users|authenticated` by migration, `false` for `anonymous`. C4 corrects the README: there are **seven edit sites in four functions** of `server/utils/authorization.js` plus the OAuth-client and delegated-token blocks, and the checkbox lives in `client/src/features/admin/components/GroupFormEditor.jsx:268-285`, not `AdminGroupEditPage.jsx`. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §7.3, §0 C4; `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3h.\n\n## Scope\n\nIn: schema, every `authorization.js` site, editor checkbox, migration, matrix test. Out: using the permission (P1-07 via `isMemoryPrincipal`).\n\n## Tasks\n\n- [ ] `server/validators/groupConfigSchema.js:34-38`: `memory: z.boolean().prefault(false)` after `projectSharing`.\n- [ ] `server/utils/authorization.js`: defaults in `resolveGroupInheritance` (`:75`), parent merge (`:130-131`), own merge (`:170-171`), output (`:193`), `loadGroupPermissions` (`:298`), `getPermissionsForUser` defaults (`:416`) and merge (`:504-505`), OAuth-client block (`:792` → `memory: false`), delegated-token block (`:812` → `user.permissions.memory = false` for **both** delegated modes; a personal API key keeps project grants but never memory — architect's call).\n- [ ] `GroupFormEditor.jsx`: checkbox after Scheduled Tasks, `id=\"group-permission-memory\"`, keys `admin.groups.memory`, `admin.groups.memoryHint`; for the `anonymous` group render it disabled with `title`/`aria-describedby` `admin.groups.memoryAnonymous` (EN/DE from ux §4.9).\n- [ ] Migration `V{NNN}__memory_permission.js`: precondition `config/groups.json`; set `permissions.memory: true` for `admins`, `users`, `authenticated` and `false` for `anonymous` with `ctx.setDefault` (V138 pattern); custom groups untouched.\n- [ ] `routes/auth.js:560-572`: nothing — `permissions` already ship on `/api/auth/status`; verify `memory` appears.\n\n## Acceptance criteria\n\n- Given the migration, when groups load, then `permissions.memory` is `true` for the three built-in groups and `false` for `anonymous`; inheritance resolves it through the chain.\n- Given an OAuth client or a delegated-token principal, when `enhanceUserWithPermissions` runs, then `permissions.memory` is `false` even if its groups grant it.\n- Given the group editor, then the checkbox is shown, saved, and disabled for `anonymous`.\n\n## Tests\n\n- `server/tests/authorization-memory-permission.test.js` (new): one row per site (inheritance from parent, own grant, output, load, defaults, user merge, OAuth client, both delegated modes, anonymous).\n- `server/tests/migration-vNNN-memory-permission.test.js` (new).\n- `tests/unit/client/group-form-editor-memory.test.jsx` (new).\n\n## Notes\n\nHarmless with the flag off; can merge first. Unblocks P1-07.\n"
+  },
+  {
+    "key": "P1-03",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] App schema memory section, chat-app migration and the admin app editor section",
+    "labels": [
+      "backend",
+      "frontend",
+      "admin-ui",
+      "config"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P1-US-22"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nDecision Q3 (README §8): per-app opt-in, the default `chat` app migrated to `readwrite`, platform flag off. Decision Q5: `partition: 'account' | 'app'`. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §7.2, §2.3 (an app with `partition: 'app'` reads only its partition — architect's call, ADR-M19); `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3e (one checkbox + two modes; `enabled: false ⇔ mode: 'off'` invariant, Q5 of ux §8).\n\n## Scope\n\nIn: schema, migration, editor section, placeholder warning. Out: scope resolution (P1-07), tool attachment (P1-08).\n\n## Tasks\n\n- [ ] `server/validators/appConfigSchema.js`: `memorySchema = z.object({ enabled, mode: off|read|readwrite, partition: account|app }).strict()` referenced from `baseAppConfigSchema` (`:536-664`) as `memory: memorySchema.optional()`; a refinement enforcing `enabled === false ⇔ mode === 'off'` (normalise on save in the admin route rather than reject, documented).\n- [ ] Migration `V{NNN}__chat_app_memory.js`: precondition `apps/chat.json`; `ctx.setDefault(app, 'memory', { enabled: true, mode: 'readwrite', partition: 'account' })`; also update `server/defaults/apps/chat.json` so fresh installs match.\n- [ ] New `client/src/features/admin/components/app-form/MemoryConfigSection.jsx` after `ProjectsConfigSection.jsx` (same three-column card): `enabled` checkbox; `fieldset disabled={!enabled}` with Mode radios (`read`, `readwrite`) and Partition radios; notes `memoryProjectNote`, `memoryPartitionChangeNote` (amber, when switching to `app` on an app that already has users), `memoryPlatformOff`, `memoryApprovalHint`; render only when the `userMemory` feature exists; warn when the system prompt contains `{{user_memory}}` and the app's mode is `off`. i18n `admin.apps.edit.memory*` EN/DE (ux §4.10).\n- [ ] Wire the section into the app editor page and the app save body; `requiredFeatures` may list `userMemory`.\n- [ ] `docs/apps.md` (or the app-config section of `docs/memory.md`): the three fields.\n\n## Acceptance criteria\n\n- Given the app editor, when an admin opens an app, then the Memory section offers `enabled`, `mode` and `partition`; saving writes `memory: { enabled, mode, partition }` with `mode: 'off'` when unchecked.\n- Given the migration, then `chat.json` has `memory: { enabled: true, mode: 'readwrite', partition: 'account' }` and an app that already had a `memory` block is untouched.\n- Given an invalid combination in a file, then validation fails with a clear message.\n\n## Tests\n\n- `tests/unit/server/admin-editor-schemas.test.js` or `server/tests/appConfigSchema-memory.test.js` (new): valid/invalid shapes, invariant.\n- `server/tests/migration-vNNN-chat-app-memory.test.js` (new).\n- `tests/unit/client/admin-app-editor-memory-section.test.jsx` (new): checkbox, disabled fieldset, notes, placeholder warning.\n\n## Notes\n\nHarmless with the flag off. `appMemoryMode(app)` from P1-01 reads it.\n"
+  },
+  {
+    "key": "P1-04",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] UserMemoryRepository: sealed documents, CAS, caps, controls, applyOperations",
+    "labels": [
+      "backend",
+      "privacy",
+      "security",
+      "architecture"
+    ],
+    "size": "L",
+    "depends_on": [],
+    "stories": [
+      "P1-US-08",
+      "P1-US-09",
+      "P1-US-15",
+      "P1-US-29",
+      "P2-US-04"
+    ],
+    "existing_issues": [
+      2522,
+      2906
+    ],
+    "body": "## Context\n\nThe store for personal memory: one envelope-encrypted document per (user, partition) in namespace `user-memory`, written under lock with etag compare-and-set, with every invariant of `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §2.1–§2.3, §2.5–§2.6 and the operations contract of README §6.3/§6.8 (snapshot checks, tombstones, window/watermark). Template: `server/services/scheduler/tasks/TaskMemoryRepository.js`. Encryption is always on (README §8, ADR-M16) through the projects `KeyProvider` (#2906).\n\n## Scope\n\nIn: namespace, key/digest helper, repository with all write paths, metadata/clear for admins, `deleteOwned`, `listPartitions`, tests. Out: prompt text (P1-06), scope (P1-07), the extractor (P2-02), budget (P2-01).\n\n## Tasks\n\n- [ ] `server/storage/namespaces.js`: `userMemory: 'user-memory'`; `docs/storage.md` table row.\n- [ ] Shared `digest(value)` helper (lift `IntegrationPreferencesRepository.js:49-50` into `server/utils/` and use it from both); keys `um_<d>`, `um_<d>__a_<appId>`, `um_<d>__p_<projectId>` (C7); every key through `isValidId`; `appId` matches `APP_ID_PATTERN`, `projectId` passes `isProjectId`.\n- [ ] New `server/services/memory/UserMemoryRepository.js`: envelope `ownerId = resolvePrincipal(user, { mode: platform.runLog?.identityMode || 'default' }).id` (`server/services/loop/runIdentity.js:46`, as `chatOwner.js:180`); plaintext metadata (`version`, `controlsVersion`, `enabled`, `paused`, `sensitiveOptIn`, `reviewMode`, `counts`, `updatedAt`, `updatedBy`) and a `sealed` block (`streamingAead.encrypt/decrypt/newDataKey`, `getKeyProvider(platform.projects?.encryption?.keyProvider || 'local-file').wrap/unwrap`, AAD `ihub:memory:v1|<ns>|<key>|<ownerId>`, `sha256` of the plaintext); ten-minute per-process data-key LRU evicted on `controlsVersion` change and delete.\n- [ ] Write path: `locks.withLock('user-memory:<key>', fn, { ttlMs: 15000, waitMs: 5000 })`, etag CAS, first write `etag: null`, three attempts, `EtagMismatchError` → `VERSION_CONFLICT` for callers with `expectedVersion`, transparent retry otherwise; not reentrant.\n- [ ] `applyOperations(scope, ops, { expectedVersion, updatedBy, sourceRef, controlsVersion, snapshotVersion, chatRevision, window, reviewMode })`: `add` / `update` / `invalidate` / `noop`; caps (`MEMORY_FULL` counting invalidated entries, `MEMORY_TOO_LONG`); neutralise text on write; normalised-text `add` → `noop` touching `updatedAt`; `invalidate` requires a successor id; `update`/`invalidate` whose `entryId` is gone or whose `updatedAt` moved → `noop`; `add` matching `recentlyDeleted[]` (7 days, max 50) → `noop`; drop the **whole** set when the document is missing (never create), `enabled: false`, `paused`, `controlsVersion` moved, `window.fromTurnId` ≠ first turn after `extraction.appliedTurns[chatId]`, or `chatRevision` stale; when `snapshotVersion` ≠ `version` return `{ dropped: 'version' }` so the caller re-extracts; park in `pending[]` with `snapshotVersion` when review is on; advance the watermark to `window.toTurnId`; `history[]` (last 20 undo records).\n- [ ] `createEntry` (tools/Settings: the only creators of a document), `updateEntry` / `deleteEntry` with optional `expectedUpdatedAt` (ux §8 Q2; mismatch → `VERSION_CONFLICT`), `setControls` (bump `controlsVersion` and `version`), `clearPartition` (entries, pending, history; keep flags; bump), `listEntries(filter, { limit, cursor, includeInvalidated })`, `listPartitions(ownerIds)` (owner index), `metadata(userId)` (plaintext only, no key), `deleteOwned(ownerIds)`, `deletePartition(partition, id)` for app/project cascades.\n- [ ] Errors as `MemoryError(code, message, extra)` with the codes of architecture §4.1 (`VERSION_CONFLICT`, `MEMORY_FULL`, `MEMORY_TOO_LONG`, `MEMORY_UNAVAILABLE` on storage/`KeyAccessDenied`/lock timeout/corrupt sha, `MEMORY_PAUSED`, `MEMORY_ENTRY_NOT_FOUND`).\n- [ ] Logging: never entry text above `debug`; log `userIdDigest`, partition, version, counts.\n\n## Acceptance criteria\n\n- Given a first write, then a document is created with `etag: null` and `version 1`; a second concurrent creator gets a conflict and retries.\n- Given `maxEntries` valid+invalidated entries, when an `add` is applied, then `MEMORY_FULL`; given text over `maxEntryLength`, `MEMORY_TOO_LONG`.\n- Given an entry containing `</user_memory>`, when stored, then it is neutralised.\n- Given a result whose `controlsVersion` snapshot is stale, or whose window does not start at the watermark, or whose `chatRevision` is older, then the whole set is dropped and the document unchanged; given a missing document, nothing is created.\n- Given a `sealed` block copied to another key or owner, then unwrap fails with `KeyAccessDenied` → `MEMORY_UNAVAILABLE`; given a corrupt `sha256`, likewise.\n- Given `metadata(userId)`, then it returns counts and flags without touching a key.\n\n## Tests\n\n- `server/tests/memory/userMemoryRepository.test.js` (new) covering every case of architecture §10.1 for this file, plus the multi-worker cases of README §6.8 (replayed set, two independent sets, two windows out of order, batch after an edit, tombstone match).\n\n## Notes\n\nADR-M03/M04/M05/M16. `sealed` is produced and consumed only here. Security review required. Unblocks P1-07, P1-11, P1-17, P2-01.\n"
+  },
+  {
+    "key": "P1-05",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] Sensitive-category policy and server-side never-store filter",
+    "labels": [
+      "backend",
+      "privacy",
+      "security"
+    ],
+    "size": "S",
+    "depends_on": [
+      "P1-01"
+    ],
+    "stories": [
+      "P1-US-17",
+      "P2-US-07"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nDecision 13 (README §5): sensitive categories (health, ethnicity, religion, politics, sexuality, gender identity) are off by default behind a user opt-in governed by `platform.memory.sensitiveCategories`, and some data (government IDs, criminal history, financial account numbers, immigration status, credentials) is never stored even on request — enforced in the prompt, in a server-side filter on every write path, and in the admin policy. See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §1.2 (`userMemoryPolicy.js`), §4.1 (`MEMORY_SENSITIVE_BLOCKED` details `reason: 'never' | 'optIn'`), §8.8.\n\n## Scope\n\nIn: `sensitiveFilter`, `sensitiveCategoryPolicy`, tests. Out: the prompt wording (P1-08, P2-02), the UI card (P1-13).\n\n## Tasks\n\n- [ ] `server/services/memory/userMemoryPolicy.js` (from P1-01): `sensitiveFilter(text)` → `{ ok: true } | { ok: false, reason: 'never', match }` for never-store shapes (IBAN with checksum, card numbers with Luhn, national-id patterns for DE/AT/CH/EU at least, API-key/token shapes, `password:`/`token:`/`secret:` prefixes, criminal-record and immigration-status keywords in EN/DE) and `{ ok: false, reason: 'optIn' }` for sensitive-category keyword lists (EN/DE) unless `allow`; `sensitiveCategoryPolicy(platform, doc)` → `{ mode: 'exclude' | 'allowOptIn' | 'allow', optedIn }`; `classifySensitive(text, flag)` combining the model's `sensitive` flag and the keyword match.\n- [ ] Apply in every write path: tools (P1-08), routes (P1-11), import/extraction (P2-02, P2-04) call `assertStorable(text, { sensitive })` which throws `MEMORY_SENSITIVE_BLOCKED` with `details.reason`.\n- [ ] Counts-only audit of filter rejections (`logAudit` is for admin actions — use a `warn`-free `info` log line with counts, no text) for the metric in product-plan §6.\n\n## Acceptance criteria\n\n- Given `sensitiveCategories: 'allowOptIn'` and `sensitiveOptIn: false`, when text matching a sensitive category is saved, then `MEMORY_SENSITIVE_BLOCKED` with `reason: 'optIn'`; given opt-in, it is stored with `sensitive: true`.\n- Given never-store text (an IBAN, a card number, an API key), then `MEMORY_SENSITIVE_BLOCKED` with `reason: 'never'` regardless of opt-in or `'allow'`.\n- Given a phone number, a date, a project code or a street name, then the filter passes.\n\n## Tests\n\n- `server/tests/memory/userMemoryPolicy.test.js` (extend): positives and negatives in EN and DE for every pattern group; `'exclude'` hides the opt-in; `'allow'` stores without the flag.\n\n## Notes\n\nADR-M13. Patterns are conservative by design (false negatives are acceptable; false positives block the user's own save and must stay rare — the negatives list is the guard).\n"
+  },
+  {
+    "key": "P1-06",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] userMemoryBlock: budgeted block, neutralisation and ledger placeholder",
+    "labels": [
+      "backend",
+      "chat",
+      "privacy"
+    ],
+    "size": "M",
+    "depends_on": [],
+    "stories": [
+      "P1-US-02",
+      "P1-US-10"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nOne pure block builder renders every read path (README §6.4; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §6.1 wording and attributes, §6.2 selection algorithm, §1.2). The block is data, not instructions, is neutralised like `<task_memory>` (`server/services/scheduler/tasks/runMemory.js:57-59 neutralizeNotes`, `:72 buildMemoryBlock`), and yields the placeholder the ledger records (P0-07).\n\n## Scope\n\nIn: `userMemoryBlock.js` and its tests. Out: loading documents (P1-07), injection (P1-09).\n\n## Tasks\n\n- [ ] New `server/services/memory/userMemoryBlock.js`: `neutralizeMemoryText(text)` (tag name `user_memory`, remove `\\r`, collapse newlines, escape `<` before `/?[a-z_]`); `selectEntries(partitions, budgetChars)` per §6.2 (fixed text counted first; `feedback`, `preference` first, then `profile`, `project`, `reference`; `updatedAt` desc; skip-and-continue; render account first then project in reading order); `buildUserMemoryBlock(docs, { budgetChars, access, toolsAttached, projectNames })` → `{ text, shown, entries, refs: [{ partition, key, version, sha256 }] }` or `null` for an empty valid set; attributes `entries`, `shown`, `budget`, `updated` (day precision), `access`; entry line `- [<category>] <text> (updated YYYY-MM-DD)` and `[<category>:<project name>]` for project entries; `sensitive: true` entries only when `sensitiveOptIn`; trailing paragraph names the tools only when attached, read-only wording for `access=\"read\"`, \"One entry is not shown…\" only when `shown < entries`.\n- [ ] `memoryPlaceholderOf(block)` → `<user_memory ref=\"v<version>\" sha256=\"<sha256 of text>\" chars=\"<n>\"/>` (multi-partition: `ref` lists each partition's version, `refs` carries them) and `renderBlockForReplay(docs, refs)` used by `memoryLedger.expandRedactions`.\n- [ ] Export helper `renderPromptText(docs)` (the `'prompt'` export format: the block text without attributes).\n\n## Acceptance criteria\n\n- Given 13 valid entries and a 4,000-char budget where one does not fit, then `shown` is 12, the two priority categories come first, a shorter later line that fits is taken, and the paragraph tells the model to call `memory_list`.\n- Given an entry containing `</user_memory>` or `<task_memory>`, then the rendered block cannot be closed early and the injection-safety test passes.\n- Given no valid entries, then `null` (no block; a user without memory gets a byte-identical prefix).\n- Given the same documents twice on the same day, then the text and `sha256` are identical.\n\n## Tests\n\n- `server/tests/memory/userMemoryBlock.test.js` (new): snapshot; budget cases; neutralisation; `access=\"read\"` wording; placeholder hash stability; project labelling; sensitive gating.\n\n## Notes\n\nADR-M06. Pure functions only; also imported by `routes/runs.js` for replay. Unblocks P1-07, P1-09.\n"
+  },
+  {
+    "key": "P1-07",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] userMemoryHandler: user scope from principal plus trusted context, fail closed",
+    "labels": [
+      "backend",
+      "security",
+      "privacy",
+      "architecture"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P0-01",
+      "P1-01",
+      "P1-02",
+      "P1-04",
+      "P1-06"
+    ],
+    "stories": [
+      "P1-US-07",
+      "P1-US-09",
+      "P1-US-13",
+      "P1-US-14",
+      "P1-US-26"
+    ],
+    "existing_issues": [
+      2522,
+      3196
+    ],
+    "body": "## Context\n\nThe third scope `{ kind: 'user' }` is resolved from the trusted principal plus server-assembled context and registered **last** (README §5 Decision 2, Decision 9; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §3.1 context shape, §3.2 resolution matrix and the eight fail-closed rules, §2.3 partition table, §0 C6 for sub-agents, ADR-M02/M09/M19).\n\n## Scope\n\nIn: the handler, registration, `readForPrompt` through the block builder, matrix tests. Out: callers (P1-08, P1-09, P1-11, P1-16).\n\n## Tasks\n\n- [ ] New `server/services/memory/userMemoryHandler.js`: `kind: 'user'`, `shape: 'entries'`; `resolve(user, context)` implements rules 1–8 of §3.2 as ordered `return null`s: `!isMemoryPrincipal(user)`; `!isUserMemoryConfigured(features, platform)`; `context.runKind === 'subagent' | 'agent'` or `user.scheduledRun` without `purpose: 'scheduled-run'`; `purpose` `chat`/`tool` without `context.app` or `appMemoryMode(app) === 'off'`; app partition only with `app.memory.partition === 'app'`, project partition only when `context.projectId` equals the chat's container project and `permissionsFor(project, user)` (`server/middleware/projectAccess.js:113`) grants read; `context.chat?.settings?.memory === false` → null, `context.chat?.temporary` → `access: 'read'`; document `enabled: false` or `paused: true` → null (flags read once per resolve and cached on `context`); `purpose: 'scheduled-run'` requires `task.memory.usePersonal` and gives `access: 'read'`, account only. Missing `context.purpose` → null (the body tools can never reach personal memory).\n- [ ] Return `{ kind: 'user', userId, ownerId, partitions: [{ partition: 'account', key }, { partition: 'project' | 'app', key, projectId? | appId? }], access, appId, chatId, controlsVersion }`; an app with `partition: 'app'` returns only its app partition (ADR-M19).\n- [ ] `readForPrompt(scope, { budgetChars })` loads the partition documents (fail-open on storage/key errors: return `{ block: null, reason: 'unavailable' }` and `warn`) and calls `buildUserMemoryBlock`; `listEntries` / `applyOperations` delegate to the repository; `read` / `write` throw `NOT_SUPPORTED`.\n- [ ] Register with `registerMemoryScopeHandler` at the end of the file; `memoryService.js` imports the module last so the order is agent → scheduled-task → user.\n\n## Acceptance criteria\n\n- The table of architecture §3.2 holds cell by cell: only an interactive user with `permissions.memory` resolves (RW / R as the context says); a scheduled run resolves only for `purpose: 'scheduled-run'` with `usePersonal`, read-only, account partition; agents, sub-agents, OAuth clients, delegated tokens and anonymous never resolve.\n- Given a chat bound to a project, then `partitions` is account + that project, never another; given an app with `partition: 'app'`, only the app partition.\n- Given `paused` or `enabled: false`, then null for every context (pause stops reading and writing).\n\n## Tests\n\n- `server/tests/memory/userMemoryHandler.test.js` (new): table-driven 8 principals × 8 contexts plus one row per fail-closed rule; partition resolution with a bound project and a revoked membership; `access` values; flag off; registration order.\n\n## Notes\n\n`appId`/`projectId` come only from `context` (never a tool argument or query string). Security review required. Unblocks P1-08, P1-09, P1-11, P1-16, P2-02.\n"
+  },
+  {
+    "key": "P1-08",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] memory tool file, userMemoryTools.js and attach rules in getToolsForApp",
+    "labels": [
+      "backend",
+      "tools",
+      "chat",
+      "security"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P0-05",
+      "P1-05",
+      "P1-07"
+    ],
+    "stories": [
+      "P1-US-01",
+      "P1-US-03",
+      "P1-US-04",
+      "P1-US-08",
+      "P1-US-11"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nThe hot write path (README §6.3): one shipped multi-function file expanded into `memory_save`, `memory_update`, `memory_delete`, `memory_list`, identity from `params.user` only, recoverable failures returned as `{ error: true, code }`, `sideEffect: 'write'` so tool-approval `writes` mode applies. Contracts: `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §4.5 (schemas, results, description policy), §5.1 (sequence), §8.8; ADR-M07.\n\n## Scope\n\nIn: tool file, implementation, ownership, attach rules, display title, tests. Out: the chip (P1-14), extraction (P2).\n\n## Tasks\n\n- [ ] New `server/defaults/tools/memory.json` in the format of `knowledge.json`: `id: 'memory'`, localised `name`/`description` EN/DE carrying the save policy (durable facts, stable preferences, standing decisions, corrections; never credentials/keys/account numbers/other people's identifiers; never tool or fetched content; never anything derivable from the chat or the app's instructions; prefer `memory_update`/`replaces`; \"forget\" → `memory_delete`; the sensitive rule), `script: 'userMemoryTools.js'`, `functions: { save, update, delete, list }` with the parameter schemas of §4.5 (`text`, `category`, `scope`, `replaces`, `sensitive`; `id`; `category`, `includeInvalidated`, `limit`); `sideEffect: 'write'` on save/update/delete, `'read'` on list; `dataFlow: 'internal'`; `ledger: 'redact'` (P0-07).\n- [ ] `server/services/tools/platformTools.js:38-49`: add `'memory'` to `PLATFORM_TOOL_FILE_IDS` (and the header comment); `server/tests/tool-ownership.test.js` passes.\n- [ ] New `server/tools/userMemoryTools.js`: `memorySave`, `memoryUpdate`, `memoryDelete`, `memoryList`; scope via `resolveMemoryScopeOfKind('user', params.user, { purpose: 'tool', app: params.appConfig, chatId: params.chatId, chat })`; ignore any `userId`/`appId`/`projectId`/`partition` argument; write in a read context → `{ error: true, code: 'MEMORY_READ_ONLY' }`; `assertStorable` (P1-05); default write target = project partition when bound unless `scope: 'account'`; `replaces` → `invalidate` + `add`; results exactly as §4.5 (`entry`, `before`, `id`, `partitions`, `budget`; never a `userId` or key); `sourceRef { chatId, runId, messageId }`, `source: 'tool'`, `confidence: 1`, `updatedBy: 'tool:<chatId>'`.\n- [ ] `server/services/tools/appTools.js:129 getToolsForApp`: attach all four when `appMemoryMode(app) === 'readwrite'`, the chat is persistent, the per-chat setting is on and the scope resolves; only `memory_list` for `mode: 'read'` or a temporary/ephemeral chat; none otherwise (needs `context.chat` / `memoryScope` from `RequestBuilder`, P1-09 — land the attach call with the flag off first).\n- [ ] `server/utils/toolDisplay.js`: titles \"Save memory\" / \"Update memory\" / \"Remove memory\" / \"Look up memory\" (EN/DE from the tool file).\n- [ ] Add the memory guidance line to the system prompt only when the tools are attached (the block's trailing paragraph from P1-06 covers it; no second prompt).\n\n## Acceptance criteria\n\n- Given a readwrite app and a persistent chat, when the user says \"remember that I write customer emails in formal German\", then the model calls `memory_save`, the entry is stored with `source: 'tool'`, `confidence: 1`, `sourceRef.chatId`, and `tool/started` carries `activityKind: 'memory'`.\n- Given `mode: 'read'` or a temporary chat, then only `memory_list` is in the tool list and a `memory_save` call (direct route) answers `{ error: true, code: 'MEMORY_READ_ONLY' }`.\n- Given `maxEntries` entries, then `memory_save` returns `{ error: true, code: 'MEMORY_FULL' }` (no throw); over-length → `MEMORY_TOO_LONG`; sensitive without opt-in → `MEMORY_SENSITIVE_BLOCKED`; paused → `MEMORY_PAUSED`.\n- Given tool approval in `writes` mode, then `memory_save` pauses for approval and `memory_list` never does.\n- Given `scope: 'account'` in a project chat, then the entry lands in the account partition.\n\n## Tests\n\n- `server/tests/tools/userMemoryTools.test.js` (new): scope from `params.user` only (a `userId`/`partition` argument is ignored); every `{ error, code }` return; `replaces`; `scope: 'account'`; read-only context; results carry no key or user id.\n- `server/tests/platform-tools.test.js`, `tool-ownership.test.js` updated.\n\n## Notes\n\nSecurity review required. ADR-M07/M09. The direct tool route already applies `withTrustedToolContext` (`server/routes/toolRoutes.js:173`); #2522's prerequisite is met.\n"
+  },
+  {
+    "key": "P1-09",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] Inject <user_memory> in PromptService: ledger, meta frame, no sub-agents",
+    "labels": [
+      "backend",
+      "chat",
+      "privacy",
+      "architecture"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P0-06",
+      "P0-07",
+      "P1-06",
+      "P1-07",
+      "P1-08"
+    ],
+    "stories": [
+      "P1-US-02",
+      "P1-US-06",
+      "P1-US-07",
+      "P1-US-10",
+      "P1-US-26"
+    ],
+    "existing_issues": [
+      2522,
+      3196
+    ],
+    "body": "## Context\n\nPrompt assembly happens in exactly one function, `PromptService.processMessageTemplates` (`server/services/PromptService.js:374`), in the order app system → variables → temporal → projects (`_applyProjects`, `:190`, applied `:526`) → skills (`:548`) → style → output format. The block goes after projects and before skills, honouring `{{user_memory}}` as `{{projects}}` is honoured (`:191-192`), with the ledger placeholder registered for every recorded prompt (P0-07). See `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.2, §6.3, §8.1 (`meta.extra.memory`), §0 C6 (sub-agents) and C10.\n\n## Scope\n\nIn: injection, `memoryContext` in `RequestBuilder`, `ledgerRedactions` → `telemetry.redactions`, the `meta` frame, `invokeAppInternal` exclusion, tool attachment wiring, replay `renderBlock` wiring, integration tests. Out: scheduled runs (P1-16).\n\n## Tasks\n\n- [ ] `server/services/chat/RequestBuilder.js:370 prepareChatRequest`: build `memoryContext = { purpose: 'chat', app, chatId, chat: { temporary, settings }, projectId }` next to `chatContext` (`:634-642`), resolve the scope once (`resolveMemoryScopeOfKind('user', user, memoryContext)`), pass it into `processMessageTemplates` (`:654`) and into `getToolsForApp` (P1-08), and put `prep.memoryScope` and `prep.ledgerRedactions` on the prep.\n- [ ] `PromptService.processMessageTemplates`: after `_applyProjects` and before skills, `readForPrompt(scope, { budgetChars })`; replace `{{user_memory}}` when present (empty string when nothing to inject), else append; unknown placeholders stay intact; `bypassAppPrompts` skips memory; register the redaction with `memoryLedger.registerRedaction` and return `ledgerRedactions` next to `llmMessages`.\n- [ ] `server/services/chat/ChatService.js:467 runTurn`: pass `telemetry.redactions` into `agentLoop.run`; emit a `meta` frame with `extra.memory = { recalled, shown, access }` (or `{ recalled: 0, reason: 'unavailable' }`) right after `run/started`; `runActivity.buildRunActivity` keeps it in the stored activity; `client/src/features/chat/runToMessage.js:171 addToolSideChannels` projects it to `message.memory` (client part in P1-14).\n- [ ] `ChatService.invokeAppInternal` (`:1507`): pass `memory: 'off'` / `runKind: 'subagent'` into `prepareChatRequest` so the child resolves no scope and gets no tools.\n- [ ] Wire `memoryLedger.expandRedactions` in `routes/runs.js` with `renderBlock` from the user handler (owner replay).\n- [ ] `docs/sse-v2.md` `meta.extra` table row `memory`; `docs/chat-persistence.md` prompt order note.\n\n## Acceptance criteria\n\n- Given valid entries, when a chat in an app with `memory.mode !== 'off'` starts, then the system prompt contains the `<user_memory entries= shown= budget= updated= access=>` block between projects and skills (or at the placeholder), the `meta` frame carries `extra.memory`, and the recorded `request/header` shows the placeholder.\n- Given a temporary chat, then the block is injected with `access=\"read\"` and only `memory_list` is attached; given \"Memory off\" in chat settings, then no block and no tools; given a user without entries or with the flag off, then the system prompt is byte-identical to today.\n- Given `invokeAppInternal`, then the child has no block and no memory tools although the parent does.\n- Given an entry containing `</user_memory>`, then it cannot close the block.\n\n## Tests\n\n- `tests/integration/memory-prompt.test.js` (new): with and without placeholder; position; `bypassAppPrompts`; injection safety; two partitions in one budget; `access=\"read\"`; byte-identical prefix.\n- `tests/integration/memory-subagent.test.js` (new).\n- `server/tests/loop/chatTurn.test.js` (extend): `meta.extra.memory` frame and `telemetry.redactions` reach `LLMClient`.\n\n## Notes\n\nADR-M06/M09/M12/M14. Security review required (prompt injection, ledger). P0-07 must have landed: the first `<user_memory>` block ever recorded is a placeholder.\n"
+  },
+  {
+    "key": "P1-10",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] Per-chat 'Memory off' setting and the actions-menu toggle",
+    "labels": [
+      "backend",
+      "frontend",
+      "chat",
+      "ui"
+    ],
+    "size": "S",
+    "depends_on": [
+      "P1-07"
+    ],
+    "stories": [
+      "P1-US-06",
+      "P1-US-07"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nA per-chat \"Memory off\" toggle stored in the chat `settings` like `enabledTools` (`server/services/chat/ChatRepository.js:306-313 CHAT_SETTING_TYPES`), honoured before the first turn and sticky thereafter (README §6.5; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §3.2 architect's call on the toggle; `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3c \"Per-chat 'Memory for this chat' toggle\" and the temporary-chat static line).\n\n## Scope\n\nIn: the setting, the menu row, the temporary-chat note, tests. Out: the resolution rule itself (P1-07 reads `chat.settings.memory`).\n\n## Tasks\n\n- [ ] `ChatRepository.js`: `memory: 'boolean'` in `CHAT_SETTING_TYPES`; default on (absent = on).\n- [ ] `client/src/features/chat/components/ChatInputActionsMenu.jsx`: new section **Memory** between \"Message context\" and the integration picker as a `menuitemcheckbox` row with `SwitchIndicator` (`:7, :28-35`); rendered only when the app's `memory.mode !== 'off'`, the user has `permissions.memory` and memory is enabled and not paused; paused → `aria-disabled` with `chat.memory.pausedHelp` and a link; off → the trigger's dot indicator (`offCount` pattern); after the first turn the description says `chat.memory.offSince`; temporary chat → static line `chat.memory.temporaryNote` with `eye-slash`. Persist with the chat settings through `useAppSettings.js`.\n- [ ] i18n `chat.memory.*` EN/DE (ux §4.7).\n\n## Acceptance criteria\n\n- Given a new chat, when the user sets \"Memory off\" before the first message, then `settings.memory === false` is stored, no block is injected, no `memory_*` tool is attached, and the state is visible in the popover; changed mid-chat, it applies from the next turn.\n- Given a temporary chat, then the row is replaced by the static note.\n\n## Tests\n\n- `tests/unit/client/chat-memory-toggle.test.jsx` (new): visible/disabled/static states; persisted value.\n- `server/tests/chat-persistence-routes.test.js` (extend): the setting round-trips and rejects a non-boolean.\n\n## Notes\n\nThe server decides (P1-07 reads the stored flag); the client only renders.\n"
+  },
+  {
+    "key": "P1-11",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] User routes /api/memories and /api/memory-preferences, partitions, export",
+    "labels": [
+      "backend",
+      "api",
+      "privacy",
+      "security"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P1-04",
+      "P1-05",
+      "P1-06",
+      "P1-07"
+    ],
+    "stories": [
+      "P1-US-12",
+      "P1-US-13",
+      "P1-US-14",
+      "P1-US-15",
+      "P1-US-16",
+      "P1-US-18"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nThe HTTP contract of `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §4.2 (table) and §4.1 (codes), per `docs/api-guidelines.md`: plural nouns, `_action` only for transitions, `201` + `Location` + `ETag`, `204` on delete, `ServiceError` with registry codes, `{ items, nextCursor }`; pause/resume as `PATCH /api/memory-preferences { paused }`, clear as `DELETE /api/memories?partition=` (C11). The partition selector is untrusted input on a direct request and fails closed.\n\n## Scope\n\nIn: `routes/memories.js`, error codes, limiter, OpenAPI comments, route tests. Out: `_activity`, `_pending`, `_import` (P2-03/P2-04), admin routes (P1-12).\n\n## Tasks\n\n- [ ] `shared/apiErrors.js`: `USER_MEMORY_ERROR_CODES` (`MEMORY_DISABLED 403`, `MEMORY_FULL 400`, `MEMORY_SENSITIVE_BLOCKED 400`, `MEMORY_PARTITION_NOT_FOUND 404`, `MEMORY_ENTRY_NOT_FOUND 404`, `MEMORY_PAUSED 409`, `MEMORY_READ_ONLY 403`, `MEMORY_BUDGET_EXCEEDED 429`, `MEMORY_PROPOSAL_STALE 409`, `MEMORY_PROPOSAL_NOT_FOUND 404`) merged into `API_ERROR_CODES` (`:360`); reuse `VERSION_CONFLICT`, `MEMORY_TOO_LONG`, `MEMORY_UNAVAILABLE` (`:104-106`). No `MEMORY_VERSION_CONFLICT`.\n- [ ] New `server/routes/memories.js` (`authRequired`; register where `routes/scheduledTasks.js` is registered): the shared partition helper (load the app via `configCache.getApps()` + `isAppAllowed` + `app.memory.partition === 'app'`; the project via `ProjectService` + `permissionsFor`; failure → `MEMORY_PARTITION_NOT_FOUND`, never a fallback); `GET /api/memories` (`limit` default 50 max 200, opaque `cursor`, `category`, `includeInvalidated`, response with `partition` meta); `POST /api/memories` (`201`, `Location: /api/memories/{id}?partition=…`, `ETag`, `source: 'user'`, `restoreOf` for the chip's delete-undo per ux §5.1); `PATCH /api/memories/{id}` (merge patch, `If-Match` or `expectedUpdatedAt` → `VERSION_CONFLICT`); `DELETE /api/memories/{id}` (`?expectedUpdatedAt=`); `DELETE /api/memories?partition=` (`204`, bumps `controlsVersion`); `GET /api/memories/_partitions` (account first, always listed; app/project names resolved; inaccessible partitions omitted); `POST /api/memories/_export` (`format: 'json' | 'prompt'`, `Cache-Control: no-store`); `GET /api/memory-preferences` (creates nothing; `limits`, `counts`, `effectiveReviewMode`) and `PATCH /api/memory-preferences` (`enabled`, `paused`, `sensitiveOptIn`, `reviewMode`; `enabled`/`paused` bump `controlsVersion` on all partitions; switching `sensitiveOptIn` off removes sensitive entries, ux §3a).\n- [ ] Principal gate: not a memory principal → `MEMORY_DISABLED` (anonymous → `AUTH_REQUIRED` from `authRequired`); scope via `resolveMemoryScopeOfKind('user', req.user, { purpose: 'settings', partition, appId, projectId })`.\n- [ ] `memoryLimiter` copied from `routes/scheduledTasks.js:94-103` (60 writes / 15 min, `userKey` `:73`) on every mutating endpoint.\n- [ ] OpenAPI comments as neighbouring routes; i18n `apiErrors.MEMORY_*` EN/DE (ux §4.8; P1-18 completes the rest).\n- [ ] Run the `api-design` and `api-security` skills before review.\n\n## Acceptance criteria\n\n- Given each endpoint, when exercised, then status, body shape, `problem+json` with `code` on errors, `Location`/`ETag` on `201`, `204` on delete and `{ items, nextCursor }` paging match §4.2.\n- Given an unknown or unauthorised `appId`/`projectId`, then `404 MEMORY_PARTITION_NOT_FOUND` and nothing is read from the account store.\n- Given a user without `permissions.memory`, an OAuth client or a delegated token, then `403 MEMORY_DISABLED`.\n- Given `PATCH { paused: true }`, then `controlsVersion` increments on every partition of the user; `{ enabled: false }` likewise; neither deletes.\n- Given 61 writes in 15 minutes, then `429` with `Retry-After`.\n\n## Tests\n\n- `server/tests/routes/memories.test.js` (new): every row of §4.2 and the cases of architecture §10.3 (paging and `limit` capping, `If-Match`/`expectedUpdatedAt` conflicts, the selector failing closed, limiter, `controlsVersion` bump across partitions, export `no-store`).\n\n## Notes\n\nRoutes call the handler/service, never the repository directly. Security review required. `.github/workflows/api-guidelines-check.yml` must pass.\n"
+  },
+  {
+    "key": "P1-12",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] Admin routes: memory settings, per-user metadata, audited clear, never content",
+    "labels": [
+      "backend",
+      "api",
+      "admin",
+      "privacy",
+      "security"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-01",
+      "P1-04"
+    ],
+    "stories": [
+      "P1-US-20",
+      "P1-US-23"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nAdmins see metadata, never content (README §5 Decision 12, ADR-M12). Contract: `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §4.3; settings write pattern `server/routes/admin/scheduledTasks.js:155-175` (Zod partial strict body, write only changed keys through `configStore`, `configCache.refreshCacheEntry('config/platform.json')`, `logAudit`); registration in `server/routes/adminRoutes.js` (`:57, :118` pattern).\n\n## Scope\n\nIn: `routes/admin/memory.js`, audit, tests. Out: the admin page (P1-15).\n\n## Tasks\n\n- [ ] New `server/routes/admin/memory.js` (`adminAuth`): `GET /api/admin/memory/settings` → `{ settings, featureEnabled }`; `PUT /api/admin/memory/settings` with `settingsBodySchema` (partial, strict, bounds of §7.1, cross-field `promptBudgetChars ≥ maxEntryLength`) → `{ settings, changed: ['memory.maxEntries', …] }`, audited `resource: 'platform', resourceId: 'memory'`; `GET /api/admin/memory/users?limit&cursor&q` → one row per user with any partition (`documents.list` over the namespace grouped by `userId`; `{ userId, partitions, entries, pending, chars, updatedAt, paused, enabled }`), audited `action: 'read'`; `GET /api/admin/users/{id}/memory` (per-partition rows), audited; `DELETE /api/admin/users/{id}/memory[?partition=]` → `204`, clears entries/pending/history and keeps the documents with bumped `controlsVersion`, audited `action: 'clear'` with counts only; also cancels extraction timers (hook for P2-03) and publishes the controls event.\n- [ ] Register in `adminRoutes.js`; OpenAPI comments; `npm run security:audit` (`scripts/audit-admin-endpoints.js`) green.\n- [ ] Admin routes go through `UserMemoryRepository.metadata/clear` (no principal owns the call); there is no admin read of content, no admin edit, no admin export.\n\n## Acceptance criteria\n\n- Given an admin, when any admin memory endpoint is called, then the response contains counts, chars, dates and flags and never a `text`, `category` or `evidence` key (route test asserts on the serialised body against a seeded entry).\n- Given `PUT` with out-of-range or cross-field-invalid values, then `400 VALIDATION_FAILED` with `errors[].pointer`; given valid values, then only the sent keys change and `platform.memory` reloads without restart.\n- Given `DELETE`, then `204`, the user's counts are 0, their flags survive, and an audit entry names actor, user id and counts.\n\n## Tests\n\n- `server/tests/routes/admin-memory.test.js` (new): no-text assertion with an admin principal; settings validation and `changed`; audit entries; clear by partition and all.\n- `tests/unit/server/audit-admin-endpoints.test.js` stays green.\n\n## Notes\n\nADR-M12. Security review required.\n"
+  },
+  {
+    "key": "P1-13",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] Settings → Memory page: list editor, preferences, partitions, export, undo",
+    "labels": [
+      "frontend",
+      "ui",
+      "privacy",
+      "chat"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P1-11"
+    ],
+    "stories": [
+      "P1-US-12",
+      "P1-US-13",
+      "P1-US-14",
+      "P1-US-15",
+      "P1-US-16",
+      "P1-US-17",
+      "P1-US-18"
+    ],
+    "existing_issues": [
+      2522,
+      1039
+    ],
+    "body": "## Context\n\nThe one place a person manages memory (README §6.5). Screen spec: `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3a (layout, Enable vs Pause semantics, partition tabs, toolbar, entry row, inline edit, deferred-delete undo toast, add form, export, delete all, sensitive card, empty/loading/error states, component table, keyboard and screen-reader labels), §5.1–§5.3 (undo matrix, optimistic rules, 409 handling), §5.5 (mobile), §6 (a11y checklist), Appendix A (shared promotions and API client).\n\n## Scope\n\nIn: the page, its components, the API client, the user-menu link, the three shared promotions. Out: the Pending tab (P2-06), i18n parity test (P1-18).\n\n## Tasks\n\n- [ ] New `client/src/api/endpoints/memories.js`: `fetchMemories`, `fetchMemoryPartitions`, `createMemory`, `updateMemory`, `deleteMemory`, `deleteAllMemories`, `exportMemories`, `fetchMemoryPreferences`, `updateMemoryPreferences` (Phase 2 adds the rest).\n- [ ] Promote `AdminTabs` → `client/src/shared/components/Tabs.jsx` (keep the API; admin imports updated), `UsagePage`'s local `Card` → `shared/components/SettingsCard.jsx`, the `ScheduledTaskNotifier` toast markup → `shared/components/UndoToast.jsx` (no visual change).\n- [ ] New `client/src/features/settings/pages/MemoryPage.jsx` and components `MemoryPreferencesCard`, `SensitiveTopicsCard`, `MemoryToolbar`, `MemoryEntryList`, `MemoryEntryRow`, `MemoryEntryForm`, `MemoryExportMenu`, `DeleteAllRow` per the ux component table: `UsagePage` shell; `role=\"status\"` live region; Enable and Pause switches with the documented semantics; tabs from `_partitions` (hidden when only account), active tab in the URL (`?partition=app:<id>` / `project:<id>`); search (client-side), category filter, counter with amber/red thresholds, Add form with \"Save to\" for app/project tabs; rows with category badge, provenance line, \"Show superseded\"; inline edit with `expectedUpdatedAt` and the 409 flow of ux §5.3; deferred DELETE with the 8 s `UndoToast` (paused on hover/focus, `keepalive` on navigation, stack of 5); Export menu (JSON download `ihub-memory-<date>.json`, \"Copy as text\" modal); Delete all with `ConfirmDialog danger`; sensitive card per policy (`exclude` note, `allowOptIn` card with confirm-off, `allow` hidden); `?highlight=` deep link; empty/loading/error/unavailable states; `DocumentTitle`.\n- [ ] Route `settings/memory` next to `App.jsx:886-889` (no `KNOWN_ROUTES` change); user-menu link after Usage in `client/src/features/auth/components/UserAuthMenu.jsx:289-305` with `Icon light-bulb`, shown when `featureFlags.isEnabled('userMemory')` and `permissions.memory` (from `AuthContext`).\n- [ ] i18n keys of ux §4.1–§4.5 EN/DE (P1-18 verifies parity).\n- [ ] Run the `a11y-audit` skill on the page; ux §6 \"Settings → Memory\" checklist in the PR.\n\n## Acceptance criteria\n\n- Given the feature is on for the user, when they open the user menu, then Memory links to `/settings/memory`; the page lists valid entries newest first with category, source and date, filters, edits inline, deletes with an 8 s undo, adds, shows `n / maxEntries`; given the flag is off or no permission, then the link is absent and the page shows the unavailable state.\n- Given Pause, then entries stay listed with the `Paused` badge; given the master switch off, the inline note explains entries are kept.\n- Given Delete all, then the confirm dialog names the count and partition, and after confirm the list is empty.\n- Given Export, then JSON downloads and the text modal copies.\n- Given a deep link to an inaccessible partition, then `MEMORY_PARTITION_NOT_FOUND` falls back to the Account tab with the message.\n\n## Tests\n\n- `tests/unit/client/memory-page.test.jsx` (new): list, filter, inline edit incl. 409, delete + undo toast timing, delete-all confirm, counter thresholds, pause/enable switches with rollback, export, sensitive card per policy, unavailable state, deep link.\n- `tests/unit/client/known-routes-sync.test.jsx` stays green.\n\n## Notes\n\n`MemoryEditor.jsx` is not used (ADR-M03). Nothing in the client infers anything from a tool id.\n"
+  },
+  {
+    "key": "P1-14",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] Chat: 'Memory updated' row with Undo and the 'Recalled n entries' chip",
+    "labels": [
+      "frontend",
+      "chat",
+      "ui"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P0-05",
+      "P1-08",
+      "P1-09",
+      "P1-11"
+    ],
+    "stories": [
+      "P1-US-03",
+      "P1-US-05",
+      "P1-US-02"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nDecision Q1 (README §8): save and inform, then Undo. The server emits `tool/started` with `activityKind: 'memory'` and the result `{ entry, before, op }`; the client renders the row and an Undo that calls the user routes (`concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.1, §8.1; `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3c rows, error table, header chip; §5.1 undo matrix; §5.2 \"Chat Undo\" is not optimistic).\n\n## Scope\n\nIn: the row with Undo, error rows, the recalled chip, `runToMessage` projection, client tests. Out: the extraction row (P2-06).\n\n## Tasks\n\n- [ ] `client/src/features/chat/components/ToolActivity.jsx`: extend the `kind === 'memory'` branch from P0-05 into `MemoryActivityItem`: headline \"Memory updated\" once per turn (`(n)` when > 1), row text per op (`toolActivity.memory.saved|updated|removed|listed`), quoted text truncated at 160 chars with `title`, `light-bulb` indigo; error rows with `StatusIcon` red and the `apiErrors.*` text plus the actions of the ux error table (`MEMORY_FULL` → \"Manage memory\" link; `MEMORY_SENSITIVE_BLOCKED` → opt-in link when policy allows).\n- [ ] Undo: present when the stored activity carries `entry.id` and the chat is not read-only; `save` → `DELETE /api/memories/{id}?expectedUpdatedAt=`; `update` → `PATCH` with `before`; `delete` → `POST /api/memories { …previous, restoreOf }`; spinner on the button; success → \"Undone · …\" and a live-region announcement; `409 VERSION_CONFLICT` / `404` → \"Changed since · Manage in Settings\" with `/settings/memory?highlight={id}`; `MEMORY_FULL` on restore → message with link. Rebuilt from the stored `activity` after reload (`runActivity.js` fold).\n- [ ] `RecalledMemoriesChip` next to `AnswerSourceBadge` from `message.memory` (`client/src/features/chat/runToMessage.js:171 addToolSideChannels` projects `meta.extra.memory`): `used` tone pill, \"Recalled n entries\" / \"Recalled shown of n entries\", `title`, link to Settings; shown on the first assistant message and when the count changed.\n- [ ] i18n `toolActivity.memory.*`, `chatMessage.memory.*` EN/DE (ux §4.7).\n\n## Acceptance criteria\n\n- Given a `memory_save/update/delete` in the turn, when the assistant message renders, then the row shows the verbatim text with Undo; Undo removes/restores and the next prompt reflects it; after a reload the row and Undo are rebuilt from the stored activity.\n- Given the entry changed since, then \"Changed since · Manage in Settings\".\n- Given a first assistant message with `extra.memory.recalled = 12`, then the chip reads \"Recalled 12 entries\"; given `shown < recalled`, the partial wording.\n\n## Tests\n\n- `tests/unit/client/tool-activity-memory-row.test.jsx` (extend): rows per op; Undo endpoints per op; 409/404 state; error rows; nothing inferred from the id.\n- `tests/unit/client/recalled-memories-chip.test.jsx` (new).\n\n## Notes\n\nADR-M14: the server decides, the client renders.\n"
+  },
+  {
+    "key": "P1-15",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] Admin → Memory page: platform settings form and per-user metadata table",
+    "labels": [
+      "frontend",
+      "admin-ui",
+      "privacy"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-12"
+    ],
+    "stories": [
+      "P1-US-20",
+      "P1-US-23"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nAdmin controls and the metadata-only user view (README §6.6, Decision 12). Screen spec: `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3d (layout as `AdminScheduledTasksPage`, validation rules, help texts, per-user table, confirm dialog, the privacy footer sentence), §2.1 (sidebar: AI Workspace after Agents, `key: 'memory'`), §4.9 keys, §6 \"Admin → Memory\" checklist.\n\n## Scope\n\nIn: the page, the form (Phase 1 fields; extraction and consolidation fieldsets rendered but gated per phase), the users table, admin API functions, sidebar entry. Out: extraction settings behaviour (P2-06).\n\n## Tasks\n\n- [ ] `client/src/api/adminApi.js`: `fetchMemorySettings`, `saveMemorySettings`, `fetchMemoryUsers`, `fetchUserMemoryMetadata`, `clearUserMemory`.\n- [ ] New `client/src/features/admin/pages/AdminMemoryPage.jsx` with `MemorySettingsForm` (fieldsets Platform / Sensitive topics / Automatic saving / Consolidation; number inputs with `min`/`max`, inline errors, cross-field rule, retention one-time warning, Save disabled while invalid with a `role=\"alert\"` on submit; `role=\"status\"` banner \"Settings saved.\") and `MemoryUsersTable` (user, entries, chars, updated, paused, Clear with `ConfirmDialog danger`, Load more, search; footer `admin.memory.users.privacyNote`; the `ledgerNote` shown only while P0-07 is not shipped — remove it when it is).\n- [ ] `client/src/features/admin/components/AdminSidebarNavData.js`: entry `memory` in AI Workspace after Agents, `href: '/admin/memory'`, visible when the `userMemory` feature exists (`showAdminPage('memory')`); route in `App.jsx` (`admin/*` already in `KNOWN_ROUTES`); `AdminBreadcrumb`.\n- [ ] i18n `admin.nav.memory`, `admin.memory.*` EN/DE (ux §4.9).\n\n## Acceptance criteria\n\n- Given an admin, when they open Admin → Memory, then the settings load with the README defaults and bounds, save through `PUT`, and the banner confirms; invalid input is explained inline and blocks Save.\n- Given the users table, then each row shows counts, chars, date and paused state and never text; Clear confirms with the user name and count, calls `DELETE`, the row shows 0 and the banner confirms.\n\n## Tests\n\n- `tests/unit/client/admin-memory-page.test.jsx` (new): form validation incl. cross-field and retention warning; save; users table; clear flow; no text rendered from a mocked response that (wrongly) contains text.\n- `tests/unit/client/admin-sidebar-i18n.test.jsx` stays green.\n\n## Notes\n\nNo per-user pause for admins (ux §3d). ADR-M12.\n"
+  },
+  {
+    "key": "P1-16",
+    "parent": "P1",
+    "type": "Feature",
+    "title": "[Memory P1] Scheduled tasks: usePersonal read-only block, editor option and run badge",
+    "labels": [
+      "backend",
+      "frontend",
+      "agentic-workflows",
+      "privacy"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-07"
+    ],
+    "stories": [
+      "P1-US-25",
+      "P1-US-26"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nDecision 9 (README §5, §8): a scheduled run acts as the owner and may **read** personal memory only when the task opts in (`task.memory.usePersonal`, default off), never write. Flow: `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.5 (`appendSystemNote` after the task block, 2,000-char cap — architect's call, run marker `memory.personal`), §7.5 (task document field; the scheduling tools do not expose it — architect's call), §3.2 rule 8; `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3f.\n\n## Scope\n\nIn: task model/service/duplicate, editor checkbox, run injection, run marker and badge, harness test. Out: anything writing memory from a run (never).\n\n## Tasks\n\n- [ ] `server/services/scheduler/tasks/taskModel.js:139`: `memory: { enabled, usePersonal }`; `taskService.js:446-448` normalisation accepts `memory.usePersonal` from the editor body; `_duplicate` (`:780`) copies it; `schedule_task` / `update_scheduled_task` tools do **not** accept it.\n- [ ] `server/services/scheduler/tasks/taskExecution.js:484-492`: after `prepareRunMemory`, when `task.memory.usePersonal`, `resolveMemoryScopeOfKind('user', user, { purpose: 'scheduled-run', runKind: 'scheduled', app, task })` → `readForPrompt(scope, { budgetChars: Math.min(promptBudgetChars, 2000) })` → `appendSystemNote(block + \"You cannot change these; the owner edits them in Settings → Memory.\")`; set `run.memory.personal = { read: true, entries: n, version }` on the run marker; register the ledger redaction through the run's `llmOptions.telemetry.redactions`.\n- [ ] `client/src/features/tasks/pages/TaskEditorPage.jsx` (memory section near `:616`): checkbox \"Use my personal memory (read-only)\" independent of \"Remember between runs\"; disabled with hint when the owner's memory is off/paused or the platform disables it; task detail summary row \"Personal memory: Read-only / Off\".\n- [ ] `client/src/features/tasks/components/TaskBadges.jsx` `RunMemoryBadges`: pill kind `personal` (`used` tone) \"Used personal memory\" with the count `title`, after \"Used notes vN\".\n- [ ] i18n `scheduledTasks.memory.usePersonal*`, `scheduledTasks.memory.personal*`, `scheduledTasks.runs.personalMemoryUsed*` EN/DE (ux §4.10); `docs/scheduled-tasks.md` section.\n\n## Acceptance criteria\n\n- Given `usePersonal: true` and the owner's memory enabled and not paused, when a run starts, then the owner's account block is appended read-only after the task block, no `memory_save/update/delete` is offered, the run marker says so and the badge shows; given `usePersonal` off, nothing is injected.\n- Given a run whose model calls `memory_save`, then the tool is absent and `memory_write` resolves to task scope; the owner's store is unchanged after the run.\n\n## Tests\n\n- `tests/integration/memory-scheduled-run.test.js` (new) extending `server/tests/helpers/scheduledTaskHarness.js`: both switch states; tool list; store unchanged; marker.\n- `server/tests/scheduled-tasks-*.test.js` (extend): normalisation, duplicate copies the flag, tools do not set it.\n\n## Notes\n\nADR-M09. The four user tools are never added to a run (`runMemory.js:150-174 addMemoryTools` adds only `memory_read`/`memory_write` and the history tools).\n"
+  },
+  {
+    "key": "P1-17",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] Compliance: deletion step, app/project cascades, retention sweep, PII row",
+    "labels": [
+      "backend",
+      "privacy",
+      "security"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-04"
+    ],
+    "stories": [
+      "P1-US-27",
+      "P1-US-28",
+      "P1-US-29",
+      "P1-US-09"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nREADME §6.7: a `userMemory` step in `USER_CLEANUP_STEPS` deleting under both owner ids, a retention sweep, a `docs/pii-data-handling.md` row, no entry text in logs. `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.4 (ordering: after `chats`, before `userPrompts`; cancels timers; publishes the controls event; erases utility-run ledgers), §1.2 (`memoryRetention.js`, singleton worker only), §2.3 (app `onAppDeleted` → `deletePartition`; `ProjectService.onDeleted` hook, `server/services/projects/ProjectService.js:149, :415`), §8.3.\n\n## Scope\n\nIn: deletion step, cascades, retention sweep, PII doc, log rule check. Out: extraction-timer cancellation implementation (P2-03 provides `cancelExtractionsFor`; call it through a no-op hook now).\n\n## Tasks\n\n- [ ] `server/services/userDeletion.js:74-240`: step `{ name: 'userMemory', kind: 'content' }` after `chats` and before `userPrompts`: `deleteOwned(await ownerIdsOf(userId))` (`:53`), delete the budget document, call the extraction-cancel hook, publish `user-memory:controls`, delete runs with `purpose ∈ { user-memory, memory-consolidation, memory-import }` under the user's principal ids through the run index; idempotent.\n- [ ] Project deletion: register an `onDeleted` hook that calls `deletePartition('project', projectId)` for every user (owner-index scan of keys ending `__p_<projectId>`); app deletion in the admin apps route: `deletePartition('app', appId)`.\n- [ ] New `server/services/memory/memoryRetention.js`: `startMemoryRetentionSweep()` / `stop…` on the `chatRetention.js:448-519` pattern (daily, `unref()`, never throw out of `tick`); expire entries with `updatedAt` older than `retentionDays` (0 keeps valid entries), invalidated entries older than 180 days, `pending` older than 30 days; delete documents of users absent that long; counts-only audit summary; started in `server/startup/worker.js:249-305` under `ownsClusterSingletons`.\n- [ ] `docs/pii-data-handling.md` summary row (\"Personal memory entries\", default off, `contents/data/user-memory/` envelope-encrypted, referenced by hash in the run ledger, switches).\n- [ ] Grep-based test that no log line above `debug` in the memory modules includes `entry.text`/`text` fields (or a logger wrapper that strips them).\n\n## Acceptance criteria\n\n- Given a user with an account store and app/project partitions, when the `userMemory` step runs, then no `user-memory` or `user-memory-budget` document remains under either owner id, and a second run finds nothing.\n- Given `retentionDays > 0`, when the sweep runs, then older entries are removed and absent users' documents deleted; given `0`, valid entries stay.\n- Given a deleted project or app, then its partition is gone for every user.\n\n## Tests\n\n- `server/tests/userDeletion-memory.test.js` (new or extend the existing deletion test): both owner ids; idempotence; budget document.\n- `server/tests/memory/memoryRetention.test.js` (new): expiry rules; `retentionDays: 0`; absent-user deletion.\n- Project/app cascade tests in the respective suites.\n\n## Notes\n\nADR-M05 (retention prunes invalidated history), ADR-M16. Sweeps run on one worker only.\n"
+  },
+  {
+    "key": "P1-18",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] i18n EN+DE for every Phase 1 memory key with a parity test",
+    "labels": [
+      "frontend",
+      "i18n",
+      "ui"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-13",
+      "P1-14",
+      "P1-15",
+      "P1-16",
+      "P1-10",
+      "P1-03",
+      "P1-02"
+    ],
+    "stories": [
+      "P1-US-19"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nGerman and English ship together in every release; no memory surface ships English-only (product-plan §5.5). The complete key tables with EN and DE texts are `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §4.1–§4.10 (`memory.*`, `toolActivity.memory.*`, `chatMessage.memory.*`, `chat.memory.*`, `apiErrors.MEMORY_*`, `admin.nav.memory`, `admin.memory.*`, `admin.groups.memory*`, `admin.apps.edit.memory*`, `scheduledTasks.memory.usePersonal*`, `scheduledTasks.runs.personalMemoryUsed*`), formal \"Sie\", \"Gedächtnis\", \"Einträge\".\n\n## Scope\n\nIn: every Phase 1 key in both files, the neutral rewording of the shared `apiErrors.MEMORY_TOO_LONG` / `MEMORY_UNAVAILABLE` / `VERSION_CONFLICT` texts (ux §4.8 note; `TaskMemoryPanel.formatError` keeps its own detail), tool-file names/descriptions EN/DE, the parity test. Out: Phase 2/4 keys (P2-07, P4-04).\n\n## Tasks\n\n- [ ] `shared/i18n/en.json` and `de.json`: every key of ux §4.1–§4.5 and §4.7–§4.10 (Phase 1 subset) with the given texts; `_one`/`_other` plurals where noted.\n- [ ] Reword `apiErrors.MEMORY_TOO_LONG`, `apiErrors.MEMORY_UNAVAILABLE`, `apiErrors.VERSION_CONFLICT` to the neutral texts; verify `TaskMemoryPanel` and `MemoryEditor` still show their task-specific strings.\n- [ ] `server/defaults/tools/memory.json`, `memory_read.json`, `memory_write.json`: `name`/`description` in `en` and `de`.\n- [ ] New `tests/unit/client/memory-i18n.test.jsx` modelled on `tests/unit/client/scheduled-task-memory-i18n.test.jsx`: every key under the memory namespaces exists in both files, no empty strings, every `{{placeholder}}` present in both languages, DE never uses \"du/dein\".\n\n## Acceptance criteria\n\n- Given the UI language, when any memory surface renders, then all strings come from the keys; German uses \"Sie\"; every `apiErrors.<CODE>` for the new codes exists in both files.\n- Given a key added to one file only, then the parity test fails.\n\n## Tests\n\n- `tests/unit/client/memory-i18n.test.jsx` (new); existing i18n tests green.\n\n## Notes\n\nEach screen PR adds its own keys; this ticket closes the gaps and adds the guard.\n"
+  },
+  {
+    "key": "P1-19",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] docs/memory.md, SUMMARY, related docs and the R1 release notes",
+    "labels": [
+      "docs",
+      "privacy"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-09",
+      "P1-11",
+      "P1-13",
+      "P1-16"
+    ],
+    "stories": [
+      "P1-US-24"
+    ],
+    "existing_issues": [
+      2522,
+      1039
+    ],
+    "body": "## Context\n\nFeature docs go in `docs/` and new files into `docs/SUMMARY.md`; every visible change gets a `docs/releases/next/` entry via `/document-feature` (CLAUDE.md). The documentation is part of the compliance package (product-plan §7 risk 5, §5.4) and must state exactly who can read memory and through which path, including the run ledger (`P1-US-24`); the three rules of product-plan §1.3 go in verbatim.\n\n## Scope\n\nIn: `docs/memory.md`, cross-references, release notes for R1 (features). Out: Phase 2–4 sections (P2-07, P3-05, P4-06).\n\n## Tasks\n\n- [ ] New `docs/memory.md`: what memory is and is not (product-plan §1.3 table and the three rules verbatim); switches (flag, platform, group, app, user, per-chat, `usePersonal`); what users see (chip, Undo, Settings page, pause vs off, export, sensitive topics); partitions (account/app/project, isolation rules); the tool contract and the save policy; the block and its budget; privacy (admins see metadata only; the ledger placeholder rule and \"replay is best-effort, deletion wins\"; encryption at rest; deletion cascade; retention; audit of admin actions; `sensitiveCategories: 'exclude'` as the regulated-deployment setting; recommend `writes` approval mode for apps with web search); the admin runbook (rollout per product-plan §5.5, DPIA inputs); API reference pointer; troubleshooting (\"why does it not remember X\" → paused/off/app mode/permission).\n- [ ] `docs/SUMMARY.md` entry; `docs/storage.md` rows for `user-memory`, `user-memory-budget`, `agent-memory`; `docs/sse-v2.md` (`activityKind: memory`, `meta.extra.memory`); `docs/run-ledger.md` (placeholder rule, if not done in P0-07); `docs/tool-calling.md` (`memory_*` family); `docs/scheduled-tasks.md` (`usePersonal`); `docs/agents.md` (storage note, if not done in P0-03); `docs/apps.md` (app `memory` section).\n- [ ] `docs/releases/next/features.md`: \"Personal memory\" entry written with `/document-feature` in the style of the existing entries (what it is, where to switch it on, what users see, the privacy statement, `usePersonal`).\n- [ ] `npm run docs:build` passes; `tests/unit/server/docsLinks.test.js` green.\n\n## Acceptance criteria\n\n- Given `docs/memory.md`, then it contains the three rules, the ledger behaviour, the audit statement and the PII row reference, and it is listed in `SUMMARY.md`.\n- Given the changelog, then the R1 features entry exists and the breaking-change entries from P0-02/P0-03 are present.\n\n## Tests\n\n- `tests/unit/server/docsLinks.test.js`; `npm run docs:build`.\n\n## Notes\n\nPure docs; no code. The closing comment for #1039 (P2-US-11) is drafted here and posted after R1.\n"
+  },
+  {
+    "key": "P1-20",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] Playwright suite tests/e2e/memory.spec.js and the prompt-path performance test",
+    "labels": [
+      "testing",
+      "chat",
+      "privacy"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-09",
+      "P1-11",
+      "P1-13",
+      "P1-14",
+      "P1-12"
+    ],
+    "stories": [
+      "P1-US-01",
+      "P1-US-05",
+      "P1-US-07",
+      "P1-US-13",
+      "P1-US-23"
+    ],
+    "existing_issues": [
+      2522
+    ],
+    "body": "## Context\n\nEnd-to-end proof of the Phase 1 acceptance (README §7 Phase 1; product-plan §8.2 e2e line; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §10.6 scenarios 1–5, §8.7 and §10.7 budgets). Login as the local admin (`admin` / `password123`, `tests/e2e/admin-usage-reports.spec.js:15-18`); the server runs with `features.userMemory: true` and `platform.memory.enabled: true`; the model is the test transport where a scripted tool call is needed (see `tests/e2e/chat.spec.js` for driving the input).\n\n## Scope\n\nIn: scenarios 1–5, the perf test, CI wiring. Out: Phase 2/4 scenarios (P2-08, P4-06).\n\n## Tasks\n\n- [ ] New `tests/e2e/memory.spec.js`: (1) ask the chat app to remember a preference → chip shows the text → Settings → Memory lists it → delete → the next turn's recorded `request/header` (via `GET /api/runs/{id}/events`) has no block; (2) a temporary chat shows the block in the prompt (placeholder in the ledger with `access=\"read\"`) but offers no save tool, and \"remember X\" is answered without a save; (3) Undo on the chip removes the entry; (4) pause → next prompt has no block, entries still listed; (5) the admin user page shows counts and no text.\n- [ ] A `contents/` fixture or env override in the Playwright `webServer` command that enables the flag and the platform setting.\n- [ ] New `server/tests/memory-prompt-perf.test.js`: a 100-entry document; prompt path p95 ≤ 10 ms (≤ 25 ms with two partitions) on the filesystem provider; tool save ≤ 30 ms p95.\n- [ ] Add `memory.spec.js` to the e2e workflow; keep `tests/e2e/accessibility.spec.js` green on `/settings/memory` and `/admin/memory` (axe baseline).\n\n## Acceptance criteria\n\n- All five scenarios pass on CI against the dev server; the perf budgets hold.\n\n## Tests\n\n- This ticket is the tests.\n\n## Notes\n\nScenario (2) proves Decision Q2 (read, never write). Scenario (5) proves Decision 12 at the UI level; the route-level proof is in P1-12.\n"
+  },
+  {
+    "key": "P1-21",
+    "parent": "P1",
+    "type": "Task",
+    "title": "[Memory P1] Internal evaluation set (first ~50 DE/EN pairs) and the nightly eval job",
+    "labels": [
+      "testing",
+      "chat",
+      "docs"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P1-09"
+    ],
+    "stories": [
+      "P2-US-07"
+    ],
+    "existing_issues": [
+      2522,
+      1465
+    ],
+    "body": "## Context\n\nREADME §9: an internal LongMemEval-style set (~100 question/history pairs in DE and EN covering knowledge update, abstention, temporal reasoning, multi-session synthesis and preference following), run with `LLMClient` fakes at the unit layer and nightly against two real models, reporting accuracy, Δ (with memory − full context), extraction precision/recall (Phase 2), tokens per turn, staleness and cost. Product-plan §8.2 requires the first ~50 pairs with Phase 1; §6 lists the metrics; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §10.7.\n\n## Scope\n\nIn: the pair format, ~50 pairs, the jest runner (unit layer), the nightly job skeleton and its report. Out: the 200-turn labelled extraction sample (P2-08).\n\n## Tasks\n\n- [ ] `tests/integration/memory-eval/README.md` (format, consent/anonymisation rule, how to add a pair) and `pairs/*.json` with `{ id, lang, category, history, memory, question, expected, judge }`; at least 10 per category, half DE.\n- [ ] `tests/integration/memory-eval/eval.test.js`: replays each pair through `processMessageTemplates` + the fake transport, asserts the expected block content for the \"with memory\" condition and reports tokens per turn; knowledge-update pairs assert the old value is not injected; abstention pairs assert the block does not contain the asked fact.\n- [ ] `scripts/memory-eval.js` (nightly, not in `test:quick`): runs the pairs against `MEMORY_EVAL_MODELS` (one cloud, one local vLLM), judges with a fixed judge model, writes `tests/integration/memory-eval/reports/<date>.json` with accuracy, Δ, tokens, staleness; a GitHub Actions workflow on a schedule (or a documented manual run) publishes the report as an artifact.\n- [ ] Record the first baseline in the concept folder (`concepts/2026-11-06 Agent Memory Research and Plan/eval-baseline.md`).\n\n## Acceptance criteria\n\n- Given the unit runner, then every pair validates against the shape and the deterministic assertions pass; given the nightly job with two models, then a report is produced with the five numbers.\n- Every release from now adds one knowledge-update and one abstention pair; the two categories must not regress.\n\n## Tests\n\n- This ticket is the tests.\n\n## Notes\n\nPairs are written from anonymised real usage with the participants' consent; no entry text of real users is committed.\n"
+  },
+  {
+    "key": "P2-01",
+    "parent": "P2",
+    "type": "Task",
+    "title": "[Memory P2] UserMemoryBudgetRepository: per-user daily extraction slots with CAS",
+    "labels": [
+      "backend",
+      "config"
+    ],
+    "size": "S",
+    "depends_on": [
+      "P1-04"
+    ],
+    "stories": [
+      "P2-US-08"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nUsers pay for their own extraction (README §5 Decision 15) and a per-user daily cap stops runaway cost: a cluster-wide budget document reserved **before** the LLM call and released only when the failure proves no request reached the provider (README §7 Phase 2; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §2.2, §8.3 \"Rate limiter per worker\").\n\n## Scope\n\nIn: namespace, repository, tests. Out: calling it (P2-02), `_import` (P2-04).\n\n## Tasks\n\n- [ ] `server/storage/namespaces.js`: `userMemoryBudget: 'user-memory-budget'`; `docs/storage.md` row.\n- [ ] New `server/services/memory/UserMemoryBudgetRepository.js`: key `umb_<d>` (shared digest helper), owner = the user, no encryption; `reserveExtractionSlot(userId, { cap })` under `locks.withLock('user-memory-budget:<key>')`: day rollover (`day !== today` → `{ day, calls: 0, skipped: 0 }`), `cap > 0 && calls >= cap` → `{ ok: false }` and `skipped += 1` (`cap === 0` is unlimited: the counter still advances, `{ ok: false }` is never returned), else `calls += 1` with CAS and `{ ok: true, release() }`; `release()` decrements once and is called only when the failure proves no request reached the provider (read failure before the call, local quota pre-check, connection-level error); timeouts, 5xx and unclassified outcomes keep the slot (architecture §2.2); `cap: 0` = unlimited; `status(userId)` → `{ day, calls, skipped, cap }` for `GET /api/memory-preferences` and `_activity.budgetExceeded`; deleted by the `userMemory` cleanup step (P1-17 hook).\n\n## Acceptance criteria\n\n- Given 50 reservations on one day with cap 50, then the 51st returns `{ ok: false }` and `skipped` is 1; given cap 0, then the 51st returns `{ ok: true }` and `calls` is 51; given a new day, the counter resets; given `release()` called twice, the counter decrements once.\n- Given two workers reserving concurrently, then CAS serialises them and the count is exact.\n\n## Tests\n\n- `server/tests/memory/userMemoryBudgetRepository.test.js` (new): day rollover; cap; cap 0 unlimited; release once; concurrent reservations with an injected `EtagMismatchError`.\n\n## Notes\n\nADR-M08/M15. One document per user whatever the partition.\n"
+  },
+  {
+    "key": "P2-02",
+    "parent": "P2",
+    "type": "Feature",
+    "title": "[Memory P2] memoryExtractor: debounced, budgeted, schema-validated extraction on postTurn",
+    "labels": [
+      "backend",
+      "chat",
+      "privacy",
+      "security"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P0-06",
+      "P0-08",
+      "P1-07",
+      "P2-01"
+    ],
+    "stories": [
+      "P2-US-01",
+      "P2-US-02",
+      "P2-US-03",
+      "P2-US-04",
+      "P2-US-07",
+      "P2-US-08",
+      "P2-US-09"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nThe background write path (README §5 Decision 8, §6.3, §6.8, §6.11; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.3 sequence, §6.4 prompt and JSON schema, §8.3 multi-worker, §8.4 telemetry, §8.6 error handling, §0 C12 model choice; ADR-M08). Registered on the `postTurn` registry from `server/startup/` so `ChatService` never names it.\n\n## Scope\n\nIn: the extractor module, prompt, schema, validation, apply with snapshot checks, telemetry, registration. Out: the stored activity record (P2-03), pending UI (P2-06), budget repository (P2-01).\n\n## Tasks\n\n- [ ] New `server/services/memory/memoryExtractor.js`: `onPostTurn(event)` skip rules (not `isMemoryPrincipal`, `extraction.enabled` false, `appMemoryMode !== 'readwrite'`, temporary chat, `chat.settings.memory === false`, paused/disabled, fewer than two user turns, `outcome.status !== 'completed'`, scope null); per-worker debounce map (`MAX_PENDING_EXTRACTIONS = 1000`, oldest cancelled; cancel-and-reschedule per chat; `debounceSeconds` default 30; immediate on chat close); snapshot `{ controlsVersion, version, chatRevision, watermark }` at schedule time.\n- [ ] Run: `reserveExtractionSlot(userId, { cap })` → no slot → log, stop (no reschedule); the call is `llmClient.complete({ …, retries: 0 })` so one reservation is one transport attempt (`LLMClient` would otherwise retry transient failures internally and report only the last error); batch = next `messageWindowSize` stored turns with `seq > watermark` in `seq` order (gaps skipped), shortened **from the end** to `maxInputTokens` (`estimateTokens`, `shared/tokenEstimator.js`), tool results and attachments replaced by `[tool result omitted]`; `window: { fromTurnId, toTurnId }`; messages = system prompt of §6.4 (with `{sensitiveRule}` and `{maxEntryLength}`), user message with `<existing_entries>`, `<conversation_summary>` (Phase 3) and `<recent_turns>`; `llmClient.complete({ model, messages, options: { responseFormat: 'json', responseSchema }, timeoutMs: 60000, telemetry: { kind: 'utility', purpose: 'user-memory', user, parentRunId: runId, surface: 'memory', refs: { chatId }, redaction: { messages: 'hash-only' } } })`; model = `platform.memory.extraction.modelId` or the turn's `prep.model.id` (C12).\n- [ ] Validate: `extractJson` → `createOutputValidator(schema)` (`server/services/inference/structuredOutput.js:444`), one retry with `jsonInstruction` (`:410`) that reserves its own slot first (no slot → `failed`, no write, no reschedule), then `failed`; post-schema: `entryId` exists, `evidenceTurn` offered, bare `invalidate` dropped, `confidence ≥ 0.7`, sensitive policy and `sensitiveFilter`, dedupe; `applyOperations(scope, ops, { controlsVersion, snapshotVersion, chatRevision, window, sourceRef: { chatId, runId, messageId }, updatedBy: 'extraction:<chatId>', reviewMode: effective })`; `{ dropped: 'version' }` → re-extract the same window once against the current document (counted against the cap); backlog → reschedule immediately.\n- [ ] Failure handling per §8.6 and §2.2: `readPlain` failure before the call (`KeyAccessDenied`, `MEMORY_UNAVAILABLE`), local quota pre-check or connection-level error (refused, DNS) → `release()`; timeout/5xx/unclassified → slot kept (the request may have been billed); `QUOTA_EXCEEDED` → skipped, counted on the budget document, logged at `info`; malformed after retry → no write.\n- [ ] `cancelExtractionsFor(userId)` (local timers) and a `clusterBus.subscribe('user-memory:controls', …)` that cancels remote timers; `flushSync({ user, chatId, runId, turns, timeoutMs })` for Phase 3 (one bounded call, errors swallowed).\n- [ ] Register from `server/startup/worker.js` (or `server/startup/services`) with `registerPostTurnHandler`; configReloadHooks need no entry (per-use config read).\n- [ ] Call `recordMemoryActivity` (P2-03) with `{ added, updated, invalidated, pending }`.\n\n## Acceptance criteria\n\n- Given a persistent chat with ≥ 2 user turns in a readwrite app with extraction on, when a turn completes, then one `complete` runs after the debounce over the window and the current entries, operations with confidence ≥ 0.7 are applied under lock with CAS, added entries carry `source: 'extraction'`, `confidence`, `sourceRef.messageId`.\n- Given a duplicate fact → `noop`; a contradiction → `invalidate` + `add`; a sensitive proposal without opt-in → dropped; malformed JSON twice → no write; a bare `invalidate` → dropped; an unknown `evidenceTurn` → dropped.\n- Given a temporary chat, \"Memory off\", `mode: 'read'`, a paused user or < 2 user turns, then no LLM call is made (asserted on the fake).\n- Given the daily cap reached, then the call is skipped and not rescheduled; given one slot left and malformed output, then the retry is not made and nothing is written; given a provider connection error on a `retries: 0` call, the slot is released; given a timeout, it is kept.\n- Given a pause/clear/delete between schedule and apply, then the whole result is dropped and no document is created; given two workers applying the same set, one write; given two results with distinct windows finishing out of order, the stale one is dropped and the next batch rescheduled; given a result scheduled before a truncating edit, it is discarded.\n\n## Tests\n\n- `server/tests/memory/memoryExtractor.test.js` (new) with `new LLMClient({ transport })` fakes: every case above, the debounce (cancel-and-reschedule, immediate on close), telemetry fields incl. `hash-only`, model choice per C12, the backlog loop, `flushSync` bounded to one call.\n\n## Notes\n\nNever creates a document. Only user and assistant text is extracted from (MINJA mitigation, §8.8). Security review required. Unblocks P2-03, P3-03.\n"
+  },
+  {
+    "key": "P2-03",
+    "parent": "P2",
+    "type": "Feature",
+    "title": "[Memory P2] memoryActivity: stored summary on the message, _activity route, cluster bus",
+    "labels": [
+      "backend",
+      "api",
+      "chat"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P2-02",
+      "P1-11"
+    ],
+    "stories": [
+      "P2-US-01",
+      "P2-US-04"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nExtraction finishes after `run/ended` and there is no user-level push channel, so the server writes its summary onto the assistant message's stored `activity` (the `chatMaterializer.js:648-683` path) and the open chat polls `GET /api/memories/_activity?chatId=&since=` (README §6.10; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §1.2 `memoryActivity.js`, §4.2 `_activity` row, §5.3, §5.4, §8.3; `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §5.4 polling cadence, §8 Q6 `budgetExceeded`).\n\n## Scope\n\nIn: the module, the route, bus channels, cancel wiring on pause/clear/delete/admin clear. Out: the client polling (P2-06).\n\n## Tasks\n\n- [ ] New `server/services/memory/memoryActivity.js`: `recordMemoryActivity({ chatId, runId, messageId, summary })` → `ChatRepository.updateMessage` under the chat lock setting `activity.memory = { added: [entry], updated: [{ entry, before }], invalidated: [ids], pending: n, at }` keyed by run id (works even when a later turn is active); `listActivity(chatId, since, user)` (owner must equal the caller → else 404); `clusterBus.publish('user-memory:changed', { userId, chatId, runId })` (`server/clusterBus.js:564`); `publishControls(userId)` for `user-memory:controls`.\n- [ ] `server/routes/memories.js`: `GET /api/memories/_activity?chatId=&since=` → `{ items: [{ runId, messageId, at, added, updated, invalidated, pending }], nextCursor: null, budgetExceeded }` (from the budget status).\n- [ ] Wire `cancelExtractionsFor(userId)` + `publishControls` into `PATCH /api/memory-preferences` (`paused`/`enabled`), `DELETE /api/memories?partition=`, `DELETE /api/admin/users/{id}/memory` and the `userMemory` deletion step (replace the P1-17 no-op hook).\n- [ ] `docs/memory.md` extraction section note on the stored record (P2-07 completes it).\n\n## Acceptance criteria\n\n- Given an extraction result, when recorded, then the assistant message of that run carries `activity.memory` even if a later turn is active, and `_activity` returns it for the owner and 404 for anyone else.\n- Given a pause/clear on one worker, then the other worker's timers are cancelled best effort and an in-flight apply is dropped by `controlsVersion`.\n\n## Tests\n\n- `server/tests/memory/memoryActivity.test.js` (new): record by chat id and message id with a later active turn; owner check; bus publish; `budgetExceeded`.\n- `server/tests/routes/memories.test.js` (extend): `_activity`.\n\n## Notes\n\nADR-M14: a stored record the server wrote; the client only renders it.\n"
+  },
+  {
+    "key": "P2-04",
+    "parent": "P2",
+    "type": "Feature",
+    "title": "[Memory P2] Review queue (pending, accept, reject), reviewMode and paste-import endpoint",
+    "labels": [
+      "backend",
+      "api",
+      "privacy"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P2-02",
+      "P1-11"
+    ],
+    "stories": [
+      "P2-US-05",
+      "P2-US-06",
+      "P2-US-10"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nHermes-style pending approval: with review on, every extraction `add`/`update` is parked in `pending[]` with its `snapshotVersion` and the person accepts or rejects (README §6.3; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §2.1 pending shape, §4.2 `_pending`/`_accept`/`_reject`/`_import` rows, §5.3 `reviewMode` precedence `required > on > off`, §0 C11 — the pending family stays `_action` because accept/reject are transitions).\n\n## Scope\n\nIn: repository pending operations, routes, `reviewMode` on preferences, import over the same contract. Out: UI (P2-06).\n\n## Tasks\n\n- [ ] `UserMemoryRepository`: `listPending`, `acceptPending(id, { text? })` under the lock — re-validate per operation when `snapshotVersion !== version` (`update`/`invalidate` downgraded to `noop` when the entry is gone or moved; `add` applied only after the UI confirmed \"your memory changed since this was proposed\", carried as `confirmChanged: true`), the accepted entry is `source: 'user'`, `confidence: 1`; `rejectPending(id)`; `pendingRetentionDays = 30` constant (pruned by P1-17's sweep); `counts.pending`.\n- [ ] `server/routes/memories.js`: `GET /api/memories/_pending?partition…` → `{ items, nextCursor }`; `POST /api/memories/_pending/{id}/_accept` `{ text?, confirmChanged? }` → `200` entry (409 `VERSION_CONFLICT` with `details.changed: true` when confirmation is needed); `POST …/_reject` → `204`; `PATCH /api/memory-preferences { reviewMode }` honouring `platform.memory.extraction.reviewMode` (`required` → cannot switch off; `off` → not settable); `GET` returns `effectiveReviewMode`.\n- [ ] `POST /api/memories/_import` `{ text }` (≤ 20,000 chars) or `{ entries: [{ text, category? }] }`: reserve a budget slot (429 `MEMORY_BUDGET_EXCEEDED` with `Retry-After` to midnight UTC), run the extractor's operations contract with `purpose: 'memory-import'`, `source: 'import'`, confidence 1, dedupe, sensitive filtering; `200 { items, skipped: [{ text, reason }] }`.\n- [ ] `memoryLimiter` on the mutating endpoints; OpenAPI; `api-design` skill.\n\n## Acceptance criteria\n\n- Given `reviewMode: 'optional'` and the user's switch on, then extraction results go to `pending[]`; Accept creates the entry, Reject discards; given `'required'`, every user is in review and cannot switch off; given `'off'`, the setting is hidden and not settable.\n- Given a proposal whose `snapshotVersion` differs, then accept of an `add` needs `confirmChanged`; an `update` of a vanished entry becomes `noop`.\n- Given pasted text, then entries carry `source: 'import'`, duplicates are `noop`, sensitive filtering applies, and a cap hit answers `429`.\n\n## Tests\n\n- `server/tests/memory/userMemoryRepository.test.js` (extend): pending accept/reject incl. stale snapshot paths; pruning age.\n- `server/tests/routes/memories.test.js` (extend): the four endpoints, `reviewMode` precedence, import incl. 429.\n\n## Notes\n\nPending items count against `maxEntries` only when accepted. `invalidate` is never parked.\n"
+  },
+  {
+    "key": "P2-05",
+    "parent": "P2",
+    "type": "Task",
+    "title": "[Memory P2] Telemetry surface 'memory': quota, Usage page line and admin reports",
+    "labels": [
+      "backend",
+      "frontend",
+      "admin"
+    ],
+    "size": "S",
+    "depends_on": [
+      "P2-02"
+    ],
+    "stories": [
+      "P2-US-09"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nEvery memory LLM call carries `telemetry.user` and `surface: 'memory'` so quota applies and the usage page shows the cost as its own line (README §5 Decision 15, §6.11; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §8.4; ADR-M15). `LLMClient.execute` resolves the surface at `:683` through `resolveSurface` (`server/services/usage/callRecord.js:56`) over `SURFACES` (`:23`).\n\n## Scope\n\nIn: the surface constant, usage page and report lines, quota-skip path. Out: the extractor itself (P2-02).\n\n## Tasks\n\n- [ ] `server/services/usage/callRecord.js:23`: append `'memory'` to `SURFACES`; verify `resolveSurface` accepts it and `assertWithinQuota` applies to `telemetry.user`.\n- [ ] `client/src/features/settings/pages/UsagePage.jsx` and the admin usage reports: a \"Memory\" line per user and in total; `docs/usage-limits.md` / `docs/usage-reporting.md` note.\n- [ ] Consolidation runs for agent profiles (Phase 4) are `user: null` → shown as `system` under `surface: 'memory'` (document now).\n- [ ] The Settings page sentence \"Memory learns from your chats and counts against your usage\" when extraction is on (key in P2-07).\n\n## Acceptance criteria\n\n- Given an extraction call, then a usage record with `surface: 'memory'` and the user exists, the Usage page shows the line, and a user over quota gets no extraction (never a failed chat).\n\n## Tests\n\n- `server/tests/usage/callRecord-memory.test.js` (new or extend): surface resolution; quota skip path asserted in `memoryExtractor.test.js`.\n- `tests/unit/client/usage-page-memory-line.test.jsx` (new).\n\n## Notes\n\nADR-M15.\n"
+  },
+  {
+    "key": "P2-06",
+    "parent": "P2",
+    "type": "Feature",
+    "title": "[Memory P2] Client: Pending tab, review switch, import, live polling, admin settings",
+    "labels": [
+      "frontend",
+      "ui",
+      "chat",
+      "admin-ui"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P2-03",
+      "P2-04",
+      "P1-13",
+      "P1-14",
+      "P1-15"
+    ],
+    "stories": [
+      "P2-US-01",
+      "P2-US-05",
+      "P2-US-06",
+      "P2-US-08",
+      "P2-US-10"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nScreen specs: `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3b (Pending tab, bulk actions, evidence line, \"Would update\"), §3a \"Review before saving\" switch, §3c background extraction row, §5.4 polling cadence (burst 15/30/60 s after `run/ended`, visible tab only), §3d extraction fieldset, §4.6 keys, §6 \"Pending tab\" checklist.\n\n## Scope\n\nIn: everything the user and admin see for Phase 2. Out: server (P2-02…P2-05).\n\n## Tasks\n\n- [ ] `client/src/api/endpoints/memories.js`: `fetchPendingMemories`, `acceptPendingMemory`, `rejectPendingMemory`, `importMemories`, `fetchMemoryActivity`.\n- [ ] `MemoryPage.jsx`: third switch **Review before saving** (`optional` → editable, `required` → on and disabled with `memory.prefs.reviewRequired`, `off` → hidden); **Pending** tab with count badge, `PendingMemoryList` (provenance link, evidence `<q>`, \"Would update/mark as outdated\", Accept / Edit and accept / Reject, checkboxes + Select all + bulk, Accept all / Reject all with `ConfirmDialog` above 5, `{Expiring}` badge, retention footnote, `budgetExceeded` footer note), the \"changed since\" confirmation on accept; **Import** action in the Export menu area opening a modal with a textarea → `_import` → result list with skipped reasons; the usage sentence when extraction is on.\n- [ ] Chat: poll `_activity` per §5.4 only when the app is `readwrite`, extraction is on, memory on and not paused, chat not temporary, tab visible; on a summary for a rendered message append the `memory` row \"Memory updated from this chat · n added, n updated\" with per-entry Undo on expand and \"n entries waiting for your review · Review\" link; a new turn resets the burst.\n- [ ] `AdminMemoryPage.jsx`: the Automatic saving fieldset live (enabled, model select, calls/day, input tokens, debounce, review mode radios); cost note.\n- [ ] i18n `memory.pending.*`, `memory.prefs.review*`, `toolActivity.memory.extracted|pending|review`, `admin.memory.extraction.*` EN/DE (P2-07 verifies parity).\n\n## Acceptance criteria\n\n- Given review on, when a proposal arrives, then the Pending tab lists it with evidence; Accept creates the entry (animated out, \"Accepted. n remaining.\"), Reject removes it; bulk works; `required` locks the switch.\n- Given an extraction summary for a rendered message, then the row appears within the polling burst without a toast.\n- Given pasted text, then Import shows the created entries and the skipped ones with reasons.\n\n## Tests\n\n- `tests/unit/client/memory-page.test.jsx` (extend): review switch per mode; pending list and bulk; import modal; budget note.\n- `tests/unit/client/tool-activity-memory-row.test.jsx` (extend): extraction row and per-entry Undo; polling gates.\n- `tests/unit/client/admin-memory-page.test.jsx` (extend): extraction fieldset.\n\n## Notes\n\nNo toast, no banner for background results (ux principle 3).\n"
+  },
+  {
+    "key": "P2-07",
+    "parent": "P2",
+    "type": "Task",
+    "title": "[Memory P2] i18n EN+DE for Phase 2 keys, docs extraction section and the R2 release note",
+    "labels": [
+      "i18n",
+      "docs"
+    ],
+    "size": "S",
+    "depends_on": [
+      "P2-06"
+    ],
+    "stories": [
+      "P2-US-11"
+    ],
+    "existing_issues": [
+      1465,
+      1039
+    ],
+    "body": "## Context\n\nPhase 2 keys are in `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §4.6 and the Phase 2 rows of §4.2, §4.7, §4.9; the documentation and changelog rules are CLAUDE.md's; product-plan §5.4 names the R2 entry \"Memory learns from chats\"; §8.3 requires the pending pruning period documented and #1039 closed with the mapping comment after release.\n\n## Tasks\n\n- [ ] `shared/i18n/en.json` / `de.json`: every Phase 2 key; the parity test (P1-18) extended to the new namespaces.\n- [ ] `docs/memory.md`: extraction section (how it works, debounce, window, confidence, review modes, import, the daily cap and the usage line, what is never extracted from — tool content, temporary chats; `pendingRetentionDays: 30`; multi-worker behaviour); admin recommendations (`reviewMode: 'optional'` first; enable per customer after a month of R1).\n- [ ] `docs/releases/next/features.md`: \"Memory learns from chats\" via `/document-feature`.\n- [ ] Draft the closing comments for #1039 (≤ 50 entries → `maxEntries`; off inside agents → Decision 9) and #1465 (what shipped, what is out of scope: embeddings, recall `k=5`, summaries as memory).\n\n## Acceptance criteria\n\n- Parity test green; `npm run docs:build` passes; the release note exists; the two closing comments are attached to the Phase 2 issue for posting after release.\n\n## Tests\n\n- `tests/unit/client/memory-i18n.test.jsx` (extend).\n\n## Notes\n\nPure docs/i18n.\n"
+  },
+  {
+    "key": "P2-08",
+    "parent": "P2",
+    "type": "Task",
+    "title": "[Memory P2] Eval gate: 200-turn labelled sample, precision ≥ 0.8, soak and e2e scenario",
+    "labels": [
+      "testing",
+      "privacy",
+      "chat"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P2-02",
+      "P2-06",
+      "P1-21"
+    ],
+    "stories": [
+      "P2-US-02",
+      "P2-US-07"
+    ],
+    "existing_issues": [
+      1465
+    ],
+    "body": "## Context\n\nPhase 2 ships only when extraction precision ≥ 0.8 on a 200-turn hand-labelled sample and zero sensitive-category saves without opt-in (README §7 Phase 2 acceptance, §9; product-plan §5.1, §6, §8.3; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §10.6 scenario 6, §10.7 soak).\n\n## Tasks\n\n- [ ] `tests/integration/memory-eval/extraction-sample/`: 200 anonymised, consented turns labelled \"should be remembered / should not / sensitive\"; a runner that feeds them through the extractor with each configured model and reports precision, recall and sensitive saves; results recorded in `concepts/2026-11-06 Agent Memory Research and Plan/eval-baseline.md`.\n- [ ] Extraction soak (nightly): 500 turns against the fake transport asserting ≤ 1 call per chat per debounce window and exact budget accounting; a two-worker run (`WORKERS=2`) asserting one application per window.\n- [ ] `tests/e2e/memory.spec.js` scenario (6): a scripted turn → `_activity` returns the summary → the row appears → pending accept creates the entry.\n- [ ] Add the update/abstention pair of README §9 for this release to the eval set.\n\n## Acceptance criteria\n\n- Precision ≥ 0.8 and zero sensitive saves without opt-in on the sample for the recommended model class; the soak and the e2e scenario pass; the numbers are recorded in the concept folder before the R2 tag.\n\n## Tests\n\n- This ticket is the tests.\n\n## Notes\n\nIf precision is below target, the extraction prompt (P2-02) is tuned before shipping; the ticket stays open until the gate is met.\n"
+  },
+  {
+    "key": "P3-01",
+    "parent": "P3",
+    "type": "Feature",
+    "title": "[Memory P3] summarizeIfOverBudget: threshold, cut rules, summary prompt and model config",
+    "labels": [
+      "backend",
+      "chat",
+      "agentic-workflows"
+    ],
+    "size": "L",
+    "depends_on": [],
+    "stories": [
+      "P3-US-01",
+      "P3-US-06"
+    ],
+    "existing_issues": [
+      3192
+    ],
+    "body": "## Context\n\nToday `server/services/loop/contextCompaction.js` does micro-compaction only (`microcompactMessages` `:22`, `compactIfOversized` `:54`, `isContextOverflowError` `:80`), applied by `AgentLoop` proactively and once reactively on overflow (`AgentLoop.js:551-570`). #3192 asks for a real LLM summary triggered by reported `promptTokens` against `model.contextWindow` (README §7 Phase 3; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.6; ADR-M10).\n\n## Scope\n\nIn: the planner and summariser, config, the loop trigger. Out: ledger checkpoint and prefix rebuild (P3-02), `/compact` (P3-04), flush (P3-03).\n\n## Tasks\n\n- [ ] `contextCompaction.js`: `planSummaryCompaction({ messages, model, previousSummary, usage, policy })` → `{ dropRange, keepFrom }` or null — trigger when reported `promptTokens` (`normalizeUsage`, fallback estimate) ≥ `policies.context.summaryThresholdRatio` (default 0.8) × `model.contextWindow`; keep the most recent ~40 % verbatim; cut only at a user turn or after a complete tool batch; keep `ask_user` answers and approvals verbatim; `summarizeIfOverBudget({ messages, model, previousSummary, llmClient, telemetry })` → strips base64 and tool outputs > 2,000 chars, prompt = previous summary + dropped turns, `llmClient.complete` with the summary model (`policies.context.summaryModelId` or the run model), returns `{ summary, dropped, usageBefore, usageAfter }`; the rebuilt context = `[system, a user message carrying <conversation_summary>, an assistant \"Understood.\", …kept]`.\n- [ ] `server/validators/platformConfigSchema.js`: `policies.context.summaryThresholdRatio` (0.5–0.95, default 0.8), `summaryModelId?`; admin settings exposure (a field on an existing admin page or `AdminMemoryPage`'s context section — architect's call: the LLM timeouts/policies page).\n- [ ] `AgentLoop.js`: after each step evaluate the plan; run the summariser before the next model call; the overflow path (`:551-570`) still compacts once.\n- [ ] `docs/agent-loop.md`: threshold, model, cut rules.\n\n## Acceptance criteria\n\n- Given reported `promptTokens` above the threshold, when the next step is prepared, then the older part is summarised with the previous summary as input, ~40 % stays verbatim, the cut lands at a user turn or after a complete tool batch, base64 and large tool outputs are stripped, `ask_user` answers and approvals stay verbatim.\n- Given a context-overflow error, then the loop still compacts once and retries.\n\n## Tests\n\n- `server/tests/loop/chatCompaction.test.js` (extend) and `server/tests/loop/summaryCompaction.test.js` (new) with fakes: threshold, cut points incl. a tool batch, kept items, stripped content, overflow path.\n\n## Notes\n\nThe summary is derived state: never written to `user-memory` (test in P3-03). Unblocks P3-02, P3-03.\n"
+  },
+  {
+    "key": "P3-02",
+    "parent": "P3",
+    "type": "Feature",
+    "title": "[Memory P3] Ledger checkpoint on context/compaction.summaryRef and prefix rebuild",
+    "labels": [
+      "backend",
+      "chat"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P3-01"
+    ],
+    "stories": [
+      "P3-US-01",
+      "P3-US-06"
+    ],
+    "existing_issues": [
+      3192
+    ],
+    "body": "## Context\n\nThe ledger already declares `context/compaction` with `summaryRef` (`shared/runEvents.js:62`; `server/services/loop/contracts/runLogEvents.js:417-423`) and `AgentLoop` runs the `onCompaction` seam (`AgentLoop.js:570`), so the summary is stored on that event as a spill blob — no new event type (C8). Later turns start from the newest checkpoint (`concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.6).\n\n## Tasks\n\n- [ ] `AgentLoop`: on a summary compaction record `context/compaction { step, trigger: 'summary' | 'manual', collapsed, freedChars, shadowedRange: [from, to], summaryRef (spill blob), summaryHash, model, tokensBefore, tokensAfter }`; call `runHooks(seams, 'onCompaction', …)`.\n- [ ] `server/services/chat/RequestBuilder.js`: when building the next turn, read the last `context/compaction` of the chat's runs (through `RunLog`), rebuild the prefix `[system, <conversation_summary>, \"Understood.\", turns after shadowedRange]`, and expose `prep.conversationSummary` for the extractor (P2-02 `<conversation_summary>`) and the scheduled-task composer's user message.\n- [ ] `routes/runs.js` events projection: `summaryRef` is readable by the owner (the summary is chat content, not memory; admins see it as they see the transcript).\n- [ ] `docs/run-ledger.md`, `docs/chat-persistence.md`.\n\n## Acceptance criteria\n\n- Given a compaction, then the ledger event records which turns, which model and tokens before/after, and `summaryRef` resolves to the summary text; given a later turn, then its prompt starts from the newest checkpoint and the full transcript remains stored and visible.\n\n## Tests\n\n- `server/tests/loop/checkpointResume.test.js` (extend) or `summaryCheckpoint.test.js` (new): event shape, replay from checkpoint, two successive compactions chain the previous summary.\n\n## Notes\n\nADR-M10. No change to `runLogEvents.js` members unless `model`/`tokensBefore`/`tokensAfter` are missing — then add them and update the snapshot once.\n"
+  },
+  {
+    "key": "P3-03",
+    "parent": "P3",
+    "type": "Feature",
+    "title": "[Memory P3] beforeCompaction seam and memory flush before turns are dropped",
+    "labels": [
+      "backend",
+      "chat",
+      "privacy"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P3-01",
+      "P2-02"
+    ],
+    "stories": [
+      "P3-US-03",
+      "P3-US-04"
+    ],
+    "existing_issues": [
+      3192,
+      1465
+    ],
+    "body": "## Context\n\nOpenClaw's pre-compaction flush (README §7 Phase 3): when a summary is about to drop turns, the Phase 2 extractor runs synchronously over exactly those turns, bounded to one call; failure never blocks compaction; summaries never become memory (Decision 10). `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.6.\n\n## Tasks\n\n- [ ] `AgentLoop` seams: new hook `beforeCompaction(ctx, { dropping })` run before the summariser; a chat-turn seam registers `memoryExtractor.flushSync({ user, chatId, runId, turns: dropping, timeoutMs: 20000 })` when extraction is enabled for the turn's scope; without Phase 2 the seam is a no-op.\n- [ ] The flush reserves a budget slot like any extraction, applies operations with the same snapshot checks, and records activity.\n- [ ] A test that no summary text ever lands in `user-memory` except through the extractor's operations (seed a summary containing a unique token; assert the token is absent from every entry unless an operation carried it).\n\n## Acceptance criteria\n\n- Given extraction enabled and a compaction about to drop turns, then the extractor runs once over those turns before they are dropped; given it throws or times out, compaction proceeds; given extraction disabled, no flush.\n- Given a fact stated in turn 3 and dropped at turn 150, then it is a memory entry (if durable) or in the summary (if episodic).\n\n## Tests\n\n- `tests/integration/memory-compaction.test.js` (new): flush-before-drop once; failure never blocks; summary stored on `summaryRef`; the no-summary-in-memory assertion.\n\n## Notes\n\nADR-M10. Degrades to \"no flush\" without Phase 2 (product-plan §5.1).\n"
+  },
+  {
+    "key": "P3-04",
+    "parent": "P3",
+    "type": "Feature",
+    "title": "[Memory P3] /compact command, 'Earlier messages summarised' marker and context indicator",
+    "labels": [
+      "backend",
+      "frontend",
+      "chat",
+      "ui",
+      "api"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P3-02"
+    ],
+    "stories": [
+      "P3-US-02"
+    ],
+    "existing_issues": [
+      3192
+    ],
+    "body": "## Context\n\n#3192 UX: a `/compact` command, a marker at the cut that expands to the summary, and the context indicator in `ChatInput.jsx` dropping. `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.6: `/compact` is a `human-events` steer of kind `compact` (`server/routes/runs.js:363`) when a run is active, or `POST /api/apps/{appId}/chat/{chatId}/_compact` when idle (architect's call, `_action` per guidelines).\n\n## Tasks\n\n- [ ] Server: steer kind `compact` in the human-events contract (`sseV2.js` / `runLogEvents.js` if an enum exists; snapshot update) raising the same path with `trigger: 'manual'`; `POST /api/apps/{appId}/chat/{chatId}/_compact` (`authRequired`, owner, `202` or `200 { compaction }`), running the summariser without a model turn; `api-design` skill.\n- [ ] Client: `/compact` slash command in the chat input (the existing command handling); a marker component at the cut (\"Earlier messages summarised\", expandable to the summary text, `motion-reduce` safe, `aria-expanded`); the context indicator recomputed from the checkpoint; the chat transcript stays complete.\n- [ ] i18n `chat.compact.*` EN/DE; `docs/chat-persistence.md` user section.\n\n## Acceptance criteria\n\n- Given a chat, when the user types `/compact`, then compaction runs regardless of threshold, the marker appears at the cut, expands to the summary, the indicator drops, and the full transcript remains visible; works while a run is active and when idle.\n\n## Tests\n\n- `server/tests/routes/chat-compact.test.js` (new): `_compact` status/body; steer kind.\n- `tests/unit/client/chat-compact-marker.test.jsx` (new).\n\n## Notes\n\nSummaries are not searchable or exported with memory (product-plan Phase 3 non-goals).\n"
+  },
+  {
+    "key": "P3-05",
+    "parent": "P3",
+    "type": "Feature",
+    "title": "[Memory P3] Compaction in scheduled runs and agent nodes; docs, release note, 200-turn e2e",
+    "labels": [
+      "backend",
+      "agentic-workflows",
+      "docs",
+      "testing"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P3-02"
+    ],
+    "stories": [
+      "P3-US-05",
+      "P3-US-06",
+      "P3-US-01"
+    ],
+    "existing_issues": [
+      3192
+    ],
+    "body": "## Context\n\n#3192 acceptance: scheduled-task runs and agent runs use the same mechanism; `ContextSummarizer` (`server/services/workflow/executors/ContextSummarizer.js`) is replaced only where it duplicates; the summary feeds the task composer as context (README §7 Phase 3).\n\n## Tasks\n\n- [ ] `server/services/scheduler/tasks/taskExecution.js`: the run's loop uses the summary planner (`policies.context` from the platform); the summary is passed to `memoryComposer` as context in its user message.\n- [ ] `server/services/workflow/executors/PromptNodeExecutor.js`: the node loop uses the same planner; keep `ContextSummarizer` for cross-node results, remove the duplicated in-loop path only.\n- [ ] `docs/chat-persistence.md`, `docs/agent-loop.md`, `docs/scheduled-tasks.md`, `docs/agents.md`; `docs/releases/next/features.md` \"Long chats are summarised\" via `/document-feature`.\n- [ ] `tests/e2e/memory.spec.js` or `tests/e2e/chat-compaction.spec.js`: a 200-turn chat on a 32k model (fake transport with a 32k `contextWindow`) completes; `/compact` on one cloud and one local model in the nightly run.\n\n## Acceptance criteria\n\n- Given a scheduled run or an agent node loop over the threshold, then it compacts the same way and the run's ledger records it; the 200-turn e2e passes; docs and release note exist.\n\n## Tests\n\n- `server/tests/scheduled-tasks-*.test.js` (extend) and `server/tests/loop/agentLoop.test.js` (extend); the e2e above.\n\n## Notes\n\nCloses #3192 together with P3-01…P3-04.\n"
+  },
+  {
+    "key": "P4-01",
+    "parent": "P4",
+    "type": "Feature",
+    "title": "[Memory P4] lessons[] on task and agent documents, sealed body envelope, block and routes",
+    "labels": [
+      "backend",
+      "agentic-workflows",
+      "privacy",
+      "api"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P0-03"
+    ],
+    "stories": [
+      "P4-US-03"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\nProcedural memory: a `lessons[]` list next to the markdown body of task and agent memory documents, same entry shape with `category: 'lesson'`, injected after the notes as `<lessons>` with the \"data, not instructions\" wording (README §6.2, §7 Phase 4; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §2.4 — body documents move under the `sealed` envelope here because lessons derived from owner follow-ups are personal content (architect's call), §4.4 lessons routes, §4.5 `kind` parameter on `memory_write`).\n\n## Tasks\n\n- [ ] `TaskMemoryRepository.js` and `AgentMemoryRepository.js`: optional `lessons[]`, `proposal`, `consolidation` fields outside the body; the `sealed` envelope for body + lessons with transparent decrypt in `get` (AAD per §2.5, key provider as the user store); plaintext metadata unchanged; one-shot lazy seal on the next write for existing plaintext documents.\n- [ ] `runMemory.js`: after `buildMemoryBlock`, a `<lessons>` block (neutralised lines, \"data, not instructions\"); `PromptNodeExecutor` likewise after the agent block.\n- [ ] `memory_write` gains `kind: 'notes' | 'lesson'` (default `notes`); a lesson write appends a `lessons[]` entry with `source: 'user'` (model-authored during a run counts as the run's own notes — `source: 'tool'`); the composer may propose lessons from owner follow-ups.\n- [ ] Routes `GET /api/scheduled-tasks/{taskId}/memory/lessons`, `PATCH …/lessons/{id}`, `DELETE …/lessons/{id}` (owner), and the admin equivalents for profiles; `memoryLimiter`.\n- [ ] `docs/scheduled-tasks.md`, `docs/agents.md` lessons sections.\n\n## Acceptance criteria\n\n- Given lessons on a task document, when a run starts, then the prompt contains `<lessons>` after `<task_memory>` with the wording; the owner can list, edit and delete lessons.\n- Given an existing plaintext task document, then it reads unchanged and is sealed on its next write; a transplanted `sealed` block fails to unwrap.\n\n## Tests\n\n- `server/tests/scheduled-tasks-memory-*.test.js` and `server/tests/agents/agentMemoryRepository.test.js` (extend): lessons, sealing round-trip and lazy seal, block rendering, routes.\n\n## Notes\n\nADR-M16 extended to body scopes. Security review required.\n"
+  },
+  {
+    "key": "P4-02",
+    "parent": "P4",
+    "type": "Feature",
+    "title": "[Memory P4] memoryConsolidator: eligibility, inputs, prompt, parsing, guards, proposal",
+    "labels": [
+      "backend",
+      "agentic-workflows"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P4-01"
+    ],
+    "stories": [
+      "P4-US-01",
+      "P4-US-03",
+      "P4-US-06"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\nDream narrowly (README §5 Decision 11, §6.3 Consolidation, §7 Phase 4): a read-only-input, new-version-output pass over free-text notes that emits operations, not replacement prose, guarded by `maxPriorEntryLossFraction` and provenance, stored as `proposal { baseVersion, … }` and never applied in place (`concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §5.7, §6.5 prompt and tag parsing, §2.4 proposal shape; ADR-M11).\n\n## Tasks\n\n- [ ] New `server/services/memory/memoryConsolidator.js`: `isEligible(doc, settings)` (`version > consolidation.lastAppliedVersion`, `runsSinceLast ≥ minRunsSinceLast`, no proposal; `force` skips the run count); `collectInputs` (current notes, last `maxRunsRead` answers through `runHistory.js`, owner follow-ups as `memoryComposer.js:146-162`); the plain-text-tag prompt of §6.5 with numbered bullets; `llmClient.complete({ model: consolidation.modelId || run model, telemetry: { kind: 'utility', purpose: 'memory-consolidation', user: owner (null for profiles), surface: 'memory', redaction: { messages: 'hash-only' } } })`; parse `<notes>`, `<lessons>`, `<operations>` tolerantly (`parseComposerReply` style, `:238-252`); discard on `finishReason: 'length'`; compute `stats` and `lossFraction` by retained bullets; reject above `maxPriorEntryLossFraction`; drop lessons citing tool/fetched content (provenance); `setProposal(scope, proposal)` by CAS without touching `body`; `applyProposal(scope, { baseVersion, keepLessons })` under the lock → new version with `updatedBy: 'consolidation'`, lessons merged, proposal cleared, `consolidation.lastAppliedVersion` set, `409 MEMORY_PROPOSAL_STALE` when `version !== baseVersion`; `discardProposal`; `autoApply: 'notes-only'` applies notes and keeps lessons pending, recording the previous version for \"Restore\".\n\n## Acceptance criteria\n\n- Given an eligible task, then a proposal is stored with `baseVersion`, a diff, operations, notes, lessons and stats, and `body` is untouched; given a proposal that would lose more than 25 % of prior bullets, it is rejected and logged; given candidates from untrusted provenance, they are dropped; given a stale base, apply answers `MEMORY_PROPOSAL_STALE`; given `notes-only`, lessons are never auto-applied.\n- The proposal keeps every `(seen YYYY-MM-DD)` watermark and is shorter than the input notes in the acceptance test.\n\n## Tests\n\n- `server/tests/memory/memoryConsolidator.test.js` (new) with fakes: eligibility; never mutates body; loss guard; provenance drop; stale apply; auto-apply notes-only; parsing tolerance; `length` discard.\n\n## Notes\n\nCode `MEMORY_PROPOSAL_STALE`, not `MEMORY_VERSION_CONFLICT` (C3).\n"
+  },
+  {
+    "key": "P4-03",
+    "parent": "P4",
+    "type": "Feature",
+    "title": "[Memory P4] Nightly consolidation sweep, settings and proposal routes for tasks and agents",
+    "labels": [
+      "backend",
+      "api",
+      "admin",
+      "agentic-workflows"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P4-02"
+    ],
+    "stories": [
+      "P4-US-01",
+      "P4-US-02",
+      "P4-US-04",
+      "P4-US-05"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\n`startMemoryConsolidationSweep()` under `ownsClusterSingletons` runs nightly per task with `memory.enabled` and per agent profile (README §6.3; `concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §1.2, §4.4 routes, §5.7, §7.1 `consolidation.*`, §7.4 optional defaults migration, §7.5 profile `consolidation`).\n\n## Tasks\n\n- [ ] New `server/services/memory/memoryConsolidationSweep.js` on the `chatRetention.js:448-519` pattern (hourly tick, runs at `consolidation.schedule` local time, `unref()`, never throws out of `tick`); started in `server/startup/worker.js:249-305` under `ownsClusterSingletons`; per-task owner attribution.\n- [ ] Routes (`server/routes/scheduledTasks.js`, owner; `server/routes/admin/agents.js`, admin, audited): `POST …/memory/_consolidate` (`202 { proposalId, status: 'queued' }`, `Location`; `force`; 409 `MEMORY_PROPOSAL_STALE` when one exists), `GET …/memory/proposal` (`200 { proposal, diff }`, 404 `MEMORY_PROPOSAL_NOT_FOUND`), `POST …/memory/proposal/_apply` `{ baseVersion, keepLessons }` (`200 { version }`), `POST …/proposal/_discard` (`204`); proposal summary on the task's `memorySummary` and in the run list.\n- [ ] `agentProfileSchema.js` `memorySchema`: `consolidation { enabled, autoApply: never | notes-only }`; task-level `memory.consolidation.autoApply` for owners (architect's call: same two values).\n- [ ] `AdminMemoryPage` consolidation fieldset live (enabled, model, runs before a proposal, runs read); migration `V{NNN}__memory_consolidation_defaults.js` only if the Phase 1 migration did not seed the section.\n- [ ] Telemetry `purpose: 'memory-consolidation'` attributed to the owner (profiles: `system` under `surface: 'memory'`).\n\n## Acceptance criteria\n\n- Given `consolidation.enabled` and an eligible task, when the nightly sweep runs on the singleton worker, then a proposal exists and the owner can fetch, apply or discard it; given `force`, a proposal is created on demand; a second worker never runs the sweep.\n\n## Tests\n\n- `server/tests/memory/memoryConsolidationSweep.test.js` (new): eligibility filter, singleton gate, schedule.\n- `server/tests/routes/task-memory-proposal.test.js` (new) and the admin agents route test (extend): statuses, codes, audit.\n\n## Notes\n\n`api-design` skill; no `_consolidate` from the scheduling tools (a model must not trigger consolidation).\n"
+  },
+  {
+    "key": "P4-04",
+    "parent": "P4",
+    "type": "Feature",
+    "title": "[Memory P4] Review UI: ConsolidationProposalCard with diff, Apply/Discard, auto-apply",
+    "labels": [
+      "frontend",
+      "ui",
+      "agentic-workflows",
+      "admin-ui",
+      "i18n"
+    ],
+    "size": "L",
+    "depends_on": [
+      "P4-03"
+    ],
+    "stories": [
+      "P4-US-01",
+      "P4-US-02",
+      "P4-US-03",
+      "P4-US-05"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\nScreen spec: `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3g proposal card (Diff / Result / Lessons tabs, stat line, loss-guard note, Apply as version N+1 with `baseVersion` and `keepLessons`, conflict wording, Discard confirm, auto-applied card with Restore for 7 days), §4.11 keys, §6 \"Phase 4 cards\" checklist; shown above `MemoryEditor` in `TaskMemoryPanel.jsx` (owner) and `AdminAgentMemoryPage.jsx` (admin).\n\n## Tasks\n\n- [ ] New shared `ConsolidationProposalCard.jsx` + `NotesDiff.jsx` (line diff with `+`/`−`, colours plus `sr-only` \"added\"/\"removed\", `role=\"region\"` keyboard scrollable); `Tabs`; lessons checklist with Keep; stat line from `operations`; Apply → `_apply` (409 → conflict wording with Discard only); Discard → `ConfirmDialog` → `_discard`; auto-applied state with \"View diff\" and \"Restore version N\" (`PUT` the previous body with `expectedVersion`).\n- [ ] `client/src/features/tasks/components/TaskMemoryPanel.jsx` and `client/src/features/admin/pages/AdminAgentMemoryPage.jsx`: render the card when the document carries a `proposal`; `{Proposal}` badge in the task list and admin table; a \"Consolidate now\" action calling `_consolidate`.\n- [ ] API client functions in `client/src/api/endpoints/scheduledTasks.js` and `adminApi.js`.\n- [ ] i18n `memoryProposal.*` EN/DE; parity test extended.\n\n## Acceptance criteria\n\n- Given a proposal, then the card shows the diff, result and lessons; Apply writes the new version keeping watermarks and the editor reloads; a stale apply shows the conflict message; Discard removes it; `notes-only` shows the auto-applied card with Restore.\n\n## Tests\n\n- `tests/unit/client/consolidation-proposal-card.test.jsx` (new): tabs, diff a11y, apply/conflict/discard flows, restore; `tests/unit/client/admin-agent-memory-page.test.jsx` (extend).\n\n## Notes\n\nColour never carries the meaning alone (ux §6).\n"
+  },
+  {
+    "key": "P4-05",
+    "parent": "P4",
+    "type": "Feature",
+    "title": "[Memory P4] Agent memory write approval: writeApproval staging and the admin queue",
+    "labels": [
+      "backend",
+      "frontend",
+      "agentic-workflows",
+      "admin-ui",
+      "security"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P4-01"
+    ],
+    "stories": [
+      "P4-US-04"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\nHermes-style `write_approval` (README §7 Phase 4): with `profile.memory.writeApproval: true`, `memory_write` during a run stages into `pending[]` and an admin approves or rejects with a diff (`concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §4.5 last paragraph, §7.5; `concepts/2026-11-06 Agent Memory Research and Plan/ux-design.md` §3g \"write-approval queue\").\n\n## Tasks\n\n- [ ] `agentProfileSchema.js` `memorySchema`: `writeApproval: z.boolean().optional().prefault(false)`.\n- [ ] `agentTools.writeMemory` / `AgentMemoryRepository`: when the profile sets `writeApproval`, append `{ id, runId, at, mode, content, summary, baseVersion }` to `pending[]` instead of writing; the tool result says \"staged for approval\"; the run's memory badge shows \"Memory write pending approval\" (amber).\n- [ ] Admin routes under `/api/admin/agents/profiles/{profileId}/memory/_pending` (`GET`), `…/_pending/{id}/_approve` (`200`, applies with `expectedVersion`, 409 `VERSION_CONFLICT` → review again), `…/_reject` (`204`, optional reason stored on the run); audited.\n- [ ] `AdminAgentMemoryPage.jsx`: tab **Pending writes {n}** with expandable diffs (shared `NotesDiff`), Approve/Reject, Select all + bulk; i18n `admin.agents.memory.*` EN/DE.\n\n## Acceptance criteria\n\n- Given `writeApproval: true`, when a run calls `memory_write`, then the notes are unchanged, the item is listed on the admin page, Approve applies it (or reports the conflict) and Reject drops it; given `false`, behaviour is unchanged.\n\n## Tests\n\n- `server/tests/memory-agent-compat.test.js` / `server/tests/agents/agentMemoryRepository.test.js` (extend): staging, approve with conflict, reject.\n- `tests/unit/client/admin-agent-memory-page.test.jsx` (extend): queue, bulk.\n\n## Notes\n\nSecurity review required (an approval path changes what reaches the prompt).\n"
+  },
+  {
+    "key": "P4-06",
+    "parent": "P4",
+    "type": "Task",
+    "title": "[Memory P4] Docs, release note, three-run e2e, eval extension and Phase 4 bookkeeping",
+    "labels": [
+      "docs",
+      "testing",
+      "agentic-workflows"
+    ],
+    "size": "M",
+    "depends_on": [
+      "P4-04",
+      "P4-05"
+    ],
+    "stories": [
+      "P4-US-01",
+      "P4-US-03"
+    ],
+    "existing_issues": [],
+    "body": "## Context\n\nProduct-plan §8.5 closing items: `docs/scheduled-tasks.md` and `docs/agents.md` sections, the README §4.2 decision list extended with the Phase 4 additions, `docs/releases/next/features.md` entry, the e2e three-run test (`concepts/2026-11-06 Agent Memory Research and Plan/architecture.md` §10.6 scenario 7) and README §9's three-run \"report only what is new\" test, and a GitHub issue opened for Phase 4 before work starts.\n\n## Tasks\n\n- [ ] Open the Phase 4 GitHub issue (this phase issue) before P4-01 starts; link it from the epic.\n- [ ] `docs/scheduled-tasks.md`, `docs/agents.md`: consolidation, lessons, write approval, `autoApply`; `docs/memory.md` pointer; `concepts/2026-11-06 Agent Memory Research and Plan/README.md` §4.2 decision list extended (D11+/E9+) noting the sealed body documents.\n- [ ] `docs/releases/next/features.md`: \"Consolidated notes and lessons for scheduled tasks and agents\" via `/document-feature`.\n- [ ] `tests/e2e/memory.spec.js` scenario (7) / `tests/e2e/scheduled-tasks.spec.js` (extend): three runs → proposal → apply → fourth run \"Used notes vN\"; the harness three-run test asserting \"report only what is new\" and that an applied consolidation is shorter and loses no watermark; a lesson from an owner correction appears in the next run's prompt.\n- [ ] Eval set: a Phase 4 pair for lessons; record the Phase 4 numbers (applied-proposal share, discard rate) in the concept folder.\n\n## Acceptance criteria\n\n- Docs and release note exist; the three-run e2e and harness tests pass; the Phase 4 issue is linked.\n\n## Tests\n\n- This ticket is the tests.\n\n## Notes\n\nPure docs/tests plus issue bookkeeping.\n"
+  }
+]
