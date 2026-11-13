@@ -65,7 +65,7 @@ export const INDEX_BYTES_PER_CHAR = 4.5;
  */
 export function formatCount(value) {
   if (!Number.isFinite(value)) return '—';
-  return Math.round(value).toLocaleString();
+  return Math.round(Number(value)).toLocaleString();
 }
 
 /**
