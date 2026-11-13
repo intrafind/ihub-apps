@@ -747,3 +747,10 @@ flag. Each of these routes now checks and changes the file under one lock.
   behind the file, and the first-run setup writes its API key to the stored list instead of the cache.
 - Installing, editing and removing integrations changes `integrations.json` and the managed
   credentials in `credentials.json` under the same lock, next to the credentials routes.
+
+## A Crashing Worker No Longer Stops the Whole Server
+
+With more than one worker, a worker that crashed — for example one that ran out of memory — could
+take the whole server down with it instead of being restarted: the main process stopped with
+`ERR_IPC_CHANNEL_CLOSED`, and in Kubernetes the pod restarted, dropping every user's open chats.
+The main process now logs the message it could not deliver and starts a new worker as intended.
