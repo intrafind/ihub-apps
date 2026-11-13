@@ -908,7 +908,9 @@ therefore shows what the live one showed, in the same components.
   chip above the answer. A skill's `activatedBy` is `user`, `app` (the app's `autoActivate`), `model` or
   `chat` (kept from an earlier message); the stored activity items keep `integration`, `origin`,
   `resultCount` and `readOutcome` (see [SSE v2](sse-v2.md#where-a-tool-call-looked)). A share keeps the
-  origin type and the counts, never the name of the integration, project or search profile.
+  origin type and the counts of each activity row, never the name of the integration, project or
+  search profile. (A source an integration declares `public` is shared whole and keeps its origin
+  label.)
 - **Recorded:** the turns of a persisted chat, and the workflow runs a tool
   started inside them. The answer text, reasoning and pictures are not — the
   transcript and the [artifact store](artifacts.md) hold those.
