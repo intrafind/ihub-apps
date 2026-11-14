@@ -43,6 +43,9 @@ import { iAssistantAskSourceProducer, iFinderSourceProducer } from './producers/
 import { projectSourceProducer } from './producers/project.js';
 import { webSourceProducer } from './producers/web.js';
 import { hasSourceProvider } from './providers.js';
+import { activityOriginOf } from '../../utils/toolDisplay.js';
+import { RECALL_TOOL_ID } from '../loop/seams/knowledgeSourceSeam.js';
+import { integrationLabelOf } from '../../utils/toolIntegrationLabel.js';
 import logger from '../../utils/logger.js';
 
 /** Most sources one frame reports; a search returns at most 100 hits, usually 10. */
@@ -108,6 +111,40 @@ function parseResult(result) {
   } catch {
     return result;
   }
+}
+
+/**
+ * The origin the sources of a call belong to when they name none: where the
+ * server says the call looked (`activityOriginOf`, the classifier the footer's
+ * basis and the activity line read), named by the integration for a connected
+ * system. Decided by the call, never by a source's `provider`: an MCP tool
+ * named like a web search is a connected system, whatever its sources say.
+ */
+function defaultOriginOf(toolId, toolDef) {
+  const kind = activityOriginOf(toolDef || { id: toolId });
+  if (!kind) return undefined;
+  const label = kind === 'integration' ? integrationLabelOf(toolDef) : null;
+  return label ? { kind, label } : { kind };
+}
+
+/**
+ * A frame without the origin the tool put on its sources. Where a source was
+ * found is decided by the server from the call, so what an MCP server, an
+ * integration or a custom tool reports under `origin` is not believed: the
+ * call's own origin is applied instead. The recall of earlier sources
+ * (`chat_sources_read`) is the exception: its sources were placed by the
+ * server when they were first found, and keep that.
+ */
+function withoutReportedOrigin(frame, toolId) {
+  if (!frame || toolId === RECALL_TOOL_ID || !Array.isArray(frame.items)) return frame;
+  return {
+    ...frame,
+    items: frame.items.map(item => {
+      if (!item || typeof item !== 'object' || !('origin' in item)) return item;
+      const { origin: _reported, ...rest } = item;
+      return rest;
+    })
+  };
 }
 
 /** The provider a tool's own sources belong to when they name none. */
@@ -177,25 +214,78 @@ export function extractToolSources({
   failed = false
 }) {
   const parsed = parseResult(result);
-  const defaults = { provider: defaultProviderOf(toolId, toolDef), private: true };
+  const origin = defaultOriginOf(toolId, toolDef);
+  const defaults = {
+    provider: defaultProviderOf(toolId, toolDef),
+    private: true,
+    ...(origin ? { origin } : {})
+  };
   try {
     const declaration = declarationOf(toolDef);
     if (declaration) {
       if (failed) return null;
       const declared = declaredSources(declaration, { args, result: parsed });
-      return finalizeSourceFrame(declared, { ...defaults, ...declared.defaults });
+      return finalizeSourceFrame(withoutReportedOrigin(declared, toolId), {
+        ...defaults,
+        ...declared.defaults
+      });
     }
     const call = { toolId: String(toolId || ''), toolDef, args, result: parsed, reported, failed };
     const producer = [...registered, ...BUILT_IN_PRODUCERS].find(candidate =>
       candidate.matches(call)
     );
-    if (producer) return finalizeSourceFrame(producer.fromToolResult(call), defaults);
+    if (producer) {
+      return finalizeSourceFrame(
+        withoutReportedOrigin(producer.fromToolResult(call), toolId),
+        defaults
+      );
+    }
     if (failed) return null;
     const items = [...(envelopeSources(parsed)?.items || []), ...reported];
-    return items.length ? finalizeSourceFrame({ items }, defaults) : null;
+    return items.length
+      ? finalizeSourceFrame(withoutReportedOrigin({ items }, toolId), defaults)
+      : null;
   } catch (error) {
     // Reporting sources must never fail a tool call.
     logger.warn('Source extraction failed', { component: 'sources', toolId, error: error.message });
     return null;
+  }
+}
+
+/**
+ * What one tool call came to, declared by the server from the tool's full
+ * result: `resultCount` (how many hits a search returned, `0` included) and
+ * `readOutcome` (`opened` when a page or document read delivered text,
+ * `empty` when it completed without any, for example a `read_url` with an
+ * `offset` at the end of the page). A field is left out when the result does
+ * not say, so the chat never infers "no results" or "opened" from an empty
+ * source list. Only the built-in producers know their result shapes; a
+ * declared or envelope source reports neither.
+ *
+ * @param {Object} call - as {@link extractToolSources}
+ * @returns {{resultCount?: number, readOutcome?: 'opened'|'empty'}}
+ */
+export function extractToolOutcome({ toolId, toolDef, args, result, failed = false }) {
+  try {
+    if (failed || declarationOf(toolDef)) return {};
+    const call = {
+      toolId: String(toolId || ''),
+      toolDef,
+      args,
+      result: parseResult(result),
+      failed
+    };
+    const producer = [...registered, ...BUILT_IN_PRODUCERS].find(candidate =>
+      candidate.matches(call)
+    );
+    if (typeof producer?.outcomeOf !== 'function') return {};
+    const { resultCount, readOutcome } = producer.outcomeOf(call);
+    return {
+      ...(Number.isInteger(resultCount) && resultCount >= 0 ? { resultCount } : {}),
+      ...(readOutcome === 'opened' || readOutcome === 'empty' ? { readOutcome } : {})
+    };
+  } catch (error) {
+    logger.warn('Tool outcome failed', { component: 'sources', toolId, error: error.message });
+    return {};
   }
 }

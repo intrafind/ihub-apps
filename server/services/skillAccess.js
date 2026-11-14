@@ -511,6 +511,10 @@ export function earlierSkillRefs(messages) {
     if (message?.role === 'assistant' && Array.isArray(message.activeSkills)) {
       // Recorded in the order they were activated: the last is the newest.
       for (const skill of [...message.activeSkills].reverse()) {
+        // A skill kept from an earlier message restates an activation an earlier
+        // answer recorded: it carries no new order, and counting it would flip
+        // which skill reads as the newest on every turn.
+        if (skill?.activatedBy === 'chat') continue;
         const by = skill?.activatedBy === 'user' ? 'user' : 'model';
         if (typeof skill?.id === 'string' && skill.id) refs.push({ id: skill.id, by });
         else if (typeof skill?.name === 'string' && skill.name) {

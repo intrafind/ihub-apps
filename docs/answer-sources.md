@@ -93,6 +93,7 @@ A source (`shared/sources/source.js`):
 | `read` | `{ ok, words?, truncated? }`: a read of the page or document |
 | `cited` | the provider reports that the answer relies on it |
 | `markers[]` | provider inline markers pointing at it (iAssistant `r:3`; passages carry `s:7`) |
+| `origin` | `{ kind, label? }`: the system it was found in, in the footer's vocabulary (`web`, `project`, `ifinder`, `documents`, `integration` with the integration's `label`), decided by the server from the call that found it, never from `provider`; the first sighting wins |
 | `private` | found with the user's own permissions or network; a share never carries it |
 
 An answer's sources are `{ items, queries, scopes? }`: the sources, merged by `id`, in the order

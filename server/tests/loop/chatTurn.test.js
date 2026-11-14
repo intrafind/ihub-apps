@@ -708,6 +708,7 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
     // The server decides how the chat draws the call: a web search.
     activityKind: 'search',
     activityScope: 'web',
+    activityOrigin: 'web',
     args: { query: 'berlin' },
     execution: 'server'
   });
@@ -722,6 +723,8 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
   assert.ok(Number.isInteger(done.durationMs) && done.durationMs >= 0);
   // knowledgeSourceSeam runs before chatToolSeam, so the per-tool hint is on the frame.
   assert.equal(done.knowledgeSource, 'websearch');
+  // The server declares what the search came to: one hit, from the full result.
+  assert.equal(done.resultCount, 1);
 
   assert.equal(round2.step, 2);
   assert.equal(round2.content, 'Sunny.');
@@ -805,6 +808,7 @@ test('search tool: sources/added carries the pages found and read, even when the
       id: 'url:weather.example/berlin',
       provider: 'web',
       kind: 'page',
+      origin: { kind: 'web' },
       title: 'Weather',
       url: 'https://weather.example/berlin',
       read: { ok: true },
@@ -814,6 +818,7 @@ test('search tool: sources/added carries the pages found and read, even when the
       id: 'url:news.example',
       provider: 'web',
       kind: 'page',
+      origin: { kind: 'web' },
       title: 'News',
       url: 'https://news.example/',
       read: { ok: false },
@@ -893,11 +898,14 @@ test('iFinder tools: each call that finds documents reports them as sources/adde
   assert.deepEqual(found[0].items[0], {
     id: 'ifinder:sp-7f3a9c11',
     provider: 'ifinder',
+    origin: { kind: 'ifinder' },
     kind: 'document',
     title: 'Supplier contract ACME',
     url: 'https://sp.example/acme.pdf',
     fileName: 'acme.pdf',
     ref: { id: 'sp-7f3a9c11', scope: 'sales' },
+    // The search profile's display name reaches the client with the frame.
+    scopeName: 'sales',
     private: true
   });
   assert.deepEqual(found[1].items[0].read, { ok: true });
