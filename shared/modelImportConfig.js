@@ -130,6 +130,15 @@ export function buildImportedModelConfig(
   if (entry.contextWindow) config.contextWindow = entry.contextWindow;
   if (entry.maxOutputTokens) config.maxOutputTokens = entry.maxOutputTokens;
   if (entry.supportsVision === true) config.supportsVision = true;
+  // What the provider says about marking this model's output and what the model
+  // returns (EU AI Act Art. 50(2)): decided by discovery on the server, copied here.
+  if (entry.supportsImageGeneration === true) config.supportsImageGeneration = true;
+  if (entry.contentMarking) {
+    // A copy per member, so models imported from one listing do not share an object.
+    config.contentMarking = Object.fromEntries(
+      Object.entries(entry.contentMarking).map(([kind, marking]) => [kind, { ...marking }])
+    );
+  }
   // Discovery learns whether function calling is offered, not whether the
   // provider accepts a forced call: that is the admin's to raise to `required`.
   if (typeof entry.supportsTools === 'boolean') {

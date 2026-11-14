@@ -109,6 +109,36 @@ describe('buildImportedModelConfig', () => {
     expect(buildImportedModelConfig(entry, options)).not.toHaveProperty('supportsTools');
   });
 
+  it('copies what discovery decided about marking and image generation, per model', () => {
+    const marking = { by: 'provider', scheme: 'synthid', statementRef: 'Google DeepMind, SynthID' };
+    const options = { id: 'm', apiType: 'google', modelsUrl: 'https://example.com/v1beta/models' };
+    const imageEntry = {
+      ...entry,
+      supportsImageGeneration: true,
+      contentMarking: { text: marking, image: marking }
+    };
+
+    const a = buildImportedModelConfig(imageEntry, options);
+    const b = buildImportedModelConfig(imageEntry, options);
+    expect(a.supportsImageGeneration).toBe(true);
+    expect(a.contentMarking).toEqual({ text: marking, image: marking });
+
+    // Each model gets objects of its own.
+    a.contentMarking.text.scheme = 'changed';
+    expect(b.contentMarking.text.scheme).toBe('synthid');
+    expect(imageEntry.contentMarking.text.scheme).toBe('synthid');
+  });
+
+  it('sets no marking or image generation for a model the provider says nothing about', () => {
+    const config = buildImportedModelConfig(entry, {
+      id: 'm',
+      apiType: 'openai',
+      modelsUrl: 'https://example.com/v1/models'
+    });
+    expect(config).not.toHaveProperty('contentMarking');
+    expect(config).not.toHaveProperty('supportsImageGeneration');
+  });
+
   it('keeps the link to a custom provider whose ID equals an API type', () => {
     const config = buildImportedModelConfig(entry, {
       id: 'm',

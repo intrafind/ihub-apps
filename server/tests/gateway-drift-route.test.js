@@ -3,16 +3,19 @@
 
 /**
  * `GET /api/admin/providers/:providerId/_model-drift`: the comparison of an
- * iFinder Model Gateway with the models imported from it.
+ * iFinder Model Gateway, or of Google, with the models imported from it.
  *
  * What has to hold:
  *   - the gateway is asked on `/v1/gateway/models` with the provider's stored
  *     project key, and the answer is compared with the provider's models;
+ *   - Google is asked on its `/models` listing with the provider's stored key,
+ *     and a model that does not declare the provider's EU AI Act marking yet is
+ *     offered it;
  *   - nothing is written;
  *   - every failure is a thrown `ServiceError` with a registry `code`, which the
  *     error middleware answers with: 404 for an unknown provider, 400 for one that
- *     is no gateway or has no base URL, 502 for a gateway that cannot be reached
- *     or turns the key down. (The middleware does not send `application/problem+json`
+ *     is neither a gateway nor Google or has no base URL, 502 for a provider that
+ *     cannot be reached or turns the key down. (The middleware does not send `application/problem+json`
  *     yet, see docs/error-responses.md, so the body's media type is not asserted.)
  *
  * Native ESM: run with `node --experimental-vm-modules` (the test scripts do).
@@ -481,5 +484,210 @@ describe('POST /api/admin/providers/:providerId/_sync-models', () => {
       'removed=applied'
     ]);
     expect(res.body.items[0].detail).toMatch(/already exists/);
+  });
+});
+
+describe('a Google provider', () => {
+  const GOOGLE_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+  const SYNTHID = {
+    by: 'provider',
+    scheme: 'synthid',
+    statementRef: 'Google DeepMind, SynthID: https://deepmind.google/technologies/synthid/'
+  };
+
+  beforeEach(() => {
+    providers.push({
+      id: 'google',
+      name: 'Google',
+      baseUrl: GOOGLE_BASE,
+      apiKey: 'enc:google-key',
+      enabled: true
+    });
+    const model = {
+      id: 'gemini-flash',
+      modelId: 'gemini-2.5-flash',
+      provider: 'google',
+      url: `${GOOGLE_BASE}/models/gemini-2.5-flash:streamGenerateContent`,
+      contextWindow: 1048576,
+      supportsVision: true,
+      contentMarking: { text: { by: 'none' } },
+      enabled: true
+    };
+    models = [model];
+    files = new Map([[`models/${model.id}.json`, clone(model)]]);
+    gatewayAnswer = {
+      status: 200,
+      body: {
+        models: [
+          {
+            name: 'models/gemini-2.5-flash',
+            displayName: 'Gemini 2.5 Flash',
+            inputTokenLimit: 1048576,
+            outputTokenLimit: 65536,
+            supportedGenerationMethods: ['generateContent']
+          }
+        ]
+      }
+    };
+  });
+
+  it('is asked on its listing with the stored key and offered the SynthID marking', async () => {
+    const res = await drift('google');
+
+    expect(res.status).toBe(200);
+    expect(gatewayCalls).toHaveLength(1);
+    expect(gatewayCalls[0].url).toBe(`${GOOGLE_BASE}/models?pageSize=1000`);
+    expect(gatewayCalls[0].init.headers['x-goog-api-key']).toBe('google-key');
+    expect(res.body.items).toEqual([
+      {
+        kind: 'changed',
+        remoteId: 'gemini-2.5-flash',
+        modelId: 'gemini-flash',
+        changes: [
+          {
+            field: 'contentMarking',
+            from: { text: { by: 'none' } },
+            to: { text: SYNTHID }
+          }
+        ]
+      }
+    ]);
+    expect(writes).toBe(0);
+  });
+
+  it('writes the marking to the stored model when the admin picks it', async () => {
+    const res = await request(app)
+      .post('/api/admin/providers/google/_sync-models')
+      .send({
+        items: [{ kind: 'changed', remoteId: 'gemini-2.5-flash', modelId: 'gemini-flash' }]
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([
+      {
+        kind: 'changed',
+        remoteId: 'gemini-2.5-flash',
+        modelId: 'gemini-flash',
+        status: 'applied'
+      }
+    ]);
+    const stored = files.get('models/gemini-flash.json');
+    expect(stored.contentMarking).toEqual({ text: SYNTHID });
+    expect(stored.supportsVision).toBe(true);
+    expect(refreshes).toBe(1);
+    expect(audits).toHaveLength(1);
+    expect(snapshots).toHaveLength(1);
+  });
+
+  it('reports nothing once the model declares the marking', async () => {
+    const declared = {
+      ...files.get('models/gemini-flash.json'),
+      contentMarking: { text: SYNTHID }
+    };
+    models = [clone(declared)];
+    const res = await drift('google');
+    expect(res.status).toBe(200);
+    expect(res.body.items).toEqual([]);
+  });
+
+  it('answers 502 UPSTREAM_ERROR when Google turns the key down', async () => {
+    gatewayAnswer = { status: 403, body: {} };
+    const res = await drift('google');
+    expect(res.status).toBe(502);
+    expect(res.body.code).toBe('UPSTREAM_ERROR');
+    expect(writes).toBe(0);
+  });
+});
+
+describe('an Anthropic provider', () => {
+  const ANTHROPIC_BASE = 'https://api.anthropic.com/v1';
+
+  beforeEach(() => {
+    providers.push(
+      {
+        id: 'anthropic',
+        name: 'Anthropic',
+        baseUrl: ANTHROPIC_BASE,
+        apiKey: 'enc:anthropic-key',
+        enabled: true
+      },
+      { id: 'mistral', name: 'Mistral AI', baseUrl: 'https://api.mistral.ai/v1', enabled: true }
+    );
+    models = [
+      {
+        id: 'claude-opus',
+        modelId: 'claude-opus-5-5',
+        provider: 'anthropic',
+        url: `${ANTHROPIC_BASE}/messages`,
+        contentMarking: { text: { by: 'none' } },
+        enabled: true
+      },
+      // Configured with the alias; the listing names the dated snapshot.
+      {
+        id: 'claude-haiku',
+        modelId: 'claude-haiku-4-5',
+        provider: 'anthropic',
+        url: `${ANTHROPIC_BASE}/messages`,
+        enabled: true
+      }
+    ];
+    files = new Map(models.map(m => [`models/${m.id}.json`, clone(m)]));
+    gatewayAnswer = {
+      status: 200,
+      body: {
+        data: [
+          { type: 'model', id: 'claude-opus-5-5', display_name: 'Claude Opus 5.5' },
+          { type: 'model', id: 'claude-haiku-4-5-20251001', display_name: 'Claude Haiku 4.5' }
+        ]
+      }
+    };
+  });
+
+  it('is asked on its listing with the stored key and offered the watermark declaration', async () => {
+    const res = await drift('anthropic');
+
+    expect(res.status).toBe(200);
+    expect(gatewayCalls[0].url).toBe(`${ANTHROPIC_BASE}/models?limit=1000`);
+    expect(gatewayCalls[0].init.headers['x-api-key']).toBe('anthropic-key');
+    expect(gatewayCalls[0].init.headers['anthropic-version']).toBeDefined();
+
+    const changed = res.body.items.filter(item => item.kind === 'changed');
+    expect(changed.map(item => item.modelId).sort()).toEqual(['claude-haiku', 'claude-opus']);
+    const opus = changed.find(item => item.modelId === 'claude-opus');
+    expect(opus).toMatchObject({ remoteId: 'claude-opus-5-5' });
+    expect(opus.changes).toEqual([
+      expect.objectContaining({
+        field: 'contentMarking',
+        from: { text: { by: 'none' } },
+        to: { text: expect.objectContaining({ by: 'provider', scheme: 'synthid-text' }) }
+      })
+    ]);
+    // The alias `claude-haiku-4-5` is the dated snapshot the listing names: it is offered the
+    // declaration, not offered again as a new model, and not reported as gone.
+    const haiku = changed.find(item => item.modelId === 'claude-haiku');
+    expect(haiku.changes.map(change => change.field)).toEqual(['contentMarking']);
+    expect(res.body.items.filter(item => item.kind === 'added')).toEqual([]);
+    expect(res.body.items.filter(item => item.kind === 'removed')).toEqual([]);
+    expect(writes).toBe(0);
+  });
+
+  it('writes the declaration to the stored model when the admin picks it', async () => {
+    const res = await request(app)
+      .post('/api/admin/providers/anthropic/_sync-models')
+      .send({ items: [{ kind: 'changed', remoteId: 'claude-opus-5-5', modelId: 'claude-opus' }] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.items.map(item => item.status)).toEqual(['applied']);
+    expect(files.get('models/claude-opus.json').contentMarking.text).toMatchObject({
+      by: 'provider',
+      scheme: 'synthid-text'
+    });
+  });
+
+  it('answers 400 for Mistral, which has nothing to compare or declare', async () => {
+    const res = await drift('mistral');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('BAD_REQUEST');
+    expect(gatewayCalls).toHaveLength(0);
   });
 });

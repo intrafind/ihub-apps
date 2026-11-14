@@ -44,6 +44,7 @@ import { projectSourceProducer } from './producers/project.js';
 import { webSourceProducer } from './producers/web.js';
 import { hasSourceProvider } from './providers.js';
 import { activityOriginOf } from '../../utils/toolDisplay.js';
+import { RECALL_TOOL_ID } from '../loop/seams/knowledgeSourceSeam.js';
 import { integrationLabelOf } from '../../utils/toolIntegrationLabel.js';
 import logger from '../../utils/logger.js';
 
@@ -126,6 +127,26 @@ function defaultOriginOf(toolId, toolDef) {
   return label ? { kind, label } : { kind };
 }
 
+/**
+ * A frame without the origin the tool put on its sources. Where a source was
+ * found is decided by the server from the call, so what an MCP server, an
+ * integration or a custom tool reports under `origin` is not believed: the
+ * call's own origin is applied instead. The recall of earlier sources
+ * (`chat_sources_read`) is the exception: its sources were placed by the
+ * server when they were first found, and keep that.
+ */
+function withoutReportedOrigin(frame, toolId) {
+  if (!frame || toolId === RECALL_TOOL_ID || !Array.isArray(frame.items)) return frame;
+  return {
+    ...frame,
+    items: frame.items.map(item => {
+      if (!item || typeof item !== 'object' || !('origin' in item)) return item;
+      const { origin: _reported, ...rest } = item;
+      return rest;
+    })
+  };
+}
+
 /** The provider a tool's own sources belong to when they name none. */
 function defaultProviderOf(toolId, toolDef) {
   const serverId = toolDef?._mcp?.serverId;
@@ -204,16 +225,26 @@ export function extractToolSources({
     if (declaration) {
       if (failed) return null;
       const declared = declaredSources(declaration, { args, result: parsed });
-      return finalizeSourceFrame(declared, { ...defaults, ...declared.defaults });
+      return finalizeSourceFrame(withoutReportedOrigin(declared, toolId), {
+        ...defaults,
+        ...declared.defaults
+      });
     }
     const call = { toolId: String(toolId || ''), toolDef, args, result: parsed, reported, failed };
     const producer = [...registered, ...BUILT_IN_PRODUCERS].find(candidate =>
       candidate.matches(call)
     );
-    if (producer) return finalizeSourceFrame(producer.fromToolResult(call), defaults);
+    if (producer) {
+      return finalizeSourceFrame(
+        withoutReportedOrigin(producer.fromToolResult(call), toolId),
+        defaults
+      );
+    }
     if (failed) return null;
     const items = [...(envelopeSources(parsed)?.items || []), ...reported];
-    return items.length ? finalizeSourceFrame({ items }, defaults) : null;
+    return items.length
+      ? finalizeSourceFrame(withoutReportedOrigin({ items }, toolId), defaults)
+      : null;
   } catch (error) {
     // Reporting sources must never fail a tool call.
     logger.warn('Source extraction failed', { component: 'sources', toolId, error: error.message });
