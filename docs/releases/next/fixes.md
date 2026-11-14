@@ -748,6 +748,21 @@ flag. Each of these routes now checks and changes the file under one lock.
 - Installing, editing and removing integrations changes `integrations.json` and the managed
   credentials in `credentials.json` under the same lock, next to the credentials routes.
 
+## Chat: Answers No Longer Go Missing With Several Workers
+
+With more than one worker, a message sent right after opening a chat could get no visible answer:
+the spinner kept turning, and the answer only appeared after reloading the page. This happened more
+often under load and with more workers (about 1 in 15 turns at 1,250 users and 8 workers
+in our load test). The worker that takes the message now asks where the chat's stream is when it
+has not heard of it yet, so the answer streams as usual.
+
+## A Crashing Worker No Longer Stops the Whole Server
+
+With more than one worker, a worker that crashed — for example one that ran out of memory — could
+take the whole server down with it instead of being restarted: the main process stopped with
+`ERR_IPC_CHANNEL_CLOSED`, and in Kubernetes the pod restarted, dropping every user's open chats.
+The main process now logs the message it could not deliver and starts a new worker as intended.
+
 ## Reopened Chats Keep the Name of the Search Provider
 
 After a web search, the activity line of a chat that was reopened or shared no longer loses the name of
@@ -771,3 +786,10 @@ silent. The chat shows who brought each skill in once the activity line is updat
 When a document could not be attached to a chat, the German messages said "Du hast keinen Zugriff" and
 "steht dir nicht zur Verfügung". They now say "Sie haben keinen Zugriff" and "steht Ihnen nicht zur
 Verfügung", like the rest of the German interface.
+
+## Source Cards Get the Search Profile Name and the "Uploaded" or "Picked" Marker Again
+
+The frames that carry an answer's sources to the chat and to the run log dropped two fields: the
+display name of the iFinder search profile a document was found in ("Found in Contracts") and where a
+project document came from (uploaded, picked, linked or written). The source cards could not show
+either. Both now arrive with the sources.

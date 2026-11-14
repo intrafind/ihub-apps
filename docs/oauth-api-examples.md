@@ -461,50 +461,13 @@ When you're done chatting, kill the background curl process:
 kill $SSE_PID 2>/dev/null
 ```
 
-### 3j. Non-Streaming Alternative
+### 3j. Without a Stream
 
-If you skip the GET SSE connection and just POST directly, the response is returned inline (non-streaming):
-
-```bash
-export CHAT_ID=$(uuidgen)
-
-curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      {
-        "role": "user",
-        "content": "What is 2 + 2?"
-      }
-    ]
-  }' | jq .
-```
-
-> This returns the complete response in one JSON payload instead of streaming chunks.
-
-Response:
-
-```json
-{
-  "messageId": null,
-  "model": "gpt-4o",
-  "content": "2 + 2 = 4.",
-  "finishReason": "stop",
-  "usage": {
-    "promptTokens": 42,
-    "completionTokens": 8,
-    "totalTokens": 50
-  }
-}
-```
-
-`messageId` echoes the `messageId` of the last request message (`null` when the
-client did not send one). Tools configured on the app still run in this mode,
-but there is no user to answer `ask_user` clarifications — they are refused — so
-use the SSE flow for interactive apps.
-
----
+The answer always arrives over the SSE connection from step 3c; the POST answers
+`{ "status": "streaming" }` when the turn has ended. Without an open stream the turn still runs and
+a kept chat stores its answer, but nothing reaches the caller. For a single request/response call
+without a stream, use the OpenAI-compatible API (`POST /api/inference/v1/chat/completions`, see
+[OpenAI-compatible API](openai-compatible-api.md)).
 
 ## 4. Complete End-to-End Script
 
