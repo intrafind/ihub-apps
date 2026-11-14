@@ -11,7 +11,7 @@ import {
   CUSTOM_PROVIDER_API_TYPES,
   getLinkedModels,
   getProviderApiType,
-  isGatewayProvider
+  supportsModelSync
 } from '../../../../../shared/llmProviders.js';
 import ProviderFormFields from '../components/ProviderFormFields';
 import GatewaySyncDialog from '../components/GatewaySyncDialog';
@@ -63,7 +63,7 @@ function AdminProviderEditPage() {
   // Import needs the saved entry: the server reads its key and API type.
   const canImport = CUSTOM_PROVIDER_API_TYPES.includes(getProviderApiType(initialData));
   // Like import, the sync reads the saved entry (its base URL and key) on the server.
-  const canSync = isGatewayProvider(initialData);
+  const canSync = supportsModelSync(initialData);
 
   useEffect(() => {
     loadProvider();
@@ -382,7 +382,7 @@ function AdminProviderEditPage() {
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 inline-flex items-center gap-2"
                   >
                     <Icon name="refresh" className="w-4 h-4" />
-                    {t('admin.providers.sync.button', 'Sync with gateway')}
+                    {t('admin.providers.sync.button', 'Sync models')}
                   </button>
                 )}
                 {canImport && (

@@ -34,6 +34,7 @@ import {
   IFINDER_GATEWAY,
   TRANSCRIPTION_API_TYPES
 } from '../../shared/llmProviders.js';
+import { providerMarkingFacts } from './provenance/providerMarking.js';
 
 /**
  * API types whose `/models` listing this module knows how to call and read —
@@ -965,6 +966,9 @@ export async function discoverModels(
     if (entry.type !== 'transcription' && entry.type !== 'tts') {
       return {
         ...entry,
+        // What the provider says about marking this model's output (EU AI Act
+        // Art. 50(2)); the import and the model sync copy it into the config.
+        ...providerMarkingFacts(provider, entry, { baseUrl }),
         url: buildInferenceUrl(provider, baseUrl, entry.id, entry.type, { azureApiVersion })
       };
     }

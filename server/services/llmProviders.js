@@ -31,7 +31,8 @@ export {
   LLM_TIMEOUT_KEYS,
   LLM_TIMEOUT_MAX_MS,
   MODEL_API_TYPES,
-  providerEnvKeyName
+  providerEnvKeyName,
+  supportsModelSync
 } from '../../shared/llmProviders.js';
 
 /**
