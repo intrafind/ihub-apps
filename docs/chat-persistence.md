@@ -903,9 +903,9 @@ frame passes whether or not a browser is connected). The reopened answer
 therefore shows what the live one showed, in the same components.
 
 - **Skills show once.** A skill activated several times in an answer (started with `/name`,
-  loaded again by the model, loaded in several rounds) appears once above the answer; the thought
-  chain lists every activation as a **Used skill** row, saying whether the user started it or the
-  model loaded it. A skill's `activatedBy` is `user`, `app` (the app's `autoActivate`), `model` or
+  loaded again by the model, loaded in several rounds) is one **Skill** row (and the first
+  segment of the collapsed line) in the answer's activity block, saying why it is there; there is no
+  chip above the answer. A skill's `activatedBy` is `user`, `app` (the app's `autoActivate`), `model` or
   `chat` (kept from an earlier message); the stored activity items keep `integration`, `origin`,
   `resultCount` and `readOutcome` (see [SSE v2](sse-v2.md#where-a-tool-call-looked)). A share keeps the
   origin type and the counts of each activity row, never the name of the integration, project or

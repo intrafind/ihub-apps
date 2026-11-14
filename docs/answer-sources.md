@@ -19,7 +19,7 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   **N results** entry with the sources' icons, in one row with the chip saying what the answer is
   based on (**Web**, **Project · Web**). *Results*, not *sources*: it counts everything found,
   cited or not. It opens the **Sources** panel, a side panel on desktop and a bottom sheet on phones.
-  How the answer searched stays above it (**Searched the web · 1 search · 10 results**). The
+  How the answer searched stays above it, one segment per place it looked (**Web 10 results · 3 opened · via Brave Search**, **Project no results**); each source card names its origin. The
   entry appears once the answer is complete; while it streams, the badges in the text open the
   panel, and closing the panel returns focus to whatever opened it.
 - **The basis chip** is one outlined button with a chevron, in two segments. The first says
