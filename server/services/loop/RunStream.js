@@ -580,6 +580,7 @@ export function projectLedgerEvent(ev) {
           ...(d.integration ? { integration: String(d.integration) } : {}),
           ...(d.activityKind ? { activityKind: d.activityKind } : {}),
           ...(d.activityScope ? { activityScope: d.activityScope } : {}),
+          ...(d.activityOrigin ? { activityOrigin: d.activityOrigin } : {}),
           args: d.args,
           execution: d.execution || 'server'
         })
@@ -594,7 +595,10 @@ export function projectLedgerEvent(ev) {
           resultPreview: d.resultPreview ?? null,
           ...(d.error ? { error: { message: String(d.error.message || 'error') } } : {}),
           ...(Number.isInteger(d.durationMs) ? { durationMs: d.durationMs } : {}),
-          ...(d.knowledgeSource ? { knowledgeSource: d.knowledgeSource } : {})
+          ...(d.knowledgeSource ? { knowledgeSource: d.knowledgeSource } : {}),
+          ...(d.activityOrigin ? { activityOrigin: d.activityOrigin } : {}),
+          ...(Number.isInteger(d.resultCount) ? { resultCount: d.resultCount } : {}),
+          ...(d.readOutcome ? { readOutcome: d.readOutcome } : {})
         })
       ];
     case RUN_LOG_EVENTS.SOURCES_ADDED:

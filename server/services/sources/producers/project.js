@@ -76,6 +76,31 @@ function parseResult(result) {
 export const projectSourceProducer = {
   id: 'project',
 
+  /**
+   * What the call came to, from the full result. A search counts its passages
+   * only when it ran and every project answered: "No project is available" or
+   * an unavailable project is not "no results". A read says whether it
+   * delivered text.
+   *
+   * @param {{toolId: string, result: unknown, failed?: boolean}} call
+   * @returns {{resultCount?: number, readOutcome?: 'opened'|'empty'}}
+   */
+  outcomeOf({ toolId, result, failed }) {
+    const parsed = parseResult(result);
+    if (failed || !parsed || typeof parsed !== 'object' || parsed.error) return {};
+    const tool = String(toolId).toLowerCase();
+    if (tool === 'knowledge_search') {
+      const unavailable = Array.isArray(parsed.unavailable) ? parsed.unavailable.length : 0;
+      return Array.isArray(parsed.hits) && parsed.retrieval && unavailable === 0
+        ? { resultCount: parsed.hits.length }
+        : {};
+    }
+    if (tool === 'knowledge_read' && typeof parsed.content === 'string') {
+      return { readOutcome: parsed.content.trim() ? 'opened' : 'empty' };
+    }
+    return {};
+  },
+
   /** @param {{toolId: string}} call */
   matches({ toolId }) {
     return KNOWLEDGE_TOOLS.has(String(toolId || '').toLowerCase());

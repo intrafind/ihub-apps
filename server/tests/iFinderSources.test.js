@@ -57,6 +57,7 @@ test('search hits become private documents with a ref into the searched profile'
     {
       id: 'ifinder:sharepoint-7f3a9c',
       provider: 'ifinder',
+      origin: { kind: 'ifinder' },
       kind: 'document',
       title: 'Supplier contract ACME',
       url: 'https://sharepoint.example/sites/legal/acme-contract.pdf',
@@ -72,6 +73,7 @@ test('search hits become private documents with a ref into the searched profile'
     {
       id: 'ifinder:fs-0042aa',
       provider: 'ifinder',
+      origin: { kind: 'ifinder' },
       kind: 'document',
       title: 'Framework agreement',
       fileName: 'framework.docx',
@@ -128,6 +130,7 @@ test('getMetadata names one document; getContent reads one', () => {
   assert.deepEqual(content, {
     id: 'ifinder:doc-654321',
     provider: 'ifinder',
+    origin: { kind: 'ifinder' },
     kind: 'document',
     title: 'Handbook',
     fileName: 'handbook.pdf',

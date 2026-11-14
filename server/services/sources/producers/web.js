@@ -154,8 +154,36 @@ function reportedWebItems(reader, reported, hitPrivacy) {
     .map(item => (reader ? item : { ...item, ...hitPrivacy }));
 }
 
+/** The list of hits a search result carries, whatever the provider calls it; null when it has none. */
+function hitListOf(result) {
+  if (Array.isArray(result)) return result;
+  if (!result || typeof result !== 'object') return null;
+  return [result.results, result.items, result.sources].find(Array.isArray) ?? null;
+}
+
 export const webSourceProducer = {
   id: 'web',
+
+  /**
+   * What the server says the call came to, from the full result: how many
+   * hits a search returned, and whether a page read delivered any text. Left
+   * out when the result does not say (an unknown shape, a failed call): an
+   * empty source list is not "no results", a provider-run search has none by
+   * construction.
+   *
+   * @param {{toolId: string, result: unknown, failed?: boolean}} call
+   * @returns {{resultCount?: number, readOutcome?: 'opened'|'empty'}}
+   */
+  outcomeOf({ toolId, result, failed }) {
+    if (failed || !result || typeof result !== 'object' || result.error) return {};
+    if (isPageReader(toolId)) {
+      return typeof result.content === 'string'
+        ? { readOutcome: result.content.trim() ? 'opened' : 'empty' }
+        : {};
+    }
+    const hits = hitListOf(result);
+    return hits ? { resultCount: hits.length } : {};
+  },
 
   /** @param {{toolId: string, toolDef?: Object}} call */
   matches({ toolId, toolDef }) {

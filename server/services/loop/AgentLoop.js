@@ -35,7 +35,7 @@ import { addUsage, normalizeUsage } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
 import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
 import { startedDisplayOf } from '../../utils/toolDisplay.js';
-import { extractToolSources, finalizeSourceFrame } from '../sources/index.js';
+import { extractToolOutcome, extractToolSources, finalizeSourceFrame } from '../sources/index.js';
 import { runToolCallScope } from '../sources/toolCallScope.js';
 import {
   emptySourceSet,
@@ -561,7 +561,13 @@ export class AgentLoop {
             if (ctx.channel?.onChunk) await ctx.channel.onChunk(chunk, ctx);
             // What a model adapter found (iAssistant) and what provider-run web
             // search reported, as it streams in.
-            if (chunk.sources) await ctx.addSources(chunk.sources, { step: iteration });
+            // A model adapter's own sources are iAssistant's: its documents.
+            if (chunk.sources) {
+              await ctx.addSources(chunk.sources, {
+                step: iteration,
+                defaults: { origin: { kind: 'iassistant' } }
+              });
+            }
             if (chunk.groundingMetadata) {
               await ctx.addSources(sourcesFromGrounding(chunk.groundingMetadata), {
                 step: iteration
@@ -1174,6 +1180,16 @@ export class AgentLoop {
         result: rawResult ?? message.content,
         reported,
         failed: !!failure
+      }),
+      // What the call came to, declared from the full result: how many hits a
+      // search returned, whether a read delivered text (`resultCount`,
+      // `readOutcome`; absent when the result does not say).
+      ...extractToolOutcome({
+        toolId,
+        toolDef,
+        args,
+        result: rawResult ?? message.content,
+        failed: !!failure
       })
     };
     await runHooks(seams, 'postTool', ctx, info, outcome);
@@ -1193,7 +1209,10 @@ export class AgentLoop {
         : undefined,
       durationMs: outcome.durationMs,
       hasImage: !!outcome.message.imageData,
-      knowledgeSource: outcome.knowledgeSource
+      knowledgeSource: outcome.knowledgeSource,
+      ...(outcome.activityOrigin ? { activityOrigin: outcome.activityOrigin } : {}),
+      ...(Number.isInteger(outcome.resultCount) ? { resultCount: outcome.resultCount } : {}),
+      ...(outcome.readOutcome ? { readOutcome: outcome.readOutcome } : {})
     });
     if (outcome.sources) {
       await ctx.addSources(outcome.sources, {

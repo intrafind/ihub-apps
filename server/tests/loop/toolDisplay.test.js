@@ -12,9 +12,11 @@ import {
   activityKindOf,
   activityScopeOf,
   outputKindOf,
+  activityOriginOfSource,
   startedDisplayOf,
   toolDisplayOf
 } from '../../utils/toolDisplay.js';
+import { answerBasisOf } from '../../services/chat/answerBasis.js';
 import { SYSTEM_SKILL_TOOL_IDS, systemSkillToolsFor } from '../../services/systemSkillTools.js';
 
 test('an integration action reads as its title and installation label', () => {
@@ -29,7 +31,12 @@ test('an integration action reads as its title and installation label', () => {
         actionTitle: 'Search people'
       }
     }),
-    { title: 'Search people', integration: 'Munich AD', activityKind: 'tool' }
+    {
+      title: 'Search people',
+      integration: 'Munich AD',
+      activityKind: 'tool',
+      activityOrigin: 'integration'
+    }
   );
 });
 
@@ -43,12 +50,18 @@ test('a connected system says so, so the chat does not draw its search as a web 
         actionTitle: 'Search tickets'
       }
     }),
-    { title: 'Search tickets', integration: 'Jira', activityKind: 'tool' }
+    {
+      title: 'Search tickets',
+      integration: 'Jira',
+      activityKind: 'tool',
+      activityOrigin: 'integration'
+    }
   );
   assert.deepEqual(toolDisplayOf({ id: 'webSearch', name: 'Web search' }), {
     title: 'Web search',
     activityKind: 'search',
-    activityScope: 'web'
+    activityScope: 'web',
+    activityOrigin: 'web'
   });
 });
 
@@ -59,14 +72,24 @@ test('an MCP tool reads as its title (else its own name) and its server', () => 
       name: 'mcp_github__search_code',
       _mcp: { serverId: 'github', serverName: 'GitHub', originalName: 'search_code' }
     }),
-    { title: 'search_code', integration: 'GitHub', activityKind: 'tool' }
+    {
+      title: 'search_code',
+      integration: 'GitHub',
+      activityKind: 'tool',
+      activityOrigin: 'integration'
+    }
   );
   assert.deepEqual(
     toolDisplayOf({
       id: 'x',
       _mcp: { serverId: 'github', originalName: 'search_code', title: 'Search code' }
     }),
-    { title: 'Search code', integration: 'github', activityKind: 'tool' }
+    {
+      title: 'Search code',
+      integration: 'github',
+      activityKind: 'tool',
+      activityOrigin: 'integration'
+    }
   );
 });
 
@@ -76,7 +99,12 @@ test('a remote agent skill reads as the skill and the agent', () => {
       id: 'a2a__x__y',
       _a2a: { agentId: 'x', agentName: 'Travel', skillName: 'Book' }
     }),
-    { title: 'Book', integration: 'Travel', activityKind: 'tool' }
+    {
+      title: 'Book',
+      integration: 'Travel',
+      activityKind: 'tool',
+      activityOrigin: 'integration'
+    }
   );
 });
 
@@ -84,13 +112,61 @@ test('any other tool reads as its name when that says more than its id', () => {
   assert.deepEqual(toolDisplayOf({ id: 'read_url', name: 'Read web page' }), {
     title: 'Read web page',
     activityKind: 'fetch',
-    activityScope: 'web'
+    activityScope: 'web',
+    activityOrigin: 'web'
   });
   assert.deepEqual(toolDisplayOf({ id: 'evidence', name: 'evidence' }), { activityKind: 'tool' });
   assert.deepEqual(toolDisplayOf({ id: 'x', name: { en: 'Not localized' } }), {
     activityKind: 'tool'
   });
   assert.deepEqual(toolDisplayOf(null), {});
+});
+
+test('the origin of a call is the footer’s kind, decided by the server', () => {
+  const origin = toolDef => toolDisplayOf(toolDef).activityOrigin;
+  assert.equal(origin({ id: 'braveSearch' }), 'web');
+  assert.equal(origin({ id: 'read_url' }), 'web', 'the page reader reads the web');
+  assert.equal(origin({ id: 'knowledge_search' }), 'project');
+  assert.equal(origin({ id: 'knowledge_read' }), 'project');
+  assert.equal(origin({ id: 'iFinder_search' }), 'ifinder');
+  assert.equal(origin({ id: 'iFinder_getContent' }), 'ifinder');
+  // What an admin configured is "documents", never a project.
+  assert.equal(origin({ id: 'source_handbook' }), 'documents');
+  assert.equal(
+    origin({ id: 'jira_x', _integration: { definition: 'com.intrafind/jira' } }),
+    'integration'
+  );
+  assert.equal(
+    origin({ id: 'mcp_x', _mcp: { serverId: 's', originalName: 'search' } }),
+    'integration'
+  );
+  // A web search integration is the web, an MCP tool named like one is not.
+  assert.equal(
+    origin({ id: 'mcp_brave', _mcp: { serverId: 'brave', originalName: 'web_search' } }),
+    'integration'
+  );
+  // Calls the server cannot place say nothing: the chat never guesses.
+  assert.equal(origin({ id: 'create_pdf' }), undefined);
+  assert.equal(origin({ id: 'search_tools', isInternalTool: true }), undefined);
+  assert.equal(origin({ id: 'researchplanner' }), undefined);
+  assert.equal(origin(null), undefined);
+});
+
+test('the activity line and the footer read one classifier', () => {
+  // Every knowledge source the seam records maps onto the kind the footer names.
+  for (const [source, kind] of [
+    ['project', 'project'],
+    ['websearch', 'web'],
+    ['grounding', 'web'],
+    ['ifinder', 'ifinder'],
+    ['sources', 'documents'],
+    ['integration', 'integration']
+  ]) {
+    assert.equal(activityOriginOfSource(source), kind);
+    assert.deepEqual(answerBasisOf({ knowledgeSources: [source] })[0].kind, kind);
+  }
+  assert.equal(activityOriginOfSource('email'), undefined, 'an input of the turn is not a call');
+  assert.equal(activityOriginOfSource('llm'), undefined);
 });
 
 test('the row kind: searches, page and document reads, plain calls', () => {

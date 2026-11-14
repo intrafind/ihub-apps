@@ -20,7 +20,7 @@
  */
 import { hostOf, httpUrl } from './url.js';
 
-const WEB = { provider: 'web', kind: 'page', private: false };
+const WEB = { provider: 'web', kind: 'page', private: false, origin: { kind: 'web' } };
 
 /** Google's grounding links point through a redirect; its title is the site. */
 function isGroundingRedirect(url) {

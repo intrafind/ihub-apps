@@ -18,11 +18,15 @@
  * @module services/chat/answerBasis
  */
 
-import { ANSWER_BASIS_KINDS, MODEL_KNOWLEDGE_SOURCE } from '../../../shared/runEvents.js';
+import {
+  ACTIVITY_ORIGINS,
+  ANSWER_BASIS_KINDS,
+  MODEL_KNOWLEDGE_SOURCE
+} from '../../../shared/runEvents.js';
 import { boundedText } from '../../utils/toolIntegrationLabel.js';
 
 /** The kind a knowledge source stands for. Anything else (`llm`) is not a source. */
-const KIND_OF_SOURCE = Object.freeze({
+export const KIND_OF_SOURCE = Object.freeze({
   project: 'project',
   websearch: 'web',
   // The provider's own search (Google Search grounding) is the web as well.
@@ -36,6 +40,19 @@ const KIND_OF_SOURCE = Object.freeze({
   file: 'file',
   audio: 'audio'
 });
+
+/**
+ * Where a call that used a knowledge source looked, in the footer's
+ * vocabulary: the same table, so the activity line and the basis chip cannot
+ * disagree. `undefined` for a source that is not a call's (`email`, `file`,
+ * `audio`) or not a source at all.
+ * @param {string|null|undefined} source - `project`, `websearch`, `ifinder`, …
+ * @returns {'project'|'web'|'ifinder'|'iassistant'|'documents'|'integration'|undefined}
+ */
+export function activityOriginOfSource(source) {
+  const kind = KIND_OF_SOURCE[source];
+  return ACTIVITY_ORIGINS.includes(kind) ? kind : undefined;
+}
 
 /** Most entries a stored answer keeps. */
 const MAX_BASIS_ENTRIES = 12;

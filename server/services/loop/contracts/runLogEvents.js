@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { provenanceContractSchema } from '../../provenance/provenanceSchema.js';
 import {
   ANSWER_BASIS_KINDS,
+  ACTIVITY_ORIGINS,
   RUN_KINDS,
   RUN_STATUSES,
   RUN_LOG_EVENTS,
@@ -290,6 +291,12 @@ export const toolCallData = z.object({
   activityKind: z.enum(['search', 'fetch', 'tool']).optional(),
   /** For a search or fetch: the public web or the organisation's documents. */
   activityScope: z.enum(['web', 'documents']).optional(),
+  /**
+   * Where the call looked, in the footer's vocabulary (server `utils/toolDisplay`:
+   * `activityOriginOf`); absent when the server cannot place the call. Never
+   * inferred from the tool id by the client.
+   */
+  activityOrigin: z.enum(ACTIVITY_ORIGINS).optional(),
   args: z.any(),
   argsRepaired: z.boolean().optional(),
   /** Execution class decided by the segment planner. */
@@ -323,8 +330,26 @@ export const sourceSchema = z.object({
       truncated: z.boolean().optional()
     })
     .optional(),
+  /**
+   * Display name of `ref.scope` where users pick it ("Contracts" for an iFinder
+   * search profile); kept only beside a `ref.scope`.
+   */
+  scopeName: z.string().optional(),
+  /** Where a project document came from: uploaded, picked, linked at its source or written by a run. */
+  provenance: z
+    .object({
+      origin: z.enum(['uploaded', 'picked', 'linked', 'written']),
+      kind: z.string().optional(),
+      at: z.string().optional()
+    })
+    .optional(),
   cited: z.boolean().optional(),
   markers: z.array(z.string()).optional(),
+  /**
+   * Where it was found, in the footer's vocabulary (decided by the server from
+   * the call that found it, never from `provider`); only an integration carries a label.
+   */
+  origin: z.object({ kind: z.enum(ACTIVITY_ORIGINS), label: z.string().optional() }).optional(),
   /** Found with the user's own permissions or network: a share never carries it. */
   private: z.boolean()
 });
@@ -391,7 +416,13 @@ export const toolResultData = z.object({
     .optional(),
   durationMs: z.number().int().nonnegative(),
   hasImage: z.boolean().optional(),
-  knowledgeSource: z.string().optional()
+  knowledgeSource: z.string().optional(),
+  /** Origin that only the result tells (the recall of earlier sources). */
+  activityOrigin: z.enum(ACTIVITY_ORIGINS).optional(),
+  /** Hits a search returned, `0` included; absent when the server does not know. */
+  resultCount: z.number().int().nonnegative().optional(),
+  /** What a page or document read delivered: `opened` (text) or `empty`. */
+  readOutcome: z.enum(['opened', 'empty']).optional()
 });
 
 export const toolDisabledData = z.object({

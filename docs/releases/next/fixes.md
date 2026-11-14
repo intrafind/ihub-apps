@@ -762,3 +762,28 @@ With more than one worker, a worker that crashed — for example one that ran ou
 take the whole server down with it instead of being restarted: the main process stopped with
 `ERR_IPC_CHANNEL_CLOSED`, and in Kubernetes the pod restarted, dropping every user's open chats.
 The main process now logs the message it could not deliver and starts a new worker as intended.
+
+## Reopened Chats Keep the Name of the Search Provider
+
+After a web search, the activity line of a chat that was reopened or shared no longer loses the name of
+the search provider (for example "Brave Search"). It showed up while the answer was live and was gone
+once the chat was stored.
+
+## An Answer Based on a Page the Model Opened Is Marked "Web"
+
+When the only thing the model did was open a page with the page reader (a pasted link, say), the footer
+named "Model knowledge". It now names "Web". A page that could not be opened, or came back without text
+(an offset at the end of the page), does not count.
+
+## Skills Set by an App No Longer Read "Started by You"
+
+A skill that an app switches on itself (`skillSettings.autoActivate`) is no longer announced as started by
+the user, and a skill kept from an earlier message of the chat is now announced too instead of being
+silent. The chat shows who brought each skill in once the activity line is updated.
+
+## Source Cards Get the Search Profile Name and the "Uploaded" or "Picked" Marker Again
+
+The frames that carry an answer's sources to the chat and to the run log dropped two fields: the
+display name of the iFinder search profile a document was found in ("Found in Contracts") and where a
+project document came from (uploaded, picked, linked or written). The source cards could not show
+either. Both now arrive with the sources.
