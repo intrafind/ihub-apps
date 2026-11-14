@@ -19,6 +19,7 @@ import {
   initWorkerBus,
   createPresenceMap,
   hasRemote,
+  lookupRemote,
   publish,
   subscribe,
   gather,
@@ -260,6 +261,30 @@ async function runPrimary() {
       assert.strictEqual(survivors[1].hasRemote, false);
     });
 
+    // ---- a lookup finds a stream the mirror has not heard of yet ----
+    // A browser opens its stream on one worker and sends the message to another
+    // as soon as the stream is connected; the lookup must not depend on the
+    // announcement having reached the second worker yet (#3674). Look up right
+    // after the registration, without waiting for presence to settle.
+    await ask(workers[0], { step: 'register', key: 'chat-new' });
+    const found = await ask(workers[1], { step: 'lookup', key: 'chat-new' });
+    check('a lookup right after the registration finds the stream', () =>
+      assert.strictEqual(found.held, true)
+    );
+    check('a found stream is mirrored, so relaying sees it', () =>
+      assert.strictEqual(found.hasRemote, true)
+    );
+    const [missing, own] = await Promise.all([
+      ask(workers[1], { step: 'lookup', key: 'chat-nowhere' }),
+      ask(workers[0], { step: 'lookup', key: 'chat-new' })
+    ]);
+    check('a lookup for a stream nobody holds says no', () =>
+      assert.strictEqual(missing.held, false)
+    );
+    check("the owner's lookup of its own stream says no (not remote)", () =>
+      assert.strictEqual(own.held, false)
+    );
+
     // ---- a silent process does not hang a gather ----
     // The dead worker cannot answer; the gather waits out its timeout and
     // returns what it has, so the caller can show the worker as missing.
@@ -327,6 +352,11 @@ function runWorker() {
         break;
       case 'probe':
         reply({ hasRemote: hasRemote('sse', msg.key) });
+        break;
+      case 'lookup':
+        lookupRemote('sse', msg.key).then(held =>
+          reply({ held, hasRemote: hasRemote('sse', msg.key) })
+        );
         break;
       case 'share':
         sharedPresence.set(msg.key, { marker: true });

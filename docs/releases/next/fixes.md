@@ -747,3 +747,11 @@ flag. Each of these routes now checks and changes the file under one lock.
   behind the file, and the first-run setup writes its API key to the stored list instead of the cache.
 - Installing, editing and removing integrations changes `integrations.json` and the managed
   credentials in `credentials.json` under the same lock, next to the credentials routes.
+
+## Chat: Answers No Longer Go Missing With Several Workers
+
+With more than one worker, a message sent right after opening a chat could get no visible answer:
+the spinner kept turning, and the answer only appeared after reloading the page. This happened more
+often under load and with more workers (about 1 in 15 turns at 1,250 users and 8 workers
+in our load test). The worker that takes the message now asks where the chat's stream is when it
+has not heard of it yet, so the answer streams as usual.
