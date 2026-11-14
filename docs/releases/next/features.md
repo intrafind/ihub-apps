@@ -2052,3 +2052,14 @@ and in what a screen reader hears.
 
 Chats stored before this release show their activity without origin words (for example "2 searches ·
 5 results"): nothing is inferred for them.
+
+## Chat: Sources Name Their Origin
+
+Every card in the Sources panel now starts with where the source comes from, as a word: **Web**,
+**Project**, **iFinder**, **Document sources**, or the connected system's own name (**Jira**). When
+an answer used more than one origin, the panel header adds a summary such as **Web 5 · Project 3**.
+The words are the ones the answer's footer and the activity line use, so the three always agree. An
+iFinder search profile now has its own glyph instead of the Project folder, and the filter buttons
+in the panel have a visible border.
+
+Sources of chats stored before this release show no origin word: nothing is guessed for them.

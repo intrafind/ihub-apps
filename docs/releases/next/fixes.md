@@ -765,3 +765,9 @@ named "Model knowledge". It now names "Web". A page that could not be opened, or
 A skill that an app switches on itself (`skillSettings.autoActivate`) is no longer announced as started by
 the user, and a skill kept from an earlier message of the chat is now announced too instead of being
 silent. The chat shows who brought each skill in once the activity line is updated.
+
+## Two German Messages About Documents Use the Formal Address
+
+When a document could not be attached to a chat, the German messages said "Du hast keinen Zugriff" and
+"steht dir nicht zur Verfügung". They now say "Sie haben keinen Zugriff" and "steht Ihnen nicht zur
+Verfügung", like the rest of the German interface.

@@ -291,19 +291,10 @@ function SegmentIcon({ segment, busy }) {
   if (busy) return <BusyIcon />;
   if (!segment.icon) return <span aria-hidden="true" className="w-4 shrink-0" />;
   const skill = segment.type === 'skill' || segment.type === 'skills';
-  return (
-    <Icon
-      name={segment.icon}
-      size="sm"
-      className={`shrink-0 ${
-        skill
-          ? 'text-purple-600 dark:text-purple-400'
-          : segment.tone === 'failed'
-            ? 'text-red-500'
-            : 'text-gray-500 dark:text-gray-400'
-      }`}
-    />
-  );
+  let tone = 'text-gray-500 dark:text-gray-400';
+  if (skill) tone = 'text-purple-600 dark:text-purple-400';
+  else if (segment.tone === 'failed') tone = 'text-red-500';
+  return <Icon name={segment.icon} size="sm" className={`shrink-0 ${tone}`} />;
 }
 
 /** One segment of the finished headline: skill, origin, neutral or output. */
