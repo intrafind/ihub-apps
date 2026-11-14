@@ -130,7 +130,7 @@ function announceEndedCall(collector, item, { t }) {
     item.status === 'completed' &&
     item.kind === 'search' &&
     item.resultCount === 0 &&
-    ANNOUNCED_EMPTY_ORIGINS.includes(item.origin)
+    ANNOUNCED_EMPTY_ORIGINS.has(item.origin)
   ) {
     // The server declared that the search found nothing: a screen reader hears
     // it, because an empty list is silent. Never said for a count not declared.
@@ -142,7 +142,7 @@ function announceEndedCall(collector, item, { t }) {
   }
 }
 
-const ANNOUNCED_EMPTY_ORIGINS = ['web', 'project', 'ifinder', 'iassistant', 'documents'];
+const ANNOUNCED_EMPTY_ORIGINS = new Set(['web', 'project', 'ifinder', 'iassistant', 'documents']);
 
 /** The idle line, once per model step, after it has been up for a while. */
 function announceIdle(collector, idle, idleSince, { t, now }) {

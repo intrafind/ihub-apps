@@ -781,6 +781,12 @@ A skill that an app switches on itself (`skillSettings.autoActivate`) is no long
 the user, and a skill kept from an earlier message of the chat is now announced too instead of being
 silent. The chat shows who brought each skill in once the activity line is updated.
 
+## Two German Messages About Documents Use the Formal Address
+
+When a document could not be attached to a chat, the German messages said "Du hast keinen Zugriff" and
+"steht dir nicht zur Verfügung". They now say "Sie haben keinen Zugriff" and "steht Ihnen nicht zur
+Verfügung", like the rest of the German interface.
+
 ## Source Cards Get the Search Profile Name and the "Uploaded" or "Picked" Marker Again
 
 The frames that carry an answer's sources to the chat and to the run log dropped two fields: the

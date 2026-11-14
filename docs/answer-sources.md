@@ -49,8 +49,12 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   [Web Tools → Sources and Citations](web-tools.md#sources-and-citations).
 - The panel lists what the answer cites under **Cited in this answer**, numbered like its inline
   badges, and everything else it found under **Also considered**. Web pages, documents and records
-  share one card design: the site or system they come from, the title, an excerpt or cited passage,
-  the date, and whether the page or document was read.
+  share one card design: the **origin** as a word (**Web**, **Project**, **iFinder**, **Document
+  sources**, or the connected system's own name such as **Jira**) followed by the site or system,
+  the title, an excerpt or cited passage, the date, and whether the page or document was read. The
+  origin is decided by the server (`Source.origin`); a source stored without one shows no origin
+  word. With two or more origins the panel header adds a summary of card counts (**Web 5 ·
+  Project 3**).
 - An answer that cites none of its sources (a model that writes no links) lists what was read for
   it instead, at its end and at the top of the panel: **Read for this answer**, the pages and
   documents whose content went to the model (`read.ok`, which the producer sets on the server).

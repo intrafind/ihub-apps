@@ -23,7 +23,11 @@ import { normalizeSource, mergeSource } from '../../shared/sources/source.js';
 import { sourcesFromGrounding } from '../../shared/sources/grounding.js';
 import { foldSkill } from '../../shared/run/runReducer.js';
 import { answerBasisOf } from '../services/chat/answerBasis.js';
-import { knowledgeSourceSeam } from '../services/loop/seams/knowledgeSourceSeam.js';
+import {
+  classifyToolKnowledgeSource,
+  knowledgeSourceSeam
+} from '../services/loop/seams/knowledgeSourceSeam.js';
+import { toolDisplayOf } from '../utils/toolDisplay.js';
 import { announcedSkills } from '../routes/chat/sessionRoutes.js';
 import { extractToolOutcome, extractToolSources } from '../services/sources/index.js';
 
@@ -541,6 +545,54 @@ test('a share carries the origin type, never the name of what was searched', () 
   // A public web search is shared whole, provider included.
   assert.equal(byId.w.integration, 'Brave Search');
   assert.equal(byId.w.origin, 'web');
+});
+
+// ── the card, the row and the footer say the same thing ───────────────────
+
+test('a source’s origin, the call’s activity origin and the footer kind agree', () => {
+  const cases = [
+    {
+      toolDef: { id: 'braveSearch' },
+      result: { results: [{ url: 'https://a.example/' }] },
+      kind: 'web'
+    },
+    {
+      toolDef: { id: 'read_url' },
+      result: { url: 'https://a.example/', content: 'x' },
+      kind: 'web'
+    },
+    {
+      toolDef: { id: 'iFinder_search' },
+      result: { searchProfile: 'p', results: [{ id: 'd1', title: 'D' }] },
+      kind: 'ifinder'
+    },
+    {
+      toolDef: { id: 'knowledge_read' },
+      result: {
+        content: 'x',
+        sources: [
+          { provider: 'project', kind: 'document', ref: { id: 'i', scope: 'p' }, title: 'T' }
+        ]
+      },
+      kind: 'project'
+    },
+    {
+      toolDef: { id: 'jira_find', _integration: { definition: 'com.intrafind/jira' } },
+      result: { sources: [{ id: 'ACME-1', title: 'Login fails' }] },
+      kind: 'integration'
+    }
+  ];
+  for (const { toolDef, result, kind } of cases) {
+    const frame = extractToolSources({ toolId: toolDef.id, toolDef, result });
+    assert.equal(frame.items[0].origin.kind, kind, `${toolDef.id}: source origin`);
+    assert.equal(toolDisplayOf(toolDef).activityOrigin, kind, `${toolDef.id}: activity origin`);
+    const source = classifyToolKnowledgeSource(toolDef.id, toolDef);
+    assert.equal(
+      answerBasisOf({ knowledgeSources: [source] })[0].kind,
+      kind,
+      `${toolDef.id}: footer`
+    );
+  }
 });
 
 // ── review findings: origin is the server's, from the call ────────────────

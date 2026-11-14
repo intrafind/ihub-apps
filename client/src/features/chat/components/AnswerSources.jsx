@@ -36,6 +36,8 @@ import {
   answerScopeLabel,
   fileTypeOf,
   matchesScope,
+  originNounOf,
+  originSummaryOf,
   scopeLabelOf,
   siteOf,
   sourceScopesOf
@@ -613,6 +615,11 @@ function SourcesPanel({
     () => sourceScopesOf([...cited, ...read, ...considered]),
     [cited, read, considered]
   );
+  // How many cards each origin holds; with two or more, the header says so.
+  const originSummary = useMemo(
+    () => originSummaryOf(t, [...cited, ...read, ...considered]),
+    [t, cited, read, considered]
+  );
   const shownScope = foundIn.some(scope => scope.id === scopeFilter) ? scopeFilter : null;
   const shownCited = cited.filter(source => matchesScope(source, shownScope));
   const shownRead = read.filter(source => matchesScope(source, shownScope));
@@ -637,6 +644,27 @@ function SourcesPanel({
             <h2 id={titleId} className="text-base font-semibold text-gray-900 dark:text-gray-100">
               {t('sources.title', 'Sources')}
             </h2>
+            {originSummary.length > 1 && (
+              // Static text, not controls: how many cards each origin holds.
+              <ul
+                aria-label={t('sources.originSummary')}
+                className="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-gray-600 dark:text-gray-300"
+              >
+                {originSummary.map((entry, index) => (
+                  <li key={entry.key}>
+                    {index > 0 && (
+                      <span aria-hidden="true" className="me-1.5">
+                        ·
+                      </span>
+                    )}
+                    <span className="font-medium text-gray-700 dark:text-gray-300">
+                      {entry.noun}
+                    </span>{' '}
+                    {entry.count}
+                  </li>
+                ))}
+              </ul>
+            )}
             {queries.length > 0 && (
               <ul
                 className="mt-1 flex flex-wrap gap-1"
@@ -661,7 +689,7 @@ function SourcesPanel({
                     className="flex items-center gap-1"
                   >
                     <Icon
-                      name={scope.action === 'ask' ? 'chat-bubble-left-right' : 'folder'}
+                      name={scope.action === 'ask' ? 'chat-bubble-left-right' : 'squares-2x2'}
                       size="xs"
                       className="shrink-0 text-gray-500 dark:text-gray-400"
                     />
@@ -808,10 +836,10 @@ function ScopeFilter({ scopes, selected, onSelect }) {
             type="button"
             aria-pressed={active}
             onClick={() => onSelect(option.id)}
-            className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
+            className={`inline-flex min-h-6 max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${
               active
                 ? 'border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-900/40 dark:text-indigo-200'
-                : 'border-gray-200 text-gray-600 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800'
+                : 'border-gray-500 text-gray-600 hover:bg-gray-50 dark:border-gray-500 dark:text-gray-300 dark:hover:bg-gray-800'
             }`}
           >
             <span className="truncate">{option.label}</span>
@@ -869,6 +897,7 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
   const actions = sourceActionsOf(source, host);
   const site = siteOf(source);
   const scopeLabel = scopeLabelOf(source);
+  const originNoun = originNounOf(t, source.origin);
   const date = source.publishedDate ? formatDate(source.publishedDate, i18n.language) : null;
   const passages = source.passages || [];
   const canPreview = actions.includes('preview');
@@ -898,14 +927,20 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
     >
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600 dark:text-gray-400">
             {source.n && (
               <span className="inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-indigo-100 px-1 text-[0.625rem] font-semibold text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-200">
                 {source.n}
               </span>
             )}
             <SourceIcon source={source} className="h-4 w-4" />
-            {site && <span className="truncate">{site}</span>}
+            {/* Where it comes from, as text: the leading glyph already says page,
+                file or record. A source without an origin shows none. */}
+            {originNoun && (
+              <span className="font-medium text-gray-700 dark:text-gray-300">{originNoun}</span>
+            )}
+            {originNoun && site && originNoun !== site && <span aria-hidden="true">·</span>}
+            {site && originNoun !== site && <span className="min-w-0 break-words">{site}</span>}
             {date && (
               <>
                 <span aria-hidden="true">·</span>
@@ -921,7 +956,7 @@ function SourceCard({ source, messageKey, active, host, attachEnabled, onAction 
                 className="inline-flex min-w-0 items-center gap-1 rounded-sm bg-gray-100 px-1.5 py-0.5 text-gray-600 dark:bg-gray-800 dark:text-gray-300"
                 title={t('sources.foundIn', 'Found in {{scope}}', { scope: scopeLabel })}
               >
-                <Icon name="folder" size="xs" className="shrink-0" />
+                <Icon name="squares-2x2" size="xs" className="shrink-0" />
                 <span className="truncate" aria-hidden="true">
                   {scopeLabel}
                 </span>
