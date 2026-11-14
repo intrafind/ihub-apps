@@ -400,7 +400,7 @@ function skillSegments(t, items) {
  * @param {Function} t
  * @param {Object[]} items - rows of `buildToolActivity`
  * @returns {{segments: Object[], named: Object[], more: Object[]}}
- *   `named` are the origin and neutral segments shown, `more` the ones the
+ *   `named` are the origin segments shown, `more` the ones the
  *   `+N` stands for; `segments` is the whole headline in order
  */
 export function headlineSegments(t, items) {
@@ -439,10 +439,15 @@ export function headlineSegments(t, items) {
       facts: factsOf(t, group.items)
     };
   });
-  const named = origins.slice(0, MAX_NAMED_KINDS);
-  const more = origins.slice(MAX_NAMED_KINDS);
+  // Only places the server named count against the limit of named origins; the
+  // neutral segment (rows it said nothing about) has no noun to hide behind a
+  // "+N", so it is always shown, in its place by first use.
+  const placed = origins.filter(segment => segment.type === 'origin');
+  const named = placed.slice(0, MAX_NAMED_KINDS);
+  const more = placed.slice(MAX_NAMED_KINDS);
+  const shown = origins.filter(segment => segment.type === 'neutral' || named.includes(segment));
   return {
-    segments: [...skillSegments(t, items), ...named, ...outputSegments(t, items)],
+    segments: [...skillSegments(t, items), ...shown, ...outputSegments(t, items)],
     named,
     more
   };

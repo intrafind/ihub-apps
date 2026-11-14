@@ -2233,6 +2233,27 @@
                         "type": "string"
                       }
                     },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "project",
+                            "web",
+                            "ifinder",
+                            "iassistant",
+                            "documents",
+                            "integration"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
+                    },
                     "private": {
                       "type": "boolean"
                     }
@@ -3462,6 +3483,27 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "origin": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "web",
+                        "ifinder",
+                        "iassistant",
+                        "documents",
+                        "integration"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
                 },
                 "private": {
                   "type": "boolean"
@@ -5360,6 +5402,27 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "project",
+                            "web",
+                            "ifinder",
+                            "iassistant",
+                            "documents",
+                            "integration"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
                     },
                     "private": {
                       "type": "boolean"

@@ -39,8 +39,12 @@ const ATTENTION = 'text-amber-700 dark:text-amber-400';
 const DETAILS_KEY = 'ihub.activity.technicalDetails';
 const detailsListeners = new Set();
 let detailsFallback = false;
+// Set when a write to storage failed (a full origin, a blocked write): the
+// in-memory value is then the truth, whatever an old stored value says.
+let storageFailed = false;
 
 function readDetails() {
+  if (storageFailed) return detailsFallback;
   try {
     return globalThis.localStorage?.getItem(DETAILS_KEY) === '1';
   } catch {
@@ -53,8 +57,10 @@ function writeDetails(on) {
   detailsFallback = on;
   try {
     globalThis.localStorage?.setItem(DETAILS_KEY, on ? '1' : '0');
+    storageFailed = false;
   } catch {
     // Not remembered; the switch still works for this page.
+    storageFailed = true;
   }
   detailsListeners.forEach(listener => listener());
 }
@@ -798,11 +804,7 @@ function ItemDetails({ item, show, words = 0 }) {
 /** Why the call failed, shown under it — the "Failed" label's tooltip is out of reach on touch screens. */
 function ItemError({ item }) {
   if (item.status !== 'error' || !item.error) return null;
-  return (
-    <p className="mt-1 ms-5.5 text-red-600 dark:text-red-400 break-words line-clamp-3">
-      {item.error}
-    </p>
-  );
+  return <p className="mt-1 ms-5.5 text-red-600 dark:text-red-400 break-words">{item.error}</p>;
 }
 
 /**

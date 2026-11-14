@@ -808,6 +808,7 @@ test('search tool: sources/added carries the pages found and read, even when the
       id: 'url:weather.example/berlin',
       provider: 'web',
       kind: 'page',
+      origin: { kind: 'web' },
       title: 'Weather',
       url: 'https://weather.example/berlin',
       read: { ok: true },
@@ -817,6 +818,7 @@ test('search tool: sources/added carries the pages found and read, even when the
       id: 'url:news.example',
       provider: 'web',
       kind: 'page',
+      origin: { kind: 'web' },
       title: 'News',
       url: 'https://news.example/',
       read: { ok: false },
@@ -896,6 +898,7 @@ test('iFinder tools: each call that finds documents reports them as sources/adde
   assert.deepEqual(found[0].items[0], {
     id: 'ifinder:sp-7f3a9c11',
     provider: 'ifinder',
+    origin: { kind: 'ifinder' },
     kind: 'document',
     title: 'Supplier contract ACME',
     url: 'https://sp.example/acme.pdf',

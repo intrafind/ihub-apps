@@ -11,7 +11,7 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import { createStreamState, reduceRunEvents, getRun } from '../../../shared/run/runReducer.js';
-import { buildToolActivity } from '../../../shared/run/toolActivity.js';
+import { buildToolActivity, withStoredSkills } from '../../../shared/run/toolActivity.js';
 import ToolActivity from '../../../client/src/features/chat/components/ToolActivity';
 import {
   headlineSegments,
@@ -458,5 +458,94 @@ describe('the announcer', () => {
     ];
     const text = derive(messageOf(frames)).announcements.map(entry => entry.text);
     expect(text.some(line => String(line).includes('noResults'))).toBe(false);
+  });
+});
+
+describe('review findings', () => {
+  test('an answer saved without skill rows still shows its skills, once, in the activity block', () => {
+    const stored = [
+      { name: 'Contract review', id: 'contract', activatedBy: 'user' },
+      { name: 'Contract review', id: 'contract', activatedBy: 'model' },
+      { name: 'Brand voice' }
+    ];
+    // A skill-only answer has no activity at all.
+    const only = withStoredSkills(null, stored);
+    expect(only.items.map(item => [item.name, item.activatedBy])).toEqual([
+      ['Contract review', 'user'],
+      ['Brand voice', null]
+    ]);
+    render(<ToolActivity activity={only} loading={false} />);
+    expect(screen.getByRole('button')).toHaveTextContent('toolActivity.skillLabel Contract review');
+    // With other rows, the skills come first; rows that exist are never doubled.
+    const searched = activityOf([
+      started(2, 'a', 'braveSearch', { ...web, args: { query: 'q' } }),
+      completed(3, 'a', 'braveSearch', { resultCount: 1 }),
+      end(4)
+    ]);
+    expect(withStoredSkills(searched, stored).items.map(item => item.kind)).toEqual([
+      'skill',
+      'skill',
+      'search'
+    ]);
+    const withRows = activityOf([
+      env(2, 'tool/progress', {
+        phase: 'skill.activation',
+        message: 'S',
+        data: { skillName: 'S', skillId: 's', activatedBy: 'user' }
+      }),
+      end(3)
+    ]);
+    expect(withStoredSkills(withRows, stored)).toBe(withRows);
+    expect(withStoredSkills(searched, [])).toBe(searched);
+  });
+
+  test('a long error is shown in full, not cut at three lines', () => {
+    const error = 'x'.repeat(400);
+    const activity = activityOf([
+      started(2, 'a', 'braveSearch', { ...web, args: { query: 'q' } }),
+      completed(3, 'a', 'braveSearch', { error: { message: error } }),
+      end(4)
+    ]);
+    render(<ToolActivity activity={activity} loading={false} />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    const shown = screen.getByText(error);
+    expect(shown.className).not.toContain('line-clamp');
+  });
+
+  test('an unclassified call is its own segment and never hides behind "+N"', () => {
+    const items = activityOf([
+      started(2, 'a', 'braveSearch', { ...web, args: { query: 'q' } }),
+      completed(3, 'a', 'braveSearch', { resultCount: 1 }),
+      started(4, 'b', 'knowledge_search', { ...project, args: { query: 'q' } }),
+      completed(5, 'b', 'knowledge_search', { resultCount: 1 }),
+      started(6, 'c', 'odd_tool', { activityKind: 'tool', args: {} }),
+      completed(7, 'c', 'odd_tool', { error: { message: 'boom' } }),
+      end(8)
+    ]).items;
+    const { segments, more } = headlineSegments(identity, items);
+    expect(more).toEqual([]);
+    expect(segments.map(segment => segment.type)).toEqual(['origin', 'origin', 'neutral']);
+    expect(segments[2].facts.map(fact => fact.key)).toEqual(['calls', 'failed']);
+    render(<ToolActivity activity={{ items, reading: null }} loading={false} />);
+    expect(screen.getByRole('button')).not.toHaveTextContent('chatMessage.answerBasis.more');
+  });
+
+  test('the switch still works for this page when only the write to storage fails', () => {
+    const activity = activityOf(screenshotRun());
+    const writes = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('QuotaExceededError');
+    });
+    render(<ToolActivity activity={activity} loading={false} />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    const before = screen.getByRole('switch').getAttribute('aria-checked');
+    fireEvent.click(screen.getByRole('switch'));
+    expect(screen.getByRole('switch')).toHaveAttribute(
+      'aria-checked',
+      before === 'true' ? 'false' : 'true'
+    );
+    writes.mockRestore();
+    // A write that works again makes storage the truth once more.
+    fireEvent.click(screen.getByRole('switch'));
+    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', before);
   });
 });
