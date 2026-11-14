@@ -304,6 +304,39 @@ export function foldSkillItems(items) {
   return out;
 }
 
+/**
+ * The activity of an answer saved before skills were rows of it: its
+ * `activeSkills` (the set the header chip used to show) become name-only skill
+ * rows, first in the list, so the skill is still shown once, in the activity
+ * block, with the reason when the record names who brought it in. An activity
+ * that has skill rows already is left as it is.
+ *
+ * @param {{items?: Object[], reading?: string|null}|null|undefined} activity
+ * @param {Array<{name?: string, id?: string, activatedBy?: string}>|undefined} activeSkills
+ * @returns {Object|null|undefined} the activity, with skill rows added when it had none
+ */
+export function withStoredSkills(activity, activeSkills) {
+  const skills = Array.isArray(activeSkills) ? activeSkills.filter(skill => skill?.name) : [];
+  if (!skills.length) return activity;
+  const items = activity?.items || [];
+  if (items.some(item => item.kind === 'skill')) return activity;
+  const rows = skills.map((skill, index) => ({
+    id: `skill-stored-${index}`,
+    kind: 'skill',
+    toolId: 'activate_skill',
+    name: skill.name,
+    skillId: typeof skill.id === 'string' ? skill.id : null,
+    activatedBy: SKILL_ACTIVATORS.includes(skill.activatedBy) ? skill.activatedBy : null,
+    status: 'completed',
+    scope: null,
+    details: [],
+    sources: [],
+    error: null,
+    durationMs: null
+  }));
+  return { reading: null, ...activity, items: foldSkillItems([...rows, ...items]) };
+}
+
 /** Whether an interaction of the run waits for the user to decide about this call. */
 function hasPendingApproval(run, callId) {
   return Object.values(run.interactions || {}).some(

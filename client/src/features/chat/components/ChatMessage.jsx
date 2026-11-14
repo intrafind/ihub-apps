@@ -28,6 +28,7 @@ import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
 import { isActivityLineBusy } from '../activityHeadline.js';
 import { settleActivity } from '../settleActivity.js';
+import { withStoredSkills } from '../../../../../shared/run/toolActivity.js';
 import { useGracedActivity } from '../hooks/useGracedActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
@@ -179,11 +180,11 @@ function ChatMessage({
   const approvalDecided = Boolean(message.toolApproval?.decision);
   const settledActivity = useMemo(
     () =>
-      settleActivity(message.toolActivity, {
+      settleActivity(withStoredSkills(message.toolActivity, message.activeSkills), {
         interrupted: stoppedHere,
         decided: approvalDecided
       }),
-    [message.toolActivity, stoppedHere, approvalDecided]
+    [message.toolActivity, message.activeSkills, stoppedHere, approvalDecided]
   );
   const toolActivity = useGracedActivity(settledActivity);
   // Its headline shows a spinner or a label, so the three-dot loader below
