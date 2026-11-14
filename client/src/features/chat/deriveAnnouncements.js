@@ -126,8 +126,23 @@ function announceEndedCall(collector, item, { t }) {
     collector.say(`${item.id}:failed`, `${what}: ${failedLabel(t)}.${detail}`, 'highest');
   } else if (item.status === 'stopped' && !item.started && hasOutputKind(item)) {
     collector.say(`${item.id}:stopped`, stoppedUnstartedLabel(t, item), 'highest');
+  } else if (
+    item.status === 'completed' &&
+    item.kind === 'search' &&
+    item.resultCount === 0 &&
+    ANNOUNCED_EMPTY_ORIGINS.includes(item.origin)
+  ) {
+    // The server declared that the search found nothing: a screen reader hears
+    // it, because an empty list is silent. Never said for a count not declared.
+    collector.say(
+      `${item.id}:noResults`,
+      t(`toolActivity.announce.noResults.${item.origin}`),
+      'normal'
+    );
   }
 }
+
+const ANNOUNCED_EMPTY_ORIGINS = ['web', 'project', 'ifinder', 'iassistant', 'documents'];
 
 /** The idle line, once per model step, after it has been up for a while. */
 function announceIdle(collector, idle, idleSince, { t, now }) {

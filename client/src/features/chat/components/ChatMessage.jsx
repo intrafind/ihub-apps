@@ -28,6 +28,7 @@ import SearchSummary from './SearchSummary';
 import ToolActivity from './ToolActivity';
 import { isActivityLineBusy } from '../activityHeadline.js';
 import { settleActivity } from '../settleActivity.js';
+import { withStoredSkills } from '../../../../../shared/run/toolActivity.js';
 import { useGracedActivity } from '../hooks/useGracedActivity';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
@@ -77,7 +78,6 @@ import ScheduleThisAction from '../../tasks/components/ScheduleThisAction';
 import GeneratedFiles from './GeneratedFiles';
 import { findSkillDraft } from '../../skills/utils/skillDraft';
 import { matchesModelFilter, modelSupportsTools } from '../../../../../shared/modelCapabilities.js';
-import { foldSkill } from '../../../../../shared/run/runReducer.js';
 import './ChatMessage.css';
 import { useChatFiles } from '../contexts/ChatFilesContext';
 import MessageAttachments from './MessageAttachments';
@@ -180,11 +180,11 @@ function ChatMessage({
   const approvalDecided = Boolean(message.toolApproval?.decision);
   const settledActivity = useMemo(
     () =>
-      settleActivity(message.toolActivity, {
+      settleActivity(withStoredSkills(message.toolActivity, message.activeSkills), {
         interrupted: stoppedHere,
         decided: approvalDecided
       }),
-    [message.toolActivity, stoppedHere, approvalDecided]
+    [message.toolActivity, message.activeSkills, stoppedHere, approvalDecided]
   );
   const toolActivity = useGracedActivity(settledActivity);
   // Its headline shows a spinner or a label, so the three-dot loader below
@@ -278,16 +278,6 @@ function ChatMessage({
         : null,
     [onSaveAsSkill, isUser, isError, readOnly, message.loading, interrupted, answerText]
   );
-  // Each skill once, however often the answer activated it: when and how is in
-  // the thought chain (ToolActivity). Answers stored before the run folded
-  // repeat activations hold the skill once per activation.
-  const distinctSkills = useMemo(
-    () =>
-      Array.isArray(message.activeSkills)
-        ? message.activeSkills.reduce((skills, skill) => foldSkill(skills, skill), [])
-        : [],
-    [message.activeSkills]
-  );
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
 
@@ -317,6 +307,7 @@ function ChatMessage({
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
   const [activeFeedback, setActiveFeedback] = useState(0); // Track active rating (0-5)
   const [showThoughts, setShowThoughts] = useState(false);
+  const thoughtsId = useId();
   const messageRef = useRef(null); // Ref to scope DOM queries to this specific message
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
@@ -968,20 +959,6 @@ function ChatMessage({
             checkpoint={message.workflowCheckpoint.checkpoint}
           />
         )}
-        {/* Skill activation indicators */}
-        {!isUser && distinctSkills.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
-            {distinctSkills.map(skill => (
-              <div
-                key={skill.id || skill.name}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
-              >
-                <Icon name="sparkles" className="w-3 h-3" />
-                <span>{skill.name}</span>
-              </div>
-            ))}
-          </div>
-        )}
         {/* Show just the question for answered clarifications (at top of bubble) */}
         {!isUser && message.clarification && message.clarificationAnswered && (
           <div className="flex items-start gap-2">
@@ -997,11 +974,27 @@ function ChatMessage({
             answer streams in below it, instead of being pushed down as content grows. */}
         {!isUser && message.thoughts && message.thoughts.length > 0 && (
           <div className="mb-2 text-xs text-gray-600 dark:text-gray-400">
-            <button onClick={() => setShowThoughts(!showThoughts)} className="underline">
-              {showThoughts ? t('pages.appChat.hideThoughts') : t('pages.appChat.showThoughts')}
+            <button
+              type="button"
+              onClick={() => setShowThoughts(!showThoughts)}
+              aria-expanded={showThoughts}
+              aria-controls={thoughtsId}
+              className="group inline-flex items-center gap-1.5 max-w-full py-1 -my-1 rounded-sm text-start hover:text-gray-900 dark:hover:text-gray-200 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <Icon
+                name="light-bulb"
+                size="sm"
+                className="shrink-0 text-gray-500 dark:text-gray-400"
+              />
+              <span>{t('pages.appChat.thinkingProcess')}</span>
+              <Icon
+                name="chevron-down"
+                size="sm"
+                className={`shrink-0 transition-transform motion-reduce:transition-none ${showThoughts ? 'rotate-180' : ''}`}
+              />
             </button>
             {showThoughts && (
-              <ul className="list-disc pl-4 mt-1 space-y-1">
+              <ul id={thoughtsId} className="list-disc pl-4 mt-1 space-y-1">
                 {splitThoughts(message.thoughts).map((th, idx) => (
                   /* Streamed reasoning is one merged block of text and carries its
                      own line breaks (numbered steps, blank lines); without this it

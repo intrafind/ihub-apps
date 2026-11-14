@@ -2058,3 +2058,27 @@ longer re-read the whole site on each server process, which could exhaust the se
 - New installations no longer ship the **IntraFind Website** project and the **IntraFind Website
   Bot** app: their pages need internet access, which many installations do not have. Existing
   installations keep both.
+
+## Chat: The Activity Line Says Where the Answer Looked
+
+The line above an answer now says where the assistant looked, one segment per place, instead of one
+run-on string: for example **Web 5 results · 3 opened · via Brave Search** and **Project no results**.
+The same words are in the live line ("Searching the project for …"), in every row of the expanded list,
+and in what a screen reader hears.
+
+- **Every row names its origin** (the web, the project, iFinder, document sources, or a connected
+  system such as Jira) in words and with an icon; colour never tells them apart. A page opening is
+  **Opened web page**, so it no longer reads as a child of the search before it. "Read" is retired in
+  favour of "Opened"; **N opened** counts only pages that delivered text.
+- **A search that found nothing says so** (**no results**), when the server knows it. Nothing is
+  claimed when the number is not known.
+- **A skill is shown once**, in the activity block, always with the reason: started manually, chosen
+  by the model, set by the app, or kept from an earlier message. The purple chip above the answer is
+  gone.
+- **Technical details** (tool, arguments, duration) are behind a switch on a finished answer, off by
+  default and remembered.
+- **Thinking process** replaces "Show thinking analysis" and looks like the activity line.
+- German strings use the formal register.
+
+Chats stored before this release show their activity without origin words (for example "2 searches ·
+5 results"): nothing is inferred for them.
