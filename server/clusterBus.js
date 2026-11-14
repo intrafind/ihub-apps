@@ -146,21 +146,43 @@ function remoteBucket(kind) {
   return bucket;
 }
 
-function sendToPrimary(message) {
-  if (!busActive || typeof process.send !== 'function') return false;
+/**
+ * Send one IPC message and log, never throw, when it cannot be delivered.
+ *
+ * The callback is what makes this safe. Sending on a closed channel does not
+ * throw: without a callback Node emits the error asynchronously on the
+ * process object, where nothing listens, so it becomes an uncaught exception
+ * and the sender exits. A worker's channel closes before the worker counts as
+ * dead (`isDead()`), so the primary still routes to a worker that has just
+ * crashed — and an out-of-memory worker used to take the primary, and with it
+ * the whole pod, down with it. The catch covers what does throw synchronously
+ * (a message that cannot be serialised).
+ *
+ * Losing a message to a process that is going away is the same outcome as that
+ * process dying a moment earlier, so it is logged and dropped.
+ *
+ * @param {{send: Function}} target - A cluster Worker, or `process` in a worker.
+ * @param {object} message
+ * @param {string} failure - Log message when delivery fails.
+ * @param {object} [fields] - Extra log fields.
+ * @returns {boolean} False if the message was not handed to the channel.
+ */
+function sendSafely(target, message, failure, fields = {}) {
+  const warn = error =>
+    logger.warn({ component: 'ClusterBus', message: failure, ...fields, error: error.message });
   try {
-    return process.send({ [ENVELOPE]: true, ...message });
-  } catch (error) {
-    // A worker shutting down loses its IPC channel mid-flight. Losing a relayed
-    // chunk at that point is the same outcome as the worker dying with the
-    // stream open, so log and carry on rather than taking the request down.
-    logger.warn({
-      component: 'ClusterBus',
-      message: 'Failed to send message to primary',
-      error: error.message
+    return target.send(message, error => {
+      if (error) warn(error);
     });
+  } catch (error) {
+    warn(error);
     return false;
   }
+}
+
+function sendToPrimary(message) {
+  if (!busActive || typeof process.send !== 'function') return false;
+  return sendSafely(process, { [ENVELOPE]: true, ...message }, 'Failed to send message to primary');
 }
 
 // ---------------------------------------------------------------------------
@@ -201,16 +223,9 @@ export function initPrimaryBus({ getWorkers }) {
   const sendTo = (workerId, message) => {
     const target = getWorkers().find(w => w && w.id === workerId && !w.isDead?.());
     if (!target) return;
-    try {
-      target.send({ [ENVELOPE]: true, ...message });
-    } catch (error) {
-      logger.warn({
-        component: 'ClusterBus',
-        message: 'Failed to send message to worker',
-        workerPid: target.process?.pid,
-        error: error.message
-      });
-    }
+    sendSafely(target, { [ENVELOPE]: true, ...message }, 'Failed to send message to worker', {
+      workerPid: target.process?.pid
+    });
   };
 
   /**
@@ -238,16 +253,9 @@ export function initPrimaryBus({ getWorkers }) {
     for (const worker of getWorkers()) {
       if (!worker || worker.isDead?.()) continue;
       if (exceptWorkerId !== null && worker.id === exceptWorkerId) continue;
-      try {
-        worker.send({ [ENVELOPE]: true, ...message });
-      } catch (error) {
-        logger.warn({
-          component: 'ClusterBus',
-          message: 'Failed to forward message to worker',
-          workerPid: worker.process?.pid,
-          error: error.message
-        });
-      }
+      sendSafely(worker, { [ENVELOPE]: true, ...message }, 'Failed to forward message to worker', {
+        workerPid: worker.process?.pid
+      });
     }
   };
 
@@ -284,12 +292,17 @@ export function initPrimaryBus({ getWorkers }) {
       .then(() => handler(message.payload.payload))
       .then(reply => {
         if (reply === undefined || worker.isDead?.()) return;
-        worker.send({
-          [ENVELOPE]: true,
-          kind: MSG_PUBLISH,
-          type: message.type + REPLY_SUFFIX,
-          payload: { requestId, reply }
-        });
+        sendSafely(
+          worker,
+          {
+            [ENVELOPE]: true,
+            kind: MSG_PUBLISH,
+            type: message.type + REPLY_SUFFIX,
+            payload: { requestId, reply }
+          },
+          'Failed to send primary reply to worker',
+          { workerPid: worker.process?.pid }
+        );
       })
       .catch(error => {
         logger.warn({
@@ -323,16 +336,12 @@ export function initPrimaryBus({ getWorkers }) {
           if (owner !== undefined && owner !== worker.id) {
             const target = getWorkers().find(w => w && w.id === owner && !w.isDead?.());
             if (target) {
-              try {
-                target.send({ [ENVELOPE]: true, ...message });
-              } catch (error) {
-                logger.warn({
-                  component: 'ClusterBus',
-                  message: 'Failed to route message to owning worker',
-                  workerPid: target.process?.pid,
-                  error: error.message
-                });
-              }
+              sendSafely(
+                target,
+                { [ENVELOPE]: true, ...message },
+                'Failed to route message to owning worker',
+                { workerPid: target.process?.pid }
+              );
               break;
             }
           }
@@ -413,20 +422,12 @@ export function initPrimaryBus({ getWorkers }) {
       }
 
       case MSG_PRESENCE_REQUEST:
-        try {
-          worker.send({
-            [ENVELOPE]: true,
-            kind: MSG_PRESENCE_BULK,
-            entries: snapshotFor(worker.id)
-          });
-        } catch (error) {
-          logger.warn({
-            component: 'ClusterBus',
-            message: 'Failed to send presence snapshot to worker',
-            workerPid: worker.process?.pid,
-            error: error.message
-          });
-        }
+        sendSafely(
+          worker,
+          { [ENVELOPE]: true, kind: MSG_PRESENCE_BULK, entries: snapshotFor(worker.id) },
+          'Failed to send presence snapshot to worker',
+          { workerPid: worker.process?.pid }
+        );
         break;
 
       case MSG_PRESENCE_LOOKUP: {

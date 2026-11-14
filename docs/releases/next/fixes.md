@@ -755,3 +755,10 @@ the spinner kept turning, and the answer only appeared after reloading the page.
 often under load and with more workers (about 1 in 15 turns at 1,250 users and 8 workers
 in our load test). The worker that takes the message now asks where the chat's stream is when it
 has not heard of it yet, so the answer streams as usual.
+
+## A Crashing Worker No Longer Stops the Whole Server
+
+With more than one worker, a worker that crashed — for example one that ran out of memory — could
+take the whole server down with it instead of being restarted: the main process stopped with
+`ERR_IPC_CHANNEL_CLOSED`, and in Kubernetes the pod restarted, dropping every user's open chats.
+The main process now logs the message it could not deliver and starts a new worker as intended.

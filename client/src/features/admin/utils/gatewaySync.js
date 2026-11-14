@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Helpers for the admin "Sync with gateway" dialog (GatewaySyncDialog).
+ * Helpers for the admin "Sync models" dialog (GatewaySyncDialog).
  *
  * `GET /admin/providers/:id/_model-drift` reports how the models of an iFinder
- * Model Gateway differ from the models imported from it: `added`, `changed` and
+ * Model Gateway or Google differ from the models imported from it: `added`, `changed` and
  * `removed` items. Nothing is changed by that call. The admin's pick goes back
  * to `POST /admin/providers/:id/_sync-models` as `{ kind, remoteId }` pairs; the
  * server applies it (see server/services/gatewaySyncApply.js) and answers one
@@ -38,11 +38,31 @@ export function countByKind(items) {
 }
 
 /**
+ * A `contentMarking` as text: the members that mark something, each as `Text: synthid
+ * (provider)`. `labels.text` and `labels.image` name the members. Nothing marked is an em dash.
+ */
+function formatContentMarking(value, labels) {
+  const parts = [];
+  for (const [kind, label] of [
+    ['text', labels.text || 'text'],
+    ['image', labels.image || 'image']
+  ]) {
+    const marking = value?.[kind];
+    if (!marking || marking.by === 'none') continue;
+    const scheme = marking.scheme ? `${marking.scheme} (${marking.by})` : marking.by;
+    parts.push(`${label}: ${scheme}`);
+  }
+  return parts.length > 0 ? parts.join(', ') : '—';
+}
+
+/**
  * A value of a changed field as text for the admin: switches as yes/no (given
- * as `labels`), an unset value as an em dash, anything else as it is. Numbers
- * stay exact: the admin compares the old and the new value.
+ * as `labels`), the EU AI Act marking as its members, an unset value as an em
+ * dash, anything else as it is. Numbers stay exact: the admin compares the old
+ * and the new value.
  */
 export function formatChangeValue(field, value, labels = {}) {
+  if (field === 'contentMarking') return formatContentMarking(value, labels);
   if (value === null || value === undefined || value === '') return '—';
   if (field === 'supportsVision') return value ? labels.yes || 'yes' : labels.no || 'no';
   return String(value);
