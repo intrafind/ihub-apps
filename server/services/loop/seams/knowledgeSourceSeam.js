@@ -72,7 +72,7 @@ export function classifyToolKnowledgeSource(toolId, toolDef) {
 }
 
 /** The tool that reads a source an earlier answer of the chat found (`tools/chatSources.js`). */
-const RECALL_TOOL_ID = 'chat_sources_read';
+export const RECALL_TOOL_ID = 'chat_sources_read';
 
 /**
  * The source of one stored source, by the provider it was found with: a page
@@ -119,9 +119,18 @@ export const knowledgeSourceSeam = {
       if (recalled.length) outcome.knowledgeSource = recalled[0];
       // The origin of what it recalled, when that is one place; the call
       // started without one, only the result tells.
-      const origins = [...new Set(recalled.map(source => activityOriginOfSource(source)))].filter(
-        Boolean
-      );
+      // Each recalled source says where it was found (`origin`, set by the server
+      // when it was first found); only a source stored before that is placed by
+      // the provider it was found with.
+      const items = Array.isArray(outcome.sources?.items) ? outcome.sources.items : [];
+      const origins = [
+        ...new Set(
+          items.map(
+            item =>
+              item?.origin?.kind || activityOriginOfSource(classifySourceProvider(item?.provider))
+          )
+        )
+      ].filter(Boolean);
       if (origins.length === 1) outcome.activityOrigin = origins[0];
       return;
     }

@@ -542,3 +542,78 @@ test('a share carries the origin type, never the name of what was searched', () 
   assert.equal(byId.w.integration, 'Brave Search');
   assert.equal(byId.w.origin, 'web');
 });
+
+// ── review findings: origin is the server's, from the call ────────────────
+
+test('what a tool reports as the origin of its sources is not believed; the call’s origin is applied', () => {
+  const claimsWeb = { sources: [{ id: 'x1', title: 'Hit', origin: { kind: 'web' } }] };
+  const mcp = extractToolSources({
+    toolId: 'mcp_x__find',
+    toolDef: { id: 'mcp_x__find', _mcp: { serverId: 'x', originalName: 'find' } },
+    result: claimsWeb
+  });
+  assert.equal(mcp.items[0].origin.kind, 'integration');
+  const claimsOther = extractToolSources({
+    toolId: 'jira_find',
+    toolDef: {
+      id: 'jira_find',
+      _integration: { definition: 'com.intrafind/jira', instanceLabel: 'Jira' }
+    },
+    result: {
+      sources: [{ id: 'a', title: 'A', origin: { kind: 'integration', label: 'SharePoint' } }]
+    }
+  });
+  assert.deepEqual(claimsOther.items[0].origin, { kind: 'integration', label: 'Jira' });
+  // A tool the server cannot place gets no origin, whatever it claims.
+  const unplaced = extractToolSources({
+    toolId: 'create_report',
+    toolDef: { id: 'create_report' },
+    result: claimsWeb
+  });
+  assert.equal(unplaced.items[0].origin, undefined);
+});
+
+test('the recall of earlier sources keeps the origin they were stored with', () => {
+  const frame = extractToolSources({
+    toolId: 'chat_sources_read',
+    toolDef: { id: 'chat_sources_read' },
+    result: {
+      sources: [
+        {
+          id: 'jira:1',
+          provider: 'jira__search_issues',
+          title: 'T',
+          origin: { kind: 'integration', label: 'Jira' }
+        }
+      ]
+    }
+  });
+  assert.deepEqual(frame.items[0].origin, { kind: 'integration', label: 'Jira' });
+});
+
+test('a recall is placed by the origin of its sources, and by the provider only for older ones', () => {
+  const recall = items => {
+    const out = { sources: { items } };
+    seam('chat_sources_read', { id: 'chat_sources_read' }, out);
+    return out.activityOrigin;
+  };
+  // An integration action's provider is its tool id: the id heuristic must not decide.
+  assert.equal(
+    recall([
+      { provider: 'jira__search_issues', origin: { kind: 'integration', label: 'Jira' } },
+      { provider: 'jira__search_issues', origin: { kind: 'integration', label: 'Jira' } }
+    ]),
+    'integration'
+  );
+  // Stored before origins existed: the provider it was found with.
+  assert.equal(recall([{ provider: 'web' }]), 'web');
+  assert.equal(recall([{ provider: 'project' }]), 'project');
+  // Several places: none.
+  assert.equal(
+    recall([
+      { provider: 'web', origin: { kind: 'web' } },
+      { provider: 'x', origin: { kind: 'project' } }
+    ]),
+    undefined
+  );
+});

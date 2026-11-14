@@ -164,6 +164,19 @@ export function isGatewayProvider(provider) {
 }
 
 /**
+ * Whether iHub can compare the provider's model listing with the models imported
+ * from it ("Sync models"): an iFinder Model Gateway, Google or Anthropic. Their
+ * listing names each model with what the sync compares (context window, whether it
+ * still exists) or what an import fills in (the provider's EU AI Act marking). The
+ * listing is read from the saved provider entry on the server.
+ */
+export function supportsModelSync(provider) {
+  return (
+    isGatewayProvider(provider) || ['google', 'anthropic'].includes(getProviderApiType(provider))
+  );
+}
+
+/**
  * The API type (adapter) of a provider entry: its `apiType` for a custom LLM
  * provider, its id for a built-in one, null for anything else.
  */
