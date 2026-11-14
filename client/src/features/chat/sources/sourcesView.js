@@ -3,6 +3,7 @@
 
 import { hostOf } from '../../../../../shared/sources/index.js';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { originNounOf as activityOriginNounOf } from '../activityHeadline.js';
 
 /**
  * How a source and an answer's sources read in the chat: the site line of a
@@ -104,11 +105,8 @@ export function answerScopeLabel(t, scope, language) {
  */
 export function originNounOf(t, origin) {
   if (!origin?.kind) return '';
-  if (origin.kind === 'integration') {
-    return origin.label || t('chatMessage.answerBasis.kind.integration');
-  }
-  if (origin.kind === 'documents') return t('toolActivity.originDocuments');
-  return t(`chatMessage.answerBasis.kind.${origin.kind}`);
+  // One implementation for the card and the activity line, so they cannot drift.
+  return activityOriginNounOf(t, { origin: origin.kind, integration: origin.label });
 }
 
 /**

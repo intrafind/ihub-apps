@@ -1040,3 +1040,14 @@ describe('where each source comes from (#3668)', () => {
     expect(pill).toHaveClass('min-h-6', 'border-gray-500');
   });
 });
+
+describe('formal German in the sources messages', () => {
+  const de = require('../../../shared/i18n/de.json');
+  test('the two attach messages address the reader as Sie', () => {
+    expect(de.sources.documentNoAccess).toContain('Sie haben keinen Zugriff');
+    expect(de.sources.documentUnavailable).toContain('steht Ihnen nicht zur Verfügung');
+    expect(de.sources.documentNoAccess + de.sources.documentUnavailable).not.toMatch(
+      /\b(Du|dir)\b/
+    );
+  });
+});
