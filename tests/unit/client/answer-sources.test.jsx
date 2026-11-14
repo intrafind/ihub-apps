@@ -34,6 +34,8 @@ import {
 } from '../../../client/src/features/chat/sources/sourcesStore';
 import {
   answerScopeLabel,
+  originNounOf,
+  originSummaryOf,
   scopeLabelOf,
   sourceScopesOf
 } from '../../../client/src/features/chat/sources/sourcesView';
@@ -879,5 +881,173 @@ describe('model picker web search marker', () => {
     expect(
       screen.getByText('Web search does not work with this model in this app')
     ).toBeInTheDocument();
+  });
+});
+
+describe('where each source comes from (#3668)', () => {
+  const web = { ...langdock, origin: { kind: 'web' } };
+  const webTwo = { ...yc, origin: { kind: 'web' } };
+  const projectDoc = {
+    id: 'project:p1:i1',
+    provider: 'project',
+    kind: 'document',
+    title: 'Project brief',
+    site: 'Project Alpha',
+    ref: { id: 'i1', scope: 'p1' },
+    origin: { kind: 'project' },
+    private: true
+  };
+  const ifinderDoc = {
+    id: 'ifinder:d1',
+    provider: 'ifinder',
+    kind: 'document',
+    title: 'Contract A',
+    ref: { id: 'd1', scope: 'contracts' },
+    scopeName: 'Contracts',
+    origin: { kind: 'ifinder' },
+    private: true
+  };
+  const jira = {
+    id: 'jira:ACME-1',
+    provider: 'jira',
+    kind: 'item',
+    title: 'Login fails',
+    site: 'ACME-1',
+    origin: { kind: 'integration', label: 'Jira' },
+    private: true
+  };
+  const documentsSource = {
+    id: 'source_handbook:1',
+    provider: 'source_handbook',
+    kind: 'document',
+    title: 'Handbook',
+    origin: { kind: 'documents' },
+    private: true
+  };
+  const noOrigin = { ...docs, id: 'url:old.example', title: 'Old page', origin: undefined };
+
+  const open = items => {
+    render(
+      <AnswerSources
+        messageKey="msg-origin"
+        sources={{ queries: [], items }}
+        citations={resolveCitations('', { queries: [], items })}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /sources.resultsCount/ }));
+    return screen.getByRole('dialog', { name: 'Sources' });
+  };
+  const card = (dialog, title) => within(dialog).getByText(title).closest('li');
+
+  test('every card starts its meta line with the origin noun, as text', () => {
+    const dialog = open([web, projectDoc, ifinderDoc, jira, documentsSource]);
+    expect(
+      within(card(dialog, web.title)).getByText('chatMessage.answerBasis.kind.web')
+    ).toBeVisible();
+    expect(
+      within(card(dialog, 'Project brief')).getByText('chatMessage.answerBasis.kind.project')
+    ).toBeVisible();
+    // The project name is the site, after the noun.
+    expect(within(card(dialog, 'Project brief')).getByText('Project Alpha')).toBeVisible();
+    expect(
+      within(card(dialog, 'Contract A')).getByText('chatMessage.answerBasis.kind.ifinder')
+    ).toBeVisible();
+    // A connected system is named by its own label, once even when the site repeats it.
+    expect(within(card(dialog, 'Login fails')).getByText('Jira')).toBeVisible();
+    expect(
+      within(card(dialog, 'Handbook')).getByText('toolActivity.originDocuments')
+    ).toBeVisible();
+  });
+
+  test('a source without an origin is unchanged: nothing is guessed from its provider', () => {
+    const dialog = open([noOrigin]);
+    const oldCard = card(dialog, 'Old page');
+    expect(oldCard.textContent).not.toContain('chatMessage.answerBasis.kind');
+    expect(within(oldCard).getByText('docs.langdock.com')).toBeVisible();
+  });
+
+  test('the meta line wraps and keeps readable grey on a highlighted card', () => {
+    const dialog = open([web]);
+    const meta = card(dialog, web.title).querySelector('.flex-wrap');
+    expect(meta).toHaveClass('flex-wrap', 'text-gray-600');
+    expect(meta.className).not.toContain('text-gray-500');
+    expect(card(dialog, web.title).querySelector('.truncate')).toBeNull();
+  });
+
+  test('two or more origins get a summary list of card counts; one origin gets none', () => {
+    const dialog = open([web, webTwo, projectDoc, ifinderDoc]);
+    const summary = within(dialog).getByRole('list', { name: 'sources.originSummary' });
+    expect(
+      within(summary)
+        .getAllByRole('listitem')
+        .map(item => item.textContent)
+    ).toEqual([
+      'chatMessage.answerBasis.kind.web 2',
+      '·chatMessage.answerBasis.kind.project 1',
+      '·chatMessage.answerBasis.kind.ifinder 1'
+    ]);
+    // The dots are decoration; the list items are text, not buttons.
+    expect(within(summary).queryByRole('button')).toBeNull();
+  });
+
+  test('one origin gets no summary: the cards say it already', () => {
+    const dialog = open([web, webTwo]);
+    expect(within(dialog).queryByRole('list', { name: 'sources.originSummary' })).toBeNull();
+  });
+
+  test('connected systems count by their own label, sources without origin are not counted', () => {
+    const summary = originSummaryOf(key => key, [jira, { ...jira, id: 'jira:2' }, web, noOrigin]);
+    expect(summary.map(entry => [entry.noun, entry.count])).toEqual([
+      ['Jira', 2],
+      ['chatMessage.answerBasis.kind.web', 1]
+    ]);
+    expect(originNounOf(key => key, undefined)).toBe('');
+    expect(originNounOf(key => key, { kind: 'integration' })).toBe(
+      'chatMessage.answerBasis.kind.integration'
+    );
+  });
+
+  test('a search profile is a "slice of the index" (squares-2x2), never the Project folder', () => {
+    const dialog = open([
+      ifinderDoc,
+      {
+        ...ifinderDoc,
+        id: 'ifinder:d2',
+        title: 'Contract B',
+        ref: { id: 'd2', scope: 'hr' },
+        scopeName: 'HR'
+      }
+    ]);
+    const names = within(dialog)
+      .getAllByTestId('icon')
+      .map(icon => icon.dataset.name);
+    expect(names).toContain('squares-2x2');
+    expect(names).not.toContain('folder');
+  });
+
+  test('the scope filter pills have a visible border and a 24 px target', () => {
+    const dialog = open([
+      ifinderDoc,
+      {
+        ...ifinderDoc,
+        id: 'ifinder:d2',
+        title: 'Contract B',
+        ref: { id: 'd2', scope: 'hr' },
+        scopeName: 'HR'
+      }
+    ]);
+    const pill = within(dialog).getByRole('button', { name: /HR/, pressed: false });
+    expect(pill).toHaveClass('min-h-6', 'border-gray-500');
+  });
+});
+
+describe('formal German in the sources messages', () => {
+  const de = require('../../../shared/i18n/de.json');
+  test('the two attach messages address the reader as Sie', () => {
+    expect(de.sources.documentNoAccess).toContain('Sie haben keinen Zugriff');
+    expect(de.sources.documentUnavailable).toContain('steht Ihnen nicht zur Verfügung');
+    expect(de.sources.documentNoAccess + de.sources.documentUnavailable).not.toMatch(
+      /\b(Du|dir)\b/
+    );
   });
 });

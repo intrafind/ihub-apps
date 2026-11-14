@@ -173,11 +173,11 @@ export function stripEllipsis(text) {
 }
 
 /** The origins that have phrases of their own (`toolActivity.origin.<origin>.*`); an integration is named by its label. */
-const PHRASED_ORIGINS = ['web', 'project', 'ifinder', 'iassistant', 'documents'];
+const PHRASED_ORIGINS = new Set(['web', 'project', 'ifinder', 'iassistant', 'documents']);
 
 /** The origin of a row when it has phrases of its own, else null (older server, unclassified call). */
 function phrasedOrigin(item) {
-  return PHRASED_ORIGINS.includes(item?.origin) ? item.origin : null;
+  return PHRASED_ORIGINS.has(item?.origin) ? item.origin : null;
 }
 
 /** The icon of a row's origin (the footer's glyph for the kind), or null. */

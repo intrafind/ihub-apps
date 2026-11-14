@@ -3,6 +3,7 @@
 
 import { hostOf } from '../../../../../shared/sources/index.js';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { originNounOf as activityOriginNounOf } from '../activityHeadline.js';
 
 /**
  * How a source and an answer's sources read in the chat: the site line of a
@@ -90,4 +91,42 @@ export function answerScopeLabel(t, scope, language) {
   return scope?.action === 'ask'
     ? t('sources.asked', 'Asked {{scope}}', { scope: name })
     : t('sources.searchedIn', 'Searched in {{scope}}', { scope: name });
+}
+
+/**
+ * The noun of a source's origin, as the footer and the activity line say it:
+ * "Web", "Project", "iFinder", "Document sources", and for a connected system
+ * its own label ("Jira"). The server decides the origin (`Source.origin`); a
+ * source without one has no noun, and nothing is guessed from its provider.
+ *
+ * @param {Function} t - translate function
+ * @param {{kind?: string, label?: string}|null|undefined} origin
+ * @returns {string} empty when the source names no origin
+ */
+export function originNounOf(t, origin) {
+  if (!origin?.kind) return '';
+  // One implementation for the card and the activity line, so they cannot drift.
+  return activityOriginNounOf(t, { origin: origin.kind, integration: origin.label });
+}
+
+/**
+ * How many cards each origin holds, in the order the origins first appear:
+ * `Web 5 · Project 3`. Connected systems count by their own label. Sources
+ * without an origin are not counted.
+ *
+ * @param {Function} t
+ * @param {Object[]} sources
+ * @returns {Array<{key: string, noun: string, count: number}>}
+ */
+export function originSummaryOf(t, sources) {
+  const groups = new Map();
+  for (const source of sources || []) {
+    const origin = source?.origin;
+    if (!origin?.kind) continue;
+    const key = origin.kind === 'integration' ? `integration:${origin.label || ''}` : origin.kind;
+    const known = groups.get(key);
+    if (known) known.count += 1;
+    else groups.set(key, { key, noun: originNounOf(t, origin), count: 1 });
+  }
+  return [...groups.values()];
 }
