@@ -57,11 +57,11 @@
  *    through a worker.
  *
  * Presence is eventually consistent: an announcement takes one IPC hop to the
- * primary and one back out. The paths that read it (a chat POST asking whether
- * an SSE stream exists) are separated from the registration (the SSE GET
- * completing) by a full browser round trip, which is orders of magnitude
- * longer, so the race is not reachable in practice. If it ever is, the reader
- * degrades to the non-streaming path rather than misbehaving.
+ * primary and one back out. A browser opens its chat stream and sends the
+ * message right after, and under load that is not long enough — the primary
+ * and the receiving worker are busy, and the message reaches a worker whose
+ * mirror does not know the stream yet (#3674). `lookupRemote()` closes that
+ * gap: on a miss it asks the primary, whose table is authoritative.
  *
  * ## Cost
  *
@@ -87,6 +87,8 @@ const MSG_PRESENCE_SET = 'presence:set';
 const MSG_PRESENCE_SYNC = 'presence:sync';
 const MSG_PRESENCE_BULK = 'presence:bulk';
 const MSG_PRESENCE_REQUEST = 'presence:request';
+const MSG_PRESENCE_LOOKUP = 'presence:lookup';
+const MSG_PRESENCE_LOOKUP_REPLY = 'presence:lookup:reply';
 
 /**
  * True when this process participates in a multi-worker cluster. Both the
@@ -144,21 +146,43 @@ function remoteBucket(kind) {
   return bucket;
 }
 
-function sendToPrimary(message) {
-  if (!busActive || typeof process.send !== 'function') return false;
+/**
+ * Send one IPC message and log, never throw, when it cannot be delivered.
+ *
+ * The callback is what makes this safe. Sending on a closed channel does not
+ * throw: without a callback Node emits the error asynchronously on the
+ * process object, where nothing listens, so it becomes an uncaught exception
+ * and the sender exits. A worker's channel closes before the worker counts as
+ * dead (`isDead()`), so the primary still routes to a worker that has just
+ * crashed — and an out-of-memory worker used to take the primary, and with it
+ * the whole pod, down with it. The catch covers what does throw synchronously
+ * (a message that cannot be serialised).
+ *
+ * Losing a message to a process that is going away is the same outcome as that
+ * process dying a moment earlier, so it is logged and dropped.
+ *
+ * @param {{send: Function}} target - A cluster Worker, or `process` in a worker.
+ * @param {object} message
+ * @param {string} failure - Log message when delivery fails.
+ * @param {object} [fields] - Extra log fields.
+ * @returns {boolean} False if the message was not handed to the channel.
+ */
+function sendSafely(target, message, failure, fields = {}) {
+  const warn = error =>
+    logger.warn({ component: 'ClusterBus', message: failure, ...fields, error: error.message });
   try {
-    return process.send({ [ENVELOPE]: true, ...message });
-  } catch (error) {
-    // A worker shutting down loses its IPC channel mid-flight. Losing a relayed
-    // chunk at that point is the same outcome as the worker dying with the
-    // stream open, so log and carry on rather than taking the request down.
-    logger.warn({
-      component: 'ClusterBus',
-      message: 'Failed to send message to primary',
-      error: error.message
+    return target.send(message, error => {
+      if (error) warn(error);
     });
+  } catch (error) {
+    warn(error);
     return false;
   }
+}
+
+function sendToPrimary(message) {
+  if (!busActive || typeof process.send !== 'function') return false;
+  return sendSafely(process, { [ENVELOPE]: true, ...message }, 'Failed to send message to primary');
 }
 
 // ---------------------------------------------------------------------------
@@ -199,16 +223,9 @@ export function initPrimaryBus({ getWorkers }) {
   const sendTo = (workerId, message) => {
     const target = getWorkers().find(w => w && w.id === workerId && !w.isDead?.());
     if (!target) return;
-    try {
-      target.send({ [ENVELOPE]: true, ...message });
-    } catch (error) {
-      logger.warn({
-        component: 'ClusterBus',
-        message: 'Failed to send message to worker',
-        workerPid: target.process?.pid,
-        error: error.message
-      });
-    }
+    sendSafely(target, { [ENVELOPE]: true, ...message }, 'Failed to send message to worker', {
+      workerPid: target.process?.pid
+    });
   };
 
   /**
@@ -236,16 +253,9 @@ export function initPrimaryBus({ getWorkers }) {
     for (const worker of getWorkers()) {
       if (!worker || worker.isDead?.()) continue;
       if (exceptWorkerId !== null && worker.id === exceptWorkerId) continue;
-      try {
-        worker.send({ [ENVELOPE]: true, ...message });
-      } catch (error) {
-        logger.warn({
-          component: 'ClusterBus',
-          message: 'Failed to forward message to worker',
-          workerPid: worker.process?.pid,
-          error: error.message
-        });
-      }
+      sendSafely(worker, { [ENVELOPE]: true, ...message }, 'Failed to forward message to worker', {
+        workerPid: worker.process?.pid
+      });
     }
   };
 
@@ -282,12 +292,17 @@ export function initPrimaryBus({ getWorkers }) {
       .then(() => handler(message.payload.payload))
       .then(reply => {
         if (reply === undefined || worker.isDead?.()) return;
-        worker.send({
-          [ENVELOPE]: true,
-          kind: MSG_PUBLISH,
-          type: message.type + REPLY_SUFFIX,
-          payload: { requestId, reply }
-        });
+        sendSafely(
+          worker,
+          {
+            [ENVELOPE]: true,
+            kind: MSG_PUBLISH,
+            type: message.type + REPLY_SUFFIX,
+            payload: { requestId, reply }
+          },
+          'Failed to send primary reply to worker',
+          { workerPid: worker.process?.pid }
+        );
       })
       .catch(error => {
         logger.warn({
@@ -321,16 +336,12 @@ export function initPrimaryBus({ getWorkers }) {
           if (owner !== undefined && owner !== worker.id) {
             const target = getWorkers().find(w => w && w.id === owner && !w.isDead?.());
             if (target) {
-              try {
-                target.send({ [ENVELOPE]: true, ...message });
-              } catch (error) {
-                logger.warn({
-                  component: 'ClusterBus',
-                  message: 'Failed to route message to owning worker',
-                  workerPid: target.process?.pid,
-                  error: error.message
-                });
-              }
+              sendSafely(
+                target,
+                { [ENVELOPE]: true, ...message },
+                'Failed to route message to owning worker',
+                { workerPid: target.process?.pid }
+              );
               break;
             }
           }
@@ -411,26 +422,56 @@ export function initPrimaryBus({ getWorkers }) {
       }
 
       case MSG_PRESENCE_REQUEST:
-        try {
-          worker.send({
-            [ENVELOPE]: true,
-            kind: MSG_PRESENCE_BULK,
-            entries: snapshotFor(worker.id)
-          });
-        } catch (error) {
-          logger.warn({
-            component: 'ClusterBus',
-            message: 'Failed to send presence snapshot to worker',
-            workerPid: worker.process?.pid,
-            error: error.message
-          });
-        }
+        sendSafely(
+          worker,
+          { [ENVELOPE]: true, kind: MSG_PRESENCE_BULK, entries: snapshotFor(worker.id) },
+          'Failed to send presence snapshot to worker',
+          { workerPid: worker.process?.pid }
+        );
         break;
+
+      case MSG_PRESENCE_LOOKUP: {
+        const ownerOf = () => ownersOf(message.ownKind, message.key).find(id => id !== worker.id);
+        const answer = owner => {
+          const reply = {
+            [ENVELOPE]: true,
+            kind: MSG_PRESENCE_LOOKUP_REPLY,
+            lookupId: message.lookupId,
+            ownKind: message.ownKind,
+            key: message.key,
+            owner: owner ?? null
+          };
+          try {
+            // The callback keeps a closed channel from becoming an uncaught exception (#3677).
+            worker.send(reply, error => {
+              if (error) logLookupReplyFailure(worker, error);
+            });
+          } catch (error) {
+            logLookupReplyFailure(worker, error);
+          }
+        };
+        const owner = ownerOf();
+        // Not known yet: look once more after this poll phase. A primary that
+        // was busy can find the owner's announcement and this lookup ready on
+        // two channels at once and read the lookup first; by the check phase
+        // it has read everything that was waiting.
+        if (owner === undefined) setImmediate(() => answer(ownerOf()));
+        else answer(owner);
+        break;
+      }
 
       default:
         break;
     }
   });
+
+  const logLookupReplyFailure = (worker, error) =>
+    logger.warn({
+      component: 'ClusterBus',
+      message: 'Failed to answer presence lookup',
+      workerPid: worker.process?.pid,
+      error: error.message
+    });
 
   cluster.on('exit', worker => {
     // Retract everything the dead worker owned. Its SSE clients died with it;
@@ -518,6 +559,18 @@ export function initWorkerBus() {
           remoteBucket(kind).set(key, owner);
         }
         break;
+
+      case MSG_PRESENCE_LOOKUP_REPLY: {
+        const settle = pendingLookups.get(message.lookupId);
+        if (!settle) break;
+        pendingLookups.delete(message.lookupId);
+        // Safe to mirror: the primary answered from its table, and anything that
+        // changes this entry later (a retraction) reaches this worker after this
+        // reply on the same channel, so the entry cannot outlive the stream.
+        if (message.owner !== null) remoteBucket(message.ownKind).set(message.key, message.owner);
+        settle(message.owner !== null);
+        break;
+      }
 
       default:
         break;
@@ -837,6 +890,56 @@ export function createPresenceMap(kind, { shared = false } = {}) {
 export function hasRemote(kind, key) {
   if (!busActive) return false;
   return remoteOwnership.get(kind)?.has(key) === true;
+}
+
+/** Lookup id → settle callback, for `lookupRemote` calls awaiting the primary. */
+const pendingLookups = new Map();
+let nextLookupId = 1;
+
+/**
+ * Whether another worker holds `key` for `kind`, asking the primary when this
+ * worker's mirror says no.
+ *
+ * The mirror lags: an entry another worker registered a moment ago may not
+ * have reached this one yet. Where acting on a stale "no" loses something —
+ * a chat turn whose stream opened just before its message arrived would send
+ * every frame nowhere — ask the primary, which holds the authoritative table.
+ * A "yes" is also written to the mirror, so `hasRemote()` and relaying agree
+ * with it from the next call on.
+ *
+ * @param {string} kind
+ * @param {string} key
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs=1000] - How long to wait for the primary;
+ *   no answer counts as "not held".
+ * @returns {Promise<boolean>} Always false outside cluster mode.
+ */
+export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
+  if (!busActive) return Promise.resolve(false);
+  if (hasRemote(kind, key)) return Promise.resolve(true);
+  const lookupId = nextLookupId++;
+  return new Promise(resolve => {
+    const timer = setTimeout(() => {
+      pendingLookups.delete(lookupId);
+      logger.warn({
+        component: 'ClusterBus',
+        message: 'Presence lookup timed out',
+        kind,
+        timeoutMs
+      });
+      resolve(false);
+    }, timeoutMs);
+    timer.unref?.();
+    pendingLookups.set(lookupId, held => {
+      clearTimeout(timer);
+      resolve(held);
+    });
+    if (!sendToPrimary({ kind: MSG_PRESENCE_LOOKUP, ownKind: kind, key, lookupId })) {
+      clearTimeout(timer);
+      pendingLookups.delete(lookupId);
+      resolve(false);
+    }
+  });
 }
 
 /**

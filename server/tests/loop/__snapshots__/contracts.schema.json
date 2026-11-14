@@ -2224,6 +2224,26 @@
                       "required": ["ok"],
                       "additionalProperties": false
                     },
+                    "scopeName": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "origin": {
+                          "type": "string",
+                          "enum": ["uploaded", "picked", "linked", "written"]
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["origin"],
+                      "additionalProperties": false
+                    },
                     "cited": {
                       "type": "boolean"
                     },
@@ -3473,6 +3493,26 @@
                     }
                   },
                   "required": ["ok"],
+                  "additionalProperties": false
+                },
+                "scopeName": {
+                  "type": "string"
+                },
+                "provenance": {
+                  "type": "object",
+                  "properties": {
+                    "origin": {
+                      "type": "string",
+                      "enum": ["uploaded", "picked", "linked", "written"]
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["origin"],
                   "additionalProperties": false
                 },
                 "cited": {
@@ -5392,6 +5432,26 @@
                         }
                       },
                       "required": ["ok"],
+                      "additionalProperties": false
+                    },
+                    "scopeName": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "origin": {
+                          "type": "string",
+                          "enum": ["uploaded", "picked", "linked", "written"]
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["origin"],
                       "additionalProperties": false
                     },
                     "cited": {

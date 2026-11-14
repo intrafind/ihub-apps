@@ -19,6 +19,7 @@ import {
   initWorkerBus,
   createPresenceMap,
   hasRemote,
+  lookupRemote,
   publish,
   subscribe,
   gather,
@@ -260,6 +261,30 @@ async function runPrimary() {
       assert.strictEqual(survivors[1].hasRemote, false);
     });
 
+    // ---- a lookup finds a stream the mirror has not heard of yet ----
+    // A browser opens its stream on one worker and sends the message to another
+    // as soon as the stream is connected; the lookup must not depend on the
+    // announcement having reached the second worker yet (#3674). Look up right
+    // after the registration, without waiting for presence to settle.
+    await ask(workers[0], { step: 'register', key: 'chat-new' });
+    const found = await ask(workers[1], { step: 'lookup', key: 'chat-new' });
+    check('a lookup right after the registration finds the stream', () =>
+      assert.strictEqual(found.held, true)
+    );
+    check('a found stream is mirrored, so relaying sees it', () =>
+      assert.strictEqual(found.hasRemote, true)
+    );
+    const [missing, own] = await Promise.all([
+      ask(workers[1], { step: 'lookup', key: 'chat-nowhere' }),
+      ask(workers[0], { step: 'lookup', key: 'chat-new' })
+    ]);
+    check('a lookup for a stream nobody holds says no', () =>
+      assert.strictEqual(missing.held, false)
+    );
+    check("the owner's lookup of its own stream says no (not remote)", () =>
+      assert.strictEqual(own.held, false)
+    );
+
     // ---- a silent process does not hang a gather ----
     // The dead worker cannot answer; the gather waits out its timeout and
     // returns what it has, so the caller can show the worker as missing.
@@ -273,6 +298,30 @@ async function runPrimary() {
       assert.deepStrictEqual(pids, [process.pid, workerPids[1]].sort());
       assert.ok(partial.elapsedMs >= 250, `resolved early after ${partial.elapsedMs}ms`);
     });
+
+    // ---- a worker whose channel closed does not take the primary down ----
+    // A crashing worker's IPC channel closes before it counts as dead, and a
+    // send on a closed channel does not throw: without a callback Node emits
+    // the error asynchronously, as an uncaught exception in the primary. An
+    // out-of-memory worker took a whole pod down this way.
+    const uncaught = [];
+    const onUncaught = error => uncaught.push(error.code || error.message);
+    process.on('uncaughtException', onUncaught);
+    await ask(workers[1], { step: 'register', key: 'chat-closing' });
+    await settle();
+    const closing = workers[1];
+    const closed = new Promise(resolve => closing.once('disconnect', resolve));
+    closing.send({ step: 'disconnect' });
+    await closed;
+    // Routed to its key, broadcast past it, and a presence sync fanned out to it.
+    await ask(workers[0], { step: 'send', key: 'chat-closing', text: 'late', directed: true });
+    await ask(workers[0], { step: 'send', text: 'late broadcast', directed: false });
+    await ask(workers[0], { step: 'register', key: 'chat-after' });
+    await settle();
+    process.off('uncaughtException', onUncaught);
+    check('sending to a worker with a closed channel is logged, not fatal', () =>
+      assert.deepStrictEqual(uncaught, [])
+    );
   } catch (error) {
     failed = true;
     console.error(`❌ test driver failed: ${error.message}`);
@@ -328,6 +377,11 @@ function runWorker() {
       case 'probe':
         reply({ hasRemote: hasRemote('sse', msg.key) });
         break;
+      case 'lookup':
+        lookupRemote('sse', msg.key).then(held =>
+          reply({ held, hasRemote: hasRemote('sse', msg.key) })
+        );
+        break;
       case 'share':
         sharedPresence.set(msg.key, { marker: true });
         reply({ ok: true });
@@ -362,6 +416,12 @@ function runWorker() {
         );
         break;
       }
+      case 'disconnect':
+        // Close the channel but stay alive for a while, like a worker that is
+        // crashing: not dead yet, unreachable already.
+        setTimeout(() => process.exit(0), 3000);
+        process.disconnect();
+        break;
       case 'clear-inbox':
         inbox.length = 0;
         reply({ ok: true });

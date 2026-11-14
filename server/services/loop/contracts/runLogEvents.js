@@ -330,6 +330,19 @@ export const sourceSchema = z.object({
       truncated: z.boolean().optional()
     })
     .optional(),
+  /**
+   * Display name of `ref.scope` where users pick it ("Contracts" for an iFinder
+   * search profile); kept only beside a `ref.scope`.
+   */
+  scopeName: z.string().optional(),
+  /** Where a project document came from: uploaded, picked, linked at its source or written by a run. */
+  provenance: z
+    .object({
+      origin: z.enum(['uploaded', 'picked', 'linked', 'written']),
+      kind: z.string().optional(),
+      at: z.string().optional()
+    })
+    .optional(),
   cited: z.boolean().optional(),
   markers: z.array(z.string()).optional(),
   /**
