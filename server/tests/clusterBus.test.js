@@ -273,6 +273,30 @@ async function runPrimary() {
       assert.deepStrictEqual(pids, [process.pid, workerPids[1]].sort());
       assert.ok(partial.elapsedMs >= 250, `resolved early after ${partial.elapsedMs}ms`);
     });
+
+    // ---- a worker whose channel closed does not take the primary down ----
+    // A crashing worker's IPC channel closes before it counts as dead, and a
+    // send on a closed channel does not throw: without a callback Node emits
+    // the error asynchronously, as an uncaught exception in the primary. An
+    // out-of-memory worker took a whole pod down this way.
+    const uncaught = [];
+    const onUncaught = error => uncaught.push(error.code || error.message);
+    process.on('uncaughtException', onUncaught);
+    await ask(workers[1], { step: 'register', key: 'chat-closing' });
+    await settle();
+    const closing = workers[1];
+    const closed = new Promise(resolve => closing.once('disconnect', resolve));
+    closing.send({ step: 'disconnect' });
+    await closed;
+    // Routed to its key, broadcast past it, and a presence sync fanned out to it.
+    await ask(workers[0], { step: 'send', key: 'chat-closing', text: 'late', directed: true });
+    await ask(workers[0], { step: 'send', text: 'late broadcast', directed: false });
+    await ask(workers[0], { step: 'register', key: 'chat-after' });
+    await settle();
+    process.off('uncaughtException', onUncaught);
+    check('sending to a worker with a closed channel is logged, not fatal', () =>
+      assert.deepStrictEqual(uncaught, [])
+    );
   } catch (error) {
     failed = true;
     console.error(`❌ test driver failed: ${error.message}`);
@@ -362,6 +386,12 @@ function runWorker() {
         );
         break;
       }
+      case 'disconnect':
+        // Close the channel but stay alive for a while, like a worker that is
+        // crashing: not dead yet, unreachable already.
+        setTimeout(() => process.exit(0), 3000);
+        process.disconnect();
+        break;
       case 'clear-inbox':
         inbox.length = 0;
         reply({ ok: true });
