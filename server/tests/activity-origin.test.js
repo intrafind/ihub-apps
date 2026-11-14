@@ -617,3 +617,37 @@ test('a recall is placed by the origin of its sources, and by the provider only 
     undefined
   );
 });
+
+test('the wire and the ledger keep Source.origin (the contract names it, so the parse does not strip it)', async () => {
+  const { parseSseV2EventData } = await import('../services/loop/contracts/sseV2.js');
+  const { parseRunLogEventData } = await import('../services/loop/contracts/runLogEvents.js');
+  const frame = {
+    items: [
+      {
+        id: 'a',
+        provider: 'jira',
+        kind: 'item',
+        private: true,
+        origin: { kind: 'integration', label: 'Jira' }
+      },
+      { id: 'b', provider: 'web', kind: 'page', private: false, origin: { kind: 'web' } }
+    ]
+  };
+  for (const parse of [
+    data => parseSseV2EventData('sources/added', data),
+    data => parseRunLogEventData('sources/added', data)
+  ]) {
+    assert.deepEqual(
+      parse(frame).items.map(item => item.origin),
+      [{ kind: 'integration', label: 'Jira' }, { kind: 'web' }]
+    );
+  }
+  // An origin that is not a kind of the vocabulary is refused, not passed on.
+  assert.throws(() =>
+    parseSseV2EventData('sources/added', {
+      items: [
+        { id: 'c', provider: 'p', kind: 'page', private: false, origin: { kind: 'elsewhere' } }
+      ]
+    })
+  );
+});

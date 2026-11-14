@@ -332,6 +332,11 @@ export const sourceSchema = z.object({
     .optional(),
   cited: z.boolean().optional(),
   markers: z.array(z.string()).optional(),
+  /**
+   * Where it was found, in the footer's vocabulary (decided by the server from
+   * the call that found it, never from `provider`); only an integration carries a label.
+   */
+  origin: z.object({ kind: z.enum(ACTIVITY_ORIGINS), label: z.string().optional() }).optional(),
   /** Found with the user's own permissions or network: a share never carries it. */
   private: z.boolean()
 });
