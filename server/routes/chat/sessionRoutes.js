@@ -24,6 +24,7 @@ import {
   hasActiveChatRequest,
   hasChatClient,
   isChatDurable,
+  locateChatClient,
   markChatDurable
 } from '../../sse.js';
 import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
@@ -701,9 +702,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
   }
 
   /**
-   * Run one chat turn through the shared chat service. With an SSE client the
-   * turn streams over the chat channel and this resolves once it ended; without
-   * one the answer is written to the HTTP response.
+   * Run one chat turn through the shared chat service. The turn streams over
+   * the chat's channel and this resolves once it ended.
    *
    * `persistence` is the durable-chat context the POST handler assembled, or
    * null when this turn is not stored — the service treats null as "behave
@@ -714,8 +714,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     buildLogData,
     messageId,
     activatedSkills = [],
-    streaming,
-    res,
     chatId,
     DEFAULT_TIMEOUT,
     getLocalizedError,
@@ -726,15 +724,15 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     canApproveTools = false,
     runId = null
   }) {
-    await logInteraction('chat_request', buildLogData(streaming));
+    await logInteraction('chat_request', buildLogData(true));
 
-    const outcome = await chatService.runTurn({
+    return chatService.runTurn({
       prep,
       chatId,
       messageId,
       ...(runId ? { runId } : {}),
       activatedSkills,
-      streaming,
+      streaming: true,
       buildLogData,
       timeoutMs: DEFAULT_TIMEOUT,
       getLocalizedError,
@@ -744,25 +742,6 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       toolApproval,
       canApproveTools
     });
-    if (streaming) return outcome;
-
-    if (outcome.refusal) {
-      throw refusal(409, outcome.refusal.message, { code: outcome.refusal.code });
-    }
-    if (outcome.status === 'error') {
-      // A failing model call is answered by the error middleware with its mapped status.
-      if (outcome.error) throw outcome.error;
-      throw refusal(502, outcome.errorInfo?.message, {
-        code: outcome.errorInfo?.code || 'ERROR'
-      });
-    }
-    return res.json({
-      messageId,
-      model: prep.model?.id,
-      content: outcome.content,
-      finishReason: outcome.finishReason,
-      usage: outcome.usage || null
-    });
   }
 
   /**
@@ -771,11 +750,10 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *   post:
    *     summary: Send a chat message
    *     description: |
-   *       Sends a message to the AI chat. If an active SSE connection exists for the
-   *       given `chatId` (established via GET on the same URL), the response streams
-   *       back over that connection and this endpoint returns immediately with
-   *       `{ status: "streaming" }`. Without an SSE connection the response is
-   *       returned directly (non-streaming).
+   *       Sends a message to the AI chat. The answer streams over the chat's SSE
+   *       connection (GET on the same URL), so open that first. This endpoint answers
+   *       `{ status: "streaming" }` once the turn has ended. Without an SSE connection
+   *       the turn still runs and a kept chat stores its answer, but nothing streams.
    *     tags:
    *       - Chat
    *     security:
@@ -808,7 +786,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *             outputFormat: "markdown"
    *     responses:
    *       200:
-   *         description: Message accepted and streaming started (or direct response returned)
+   *         description: The turn ran; its answer was streamed over the chat's SSE connection
    *         content:
    *           application/json:
    *             schema:
@@ -1367,13 +1345,13 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           integrationScopes
         };
 
-        // Resolve the SSE sink once, up front. In cluster mode the stream for
-        // this chat may be held by another worker, in which case this is a
-        // relay shim rather than a local response; null means no stream exists
-        // anywhere and the answer has to come back on this POST instead.
-        // Deciding from the sink itself (rather than checking membership and
-        // fetching separately) keeps the two in step.
-        const streamOpen = hasChatClient(chatId);
+        // The answer reaches the browser over the chat's stream only. In
+        // cluster mode that stream may be held by another worker, opened a
+        // moment ago — before this worker heard of it — so make sure it is
+        // known here before the turn's first frame is routed (#3674). With no
+        // stream anywhere the turn still runs and is stored; its frames have
+        // nowhere to go.
+        await locateChatClient(chatId);
 
         // From here the turn owns the chat. A kept chat's turn has to survive
         // the browser closing — its answer is written to the store either way —
@@ -1387,150 +1365,91 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           durableTurn = true;
         }
 
-        if (!streamOpen) {
-          logger.info('No active SSE connection, creating response without streaming', {
-            component: 'sessionRoutes',
-            chatId
-          });
-          const prep = await chatService.prepareChatRequest(chatRequestOptions);
-          if (!prep.success) {
-            const errMsg = await getLocalizedError(
-              prep.error.code || 'internalError',
-              {},
-              clientLanguage
-            );
-            throw refusal(
-              prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
-                ? 404
-                : prep.error.code === 'modelAccessDeniedForUser'
-                  ? 403
-                  : prep.error.code === 'noModelsAvailable' ||
-                      prep.error.code === 'noCompatibleModels' ||
-                      prep.error.code === 'noModelIdProvided' ||
-                      prep.error.code === 'noModelsForUser'
-                    ? 400
-                    : 500,
-              errMsg,
-              { code: prep.error.code }
-            );
-          }
-          const approvalRefusal = await commitApproval();
-          if (approvalRefusal) {
-            throw refusal(approvalRefusal.status, approvalRefusal.message, {
-              code: approvalRefusal.code
-            });
-          }
-          appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
-          ({ model, llmMessages } = prep.data);
-
-          // Awaited, not returned bare: `return promise` inside a try/finally
-          // runs the finally before the turn settles, which would drop the
-          // durable mark while the run is still going.
-          return await processChatRequest({
-            prep: prep.data,
-            buildLogData,
+        // Note that `hasChatClient` (inside `locateChatClient`) refreshed
+        // lastActivity on the existing map entry in place rather than
+        // replacing it: the SSE GET handler pins that object reference via
+        // `myEntry` to identify a stale `req.on('close')` after a reconnect,
+        // and replacing the entry would defeat that check, letting a dead
+        // socket's close handler bail out and leak the Map entry +
+        // activeRequests controller for up to 5 minutes until
+        // cleanupInactiveClients evicts it.
+        //
+        // The turn's run is named before its preparation (#3622): while the
+        // prompt is built, the refresh of outdated project documents it
+        // waits for is shown on that run, and the turn then runs as it (or
+        // fails as it, so the status line ends with the turn).
+        const turnRunId = newRunId('chat');
+        const refreshStatus = new RunStreamEmitter({ streamId: chatId, runId: turnRunId });
+        const prep = await chatService.prepareChatRequest({
+          ...chatRequestOptions,
+          onKnowledgeRefresh: ({ total, done }) =>
+            refreshStatus.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
+              phase: KNOWLEDGE_REFRESH_PHASE,
+              data: { total, done }
+            })
+        });
+        if (!prep.success) {
+          const errMsg = await getLocalizedError(
+            prep.error.code || 'internalError',
+            {},
+            clientLanguage
+          );
+          emitFailedRun(chatId, {
             messageId,
-            activatedSkills: announcedSkills(prep.data.activeSkills),
-            streaming: false,
-            res,
-            chatId,
-            DEFAULT_TIMEOUT,
-            getLocalizedError,
-            clientLanguage,
-            user: req.user,
-            persistence,
-            // No stream, no card: a gated call is refused (APPROVAL_REQUIRED_NO_USER).
-            toolApproval,
-            canApproveTools: false
-          });
-        } else {
-          // Note that `hasChatClient` refreshed lastActivity on the
-          // existing map entry in place rather than replacing it: the SSE GET
-          // handler pins that object reference via `myEntry` to identify a stale
-          // `req.on('close')` after a reconnect, and replacing the entry would
-          // defeat that check, letting a dead socket's close handler bail out
-          // and leak the Map entry + activeRequests controller for up to
-          // 5 minutes until cleanupInactiveClients evicts it.
-          //
-          // The turn's run is named before its preparation (#3622): while the
-          // prompt is built, the refresh of outdated project documents it
-          // waits for is shown on that run, and the turn then runs as it (or
-          // fails as it, so the status line ends with the turn).
-          const turnRunId = newRunId('chat');
-          const refreshStatus = new RunStreamEmitter({ streamId: chatId, runId: turnRunId });
-          const prep = await chatService.prepareChatRequest({
-            ...chatRequestOptions,
-            onKnowledgeRefresh: ({ total, done }) =>
-              refreshStatus.emit(SSE_V2_EVENTS.TOOL_PROGRESS, {
-                phase: KNOWLEDGE_REFRESH_PHASE,
-                data: { total, done }
-              })
-          });
-          if (!prep.success) {
-            const errMsg = await getLocalizedError(
-              prep.error.code || 'internalError',
-              {},
-              clientLanguage
-            );
-            emitFailedRun(chatId, {
-              messageId,
-              code: prep.error.code,
-              message: errMsg,
-              runId: turnRunId
-            });
-            return res.json({ status: 'error', message: errMsg, code: prep.error.code });
-          }
-          const approvalRefusal = await commitApproval();
-          if (approvalRefusal) {
-            emitFailedRun(chatId, {
-              runId: turnRunId,
-              messageId,
-              code: approvalRefusal.code,
-              message: approvalRefusal.message
-            });
-            throw refusal(approvalRefusal.status, approvalRefusal.message, {
-              code: approvalRefusal.code
-            });
-          }
-          model = prep.data.model;
-          // What open MCP App views reported since the last turn; model-only.
-          appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
-          llmMessages = prep.data.llmMessages;
-
-          // Skills in force this turn are announced on the run: the usable
-          // subset the request builder put in the system prompt, never a skill
-          // the app or the user may not use. Each says who brought it in (the
-          // user's `/name` or composer pick, the app, or an earlier message).
-          const activatedSkills = announcedSkills(prep.data.activeSkills);
-
-          const outcome = await processChatRequest({
-            prep: prep.data,
-            buildLogData,
-            messageId,
-            activatedSkills,
-            streaming: true,
-            res: null,
-            chatId,
-            DEFAULT_TIMEOUT,
-            getLocalizedError,
-            clientLanguage,
-            user: req.user,
-            persistence,
-            toolApproval,
-            // Only a client that draws the approval card can answer one.
-            canApproveTools: toolApprovalCapable === true,
+            code: prep.error.code,
+            message: errMsg,
             runId: turnRunId
           });
-          // Refused at persistence: the chat's container changed under the
-          // turn (`settleUserTurn`), and nothing of it was stored.
-          if (outcome?.refusal) {
-            throw refusal(409, outcome.refusal.message, {
-              code: outcome.refusal.code
-            });
-          }
-
-          return res.json({ status: 'streaming', chatId });
+          return res.json({ status: 'error', message: errMsg, code: prep.error.code });
         }
+        const approvalRefusal = await commitApproval();
+        if (approvalRefusal) {
+          emitFailedRun(chatId, {
+            runId: turnRunId,
+            messageId,
+            code: approvalRefusal.code,
+            message: approvalRefusal.message
+          });
+          throw refusal(approvalRefusal.status, approvalRefusal.message, {
+            code: approvalRefusal.code
+          });
+        }
+        model = prep.data.model;
+        // What open MCP App views reported since the last turn; model-only.
+        appendMcpAppContext(prep.data.llmMessages, mcpAppContext);
+        llmMessages = prep.data.llmMessages;
+
+        // Skills in force this turn are announced on the run: the usable
+        // subset the request builder put in the system prompt, never a skill
+        // the app or the user may not use. Each says who brought it in (the
+        // user's `/name` or composer pick, the app, or an earlier message).
+        const activatedSkills = announcedSkills(prep.data.activeSkills);
+
+        const outcome = await processChatRequest({
+          prep: prep.data,
+          buildLogData,
+          messageId,
+          activatedSkills,
+          chatId,
+          DEFAULT_TIMEOUT,
+          getLocalizedError,
+          clientLanguage,
+          user: req.user,
+          persistence,
+          toolApproval,
+          // Only a client that draws the approval card can answer one.
+          canApproveTools: toolApprovalCapable === true,
+          runId: turnRunId
+        });
+        // Refused at persistence: the chat's container changed under the
+        // turn (`settleUserTurn`), and nothing of it was stored.
+        if (outcome?.refusal) {
+          throw refusal(409, outcome.refusal.message, {
+            code: outcome.refusal.code
+          });
+        }
+
+        return res.json({ status: 'streaming', chatId });
       } catch (error) {
         // A refusal and a failing model call are answered as they are; only an unexpected
         // failure is logged here.

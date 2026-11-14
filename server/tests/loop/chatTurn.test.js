@@ -904,6 +904,8 @@ test('iFinder tools: each call that finds documents reports them as sources/adde
     url: 'https://sp.example/acme.pdf',
     fileName: 'acme.pdf',
     ref: { id: 'sp-7f3a9c11', scope: 'sales' },
+    // The search profile's display name reaches the client with the frame.
+    scopeName: 'sales',
     private: true
   });
   assert.deepEqual(found[1].items[0].read, { ok: true });

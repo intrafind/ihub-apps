@@ -651,3 +651,39 @@ test('the wire and the ledger keep Source.origin (the contract names it, so the 
     })
   );
 });
+
+test('the contract names every field a normalized source can carry: the parse on the wire and in the ledger drops none', async () => {
+  const { parseSseV2EventData } = await import('../services/loop/contracts/sseV2.js');
+  const { parseRunLogEventData } = await import('../services/loop/contracts/runLogEvents.js');
+  // A source with every field the normalization can produce.
+  const source = normalizeSource({
+    provider: 'ifinder',
+    kind: 'document',
+    title: 'Contract A',
+    url: 'https://sp.example/a.pdf',
+    site: 'SharePoint',
+    favicon: 'https://sp.example/favicon.ico',
+    snippet: 'The notice period is three months.',
+    passages: [{ text: 'Three months.', marker: 's:1' }],
+    publishedDate: '2026-09-01T00:00:00.000Z',
+    fileName: 'a.pdf',
+    type: 'PDF',
+    ref: { id: 'd1', scope: 'contracts' },
+    scopeName: 'Contracts',
+    provenance: { origin: 'picked', kind: 'ifinder', at: '2026-09-02T00:00:00.000Z' },
+    origin: { kind: 'ifinder' },
+    read: { ok: true, words: 12, truncated: true },
+    cited: true,
+    markers: ['r:1'],
+    private: true
+  });
+  for (const key of ['scopeName', 'provenance', 'origin', 'passages', 'markers', 'read', 'ref']) {
+    assert.ok(source[key], `the fixture carries ${key}`);
+  }
+  for (const parse of [
+    data => parseSseV2EventData('sources/added', data),
+    data => parseRunLogEventData('sources/added', data)
+  ]) {
+    assert.deepEqual(parse({ items: [source] }).items[0], source);
+  }
+});
