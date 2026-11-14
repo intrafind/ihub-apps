@@ -171,11 +171,14 @@ export const webSourceProducer = {
    * empty source list is not "no results", a provider-run search has none by
    * construction.
    *
-   * @param {{toolId: string, result: unknown, failed?: boolean}} call
+   * @param {{toolId: string, toolDef?: Object, result: unknown, failed?: boolean}} call
    * @returns {{resultCount?: number, readOutcome?: 'opened'|'empty'}}
    */
-  outcomeOf({ toolId, result, failed }) {
+  outcomeOf({ toolId, toolDef, result, failed }) {
     if (failed || !result || typeof result !== 'object' || result.error) return {};
+    // A connected server's bare array is its content blocks (text, images),
+    // not a hit list: counting them would declare "N results" for one block.
+    if (Array.isArray(result) && (toolDef?._mcp || toolDef?._a2a)) return {};
     if (isPageReader(toolId)) {
       return typeof result.content === 'string'
         ? { readOutcome: result.content.trim() ? 'opened' : 'empty' }
