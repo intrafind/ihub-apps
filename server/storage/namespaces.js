@@ -324,6 +324,18 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * the first requester (or the admin who added it).
    */
   websiteCorpusDomains: 'website-corpus-domains',
+  /**
+   * Evidence records of chat answers (#3687): one document per stored answer,
+   * keyed `<scope(chatId)>__<scope(messageId)>` so all evidence of a chat is
+   * one prefix. The content it refers to is in `chat-evidence-content`.
+   */
+  chatEvidence: 'chat-evidence',
+  /**
+   * Evidence records of runs without a chat (`/v1` completions, the
+   * Responses API without a stored conversation), keyed by run id and owned
+   * by the caller. The content is in `run-evidence-content`.
+   */
+  runEvidence: 'run-evidence',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });
@@ -350,7 +362,15 @@ export const BLOB_NAMESPACES = Object.freeze({
    * pressure without losing the extracted text needed for multi-turn chat and
    * replay.
    */
-  chatFiles: 'chat-files'
+  chatFiles: 'chat-files',
+  /**
+   * Content an evidence record refers to (system prompts, messages, tool
+   * definitions, tool arguments and results), stored once per chat under
+   * `<scope(chatId)>__<sha256>`.
+   */
+  chatEvidenceContent: 'chat-evidence-content',
+  /** The same for runs without a chat, under `<scope(runId)>__<sha256>`. */
+  runEvidenceContent: 'run-evidence-content'
 });
 
 /**
@@ -379,7 +399,13 @@ export const KEY_PREFIX_SEGMENTS = Object.freeze({
   /** `<scopeType>__<scopeId>__<artifactId>`, documents and blobs. */
   artifacts: 2,
   /** Blobs `<projectId>__<itemId>__<versionId>`, listed per project and per item. */
-  'project-files': 1
+  'project-files': 1,
+  /** `<scope(chatId)>__<scope(messageId)>`: the evidence documents of one chat. */
+  'chat-evidence': 1,
+  /** `<scope(chatId)>__<sha256>`: the evidence content of one chat. */
+  'chat-evidence-content': 1,
+  /** `<scope(runId)>__<sha256>`: the evidence content of one run. */
+  'run-evidence-content': 1
 });
 
 /**

@@ -24,6 +24,8 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `chats`, `chat-messages`    | every conversation and its transcript — temporary unless the Chat History feature keeps it | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
 | `artifacts`                 | what a run produced: a metadata document and a blob per artifact | –                        | [Artifacts](artifacts.md)                |
 | `chat-files`                | files uploaded to a chat or a scheduled task, or through the Inference API: a metadata document per file (the extracted text, page images and original are blobs beside it) and the `_meta__server-bytes` counter that enforces the server-wide quota | the owner | [Chat and Scheduled-Task Files](chat-files.md) |
+| `chat-evidence`, `chat-evidence-content` | the evidence record of each stored answer (what went into every model call and every tool call) and the content it refers to, stored once per chat by SHA-256; deleted with the chat | the chat's principal | [Chat Evidence Record](chat-evidence.md) |
+| `run-evidence`, `run-evidence-content` | the same record for runs without a chat (`/v1` completions, the Responses API without a stored conversation) | the caller | [Chat Evidence Record](chat-evidence.md) |
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
 | `workflow-state`            | an execution's checkpoint, and what a resume reads           | the principal that started it | [Workflows](workflows.md)              |
@@ -227,7 +229,8 @@ it once.
 Namespaces whose listings are scoped by the leading `__` segments of the key
 are declared in `KEY_PREFIX_SEGMENTS` (`server/storage/namespaces.js`):
 `chat-files` and `artifacts` by two segments (`<scopeType>__<scopeId>__…`),
-`project-files` by one (`<projectId>__…`). A provider may index those segments
+`project-files`, `chat-evidence`, `chat-evidence-content` and
+`run-evidence-content` by one (`<projectId>__…`, `<chat scope>__…`). A provider may index those segments
 so a listing of one chat's files does not read all of them; results are the
 same either way.
 

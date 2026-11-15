@@ -43,7 +43,7 @@
  *
  * @module storage/BlobStore
  */
-import { NotSupportedError } from './errors.js';
+import { InvalidKeyError, NotSupportedError } from './errors.js';
 
 /** Page size the base {@link BlobStore#scan} walks `list` with (its maximum). */
 const SCAN_PAGE_SIZE = 1000;
@@ -174,6 +174,27 @@ export class BlobStore {
       yield* page.items;
       cursor = page.nextCursor || null;
     } while (cursor);
+  }
+
+  /**
+   * Remove every blob whose key starts with `prefix` — the blob counterpart of
+   * {@link module:storage/DocumentStore~DocumentStore#deletePrefix}, with the
+   * same `startsWith` match, idempotence and refusal of an empty prefix.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} prefix - Key prefix; must not be empty.
+   * @returns {Promise<number>} How many blobs were removed.
+   * @throws {InvalidKeyError} When `prefix` is empty.
+   */
+  async deletePrefix(ns, prefix) {
+    if (typeof prefix !== 'string' || prefix.length === 0) {
+      throw new InvalidKeyError('deletePrefix needs a non-empty prefix');
+    }
+    const keys = [];
+    for await (const item of this.scan(ns, { prefix })) keys.push(item.key);
+    let removed = 0;
+    for (const key of keys) if (await this.delete(ns, key)) removed++;
+    return removed;
   }
 
   /**
