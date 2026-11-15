@@ -1160,6 +1160,12 @@
         "modelChat": "Das Modell des Chats",
         "modelIdHelp": "Ein kleines, günstiges Modell genügt. Es wird nur für Nutzende verwendet, deren Gruppen es nutzen dürfen; für alle anderen schreibt das Modell des Chats den Titel. Ein anderes Modell wird nie verwendet."
       },
+      "evidence": {
+        "title": "Nachweis",
+        "description": "Für jede gespeicherte Antwort ein Nachweis, was eingegangen und was herausgekommen ist: der Systemprompt, die Nachrichten und Tool-Definitionen jedes Modellaufrufs, jeder Tool-Aufruf mit Argumenten und Ergebnis sowie die Modelleinstellungen. Er lebt mit dem Chat und wird mit ihm gelöscht. Lesen können ihn der Eigentümer und Admins; ein geteilter Chat teilt ihn nicht.",
+        "enabled": "Nachweis führen",
+        "enabledHelp": "Aus bedeutet: Es wird nicht festgehalten, was eingegangen ist. Eingeschaltet gilt es für Antworten, die ab dann gespeichert werden."
+      },
       "sharing": {
         "title": "Chats teilen",
         "description": "Schreibgeschützte Links auf gespeicherte Chats. Erfordert zusätzlich das Feature „Chats teilen“. Ein Link ist eine Kopie des Chats im Stand zum Zeitpunkt des Teilens; ob die hochgeladenen Dateien mitgeteilt werden, entscheidet der Eigentümer (standardmäßig nicht).",

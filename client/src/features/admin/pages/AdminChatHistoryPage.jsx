@@ -323,6 +323,7 @@ function AdminChatHistoryPage() {
         body: {
           chats: settings.chats,
           titles: settings.titles,
+          evidence: settings.evidence,
           runLog: settings.runLog,
           sharing: settings.sharing,
           uploads: settings.uploads
@@ -1206,6 +1207,32 @@ function AdminChatHistoryPage() {
             </div>
           </div>
         </div>
+
+        {/* Evidence record settings */}
+        {settings.evidence && (
+          <div className={cardClass}>
+            <h2 className={headingClass}>
+              <Icon name="shield-check" className="w-5 h-5 mr-2 text-blue-500" />
+              {t('admin.chatHistory.evidence.title', 'Evidence record')}
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              {t(
+                'admin.chatHistory.evidence.description',
+                'For every stored answer, a record of what went in and what came out: the system prompt, the messages and tool definitions of every model call, every tool call with its arguments and result, and the model settings. It lives and is deleted with the chat. The owner and admins can read it; a shared chat does not share it.'
+              )}
+            </p>
+            <CheckboxField
+              id="evidence-enabled"
+              label={t('admin.chatHistory.evidence.enabled', 'Keep an evidence record')}
+              help={t(
+                'admin.chatHistory.evidence.enabledHelp',
+                'Off means no record of what went in is kept. Turning it on applies to answers stored from then on.'
+              )}
+              checked={settings.evidence.enabled}
+              onChange={value => updateSetting('evidence', 'enabled', value)}
+            />
+          </div>
+        )}
 
         {/* Chat sharing settings */}
         <div className={cardClass}>

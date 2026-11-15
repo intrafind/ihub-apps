@@ -249,3 +249,22 @@ export function chatTitleSettings(platformConfig) {
     modelId: typeof titles?.modelId === 'string' ? titles.modelId.trim() : ''
   };
 }
+
+/** Default cap of one evidence item, in bytes (`chats.evidence.maxContentBytes`). */
+export const DEFAULT_EVIDENCE_MAX_CONTENT_BYTES = 10 * 1024 * 1024;
+
+/**
+ * The chat evidence record settings (`platform.chats.evidence`, #3687),
+ * defaults filled in. On unless switched off explicitly.
+ *
+ * @param {Object} platformConfig - Platform configuration.
+ * @returns {{enabled: boolean, maxContentBytes: number}}
+ */
+export function chatEvidenceSettings(platformConfig) {
+  const evidence = platformConfig?.chats?.evidence;
+  const max = evidence?.maxContentBytes;
+  return {
+    enabled: evidence?.enabled !== false,
+    maxContentBytes: Number.isFinite(max) && max > 0 ? max : DEFAULT_EVIDENCE_MAX_CONTENT_BYTES
+  };
+}

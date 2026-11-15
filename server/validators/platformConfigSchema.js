@@ -637,6 +637,16 @@ export const platformConfigSchema = z
           })
           .passthrough()
           .prefault({}),
+        // Chat evidence record (#3687): per stored answer, what went into
+        // every model call and tool call. `maxContentBytes` caps one item (a
+        // tool result, a message); a larger one keeps only its hash and size.
+        evidence: z
+          .object({
+            enabled: z.boolean().prefault(true),
+            maxContentBytes: z.number().prefault(10 * 1024 * 1024)
+          })
+          .passthrough()
+          .prefault({}),
         // Chat sharing: read-only links onto stored chats, gated by
         // features.chatSharing. The three `allow*` switches decide which
         // audiences an owner may pick; the caps bound what a link may be

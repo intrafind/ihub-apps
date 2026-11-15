@@ -241,6 +241,30 @@ describe('PUT /api/admin/chat-history/settings', () => {
   });
 });
 
+describe('evidence record settings (platform.chats.evidence)', () => {
+  test('reads the defaults and writes a change under chats.evidence', async () => {
+    const app = createTestApp();
+    const read = await request(app).get('/api/admin/chat-history');
+    expect(read.body.settings.evidence).toEqual({ enabled: true, maxContentBytes: 10485760 });
+
+    const response = await request(app)
+      .put('/api/admin/chat-history/settings')
+      .send({ evidence: { enabled: false, maxContentBytes: 10485760 } });
+
+    expect(response.status).toBe(200);
+    expect(response.body.changed).toEqual(['chats.evidence.enabled']);
+    expect(state.stored.chats.evidence).toEqual({ enabled: false });
+    expect(response.body.settings.evidence.enabled).toBe(false);
+  });
+
+  test('rejects a non-positive item cap', async () => {
+    const response = await request(createTestApp())
+      .put('/api/admin/chat-history/settings')
+      .send({ evidence: { maxContentBytes: 0 } });
+    expect(response.status).toBe(400);
+  });
+});
+
 describe('uploaded files settings (platform.uploads)', () => {
   test('reads the effective upload settings with defaults filled in', async () => {
     const response = await request(createTestApp()).get('/api/admin/chat-history');
