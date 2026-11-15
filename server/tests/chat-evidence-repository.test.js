@@ -41,21 +41,24 @@ async function blobCount(ns, prefix = '') {
   return page.items.length;
 }
 
+/** A record naming the given items, as a built record does. */
+function recordOf(messageId, ...values) {
+  return { messageId, refs: values.map(value => `sha256:${contentItem(value).sha256}`) };
+}
+
 describe('ChatEvidenceRepository', () => {
-  it('stores a record and its content; the id and sha256 are what the message keeps', async () => {
-    const items = itemsOf('system prompt', { role: 'user', content: 'hi' });
+  it('stores a record and its content; the id and sha256 come back', async () => {
     const ref = await repo.writeRecord(
       'chat',
       'chat-1',
       { v: 1, chatId: 'chat-1', messageId: 'm1' },
-      items,
-      { ownerId: 'alice', maxContentBytes: 1000 }
+      itemsOf('system prompt', { role: 'user', content: 'hi' }),
+      { ownerId: 'alice' }
     );
     assert.equal(ref.id, 'm1');
     const doc = await repo.getRecord('chat', 'chat-1', 'm1');
     assert.equal(doc.etag, ref.sha256);
     assert.equal(doc.ownerId, 'alice');
-    assert.equal(doc.data.messageId, 'm1');
 
     const { sha256, text } = contentItem('system prompt');
     const content = await repo.getContent('chat', 'chat-1', sha256);
@@ -64,38 +67,42 @@ describe('ChatEvidenceRepository', () => {
     assert.equal(await repo.getContent('chat', 'chat-2', sha256), null, 'per chat');
   });
 
-  it('writes shared content once per chat and keeps it when a message goes', async () => {
-    const shared = itemsOf('system prompt');
-    await repo.writeRecord('chat', 'chat-3', { messageId: 'a' }, shared, { maxContentBytes: 1e6 });
+  it('writes shared content once; removing a message sweeps only what nobody names', async () => {
+    await repo.writeRecord(
+      'chat',
+      'chat-3',
+      recordOf('a', 'shared', 'only a'),
+      itemsOf('shared', 'only a')
+    );
     const before = await blobCount('chat-evidence-content');
-    await repo.writeRecord('chat', 'chat-3', { messageId: 'b' }, shared, { maxContentBytes: 1e6 });
-    assert.equal(await blobCount('chat-evidence-content'), before);
+    await repo.writeRecord('chat', 'chat-3', recordOf('b', 'shared'), itemsOf('shared'));
+    assert.equal(await blobCount('chat-evidence-content'), before, 'shared blob written once');
 
     assert.equal(await repo.deleteMessages('chat-3', ['a']), 1);
     assert.equal(await repo.getRecord('chat', 'chat-3', 'a'), null);
     assert.ok(await repo.getRecord('chat', 'chat-3', 'b'));
-    const { sha256 } = contentItem('system prompt');
-    assert.ok(await repo.getContent('chat', 'chat-3', sha256), 'shared blob stays');
-    assert.ok((await repo.chatBytes('chat-3')) > 0);
+    assert.ok(
+      await repo.getContent('chat', 'chat-3', contentItem('shared').sha256),
+      'shared stays'
+    );
+    assert.equal(
+      await repo.getContent('chat', 'chat-3', contentItem('only a').sha256),
+      null,
+      'what only the removed record named goes'
+    );
   });
 
-  it('does not store an item above maxContentBytes and marks it truncated', async () => {
-    const big = 'x'.repeat(200);
-    const items = itemsOf(big, 'small');
-    await repo.writeRecord('chat', 'chat-4', { messageId: 'm' }, items, { maxContentBytes: 100 });
-    const { sha256 } = contentItem(big);
-    assert.equal(await repo.getContent('chat', 'chat-4', sha256), null);
-    const doc = await repo.getRecord('chat', 'chat-4', 'm');
-    assert.deepEqual(doc.data.truncated, [{ sha256, bytes: 202, truncated: true }]);
+  it('writes nothing when onlyIf says no (the chat is gone)', async () => {
+    const ref = await repo.writeRecord('chat', 'chat-gone', recordOf('m', 'x'), itemsOf('x'), {
+      onlyIf: async () => false
+    });
+    assert.equal(ref, null);
+    assert.equal(await repo.chatBytes('chat-gone'), 0);
   });
 
   it('deleteChat removes every record and blob of the chat and nothing else', async () => {
-    await repo.writeRecord('chat', 'chat-5', { messageId: 'm' }, itemsOf('five'), {
-      maxContentBytes: 1e6
-    });
-    await repo.writeRecord('chat', 'chat-6', { messageId: 'm' }, itemsOf('six'), {
-      maxContentBytes: 1e6
-    });
+    await repo.writeRecord('chat', 'chat-5', recordOf('m', 'five'), itemsOf('five'));
+    await repo.writeRecord('chat', 'chat-6', recordOf('m', 'six'), itemsOf('six'));
     assert.equal(await repo.deleteChat('chat-5'), 2);
     assert.equal(await repo.getRecord('chat', 'chat-5', 'm'), null);
     assert.equal(await repo.chatBytes('chat-5'), 0);
@@ -104,10 +111,9 @@ describe('ChatEvidenceRepository', () => {
   });
 
   it('run evidence: owner delete, age sweep and single delete', async () => {
-    const opts = owner => ({ ownerId: owner, maxContentBytes: 1e6 });
-    await repo.writeRecord('run', 'run-a', { runId: 'run-a' }, itemsOf('a'), opts('bob'));
-    await repo.writeRecord('run', 'run-b', { runId: 'run-b' }, itemsOf('b'), opts('bob'));
-    await repo.writeRecord('run', 'run-c', { runId: 'run-c' }, itemsOf('c'), opts('carol'));
+    await repo.writeRecord('run', 'run-a', { runId: 'run-a' }, itemsOf('a'), { ownerId: 'bob' });
+    await repo.writeRecord('run', 'run-b', { runId: 'run-b' }, itemsOf('b'), { ownerId: 'bob' });
+    await repo.writeRecord('run', 'run-c', { runId: 'run-c' }, itemsOf('c'), { ownerId: 'carol' });
     assert.equal((await repo.getRecord('run', 'run-a')).ownerId, 'bob');
 
     assert.equal(await repo.deleteRunsOfOwner('bob'), 2);

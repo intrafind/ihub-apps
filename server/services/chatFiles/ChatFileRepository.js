@@ -645,6 +645,8 @@ export class ChatFileRepository {
     let scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
     // A chat's evidence records take its storage too. Checked here, before an
     // upload, never before an answer: an answer is not refused for it.
+    // ponytail: lists the chat's evidence per upload — O(records + blobs of the
+    // chat); keep a byte counter if long chats make uploads slow.
     if (scope.type === 'chat' && limits.maxBytes > 0) {
       scopeBytes += await this._evidence.chatBytes(scope.id).catch(error => {
         this.logger.error('Evidence bytes of a chat not counted', {

@@ -47,7 +47,7 @@ import configCache from '../configCache.js';
 import { appAllowsUserProjects } from '../../shared/appProjects.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import runLog from '../services/loop/RunLog.js';
-import { resolvePrincipal } from '../services/loop/runIdentity.js';
+import { isAnonymousUser, resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { resolveChatOwner } from '../services/chat/chatOwner.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
@@ -505,6 +505,8 @@ export default function registerChatRoutes(app) {
     const { chatId } = req.params;
     assertValidId(chatId, 'chat');
     const repository = requireRepository();
+    // A guest's chat keeps no evidence; the anonymous principal reads none.
+    if (isAnonymousUser(req.user)) throw notFound('Chat');
     const access = await loadOwnedChat(chatId, req.user, repository, 'read');
     if (!access || access.nonOwner) throw notFound('Chat');
     return chatId;

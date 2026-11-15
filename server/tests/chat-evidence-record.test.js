@@ -21,6 +21,7 @@ import { LLMClient } from '../services/loop/LLMClient.js';
 import { ledgerMessages } from '../services/loop/ledgerMessages.js';
 import { buildEvidence } from '../services/chat/evidenceRecord.js';
 import { contentItem } from '../services/chat/ChatEvidenceRepository.js';
+import configCache from '../configCache.js';
 
 const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
 
@@ -73,6 +74,18 @@ function header(runId, requestId, step, messages, { tools = TOOLS, temperature =
     language: 'en'
   });
 }
+
+/** The full message references of call `index`, following its `from` chain. */
+function messagesOf(calls, index) {
+  const { from, append } = calls[index].messages;
+  return [...(from === null ? [] : messagesOf(calls, from)), ...append.map(m => m.message)];
+}
+
+/** A journal event for the fake run logs below. */
+const ev = (type, data) => ({ type, ts: 't', data });
+
+/** A run log over a fixed list of events. */
+const journalOf = events => ({ readEvents: async () => events, readSpill: async () => null });
 
 /** Resolve a `sha256:` reference to its parsed item. */
 function item(items, ref) {
@@ -200,15 +213,25 @@ describe('buildEvidence', () => {
     assert.deepEqual(record.output.files, [{ artifactId: 'art-1', sha256: 'a'.repeat(64) }]);
     assert.deepEqual(record.knowledge, [{ projectId: 'p1', mode: 'loaded', documents: 3 }]);
 
-    // Calls: initial, append, same, change — each with its full history.
+    // Calls: initial, append, same, change — each a delta on the call before,
+    // as the journal records it.
     assert.deepEqual(
-      record.calls.map(call => [call.requestId, call.status, call.messages.length]),
+      record.calls.map(call => [
+        call.requestId,
+        call.status,
+        call.messages.from,
+        call.messages.append.length
+      ]),
       [
-        ['req-1', 'ok', 1],
-        ['req-2', 'ok', 4],
-        ['req-3', 'error', 4],
-        ['req-4', 'ok', 1]
+        ['req-1', 'ok', null, 2],
+        ['req-2', 'ok', 0, 3],
+        ['req-3', 'error', 1, 0],
+        ['req-4', 'ok', null, 2]
       ]
+    );
+    assert.equal(
+      record.calls.some(call => call.incomplete),
+      false
     );
     for (const [call, real] of [
       [record.calls[0], first],
@@ -217,7 +240,7 @@ describe('buildEvidence', () => {
       [record.calls[3], compacted]
     ]) {
       assert.equal(call.messagesHash, hashPayload(real), 'messagesHash as computed at the call');
-      const rebuilt = [...call.system, ...call.messages.map(m => m.message)].map(ref =>
+      const rebuilt = messagesOf(record.calls, record.calls.indexOf(call)).map(ref =>
         item(items, ref)
       );
       assert.deepEqual(rebuilt, ledgerMessages(real), 'the messages the call was sent');
@@ -233,7 +256,7 @@ describe('buildEvidence', () => {
     assert.equal(item(items, record.calls[3].config).optionsSnapshot.temperature, 0.5);
 
     // The user message names its document and picture as chat files.
-    assert.deepEqual(record.calls[0].messages[0].files, [
+    assert.deepEqual(record.calls[0].messages.append[1].files, [
       { fileId: 'img1', sha256: sha256(picture), bytes: picture.length },
       { fileId: 'f1', textSha256: sha256(doc.content), chars: doc.content.length }
     ]);
@@ -268,5 +291,131 @@ describe('buildEvidence', () => {
     assert.equal(record.status, 'completed');
     assert.equal(record.finishReason ?? record.output.finishReason, 'stop');
     assert.equal(record.calls[0].tools, undefined);
+  });
+
+  it('keeps a call id that repeats across steps apart, with the result each step read', async () => {
+    const call = (step, q) => [
+      ev('tool/call', { step, callId: '0', toolId: 'search', args: { q } }),
+      ev('tool/result', { step, callId: '0', resultPreview: q.toUpperCase() })
+    ];
+    const toolTurn = (requestId, content) =>
+      ev('request/header', {
+        reason: 'append',
+        requestId,
+        messagesDelta: [
+          { role: 'assistant', tool_calls: [{ id: '0' }] },
+          { role: 'tool', tool_call_id: '0', content }
+        ]
+      });
+    const built = await buildEvidence({
+      runLog: journalOf([
+        ev('request/header', { reason: 'initial', requestId: 'r1', messages: [{ role: 'user' }] }),
+        ...call(0, 'a'),
+        toolTurn('r2', 'result a'),
+        ...call(1, 'b'),
+        toolTurn('r3', 'result b')
+      ]),
+      runId: 'run-dup'
+    });
+    assert.deepEqual(
+      built.record.toolCalls.map(entry => [entry.step, item(built.items, entry.result)]),
+      [
+        [0, 'result a'],
+        [1, 'result b']
+      ]
+    );
+  });
+
+  it('is nothing for a journal without a model call (the ledger was off)', async () => {
+    assert.equal(await buildEvidence({ runLog: journalOf([]), runId: 'run-none' }), null);
+    assert.equal(
+      await buildEvidence({
+        runLog: journalOf([ev('run/start', { principal: { id: 'u' } })]),
+        runId: 'run-none'
+      }),
+      null
+    );
+  });
+
+  it('marks a call incomplete when the replay does not match its message count', async () => {
+    const { record } = await buildEvidence({
+      runLog: journalOf([
+        // The run's first header is missing: the append has nothing to extend.
+        ev('request/header', {
+          reason: 'append',
+          requestId: 'r2',
+          messageCount: 3,
+          messagesDelta: [{ role: 'tool', tool_call_id: 'x', content: 'y' }]
+        })
+      ]),
+      runId: 'run-gap'
+    });
+    assert.equal(record.calls[0].incomplete, true);
+  });
+
+  it('attributes an error to the call of its step, not to the latest call', async () => {
+    const { record } = await buildEvidence({
+      runLog: journalOf([
+        ev('request/header', { reason: 'initial', step: 0, requestId: 'r1', messages: [] }),
+        ev('request/header', { reason: 'same', step: 1, requestId: 'r2' }),
+        ev('error', { step: 0, code: 'UPSTREAM', message: 'failed' })
+      ]),
+      runId: 'run-err'
+    });
+    assert.equal(record.calls[0].status, 'error');
+    assert.equal(record.calls[1].status, 'unknown');
+    assert.equal(record.errors[0].code, 'UPSTREAM');
+  });
+
+  it('carries the response schema forward to the calls that do not repeat it', async () => {
+    const schema = { type: 'object', properties: { a: { type: 'string' } } };
+    const { record, items } = await buildEvidence({
+      runLog: journalOf([
+        ev('request/header', {
+          reason: 'initial',
+          requestId: 'r1',
+          messages: [],
+          callConfig: { responseSchemaHash: 'h', responseSchema: schema }
+        }),
+        ev('request/header', {
+          reason: 'same',
+          requestId: 'r2',
+          callConfig: { responseSchemaHash: 'h' }
+        }),
+        ev('request/header', { reason: 'same', requestId: 'r3', callConfig: {} })
+      ]),
+      runId: 'run-schema'
+    });
+    const schemaOf = index => item(items, record.calls[index].config).callConfig.responseSchema;
+    assert.deepEqual(schemaOf(1), schema);
+    assert.equal(schemaOf(2), undefined);
+  });
+
+  it('stores the app configuration as an item, and an oversized item only by hash', async () => {
+    const app = { id: 'app-big', system: { en: 'Be brief.' } };
+    configCache.setCacheEntry('config/apps.json', [app]);
+    const huge = 'x'.repeat(300);
+    const { record, items } = await buildEvidence({
+      runLog: journalOf([
+        ev('run/start', { refs: { appId: 'app-big' } }),
+        ev('request/header', {
+          reason: 'initial',
+          requestId: 'r1',
+          messages: [{ role: 'user', content: huge }]
+        })
+      ]),
+      runId: 'run-app',
+      maxContentBytes: 200
+    });
+    assert.deepEqual(item(items, record.app.config), app);
+    const ref = record.calls[0].messages.append[0].message.slice('sha256:'.length);
+    assert.equal(items.has(ref), false, 'not kept');
+    assert.deepEqual(record.truncated, [
+      {
+        sha256: ref,
+        bytes: contentItem({ role: 'user', content: huge }).text.length,
+        truncated: true
+      }
+    ]);
   });
 });

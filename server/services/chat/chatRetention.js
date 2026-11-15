@@ -298,6 +298,9 @@ function overflowingChats(chats, maxChatsPerUser) {
  * @param {number|null} [options.temporaryRetentionHours=null] - Age in hours
  *   past which a temporary chat goes; null (or zero or less) leaves temporary
  *   chats alone this time.
+ * @param {number} [options.runEvidenceRetentionDays=retentionDays] - Age in
+ *   days past which the evidence of runs without a chat goes; zero or less
+ *   keeps it.
  * @param {(runId: string) => Promise<unknown>} [options.deleteRun] - Ledger
  *   cascade for a removed chat's runs. Injectable so a test can observe it
  *   without a ledger on disk.
@@ -315,6 +318,7 @@ export async function sweepChats({
   maxChatsPerUser,
   temporaryRetentionHours = null,
   originalRetentionDays = 0,
+  runEvidenceRetentionDays = retentionDays,
   deleteRun = runId => runLog.deleteRun(runId),
   removeWorkflowState = runId => getWorkflowStateRepository().remove(runId),
   pageSize = SCAN_PAGE_SIZE,
@@ -330,10 +334,11 @@ export async function sweepChats({
       });
     }
   }
-  // Evidence of runs without a chat follows the chats' age rule (#3687).
-  if (retentionDays > 0 && typeof repository?.evidenceStore === 'function') {
+  // Evidence of runs without a chat follows the chats' age rule (#3687), also
+  // while the chat history is off: those runs are no chat history.
+  if (runEvidenceRetentionDays > 0 && typeof repository?.evidenceStore === 'function') {
     try {
-      await repository.evidenceStore().sweepRuns(now() - retentionDays * DAY_MS);
+      await repository.evidenceStore().sweepRuns(now() - runEvidenceRetentionDays * DAY_MS);
     } catch (error) {
       logger.error('Chat retention failed to sweep run evidence', {
         component: COMPONENT,
@@ -510,6 +515,8 @@ export function startChatRetentionSweep({
         maxChatsPerUser: historyDue ? maxChatsPerUser : 0,
         temporaryRetentionHours,
         originalRetentionDays: historyDue ? chatFileSettings(platform).originalRetentionDays : 0,
+        // Not a history rule: `/v1` runs keep evidence with the history off too.
+        runEvidenceRetentionDays: retentionDays,
         now
       });
     } catch (error) {

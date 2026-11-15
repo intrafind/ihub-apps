@@ -40,7 +40,10 @@ import {
   settleInterruptedChat
 } from '../services/chat/chatRecovery.js';
 import { snapshotMessage } from '../services/chat/ChatShareRepository.js';
-import { ChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
+import {
+  ChatEvidenceRepository,
+  evidenceWritesSettled
+} from '../services/chat/ChatEvidenceRepository.js';
 import { mentionAccess } from '../services/workflow/workflowAccess.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
@@ -1768,12 +1771,21 @@ describe('the evidence record of a recovered turn', () => {
       const longAgo = new Date(Date.now() - INTERRUPTED_RUN_GRACE_MS - 60_000).toISOString();
       await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
       const chat = await repository.getChat(CHAT_ID);
-      await settleInterruptedChat(chat, { repository, runLog: fakeRunLog({ events: LEDGER }) });
+      const header = {
+        seq: 5,
+        runId: RUN_ID,
+        ts: 't5',
+        type: RUN_LOG_EVENTS.REQUEST_HEADER,
+        data: { step: 1, requestId: 'r1', reason: 'initial', messages: [], callConfig: {} }
+      };
+      await settleInterruptedChat(chat, {
+        repository,
+        runLog: fakeRunLog({ events: [...LEDGER, header] })
+      });
 
+      await evidenceWritesSettled();
       const answer = (await repository.getMessages(CHAT_ID)).messages[1];
-      assert.equal(answer.evidence.id, answer.id);
       const doc = await evidence.getRecord('chat', CHAT_ID, answer.id);
-      assert.equal(doc.etag, answer.evidence.sha256);
       assert.equal(doc.ownerId, 'user-1');
       assert.equal(doc.data.journalEnded, false);
       assert.equal(doc.data.status, 'error');

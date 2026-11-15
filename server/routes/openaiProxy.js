@@ -506,8 +506,13 @@ export default function registerOpenAIProxyRoutes(
     };
 
     // The evidence record of this run (#3687), after it ended; never awaited.
-    const recordEvidence = summary =>
+    // Once per run: the stream path can reach both its finish and its catch.
+    let evidenceRecorded = false;
+    const recordEvidence = summary => {
+      if (evidenceRecorded) return;
+      evidenceRecorded = true;
       void recordRunEvidence({ runId: run.runId, user, summary, runLog: llmClient.runLog });
+    };
     const evidenceOf = result => ({
       status: 'completed',
       content: result.content,

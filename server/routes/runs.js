@@ -175,7 +175,15 @@ export default function registerRunRoutes(app) {
     }
     const result = await runLog.deleteRun(runId);
     // A run without a chat keeps its evidence record beside the ledger (#3687).
-    await getChatEvidenceRepository().deleteRun(runId);
+    try {
+      await getChatEvidenceRepository().deleteRun(runId);
+    } catch (error) {
+      logger.error('Run evidence not deleted', {
+        component: 'RunRoutes',
+        runId,
+        error: error.message
+      });
+    }
     res.json(result);
   });
 
