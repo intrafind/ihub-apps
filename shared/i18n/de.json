@@ -1164,7 +1164,7 @@
         "title": "Nachweis",
         "description": "Für jede gespeicherte Antwort ein Nachweis, was eingegangen und was herausgekommen ist: der Systemprompt, die Nachrichten und Tool-Definitionen jedes Modellaufrufs, jeder Tool-Aufruf mit Argumenten und Ergebnis sowie die Modelleinstellungen. Er lebt mit dem Chat und wird mit ihm gelöscht. Lesen können ihn der Eigentümer und Admins; ein geteilter Chat teilt ihn nicht.",
         "enabled": "Nachweis führen",
-        "enabledHelp": "Aus bedeutet: Es wird nicht festgehalten, was eingegangen ist. Eingeschaltet gilt es für Antworten, die ab dann gespeichert werden."
+        "enabledHelp": "Aus bedeutet: Es wird nicht festgehalten, was eingegangen ist. Der Nachweis entsteht aus dem Laufprotokoll (Run Ledger), das gespeicherte Chats einschalten; ein Lauf ohne Protokoll erhält keinen Nachweis. Eingeschaltet gilt es für Antworten, die ab dann gespeichert werden."
       },
       "sharing": {
         "title": "Chats teilen",

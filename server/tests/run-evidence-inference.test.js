@@ -119,7 +119,7 @@ describe('evidence of /v1/chat/completions runs', () => {
       assert.equal(doc.data.runId, doc.key);
       assert.equal(doc.data.calls.length, 1);
       assert.equal(doc.data.calls[0].status, 'ok');
-      const [message] = doc.data.calls[0].messages.slice(-1);
+      const [message] = doc.data.calls[0].messages.append.slice(-1);
       const content = await getChatEvidenceRepository().getContent(
         'run',
         doc.key,
@@ -129,7 +129,12 @@ describe('evidence of /v1/chat/completions runs', () => {
     }
     const appRecord = records.find(doc => doc.data.app?.id === 'helper');
     assert.ok(appRecord, 'the app turn names its app');
-    assert.equal(appRecord.data.calls[0].system.length > 0, true, 'with its system prompt');
+    assert.equal(
+      appRecord.data.calls[0].messages.append[0].role,
+      'system',
+      'with its system prompt'
+    );
+    assert.ok(appRecord.data.app.config, 'and the app configuration as stored');
   });
 
   it('records nothing for an anonymous caller', async () => {

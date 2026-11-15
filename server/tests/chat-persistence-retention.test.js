@@ -635,6 +635,43 @@ describe('startChatRetentionSweep', () => {
     });
   });
 
+  it('with the history off, still removes expired evidence of runs without a chat', async () => {
+    await withRepository(async ({ repository, provider }) => {
+      const evidence = new ChatEvidenceRepository({
+        documents: provider.documents,
+        blobs: provider.blobs
+      });
+      const withEvidence = new ChatRepository({
+        documents: provider.documents,
+        locks: provider.locks,
+        logger: quietLogger(),
+        evidence
+      });
+      await storeChat(repository, { chatId: 'chat-ancient', ownerId: OWNER, ageDays: 4000 });
+      await evidence.writeRecord('run', 'run-old', { runId: 'run-old' }, new Map(), {
+        ownerId: OWNER
+      });
+      await withCapturedTimers(async () => {
+        const stop = startChatRetentionSweep({
+          repository: withEvidence,
+          ...SWEEP_ON,
+          getPlatformConfig: () => ({ chats: { enabled: false, retentionDays: 1 } }),
+          intervalMs: 60_000,
+          now: () => Date.now() + 2 * DAY_MS
+        });
+        try {
+          await waitFor(
+            async () => (await evidence.getRecord('run', 'run-old')) === null,
+            'the run evidence to be swept'
+          );
+          assert.ok(await repository.getChat('chat-ancient'), 'the chats stay');
+        } finally {
+          await stop();
+        }
+      });
+    });
+  });
+
   it('turning the Durable Chats feature off does not purge the store either', async () => {
     // The switch an admin actually sees is `features.chatPersistence`; it does
     // not touch `platform.chats.enabled`. Gating the sweep on the platform key

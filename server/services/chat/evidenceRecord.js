@@ -9,9 +9,10 @@
  * sent: each `request/header` carries the messages in full (`initial`,
  * `change`), as the messages added since the previous header (`append`) or
  * not at all (`same`), plus the tool definitions and the call configuration
- * when they change. This module replays those headers into the exact message
- * list of every call and folds them, the tool calls and their results into one
- * record. Every piece of content becomes an item (its canonical JSON, keyed by
+ * when they change. This module replays those headers and folds them, the tool
+ * calls and their results into one record. A call's messages mirror the
+ * journal: `{ from, append }`, the call whose list it continues plus what it
+ * added. Every piece of content becomes an item (its canonical JSON, keyed by
  * SHA-256) that `ChatEvidenceRepository` stores once per chat; the record
  * names items as `sha256:<hex>`.
  *
@@ -19,9 +20,10 @@
  * journal (`ledgerMessages.js`); they are listed on the message as `files`
  * and not copied.
  *
- * The record is built for a normal end and for crash recovery alike, so
- * `run/end` may be missing: status, finish reason and usage come from the
- * turn's summary, and `journalEnded` says whether the journal had its end.
+ * The record is written after the answer is stored, off the answer path: a
+ * process that dies in between leaves the answer without a record (logged by
+ * nobody — there is nobody left). A run whose journal has no model call (the
+ * run ledger off) gets no record.
  *
  * @module services/chat/evidenceRecord
  */
@@ -32,12 +34,16 @@ import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { isAnonymousUser } from '../loop/runIdentity.js';
 import { chatEvidenceSettings } from './chatPersistence.js';
+import { GUEST_OWNER_PREFIX } from './chatOwner.js';
 import {
   SHA256_PATTERN,
   contentItem,
   getChatEvidenceRepository,
+  inBackground,
   sha256Hex
 } from './ChatEvidenceRepository.js';
+
+export { evidenceWritesSettled } from './ChatEvidenceRepository.js';
 
 /** Version of the record shape. */
 export const EVIDENCE_VERSION = 1;
@@ -47,12 +53,17 @@ const DOCUMENT_REF_TAG = /<content\b[^>]*\btext_sha256="[a-f0-9]{64}"[^>]*\/>/g;
 
 /**
  * Collects items and hands out their references. One per build, so a message
- * object replayed into many calls is serialized and hashed once.
+ * object replayed into many calls is serialized and hashed once. An item
+ * above `maxContentBytes` is hashed but not kept; it is listed in `truncated`.
  */
 class ItemCollector {
-  constructor() {
+  constructor(maxContentBytes) {
     /** @type {Map<string, string>} sha256 → canonical JSON */
     this.items = new Map();
+    /** @type {Map<string, {sha256: string, bytes: number, truncated: true}>} */
+    this.truncated = new Map();
+    this._max =
+      Number.isFinite(maxContentBytes) && maxContentBytes > 0 ? maxContentBytes : Infinity;
     this._refs = new WeakMap();
   }
 
@@ -65,8 +76,19 @@ class ItemCollector {
   ref(value) {
     const cacheable = value !== null && typeof value === 'object';
     if (cacheable && this._refs.has(value)) return this._refs.get(value);
+    // Serialized once; the size check reads the same text that is hashed.
     const { sha256, text } = contentItem(value);
-    this.items.set(sha256, text);
+    // UTF-8 is 1–3 bytes per UTF-16 unit: only a text near the cap is measured.
+    const over =
+      text.length > this._max ||
+      (text.length * 3 > this._max && Buffer.byteLength(text, 'utf8') > this._max);
+    if (over) {
+      this.truncated.set(sha256, {
+        sha256,
+        bytes: Buffer.byteLength(text, 'utf8'),
+        truncated: true
+      });
+    } else this.items.set(sha256, text);
     const ref = `sha256:${sha256}`;
     if (cacheable) this._refs.set(value, ref);
     return ref;
@@ -115,6 +137,8 @@ export function filesOfMessage(message) {
 }
 
 /** Drop undefined and null members. */
+
+/** Drop undefined and null members. */
 function compact(object) {
   return Object.fromEntries(
     Object.entries(object).filter(([, value]) => value !== undefined && value !== null)
@@ -136,20 +160,38 @@ function modelSettings(callConfig = {}, optionsSnapshot = {}) {
 }
 
 /**
- * The SHA-256 of the app configuration as it is in force now — the record is
- * built when the answer is stored, which is the closest point to the run.
+ * The app configuration in force now — the record is built when the answer
+ * is stored, which is the closest point to the run it can see.
  *
  * @param {string|null} appId
- * @returns {string|null}
+ * @returns {Object|null}
  */
-function appConfigSha256(appId) {
+function appConfigOf(appId) {
   if (!appId) return null;
   try {
-    const app = (configCache.getApps?.(true)?.data || []).find(entry => entry?.id === appId);
-    return app ? contentItem(app).sha256 : null;
+    return (configCache.getApps?.(true)?.data || []).find(entry => entry?.id === appId) || null;
   } catch {
     return null;
   }
+}
+
+/** One message as a call lists it: role, reference, chat files. */
+function messageEntry(collector, message) {
+  const files = filesOfMessage(message);
+  return compact({
+    role: message?.role,
+    message: collector.ref(message),
+    files: files.length > 0 ? files : undefined
+  });
+}
+
+/** The last tool message of `messages` answering `callId`. */
+function toolMessageFor(messages, callId) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role === 'tool' && message.tool_call_id === callId) return message;
+  }
+  return null;
 }
 
 /**
@@ -164,7 +206,9 @@ function appConfigSha256(appId) {
  * @param {string} [params.messageId] - The stored answer's id, for a chat record.
  * @param {string} [params.appId] - The app; defaults to the run's `refs.appId`.
  * @param {Array<Object>} [params.artifacts] - Stored artifact descriptors of the answer.
- * @returns {Promise<{record: Object, items: Map<string, string>}>}
+ * @param {number} [params.maxContentBytes] - Cap of one item.
+ * @returns {Promise<{record: Object, items: Map<string, string>}|null>} Null
+ *   when the journal has no model call (the ledger was off).
  */
 export async function buildEvidence({
   runLog,
@@ -173,21 +217,25 @@ export async function buildEvidence({
   chatId,
   messageId,
   appId,
-  artifacts = []
+  artifacts = [],
+  maxContentBytes
 }) {
   const events = await runLog.readEvents(runId);
-  const collector = new ItemCollector();
+  const collector = new ItemCollector(maxContentBytes);
   const calls = [];
   const callsByRequest = new Map();
+  const callsByStep = new Map();
+  /** Tool calls by `<step>:<callId>`; a call id can repeat across steps. */
   const toolCalls = new Map();
-  const toolMessages = new Map();
+  /** Tool calls whose result the next header may carry. */
+  let awaitingHeader = [];
   const knowledge = [];
   const errors = [];
   let start = null;
   let end = null;
-  let current = null;
   let messages = [];
   let tools = null;
+  let responseSchema = null;
   let configState = {};
 
   for (const event of events) {
@@ -200,29 +248,45 @@ export async function buildEvidence({
         end = event;
         break;
       case RUN_LOG_EVENTS.REQUEST_HEADER: {
-        if (data.reason === 'initial' || data.reason === 'change') {
+        const previous = calls.length - 1;
+        let from = null;
+        let added = [];
+        let incomplete = false;
+        if (data.reason === 'append' || data.reason === 'same') {
+          // Relative to the previous header of the run, which is the previous call here.
+          if (previous < 0) incomplete = true;
+          else from = previous;
+          added =
+            data.reason === 'append' && Array.isArray(data.messagesDelta) ? data.messagesDelta : [];
+          messages = messages.concat(added);
+        } else {
           messages = Array.isArray(data.messages) ? data.messages : [];
-        } else if (data.reason === 'append') {
-          messages = messages.concat(Array.isArray(data.messagesDelta) ? data.messagesDelta : []);
+          added = messages;
+        }
+        if (Number.isInteger(data.messageCount) && data.messageCount !== messages.length) {
+          incomplete = true;
         }
         if (Array.isArray(data.toolSchemas)) tools = data.toolSchemas;
         else if (data.toolSchemasHash === null) tools = null;
+        const callConfig = data.callConfig || {};
+        if (callConfig.responseSchema !== undefined) responseSchema = callConfig.responseSchema;
+        else if (!callConfig.responseSchemaHash) responseSchema = null;
         if (data.modelSnapshot || data.optionsSnapshot) {
           configState = {
             modelSnapshot: data.modelSnapshot || configState.modelSnapshot,
             optionsSnapshot: data.optionsSnapshot || configState.optionsSnapshot
           };
         }
-        for (const message of messages) {
-          if (message?.role === 'tool' && message.tool_call_id) {
-            if (!toolMessages.has(message.tool_call_id)) {
-              toolMessages.set(message.tool_call_id, message.content);
-            }
-          }
+        // The tool calls since the previous header get the result the model read here.
+        for (const entry of awaitingHeader) {
+          const message = toolMessageFor(messages, entry.call.callId);
+          if (message) entry.message = message;
         }
-        let systemCount = 0;
-        while (messages[systemCount]?.role === 'system') systemCount += 1;
-        current = compact({
+        awaitingHeader = [];
+        // ponytail: the first call of each answer still lists the whole history
+        // (O(history) references per answer); a cross-answer `from` would need
+        // the previous answer's record.
+        const call = compact({
           step: data.step,
           segment: data.segment,
           purpose: data.purpose,
@@ -234,26 +298,20 @@ export async function buildEvidence({
           modelId: data.modelId,
           messagesHash: data.messagesHash,
           messageCount: data.messageCount,
-          system: messages.slice(0, systemCount).map(message => collector.ref(message)),
-          messages: messages.slice(systemCount).map(message => {
-            const files = filesOfMessage(message);
-            return compact({
-              role: message?.role,
-              message: collector.ref(message),
-              files: files.length > 0 ? files : undefined
-            });
-          }),
+          messages: { from, append: added.map(message => messageEntry(collector, message)) },
+          incomplete: incomplete || undefined,
           tools: tools ? tools.map(tool => collector.ref(tool)) : undefined,
           config: collector.ref({
-            callConfig: data.callConfig || {},
+            callConfig: { ...callConfig, responseSchema: responseSchema ?? undefined },
             modelSnapshot: configState.modelSnapshot || {},
             optionsSnapshot: configState.optionsSnapshot || {}
           }),
-          settings: modelSettings(data.callConfig, configState.optionsSnapshot),
+          settings: modelSettings(callConfig, configState.optionsSnapshot),
           status: 'unknown'
         });
-        calls.push(current);
-        callsByRequest.set(data.requestId, current);
+        calls.push(call);
+        callsByRequest.set(data.requestId, call);
+        callsByStep.set(data.step, call);
         break;
       }
       case RUN_LOG_EVENTS.REQUEST_RETRY: {
@@ -266,7 +324,7 @@ export async function buildEvidence({
         break;
       }
       case RUN_LOG_EVENTS.MESSAGE_ASSISTANT: {
-        const call = callsByRequest.get(data.requestId) || current;
+        const call = callsByRequest.get(data.requestId) || callsByStep.get(data.step);
         if (!call) break;
         call.status = 'ok';
         call.endedAt = event.ts;
@@ -298,25 +356,30 @@ export async function buildEvidence({
           at: event.ts
         });
         errors.push(error);
-        // A failed model call has no answer; an error after one (a tool, the
-        // loop) belongs to the run, not to the call.
-        if (current && current.status !== 'ok') {
-          current.status = 'error';
-          current.error = error;
+        // A model call that failed has no answer; an error of a step whose
+        // call did answer (a tool, the loop) belongs to the run only.
+        const call = callsByRequest.get(data.requestId) || callsByStep.get(data.step);
+        if (call && call.status !== 'ok') {
+          call.status = 'error';
+          call.error = error;
         }
         break;
       }
-      case RUN_LOG_EVENTS.TOOL_CALL:
-        toolCalls.set(data.callId, {
-          call: data,
-          startedAt: event.ts
-        });
+      case RUN_LOG_EVENTS.TOOL_CALL: {
+        const entry = { call: data, startedAt: event.ts };
+        toolCalls.set(`${data.step}:${data.callId}`, entry);
+        awaitingHeader.push(entry);
         break;
+      }
       case RUN_LOG_EVENTS.TOOL_RESULT: {
-        const entry = toolCalls.get(data.callId) || { call: { callId: data.callId } };
+        const key = `${data.step}:${data.callId}`;
+        const entry = toolCalls.get(key) || { call: { step: data.step, callId: data.callId } };
         entry.result = data;
         entry.endedAt = event.ts;
-        toolCalls.set(data.callId, entry);
+        if (!toolCalls.has(key)) {
+          toolCalls.set(key, entry);
+          awaitingHeader.push(entry);
+        }
         break;
       }
       case RUN_LOG_EVENTS.KNOWLEDGE_SCOPE:
@@ -331,8 +394,10 @@ export async function buildEvidence({
     }
   }
 
+  if (calls.length === 0) return null;
+
   const toolCallRecords = [];
-  for (const { call, result, startedAt, endedAt } of toolCalls.values()) {
+  for (const { call, result, message, startedAt, endedAt } of toolCalls.values()) {
     let resultRef;
     let resultSource;
     if (result?.spillRef) {
@@ -343,8 +408,8 @@ export async function buildEvidence({
         /* fall through to what the model saw */
       }
     }
-    if (!resultRef && toolMessages.has(call.callId)) {
-      resultRef = collector.ref(toolMessages.get(call.callId));
+    if (!resultRef && message) {
+      resultRef = collector.ref(message.content);
       resultSource = 'message';
     }
     if (!resultRef && result && result.resultPreview !== undefined) {
@@ -379,8 +444,9 @@ export async function buildEvidence({
 
   const startData = start?.data || {};
   const endData = end?.data || {};
-  const first = calls[0] || {};
+  const first = calls[0];
   const resolvedAppId = appId || startData.refs?.appId || null;
+  const appConfig = appConfigOf(resolvedAppId);
   const content = typeof summary?.content === 'string' ? summary.content : '';
   const record = compact({
     v: EVIDENCE_VERSION,
@@ -392,17 +458,16 @@ export async function buildEvidence({
     endedAt: end?.ts || new Date().toISOString(),
     journalEnded: Boolean(end),
     ihubVersion: getAppVersion(),
+    // The app configuration in force when the answer was stored.
     app: resolvedAppId
-      ? compact({ id: resolvedAppId, configSha256: appConfigSha256(resolvedAppId) })
+      ? compact({ id: resolvedAppId, config: appConfig ? collector.ref(appConfig) : undefined })
       : undefined,
-    model: first.model
-      ? compact({
-          id: first.model,
-          provider: first.provider,
-          modelId: first.modelId,
-          settings: first.settings
-        })
-      : undefined,
+    model: compact({
+      id: first.model,
+      provider: first.provider,
+      modelId: first.modelId,
+      settings: first.settings
+    }),
     status: summary?.status ?? endData.status,
     output: compact({
       provenanceId: summary?.provenance?.output_id ?? endData.provenance?.output_id,
@@ -417,9 +482,70 @@ export async function buildEvidence({
     toolCalls: toolCallRecords,
     errors: errors.length > 0 ? errors : undefined,
     knowledge,
-    children: []
+    truncated: collector.truncated.size > 0 ? [...collector.truncated.values()] : undefined
   });
   return { record, items: collector.items };
+}
+
+/** Whether a chat owner is a guest or the anonymous principal. */
+function isGuestOwner(ownerId) {
+  return !ownerId || ownerId === 'anonymous' || String(ownerId).startsWith(GUEST_OWNER_PREFIX);
+}
+
+/**
+ * Store the evidence record of a stored chat answer, in the background
+ * (#3687). Called after the answer is appended and the run released; the
+ * record is named by the chat and the answer's message id.
+ *
+ * Nothing is written while the switch is off, for a guest's or the anonymous
+ * principal's chat, for a run without a model call in its journal, or once the
+ * chat is gone (checked under the evidence lock).
+ *
+ * @param {Object} params
+ * @param {import('./ChatRepository.js').default} params.repository
+ * @param {string} params.chatId
+ * @param {string} params.runId
+ * @param {string} params.messageId - The stored answer's id.
+ * @param {Object} params.summary - The turn outcome.
+ * @param {Array<Object>} [params.artifacts] - Stored artifact descriptors.
+ * @param {Object} [params.runLog] - The run journal; the shared RunLog by default.
+ * @returns {Promise<{id: string, sha256: string}|null>}
+ */
+export function recordChatEvidence({
+  repository,
+  chatId,
+  runId,
+  messageId,
+  summary,
+  artifacts,
+  runLog
+}) {
+  return inBackground(
+    async () => {
+      const settings = chatEvidenceSettings(configCache.getPlatform?.() || {});
+      if (!settings.enabled) return null;
+      const store = repository.evidenceStore?.();
+      if (!store?.isAvailable()) return null;
+      const chat = await repository.getChat(chatId);
+      if (!chat || isGuestOwner(chat.ownerId)) return null;
+      const journal = runLog || (await import('../loop/RunLog.js')).default;
+      const built = await buildEvidence({
+        runLog: journal,
+        runId,
+        summary,
+        chatId,
+        messageId,
+        artifacts,
+        maxContentBytes: settings.maxContentBytes
+      });
+      if (!built) return null;
+      return store.writeRecord('chat', chatId, built.record, built.items, {
+        ownerId: chat.ownerId,
+        onlyIf: async () => Boolean(await repository.getChat(chatId))
+      });
+    },
+    { component: 'evidenceRecord', operation: 'chat record', chatId, runId }
+  );
 }
 
 /**
@@ -439,27 +565,26 @@ export async function buildEvidence({
  * @param {Object} [params.runLog] - The run journal; the shared RunLog by default.
  * @returns {Promise<{id: string, sha256: string}|null>}
  */
-export async function recordRunEvidence({ runId, user, summary = {}, runLog }) {
-  try {
-    if (!runId || !user?.id || isAnonymousUser(user)) return null;
-    const settings = chatEvidenceSettings(configCache.getPlatform?.() || {});
-    if (!settings.enabled) return null;
-    const store = getChatEvidenceRepository();
-    if (!store.isAvailable()) return null;
-    const journal = runLog || (await import('../loop/RunLog.js')).default;
-    const { record, items } = await buildEvidence({ runLog: journal, runId, summary });
-    return await store.writeRecord('run', runId, record, items, {
-      ownerId: user.id,
-      maxContentBytes: settings.maxContentBytes
-    });
-  } catch (error) {
-    logger.error('Run evidence record not stored', {
-      component: 'evidenceRecord',
-      runId,
-      error: error.message
-    });
-    return null;
-  }
+export function recordRunEvidence({ runId, user, summary = {}, runLog }) {
+  return inBackground(
+    async () => {
+      if (!runId || !user?.id || isAnonymousUser(user)) return null;
+      const settings = chatEvidenceSettings(configCache.getPlatform?.() || {});
+      if (!settings.enabled) return null;
+      const store = getChatEvidenceRepository();
+      if (!store.isAvailable()) return null;
+      const journal = runLog || (await import('../loop/RunLog.js')).default;
+      const built = await buildEvidence({
+        runLog: journal,
+        runId,
+        summary,
+        maxContentBytes: settings.maxContentBytes
+      });
+      if (!built) return null;
+      return store.writeRecord('run', runId, built.record, built.items, { ownerId: user.id });
+    },
+    { component: 'evidenceRecord', operation: 'run record', runId }
+  );
 }
 
 /** The 404 of a record that was not kept (switched off, stored before the release, not ours). */
@@ -497,7 +622,7 @@ export async function readEvidenceRecord({ kind, id, messageId, ownerId }) {
  * @param {string} params.id - Chat id or run id.
  * @param {string} params.sha256 - Content hash.
  * @param {string} [params.ownerId] - Required owner of the run record.
- * @returns {Promise<Buffer>} The canonical JSON of the item.
+ * @returns {Promise<{content: Buffer, sha256: string}>} The canonical JSON of the item.
  * @throws {ServiceError} `BAD_REQUEST` for a malformed hash, `EVIDENCE_NOT_RECORDED` otherwise.
  */
 export async function readEvidenceContent({ kind, id, sha256, ownerId }) {
@@ -508,23 +633,25 @@ export async function readEvidenceContent({ kind, id, sha256, ownerId }) {
   if (ownerId !== undefined) await readEvidenceRecord({ kind, id, ownerId });
   const content = await getChatEvidenceRepository().getContent(kind, id, sha256);
   if (!content) throw notRecorded();
-  return content;
+  return { content, sha256 };
 }
 
 /**
- * Send a record or a content blob. Both are immutable under their URL (a
- * record is written once per answer), so they may be cached — privately.
+ * Send a record or a content blob with its ETag. `no-cache`: a record or a
+ * blob can be deleted (a removed message, a deleted chat), so a cache must
+ * revalidate rather than keep serving it.
  *
  * @param {import('express').Response} res
- * @param {{data?: Object, etag?: string}|Buffer} payload
+ * @param {{data?: Object, etag?: string}|{content: Buffer, sha256: string}} payload
  * @returns {void}
  */
 export function sendEvidence(res, payload) {
-  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
-  if (Buffer.isBuffer(payload)) {
+  res.setHeader('Cache-Control', 'private, no-cache');
+  if (Buffer.isBuffer(payload.content)) {
+    res.setHeader('ETag', `"${payload.sha256}"`);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.send(payload);
+    res.send(payload.content);
     return;
   }
   res.setHeader('ETag', `"${payload.etag}"`);

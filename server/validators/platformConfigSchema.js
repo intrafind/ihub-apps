@@ -643,7 +643,11 @@ export const platformConfigSchema = z
         evidence: z
           .object({
             enabled: z.boolean().prefault(true),
-            maxContentBytes: z.number().prefault(10 * 1024 * 1024)
+            maxContentBytes: z
+              .number()
+              .int()
+              .positive()
+              .prefault(10 * 1024 * 1024)
           })
           .passthrough()
           .prefault({}),

@@ -473,7 +473,9 @@ export default function registerAdminChatHistoryRoutes(app) {
               repository: getChatRepository(),
               retentionDays: history ? settings.chats.retentionDays : 0,
               maxChatsPerUser: history ? settings.chats.maxChatsPerUser : 0,
-              temporaryRetentionHours: chatRetentionSettings(platform).temporaryRetentionHours
+              temporaryRetentionHours: chatRetentionSettings(platform).temporaryRetentionHours,
+              // Evidence of runs without a chat is no history: swept either way.
+              runEvidenceRetentionDays: settings.chats.retentionDays
             });
             result.chats = { ran: true, removed, ...(history ? {} : { historyRules: false }) };
           } else {

@@ -28,8 +28,10 @@ import {
   materializeUserTurn,
   settleUserTurn
 } from '../services/chat/chatMaterializer.js';
-import { ChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
-import { snapshotMessage } from '../services/chat/ChatShareRepository.js';
+import {
+  ChatEvidenceRepository,
+  evidenceWritesSettled
+} from '../services/chat/ChatEvidenceRepository.js';
 import configCache from '../configCache.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 
@@ -981,7 +983,8 @@ describe('chatMaterializer: the evidence record', () => {
     await withRepository(async ({ provider }) => {
       const evidence = new ChatEvidenceRepository({
         documents: provider.documents,
-        blobs: provider.blobs
+        blobs: provider.blobs,
+        locks: provider.locks
       });
       const repository = new ChatRepository({
         documents: provider.documents,
@@ -989,34 +992,42 @@ describe('chatMaterializer: the evidence record', () => {
         logger: quietLogger(),
         evidence
       });
-      await fn({ repository, evidence });
+      try {
+        await fn({ repository, evidence, provider });
+      } finally {
+        await evidenceWritesSettled();
+      }
     });
   }
 
-  function answer(repository, runLog = journal) {
-    return materializeAssistantTurn({
+  async function answer(repository, runLog = journal, chatId = CHAT_ID) {
+    const stored = await materializeAssistantTurn({
       repository,
-      chatId: CHAT_ID,
+      chatId,
       runId: RUN_ID,
       summary: { status: 'success', content: 'Run the rotate script.' },
       clientConnected: true,
       runLog
     });
+    await evidenceWritesSettled();
+    return stored;
   }
 
-  it('stores the record first and names it on the answer by its etag', async () => {
+  async function stored(provider) {
+    const docs = await provider.documents.list('chat-evidence', { limit: 100 });
+    const blobs = await provider.blobs.list('chat-evidence-content', { limit: 100 });
+    return { docs: docs.items.length, blobs: blobs.items.length };
+  }
+
+  it('stores the record after the answer, keyed by its message id; the answer names nothing', async () => {
     await withEvidence(async ({ repository, evidence }) => {
       await userTurn(repository);
-      const stored = await answer(repository);
-      assert.equal(stored.evidence.id, stored.id);
-      const doc = await evidence.getRecord('chat', CHAT_ID, stored.id);
-      assert.equal(doc.etag, stored.evidence.sha256);
+      const message = await answer(repository);
+      assert.equal('evidence' in message, false, 'no pointer on the message');
+      const doc = await evidence.getRecord('chat', CHAT_ID, message.id);
       assert.equal(doc.ownerId, OWNER);
-      assert.equal(doc.data.messageId, stored.id);
+      assert.equal(doc.data.messageId, message.id);
       assert.equal(doc.data.calls.length, 1);
-
-      // A share never hands out the evidence.
-      assert.equal('evidence' in snapshotMessage(stored), false);
     });
   });
 
@@ -1026,9 +1037,8 @@ describe('chatMaterializer: the evidence record', () => {
     try {
       await withEvidence(async ({ repository, evidence }) => {
         await userTurn(repository);
-        const stored = await answer(repository);
-        assert.equal('evidence' in stored, false);
-        assert.equal(await evidence.getRecord('chat', CHAT_ID, stored.id), null);
+        const message = await answer(repository);
+        assert.equal(await evidence.getRecord('chat', CHAT_ID, message.id), null);
       });
     } finally {
       configCache.getPlatform = original;
@@ -1036,22 +1046,38 @@ describe('chatMaterializer: the evidence record', () => {
   });
 
   it('stores the answer without a record when building it fails', async () => {
-    await withEvidence(async ({ repository }) => {
+    await withEvidence(async ({ repository, evidence }) => {
       await userTurn(repository);
       const broken = {
         readEvents: async () => {
           throw new Error('journal unreadable');
         }
       };
-      const stored = await answer(repository, broken);
-      assert.equal(stored.content, 'Run the rotate script.');
-      assert.equal('evidence' in stored, false);
+      const message = await answer(repository, broken);
+      assert.equal(message.content, 'Run the rotate script.');
+      assert.equal(await evidence.getRecord('chat', CHAT_ID, message.id), null);
       assert.equal((await repository.getChat(CHAT_ID)).activeRunId, null);
     });
   });
 
-  it('an edit removes only the dropped answer record; a chat delete removes all', async () => {
-    await withEvidence(async ({ repository, evidence }) => {
+  it('leaves nothing behind when the chat is gone', async () => {
+    await withEvidence(async ({ repository, provider }) => {
+      const message = await answer(repository, journal, 'chat-gone');
+      assert.equal(message, null);
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 });
+    });
+  });
+
+  it("keeps no evidence for a guest's chat", async () => {
+    await withEvidence(async ({ repository, provider }) => {
+      await userTurn(repository, { ownerId: 'guest-abc' });
+      await answer(repository);
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 });
+    });
+  });
+
+  it('an edit removes the dropped answer record and its own content; a chat delete removes all', async () => {
+    await withEvidence(async ({ repository, evidence, provider }) => {
       await userTurn(repository);
       const first = await answer(repository);
       await repository.claimRun(CHAT_ID, 'chat-run-2', { isBusy: () => false });
@@ -1060,55 +1086,78 @@ describe('chatMaterializer: the evidence record', () => {
         content: 'And then?',
         runId: 'chat-run-2'
       });
+      const secondJournal = {
+        readEvents: async () => [
+          ...(await journal.readEvents()),
+          {
+            seq: 3,
+            ts: 't3',
+            type: RUN_LOG_EVENTS.REQUEST_HEADER,
+            data: {
+              step: 1,
+              requestId: 'req-2',
+              reason: 'append',
+              messageCount: 2,
+              messagesDelta: [{ role: 'user', content: 'And then?' }],
+              toolSchemasHash: null,
+              callConfig: {}
+            }
+          }
+        ]
+      };
       const second = await materializeAssistantTurn({
         repository,
         chatId: CHAT_ID,
         runId: 'chat-run-2',
         summary: { status: 'success', content: 'Then restart.' },
         clientConnected: true,
-        runLog: journal
+        runLog: secondJournal
       });
-      const blobs = async () =>
-        (await evidence.blobs.list('chat-evidence-content', { limit: 100 })).items.length;
-      const shared = await blobs();
+      await evidenceWritesSettled();
+      const both = (await stored(provider)).blobs;
 
-      // Resend from the second question: its answer goes, the first stays.
+      // Resend from the second question: its answer goes, the first stays,
+      // and so does the content the first still names.
       await repository.appendMessage(
         CHAT_ID,
         { role: 'user', content: 'Edited', runId: 'chat-run-3' },
         { replaceFromMessageId: question.message.id }
       );
+      await evidenceWritesSettled();
       assert.equal(await evidence.getRecord('chat', CHAT_ID, second.id), null);
       assert.ok(await evidence.getRecord('chat', CHAT_ID, first.id));
-      assert.equal(await blobs(), shared, 'content shared with other answers stays');
+      const left = (await stored(provider)).blobs;
+      assert.ok(
+        left > 0 && left < both,
+        `only the second answer's own content goes (${both} → ${left})`
+      );
 
       await repository.deleteMessage(CHAT_ID, first.id);
-      assert.equal(await evidence.getRecord('chat', CHAT_ID, first.id), null);
+      await evidenceWritesSettled();
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 }, 'swept with the last record');
 
+      await answer(repository);
       await repository.deleteChat(CHAT_ID);
-      assert.equal(await blobs(), 0, 'the chat takes all its content with it');
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 }, 'the chat takes all of it');
     });
   });
 
-  it('deletes the record of an answer another writer already stored', async () => {
-    await withEvidence(async ({ repository, evidence }) => {
+  it('keeps no record for an answer another writer already stored', async () => {
+    await withEvidence(async ({ repository, provider }) => {
       await userTurn(repository);
       await answer(repository);
       await repository.claimRun(CHAT_ID, RUN_ID, { isBusy: () => false });
-      const outcome = await materializeAssistantTurn({
+      await materializeAssistantTurn({
         repository,
         chatId: CHAT_ID,
         runId: RUN_ID,
         summary: { status: 'success', content: 'Second writer' },
         clientConnected: true,
         onlyIfUnanswered: true,
-        runLog: journal,
-        message: { id: 'loser' }
+        runLog: journal
       });
-      assert.notEqual(outcome?.id, 'loser');
-      assert.equal(await evidence.getRecord('chat', CHAT_ID, 'loser'), null);
-      const records = await evidence.documents.list('chat-evidence', { limit: 10 });
-      assert.equal(records.items.length, 1, 'only the stored answer keeps a record');
+      await evidenceWritesSettled();
+      assert.equal((await stored(provider)).docs, 1, 'only the stored answer keeps a record');
     });
   });
 });

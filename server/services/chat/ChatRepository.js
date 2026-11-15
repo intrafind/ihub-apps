@@ -46,7 +46,7 @@ import { VARIABLE_NAME_PATTERN } from '../../../shared/validationPatterns.js';
 import { chatMessageCap } from './chatPersistence.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 import { getChatFileRepository } from '../chatFiles/ChatFileRepository.js';
-import { getChatEvidenceRepository } from './ChatEvidenceRepository.js';
+import { getChatEvidenceRepository, inBackground } from './ChatEvidenceRepository.js';
 import { ChatShareRepository } from './ChatShareRepository.js';
 
 const COMPONENT = 'ChatRepository';
@@ -188,9 +188,7 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'answerBasis',
   // A transcription turn (see services/chat/transcriptionTurn.js): its audio is
   // not kept, so the question can be neither edited nor resent.
-  'transcription',
-  // The answer's evidence record `{ id, sha256 }` (see services/chat/ChatEvidenceRepository.js).
-  'evidence'
+  'transcription'
 ];
 
 /** Variables kept per message, and the longest value kept. */
@@ -1833,9 +1831,11 @@ export class ChatRepository {
    */
   async deleteChat(chatId, { onlyIf } = {}) {
     if (!this._usable(chatId, 'deleteChat')) return { deleted: false, runIds: [] };
-    return this._withChatLock(chatId, async () => {
+    let proceeded = false;
+    const result = await this._withChatLock(chatId, async () => {
       const existing = await this._readChat(chatId);
       if (onlyIf && !onlyIf(existing)) return { deleted: false, runIds: [] };
+      proceeded = true;
       // Both halves: the chat document's recent runs and whatever outgrew it
       // and moved to the transcript. Read before either document is removed.
       const retired = (await this._readMessages(chatId)).retiredRunIds;
@@ -1860,12 +1860,26 @@ export class ChatRepository {
       // left behind.
       await this.artifactStore().deleteScope(this.artifactScope(chatId));
       await this.fileStore().deleteScope(this.fileScope(chatId));
-      await this.evidenceStore().deleteChat(chatId);
       // A delete is the other thing that changes a listing, and it does not go
       // through `_writeChat`.
       this._forgetOwnerChat(existing?.ownerId, chatId);
       return { deleted: removedChat || removedMessages, runIds };
     });
+    // The evidence, after the chat document is gone and outside its lock: a
+    // large prefix delete must not outlast the chat lock's lease. Under the
+    // evidence lock, so a record write racing it finds the chat gone.
+    if (proceeded) {
+      try {
+        await this.evidenceStore().deleteChat(chatId);
+      } catch (error) {
+        this.logger.error('Evidence of a deleted chat not removed', {
+          component: COMPONENT,
+          chatId,
+          error: error.message
+        });
+      }
+    }
+    return result;
   }
 
   /**
@@ -2077,7 +2091,7 @@ export class ChatRepository {
         }
       }
 
-      await this._deleteEvidenceOf(chatId, discarded);
+      this._deleteEvidenceOf(chatId, discarded);
       return { message: entry, messages };
     });
   }
@@ -2133,33 +2147,32 @@ export class ChatRepository {
           await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
         }
       }
-      await this._deleteEvidenceOf(chatId, [removed]);
+      this._deleteEvidenceOf(chatId, [removed]);
       return { deleted: true, chat: updated };
     });
   }
 
   /**
-   * Remove the evidence records of messages that left the transcript. Their
-   * content blobs stay until the chat goes: other answers may share them.
-   * Logged, never thrown — the transcript is already written.
+   * Remove the evidence records of answers that left the transcript, and the
+   * content no other record refers to. In the background, logged, never
+   * thrown — the transcript is already written.
    *
    * @param {string} chatId - Chat id.
    * @param {Object[]} messages - Messages removed from the transcript.
-   * @returns {Promise<void>}
+   * @returns {void}
    * @private
    */
-  async _deleteEvidenceOf(chatId, messages) {
-    const ids = messages.filter(message => message?.evidence).map(message => message.id);
+  _deleteEvidenceOf(chatId, messages) {
+    const ids = messages
+      .filter(message => message?.role === 'assistant' && message.id)
+      .map(message => message.id);
     if (ids.length === 0) return;
-    try {
-      await this.evidenceStore().deleteMessages(chatId, ids);
-    } catch (error) {
-      this.logger.error('Evidence records of removed messages not deleted', {
-        component: COMPONENT,
-        chatId,
-        error: error.message
-      });
-    }
+    // Not awaited: the content sweep that follows must not hold the chat lock.
+    void inBackground(() => this.evidenceStore().deleteMessages(chatId, ids), {
+      component: COMPONENT,
+      operation: 'delete evidence of removed messages',
+      chatId
+    });
   }
 
   /**

@@ -104,8 +104,7 @@ const LOCK_OPTIONS = { ttlMs: 15000, waitMs: 5000 };
  * may not let them see, including viewers of a public link. `sources` is
  * carried, but only its public part (see {@link snapshotMessage}).
  */
-// `evidence` names the answer's evidence record, which a share never hands out (#3687).
-const MESSAGE_FIELDS_DROPPED = new Set(['clientMessageId', 'citations', 'evidence']);
+const MESSAGE_FIELDS_DROPPED = new Set(['clientMessageId', 'citations']);
 
 /**
  * Mint a share id.

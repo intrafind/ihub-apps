@@ -23,6 +23,7 @@ import registerChatRoutes from '../routes/chats.js';
 import registerRunRoutes from '../routes/runs.js';
 import registerAdminEvidenceRoutes from '../routes/admin/evidence.js';
 import errorHandler from '../middleware/errorHandler.js';
+import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
 
 const ADA = { id: 'user-ada', name: 'Ada' };
 const GRACE = { id: 'user-grace', name: 'Grace' };
@@ -141,16 +142,18 @@ function assertProblem(res, status, code) {
 }
 
 describe('chat evidence: the owner', () => {
-  it('reads the record, named by the etag the answer keeps, and its content', async () => {
+  it('reads the record with its etag, and its content', async () => {
     const { res } = await get(CHAT_RECORD, { chatId: 'chat-ada', messageId: 'm1' }, ADA);
     assert.equal(res.statusCode, 200);
     assert.equal(res.body.messageId, 'm1');
     assert.equal(res.headers.etag, `"${stored.sha256}"`);
-    assert.match(res.headers['cache-control'], /private/);
+    assert.equal(res.headers['cache-control'], 'private, no-cache');
 
     const content = await get(CHAT_CONTENT, { chatId: 'chat-ada', sha256: PROMPT.sha256 }, ADA);
     assert.equal(content.res.statusCode, 200);
     assert.equal(content.res.body.toString('utf8'), PROMPT.text);
+    assert.equal(content.res.headers.etag, `"${PROMPT.sha256}"`);
+    assert.equal(content.res.headers['cache-control'], 'private, no-cache');
   });
 
   it('gets EVIDENCE_NOT_RECORDED for an answer without one, and 400 for a bad hash', async () => {
@@ -183,6 +186,26 @@ describe('chat evidence: everybody else', () => {
     assertProblem(record.res, 404, 'NOT_FOUND');
     const content = await get(CHAT_CONTENT, { chatId: 'chat-ada', sha256: PROMPT.sha256 }, GRACE);
     assertProblem(content.res, 404, 'NOT_FOUND');
+  });
+
+  it('a guest gets 404 even for its own chat', async () => {
+    const guestSecret = 'a'.repeat(64);
+    const guest = { id: 'anonymous', name: 'Anonymous', groups: ['anonymous'] };
+    setGuestId(guest, guestSecret);
+    await getChatRepository().ensureChat({
+      chatId: 'chat-guest',
+      ownerId: guestOwnerId(guestSecret),
+      appId: 'chat'
+    });
+    await getChatEvidenceRepository().writeRecord(
+      'chat',
+      'chat-guest',
+      { v: 1, messageId: 'm1' },
+      new Map(),
+      { ownerId: guestOwnerId(guestSecret) }
+    );
+    const { res } = await get(CHAT_RECORD, { chatId: 'chat-guest', messageId: 'm1' }, guest);
+    assertProblem(res, 404, 'NOT_FOUND');
   });
 
   it("an admin gets 404 on the owner's route, which does not rest on ownership", async () => {
