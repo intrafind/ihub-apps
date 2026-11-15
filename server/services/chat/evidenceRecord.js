@@ -29,9 +29,15 @@ import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import configCache from '../../configCache.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import logger from '../../utils/logger.js';
+import { ServiceError } from '../../utils/ServiceError.js';
 import { isAnonymousUser } from '../loop/runIdentity.js';
 import { chatEvidenceSettings } from './chatPersistence.js';
-import { contentItem, getChatEvidenceRepository, sha256Hex } from './ChatEvidenceRepository.js';
+import {
+  SHA256_PATTERN,
+  contentItem,
+  getChatEvidenceRepository,
+  sha256Hex
+} from './ChatEvidenceRepository.js';
 
 /** Version of the record shape. */
 export const EVIDENCE_VERSION = 1;
@@ -454,6 +460,75 @@ export async function recordRunEvidence({ runId, user, summary = {}, runLog }) {
     });
     return null;
   }
+}
+
+/** The 404 of a record that was not kept (switched off, stored before the release, not ours). */
+function notRecorded() {
+  return new ServiceError('EVIDENCE_NOT_RECORDED', 'No evidence record was kept for this answer');
+}
+
+/**
+ * Read a stored evidence record for an endpoint. The caller has authorized
+ * the chat (or the run's owner is checked here via `ownerId`).
+ *
+ * @param {Object} params
+ * @param {'chat'|'run'} params.kind
+ * @param {string} params.id - Chat id or run id.
+ * @param {string} [params.messageId] - For a chat record.
+ * @param {string} [params.ownerId] - Required owner of a run record.
+ * @returns {Promise<Object>} The stored document (`data`, `etag`, `ownerId`).
+ * @throws {ServiceError} `EVIDENCE_NOT_RECORDED` (404) while the switch is off
+ *   or when there is no such record.
+ */
+export async function readEvidenceRecord({ kind, id, messageId, ownerId }) {
+  if (!chatEvidenceSettings(configCache.getPlatform?.() || {}).enabled) throw notRecorded();
+  const doc = await getChatEvidenceRepository().getRecord(kind, id, messageId);
+  if (!doc || (ownerId !== undefined && (!ownerId || doc.ownerId !== ownerId))) {
+    throw notRecorded();
+  }
+  return doc;
+}
+
+/**
+ * Read one content blob of a chat or run for an endpoint.
+ *
+ * @param {Object} params
+ * @param {'chat'|'run'} params.kind
+ * @param {string} params.id - Chat id or run id.
+ * @param {string} params.sha256 - Content hash.
+ * @param {string} [params.ownerId] - Required owner of the run record.
+ * @returns {Promise<Buffer>} The canonical JSON of the item.
+ * @throws {ServiceError} `BAD_REQUEST` for a malformed hash, `EVIDENCE_NOT_RECORDED` otherwise.
+ */
+export async function readEvidenceContent({ kind, id, sha256, ownerId }) {
+  if (!SHA256_PATTERN.test(String(sha256))) {
+    throw new ServiceError('BAD_REQUEST', 'Expected a lower-case hex SHA-256');
+  }
+  if (!chatEvidenceSettings(configCache.getPlatform?.() || {}).enabled) throw notRecorded();
+  if (ownerId !== undefined) await readEvidenceRecord({ kind, id, ownerId });
+  const content = await getChatEvidenceRepository().getContent(kind, id, sha256);
+  if (!content) throw notRecorded();
+  return content;
+}
+
+/**
+ * Send a record or a content blob. Both are immutable under their URL (a
+ * record is written once per answer), so they may be cached — privately.
+ *
+ * @param {import('express').Response} res
+ * @param {{data?: Object, etag?: string}|Buffer} payload
+ * @returns {void}
+ */
+export function sendEvidence(res, payload) {
+  res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
+  if (Buffer.isBuffer(payload)) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(payload);
+    return;
+  }
+  res.setHeader('ETag', `"${payload.etag}"`);
+  res.json(payload.data);
 }
 
 export default buildEvidence;
