@@ -31,6 +31,7 @@ import { sniffRasterImage } from './rasterImage.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
 import { walkBlobs, walkDocuments } from '../../storage/walk.js';
+import { ChatEvidenceRepository } from '../chat/ChatEvidenceRepository.js';
 import {
   canUseFileAsTemplate,
   chatFilePolicy,
@@ -363,6 +364,8 @@ export class ChatFileRepository {
     this.blobs = blobs || null;
     this.logger = log || logger;
     this.policy = policy;
+    /** A chat's evidence counts against its byte quota (#3687); same provider as the files. */
+    this._evidence = new ChatEvidenceRepository({ documents, blobs, logger: this.logger });
   }
 
   /** Whether both document and blob facets are available. @returns {boolean} */
@@ -639,7 +642,18 @@ export class ChatFileRepository {
     if (origin !== 'image') {
       assertScopeSlots(scope, limits, existing.filter(item => item.origin !== 'image').length);
     }
-    const scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
+    let scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
+    // A chat's evidence records take its storage too. Checked here, before an
+    // upload, never before an answer: an answer is not refused for it.
+    if (scope.type === 'chat' && limits.maxBytes > 0) {
+      scopeBytes += await this._evidence.chatBytes(scope.id).catch(error => {
+        this.logger.error('Evidence bytes of a chat not counted', {
+          component: COMPONENT,
+          error: error.message
+        });
+        return 0;
+      });
+    }
     assertScopeBytes(scope, limits, scopeBytes, totalBytes);
   }
 

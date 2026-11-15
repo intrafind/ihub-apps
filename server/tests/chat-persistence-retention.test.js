@@ -26,6 +26,7 @@ import assert from 'node:assert/strict';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { ChatRepository } from '../services/chat/ChatRepository.js';
 import { startChatRetentionSweep, sweepChats } from '../services/chat/chatRetention.js';
+import { ChatEvidenceRepository, sha256Hex } from '../services/chat/ChatEvidenceRepository.js';
 
 const OWNER = 'user-1';
 const OTHER_OWNER = 'user-2';
@@ -1006,6 +1007,84 @@ describe('sweepChats: a namespace bigger than one page', () => {
 
       assert.equal(result.removed, 1, 'only the ancient one');
       assert.deepEqual(await survivingIds(repository, OWNER), ['chat-live-1', 'chat-live-2']);
+    });
+  });
+});
+
+describe('sweepChats: the evidence of a removed chat', () => {
+  /** A repository whose evidence lives on the same provider, plus that store. */
+  async function withEvidence(fn) {
+    await withRepository(async ({ provider }) => {
+      const evidence = new ChatEvidenceRepository({
+        documents: provider.documents,
+        blobs: provider.blobs
+      });
+      const repository = new ChatRepository({
+        documents: provider.documents,
+        locks: provider.locks,
+        logger: quietLogger(),
+        evidence
+      });
+      await fn({ repository, evidence, provider });
+    });
+  }
+
+  const record = (evidence, chatId) =>
+    evidence.writeRecord(
+      'chat',
+      chatId,
+      { messageId: `${chatId}-answer` },
+      new Map([[sha256Hex(chatId), '"x"']]),
+      { maxContentBytes: 1000 }
+    );
+
+  async function leftOf(provider) {
+    const docs = await provider.documents.list('chat-evidence', { limit: 100 });
+    const blobs = await provider.blobs.list('chat-evidence-content', { limit: 100 });
+    return docs.items.length + blobs.items.length;
+  }
+
+  it('the age, count and temporary rules leave no evidence of what they removed', async () => {
+    await withEvidence(async ({ repository, evidence, provider }) => {
+      await storeChat(repository, { chatId: 'old', ownerId: OWNER, ageDays: 40 });
+      await storeChat(repository, { chatId: 'over-1', ownerId: OTHER_OWNER, ageDays: 3 });
+      await storeChat(repository, { chatId: 'over-2', ownerId: OTHER_OWNER, ageDays: 2 });
+      await storeChat(repository, { chatId: 'kept', ownerId: OTHER_OWNER, ageDays: 1 });
+      await storeChat(repository, {
+        chatId: 'temp',
+        ownerId: OWNER,
+        ageDays: 2,
+        temporary: true
+      });
+      for (const chatId of ['old', 'over-1', 'over-2', 'kept', 'temp']) {
+        await record(evidence, chatId);
+      }
+
+      const { removed } = await sweepChats({
+        repository,
+        retentionDays: 30,
+        maxChatsPerUser: 1,
+        temporaryRetentionHours: 24,
+        deleteRun: async () => {}
+      });
+
+      assert.equal(removed, 4);
+      assert.equal(await leftOf(provider), 2, 'only the kept chat keeps its record and blob');
+      assert.ok(await evidence.getRecord('chat', 'kept', 'kept-answer'));
+    });
+  });
+
+  it('removes run evidence older than retentionDays, and only while the rule is on', async () => {
+    await withEvidence(async ({ repository, evidence }) => {
+      await evidence.writeRecord('run', 'run-1', { runId: 'run-1' }, new Map(), {
+        ownerId: OWNER,
+        maxContentBytes: 1000
+      });
+      const later = () => Date.now() + 40 * DAY_MS;
+      await sweepChats({ repository, retentionDays: 0, maxChatsPerUser: 0, now: later });
+      assert.ok(await evidence.getRecord('run', 'run-1'), 'rule off keeps it');
+      await sweepChats({ repository, retentionDays: 30, maxChatsPerUser: 0, now: later });
+      assert.equal(await evidence.getRecord('run', 'run-1'), null);
     });
   });
 });

@@ -50,6 +50,7 @@ import { abortChatRequest } from '../sse.js';
 import { userAbortCause } from '../services/chat/abortCause.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import logger from '../utils/logger.js';
+import { getChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
 
 /**
  * `stop` is the one human event with a side effect: abort the run. A chat run
@@ -168,6 +169,8 @@ export default function registerRunRoutes(app) {
         : new ServiceError('FORBIDDEN', 'Insufficient permissions: delete run required');
     }
     const result = await runLog.deleteRun(runId);
+    // A run without a chat keeps its evidence record beside the ledger (#3687).
+    await getChatEvidenceRepository().deleteRun(runId);
     res.json(result);
   });
 

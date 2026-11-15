@@ -330,6 +330,17 @@ export async function sweepChats({
       });
     }
   }
+  // Evidence of runs without a chat follows the chats' age rule (#3687).
+  if (retentionDays > 0 && typeof repository?.evidenceStore === 'function') {
+    try {
+      await repository.evidenceStore().sweepRuns(now() - retentionDays * DAY_MS);
+    } catch (error) {
+      logger.error('Chat retention failed to sweep run evidence', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
+  }
   const documents = documentsOf(repository);
   if (!documents) return { removed: 0 };
   const sweepTemporary = temporaryRetentionHours > 0;
