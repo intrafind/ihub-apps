@@ -23,8 +23,8 @@ import { integrationLabelOf } from '../utils/toolIntegrationLabel.js';
 
 test('a project alone is the kind Project, never "configured sources"', () => {
   assert.deepEqual(answerBasisOf({ knowledgeSources: ['project'] }), [{ kind: 'project' }]);
-  // `sources` keeps only what an admin configured.
-  assert.deepEqual(answerBasisOf({ knowledgeSources: ['sources'] }), [{ kind: 'documents' }]);
+  // What an admin configured is a project too: new answers never say "documents".
+  assert.deepEqual(answerBasisOf({ knowledgeSources: ['sources'] }), [{ kind: 'project' }]);
 });
 
 test('project and web search are two kinds, the project first', () => {
