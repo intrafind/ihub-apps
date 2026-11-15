@@ -28,7 +28,10 @@
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import configCache from '../../configCache.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
-import { contentItem, sha256Hex } from './ChatEvidenceRepository.js';
+import logger from '../../utils/logger.js';
+import { isAnonymousUser } from '../loop/runIdentity.js';
+import { chatEvidenceSettings } from './chatPersistence.js';
+import { contentItem, getChatEvidenceRepository, sha256Hex } from './ChatEvidenceRepository.js';
 
 /** Version of the record shape. */
 export const EVIDENCE_VERSION = 1;
@@ -411,6 +414,46 @@ export async function buildEvidence({
     children: []
   });
   return { record, items: collector.items };
+}
+
+/**
+ * Store the evidence record of a run that is not a turn of a stored chat
+ * (`/v1/chat/completions`, the Responses API without a conversation) in
+ * `run-evidence`, owned by the caller. Call it after the run ended, without
+ * awaiting it: it never throws and never delays the response.
+ *
+ * Anonymous callers get no record — there is nobody it could be shown to or
+ * deleted with.
+ *
+ * @param {Object} params
+ * @param {string} params.runId - The run.
+ * @param {Object} params.user - The caller (`req.user`).
+ * @param {Object} [params.summary] - The outcome: `status`, `content`,
+ *   `finishReason`, `usage`, `provenance`.
+ * @param {Object} [params.runLog] - The run journal; the shared RunLog by default.
+ * @returns {Promise<{id: string, sha256: string}|null>}
+ */
+export async function recordRunEvidence({ runId, user, summary = {}, runLog }) {
+  try {
+    if (!runId || !user?.id || isAnonymousUser(user)) return null;
+    const settings = chatEvidenceSettings(configCache.getPlatform?.() || {});
+    if (!settings.enabled) return null;
+    const store = getChatEvidenceRepository();
+    if (!store.isAvailable()) return null;
+    const journal = runLog || (await import('../loop/RunLog.js')).default;
+    const { record, items } = await buildEvidence({ runLog: journal, runId, summary });
+    return await store.writeRecord('run', runId, record, items, {
+      ownerId: user.id,
+      maxContentBytes: settings.maxContentBytes
+    });
+  } catch (error) {
+    logger.error('Run evidence record not stored', {
+      component: 'evidenceRecord',
+      runId,
+      error: error.message
+    });
+    return null;
+  }
 }
 
 export default buildEvidence;

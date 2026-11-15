@@ -86,6 +86,7 @@ import {
 import { messagesFromChatCompletions, withReadFiles } from '../services/inference/inputContent.js';
 import { createFileContext } from '../services/inference/files.js';
 import { appTurnError, executeAppTurn, prepareAppTurn } from '../services/inference/appTurn.js';
+import { recordRunEvidence } from '../services/chat/evidenceRecord.js';
 import { apiUser, numberField, platformLanguage, requestLanguage } from './inference/shared.js';
 import registerResponsesRoutes from './inference/responses.js';
 import { newOutputId } from '../services/provenance/records.js';
@@ -504,8 +505,19 @@ export default function registerOpenAIProxyRoutes(
       );
     };
 
+    // The evidence record of this run (#3687), after it ended; never awaited.
+    const recordEvidence = summary =>
+      void recordRunEvidence({ runId: run.runId, user, summary, runLog: llmClient.runLog });
+    const evidenceOf = result => ({
+      status: 'completed',
+      content: result.content,
+      finishReason: result.finishReason,
+      usage: result.usage
+    });
+
     const failUpstream = async error => {
       run.fail(error, model);
+      recordEvidence({ status: 'error' });
       if (clientDisconnected || error?.code === LLM_ERROR_CODES.ABORTED) return undefined;
       if (isLLMError(error) && typeof error.status === 'number') {
         logger.error('[OpenAI Proxy] Error response from provider', {
@@ -568,6 +580,7 @@ export default function registerOpenAIProxyRoutes(
         return failUpstream(error);
       }
       run.finish(result);
+      recordEvidence(evidenceOf(result));
       recordValidation(result.structuredOutput);
       if (result.structuredOutput && !result.structuredOutput.valid) {
         return sendFlatError(res, outputValidationError(result.structuredOutput));
@@ -713,6 +726,7 @@ export default function registerOpenAIProxyRoutes(
       }
       const result = liftJsonToolResult(llmStream.result(), format);
       run.finish(result);
+      recordEvidence(evidenceOf(result));
       if (validate && !clientDisconnected && result.toolCalls.length === 0) {
         // The text is already on the wire, so there is no second attempt: an
         // answer that does not validate ends the stream with an in-band error.
@@ -736,6 +750,7 @@ export default function registerOpenAIProxyRoutes(
       finish();
     } catch (error) {
       run.fail(error, model);
+      recordEvidence({ status: 'error' });
       if (clientDisconnected || error?.code === LLM_ERROR_CODES.ABORTED) {
         if (!res.writableEnded) res.end();
         return undefined;
@@ -922,6 +937,8 @@ export default function registerOpenAIProxyRoutes(
       }
       return sendFlatError(res, failure);
     }
+    // The evidence record of this turn (#3687); never awaited.
+    void recordRunEvidence({ runId, user, summary: outcome, runLog: chatService.runLog });
     if (clientDisconnected) return undefined;
 
     if (outcome.status === 'error' || outcome.status === 'aborted') {
