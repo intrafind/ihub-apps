@@ -1,12 +1,12 @@
 ---
-name: review-pr-inline
+name: review-pr
 description: Review a GitHub pull request for defects the author would want fixed before merging, then post the findings as inline review comments anchored to the code they are about (one pending review, one comment per finding, one summary). Use when asked to review a PR and post the review, or when a review should land on the diff rather than as one long PR comment.
 user-invocable: true
 ---
 
 # Review a PR and post it inline
 
-Input: PR number or URL, optionally `--post` (e.g. `/review-pr-inline 3036 --post`).
+Input: PR number or URL, optionally `--post` (e.g. `/review-pr 3036 --post`).
 With no PR given: uncommitted changes plus commits since the merge-base with `origin/main`
 (review only, nothing to post).
 
