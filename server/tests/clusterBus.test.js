@@ -24,7 +24,8 @@ import {
   subscribe,
   gather,
   respond,
-  respondInPrimary
+  respondInPrimary,
+  request
 } from '../clusterBus.js';
 
 const WORKER_COUNT = 3;
@@ -47,6 +48,7 @@ async function runPrimary() {
   // The primary answers gathers about itself, as it does for the System
   // resources page's per-process snapshot.
   respondInPrimary('test:whoami', () => ({ pid: process.pid, role: 'primary' }));
+  respondInPrimary('test:counter', payload => ({ seen: payload.n }));
 
   for (let i = 0; i < WORKER_COUNT; i++) {
     workers.push(cluster.fork({ TEST_WORKER_INDEX: String(i) }));
@@ -152,6 +154,17 @@ async function runPrimary() {
     check('directed publish to an unknown owner falls back to broadcast', () => {
       assert.deepStrictEqual(inboxes[0].inbox, ['orphan']);
       assert.deepStrictEqual(inboxes[2].inbox, ['orphan']);
+    });
+
+    // ---- a primary-only question is answered by the primary and never reaches a worker ----
+    await askAll(() => ({ step: 'clear-inbox' }));
+    const answered = await ask(workers[1], { step: 'ask-primary', n: 7 });
+    await settle();
+    inboxes = await askAll(() => ({ step: 'inbox' }));
+    check('a primary-only request is answered by the primary alone', () => {
+      assert.deepStrictEqual(answered.reply, { seen: 7 });
+      assert.deepStrictEqual(inboxes[0].inbox, []);
+      assert.deepStrictEqual(inboxes[2].inbox, []);
     });
 
     // ---- a shared key survives one holder letting go ----
@@ -357,6 +370,10 @@ function runWorker() {
   const inbox = [];
   subscribe('test:channel', payload => inbox.push(payload.text));
   respond('test:whoami', () => ({ pid: process.pid, role: 'worker' }));
+  // Records the question without answering, so a broadcast would show up here.
+  respond('test:counter', () => {
+    inbox.push('counter-question');
+  });
 
   process.on('message', msg => {
     if (!msg || typeof msg.step !== 'string') return;
@@ -421,6 +438,11 @@ function runWorker() {
         // crashing: not dead yet, unreachable already.
         setTimeout(() => process.exit(0), 3000);
         process.disconnect();
+        break;
+      case 'ask-primary':
+        request('test:counter', { n: msg.n }, { primaryOnly: true, timeoutMs: 2000 }).then(r =>
+          reply({ reply: r })
+        );
         break;
       case 'clear-inbox':
         inbox.length = 0;
