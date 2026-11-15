@@ -259,7 +259,7 @@ ends a turn: a client that merely leaves or reconnects sends nothing.
 chip under the answer reads (see [Answer Sources](answer-sources.md#what-users-see)):
 `[{ kind, label? }]`, one entry per kind of source the answer used and one per
 connected system. `kind` is `project`, `web`, `ifinder`, `iassistant`,
-`documents` (sources an admin configured), `integration` (with its `label`,
+`documents` (kept for chats stored before admin-configured sources became projects; no new answer carries it), `integration` (with its `label`,
 for example `Jira`; an MCP server or remote agent as well), `email`, `file`,
 `audio`, or `model` when the answer used none of them (its own knowledge), which
 then stands alone. The server decides it; the client maps no tool id. A project

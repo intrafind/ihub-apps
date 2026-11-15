@@ -33,8 +33,10 @@ export const KIND_OF_SOURCE = Object.freeze({
   grounding: 'web',
   ifinder: 'ifinder',
   iassistant: 'iassistant',
-  // What an admin configured (`sources`): "Documents".
-  sources: 'documents',
+  // What an admin configured is a project (admin sources became projects; the
+  // `source_*` tools are gone): named like one, never as "Documents". Chats stored
+  // before this say `documents` and keep saying it.
+  sources: 'project',
   integration: 'integration',
   email: 'email',
   file: 'file',

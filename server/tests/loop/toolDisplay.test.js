@@ -130,8 +130,8 @@ test('the origin of a call is the footer’s kind, decided by the server', () =>
   assert.equal(origin({ id: 'knowledge_read' }), 'project');
   assert.equal(origin({ id: 'iFinder_search' }), 'ifinder');
   assert.equal(origin({ id: 'iFinder_getContent' }), 'ifinder');
-  // What an admin configured is "documents", never a project.
-  assert.equal(origin({ id: 'source_handbook' }), 'documents');
+  // What an admin configured is a project too (admin sources became projects).
+  assert.equal(origin({ id: 'source_handbook' }), 'project');
   assert.equal(
     origin({ id: 'jira_x', _integration: { definition: 'com.intrafind/jira' } }),
     'integration'
@@ -159,7 +159,7 @@ test('the activity line and the footer read one classifier', () => {
     ['websearch', 'web'],
     ['grounding', 'web'],
     ['ifinder', 'ifinder'],
-    ['sources', 'documents'],
+    ['sources', 'project'],
     ['integration', 'integration']
   ]) {
     assert.equal(activityOriginOfSource(source), kind);
