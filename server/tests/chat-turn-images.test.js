@@ -12,6 +12,7 @@
  */
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -24,6 +25,7 @@ import {
 } from '../services/chatFiles/ChatFileService.js';
 import { decodeRasterDataUrl, sniffRasterImage } from '../services/chatFiles/rasterImage.js';
 import { normalizeAttachments } from '../services/chat/chatMaterializer.js';
+import { ledgerMessages } from '../services/loop/ledgerMessages.js';
 
 const PNG = Buffer.concat([
   Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -125,6 +127,36 @@ describe('a picture of a turn', () => {
     const original = await repo.getOriginal(scope, descriptor.id);
     assert.deepEqual(original.data, PNG);
     assert.equal(original.mimeType, 'image/png');
+  });
+
+  it('carries its chat file id to the model request, and the run ledger records it by that file', async () => {
+    const { attachments, promptMessage } = await turn({ imageData: imageOf(PNG) });
+    const [image] = [promptMessage.imageData].flat();
+    assert.equal(image.fileId, attachments[0].id);
+    const [recorded] = ledgerMessages([promptMessage]);
+    const [ref] = [recorded.imageData].flat();
+    assert.equal(ref.base64, undefined);
+    const original = await repo.getOriginal(scope, ref.fileId);
+    assert.equal(ref.sha256, crypto.createHash('sha256').update(original.data).digest('hex'));
+  });
+
+  it('keeps the picture in the model request without an id when it is not stored', async () => {
+    const { promptMessage } = await turn({
+      imageData: imageOf(SVG, { name: 'x.svg', mime: 'image/svg+xml' })
+    });
+    assert.equal([promptMessage.imageData].flat()[0].fileId, undefined);
+  });
+
+  it('drops a file id the client sent with a picture that is not stored, so the ledger keeps the picture', async () => {
+    const image = {
+      ...imageOf(SVG, { name: 'x.svg', mime: 'image/svg+xml' }),
+      fileId: 'file_forged'
+    };
+    const { promptMessage } = await turn({ imageData: image });
+    const [sent] = [promptMessage.imageData].flat();
+    assert.equal(sent.fileId, undefined);
+    const [recorded] = ledgerMessages([promptMessage]);
+    assert.equal([recorded.imageData].flat()[0].base64, image.base64);
   });
 
   it('survives the store: the materializer keeps what a card needs to fetch it', () => {

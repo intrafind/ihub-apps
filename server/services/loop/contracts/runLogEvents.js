@@ -5,7 +5,8 @@
  * RunLog event contracts — the ledger underneath every chat, workflow, agent
  * and inference run (concept §5.4). One append-only JSONL stream per run.
  *
- * Rule: anything model-visible must be reconstructable from the log. The
+ * Rule: anything model-visible must be reconstructable from the log, with
+ * uploads resolved through their chat file while it exists. The
  * `request/header` event therefore carries the exact call configuration and a
  * hash of the rendered tool schemas / messages, and `tool/call` is logged
  * BEFORE execution so a crash mid-tool is visible.
@@ -211,7 +212,10 @@ export const requestHeaderData = z.object({
   /**
    * Full messages are recorded on 'initial' and 'change'; 'append' records only
    * the messages added since the previous header (`messagesDelta`); 'same'
-   * records neither (hash-dedupe, concept §8.3).
+   * records neither (hash-dedupe, concept §8.3). Documents and pictures stored
+   * as chat files are recorded as references to them (id + SHA-256) and
+   * `fileData` is left out (`services/loop/ledgerMessages.js`); `messagesHash`
+   * covers the real messages.
    */
   reason: z.enum(['initial', 'change', 'same', 'append']),
   messages: z.array(z.any()).optional(),

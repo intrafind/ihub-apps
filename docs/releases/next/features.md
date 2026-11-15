@@ -2101,3 +2101,17 @@ primary process, which alone writes `contents/data/quota-usage.json`. Workers no
 writing the file every few seconds, and a limit check no longer re-reads and copies the whole file
 each time another worker wrote it — with a few thousand users this cost noticeable CPU on every chat
 request.
+
+## The Run Ledger Stores Uploads Once
+
+The run ledger (`data/logs/run`) no longer copies uploaded documents, pictures and scanned pages into
+every model call it records. What is stored as a chat file is recorded as a reference to it — the
+chat file's id and the SHA-256 hash of the text or picture the model was sent. In load tests this
+made the ledger about a third of its size, and chats with large uploads or scans far smaller.
+
+- While the chat file exists, the reference leads to it. Once it is deleted, the ledger no longer
+  holds the content, only its hash: that confirms a copy kept elsewhere, but cannot show what the
+  model was sent. Keep chat files as long as you need that proof.
+- Content with no chat file behind it stays in the ledger in full: audio, pictures sent through the
+  OpenAI-compatible API, pages rendered by a workflow, and files the store refused.
+- Ledgers written before the update keep their full copies until retention removes them.

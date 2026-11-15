@@ -414,19 +414,44 @@ function renderDocuments(fileData) {
       blocks.push(`<${CONTEXT_TAGS.content} ${all.join(' ')} omitted="true"${chars}/>`);
       continue;
     }
-    const text = sourceText(typeof file.content === 'string' ? file.content : '');
+    const block = documentBlock(file);
     const pageCount = Array.isArray(file.pageImages) ? file.pageImages.length : 0;
-    if (!text && pageCount === 0) continue;
-    const origin = file.origin === 'attachment' ? 'attachment' : 'upload';
-    const attrs = fileAttributes(file);
-    if (text) {
-      blocks.push(contentBlock('document', origin, [text], attrs));
-    } else {
-      const all = [`type="document"`, `origin="${origin}"`, ...attrs];
-      blocks.push(`<${CONTEXT_TAGS.content} ${all.join(' ')} pages_as_images="${pageCount}"/>`);
+    if (block) {
+      blocks.push(block);
+    } else if (pageCount > 0) {
+      blocks.push(documentReference(file, [`pages_as_images="${pageCount}"`]));
     }
   }
   return blocks;
+}
+
+/**
+ * The `<content type="document">` block of one file with text, exactly as it is
+ * rendered into the user message, or '' when the file has no text. The run
+ * ledger looks for this string to record the document as a reference.
+ *
+ * @param {Object} file - One `fileData` entry
+ * @returns {string}
+ */
+export function documentBlock(file) {
+  const text = sourceText(typeof file?.content === 'string' ? file.content : '');
+  if (!text) return '';
+  const origin = file.origin === 'attachment' ? 'attachment' : 'upload';
+  return contentBlock('document', origin, [text], fileAttributes(file));
+}
+
+/**
+ * A self-closing `<content type="document" …/>` tag naming a file without its
+ * text, with extra attributes appended (`pages_as_images="3"`, `ref="sha256:…"`).
+ *
+ * @param {Object} file - One `fileData` entry
+ * @param {string[]} [extraAttrs]
+ * @returns {string}
+ */
+export function documentReference(file, extraAttrs = []) {
+  const origin = file.origin === 'attachment' ? 'attachment' : 'upload';
+  const all = [`type="document"`, `origin="${origin}"`, ...fileAttributes(file), ...extraAttrs];
+  return `<${CONTEXT_TAGS.content} ${all.join(' ')}/>`;
 }
 
 /**
