@@ -973,9 +973,9 @@ its newest `scheduledTasks.maxRunChatsPerTask` (20) run chats. The age rule
 applies to them like to any other chat.
 
 Every removal is the same cascade `DELETE /api/chats/:id` performs, ledger runs
-and the chat's [evidence records](chat-evidence.md) included. The age rule also
-removes the evidence of runs without a chat (`/v1` completions) older than
-`retentionDays`. No rule removes a chat a turn is still producing into, here or on
+and the chat's [evidence records](chat-evidence.md) included. Evidence of runs
+without a chat (`/v1` completions) older than `retentionDays` is removed every
+hour, also while the history is off. No rule removes a chat a turn is still producing into, here or on
 another worker; one a restart left `running` with nothing behind it expires as
 usual. The rule is judged again under the chat's lock right before the delete,
 so a chat kept, written to or started since the scan stays. The sweep runs once at startup — so a misconfigured retention shows up

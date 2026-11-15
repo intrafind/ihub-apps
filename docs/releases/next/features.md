@@ -7,7 +7,7 @@ definitions sent in every model call of the turn, every tool call with its argum
 retries and errors, the model and its settings, and what the model answered. Content is stored once per
 chat by its SHA-256, and documents and pictures uploaded to the chat are referenced, not copied. The
 record lives and is deleted with its chat (user delete, retention, a deleted user's cleanup); editing or
-resending a message removes that answer's record. `/v1/chat/completions` and Responses API calls without
+resending a message removes that answer's record and the content only it referred to. `/v1/chat/completions` and Responses API calls without
 a conversation get the same record, owned by the caller and removed after `chats.retentionDays`.
 
 The chat's owner reads it through `GET /api/chats/{chatId}/evidence/{messageId}` and
@@ -16,6 +16,7 @@ The chat's owner reads it through `GET /api/chats/{chatId}/evidence/{messageId}`
 `/api/admin/runs/…` mirrors. Shared chats and project members never see it. A chat's evidence counts
 against its upload quota (`uploads.quotas.maxChatBytes`); an answer is never refused for it.
 
+The record is written in the background after the answer is stored and is built from the run ledger.
 Admins can switch it off on **Admin → Chat History → Evidence record** (`chats.evidence.enabled`,
 default on; `chats.evidence.maxContentBytes` caps one item at 10 MB). Off means no record of what went
 in is kept. See [Chat Evidence Record](../../chat-evidence.md).

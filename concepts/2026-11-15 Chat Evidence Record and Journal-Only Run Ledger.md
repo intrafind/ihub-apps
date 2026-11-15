@@ -72,8 +72,9 @@ small on purpose. The evidence goes into two new namespaces of the storage provi
   `<chatId>/<sha256>`. A system prompt, passage, tool result or history message is written once
   per chat, however often it is sent.
 
-The assistant message gets one small field, `evidence: { id, sha256 }`. `sha256` is the hash of
-the evidence document, so the chat states which record belongs to the answer.
+The assistant message carries no pointer: the record is keyed by the chat and the answer's message
+id, and holds the message id and the hash of the answer's content (`output.contentSha256`). This
+keeps the record off the answer path (implementation review, phase 1).
 
 > ponytail: deduplication is per chat, not global. The same app system prompt is stored once per
 > chat, not once per installation. In exchange, deleting a chat is a prefix delete, with no
@@ -88,7 +89,7 @@ the evidence document, so the chat states which record belongs to the answer.
   "chatId": "…", "messageId": "…", "runId": "…", "userId": "…",
   "startedAt": "…", "endedAt": "…",
   "ihubVersion": "5.7.0",
-  "app": { "id": "…", "configSha256": "…" },          // the resolved app config as run
+  "app": { "id": "…", "config": "sha256:…" },         // the resolved app config when the answer was stored
   "model": { "id": "…", "provider": "…", "settings": { "temperature": 0.2, "maxTokens": 4096, "thinking": "…" } },
   "output": { "provenanceId": "…", "contentSha256": "…", "finishReason": "stop", "usage": { … },
               "files": [ { "artifactId": "…", "sha256": "…" } ] },
@@ -146,10 +147,18 @@ Write path while the run is active:
 
 At the end (`chatMaterializer`):
 
-1. Read the run's journal (it was just written, so it is in the page cache).
-2. Fold it into the evidence record and write the record.
-3. Store the answer with `evidence: { id, sha256 }`.
-4. Mark the run materialized.
+1. Store the answer and release the run, as before.
+2. In the background (never awaited): read the run's journal, fold it into the evidence record
+   and write the record. A process that dies between the append and this write leaves the answer
+   without a record; the failure of a write is logged. A run whose journal has no model call (the
+   ledger off) gets no record.
+3. Mark the run materialized.
+
+A call's messages mirror the journal: `{ from, append }`, the earlier call of the record whose
+list it continues and the messages it added.
+
+> ponytail: the first call of each answer still lists the whole history (O(history) references per
+> answer). A cross-answer `from` would need the previous answer's record.
 
 A run that is **not** a turn of a stored chat (`/v1` completions, headless agent calls without a
 chat) gets the same evidence record, set up like a chat. It is stored in `run-evidence`
@@ -200,12 +209,9 @@ the same way a chat message gets `evidence`.
   `chat-evidence-content/<chatId>/`.
 - **Temporary chat:** goes with the chat after `temporaryRetentionHours`.
 - **`runLog.retentionDays`** no longer limits any evidence. It only applies to run summaries.
-- **Deleting a single message** (edit, resend) deletes its evidence document. Blobs it shared with
-  other answers of the chat stay until the chat goes.
-
-> ponytail: orphaned per-chat blobs (from a deleted message) live until the chat is deleted. They
-> are bounded by the chat's own size. Add a per-chat mark-and-sweep if edits turn out to leave a
-> lot behind.
+- **Deleting a single message** (edit, resend) deletes its evidence document, then a mark-and-sweep
+  of the chat's blobs removes those no remaining record names. Record writes, sweeps and the chat
+  delete take the lock `evidence:<scope(chatId)>`, so they never interleave.
 
 ### 7. Legal hold
 

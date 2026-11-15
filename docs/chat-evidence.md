@@ -41,7 +41,7 @@ Answers stored before the release, or while the switch was off, have no record. 
   "startedAt": "…", "endedAt": "…",
   "journalEnded": true,            // false when the answer was rebuilt after a crash (no run/end)
   "ihubVersion": "…",
-  "app": { "id": "…", "configSha256": "…" },   // hash of the app config in force when the answer was stored
+  "app": { "id": "…", "config": "sha256:…" },  // the app config in force when the answer was stored
   "model": { "id": "…", "provider": "…", "modelId": "…", "settings": { "temperature": 0.2, "maxTokens": 4096 } },
   "status": "completed",
   "output": { "provenanceId": "…", "contentSha256": "…", "finishReason": "stop", "usage": {…},
@@ -50,12 +50,14 @@ Answers stored before the release, or while the switch was off, have no record. 
     "step": 0, "segment": "…", "purpose": "…", "requestId": "req-…", "attempt": 2,
     "retries": [ { "attempt": 1, "code": "RATE_LIMITED", "status": 429 } ],
     "model": "…", "provider": "…", "messagesHash": "…", "messageCount": 4,
-    "system": ["sha256:…"],                    // the leading system messages
-    "messages": [ { "role": "user", "message": "sha256:…",
+    "messages": {                              // as the journal records it
+      "from": 0,                               // the call this list continues, null for a full list
+      "append": [ { "role": "user", "message": "sha256:…",
                     "files": [ { "fileId": "…", "textSha256": "…", "chars": 1234 },
-                               { "fileId": "…", "sha256": "…", "bytes": 5678, "page": 3 } ] } ],
+                               { "fileId": "…", "sha256": "…", "bytes": 5678, "page": 3 } ] } ] },
+    "incomplete": true,                        // only when the replay does not match messageCount
     "tools": ["sha256:…"],                     // one per tool definition offered
-    "config": "sha256:…",                      // callConfig + model and options snapshots
+    "config": "sha256:…",                      // callConfig (with the response schema) + snapshots
     "output": "sha256:…",                      // what the call returned (text, tool calls, usage)
     "status": "ok" | "error" | "unknown", "error": { … },
     "startedAt": "…", "endedAt": "…" } ],
@@ -67,47 +69,53 @@ Answers stored before the release, or while the switch was off, have no record. 
     "resultBytes": 12345, "error": { … }, "durationMs": 120, "startedAt": "…", "endedAt": "…" } ],
   "errors": [ { "step": 2, "code": "…", "message": "…" } ],
   "knowledge": [ { "projectId": "…", "mode": "loaded", "documents": 3 } ],
-  "children": [],
   "truncated": [ { "sha256": "…", "bytes": 20000000, "truncated": true } ]
 }
 ```
 
 - Every `sha256:<hex>` names a content item: the **canonical JSON** (`storage/canonicalJson.js`) of a
-  message, tool definition, tool argument object or tool result. Its SHA-256 is computed over exactly
-  those bytes, so a reader can verify every item.
-- A call's messages are the full list the model was sent, rebuilt from the journal, as the ledger
-  records them: a document stored as a chat file appears as its `<content … id text_sha256 chars/>`
-  reference, a picture as `{ fileId, sha256, bytes }` (see `services/loop/ledgerMessages.js`), and
-  `files` lists those references. `messagesHash` is the hash `LLMClient` computed over the real
-  messages when the call was made; it is copied, not recomputed.
-- A tool result is the full result when the loop spilled it (`resultSource: "spill"`), otherwise the
-  tool message the model read in the next call (`"message"`), otherwise the 1,024-character preview
-  of the journal (`"preview"`, `partial: true`), e.g. when the run ended right after the tool.
+  message, tool definition, tool argument object, tool result or the app configuration. Its SHA-256
+  is computed over exactly those bytes, so a reader can verify every item.
+- A call's messages are a delta, as in the journal: a full list (`from: null`, the first call and
+  calls after a compaction) or the call it continues plus what was added (`append`, possibly empty).
+  The full list of call *n* is the list of call `from` followed by `append`. The first call of
+  every answer lists the whole history again. Messages are as the ledger records them: a document
+  stored as a chat file appears as its `<content … id text_sha256 chars/>` reference, a picture as
+  `{ fileId, sha256, bytes }` (see `services/loop/ledgerMessages.js`), and `files` lists those
+  references. System messages are the leading `role: "system"` entries. `messagesHash` is the hash
+  `LLMClient` computed over the real messages when the call was made; it is copied, not recomputed.
+- A tool call is identified by its step and call id (providers reuse ids across steps). Its result
+  is the full result when the loop spilled it (`resultSource: "spill"`), otherwise the tool message
+  the model read in the first call after it (`"message"`), otherwise the 1,024-character preview of
+  the journal (`"preview"`, `partial: true`), e.g. when the run ended right after the tool.
+- An `error` event belongs to the call of its step; it marks that call failed only if the call had
+  no answer.
 - Tool labels (`title`, `integration`, `activityKind`, `activityScope`, `activityOrigin`) are copied
   from the `tool/call` event; the record never infers them.
 - `knowledge` is phase 1: which projects the turn reached and how. The passages themselves are in
   the system prompt.
-- Workflow and agent children (`children`) are phase 5 and always empty for now.
 
 ## How it is built
 
 `services/chat/evidenceRecord.js` (`buildEvidence`) reads the run's journal
 (`RunLog.readEvents`) and replays it: every `request/header` gives a call (`initial` / `change`
 carry the full messages, `append` the new ones, `same` none), `request/retry`, `error` and
-`message/assistant` complete it, `tool/call` and `tool/result` give the tool calls.
+`message/assistant` complete it, `tool/call` and `tool/result` give the tool calls. A run whose
+journal has no `request/header` gets **no record**: the record is built from the run ledger, so a
+run that was not recorded (the ledger off, which stored chats never allow) has none.
 
-- **Chat answers:** `chatMaterializer.settleAssistantTurn` builds and stores the record after the
-  generated artifacts and before the answer is appended, so the answer can carry
-  `evidence: { id, sha256 }` (`id` is the message id, `sha256` the etag of the stored record). This
-  is the one path every chat answer takes: the normal end, crash recovery (`chatRecovery.js`, where
-  `run/end` is not written yet, so `journalEnded` is `false`), transcription turns, workflow results,
-  and Responses API turns with a conversation.
-- **Runs without a chat:** `recordRunEvidence` is called after the run ended, without being awaited,
-  by `/v1/chat/completions` (model and app) and the Responses API without a conversation. Anonymous
-  callers get no record.
-- **Best effort.** An answer is never refused, delayed beyond the build or lost because of its
-  evidence: any failure is logged at error level and the answer is stored without `evidence`. A
-  record whose answer was not stored (another writer answered first, the chat is gone) is deleted.
+- **Chat answers:** `chatMaterializer.settleAssistantTurn` stores the answer and releases the run as
+  before, then starts `recordChatEvidence` in the background, never awaited. The record is keyed by
+  the chat and the stored answer's message id; the answer itself carries no pointer. This is the one
+  path every chat answer takes: the normal end, crash recovery (`chatRecovery.js`; `journalEnded`
+  says whether `run/end` was there), transcription turns, workflow results, and Responses API turns
+  with a conversation. A guest's chat or the anonymous principal's gets no record.
+- **Runs without a chat:** `recordRunEvidence` runs in the background after the run ended, for
+  `/v1/chat/completions` (model and app, once per run) and the Responses API without a conversation.
+  Anonymous callers get no record.
+- **Off the answer path.** An answer is never refused, delayed or lost because of its evidence. A
+  failed write is logged at error level; a process that dies between storing the answer and writing
+  the record leaves that answer without one. A write that finds the chat gone writes nothing.
 
 ## Storage
 
@@ -122,18 +130,23 @@ carry the full messages, `append` the new ones, `same` none), `request/retry`, `
 
 `scope(id)` is the first 32 hex characters of sha256(id). Content is stored **once per chat**: a
 system prompt or history message sent in many calls is one blob. Writing a record lists the chat's
-blobs once and writes only the missing ones.
+blobs once and writes only the missing ones, eight at a time. An item above `maxContentBytes` is
+hashed but never kept. Record writes, content sweeps and the chat's evidence delete take the lock
+`evidence:<scope(chatId)>`, so they never interleave.
 
 ## Deletion
 
 - A chat's evidence goes with the chat: `ChatRepository.deleteChat` removes both prefixes
-  (`deletePrefix`), so every delete path covers it — the user's delete, `/v1` conversation delete,
-  scheduled task delete, the retention sweep (age, count, temporary chats), the deleted user's
-  cleanup and the workflow execution chat.
-- A message that leaves the transcript (edit, resend, message delete, the message cap) takes its
-  record with it. Blobs it shared with other answers stay until the chat goes.
+  (`deletePrefix`) after the chat document, outside the chat lock, so every delete path covers it —
+  the user's delete, `/v1` conversation delete, scheduled task delete, the retention sweep (age,
+  count, temporary chats), the deleted user's cleanup and the workflow execution chat. A failure
+  there is logged; a re-delete sweeps what is left.
+- An answer that leaves the transcript (edit, resend, message delete, the message cap) takes its
+  record with it, in the background; then the chat's blobs that no remaining record names are
+  removed (mark and sweep).
 - Run evidence goes with `DELETE /api/runs/{runId}`, the deleted user's cleanup (step
-  `runEvidence`) and the chats' age rule (`chats.retentionDays`) in the retention sweep.
+  `runEvidence`) and `chats.retentionDays` in the hourly retention sweep — also while the chat
+  history is off, since these runs are no chat history.
 - `runLog.retentionDays` does not limit evidence.
 
 ## Quota
@@ -144,8 +157,8 @@ uploads to the chat are refused (`QUOTA_CHAT_BYTES`), and a chat can go over it 
 
 ## Reading it
 
-Only the owner and admins. A shared chat does not share it (`evidence` is dropped from share
-snapshots), and project members cannot read it.
+Only the owner and admins. A shared chat does not share it (its messages name no record), and
+project members cannot read it.
 
 | Endpoint | Who |
 | -------- | --- |
@@ -156,8 +169,9 @@ snapshots), and project members cannot read it.
 | `GET /api/admin/chats/{chatId}/evidence/{messageId}` (and `…/evidence-content/{sha256}`) | admins, audited (`chatEvidence`) |
 | `GET /api/admin/runs/{runId}/evidence` (and `…/evidence-content/{sha256}`) | admins, audited (`runEvidence`) |
 
-The record answers with an `ETag` equal to the answer's `evidence.sha256`; content answers are the
-item's canonical JSON. Both are `Cache-Control: private, immutable`. Errors: `404
+The record answers with its document etag as `ETag`; content answers are the item's canonical
+JSON with its SHA-256 as `ETag`. Both are `Cache-Control: private, no-cache`: a record or blob can
+be deleted, so a cache revalidates. A guest or the anonymous principal reads no evidence. Errors: `404
 EVIDENCE_NOT_RECORDED` (no record, not yours on the run routes, or the switch is off), `404
 NOT_FOUND` (not your chat), `400 BAD_REQUEST` (not a lower-case hex SHA-256).
 
@@ -166,3 +180,6 @@ NOT_FOUND` (not your chat), `400 BAD_REQUEST` (not a lower-case hex SHA-256).
 Legal hold, the `knowledge/passages` event, content-addressed writes at request time, deleting
 journals after materialization, and workflow/agent evidence (`children`, `workflow-evidence`) are
 later phases of the design.
+
+> ponytail: a record write and an upload's quota check list the chat's evidence (O(records and
+> blobs of the chat)). Keep a per-chat counter or index if long chats make it show up.
