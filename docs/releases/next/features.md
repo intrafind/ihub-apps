@@ -2094,6 +2094,14 @@ in the panel have a visible border.
 
 Sources of chats stored before this release show no origin word: nothing is guessed for them.
 
+## Usage-Limit Checks Cost Less With Many Users
+
+On servers with several workers (`WORKERS` > 1), the usage-limit counters are now held by the
+primary process, which alone writes `contents/data/quota-usage.json`. Workers no longer take turns
+writing the file every few seconds, and a limit check no longer re-reads and copies the whole file
+each time another worker wrote it — with a few thousand users this cost noticeable CPU on every chat
+request.
+
 ## The Run Ledger Stores Uploads Once
 
 The run ledger (`data/logs/run`) no longer copies uploaded documents, pictures and scanned pages into

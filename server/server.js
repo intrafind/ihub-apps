@@ -18,6 +18,7 @@ import { applySystemCaDefault } from './utils/systemCa.js';
 import './requestThrottler.js';
 import './utils/clusterRateLimitStore.js';
 import './utils/loginLockout.js';
+import './services/quota/QuotaLedger.js';
 import config from './config.js';
 // `startup/primary.js` and `startup/worker.js` are imported below, each only in
 // the process that runs it. A static import of `worker.js` loaded the whole
