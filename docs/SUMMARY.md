@@ -114,6 +114,7 @@
     - [Update Signing](update-signing.md)
     - [Rate Limiting](rate-limiting.md)
     - [Scaling with Multiple Workers](scaling.md)
+    - [Sizing](sizing.md)
     - [Multi-Server Deployment](multi-server-deployment.md)
     - [Telemetry & Observability](telemetry.md)
   - [Development & Deployment]()

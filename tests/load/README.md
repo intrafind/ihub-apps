@@ -19,7 +19,7 @@ The harness is plain Node 20+ with no dependencies. It runs the same way on a la
 | `teardown.mjs`              | Deletes test chats and projects (with `--delete-users`, also the users)                                                                                                        |
 | `stub/server.mjs`           | Paced fake LLM (OpenAI-compatible, with vLLM-style `/metrics`) and a synthetic website for crawls                                                                              |
 | `tools/generate-corpus.mjs` | Generates 42 realistic Word, PowerPoint, Excel and PDF files (`npm run loadtest:corpus`)                                                                                       |
-| `profiles/*.json`           | One per experiment: `smoke`, `capacity-stub`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                                          |
+| `profiles/*.json`           | One per experiment: `smoke`, `capacity-stub`, `company`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                               |
 | `docker-compose.yml`        | Local sizing lab: iHub with a fixed CPU/RAM budget, plus the stubs                                                                                                             |
 | `k8s/`                      | Stubs Deployment, setup Job, Indexed runner Job, `collect.sh`                                                                                                                  |
 
@@ -36,6 +36,15 @@ A VU is one **concurrently active** user. It loops over sessions, picked by the 
 | `browse`       | app list, chat history, project list                                                                                        | non-LLM API latency                                                     |
 | page load      | before 30% of sessions: auth status, configs, translations, styles, apps, models, prompts, AI notice                        | the per-user request rate a browser produces (rate limits)              |
 | `inference`    | `/api/inference/v1/chat/completions`, streamed                                                                              | pure LLM path (off by default)                                          |
+
+### Workload mixes
+
+| Profile         | chat | projectChat | chatFile | projectBuild | browse | Project chats                                                       |
+| --------------- | ---: | ----------: | -------: | -----------: | -----: | ------------------------------------------------------------------- |
+| `capacity-stub` |  45% |         30% |      15% |           5% |     5% | half in the user's own project, half spread over 20 shared projects |
+| `company`       |  55% |         25% |      10% |           2% |     8% | 80% shared, and 60% of those in one project (`shared-1`)            |
+
+`capacity-stub` is a heavy, project-centric workload: every third session reads a project and one in twenty builds one. `company` is closer to a typical installation: most people chat, a few upload a document, very few build projects, and most project questions go to one popular project such as a website chatbot or the company handbook. The mix is per session, not per user, so 10% `chatFile` means one session in ten uploads a file.
 
 Measured per turn:
 
@@ -246,6 +255,7 @@ The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU l
 | `LT_THINKING`                                                              | model default                       | `on` / `off`: sends `thinkingEnabled` (Qwen3 on gpu-01)                 |
 | `LT_LLM_CONTEXT_WINDOW`                                                    | discovered (173184)                 | Context window registered for the test models                           |
 | `LT_OWN_PROJECTS_MAX`, `LT_SHARED_PROJECTS`, `LT_DOCS_PER_PROJECT`         | 200, profile, 6                     | Projects setup prepares for `projectChat`                               |
+| `LT_PREFER_SHARED`, `LT_HOT_SHARE`                                         | 0.5, 0 (`company`: 0.8, 0.6)        | Share of project chats in shared projects; share of those in `shared-1` |
 | `LT_USERS_PER_IP`                                                          | target or capacity                  | Users assumed behind one IP for the rate-limit recommendation           |
 | `LT_VLLM_METRICS_URL`                                                      | auto                                | vLLM `/metrics`; `none` disables it                                     |
 | `LT_PROM_URL`, `LT_PROM_TOKEN`                                             | –                                   | Prometheus or Grafana datasource proxy, bearer token                    |
