@@ -22,15 +22,22 @@ import fsCallbacks from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { runProviderConformance } from '../storage/__tests__/providerConformance.js';
+import {
+  PREFIX_LISTING_NAMESPACES,
+  runProviderConformance
+} from '../storage/__tests__/providerConformance.js';
+import { KEY_PREFIX_SEGMENTS } from '../storage/namespaces.js';
 import { LockTimeoutError } from '../storage/errors.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 import { FilesystemLockManager } from '../storage/providers/filesystem/FilesystemLockManager.js';
 
 /** Directory handed out by the most recent factory call; `reuse` re-opens it. */
 let lastBaseDir = null;
+
+/** The key-prefix index the factory configures: on (the shipped map plus the suite's). */
+let keyPrefixSegments = { ...KEY_PREFIX_SEGMENTS, ...PREFIX_LISTING_NAMESPACES };
 
 /**
  * Build an uninitialized filesystem provider over a scratch directory.
@@ -47,7 +54,11 @@ async function createProvider({ reuse = false } = {}) {
 
   // A short flush interval keeps the buffered append-log honest without the
   // suite ever having to wait for a timer: every read flushes explicitly.
-  const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
+  const provider = new FilesystemStorageProvider({
+    baseDir,
+    flushIntervalMs: 25,
+    keyPrefixSegments
+  });
 
   return {
     provider,
@@ -59,19 +70,42 @@ async function createProvider({ reuse = false } = {}) {
   };
 }
 
+const FILESYSTEM_CAPABILITIES = {
+  transactions: false,
+  notifications: 'in-process',
+  locking: 'advisory-single-machine',
+  search: false,
+  multiInstance: false,
+  blobs: true,
+  blobStore: true,
+  conditionalWrites: true
+};
+
 runProviderConformance({
   name: 'filesystem',
   createProvider,
-  capabilities: {
-    transactions: false,
-    notifications: 'in-process',
-    locking: 'advisory-single-machine',
-    search: false,
-    multiInstance: false,
-    blobs: true,
-    blobStore: true,
-    conditionalWrites: true
-  }
+  capabilities: FILESYSTEM_CAPABILITIES
+});
+
+// The listing contract without the key-prefix index: every listing then reads
+// the namespace directory, and must answer exactly as it does with the index.
+// `describe` callbacks run at collection time, so the toggle is flipped in the
+// suite's own hooks rather than around the call.
+describe('filesystem storage provider without the key-prefix index', () => {
+  before(() => {
+    keyPrefixSegments = {};
+  });
+  after(() => {
+    keyPrefixSegments = { ...KEY_PREFIX_SEGMENTS, ...PREFIX_LISTING_NAMESPACES };
+  });
+  runProviderConformance({
+    // The provider's registry name: healthCheck() is asserted to report it.
+    name: 'filesystem',
+    createProvider,
+    capabilities: FILESYSTEM_CAPABILITIES,
+    // Only what lists: everything else does not read the index.
+    sections: ['listing and paging', 'key-prefix listings', 'the blob facet']
+  });
 });
 
 /**

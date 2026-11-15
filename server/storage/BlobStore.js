@@ -21,6 +21,7 @@
  * | `get`     | read file         | `GetObject`     | read                |
  * | `delete`  | unlink            | `DeleteObject`  | delete              |
  * | `list`    | readdir + filter  | `ListObjectsV2` | `LIKE` on key       |
+ * | `scan`    | one readdir, lazy | paged `list`    | cursor over a query |
  *
  * Nothing here is provider-specific and nothing needs a transaction, so a
  * domain repository written against this interface keeps working when an
@@ -43,6 +44,9 @@
  * @module storage/BlobStore
  */
 import { NotSupportedError } from './errors.js';
+
+/** Page size the base {@link BlobStore#scan} walks `list` with (its maximum). */
+const SCAN_PAGE_SIZE = 1000;
 
 /**
  * What a blob write reports back.
@@ -131,6 +135,57 @@ export class BlobStore {
    */
   async list(_ns, _opts = {}) {
     throw new NotSupportedError('BlobStore.list is not implemented');
+  }
+
+  /**
+   * Every blob key in a namespace, in ascending key order, as a stream.
+   *
+   * The walk counterpart to {@link BlobStore#list}, as
+   * {@link module:storage/DocumentStore~DocumentStore#scan} is to the document
+   * listing. `list` takes a cursor and returns one page; a caller that wants
+   * the whole namespace (an orphan sweep, a scope delete) paging it has every
+   * page re-establish where it is, and on the filesystem provider that means
+   * re-reading and re-sorting the whole directory per page — O(N) per page
+   * instead of O(N) in total.
+   *
+   * The contract is the order and the completeness, not the mechanism: the
+   * same keys `list` would return across all its pages, in the same order
+   * (plain code-unit comparison), each with its size and never its payload.
+   * A blob deleted while the walk runs may be skipped; a blob written while it
+   * runs may or may not appear. Deleting the blob just yielded is safe.
+   *
+   * This base implementation pages {@link BlobStore#list}, so every provider
+   * has it; a provider overrides it only to make it cheaper.
+   *
+   * @param {string} ns - Namespace.
+   * @param {Object} [opts]
+   * @param {string} [opts.prefix] - Keep only keys starting with this.
+   * @yields {{key: string, bytes: number}} Keys in ascending order.
+   */
+  async *scan(ns, opts = {}) {
+    const { prefix } = opts || {};
+    let cursor = null;
+    do {
+      const page = await this.list(ns, {
+        ...(prefix ? { prefix } : {}),
+        limit: SCAN_PAGE_SIZE,
+        ...(cursor ? { cursor } : {})
+      });
+      yield* page.items;
+      cursor = page.nextCursor || null;
+    } while (cursor);
+  }
+
+  /**
+   * Whether {@link BlobStore#scan} is available. True for every subclass —
+   * the base implementation works over `list` — and only declared so
+   * `storage/walk.js` can tell a real store from a hand-written test double
+   * that has `list` and nothing else.
+   *
+   * @returns {boolean} true
+   */
+  get supportsScan() {
+    return true;
   }
 }
 

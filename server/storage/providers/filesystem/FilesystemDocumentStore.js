@@ -9,6 +9,9 @@
  *   <base>/<ns>/<key>.json                      the document envelope
  *   <base>/<ns>/.owners/<ownerSegment>/<key>    empty marker file (the per-owner index)
  *   <base>/<ns>/.locks/<key>.lock               transient compare-and-set lock
+ *   <base>/<ns>/.prefixes/<partition>/<key>     empty marker file (the key-prefix index,
+ *                                               only for namespaces in KEY_PREFIX_SEGMENTS;
+ *                                               see ./prefixIndex.js)
  *
  * Design note — flat documents, owners as an index. The persistence concept
  * sketches `contents/data/<ns>/[<ownerId>/]<key>.json`, but `get(ns, key)`
@@ -48,6 +51,7 @@ import {
   containedPath,
   ownerSegment
 } from './paths.js';
+import { PREFIXES_DIR, PrefixIndex } from './prefixIndex.js';
 
 const COMPONENT = 'FilesystemDocumentStore';
 
@@ -112,7 +116,12 @@ const TEMP_PREFIX = '.tmp_';
  * @returns {boolean} True when the entry is bookkeeping and must not be listed
  */
 function isReservedEntry(entry) {
-  return entry === OWNERS_DIR || entry === LOCKS_DIR || entry.startsWith(TEMP_PREFIX);
+  return (
+    entry === OWNERS_DIR ||
+    entry === LOCKS_DIR ||
+    entry === PREFIXES_DIR ||
+    entry.startsWith(TEMP_PREFIX)
+  );
 }
 
 /**
@@ -366,8 +375,10 @@ export class FilesystemDocumentStore extends DocumentStore {
    * @param {string} options.baseDir - Absolute directory this store owns
    * @param {{publish: (event: Object) => Promise<void>}} [options.notifier] - Change notifier the
    *   store publishes `document.put` / `document.delete` on; omitted, the store stays silent
+   * @param {Record<string, number>} [options.keyPrefixSegments] - Namespaces kept in the
+   *   key-prefix index; defaults to `KEY_PREFIX_SEGMENTS`. `{}` switches it off (tests)
    */
-  constructor({ baseDir, notifier } = {}) {
+  constructor({ baseDir, notifier, keyPrefixSegments } = {}) {
     super();
     if (typeof baseDir !== 'string' || baseDir.length === 0) {
       throw new StorageError('FilesystemDocumentStore requires a baseDir', {
@@ -376,6 +387,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     }
     this._baseDir = path.resolve(baseDir);
     this._notifier = notifier || null;
+    this._prefixIndex = new PrefixIndex(keyPrefixSegments);
   }
 
   /**
@@ -504,6 +516,9 @@ export class FilesystemDocumentStore extends DocumentStore {
           // rollback safe when the winner happens to share the owner.
           const markerPath = ownerId ? this._ownerMarkerPath(ns, ownerId, key) : null;
           const markerCreated = markerPath ? await tryCreateExclusive(markerPath, '') : false;
+          // The prefix marker is left in place when the create loses: the key
+          // then holds the winner's document, which belongs in the partition.
+          await this._prefixIndex.writeMarker(this._nsDir(ns), ns, key);
           try {
             await atomicCreateJSON(this._docPath(ns, key), envelope);
           } catch (error) {
@@ -537,6 +552,8 @@ export class FilesystemDocumentStore extends DocumentStore {
         // owner's listing cannot see — invisible data is worse than a
         // dangling index entry.
         if (ownerId) await this._writeOwnerMarker(ns, ownerId, key);
+        // Same order for the key-prefix index, same reason.
+        await this._prefixIndex.writeMarker(this._nsDir(ns), ns, key);
         await atomicWriteJSON(this._docPath(ns, key), envelope);
         // Retire the previous owner's marker only once the new envelope is on
         // disk, so the document is never missing from both indexes at once.
@@ -581,6 +598,17 @@ export class FilesystemDocumentStore extends DocumentStore {
         // Drop the index entry after the envelope: a marker may outlive its
         // document, never the other way round.
         if (ownerId) await removeIfExists(this._ownerMarkerPath(ns, ownerId, key));
+        try {
+          await this._prefixIndex.removeMarker(this._nsDir(ns), ns, key);
+        } catch (error) {
+          // The document is gone; a leftover marker is skipped by listings.
+          logger.warn('Could not remove the prefix index entry of a deleted document', {
+            component: COMPONENT,
+            ns,
+            key,
+            error: error.message
+          });
+        }
         return { removed, ownerId };
       },
       { component: COMPONENT }
@@ -613,10 +641,7 @@ export class FilesystemDocumentStore extends DocumentStore {
     const pageSize = clampLimit(limit);
     const after = cursor === undefined || cursor === null ? null : decodeCursor(cursor);
 
-    let keys =
-      ownerId === undefined || ownerId === null
-        ? await this._namespaceKeys(ns)
-        : await this._ownerKeys(ns, ownerId);
+    let keys = await this._listingKeys(ns, ownerId, prefix);
 
     keys.sort(compareKeys);
     if (typeof prefix === 'string' && prefix.length > 0) {
@@ -700,33 +725,41 @@ export class FilesystemDocumentStore extends DocumentStore {
   async *scan(ns, opts = {}) {
     assertValidNamespace(ns);
     const { ownerId, prefix, includeData = true } = opts || {};
-    let keys =
-      ownerId === undefined || ownerId === null
-        ? await this._namespaceKeys(ns)
-        : await this._ownerKeys(ns, ownerId);
+    let keys = await this._listingKeys(ns, ownerId, prefix);
     keys.sort(compareKeys);
     if (typeof prefix === 'string' && prefix.length > 0) {
       keys = keys.filter(key => key.startsWith(prefix));
     }
     const upgrades = { upgraded: 0, failed: 0 };
     try {
-      for (const key of keys) {
-        // Same reasoning as `list`: a missing envelope is a stale owner marker
-        // or a document deleted mid-walk, and is skipped rather than removed.
-        const envelope =
-          includeData !== false
-            ? await this._readEnvelope(ns, key, { lenient: true })
-            : await this._readEnvelopeHead(ns, key, { lenient: true });
-        if (!envelope) continue;
-        if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
-        if (envelope[LEGACY_ENVELOPE]) {
-          if (await this._upgradeLegacyEnvelope(ns, key, envelope[LEGACY_ENVELOPE])) {
-            upgrades.upgraded += 1;
-          } else {
-            upgrades.failed += 1;
+      // Read ahead one batch at a time, as `list` does: one document after the
+      // other made a walk over a user's files slower than the paged listing it
+      // replaced, which read each page in parallel.
+      for (let start = 0; start < keys.length; start += READ_CONCURRENCY) {
+        const batch = keys.slice(start, start + READ_CONCURRENCY);
+        const envelopes = await Promise.all(
+          batch.map(key =>
+            includeData !== false
+              ? this._readEnvelope(ns, key, { lenient: true })
+              : this._readEnvelopeHead(ns, key, { lenient: true })
+          )
+        );
+        for (let offset = 0; offset < batch.length; offset += 1) {
+          const key = batch[offset];
+          const envelope = envelopes[offset];
+          // Same reasoning as `list`: a missing envelope is a stale owner marker
+          // or a document deleted mid-walk, and is skipped rather than removed.
+          if (!envelope) continue;
+          if (await this._rejectForeign(ns, key, envelope, ownerId)) continue;
+          if (envelope[LEGACY_ENVELOPE]) {
+            if (await this._upgradeLegacyEnvelope(ns, key, envelope[LEGACY_ENVELOPE])) {
+              upgrades.upgraded += 1;
+            } else {
+              upgrades.failed += 1;
+            }
           }
+          yield this._toDocument(ns, key, envelope, includeData !== false);
         }
-        yield this._toDocument(ns, key, envelope, includeData !== false);
       }
     } finally {
       // One line per walk, however many documents it upgraded.
@@ -821,6 +854,24 @@ export class FilesystemDocumentStore extends DocumentStore {
     // Rewritten on every put so an entry lost to a crash reappears on the next
     // write. The file is empty: its name is the whole payload.
     await fs.writeFile(marker, '', 'utf8');
+  }
+
+  /**
+   * The candidate keys of a listing, unsorted and not yet prefix-filtered: the
+   * owner's index for an owner listing, the key-prefix index when the prefix
+   * pins one partition, the whole namespace directory otherwise.
+   *
+   * @param {string} ns - Namespace
+   * @param {string|null|undefined} ownerId - Owner filter
+   * @param {string|undefined} prefix - Prefix filter
+   * @returns {Promise<string[]>}
+   * @private
+   */
+  async _listingKeys(ns, ownerId, prefix) {
+    if (ownerId !== undefined && ownerId !== null) return this._ownerKeys(ns, ownerId);
+    const partition = this._prefixIndex.partition(ns, prefix);
+    if (partition) return this._prefixIndex.keys(this._nsDir(ns), partition);
+    return this._namespaceKeys(ns);
   }
 
   /** Keys of every document file directly in a namespace. @private */

@@ -30,6 +30,7 @@ import { recordUpload } from '../../telemetry/metrics.js';
 import { OAuthRefreshError } from '../integrations/oauthRefreshError.js';
 import { isIntegrationAuthRequired } from '../integrations/auth/integrationAuthRequired.js';
 import { KnowledgeError } from '../knowledge/types.js';
+import { walkBlobs } from '../../storage/walk.js';
 import { PROJECT_FILES_NAMESPACE, getProjectRepository, usageOf } from './ProjectRepository.js';
 import { ProjectError } from './projectErrors.js';
 import { projectSettings } from './projectSettings.js';
@@ -63,6 +64,9 @@ const FETCH_TIMEOUT_MS = 10 * 60 * 1000;
 
 /** User projects read per page of the reconciler's inventory. */
 const INVENTORY_PAGE_SIZE = 10000;
+
+/** Blobs the orphan sweep checks between two reads of the jobs in flight. */
+const ORPHAN_SWEEP_BATCH = 200;
 
 /**
  * Most expired files one reconciler tick queues for a refresh; the rest wait
@@ -1304,25 +1308,21 @@ export class ProjectIngestService {
       for (const item of project.items || []) if (item.text?.blobKey) named.add(item.text.blobKey);
     }
     let removed = 0;
-    let cursor = null;
+    let busy = [];
+    let seen = 0;
     try {
-      do {
-        const page = await this.repository.blobs.list(PROJECT_FILES_NAMESPACE, {
-          limit: 200,
-          ...(cursor ? { cursor } : {})
-        });
-        const busy = this._busyItemIds();
-        for (const blob of page.items) {
-          if (named.has(blob.key)) continue;
-          // A key that does not parse is kept: its age and owner are unknown.
-          const parsed = parseBlobKey(blob.key);
-          if (!parsed) continue;
-          if (busy.some(itemId => parsed.scope.endsWith(`__${itemId}`))) continue;
-          if (now - parsed.mintedAt < ORPHAN_AGE_MS) continue;
-          if (await this.repository.blobs.delete(PROJECT_FILES_NAMESPACE, blob.key)) removed += 1;
-        }
-        cursor = page.nextCursor;
-      } while (cursor);
+      for await (const blob of walkBlobs(this.repository.blobs, PROJECT_FILES_NAMESPACE)) {
+        // The jobs on this worker change while the walk runs: re-read them
+        // every batch rather than once.
+        if (seen++ % ORPHAN_SWEEP_BATCH === 0) busy = this._busyItemIds();
+        if (named.has(blob.key)) continue;
+        // A key that does not parse is kept: its age and owner are unknown.
+        const parsed = parseBlobKey(blob.key);
+        if (!parsed) continue;
+        if (busy.some(itemId => parsed.scope.endsWith(`__${itemId}`))) continue;
+        if (now - parsed.mintedAt < ORPHAN_AGE_MS) continue;
+        if (await this.repository.blobs.delete(PROJECT_FILES_NAMESPACE, blob.key)) removed += 1;
+      }
     } catch (error) {
       logger.warn('Orphan blob sweep failed', { component: COMPONENT, error: error.message });
     }

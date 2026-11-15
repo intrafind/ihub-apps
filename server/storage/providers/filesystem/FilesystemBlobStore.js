@@ -6,9 +6,11 @@
  *
  * Layout under the provider's base directory:
  *
- *   <base>/blobs/<ns>/<key>      the payload, byte for byte
+ *   <base>/blobs/<ns>/<key>                        the payload, byte for byte
+ *   <base>/blobs/<ns>/.prefixes/<partition>/<key>  empty marker (key-prefix index, only for
+ *                                                  namespaces in KEY_PREFIX_SEGMENTS)
  *
- * No envelope, no encoding, no sidecar. A blob file *is* the bytes, which is
+ * No envelope, no encoding, no sidecar beside the payload. A blob file *is* the bytes, which is
  * what makes this facet swappable for an object store later (issue #2318): an
  * S3 adapter maps the same four calls onto `PutObject`, `GetObject`,
  * `DeleteObject` and `ListObjectsV2`, and a domain repository written against
@@ -25,6 +27,13 @@
  * without touching the payload. `put` accepts it as a hint so an object-store
  * implementation can set it on the object; here it is ignored.
  *
+ * The key-prefix index (`./prefixIndex.js`) makes a listing scoped to one chat
+ * or one project read that scope's partition rather than the namespace. A
+ * blob is written with no lock, so a `put` racing a `delete` *of the same key*
+ * can end with the payload in place and its marker gone; the facet's callers
+ * mint a fresh key per write (see {@link BlobStore#put}), which is what keeps
+ * that case out of reach.
+ *
  * @module storage/providers/filesystem/FilesystemBlobStore
  */
 import { promises as fs } from 'node:fs';
@@ -33,8 +42,9 @@ import path from 'node:path';
 import { atomicWriteFile } from '../../../utils/atomicWrite.js';
 import logger from '../../../utils/logger.js';
 import { BlobStore } from '../../BlobStore.js';
-import { StorageError } from '../../errors.js';
+import { InvalidKeyError, StorageError } from '../../errors.js';
 import { assertValidKey, assertValidNamespace, containedPath } from './paths.js';
+import { PREFIXES_DIR, PrefixIndex } from './prefixIndex.js';
 
 /** Directory holding every blob namespace, relative to the provider's base. */
 export const BLOB_DIR = 'blobs';
@@ -44,6 +54,17 @@ export const BLOB_DIR = 'blobs';
  * `..`, which no key may contain (`isValidId`), so it never hides a real blob.
  */
 export const DELETING_PREFIX = '..deleting_';
+
+/** Prefix `atomicWriteFile` gives its scratch file while a `put` is in flight. */
+const TEMP_PREFIX = '.tmp_';
+
+/** Keys a blob walk stats at once. */
+const SCAN_CONCURRENCY = 16;
+
+/** Whether a namespace directory entry is bookkeeping rather than a blob. */
+function isReservedEntry(name) {
+  return name === PREFIXES_DIR || name.startsWith(DELETING_PREFIX) || name.startsWith(TEMP_PREFIX);
+}
 
 const DEFAULT_LIMIT = 100;
 const MIN_LIMIT = 1;
@@ -100,10 +121,14 @@ function toBuffer(data) {
 export class FilesystemBlobStore extends BlobStore {
   /**
    * @param {string} baseDir - The provider's base directory.
+   * @param {Object} [options]
+   * @param {Record<string, number>} [options.keyPrefixSegments] - Namespaces kept in
+   *   the key-prefix index; defaults to `KEY_PREFIX_SEGMENTS`. `{}` switches it off (tests)
    */
-  constructor(baseDir) {
+  constructor(baseDir, { keyPrefixSegments } = {}) {
     super();
     this.baseDir = baseDir;
+    this._prefixIndex = new PrefixIndex(keyPrefixSegments);
   }
 
   /**
@@ -117,6 +142,11 @@ export class FilesystemBlobStore extends BlobStore {
   _path(ns, key) {
     assertValidNamespace(ns);
     assertValidKey(key);
+    // The index directory's name, and the prefix of a write in flight: both
+    // are left out of namespace listings, so neither may be a key.
+    if (key === PREFIXES_DIR || key.startsWith(TEMP_PREFIX)) {
+      throw new InvalidKeyError(`Reserved blob key: ${key}`);
+    }
     return containedPath(this.baseDir, BLOB_DIR, ns, key);
   }
 
@@ -137,6 +167,8 @@ export class FilesystemBlobStore extends BlobStore {
     const file = this._path(ns, key);
     const buffer = toBuffer(data);
     await fs.mkdir(path.dirname(file), { recursive: true });
+    // Marker first: a marker may outlive its blob, never the reverse.
+    await this._prefixIndex.writeMarker(this._dir(ns), ns, key);
     // Atomic (temp file + rename), so a reader never sees half a payload and
     // a crash mid-write leaves the previous bytes rather than a truncated
     // file. `fs.writeFile` ignores the encoding argument for a Buffer.
@@ -180,7 +212,12 @@ export class FilesystemBlobStore extends BlobStore {
     try {
       await fs.rename(file, claimed);
     } catch (error) {
-      if (error.code === 'ENOENT') return false;
+      if (error.code === 'ENOENT') {
+        // Nothing to delete, but a marker a crashed put or delete left behind
+        // would otherwise stay for good.
+        await this._removeMarker(ns, key);
+        return false;
+      }
       throw new StorageError(`Failed to delete blob ${ns}/${key}`, {
         code: 'IO_ERROR',
         cause: error
@@ -202,7 +239,32 @@ export class FilesystemBlobStore extends BlobStore {
         });
       }
     }
+    // After the payload, never before; a marker left by a failure is skipped
+    // by every listing.
+    await this._removeMarker(ns, key);
     return true;
+  }
+
+  /**
+   * Remove a key's prefix index marker, logging rather than throwing: the
+   * blob is gone either way, and a leftover marker is skipped by listings.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} key - Key.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _removeMarker(ns, key) {
+    try {
+      await this._prefixIndex.removeMarker(this._dir(ns), ns, key);
+    } catch (error) {
+      logger.warn('Could not remove the prefix index entry of a deleted blob', {
+        component: 'FilesystemBlobStore',
+        ns,
+        key,
+        error: error.message
+      });
+    }
   }
 
   /**
@@ -243,18 +305,7 @@ export class FilesystemBlobStore extends BlobStore {
   async list(ns, opts = {}) {
     const { prefix, limit, cursor } = opts || {};
     const dir = this._dir(ns);
-    let names;
-    try {
-      names = await fs.readdir(dir);
-    } catch (error) {
-      // A namespace nobody has written to is empty, not an error.
-      if (error.code === 'ENOENT') return { items: [], nextCursor: null };
-      throw new StorageError(`Failed to list blobs in ${ns}`, { code: 'IO_ERROR', cause: error });
-    }
-    let keys = names.filter(name => !name.startsWith(DELETING_PREFIX)).sort(compareKeys);
-    if (typeof prefix === 'string' && prefix.length > 0) {
-      keys = keys.filter(key => key.startsWith(prefix));
-    }
+    let keys = await this._keys(ns, prefix);
     if (cursor) {
       const after = decodeCursor(cursor);
       keys = keys.filter(key => compareKeys(key, after) > 0);
@@ -263,17 +314,81 @@ export class FilesystemBlobStore extends BlobStore {
     const page = keys.slice(0, pageSize);
     const items = [];
     for (const key of page) {
-      try {
-        const stat = await fs.stat(containedPath(dir, key));
-        if (!stat.isFile()) continue;
-        items.push({ key, bytes: stat.size });
-      } catch (error) {
-        // Deleted mid-walk: skipped, like a document whose envelope is gone.
-        if (error.code !== 'ENOENT') throw error;
-      }
+      const item = await this._entry(dir, key);
+      if (item) items.push(item);
     }
     const nextCursor = keys.length > pageSize ? encodeCursor(page[page.length - 1]) : null;
     return { items, nextCursor };
+  }
+
+  /**
+   * @inheritdoc
+   *
+   * One directory read for the whole walk — the namespace, or the one
+   * partition of the key-prefix index the prefix pins — then one `stat` per
+   * key as it is yielded, so a caller that stops early stops the work too.
+   */
+  async *scan(ns, opts = {}) {
+    const { prefix } = opts || {};
+    const dir = this._dir(ns);
+    const keys = await this._keys(ns, prefix);
+    // Stat ahead one batch at a time instead of one key after the other.
+    for (let start = 0; start < keys.length; start += SCAN_CONCURRENCY) {
+      const batch = keys.slice(start, start + SCAN_CONCURRENCY);
+      for (const item of await Promise.all(batch.map(key => this._entry(dir, key)))) {
+        if (item) yield item;
+      }
+    }
+  }
+
+  /**
+   * The keys a listing covers, sorted and prefix-filtered: from the key-prefix
+   * index when the prefix pins one partition, from the namespace directory
+   * otherwise. A namespace nobody has written to is empty, not an error.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} [prefix] - Prefix filter.
+   * @returns {Promise<string[]>}
+   * @private
+   */
+  async _keys(ns, prefix) {
+    const dir = this._dir(ns);
+    const partition = this._prefixIndex.partition(ns, prefix);
+    let names;
+    if (partition) {
+      names = await this._prefixIndex.keys(dir, partition);
+    } else {
+      try {
+        names = (await fs.readdir(dir)).filter(name => !isReservedEntry(name));
+      } catch (error) {
+        if (error.code === 'ENOENT') return [];
+        throw new StorageError(`Failed to list blobs in ${ns}`, { code: 'IO_ERROR', cause: error });
+      }
+    }
+    let keys = names.sort(compareKeys);
+    if (typeof prefix === 'string' && prefix.length > 0) {
+      keys = keys.filter(key => key.startsWith(prefix));
+    }
+    return keys;
+  }
+
+  /**
+   * Size of one listed blob, or null when it is not there (deleted mid-walk,
+   * or an index marker whose blob never landed — skipped, never pruned).
+   *
+   * @param {string} dir - Namespace directory.
+   * @param {string} key - Key.
+   * @returns {Promise<{key: string, bytes: number}|null>}
+   * @private
+   */
+  async _entry(dir, key) {
+    try {
+      const stat = await fs.stat(containedPath(dir, key));
+      return stat.isFile() ? { key, bytes: stat.size } : null;
+    } catch (error) {
+      if (error.code === 'ENOENT') return null;
+      throw error;
+    }
   }
 }
 

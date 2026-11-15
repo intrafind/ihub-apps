@@ -344,12 +344,42 @@ export const BLOB_NAMESPACES = Object.freeze({
   projectFiles: 'project-files',
   /**
    * Payloads of uploaded chat and scheduled-task files: extracted text
-   * (`<key>__text`) and optional original binary (`<key>__original`), kept as
+   * (`<key>.txt`), page texts (`<key>.pages`) and optional original binary
+   * (`<key>.bin`), kept as
    * separate blobs so original binaries can expire or be evicted under quota
    * pressure without losing the extracted text needed for multi-turn chat and
    * replay.
    */
   chatFiles: 'chat-files'
+});
+
+/**
+ * Namespaces whose listings are by the first N `__`-separated segments of the
+ * key, and N for each. Applies to the documents and the blobs of a namespace
+ * of that name alike.
+ *
+ * A listing in these namespaces asks for one scope at a time — the files of
+ * one chat (`<scopeType>__<scopeId>__`), the artifacts of one run, the blobs of
+ * one project (`<projectId>__`) — and a provider may keep an index by that
+ * leading part of the key so such a listing does not have to look at every
+ * key of the namespace. Results are the same with or without it: a listing
+ * still returns exactly the keys starting with the prefix.
+ *
+ * The filesystem provider keeps that index (`.prefixes/<partition>/<key>`
+ * marker files, migration V250 built them for existing data). Changing a
+ * number here, or adding a namespace that already holds data, needs a new
+ * migration that builds the markers for what is stored, or scoped listings
+ * miss it.
+ *
+ * @type {Readonly<Record<string, number>>}
+ */
+export const KEY_PREFIX_SEGMENTS = Object.freeze({
+  /** `<scopeType>__<scopeId>__<fileId>`, blobs `<…>.txt` / `.pages` / `.bin`. */
+  'chat-files': 2,
+  /** `<scopeType>__<scopeId>__<artifactId>`, documents and blobs. */
+  artifacts: 2,
+  /** Blobs `<projectId>__<itemId>__<versionId>`, listed per project and per item. */
+  'project-files': 1
 });
 
 /**

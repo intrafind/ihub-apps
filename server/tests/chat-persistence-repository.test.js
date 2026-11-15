@@ -991,18 +991,22 @@ describe('ChatRepository: degraded modes', () => {
 });
 
 describe('ChatRepository: what a listing costs', () => {
-  it('does not reload the owner every page, but does after a write', async () => {
+  it('does not reload the owner every page, nor after its own writes', async () => {
     // `listChats` has no stored order by `lastMessageAt`, so it loads the
     // owner's chats and sorts in memory — and its cursor is a position in that
     // sort, not a store cursor, so every page repeated the whole load. Page
     // seven of a 200-chat owner cost 1400 document reads, and the sidebar
     // invalidates its list after every completed turn.
     await withRepository(async ({ provider }) => {
-      let listCalls = 0;
+      let reads = 0;
       const documents = Object.create(provider.documents);
       documents.list = (...args) => {
-        listCalls += 1;
+        reads += 1;
         return provider.documents.list(...args);
+      };
+      documents.scan = (...args) => {
+        reads += 1;
+        return provider.documents.scan(...args);
       };
       const repository = new ChatRepository({
         documents,
@@ -1014,24 +1018,56 @@ describe('ChatRepository: what a listing costs', () => {
         await repository.ensureChat({ chatId: `chat-page-${n}`, ownerId: OWNER, appId: 'chat' });
       }
 
-      listCalls = 0;
+      reads = 0;
       const first = await repository.listChats(OWNER, { limit: 2 });
-      const afterFirst = listCalls;
+      const afterFirst = reads;
       assert.ok(afterFirst > 0, 'the first page loads the owner');
 
       await repository.listChats(OWNER, { limit: 2, cursor: first.nextCursor });
-      assert.equal(listCalls, afterFirst, 'the next page is served from what the first loaded');
+      assert.equal(reads, afterFirst, 'the next page is served from what the first loaded');
 
       // A write this process made has to be visible to its own next read: the
       // client sends a turn and reloads the list, and answering that from the
       // snapshot would show a chat under its old title or one it just deleted.
+      // The write holds the new version, so the memo is patched with it rather
+      // than reloaded.
       await repository.renameChat('chat-page-1', 'renamed');
       const renamed = await repository.listChats(OWNER, { limit: 10 });
-      assert.ok(listCalls > afterFirst, 'the memo was dropped by the write');
-      assert.ok(
-        renamed.items.some(chat => chat.title === 'renamed'),
-        'and the listing shows it'
-      );
+      assert.equal(reads, afterFirst, 'no store read after a rename');
+      assert.equal(renamed.items.length, 4);
+      assert.equal(renamed.items.find(chat => chat.id === 'chat-page-1').title, 'renamed');
+
+      await repository.ensureChat({ chatId: 'chat-page-5', ownerId: OWNER, appId: 'chat' });
+      await repository.deleteChat('chat-page-2');
+      const changed = await repository.listChats(OWNER, { limit: 10 });
+      assert.equal(reads, afterFirst, 'nor after a create or a delete');
+      assert.deepEqual(changed.items.map(chat => chat.id).sort(), [
+        'chat-page-1',
+        'chat-page-3',
+        'chat-page-4',
+        'chat-page-5'
+      ]);
+    });
+  });
+});
+
+describe('ChatRepository: a listing load racing a write', () => {
+  it('a load finishing after a write does not overwrite the memo', async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.ensureChat({ chatId: 'chat-race', ownerId: OWNER, appId: 'chat' });
+      // A load that read the old title, still in flight when the write lands.
+      let finish;
+      const stale = (await repository.listChats(OWNER)).items;
+      repository._ownerChats.clear();
+      repository._scanOwnerChats = () => new Promise(resolve => (finish = () => resolve(stale)));
+      const inFlight = repository.listChats(OWNER);
+      await repository.renameChat('chat-race', 'after the write');
+      finish();
+      await inFlight;
+      repository._scanOwnerChats = ChatRepository.prototype._scanOwnerChats;
+
+      const listed = await repository.listChats(OWNER);
+      assert.equal(listed.items.find(chat => chat.id === 'chat-race').title, 'after the write');
     });
   });
 });

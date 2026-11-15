@@ -30,6 +30,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { sniffRasterImage } from './rasterImage.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkBlobs, walkDocuments } from '../../storage/walk.js';
 import {
   canUseFileAsTemplate,
   chatFilePolicy,
@@ -152,7 +153,6 @@ export function sanitizeFileSource(source) {
 
 const KEY_SEPARATOR = '__';
 const DAY_MS = 24 * 60 * 60 * 1000;
-const SCAN_PAGE_SIZE = 200;
 
 /**
  * Key of the counter document that holds the server-wide byte total. It lives in
@@ -1222,24 +1222,11 @@ export class ChatFileRepository {
     const prefix = scopePrefix(scope);
     const docs = [];
     try {
-      if (this.documents.supportsScan) {
-        for await (const doc of this.documents.scan(CHAT_FILES_NAMESPACE, {
-          prefix,
-          includeData
-        })) {
-          docs.push(doc);
-        }
-      } else {
-        let cursor = null;
-        do {
-          const page = await this.documents.list(CHAT_FILES_NAMESPACE, {
-            prefix,
-            includeData,
-            cursor
-          });
-          for (const doc of page.items || []) docs.push(doc);
-          cursor = page.nextCursor || null;
-        } while (cursor);
+      for await (const doc of walkDocuments(this.documents, CHAT_FILES_NAMESPACE, {
+        prefix,
+        includeData
+      })) {
+        docs.push(doc);
       }
     } catch (error) {
       this.logger.error("Failed to enumerate a scope's chat files", {
@@ -1257,12 +1244,9 @@ export class ChatFileRepository {
     const prefix = scopePrefix(scope);
     const keys = [];
     try {
-      let cursor = null;
-      do {
-        const page = await this.blobs.list(CHAT_FILE_BLOBS_NAMESPACE, { prefix, cursor });
-        for (const item of page.items || []) keys.push(item.key);
-        cursor = page.nextCursor || null;
-      } while (cursor);
+      for await (const item of walkBlobs(this.blobs, CHAT_FILE_BLOBS_NAMESPACE, { prefix })) {
+        keys.push(item.key);
+      }
     } catch (error) {
       this.logger.error("Failed to enumerate a scope's chat file blobs", {
         component: COMPONENT,
@@ -1294,19 +1278,12 @@ export class ChatFileRepository {
   async _listOwnerDocs(ownerId) {
     const docs = [];
     try {
-      let cursor = null;
-      do {
-        const page = await this.documents.list(CHAT_FILES_NAMESPACE, {
-          ownerId: String(ownerId),
-          limit: SCAN_PAGE_SIZE,
-          includeData: true,
-          ...(cursor ? { cursor } : {})
-        });
-        for (const doc of page.items || []) {
-          if (doc?.data) docs.push(doc);
-        }
-        cursor = page.nextCursor || null;
-      } while (cursor);
+      for await (const doc of walkDocuments(this.documents, CHAT_FILES_NAMESPACE, {
+        ownerId: String(ownerId),
+        includeData: true
+      })) {
+        if (doc?.data) docs.push(doc);
+      }
     } catch (error) {
       this.logger.error('Failed to list owner chat files for quota check', {
         component: COMPONENT,
@@ -1319,18 +1296,11 @@ export class ChatFileRepository {
   async _listAllDocs() {
     const docs = [];
     try {
-      let cursor = null;
-      do {
-        const page = await this.documents.list(CHAT_FILES_NAMESPACE, {
-          limit: SCAN_PAGE_SIZE,
-          includeData: true,
-          ...(cursor ? { cursor } : {})
-        });
-        for (const doc of page.items || []) {
-          if (doc?.data && doc.key !== SERVER_COUNTER_KEY) docs.push(doc);
-        }
-        cursor = page.nextCursor || null;
-      } while (cursor);
+      for await (const doc of walkDocuments(this.documents, CHAT_FILES_NAMESPACE, {
+        includeData: true
+      })) {
+        if (doc?.data && doc.key !== SERVER_COUNTER_KEY) docs.push(doc);
+      }
     } catch (error) {
       this.logger.error('Failed to list server chat files', {
         component: COMPONENT,

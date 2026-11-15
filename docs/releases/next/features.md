@@ -2115,3 +2115,25 @@ made the ledger about a third of its size, and chats with large uploads or scans
 - Content with no chat file behind it stays in the ledger in full: audio, pictures sent through the
   OpenAI-compatible API, pages rendered by a workflow, and files the store refused.
 - Ledgers written before the update keep their full copies until retention removes them.
+
+## Less CPU on Installations With a Long History
+
+On installations that have accumulated many chats, runs and uploaded files, the server now spends
+much less time reading the data directory.
+
+- Listing one chat's files, one run's artifacts or one project's stored text reads only that
+  chat's, run's or project's entries instead of every file of the installation. A one-time
+  migration indexes the data already stored when the server starts after the upgrade.
+- Sweeps and scans over a whole data area read its directory once instead of once per page.
+- Lock bookkeeping files (`contents/data/locks/*.fence`) of locks nobody has used for a day are
+  removed every night at 03:00 local time (`storage.filesystem.fenceSweepHour`); they used to
+  accumulate forever. On an installation with a long history the first night's cleanup takes an
+  hour or two.
+- A user's own changes to a chat (a new message, a rename, a delete) no longer make the chat list
+  reload all their chats.
+- The agent and workflow run lists reuse what they loaded for 5 seconds instead of re-reading all
+  of a user's runs on every poll. On installations with several workers, a run changed by another
+  worker can show its previous state in these lists for up to 5 seconds.
+
+Downgrading to an earlier release and upgrading again leaves the files written in between out of
+the new index; [Storage](../../storage.md#the-key-prefix-index) describes how to rebuild it.

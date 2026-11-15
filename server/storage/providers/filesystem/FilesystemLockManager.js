@@ -33,6 +33,13 @@
  * with; {@link FilesystemLockManager#isTokenCurrent} compares both, which is
  * how a holder that was taken over finds out before it publishes.
  *
+ * The counter is seeded from the clock (`max(previous + 1, now)`), which is
+ * what lets {@link FilesystemLockManager#sweepIdleFences} delete the counter of
+ * a name nobody has locked for a day: the next token is still larger than any
+ * token issued before the deletion. Without the sweep every lock name ever
+ * used — one per chat, per run, per import — left a counter file behind for
+ * good (346 000 of them on one load-test installation).
+ *
  * @module storage/providers/filesystem/FilesystemLockManager
  */
 import { promises as fs } from 'node:fs';
@@ -62,6 +69,18 @@ const NAME_DIGEST_LENGTH = 40;
 const DEFAULT_TTL_MS = 30_000;
 const DEFAULT_WAIT_MS = 5_000;
 const DEFAULT_POLL_MS = 25;
+
+/** How long a fencing counter must sit untouched before the sweep removes it. */
+export const DEFAULT_FENCE_IDLE_MS = 24 * 60 * 60 * 1000;
+
+/** Lease the sweep holds while it removes one counter: a few file operations. */
+/** Idle counters the sweep handles between pauses, and the pause. */
+const SWEEP_BATCH = 50;
+const SWEEP_PAUSE_MS = 1000;
+const SWEEP_LEASE_TTL_MS = 10_000;
+
+/** A lease, fencing counter, or counter scratch file name: digest, suffix, rest. */
+const LOCK_FILE_NAME = /^([0-9a-f]{40})\.(lock|fence)(\..+)?$/;
 
 /**
  * Lease file name for a lock name.
@@ -305,10 +324,15 @@ export class FilesystemLockManager extends LockManager {
    * Issue the next fencing token for a name. Called by the holder right after
    * it won the lease, so no other acquisition of the name runs it at the same
    * time; written to a scratch file and renamed into place, so a reader sees
-   * the old counter or the new one, never a torn one. A counter file that
-   * cannot be read (damaged by hand) continues from the clock in
-   * milliseconds, which is larger than any counter a name reaches, so the
-   * token still grows.
+   * the old counter or the new one, never a torn one.
+   *
+   * The token is `max(previous + 1, now in ms)`: it grows by one per
+   * acquisition and never falls behind the clock. That is what makes a missing
+   * counter safe — one swept as idle ({@link FilesystemLockManager#sweepIdleFences})
+   * or damaged by hand (unreadable, so it continues from the clock) — because
+   * every token issued before was at most the counter's value when it was last
+   * written, and that was more than a day ago. A clock set back keeps the
+   * `previous + 1` side, so the token still grows.
    *
    * @param {string} name - Lock name
    * @returns {Promise<number>} The new token
@@ -324,7 +348,7 @@ export class FilesystemLockManager extends LockManager {
       });
       previous = Date.now();
     }
-    const token = previous + 1;
+    const token = Math.max(previous + 1, Date.now());
     const scratch = `${fencePath}.${process.pid}-${crypto.randomUUID()}`;
     await fs.mkdir(this.lockDir, { recursive: true });
     try {
@@ -334,6 +358,147 @@ export class FilesystemLockManager extends LockManager {
       await removeIfExists(scratch).catch(() => {});
     }
     return token;
+  }
+
+  /**
+   * Remove the fencing counters of names nobody has locked for `idleMs`, and
+   * counter scratch files left behind by a crash.
+   *
+   * Safe against a running holder and against a later one:
+   * - a token is issued only by the holder of the name's lease, and the sweep
+   *   takes the same lease (one attempt, no wait — a name in use is simply
+   *   skipped) and checks the age again under it, so no token is issued while
+   *   a counter is being removed;
+   * - a counter is removed only when its token is below the current time, so
+   *   the next token for the name — at least the current time
+   *   ({@link FilesystemLockManager#_issueToken}) — is larger than any token
+   *   issued before; a counter that ran ahead of the clock is kept until the
+   *   clock passes it;
+   * - the sweep's lease is not renewed, so it is checked to be still ours right
+   *   before the counter goes;
+   * - a holder still working with an old token finds `isCurrent()` false: the
+   *   counter it compared against is gone.
+   *
+   * The lease and counter files are named by a digest of the lock name, so
+   * the sweep never needs the name itself.
+   *
+   * @param {Object} [options]
+   * @param {number} [options.idleMs=86400000] - Minimum age (modification time)
+   * @param {() => boolean} [options.shouldStop] - Checked between files; true
+   *   ends the sweep early (provider shutdown)
+   * @param {number} [options.batch=50] - Counters handled between pauses
+   * @param {number} [options.pauseMs=1000] - Pause after each batch. Each
+   *   counter costs several file creations and removals; a first sweep over a
+   *   backlog of hundreds of thousands, unpaced, kept the disk busy enough to
+   *   slow requests for many minutes after it ended. Paced, it drains such a
+   *   backlog in the background over hours, and a day's idle counters in minutes.
+   * @returns {Promise<{removed: number, scratch: number, busy: number}>}
+   *   Counters removed, scratch files removed, counters skipped because their
+   *   name was locked
+   */
+  async sweepIdleFences({
+    idleMs = DEFAULT_FENCE_IDLE_MS,
+    shouldStop = () => false,
+    batch = SWEEP_BATCH,
+    pauseMs = SWEEP_PAUSE_MS
+  } = {}) {
+    const outcome = { removed: 0, scratch: 0, busy: 0 };
+    let handled = 0;
+    const pace = async () => {
+      handled += 1;
+      if (pauseMs > 0 && handled % batch === 0) {
+        await new Promise(resolve => setTimeout(resolve, pauseMs).unref?.());
+      }
+    };
+    let names;
+    try {
+      names = await fs.readdir(this.lockDir);
+    } catch (error) {
+      if (error.code === 'ENOENT') return outcome;
+      throw error;
+    }
+    const isIdle = async file => {
+      try {
+        return Date.now() - (await fs.stat(file)).mtimeMs >= idleMs;
+      } catch (error) {
+        if (error.code === 'ENOENT') return false;
+        throw error;
+      }
+    };
+    for (const entry of names) {
+      if (shouldStop()) break;
+      const match = LOCK_FILE_NAME.exec(entry);
+      if (!match || match[2] !== 'fence') continue;
+      const file = containedPath(this._baseDir, LOCKS_DIR, entry);
+      if (!(await isIdle(file))) continue;
+      await pace();
+      if (shouldStop()) break;
+      if (match[3]) {
+        // `<digest>.fence.<pid>-<uuid>`: a counter write that never reached
+        // its rename. A live one is milliseconds old.
+        if (await removeIfExists(file)) outcome.scratch += 1;
+        continue;
+      }
+      const lockPath = containedPath(this._baseDir, LOCKS_DIR, `${match[1]}.lock`);
+      const owner = crypto.randomUUID();
+      try {
+        await acquireLease(lockPath, owner, {
+          ttlMs: SWEEP_LEASE_TTL_MS,
+          waitMs: 0,
+          pollMs: this._pollMs,
+          name: match[1],
+          component: COMPONENT
+        });
+      } catch (error) {
+        if (!(error instanceof LockTimeoutError)) throw error;
+        outcome.busy += 1;
+        continue;
+      }
+      try {
+        // Only a counter the clock has passed: one that ran ahead of it (a
+        // clock corrected backwards, more than one acquisition per ms) would
+        // otherwise restart below tokens it already issued. And only while the
+        // lease is still ours — it is not renewed, so a slow sweep could have
+        // lost it to a waiter that took it over as expired.
+        if (
+          (await isIdle(file)) &&
+          (await this._fenceBehindClock(file)) &&
+          (await this._touch(lockPath, owner, SWEEP_LEASE_TTL_MS, match[1])) &&
+          (await removeIfExists(file))
+        ) {
+          outcome.removed += 1;
+        }
+      } finally {
+        await this._release(lockPath, owner, match[1]);
+      }
+    }
+    return outcome;
+  }
+
+  /**
+   * Whether the counter at `file` holds a token below the current time. An
+   * unreadable counter counts as behind: the next acquisition continues from
+   * the clock either way.
+   *
+   * @param {string} file - Counter path
+   * @returns {Promise<boolean>}
+   * @private
+   */
+  async _fenceBehindClock(file) {
+    let text;
+    try {
+      text = await fs.readFile(file, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT') return false;
+      throw error;
+    }
+    let token;
+    try {
+      token = JSON.parse(text)?.token;
+    } catch {
+      return true;
+    }
+    return !Number.isSafeInteger(token) || token < Date.now();
   }
 
   /**

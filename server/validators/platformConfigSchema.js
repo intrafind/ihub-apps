@@ -960,7 +960,16 @@ export const platformConfigSchema = z
               .int()
               .positive()
               .prefault(2000)
-              .describe('Debounce for buffered append-log writes.')
+              .describe('Debounce for buffered append-log writes.'),
+            fenceSweepHour: z
+              .number()
+              .int()
+              .min(0)
+              .max(23)
+              .optional()
+              .describe(
+                'Local hour (0-23) of the nightly removal of lock files nobody used for a day. Default 3.'
+              )
           })
           .passthrough()
           .prefault({})
