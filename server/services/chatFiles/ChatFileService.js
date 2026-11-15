@@ -344,6 +344,8 @@ export function toPromptFileData(storedFile) {
       : {}),
     canUseAsTemplate: storedFile.canUseAsTemplate === true,
     hasOriginal: storedFile.hasOriginal === true,
+    // Stored as a chat file: the run ledger records it as a reference to it.
+    chatFile: true,
     origin: CHAT_FILE_ORIGINS.includes(storedFile.origin) ? storedFile.origin : 'upload',
     ...(storedFile.meta ? { meta: storedFile.meta } : {}),
     fileSize: storedFile.bytes
@@ -735,7 +737,8 @@ export async function prepareTurnFiles({
             origin,
             ...(meta ? { meta } : {}),
             canUseAsTemplate: storedDescriptor.canUseAsTemplate === true,
-            hasOriginal: storedDescriptor.hasOriginal === true
+            hasOriginal: storedDescriptor.hasOriginal === true,
+            chatFile: true
           });
           descriptors.push(describeStored(storedDescriptor));
           continue;
@@ -768,8 +771,14 @@ export async function prepareTurnFiles({
   // stored, so its thumbnail survives a reload. One at a time, on purpose: the same picture twice
   // in a turn is found by the first store, and each store reads the quotas as the one before left
   // them.
+  // A picture stored as a chat file carries its id to the model request (adapters
+  // ignore it), so the run ledger can record it as a reference to that file.
+  const images = [];
   for (const image of listOf(message?.imageData)) {
     const stored = await storeTurnImage({ repo: activeRepo, scope, ownerId, image, appConfig });
+    images.push(
+      stored && image && typeof image === 'object' ? { ...image, fileId: stored.id } : image
+    );
     if (stored && seenIds.has(stored.id)) {
       // Named by id and sent again with the turn: this time the model has it
       markSentToModel(descriptors, stored.id);
@@ -792,7 +801,13 @@ export async function prepareTurnFiles({
     if (descriptor) descriptors.push(descriptor);
   }
 
-  const promptMessage = promptMessageOf(message, resolvedPromptFiles, namedPicture);
+  let promptMessage = promptMessageOf(message, resolvedPromptFiles, namedPicture);
+  if (images.some(image => image?.fileId)) {
+    promptMessage = {
+      ...promptMessage,
+      imageData: Array.isArray(message.imageData) ? images : images[0]
+    };
+  }
 
   return { promptMessage, message: promptMessage, attachments: descriptors };
 }
