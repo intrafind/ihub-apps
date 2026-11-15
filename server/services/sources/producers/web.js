@@ -161,6 +161,20 @@ function hitListOf(result) {
   return [result.results, result.items, result.sources].find(Array.isArray) ?? null;
 }
 
+const CONTENT_BLOCK_TYPES = new Set(['text', 'image', 'audio', 'resource', 'resource_link']);
+
+/** A connected server's content block (`{type: 'text', text}`), not a hit: it has a block type and no link. */
+function isContentBlock(item) {
+  return (
+    !!item &&
+    typeof item === 'object' &&
+    CONTENT_BLOCK_TYPES.has(item.type) &&
+    !item.url &&
+    !item.link &&
+    !item.href
+  );
+}
+
 export const webSourceProducer = {
   id: 'web',
 
@@ -176,9 +190,17 @@ export const webSourceProducer = {
    */
   outcomeOf({ toolId, toolDef, result, failed }) {
     if (failed || !result || typeof result !== 'object' || result.error) return {};
-    // A connected server's bare array is its content blocks (text, images),
-    // not a hit list: counting them would declare "N results" for one block.
-    if (Array.isArray(result) && (toolDef?._mcp || toolDef?._a2a)) return {};
+    // A connected server's array of content blocks (text, images) is not a hit
+    // list: counting them would declare "N results" for one block. An array of
+    // hit objects (a text block that held a JSON hit list) is still counted.
+    if (
+      Array.isArray(result) &&
+      (toolDef?._mcp || toolDef?._a2a) &&
+      result.length > 0 &&
+      result.every(isContentBlock)
+    ) {
+      return {};
+    }
     if (isPageReader(toolId)) {
       return typeof result.content === 'string'
         ? { readOutcome: result.content.trim() ? 'opened' : 'empty' }

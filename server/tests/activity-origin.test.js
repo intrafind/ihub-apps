@@ -604,6 +604,14 @@ test('a connected server’s content blocks are not counted as search hits', () 
   assert.deepEqual(extractToolOutcome({ toolId: toolDef.id, toolDef, result: blocks }), {});
 });
 
+test('a connected server’s JSON hit list is still counted', () => {
+  const toolDef = { id: 'mcp_x__web_search', _mcp: { serverId: 'x', originalName: 'web_search' } };
+  const hits = [{ url: 'https://a.example/' }, { url: 'https://b.example/' }];
+  assert.deepEqual(extractToolOutcome({ toolId: toolDef.id, toolDef, result: hits }), {
+    resultCount: 2
+  });
+});
+
 // ── review findings: origin is the server's, from the call ────────────────
 
 test('what a tool reports as the origin of its sources is not believed; the call’s origin is applied', () => {
