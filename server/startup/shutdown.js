@@ -76,6 +76,18 @@ export async function shutdown() {
       error: error?.message
     });
   }
+  // Evidence records of answers stored just before the signal are written in
+  // the background; let them land before storage closes, within a budget
+  // (the force-exit timer bounds the whole shutdown anyway).
+  try {
+    const { evidenceWritesSettled } = await import('../services/chat/ChatEvidenceRepository.js');
+    await Promise.race([evidenceWritesSettled(), new Promise(r => setTimeout(r, 3000).unref())]);
+  } catch (error) {
+    logger.error('Could not wait for evidence records on shutdown', {
+      component: 'Server',
+      error: error?.message
+    });
+  }
   // Flush buffered storage writes (chat documents, append-log entries) and
   // release the provider's handles before the process goes away.
   await shutdownStorageBootstrap();
