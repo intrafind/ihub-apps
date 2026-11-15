@@ -910,7 +910,7 @@ therefore shows what the live one showed, in the same components.
   `resultCount` and `readOutcome` (see [SSE v2](sse-v2.md#where-a-tool-call-looked)). A share keeps the
   origin type and the counts of each activity row, never an integration or search-profile name on
   a non-public row. Public web-search rows are shared whole and keep their integration name (for
-  example "Brave Search"); a source an integration declares `public` keeps its origin label. In the
+  example "Brave Search"). In the
   share's project scope, a user-owned project's id and name are set to null and an admin-owned
   project is kept.
 - **Recorded:** the turns of a persisted chat, and the workflow runs a tool
