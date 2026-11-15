@@ -29,6 +29,7 @@ import { getChatRepository } from '../../services/chat/ChatRepository.js';
 import {
   CHAT_PERSISTENCE_FEATURE,
   chatRetentionSettings,
+  chatEvidenceSettings,
   chatTitleSettings,
   isChatHistoryConfigured,
   isChatStorageAvailable,
@@ -90,6 +91,15 @@ const titlesSettingsSchema = z
   .partial()
   .strict();
 
+// The evidence record block, `platform.chats.evidence` on disk.
+const evidenceSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    maxContentBytes: z.number().int().positive()
+  })
+  .partial()
+  .strict();
+
 // The sharing block lives under `platform.chats.sharing` but is edited as its
 // own form section, so it travels as its own block here. Day and view caps
 // are integers; zero or less is the documented "no cap".
@@ -137,6 +147,7 @@ const settingsBodySchema = z
   .object({
     chats: chatsSettingsSchema.optional(),
     titles: titlesSettingsSchema.optional(),
+    evidence: evidenceSettingsSchema.optional(),
     runLog: runLogSettingsSchema.optional(),
     sharing: sharingSettingsSchema.optional(),
     uploads: uploadsSettingsSchema.optional()
@@ -157,7 +168,7 @@ let retentionRunning = false;
  * The effective settings, defaults filled in, in the shape the page edits.
  *
  * @param {Object} platform - Platform configuration.
- * @returns {{chats: Object, titles: Object, sharing: Object, uploads: Object, runLog: Object}}
+ * @returns {{chats: Object, titles: Object, evidence: Object, sharing: Object, uploads: Object, runLog: Object}}
  */
 function resolveSettings(platform) {
   const chats = platform?.chats || {};
@@ -168,6 +179,7 @@ function resolveSettings(platform) {
       ...chatRetentionSettings(platform)
     },
     titles: chatTitleSettings(platform),
+    evidence: chatEvidenceSettings(platform),
     sharing: chatSharingSettings(platform),
     uploads: (() => {
       const { enabled, storageMode, originalRetentionDays, evictOldestOriginalsOnQuota, quotas } =
@@ -265,7 +277,7 @@ export default function registerAdminChatHistoryRoutes(app) {
           .join('; ')}`
       );
     }
-    const { chats, runLog: ledger, titles, sharing, uploads } = parsed.data;
+    const { chats, runLog: ledger, titles, evidence, sharing, uploads } = parsed.data;
     // Computed from the stored file under the update lock; reruns on conflict, so
     // everything it needs is derived from the body it is handed.
     let changed = [];
@@ -285,14 +297,19 @@ export default function registerAdminChatHistoryRoutes(app) {
           changed.push(`${block}.${key}`);
         }
       }
-      // The titles form section is `platform.chats.titles` on disk.
-      for (const [key, value] of Object.entries(titles || {})) {
-        if (current.titles[key] === value) continue;
-        platformConfig.chats = {
-          ...platformConfig.chats,
-          titles: { ...platformConfig.chats?.titles, [key]: value }
-        };
-        changed.push(`chats.titles.${key}`);
+      // The titles and evidence form sections are `platform.chats.<section>` on disk.
+      for (const [section, patch] of [
+        ['titles', titles],
+        ['evidence', evidence]
+      ]) {
+        for (const [key, value] of Object.entries(patch || {})) {
+          if (current[section][key] === value) continue;
+          platformConfig.chats = {
+            ...platformConfig.chats,
+            [section]: { ...platformConfig.chats?.[section], [key]: value }
+          };
+          changed.push(`chats.${section}.${key}`);
+        }
       }
       // The sharing form section is `platform.chats.sharing` on disk.
       const nextSharing = { ...current.sharing, ...sharing };
