@@ -8759,7 +8759,7 @@
     "title": "Sources",
     "resultsCount_one": "{{count}} result",
     "resultsCount_other": "{{count}} results",
-    "originSummary": "Sources by origin",
+    "originFilter": "Filter by origin",
     "queries": "Searches",
     "cited": "Cited in this answer",
     "read": "Read for this answer",

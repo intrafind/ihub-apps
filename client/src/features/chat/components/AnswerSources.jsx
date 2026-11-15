@@ -38,6 +38,7 @@ import {
   matchesScope,
   originNounOf,
   originSummaryOf,
+  matchesOrigin,
   scopeLabelOf,
   siteOf,
   sourceScopesOf
@@ -510,6 +511,8 @@ function SourcesPanel({
   const closeRef = useRef(null);
   // The scope the lists are narrowed to (`ref.scope`), or null for all of them.
   const [scopeFilter, setScopeFilter] = useState(null);
+  // The origin the lists are narrowed to (`originKeyOf`), or null for all of them.
+  const [originFilter, setOriginFilter] = useState(null);
   // The chat's workspace pane, where a preview opens beside the answer.
   const workspace = useArtifactViewer();
   // { type: 'preview'|'details'|'app', source, passages?, initialPassageIndex? }
@@ -609,21 +612,31 @@ function SourcesPanel({
   const queries = sources.queries || [];
   const answerScopes = sources.scopes || [];
   const cardProps = { messageKey, highlight, host, attachEnabled, onAction: runAction };
-  // The scopes the sources were found in; with more than one, the lists can
-  // show one at a time. A filter whose scope is gone shows everything.
-  const foundIn = useMemo(
-    () => sourceScopesOf([...cited, ...read, ...considered]),
-    [cited, read, considered]
-  );
-  // How many cards each origin holds; with two or more, the header says so.
+  // How many cards each origin holds; with two or more, the lists can show one
+  // origin at a time. A filter whose origin is gone shows everything.
   const originSummary = useMemo(
     () => originSummaryOf(t, [...cited, ...read, ...considered]),
     [t, cited, read, considered]
   );
-  const shownScope = foundIn.some(scope => scope.id === scopeFilter) ? scopeFilter : null;
-  const shownCited = cited.filter(source => matchesScope(source, shownScope));
-  const shownRead = read.filter(source => matchesScope(source, shownScope));
-  const shownConsidered = considered.filter(source => matchesScope(source, shownScope));
+  const shownOrigin = originSummary.some(entry => entry.key === originFilter) ? originFilter : null;
+  const inOrigin = list => list.filter(source => matchesOrigin(source, shownOrigin));
+  const originCited = inOrigin(cited);
+  const originRead = inOrigin(read);
+  const originConsidered = inOrigin(considered);
+  // The scopes the sources of that origin were found in; with more than one, the
+  // lists can show one at a time. A filter whose scope is gone shows everything.
+  // With several origins the profiles are a second level, under the origin
+  // that has them: they show once an origin is chosen.
+  const foundIn = useMemo(
+    () => sourceScopesOf([...originCited, ...originRead, ...originConsidered]),
+    [originCited, originRead, originConsidered]
+  );
+  const showScopes = foundIn.length > 1 && (originSummary.length < 2 || shownOrigin !== null);
+  const shownScope =
+    showScopes && foundIn.some(scope => scope.id === scopeFilter) ? scopeFilter : null;
+  const shownCited = originCited.filter(source => matchesScope(source, shownScope));
+  const shownRead = originRead.filter(source => matchesScope(source, shownScope));
+  const shownConsidered = originConsidered.filter(source => matchesScope(source, shownScope));
 
   return createPortal(
     <>
@@ -644,27 +657,6 @@ function SourcesPanel({
             <h2 id={titleId} className="text-base font-semibold text-gray-900 dark:text-gray-100">
               {t('sources.title', 'Sources')}
             </h2>
-            {originSummary.length > 1 && (
-              // Static text, not controls: how many cards each origin holds.
-              <ul
-                aria-label={t('sources.originSummary')}
-                className="mt-0.5 flex flex-wrap gap-x-1.5 text-xs text-gray-600 dark:text-gray-300"
-              >
-                {originSummary.map((entry, index) => (
-                  <li key={entry.key}>
-                    {index > 0 && (
-                      <span aria-hidden="true" className="me-1.5">
-                        ·
-                      </span>
-                    )}
-                    <span className="font-medium text-gray-700 dark:text-gray-300">
-                      {entry.noun}
-                    </span>{' '}
-                    {entry.count}
-                  </li>
-                ))}
-              </ul>
-            )}
             {queries.length > 0 && (
               <ul
                 className="mt-1 flex flex-wrap gap-1"
@@ -722,8 +714,21 @@ function SourcesPanel({
               {notice}
             </Banner>
           )}
-          {foundIn.length > 1 && (
-            <ScopeFilter scopes={foundIn} selected={shownScope} onSelect={setScopeFilter} />
+          {originSummary.length > 1 && (
+            <OriginFilter
+              origins={originSummary}
+              total={cited.length + read.length + considered.length}
+              selected={shownOrigin}
+              onSelect={setOriginFilter}
+            />
+          )}
+          {showScopes && (
+            <ScopeFilter
+              scopes={foundIn}
+              selected={shownScope}
+              onSelect={setScopeFilter}
+              nested={originSummary.length > 1}
+            />
           )}
           {/* No list without sources: an answer that cites nothing gets no
               empty "Cited in this answer", but what was read for it. */}
@@ -808,27 +813,28 @@ function Banner({ tone, onDismiss, children }) {
 }
 
 /**
- * Narrows the panel to the sources found in one scope ("All", "Contracts 4",
- * "HR policies 2"), for an answer whose sources come from several (#3056).
+ * A row of filter pills (outlined = clickable, `aria-pressed`): "All" and one
+ * pill per option, each with its card count.
  *
  * @param {Object} props
- * @param {Array<{id: string, label: string, count: number}>} props.scopes - `sourceScopesOf`
- * @param {string|null} props.selected - the scope shown, null for all
- * @param {(scopeId: string|null) => void} props.onSelect
+ * @param {string} props.legend - what the group filters by, read by a screen reader
+ * @param {Array<{id: string, label: string, count: number}>} props.options - without "All"
+ * @param {number} props.total - the count on "All"
+ * @param {string|null} props.selected - the option shown, null for all
+ * @param {(id: string|null) => void} props.onSelect
+ * @param {boolean} [props.nested] - a second level: indented under the row above it
  */
-function ScopeFilter({ scopes, selected, onSelect }) {
+function FilterPills({ legend, options, total, selected, onSelect, nested = false }) {
   const { t } = useTranslation();
-  const total = scopes.reduce((sum, scope) => sum + scope.count, 0);
-  const options = [
-    { id: null, label: t('sources.scopeFilterAll', 'All'), count: total },
-    ...scopes
-  ];
+  const all = [{ id: null, label: t('sources.scopeFilterAll', 'All'), count: total }, ...options];
   return (
-    <fieldset className="mb-3 flex min-w-0 flex-wrap gap-1 border-0 p-0">
-      <legend className="sr-only">
-        {t('sources.scopeFilter', 'Filter by where the sources were found')}
-      </legend>
-      {options.map(option => {
+    <fieldset
+      className={`mb-3 flex min-w-0 flex-wrap gap-1 border-0 p-0 ${
+        nested ? 'ms-3 border-s border-gray-300 ps-3 dark:border-gray-600' : ''
+      }`}
+    >
+      <legend className="sr-only">{legend}</legend>
+      {all.map(option => {
         const active = option.id === selected;
         return (
           <button
@@ -848,6 +854,52 @@ function ScopeFilter({ scopes, selected, onSelect }) {
         );
       })}
     </fieldset>
+  );
+}
+
+/**
+ * The origin pills: where the answer's sources came from ("Web 5", "Project 3"),
+ * from the same per-origin entries the footer names. Only shown for two or more.
+ *
+ * @param {Object} props
+ * @param {Array<{key: string, noun: string, count: number}>} props.origins - `originSummaryOf`
+ * @param {number} props.total
+ * @param {string|null} props.selected - the origin key shown, null for all
+ * @param {(key: string|null) => void} props.onSelect
+ */
+function OriginFilter({ origins, total, selected, onSelect }) {
+  const { t } = useTranslation();
+  return (
+    <FilterPills
+      legend={t('sources.originFilter', 'Filter by origin')}
+      options={origins.map(origin => ({ id: origin.key, label: origin.noun, count: origin.count }))}
+      total={total}
+      selected={selected}
+      onSelect={onSelect}
+    />
+  );
+}
+
+/**
+ * The search-profile pills (the second level under iFinder).
+ *
+ * @param {Object} props
+ * @param {Array<{id: string, label: string, count: number}>} props.scopes - `sourceScopesOf`
+ * @param {string|null} props.selected - the scope shown, null for all
+ * @param {(scopeId: string|null) => void} props.onSelect
+ * @param {boolean} [props.nested] - drawn under the origin row
+ */
+function ScopeFilter({ scopes, selected, onSelect, nested = false }) {
+  const { t } = useTranslation();
+  return (
+    <FilterPills
+      legend={t('sources.scopeFilter', 'Filter by where the sources were found')}
+      options={scopes}
+      total={scopes.reduce((sum, scope) => sum + scope.count, 0)}
+      selected={selected}
+      onSelect={onSelect}
+      nested={nested}
+    />
   );
 }
 
