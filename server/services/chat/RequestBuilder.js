@@ -41,7 +41,15 @@ export function attachDocumentPageImages(messages) {
   return messages.map(msg => {
     const pageImages = normalizeFiles(msg.fileData)
       .filter(file => !file.content && Array.isArray(file.pageImages))
-      .flatMap(file => file.pageImages.map(img => ({ base64: img, fileType: 'image/jpeg' })));
+      .flatMap(file =>
+        file.pageImages.map((img, page) => ({
+          base64: img,
+          fileType: 'image/jpeg',
+          // Not sent to the provider; lets the run ledger record a stored file's page
+          // as a reference to it.
+          ...(file.chatFile === true ? { fileId: file.fileId || file.id, page } : {})
+        }))
+      );
     if (pageImages.length === 0) return msg;
     const existing = Array.isArray(msg.imageData)
       ? msg.imageData
