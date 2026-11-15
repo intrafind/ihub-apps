@@ -141,9 +141,9 @@ describe('a picture of a turn', () => {
   });
 
   it('keeps the picture in the model request without an id when it is not stored', async () => {
-    const { promptMessage } = await turn(
-      { imageData: imageOf(SVG, { name: 'x.svg', mime: 'image/svg+xml' }) }
-    );
+    const { promptMessage } = await turn({
+      imageData: imageOf(SVG, { name: 'x.svg', mime: 'image/svg+xml' })
+    });
     assert.equal([promptMessage.imageData].flat()[0].fileId, undefined);
   });
 
