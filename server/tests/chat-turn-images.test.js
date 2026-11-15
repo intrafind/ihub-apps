@@ -147,6 +147,18 @@ describe('a picture of a turn', () => {
     assert.equal([promptMessage.imageData].flat()[0].fileId, undefined);
   });
 
+  it('drops a file id the client sent with a picture that is not stored, so the ledger keeps the picture', async () => {
+    const image = {
+      ...imageOf(SVG, { name: 'x.svg', mime: 'image/svg+xml' }),
+      fileId: 'file_forged'
+    };
+    const { promptMessage } = await turn({ imageData: image });
+    const [sent] = [promptMessage.imageData].flat();
+    assert.equal(sent.fileId, undefined);
+    const [recorded] = ledgerMessages([promptMessage]);
+    assert.equal([recorded.imageData].flat()[0].base64, image.base64);
+  });
+
   it('survives the store: the materializer keeps what a card needs to fetch it', () => {
     const [kept] = normalizeAttachments([
       {

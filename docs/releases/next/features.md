@@ -2101,8 +2101,9 @@ every model call it records. What is stored as a chat file is recorded as a refe
 chat file's id and the SHA-256 hash of the text or picture the model was sent. In load tests this
 made the ledger about a third of its size, and chats with large uploads or scans far smaller.
 
-- While the chat file exists, the reference leads to it; after it is deleted, the hash still shows
-  which content the model was sent.
+- While the chat file exists, the reference leads to it. Once it is deleted, the ledger no longer
+  holds the content, only its hash: that confirms a copy kept elsewhere, but cannot show what the
+  model was sent. Keep chat files as long as you need that proof.
 - Content with no chat file behind it stays in the ledger in full: audio, pictures sent through the
   OpenAI-compatible API, pages rendered by a workflow, and files the store refused.
 - Ledgers written before the update keep their full copies until retention removes them.

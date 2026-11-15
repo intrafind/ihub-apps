@@ -776,8 +776,15 @@ export async function prepareTurnFiles({
   const images = [];
   for (const image of listOf(message?.imageData)) {
     const stored = await storeTurnImage({ repo: activeRepo, scope, ownerId, image, appConfig });
+    // Only this store sets `fileId`: one a client sent along with a picture that was not
+    // stored would make the ledger record a reference to nothing instead of the picture.
+    const { fileId: _claimed, ...unclaimed } = image && typeof image === 'object' ? image : {};
     images.push(
-      stored && image && typeof image === 'object' ? { ...image, fileId: stored.id } : image
+      image && typeof image === 'object'
+        ? stored
+          ? { ...unclaimed, fileId: stored.id }
+          : unclaimed
+        : image
     );
     if (stored && seenIds.has(stored.id)) {
       // Named by id and sent again with the turn: this time the model has it
@@ -802,7 +809,7 @@ export async function prepareTurnFiles({
   }
 
   let promptMessage = promptMessageOf(message, resolvedPromptFiles, namedPicture);
-  if (images.some(image => image?.fileId)) {
+  if (images.length > 0) {
     promptMessage = {
       ...promptMessage,
       imageData: Array.isArray(message.imageData) ? images : images[0]
