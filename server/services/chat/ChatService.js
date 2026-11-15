@@ -1077,7 +1077,8 @@ class ChatService {
           runId,
           summary: outcome,
           clientConnected: clientConnectedOf(persist, chatId),
-          message: persist.assistant
+          message: persist.assistant,
+          runLog: this.runLog
         });
         // A named chat is easier to find again. After the answer is stored and
         // not awaited: the title never delays the turn, and it works the same
@@ -1122,7 +1123,8 @@ class ChatService {
             finishReason: 'error',
             errorInfo: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
           },
-          clientConnected: clientConnectedOf(persist, chatId)
+          clientConnected: clientConnectedOf(persist, chatId),
+          runLog: this.runLog
         });
       }
       throw error;

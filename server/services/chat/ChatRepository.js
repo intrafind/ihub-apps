@@ -46,6 +46,7 @@ import { VARIABLE_NAME_PATTERN } from '../../../shared/validationPatterns.js';
 import { chatMessageCap } from './chatPersistence.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
 import { getChatFileRepository } from '../chatFiles/ChatFileRepository.js';
+import { getChatEvidenceRepository } from './ChatEvidenceRepository.js';
 import { ChatShareRepository } from './ChatShareRepository.js';
 
 const COMPONENT = 'ChatRepository';
@@ -187,7 +188,9 @@ const OPTIONAL_MESSAGE_FIELDS = [
   'answerBasis',
   // A transcription turn (see services/chat/transcriptionTurn.js): its audio is
   // not kept, so the question can be neither edited nor resent.
-  'transcription'
+  'transcription',
+  // The answer's evidence record `{ id, sha256 }` (see services/chat/ChatEvidenceRepository.js).
+  'evidence'
 ];
 
 /** Variables kept per message, and the longest value kept. */
@@ -770,6 +773,8 @@ export class ChatRepository {
    *   Where what a turn produced is stored. Injected rather than imported at
    *   use so a test can drive the transcript without a payload store, and
    *   resolved lazily so this module does not fix the provider at construction.
+   * @param {import('./ChatEvidenceRepository.js').ChatEvidenceRepository} [options.evidence]
+   *   Where the answers' evidence records live; the shared one when not given.
    * @param {import('./ChatShareRepository.js').ChatShareRepository} [options.shares]
    *   Where a chat's share links are stored; asked which artifacts a link
    *   still hands out before a truncating write deletes them. Built over the
@@ -783,6 +788,7 @@ export class ChatRepository {
     maxMessages = null,
     artifacts = null,
     files = null,
+    evidence = null,
     shares = null
   } = {}) {
     this.documents = documents || null;
@@ -790,6 +796,7 @@ export class ChatRepository {
     this.logger = log || logger;
     this._artifacts = artifacts;
     this._files = files;
+    this._evidence = evidence;
     this._shares = shares;
     /**
      * Messages one chat may keep, or null for "ask the platform config".
@@ -826,6 +833,15 @@ export class ChatRepository {
    */
   fileStore() {
     return this._files || getChatFileRepository();
+  }
+
+  /**
+   * The evidence store of this repository's chats.
+   *
+   * @returns {import('./ChatEvidenceRepository.js').ChatEvidenceRepository}
+   */
+  evidenceStore() {
+    return this._evidence || getChatEvidenceRepository();
   }
 
   /**
@@ -1844,6 +1860,7 @@ export class ChatRepository {
       // left behind.
       await this.artifactStore().deleteScope(this.artifactScope(chatId));
       await this.fileStore().deleteScope(this.fileScope(chatId));
+      await this.evidenceStore().deleteChat(chatId);
       // A delete is the other thing that changes a listing, and it does not go
       // through `_writeChat`.
       this._forgetOwnerChat(existing?.ownerId, chatId);
@@ -2060,6 +2077,7 @@ export class ChatRepository {
         }
       }
 
+      await this._deleteEvidenceOf(chatId, discarded);
       return { message: entry, messages };
     });
   }
@@ -2115,8 +2133,33 @@ export class ChatRepository {
           await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
         }
       }
+      await this._deleteEvidenceOf(chatId, [removed]);
       return { deleted: true, chat: updated };
     });
+  }
+
+  /**
+   * Remove the evidence records of messages that left the transcript. Their
+   * content blobs stay until the chat goes: other answers may share them.
+   * Logged, never thrown — the transcript is already written.
+   *
+   * @param {string} chatId - Chat id.
+   * @param {Object[]} messages - Messages removed from the transcript.
+   * @returns {Promise<void>}
+   * @private
+   */
+  async _deleteEvidenceOf(chatId, messages) {
+    const ids = messages.filter(message => message?.evidence).map(message => message.id);
+    if (ids.length === 0) return;
+    try {
+      await this.evidenceStore().deleteMessages(chatId, ids);
+    } catch (error) {
+      this.logger.error('Evidence records of removed messages not deleted', {
+        component: COMPONENT,
+        chatId,
+        error: error.message
+      });
+    }
   }
 
   /**
