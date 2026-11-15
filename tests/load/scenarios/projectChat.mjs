@@ -10,7 +10,9 @@
  *
  * Projects come from setup.mjs (names starting with "LT-chat"): the user's own
  * and the shared ones. Which one a session picks is controlled by
- * `scenarios.projectChat.preferShared` (0..1).
+ * `scenarios.projectChat.preferShared` (0..1). `hotShare` (0..1) sends that
+ * share of the shared picks to one project ("shared-1"), the way a website
+ * chatbot or a company handbook draws most of a company's project questions.
  */
 
 import { ChatSession } from '../lib/chat.mjs';
@@ -26,7 +28,11 @@ export default async function projectChat(ctx) {
     err.code = 'NO_PROJECT';
     throw err;
   }
-  const project = ctx.pick(pool);
+  const hot =
+    pool === shared && Math.random() < (s.hotShare || 0)
+      ? shared.find(p => / shared-1$/.test(p.name))
+      : null;
+  const project = hot || ctx.pick(pool);
   const topic = /topic=(\w+)/.exec(project.description || '')?.[1] || null;
   const questions = questionsFor(topic);
 
