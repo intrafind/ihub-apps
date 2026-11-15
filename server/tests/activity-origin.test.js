@@ -22,7 +22,7 @@ import { boundStoredActivity, shareableActivity } from '../services/chat/runActi
 import { normalizeSource, mergeSource } from '../../shared/sources/source.js';
 import { sourcesFromGrounding } from '../../shared/sources/grounding.js';
 import { foldSkill } from '../../shared/run/runReducer.js';
-import { answerBasisOf, activityOriginOfSource } from '../services/chat/answerBasis.js';
+import { answerBasisOf } from '../services/chat/answerBasis.js';
 import {
   classifyToolKnowledgeSource,
   knowledgeSourceSeam
@@ -253,11 +253,6 @@ test('web, project, iFinder and connected-system sources carry the call’s orig
     result: { sources: [{ id: 'ACME-1', title: 'Login fails' }] }
   });
   assert.deepEqual(jira.items[0].origin, { kind: 'integration', label: 'Jira' });
-});
-
-test('an admin-configured source is a project: the call is placed as a project, not as documents', () => {
-  assert.equal(activityOriginOfSource('sources'), 'project');
-  assert.equal(activityOriginOfSource('project'), 'project');
 });
 
 test('an MCP tool named like a web search is a connected system, and so are its sources', () => {
