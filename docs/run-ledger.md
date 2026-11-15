@@ -131,10 +131,12 @@ the same name.
 was rewritten (`reason: change`, e.g. after a compaction); an identical repeat
 carries just the hash. It also records the tool schemas and the model / option
 snapshot when they change, the call configuration and a hash of the provider
-request body. The `server/services/loop/replay/reconstruct.js` check replays
-the deltas, rebuilds every request from these fields and verifies the hashes —
-the ledger is complete enough to replay, and a tampered context is reported as
-a mismatch.
+request body. Replaying the deltas rebuilds every request's messages; the
+[Chat Evidence Record](chat-evidence.md) does exactly that when an answer is
+stored, and keeps the result with the chat. `messagesHash` is copied into the
+record as computed at the call, not re-verified, and the record's
+`app.configSha256` is the hash of the app configuration in force when the
+answer was stored.
 
 ### Upgrading an installation that already has a ledger
 
