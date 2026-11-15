@@ -294,7 +294,8 @@ async function settle(chat, { repository, runLog }) {
       // the run on the ledger — also when its answer could not be written, or
       // another worker's answer was, since a released chat is never settled
       // again.
-      onlyIfUnanswered: true
+      onlyIfUnanswered: true,
+      runLog
     });
     if (!settled.released) return repository.getChat(chatId);
     if (settled.skipped) {
@@ -446,7 +447,8 @@ async function deliver(chat, waiting, { repository, runLog }) {
     // In the waiting answer's place, so the exchange stays where it was asked
     // and the questions asked after it stay after it. Another worker that
     // replaced it first is left its answer.
-    supersedeMessageId: waiting.id
+    supersedeMessageId: waiting.id,
+    runLog
   });
   if (!settled.message) return false;
   // The engine ends its run when the workflow ends; this covers a workflow

@@ -23,6 +23,10 @@ import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
 import { generatedFileKind, generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { boundStoredActivity, takeRunActivity } from './runActivity.js';
 import { insertSupportMarkers } from '../../../shared/sources/index.js';
+import { randomUUID } from 'node:crypto';
+import configCache from '../../configCache.js';
+import { chatEvidenceSettings } from './chatPersistence.js';
+import { buildEvidence } from './evidenceRecord.js';
 
 /** Connect cards kept per stored answer. */
 const MAX_STORED_AUTH_PROMPTS = 10;
@@ -540,6 +544,61 @@ export async function admitTurnProjects({ repository, chatId, projects = null, p
 }
 
 /**
+ * Build and store the evidence record of an answer (#3687), before the answer
+ * itself so the message can name it. Best effort: an answer is never refused
+ * or lost because of its evidence — any failure is logged and the answer is
+ * stored without one.
+ *
+ * @param {Object} params
+ * @param {import('./ChatRepository.js').default} params.repository
+ * @param {string} params.chatId
+ * @param {string} params.runId
+ * @param {string} params.messageId - The id the answer will be stored under.
+ * @param {Object} params.summary - The turn outcome.
+ * @param {Array<Object>} params.artifacts - Stored artifact descriptors.
+ * @param {Object} [params.runLog] - The run journal; the shared RunLog by default.
+ * @returns {Promise<{id: string, sha256: string}|null>} What the message keeps.
+ */
+async function recordEvidence({
+  repository,
+  chatId,
+  runId,
+  messageId,
+  summary,
+  artifacts,
+  runLog
+}) {
+  try {
+    const settings = chatEvidenceSettings(configCache.getPlatform?.() || {});
+    if (!settings.enabled) return null;
+    const store = repository.evidenceStore?.();
+    if (!store?.isAvailable()) return null;
+    const journal = runLog || (await import('../loop/RunLog.js')).default;
+    const { record, items } = await buildEvidence({
+      runLog: journal,
+      runId,
+      summary,
+      chatId,
+      messageId,
+      artifacts
+    });
+    const chat = await repository.getChat(chatId);
+    return await store.writeRecord('chat', chatId, record, items, {
+      ownerId: chat?.ownerId ?? null,
+      maxContentBytes: settings.maxContentBytes
+    });
+  } catch (error) {
+    logger.error('Evidence record not stored; storing the answer without it', {
+      component: COMPONENT,
+      chatId,
+      runId,
+      error: error.message
+    });
+    return null;
+  }
+}
+
+/**
  * Write the assistant half of a turn and release the chat.
  *
  * Called once per turn at the single choke point before the ledger's
@@ -583,6 +642,8 @@ export async function admitTurnProjects({ repository, chatId, projects = null, p
  * @param {string} [params.supersedeMessageId] - store the answer in place of this
  *   stored message of the run rather than after the run's question; nothing is
  *   stored when it is gone (`chatRecovery.js`, a resumed workflow's result)
+ * @param {Object} [params.runLog] - the run journal the evidence record is built
+ *   from; the shared RunLog by default
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeAssistantTurn(params) {
@@ -607,7 +668,8 @@ export async function settleAssistantTurn({
   clientConnected,
   message = null,
   onlyIfUnanswered = false,
-  supersedeMessageId = null
+  supersedeMessageId = null,
+  runLog = null
 }) {
   const outcome = { message: null, skipped: false, released: false };
   if (!repository) return outcome;
@@ -704,6 +766,20 @@ export async function settleAssistantTurn({
         ? insertSupportMarkers(content, summary.sources.supports)
         : content;
 
+    // The evidence record names the answer by id, so the id is minted here.
+    const messageId = typeof message?.id === 'string' && message.id ? message.id : randomUUID();
+    const evidence = pausedWithoutAnswer
+      ? null
+      : await recordEvidence({
+          repository,
+          chatId,
+          runId,
+          messageId,
+          summary,
+          artifacts,
+          runLog
+        });
+
     let appended = null;
     if (!pausedWithoutAnswer) {
       try {
@@ -715,6 +791,7 @@ export async function settleAssistantTurn({
             ...(structured?.valid === true && structured.value !== undefined
               ? { output: structured.value }
               : {}),
+            id: messageId,
             role: 'assistant',
             content: storedContent,
             ts: new Date().toISOString(),
@@ -730,7 +807,8 @@ export async function settleAssistantTurn({
             ...(activity ? { activity } : {}),
             ...(sources ? { sources } : {}),
             ...(summary?.provenance ? { provenance: summary.provenance } : {}),
-            ...(answerBasis ? { answerBasis } : {})
+            ...(answerBasis ? { answerBasis } : {}),
+            ...(evidence ? { evidence } : {})
           },
           // The end of the transcript for an ordinary turn, and the position
           // right after this run's own question for a superseded one.
@@ -750,6 +828,21 @@ export async function settleAssistantTurn({
           runId,
           error: appendError.message
         });
+      }
+      // A record whose answer was not stored (somebody else answered, the
+      // chat is gone) names nothing; its content goes with the chat.
+      if (evidence && appended?.message?.id !== messageId) {
+        await repository
+          .evidenceStore()
+          .deleteMessages(chatId, [messageId])
+          .catch(error =>
+            logger.error('Evidence record of an unstored answer not deleted', {
+              component: COMPONENT,
+              chatId,
+              runId,
+              error: error.message
+            })
+          );
       }
     }
 

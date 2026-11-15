@@ -40,6 +40,7 @@ import {
   settleInterruptedChat
 } from '../services/chat/chatRecovery.js';
 import { snapshotMessage } from '../services/chat/ChatShareRepository.js';
+import { ChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
 import { mentionAccess } from '../services/workflow/workflowAccess.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
 import { getWorkflowEngine } from '../services/workflow/WorkflowEngine.js';
@@ -1735,6 +1736,54 @@ describe('Chat with Results: a stored chat about an execution', () => {
         identityMode: 'default'
       });
       assert.deepEqual(result, { error: 'NOT_FINISHED' }, status);
+    }
+  });
+});
+
+describe('the evidence record of a recovered turn', () => {
+  it('is built from the journal the dead process left, without its end', async () => {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-chat-evidence-recovery-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 25 });
+    await provider.initialize();
+    const evidence = new ChatEvidenceRepository({
+      documents: provider.documents,
+      blobs: provider.blobs
+    });
+    const repository = new ChatRepository({
+      documents: provider.documents,
+      locks: provider.locks,
+      logger: quietLogger(),
+      evidence
+    });
+    try {
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'look it up'
+      });
+      const longAgo = new Date(Date.now() - INTERRUPTED_RUN_GRACE_MS - 60_000).toISOString();
+      await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
+      const chat = await repository.getChat(CHAT_ID);
+      await settleInterruptedChat(chat, { repository, runLog: fakeRunLog({ events: LEDGER }) });
+
+      const answer = (await repository.getMessages(CHAT_ID)).messages[1];
+      assert.equal(answer.evidence.id, answer.id);
+      const doc = await evidence.getRecord('chat', CHAT_ID, answer.id);
+      assert.equal(doc.etag, answer.evidence.sha256);
+      assert.equal(doc.ownerId, 'user-1');
+      assert.equal(doc.data.journalEnded, false);
+      assert.equal(doc.data.status, 'error');
+      assert.deepEqual(
+        doc.data.toolCalls.map(call => [call.callId, call.activityKind, call.resultSource]),
+        [['c1', 'search', 'preview']]
+      );
+    } finally {
+      await provider.shutdown();
+      await fs.rm(baseDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
     }
   });
 });
