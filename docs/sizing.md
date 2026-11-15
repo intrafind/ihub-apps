@@ -156,6 +156,10 @@ first visible word: p95 ≤ 6 s.
 - **Planning:** GPUs = test users at the peak ÷ 30 (thinking off), rounded up, plus one for
   availability. A pod with 4 workers carries as many users as about 15 such GPUs; the GPU is by far
   the larger cost.
+- **Several GPUs need a load balancer.** A model in iHub has one URL. Put the vLLM instances behind
+  one endpoint (a Kubernetes Service, or a router such as LiteLLM or vLLM's router) and register
+  that. With prefix caching, route by session or prompt prefix, so a popular project's prompt stays
+  cached on one GPU.
 
 GPU model of `gpu-01`: to be added.
 
