@@ -8752,7 +8752,7 @@
     "title": "Quellen",
     "resultsCount_one": "{{count}} Ergebnis",
     "resultsCount_other": "{{count}} Ergebnisse",
-    "originSummary": "Quellen nach Herkunft",
+    "originFilter": "Nach Herkunft filtern",
     "queries": "Suchen",
     "cited": "In dieser Antwort zitiert",
     "read": "Für diese Antwort gelesen",

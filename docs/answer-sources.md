@@ -53,8 +53,10 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   sources**, or the connected system's own name such as **Jira**) followed by the site or system,
   the title, an excerpt or cited passage, the date, and whether the page or document was read. The
   origin is decided by the server (`Source.origin`); a source stored without one shows no origin
-  word. With two or more origins the panel header adds a summary of card counts (**Web 5 ·
-  Project 3**).
+  word. With two or more origins the panel shows a row of filter pills (**All 8**, **Web 5**,
+  **Project 3**); choosing one narrows every list to that origin, and **All** brings the rest back.
+  An answer with one origin has no pills, and a source stored without an origin shows under **All**
+  only.
 - An answer that cites none of its sources (a model that writes no links) lists what was read for
   it instead, at its end and at the top of the panel: **Read for this answer**, the pages and
   documents whose content went to the model (`read.ok`, which the producer sets on the server).
@@ -69,7 +71,8 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   panel header says where the answer searched and whom it asked (**Searched in Contracts**,
   **Asked HR assistant**). When the sources come from more than one scope (an iAssistant over
   all of the user's search profiles, or several searches), the panel can show one scope at a
-  time. See [Integration scopes](#integration-scopes).
+  time. With several origins, the search profiles are a second row under the origin row and show
+  once an origin is chosen. See [Integration scopes](#integration-scopes).
 
 | Action | Offered when the source has | Runs |
 |---|---|---|
