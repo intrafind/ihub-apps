@@ -19,6 +19,7 @@ import { FilesystemStorageProvider } from '../storage/index.js';
 import { ChatFileRepository } from '../services/chatFiles/ChatFileRepository.js';
 import { chatFileSettings, normalizeChatFilePolicy } from '../services/chatFiles/chatFilePolicy.js';
 import { platformConfigSchema } from '../validators/platformConfigSchema.js';
+import { ChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
 
 describe('Inference API file quotas', () => {
   let tmpDir;
@@ -77,6 +78,26 @@ describe('Inference API file quotas', () => {
     await put(user, 2, policy);
     await assert.rejects(put(user, 3, policy), error => error.code === 'QUOTA_API_BYTES');
     await assert.rejects(put(chat, 1, policy), error => error.code === 'QUOTA_CHAT_BYTES');
+  });
+
+  it("counts a chat's evidence records against its byte quota", async () => {
+    const policy = { quotas: { maxChatBytes: 1000 } };
+    await put(chat, 1, policy);
+    const evidence = new ChatEvidenceRepository({
+      documents: provider.documents,
+      blobs: provider.blobs
+    });
+    const text = JSON.stringify('y'.repeat(900));
+    await evidence.writeRecord(
+      'chat',
+      chat.id,
+      { messageId: 'm1' },
+      new Map([['b'.repeat(64), text]]),
+      { maxContentBytes: 1e6 }
+    );
+    await assert.rejects(put(chat, 2, policy), error => error.code === 'QUOTA_CHAT_BYTES');
+    // Another chat is not charged for it.
+    await put({ type: 'chat', id: 'other-chat' }, 1, policy);
   });
 
   it('0 removes the API limits', async () => {

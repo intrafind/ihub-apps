@@ -168,6 +168,21 @@ export const USER_CLEANUP_STEPS = [
     }
   },
   {
+    // Evidence records of runs without a chat (`/v1` completions, #3687); a
+    // chat's evidence goes with the chat above.
+    name: 'runEvidence',
+    kind: 'content',
+    run: async userId => {
+      const { getChatEvidenceRepository } = await import('./chat/ChatEvidenceRepository.js');
+      const repository = getChatEvidenceRepository();
+      let removed = 0;
+      for (const ownerId of await ownerIdsOf(userId)) {
+        removed += await repository.deleteRunsOfOwner(ownerId);
+      }
+      return { removed };
+    }
+  },
+  {
     name: 'userPrompts',
     kind: 'content',
     run: async userId => {

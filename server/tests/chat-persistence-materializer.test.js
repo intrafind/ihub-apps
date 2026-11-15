@@ -1050,6 +1050,46 @@ describe('chatMaterializer: the evidence record', () => {
     });
   });
 
+  it('an edit removes only the dropped answer record; a chat delete removes all', async () => {
+    await withEvidence(async ({ repository, evidence }) => {
+      await userTurn(repository);
+      const first = await answer(repository);
+      await repository.claimRun(CHAT_ID, 'chat-run-2', { isBusy: () => false });
+      const question = await repository.appendMessage(CHAT_ID, {
+        role: 'user',
+        content: 'And then?',
+        runId: 'chat-run-2'
+      });
+      const second = await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: 'chat-run-2',
+        summary: { status: 'success', content: 'Then restart.' },
+        clientConnected: true,
+        runLog: journal
+      });
+      const blobs = async () =>
+        (await evidence.blobs.list('chat-evidence-content', { limit: 100 })).items.length;
+      const shared = await blobs();
+
+      // Resend from the second question: its answer goes, the first stays.
+      await repository.appendMessage(
+        CHAT_ID,
+        { role: 'user', content: 'Edited', runId: 'chat-run-3' },
+        { replaceFromMessageId: question.message.id }
+      );
+      assert.equal(await evidence.getRecord('chat', CHAT_ID, second.id), null);
+      assert.ok(await evidence.getRecord('chat', CHAT_ID, first.id));
+      assert.equal(await blobs(), shared, 'content shared with other answers stays');
+
+      await repository.deleteMessage(CHAT_ID, first.id);
+      assert.equal(await evidence.getRecord('chat', CHAT_ID, first.id), null);
+
+      await repository.deleteChat(CHAT_ID);
+      assert.equal(await blobs(), 0, 'the chat takes all its content with it');
+    });
+  });
+
   it('deletes the record of an answer another writer already stored', async () => {
     await withEvidence(async ({ repository, evidence }) => {
       await userTurn(repository);
