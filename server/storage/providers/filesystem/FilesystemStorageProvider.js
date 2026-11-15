@@ -423,8 +423,11 @@ export class FilesystemStorageProvider extends StorageProvider {
       // file cache — requests were measurably slower for as long as it ran and
       // a while after. The first sweep runs at the next `fenceSweepHour`.
       this._fenceSweepTimer = setTimeout(() => {
-        this._sweepFences();
-        this._fenceSweepTimer = setInterval(() => this._sweepFences(), this._fenceSweepIntervalMs);
+        void this._sweepFences();
+        this._fenceSweepTimer = setInterval(
+          () => void this._sweepFences(),
+          this._fenceSweepIntervalMs
+        );
         this._fenceSweepTimer.unref?.();
       }, msUntilHour(this._fenceSweepHour));
       this._fenceSweepTimer.unref?.();
