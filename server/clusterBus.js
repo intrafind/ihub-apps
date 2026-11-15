@@ -278,8 +278,8 @@ export function initPrimaryBus({ getWorkers }) {
    * Answer a question on a channel the primary registered with
    * `respondInPrimary`. The reply goes to the asker alone, shaped exactly like
    * a worker's reply, so the asker cannot tell who answered. The question is
-   * still repeated to the workers afterwards: the primary answers *as well as*
-   * them, not instead.
+   * still repeated to the workers afterwards — the primary answers *as well as*
+   * them, not instead — unless it was asked `primaryOnly`.
    */
   const answerAsPrimary = (worker, message) => {
     // Every relayed chat chunk passes through here, so bail on the map lookup
@@ -320,6 +320,9 @@ export function initPrimaryBus({ getWorkers }) {
     switch (message.kind) {
       case MSG_PUBLISH: {
         if (primaryResponders.size > 0) answerAsPrimary(worker, message);
+        // A question only the primary can answer (quota counters): repeating it
+        // to every worker would make each one deserialise and drop it.
+        if (message.primaryOnly) break;
         // A directed message names the presence entry that should receive it.
         // The primary is the only process that knows who owns what, so it can
         // deliver straight to that worker; chat token streams are the hot path
@@ -612,11 +615,16 @@ export function isClusterBusActive() {
  *   intended recipient. When given, the primary delivers only to the worker
  *   owning that entry, falling back to a broadcast if it does not know one.
  *   Omit to fan out to every other worker.
+ * @param {object} [options]
+ * @param {boolean} [options.primaryOnly=false] - Only the primary's responder
+ *   sees the message; it is not repeated to the workers.
  * @returns {boolean} Whether the message was handed to the primary.
  */
-export function publish(type, payload, route) {
+export function publish(type, payload, route, { primaryOnly = false } = {}) {
   if (!busActive) return false;
-  const sent = sendToPrimary({ kind: MSG_PUBLISH, type, payload, route });
+  const message = { kind: MSG_PUBLISH, type, payload, route };
+  if (primaryOnly) message.primaryOnly = true;
+  const sent = sendToPrimary(message);
   if (sent) stats.published += 1;
   return sent;
 }
@@ -698,10 +706,12 @@ function ensureReplyChannel(type) {
  *   the worker that should answer. Without it the question is broadcast and any
  *   worker may answer, so the first reply wins.
  * @param {number} [options.timeoutMs=1500] - How long to wait before giving up.
+ * @param {boolean} [options.primaryOnly=false] - Ask only the primary's
+ *   `respondInPrimary` handler; the workers never see the question.
  * @returns {Promise<*|null>} The responder's reply, or null on timeout / outside
  *   cluster mode, where there is no other worker to ask.
  */
-export function request(type, payload, { route, timeoutMs = 1500 } = {}) {
+export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = false } = {}) {
   if (!busActive) return Promise.resolve(null);
 
   ensureReplyChannel(type);
@@ -726,7 +736,7 @@ export function request(type, payload, { route, timeoutMs = 1500 } = {}) {
       resolve(reply === undefined ? null : reply);
     });
 
-    if (!publish(type, { requestId, payload }, route)) {
+    if (!publish(type, { requestId, payload }, route, { primaryOnly })) {
       clearTimeout(timer);
       pendingRequests.delete(requestId);
       resolve(null);
