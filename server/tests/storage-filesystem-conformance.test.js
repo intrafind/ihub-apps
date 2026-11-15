@@ -104,7 +104,7 @@ describe('filesystem storage provider without the key-prefix index', () => {
     createProvider,
     capabilities: FILESYSTEM_CAPABILITIES,
     // Only what lists: everything else does not read the index.
-    sections: ['listing and paging', 'key-prefix listings', 'the blob facet']
+    sections: ['listing and paging', 'key-prefix listings', 'prefix deletes', 'the blob facet']
   });
 });
 

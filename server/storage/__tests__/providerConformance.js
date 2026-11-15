@@ -1121,6 +1121,64 @@ export function runProviderConformance({
       }
     });
 
+    describe('prefix deletes', section('prefix deletes'), () => {
+      // The scope delete of a repository keyed `<scope>__<id>`: everything
+      // under `a__` goes, `ab__` and the bare `a` stay, and nothing is left
+      // that a later listing of the prefix could still see.
+      const KEYS = ['a__x', 'a__y', 'a__x__z', 'ab__x', 'a'];
+      for (const ns of Object.keys(PREFIX_LISTING_NAMESPACES)) {
+        it(`documents: deletePrefix removes exactly the prefix (${ns})`, async () => {
+          for (const key of KEYS) await shared.documents.put(ns, key, { key });
+          try {
+            assert.equal(await shared.documents.deletePrefix(ns, 'a__'), 3);
+            const left = await shared.documents.list(ns, { limit: 1000 });
+            assert.deepEqual(
+              left.items.map(doc => doc.key).filter(k => KEYS.includes(k)),
+              ['a', 'ab__x']
+            );
+            const under = await shared.documents.list(ns, { prefix: 'a__' });
+            assert.deepEqual(under.items, [], 'no entry left under the prefix');
+            assert.equal(await shared.documents.deletePrefix(ns, 'a__'), 0, 'idempotent');
+            // A key written again under the prefix lists alone: no stale index entry.
+            await shared.documents.put(ns, 'a__new', { key: 'a__new' });
+            const again = await shared.documents.list(ns, { prefix: 'a__' });
+            assert.deepEqual(
+              again.items.map(doc => doc.key),
+              ['a__new']
+            );
+            await assert.rejects(() => shared.documents.deletePrefix(ns, ''), {
+              code: 'INVALID_KEY'
+            });
+          } finally {
+            for (const key of [...KEYS, 'a__new']) await shared.documents.delete(ns, key);
+          }
+        });
+
+        it(
+          `blobs: deletePrefix removes exactly the prefix (${ns})`,
+          { skip: skipWithoutBlobStore },
+          async () => {
+            for (const key of KEYS) await shared.blobs.put(ns, key, Buffer.from(key));
+            try {
+              assert.equal(await shared.blobs.deletePrefix(ns, 'a__'), 3);
+              const left = await shared.blobs.list(ns, { limit: 1000 });
+              assert.deepEqual(
+                left.items.map(item => item.key).filter(k => KEYS.includes(k)),
+                ['a', 'ab__x']
+              );
+              assert.deepEqual((await shared.blobs.list(ns, { prefix: 'a__' })).items, []);
+              assert.equal(await shared.blobs.deletePrefix(ns, 'a__'), 0, 'idempotent');
+              await assert.rejects(() => shared.blobs.deletePrefix(ns, ''), {
+                code: 'INVALID_KEY'
+              });
+            } finally {
+              for (const key of KEYS) await shared.blobs.delete(ns, key);
+            }
+          }
+        );
+      }
+    });
+
     describe('raw namespaces', section('raw namespaces', skipWithoutRaw), () => {
       const ns = rawNamespace;
 

@@ -18,7 +18,8 @@
  *
  * @module storage/DocumentStore
  */
-import { NotSupportedError } from './errors.js';
+import { InvalidKeyError, NotSupportedError } from './errors.js';
+import { walkDocuments } from './walk.js';
 
 /**
  * A stored document with its metadata.
@@ -275,6 +276,35 @@ export class DocumentStore {
    */
   async *scan(_ns, _opts = {}) {
     throw new NotSupportedError('DocumentStore.scan is not implemented');
+  }
+
+  /**
+   * Remove every document whose key starts with `prefix`.
+   *
+   * The scope delete of a repository that keys its documents
+   * `<scope>__<id>` (all evidence of one chat, for instance). `a__` removes
+   * `a__x` and never `ab__x`: the match is `String.prototype.startsWith`,
+   * the same as a prefix listing. Idempotent; a second call removes nothing.
+   *
+   * The base implementation lists the keys once and deletes them one by one,
+   * so every provider has it; a provider overrides it only to make it cheaper.
+   *
+   * @param {string} ns - Namespace.
+   * @param {string} prefix - Key prefix; must not be empty.
+   * @returns {Promise<number>} How many documents were removed.
+   * @throws {InvalidKeyError} When `prefix` is empty: that would be the whole namespace.
+   */
+  async deletePrefix(ns, prefix) {
+    if (typeof prefix !== 'string' || prefix.length === 0) {
+      throw new InvalidKeyError('deletePrefix needs a non-empty prefix');
+    }
+    const keys = [];
+    for await (const doc of walkDocuments(this, ns, { prefix, includeData: false })) {
+      keys.push(doc.key);
+    }
+    let removed = 0;
+    for (const key of keys) if (await this.delete(ns, key)) removed++;
+    return removed;
   }
 
   /**
