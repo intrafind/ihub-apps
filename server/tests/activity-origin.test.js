@@ -595,6 +595,15 @@ test('a source’s origin, the call’s activity origin and the footer kind agre
   }
 });
 
+test('a connected server’s content blocks are not counted as search hits', () => {
+  const toolDef = { id: 'mcp_x__web_search', _mcp: { serverId: 'x', originalName: 'web_search' } };
+  const blocks = [
+    { type: 'text', text: 'first' },
+    { type: 'text', text: 'second' }
+  ];
+  assert.deepEqual(extractToolOutcome({ toolId: toolDef.id, toolDef, result: blocks }), {});
+});
+
 // ── review findings: origin is the server's, from the call ────────────────
 
 test('what a tool reports as the origin of its sources is not believed; the call’s origin is applied', () => {
