@@ -226,6 +226,13 @@ blobs, picked (with a paged-`list` fallback for stores that have no `scan`) by
 provider a paged walk re-reads the whole directory for every page; `scan` reads
 it once.
 
+`deletePrefix(ns, prefix)` on documents and on blobs removes every key starting
+with the prefix and answers how many went — the scope delete of a repository
+keyed `<scope>__<id>` (all evidence of one chat). An empty prefix is refused
+(`INVALID_KEY`). The base classes implement it as one listing and a delete per
+key, so every provider has it; the conformance suite checks it in its
+`prefix deletes` section.
+
 Namespaces whose listings are scoped by the leading `__` segments of the key
 are declared in `KEY_PREFIX_SEGMENTS` (`server/storage/namespaces.js`):
 `chat-files` and `artifacts` by two segments (`<scopeType>__<scopeId>__…`),

@@ -126,6 +126,7 @@
     - [Run Ledger](run-ledger.md)
     - [Storage Providers](storage.md)
     - [Chat Persistence](chat-persistence.md)
+    - [Chat Evidence Record](chat-evidence.md)
     - [Chat Sharing](chat-sharing.md)
     - [Artifacts](artifacts.md)
     - [Docker Quick Reference](DOCKER-QUICK-REFERENCE.md)

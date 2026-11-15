@@ -125,6 +125,9 @@ administrator configures and reviews stored chats and the run ledger:
 - **Run ledger** — recorded runs by kind and status.
 - **Chat titles** — whether a model names chats after their first answer, and
   which model (empty: the chat's own); see [Chat titles](#chat-titles).
+- **Evidence record** — whether each stored answer keeps a record of what went
+  into and came out of every model call and tool call (on by default); see
+  [Chat Evidence Record](chat-evidence.md).
 - **Settings** — `platform.chats` (including the temporary-chat window) and
   `platform.runLog` (enabled, identity mode,
   retention, daily cleanup, spill threshold, flush interval). Changes apply
@@ -970,7 +973,9 @@ its newest `scheduledTasks.maxRunChatsPerTask` (20) run chats. The age rule
 applies to them like to any other chat.
 
 Every removal is the same cascade `DELETE /api/chats/:id` performs, ledger runs
-included. No rule removes a chat a turn is still producing into, here or on
+and the chat's [evidence records](chat-evidence.md) included. The age rule also
+removes the evidence of runs without a chat (`/v1` completions) older than
+`retentionDays`. No rule removes a chat a turn is still producing into, here or on
 another worker; one a restart left `running` with nothing behind it expires as
 usual. The rule is judged again under the chat's lock right before the delete,
 so a chat kept, written to or started since the scan stays. The sweep runs once at startup — so a misconfigured retention shows up
