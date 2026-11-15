@@ -433,6 +433,71 @@ describe('RunSummaryRepository: the runs namespace', () => {
   });
 });
 
+describe('RunSummaryRepository: what an owner listing costs', () => {
+  it('reuses a listing for a burst, and drops it on this process s own writes', async () => {
+    await withRepository(async ({ provider }) => {
+      let walks = 0;
+      const documents = Object.create(provider.documents);
+      documents.scan = (...args) => {
+        walks += 1;
+        return provider.documents.scan(...args);
+      };
+      const repository = new RunSummaryRepository({
+        documents,
+        locks: provider.locks,
+        logger: recordingLogger().logger
+      });
+      await repository.put(summary({ runId: 'run-a' }));
+      await repository.put(summary({ runId: 'run-b', kind: 'workflow' }));
+
+      const first = await repository.listByOwner(OWNER);
+      await repository.listByOwner(OWNER, { limit: 1, offset: 1 });
+      assert.equal(walks, 1, 'a second page within the window reads nothing');
+      assert.equal(first.total, 2);
+
+      const workflows = await repository.listByOwner(OWNER, { kind: 'workflow' });
+      assert.equal(walks, 2, 'another filter is its own listing');
+      assert.deepEqual(
+        workflows.items.map(run => run.runId),
+        ['run-b']
+      );
+
+      await repository.patch('run-a', { status: 'completed' });
+      const after = await repository.listByOwner(OWNER);
+      assert.equal(walks, 3, 'a write drops the owner s listings');
+      assert.equal(after.items.find(run => run.runId === 'run-a').status, 'completed');
+
+      await repository.remove('run-b');
+      const removed = await repository.listByOwner(OWNER);
+      assert.deepEqual(
+        removed.items.map(run => run.runId),
+        ['run-a']
+      );
+    });
+  });
+});
+
+describe('RunSummaryRepository: what the owner memo holds', () => {
+  it('lets go of expired listings when another owner is listed', async () => {
+    await withRepository(async ({ repository }) => {
+      await repository.put(summary({ runId: 'run-a' }));
+      await repository.put(summary({ runId: 'run-b', ownerId: OTHER_OWNER }));
+      await repository.listByOwner(OWNER);
+      assert.ok(repository._ownerRuns.has(OWNER));
+
+      const realNow = Date.now;
+      Date.now = () => realNow() + 60_000;
+      try {
+        await repository.listByOwner(OTHER_OWNER);
+      } finally {
+        Date.now = realNow;
+      }
+      assert.equal(repository._ownerRuns.has(OWNER), false, 'the expired owner is gone');
+      assert.ok(repository._ownerRuns.has(OTHER_OWNER));
+    });
+  });
+});
+
 describe('RunSummaryRepository: the shared upsert', () => {
   it('creates once, then merges, so two writers keep both halves', async () => {
     // A workflow run's summary has two writers with disjoint halves: the

@@ -35,6 +35,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkBlobs, walkDocuments } from '../../storage/walk.js';
 import configStore from '../config/ConfigStore.js';
 import configCache from '../../configCache.js';
 import { memberTargetKey } from './projectAccess.js';
@@ -249,17 +250,14 @@ function adminPath(id) {
 async function collect(documents, ns, options, max = MAX_SCANNED) {
   const items = [];
   const withData = options?.includeData !== false;
-  let cursor = null;
-  do {
-    const page = await documents.list(ns, {
-      limit: PAGE_SIZE,
-      includeData: true,
-      ...options,
-      ...(cursor ? { cursor } : {})
-    });
-    for (const doc of page.items) if (doc && (!withData || doc.data)) items.push(doc);
-    cursor = page.nextCursor;
-  } while (cursor && items.length < max);
+  for await (const doc of walkDocuments(documents, ns, {
+    limit: PAGE_SIZE,
+    includeData: true,
+    ...options
+  })) {
+    if (items.length >= max) break;
+    if (doc && (!withData || doc.data)) items.push(doc);
+  }
   return items;
 }
 
@@ -1148,20 +1146,11 @@ export class ProjectRepository {
     // prefix match.
     const parts = itemId ? 1 : 2;
     let removed = 0;
-    let cursor = null;
-    do {
-      const page = await this.blobs.list(PROJECT_FILES_NAMESPACE, {
-        prefix,
-        limit: PAGE_SIZE,
-        ...(cursor ? { cursor } : {})
-      });
-      for (const blob of page.items) {
-        const rest = blob.key.slice(prefix.length);
-        if (!rest || rest.split(ID_SEPARATOR).length !== parts) continue;
-        if (await this.blobs.delete(PROJECT_FILES_NAMESPACE, blob.key)) removed += 1;
-      }
-      cursor = page.nextCursor;
-    } while (cursor);
+    for await (const blob of walkBlobs(this.blobs, PROJECT_FILES_NAMESPACE, { prefix })) {
+      const rest = blob.key.slice(prefix.length);
+      if (!rest || rest.split(ID_SEPARATOR).length !== parts) continue;
+      if (await this.blobs.delete(PROJECT_FILES_NAMESPACE, blob.key)) removed += 1;
+    }
     return removed;
   }
 }

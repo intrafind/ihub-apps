@@ -19,6 +19,7 @@
 import { randomUUID } from 'node:crypto';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkBlobs } from '../../storage/walk.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 
 export const CORPUS_NAMESPACE = RUNTIME_NAMESPACES.websiteCorpora;
@@ -164,12 +165,9 @@ export class CorpusStore {
   }
 
   async _deleteBlobs(prefix) {
-    let cursor = null;
-    do {
-      const page = await this.blobs.list(CORPUS_NAMESPACE, { prefix, cursor });
-      for (const item of page.items) await this.blobs.delete(CORPUS_NAMESPACE, item.key);
-      cursor = page.nextCursor;
-    } while (cursor);
+    for await (const item of walkBlobs(this.blobs, CORPUS_NAMESPACE, { prefix })) {
+      await this.blobs.delete(CORPUS_NAMESPACE, item.key);
+    }
   }
 
   /**

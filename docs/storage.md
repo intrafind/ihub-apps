@@ -217,6 +217,20 @@ than silently turning into JSON.
   and keeps the metadata.
 - An unknown namespace lists empty; it never throws.
 
+A consumer that needs every entry of a namespace, an owner or a prefix walks
+it with `scan` instead of paging `list` — `scan(ns, opts)` on documents and on
+blobs, picked (with a paged-`list` fallback for stores that have no `scan`) by
+`walkDocuments` / `walkBlobs` in `server/storage/walk.js`. On the filesystem
+provider a paged walk re-reads the whole directory for every page; `scan` reads
+it once.
+
+Namespaces whose listings are scoped by the leading `__` segments of the key
+are declared in `KEY_PREFIX_SEGMENTS` (`server/storage/namespaces.js`):
+`chat-files` and `artifacts` by two segments (`<scopeType>__<scopeId>__…`),
+`project-files` by one (`<projectId>__…`). A provider may index those segments
+so a listing of one chat's files does not read all of them; results are the
+same either way.
+
 ## Raw namespaces: configuration stays where it is
 
 Configuration is the one kind of data that could not move. Every file under
@@ -493,11 +507,57 @@ contents/data/
   <ns>/<key>.json                     the document envelope
   <ns>/.owners/<ownerSegment>/<key>   empty marker file — the per-owner index
   <ns>/.locks/<key>.lock              transient compare-and-set lock
+  <ns>/.prefixes/<partition>/<key>    empty marker file — the key-prefix index
+  blobs/<ns>/<key>                    a blob, byte for byte
+  blobs/<ns>/.prefixes/<partition>/<key>  the key-prefix index of blobs
   logs/<stream segments>.jsonl        one append-log stream, one JSON per line
   logs/<stream segments>.blobs/       that stream's blobs
   locks/<sha256(name)[0..40]>.lock    LockManager leases
+  locks/<sha256(name)[0..40]>.fence   LockManager fencing counter
   .config-locks/<ns>/<key>.lock       compare-and-set locks for the raw namespaces
 ```
+
+### The key-prefix index
+
+For the namespaces in `KEY_PREFIX_SEGMENTS`, documents and blobs get an empty
+marker under `.prefixes/<partition>/`, where the partition is the key up to
+its N-th `__`. A listing whose prefix contains N complete `__` reads that one
+directory; any other listing reads the namespace directory as before. The
+marker is written before the document or blob and removed after it, so a
+marker can outlive its entry after a crash (listings skip it) but an entry is
+never missing from its partition. Migration V250 built the markers for data
+stored before the index existed. A partition directory is not removed when its
+last marker goes (removing it would race a write of another key into the same
+partition), so deleted chats and projects leave empty directories under
+`.prefixes/`; they are harmless and may be removed while the server is stopped.
+
+**Downgrade caveat.** A release older than V250 does not write markers. Data
+written by it after a downgrade is missing from scoped listings (one chat's
+files, one run's artifacts, one project's blobs) once you upgrade again, and
+V250 does not run a second time. To repair, delete the `.prefixes` directories
+under `contents/data/chat-files`, `contents/data/artifacts` and
+`contents/data/blobs/{chat-files,artifacts,project-files}` and remove the V250
+entry from `contents/.migration-history.json` so the migration runs again at
+the next start.
+
+### Idle lock counters
+
+Every lock name gets a fencing counter file beside its lease, and lock names
+are per chat, per run, per import — so the counters used to accumulate
+forever. The provider sweeps counters untouched for 24 hours once a night, at
+03:00 local time (`storage.filesystem.fenceSweepHour` in `platform.json`, 0–23).
+Only one process sweeps at a time, across all workers and servers sharing the
+directory; the others skip that night's round. A counter is only removed while its lease is
+held by the sweep and its token is below the current time, and tokens are
+seeded from the clock (`max(previous + 1, now)`), so a name locked again after
+its counter was removed still gets a larger token than any it had before.
+
+The sweep paces itself at about 50 counters per second, so the first sweep after
+the upgrade on an installation with a long history (hundreds of thousands of
+counters) takes an hour or two of that night; a day's idle counters afterwards
+take minutes. It runs at night because on a server whose data does not fit in
+memory, touching that many files pushed chats and projects out of the file cache:
+in load tests requests were measurably slower while it ran and for a while after.
 
 `.config-locks/` is the one part of the data directory that guards files
 outside it: the [raw namespaces](#raw-namespaces-configuration-stays-where-it-is)

@@ -41,6 +41,7 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkDocuments } from '../../storage/walk.js';
 import { VARIABLE_NAME_PATTERN } from '../../../shared/validationPatterns.js';
 import { chatMessageCap } from './chatPersistence.js';
 import { getArtifactRepository } from '../artifacts/ArtifactRepository.js';
@@ -798,8 +799,9 @@ export class ChatRepository {
     this._maxMessages = maxMessages;
     /**
      * One owner's loaded chat set, held for {@link OWNER_CHATS_TTL_MS} so a
-     * cursor walk does not repeat it. Keyed by owner; entries are dropped by
-     * `_forgetOwnerChats` whenever this process changes what a listing shows.
+     * cursor walk does not repeat it. Keyed by owner; entries are patched by
+     * `_rememberOwnerChat` / `_forgetOwnerChat` whenever this process changes
+     * what a listing shows.
      * @type {Map<string, {at: number, chats: Object[], pending?: Promise<Object[]>}>}
      */
     this._ownerChats = new Map();
@@ -980,9 +982,10 @@ export class ChatRepository {
     });
     // The single funnel for every change a listing can show — create, rename,
     // a turn moving the chat to the top, the unseen flag — so the memo is
-    // dropped here rather than at each of them.
-    this._forgetOwnerChats(chat.ownerId);
-    return toChat(doc);
+    // brought up to date here rather than at each of them.
+    const stored = toChat(doc);
+    this._rememberOwnerChat(chat.ownerId, stored);
+    return stored;
   }
 
   /**
@@ -1094,13 +1097,17 @@ export class ChatRepository {
     if (cached && Date.now() - cached.at < OWNER_CHATS_TTL_MS) return cached.chats;
     if (cached?.pending) return cached.pending;
 
+    // Stored only while this load is still the one the memo is waiting for: a
+    // write of this process drops a pending entry (`_updateOwnerChats`), and
+    // a snapshot read before that write must not be put back over it.
+    const isCurrent = () => this._ownerChats.get(ownerId)?.pending === pending;
     const pending = this._scanOwnerChats(ownerId)
       .then(chats => {
-        this._ownerChats.set(ownerId, { at: Date.now(), chats });
+        if (isCurrent()) this._ownerChats.set(ownerId, { at: Date.now(), chats });
         return chats;
       })
       .catch(error => {
-        this._ownerChats.delete(ownerId);
+        if (isCurrent()) this._ownerChats.delete(ownerId);
         throw error;
       });
     // Concurrent callers share one walk: the sidebar and the history page ask
@@ -1123,38 +1130,75 @@ export class ChatRepository {
    */
   async _scanOwnerChats(ownerId) {
     const chats = [];
-    let cursor = null;
-    do {
-      const page = await this.documents.list(CHATS_NAMESPACE, {
-        ownerId,
-        limit: OWNER_PAGE_SIZE,
-        ...(cursor ? { cursor } : {})
-      });
-      for (const doc of page.items) {
-        const chat = toChat(doc);
-        if (chat && chat.temporary !== true) chats.push(chat);
-      }
-      cursor = page.nextCursor;
-    } while (cursor && chats.length < MAX_OWNER_CHATS);
+    for await (const doc of walkDocuments(this.documents, CHATS_NAMESPACE, {
+      ownerId,
+      limit: OWNER_PAGE_SIZE
+    })) {
+      const chat = toChat(doc);
+      if (chat && chat.temporary !== true) chats.push(chat);
+      if (chats.length >= MAX_OWNER_CHATS) break;
+    }
     return chats;
   }
 
   /**
-   * Forget an owner's memoized chat set, because this process just changed it.
+   * Put a chat this process just wrote into its owner's memoized chat set.
    *
    * A write this process made must be visible to its own next read — the
    * client sends the turn and then reloads the list, and answering that from a
    * five-second-old snapshot would show them a chat they just renamed under
-   * its old title, or one they just deleted. Only the writes that change what
-   * a *listing* shows invalidate; a message append does, because it moves the
-   * chat to the top.
+   * its old title. Dropping the memo did that too, but then every turn of an
+   * active user re-read all their chats; the write already holds the new
+   * version, so it replaces the old one in place (or is added, or — a
+   * temporary chat, which is never listed — left out).
+   *
+   * While a load is in flight the memo is dropped instead: that load may
+   * have read the chat before this write, and would store the old version.
    *
    * @param {string|null|undefined} ownerId - Owner whose listing changed.
+   * @param {Object|null} chat - The chat as stored.
    * @returns {void}
    * @private
    */
-  _forgetOwnerChats(ownerId) {
-    if (ownerId) this._ownerChats.delete(ownerId);
+  _rememberOwnerChat(ownerId, chat) {
+    if (!ownerId || !chat) return;
+    this._updateOwnerChats(ownerId, chat.id, chat.temporary === true ? null : chat);
+  }
+
+  /**
+   * Take a chat this process just deleted out of its owner's memoized chat
+   * set; same reasoning as {@link ChatRepository#_rememberOwnerChat}.
+   *
+   * @param {string|null|undefined} ownerId - Owner whose listing changed.
+   * @param {string} chatId - The deleted chat.
+   * @returns {void}
+   * @private
+   */
+  _forgetOwnerChat(ownerId, chatId) {
+    if (ownerId) this._updateOwnerChats(ownerId, chatId, null);
+  }
+
+  /**
+   * Replace (or remove, with `chat` null) one chat in an owner's memo, or
+   * drop the memo when it cannot be patched safely.
+   *
+   * @param {string} ownerId - Owner.
+   * @param {string} chatId - Chat id.
+   * @param {Object|null} chat - New version, or null to remove it.
+   * @returns {void}
+   * @private
+   */
+  _updateOwnerChats(ownerId, chatId, chat) {
+    const cached = this._ownerChats.get(ownerId);
+    if (!cached) return;
+    if (cached.pending || Date.now() - cached.at >= OWNER_CHATS_TTL_MS) {
+      this._ownerChats.delete(ownerId);
+      return;
+    }
+    // A new array: a caller may still be iterating (or sorting) the old one.
+    const chats = cached.chats.filter(existing => existing.id !== chatId);
+    if (chat) chats.push(chat);
+    this._ownerChats.set(ownerId, { at: cached.at, chats });
   }
 
   /**
@@ -1177,7 +1221,8 @@ export class ChatRepository {
    * @param {Object} [options]
    * @param {number} [options.limit=30] - Page size, clamped to 100.
    * @param {string|null} [options.cursor=null] - Cursor from a previous page.
-   * @returns {Promise<{items: Object[], nextCursor: string|null}>}
+   * @returns {Promise<{items: Object[], nextCursor: string|null}>} The chat
+   *   objects are shared with the owner memo: read them, never mutate them.
    * @throws {StorageError} Code `INVALID_CURSOR` for a cursor this store did
    *   not issue.
    */
@@ -1229,17 +1274,14 @@ export class ChatRepository {
   async countChats(ownerId) {
     if (!this.isAvailable() || !ownerId) return 0;
     let count = 0;
-    let cursor = null;
-    do {
-      const page = await this.documents.list(CHATS_NAMESPACE, {
-        ownerId,
-        limit: OWNER_PAGE_SIZE,
-        includeData: false,
-        ...(cursor ? { cursor } : {})
-      });
-      count += page.items.length;
-      cursor = page.nextCursor;
-    } while (cursor && count < MAX_OWNER_CHATS);
+    for await (const _doc of walkDocuments(this.documents, CHATS_NAMESPACE, {
+      ownerId,
+      includeData: false,
+      limit: OWNER_PAGE_SIZE
+    })) {
+      count += 1;
+      if (count >= MAX_OWNER_CHATS) break;
+    }
     return count;
   }
 
@@ -1804,7 +1846,7 @@ export class ChatRepository {
       await this.fileStore().deleteScope(this.fileScope(chatId));
       // A delete is the other thing that changes a listing, and it does not go
       // through `_writeChat`.
-      this._forgetOwnerChats(existing?.ownerId);
+      this._forgetOwnerChat(existing?.ownerId, chatId);
       return { deleted: removedChat || removedMessages, runIds };
     });
   }

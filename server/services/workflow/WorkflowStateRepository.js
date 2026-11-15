@@ -20,6 +20,7 @@ import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { requireStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkDocuments } from '../../storage/walk.js';
 
 const COMPONENT = 'WorkflowStateRepository';
 
@@ -57,9 +58,6 @@ const REBUILD_PAGE_SIZE = 10;
  * short list reads as "that is all there is".
  */
 export const MAX_SCAN_STATES = 20_000;
-
-/** Documents fetched per `list` call while scanning the namespace. */
-const SCAN_PAGE_SIZE = 200;
 
 /**
  * Keys in this namespace that are not execution states.
@@ -442,19 +440,7 @@ export class WorkflowStateRepository {
    * @private
    */
   async *_walkStates() {
-    if (this.documents.supportsScan) {
-      yield* this.documents.scan(WORKFLOW_STATE_NAMESPACE);
-      return;
-    }
-    let cursor = null;
-    do {
-      const page = await this.documents.list(WORKFLOW_STATE_NAMESPACE, {
-        limit: REBUILD_PAGE_SIZE,
-        ...(cursor ? { cursor } : {})
-      });
-      yield* page.items;
-      cursor = page.nextCursor;
-    } while (cursor);
+    yield* walkDocuments(this.documents, WORKFLOW_STATE_NAMESPACE, { limit: REBUILD_PAGE_SIZE });
   }
 
   /**
@@ -574,29 +560,19 @@ export class WorkflowStateRepository {
   async _scan({ prefix, max, includeData }) {
     const bound = Number.isFinite(max) && max > 0 ? max : MAX_SCAN_STATES;
     const found = new Map();
-    let cursor = null;
-    do {
-      let page;
-      try {
-        const pageOptions = {
-          limit: SCAN_PAGE_SIZE,
-          ...(prefix ? { prefix } : {}),
-          ...(cursor ? { cursor } : {})
-        };
-        // Metadata only: no state body is read, so walking an installation's
-        // whole history for ids and timestamps costs a few kilobytes a state.
-        page = includeData
-          ? await this.documents.list(WORKFLOW_STATE_NAMESPACE, pageOptions)
-          : await this.documents.listMetadata(WORKFLOW_STATE_NAMESPACE, pageOptions);
-      } catch (error) {
-        this.logger.warn('Could not list the workflow state namespace', {
-          component: COMPONENT,
-          error: error.message
-        });
-        cursor = null;
-        break;
-      }
-      for (const doc of page.items) {
+    let truncated = false;
+    try {
+      // Metadata only unless asked: no state body is read, so walking an
+      // installation's whole history for ids and timestamps costs a few
+      // kilobytes a state.
+      for await (const doc of walkDocuments(this.documents, WORKFLOW_STATE_NAMESPACE, {
+        ...(prefix ? { prefix } : {}),
+        includeData
+      })) {
+        if (found.size >= bound) {
+          truncated = true;
+          break;
+        }
         if (RESERVED_KEYS.has(doc.key)) continue;
         if (includeData && !isWorkflowState(doc.data)) continue;
         found.set(doc.key, {
@@ -605,9 +581,13 @@ export class WorkflowStateRepository {
           ...(includeData ? { state: doc.data } : {})
         });
       }
-      cursor = page.nextCursor;
-    } while (cursor && found.size < bound);
-    return { items: [...found.values()], truncated: Boolean(cursor) };
+    } catch (error) {
+      this.logger.warn('Could not list the workflow state namespace', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
+    return { items: [...found.values()], truncated };
   }
 }
 

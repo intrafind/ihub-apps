@@ -54,6 +54,7 @@ import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkBlobs, walkDocuments } from '../../storage/walk.js';
 
 let lastCreatedAtMs = 0;
 
@@ -438,12 +439,9 @@ export class ArtifactRepository {
     const prefix = scopePrefix(scope);
     const keys = [];
     try {
-      let cursor = null;
-      do {
-        const page = await this.blobs.list(ARTIFACTS_NAMESPACE, { prefix, cursor });
-        for (const item of page.items || []) keys.push(item.key);
-        cursor = page.nextCursor || null;
-      } while (cursor);
+      for await (const item of walkBlobs(this.blobs, ARTIFACTS_NAMESPACE, { prefix })) {
+        keys.push(item.key);
+      }
     } catch (error) {
       this.logger.error("Failed to enumerate a scope's artifact payloads", {
         component: COMPONENT,
@@ -513,21 +511,11 @@ export class ArtifactRepository {
     const prefix = scopePrefix(scope);
     const docs = [];
     try {
-      if (this.documents.supportsScan) {
-        for await (const doc of this.documents.scan(ARTIFACTS_NAMESPACE, { prefix, includeData })) {
-          docs.push(doc);
-        }
-      } else {
-        let cursor = null;
-        do {
-          const page = await this.documents.list(ARTIFACTS_NAMESPACE, {
-            prefix,
-            includeData,
-            cursor
-          });
-          for (const doc of page.items || []) docs.push(doc);
-          cursor = page.nextCursor || null;
-        } while (cursor);
+      for await (const doc of walkDocuments(this.documents, ARTIFACTS_NAMESPACE, {
+        prefix,
+        includeData
+      })) {
+        docs.push(doc);
       }
     } catch (error) {
       this.logger.error("Failed to enumerate a scope's artifacts", {
