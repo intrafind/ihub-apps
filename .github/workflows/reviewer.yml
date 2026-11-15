@@ -29,14 +29,14 @@
 #   PreToolUse hook rejects any review submission whose event is not COMMENT.
 #
 # Review logic
-#   The job runs the repo's `review-pr-inline` skill
-#   (.claude/skills/review-pr-inline/SKILL.md, taken from the base branch) with
+#   The job runs the repo's `review-pr` skill
+#   (.claude/skills/review-pr/SKILL.md, taken from the base branch) with
 #   `--post`, so changing that skill changes what @reviewer does.
 #
 # Watching a run
 #   The run is not a claude.ai session, so follow it in the Actions run of this
 #   workflow: `show_full_output` writes every message and tool result of the
-#   reviewer into the "Run review-pr-inline skill" step log, and
+#   reviewer into the "Run review-pr skill" step log, and
 #   `display_report` adds the Claude Code report to the job's Step Summary when
 #   the run ends. Both are public on this repository. The reviewer only reads
 #   the PR and the base branch; GitHub masks the secrets it holds in the log.
@@ -112,6 +112,8 @@ jobs:
       id-token: write
     env:
       PR_NUMBER: ${{ github.event.issue.number || github.event.pull_request.number }}
+      # Who asked for the review: the skill names them in its AI-drafted preamble.
+      REQUESTER: ${{ github.event.comment.user.login }}
     steps:
       - name: Acknowledge the request
         env:
@@ -177,7 +179,7 @@ jobs:
           git -C pr-head diff --name-only "$BASE" HEAD > review-input/changed-files.txt
           printf '%s\n' "$REVIEW_REQUEST" > review-input/request.txt
 
-      - name: Run review-pr-inline skill
+      - name: Run review-pr skill
         uses: anthropics/claude-code-action@d535f5172dec02b204866b393d6b20b9b2aaf98d # v1.0.266
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -217,7 +219,7 @@ jobs:
               }
             }
           prompt: |
-            Use the Skill tool to run the `review-pr-inline` skill with the arguments
+            Use the Skill tool to run the `review-pr` skill with the arguments
             `${{ env.PR_NUMBER }} --post`, and follow it to the end, including Phase 6
             (posting). The `--post` go-ahead comes from a maintainer with write access who
             commented `@reviewer` on the PR; their full comment is in
@@ -226,6 +228,7 @@ jobs:
 
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ env.PR_NUMBER }}
+            REQUESTED BY: ${{ env.REQUESTER }}
             BASE BRANCH: ${{ steps.pr.outputs.base_ref }}
 
             This runs in GitHub Actions, so adapt the skill as follows. These overrides win
