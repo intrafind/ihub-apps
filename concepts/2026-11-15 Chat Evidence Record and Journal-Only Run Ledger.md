@@ -76,6 +76,16 @@ The assistant message carries no pointer: the record is keyed by the chat and th
 id, and holds the message id and the hash of the answer's content (`output.contentSha256`). This
 keeps the record off the answer path (implementation review, phase 1).
 
+**Switch.** `platform.chats.evidence.enabled` (default `true`) turns the record off for the whole
+installation. Off means no evidence documents and blobs are written and the read endpoints return
+404 `EVIDENCE_NOT_RECORDED`. The journal is still deleted after materialization (section 4), so an
+installation with evidence off keeps no record of what went in. The admin page says so next to
+the switch. Turning it on applies to answers stored from then on.
+
+**Existing data.** No backfill. Answers stored before the release, or while evidence was off, have
+no `evidence` field, and the read endpoints return 404 `EVIDENCE_NOT_RECORDED` for them. Their
+ledgers expire by the old `runLog.retentionDays` rule.
+
 > ponytail: deduplication is per chat, not global. The same app system prompt is stored once per
 > chat, not once per installation. In exchange, deleting a chat is a prefix delete, with no
 > reference counting and no garbage collector. Move to global addressing with a mark-and-sweep
@@ -207,7 +217,11 @@ the same way a chat message gets `evidence`.
 - **Kept chat:** evidence is deleted by `deleteChatWithCascade`, the chat retention sweep (age
   and count rules) and a user's delete, as a prefix delete of `chat-evidence/<chatId>/` and
   `chat-evidence-content/<chatId>/`.
-- **Temporary chat:** goes with the chat after `temporaryRetentionHours`.
+- **Temporary chat:** goes with the chat after `temporaryRetentionHours`, also under a legal hold
+  (section 7).
+- **Deleted user account:** the background cleanup that already removes a deleted user's chats
+  (`startUserCleanup`) removes their evidence with them. A held user's chats and evidence stay
+  (section 7).
 - **`runLog.retentionDays`** no longer limits any evidence. It only applies to run summaries.
 - **Deleting a single message** (edit, resend) deletes its evidence document, then a mark-and-sweep
   of the chat's blobs removes those no remaining record names. Record writes, sweeps and the chat
@@ -230,12 +244,18 @@ migration.
   retention rules remove it later as if it had not been deleted. The count rule
   (`maxChatsPerUser`) does not count hidden chats.
 - **Held users and groups:** nothing owned by a held principal is deleted, whether by the user,
-  retention, the count rule or the temporary-chat sweep. Hidden is the most a delete does.
+  retention, the count rule or the deletion of the user account. Hidden is the most a delete
+  does. **Temporary chats are the exception:** they are deleted after `temporaryRetentionHours`
+  under a hold too. Users choose a temporary chat to have it gone.
   Releasing the hold lets the normal rules run again on the next sweep.
 - The hold covers everything the evidence refers to: the chat document, the evidence documents
   and blobs, the **chat files** (documents are referenced, not copied) and generated artifacts.
 - Setting or releasing a hold, and every admin read of held or hidden data, is written to the
   audit log.
+- **Who:** admins (`adminAuth`). A separate compliance role can come later.
+- **Erasure requests:** the product shows no notice and has no override. A user's delete under a
+  hold hides the chat; whether a hold outweighs an erasure request is the operator's decision,
+  outside iHub.
 
 There is no soft delete today (`deleteChatWithCascade` removes everything at once), so
 `deletedAt` and the filter in listings and reads are new. All chat and run deletion paths go
@@ -254,7 +274,23 @@ Decided: the owner and admins can read the evidence; nobody else can.
   results the recipient may not be allowed to see.
 - Errors follow `docs/api-guidelines.md` (problem+json, registry codes).
 
-### 9. Size and performance
+### 9. Size, quota and storage backends
+
+- **Quota:** evidence counts against the chat's storage limit (`chats.uploads.quotas.maxChatBytes`),
+  together with the chat's files. Referenced documents are counted once, as chat files. When the
+  limit is reached, new uploads to the chat are refused as today. Answers are never refused or
+  stored without their evidence: the limit is checked before an upload, not before an answer, so
+  a chat can go over it by its last answers.
+- **Originals expire before the chat.** `uploads.originalRetentionDays` (14) and
+  `evictOldestOriginalsOnQuota` remove an uploaded original while its text stays with the chat.
+  The record therefore refers to the extracted text the model received (file id, text hash,
+  page), which lives as long as the chat; the original is evidence only while it exists. Under a
+  legal hold neither rule removes originals.
+- **Storage backends:** deletion is a prefix delete (`chat-evidence/<chatId>/`,
+  `chat-evidence-content/<chatId>/`). Every storage provider must implement it, with a
+  conformance test, before phase 1 ships.
+
+### 10. Performance
 
 Expected direction, to be measured in the load lab before the ledger deletion ships:
 
@@ -272,11 +308,14 @@ Each phase is shippable on its own.
    builder in the materializer and crash recovery, the `evidence` field on the message, the
    delete cascade, the owner and admin read endpoints. The ledger is unchanged, so this only
    adds data. Tests: record contents for a turn with history, a document, a picture, a tool
-   call, a workflow child, an error and retry; a `/v1` run; crash recovery; cascade.
+   call, a workflow child, an error and retry; a `/v1` run; crash recovery; cascade, including
+   the user-account cleanup. `chats.evidence.enabled`, the quota count and the prefix delete
+   conformance test for every storage provider.
 2. **Legal hold.** `chats.legalHold` with a migration for the defaults, `deletedAt` hiding, the
    checks in `chatDeletion.js` and the retention sweeps (chats, temporary chats, run evidence,
-   chat files, artifacts), audit log entries, admin UI to manage held users and groups. Tests:
-   every deletion path against a held user and with `keepUserDeleted`.
+   chat files, artifacts, user-account cleanup), audit log entries, admin UI to manage held users
+   and groups. Tests: every deletion path against a held user and with `keepUserDeleted`;
+   temporary chats of a held user are still deleted.
 3. **Content-addressed writes.** `request/header` and spills write into the evidence content
    store, and the journal holds only references. Add the `knowledge/passages` event. Load lab:
    ledger growth and event-loop delay vs #3684.
@@ -314,9 +353,19 @@ Each phase is shippable on its own.
 4. **`GET /api/runs/:id/events` for finished runs:** clean cut, no deprecation period.
 5. **Access:** the owner and admins.
 6. **`maxContentBytes`:** 10 MB per item. Documents are referenced, not counted.
+7. **Existing data:** no backfill. Only answers stored after the release have evidence.
+8. **Erasure vs hold:** no notice or override in the product.
+9. **Deleted user accounts:** their chats and evidence are deleted, unless the user is held.
+10. **Who sets a hold:** admins, for now.
+11. **Temporary chats:** deleted under a hold too.
+12. **Quota:** evidence counts against the chat's storage limit.
+13. **Storage backends:** every provider implements the prefix delete.
+14. **Switch:** evidence can be turned off (`chats.evidence.enabled`).
 
 ## Open questions
 
 - Should a legal hold also be settable on a single chat, not only on users and groups?
-- Should admins be able to export the evidence of held data as one bundle (for eDiscovery), or is
-  the read API enough for now?
+- **Export (undecided).** Direction under discussion: an admin export of everything (or of the
+  held principals), produced in the background and split into one zip per user, like the data
+  export of consumer AI products. Each zip holds the user's chats, evidence documents, blobs and
+  referenced files with a manifest of hashes. Not part of phases 1–6.
