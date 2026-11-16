@@ -229,6 +229,8 @@ applied*. Setup, rotation, the detector contract and the limits: [Text Watermark
 **Admin → EU AI Act** (`/admin/eu-ai-act`) is the one place to see and operate the measures above. Below the
 master switch, these cards:
 
+![Admin → EU AI Act: the master switch and the configuration check](assets/screenshots/admin-eu-ai-act.png)
+
 - **Configuration check.** One row per check with a level (OK, Attention, Failing) and a link to where it is fixed.
   The server decides every level (`GET /api/admin/eu-ai-act/status`, admin only, never a key or token). Failing is
   reserved for the watermark chain of models marked "iHub" (no active key, detector missing, rejected or

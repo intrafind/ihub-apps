@@ -305,3 +305,11 @@ extension also list your chat history.
 
 The **iHub Support Bot** app answers questions about iHub itself, including what changed in each
 release. The **Documentation** link in the sidebar opens this documentation.
+
+## Next steps
+
+- [Prompt Library](prompts.md) — save and reuse prompts.
+- [Projects](projects.md) — keep chats and files for one topic together.
+- [Chat Sharing](chat-sharing.md) — share a conversation or an app link.
+- [Scheduled Tasks](scheduled-tasks.md) — run an app on a schedule.
+- [Troubleshooting](troubleshooting.md) — fix common problems.
