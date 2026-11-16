@@ -159,6 +159,12 @@ export function resolveNodeSkillIds(config, profile) {
  *   }
  * }
  */
+/** The first of these values that is a string, cut to the length a citation keeps. */
+function citationSnippet(...candidates) {
+  const text = candidates.find(value => typeof value === 'string');
+  return text === undefined ? undefined : text.slice(0, 400);
+}
+
 export class PromptNodeExecutor extends BaseNodeExecutor {
   /**
    * Create a new PromptNodeExecutor
@@ -3112,14 +3118,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         push({
           url,
           title: item.title || item.name || item.heading || undefined,
-          snippet:
-            typeof item.snippet === 'string'
-              ? item.snippet.slice(0, 400)
-              : typeof item.summary === 'string'
-                ? item.summary.slice(0, 400)
-                : typeof item.text === 'string'
-                  ? item.text.slice(0, 400)
-                  : undefined,
+          snippet: citationSnippet(item.snippet, item.summary, item.text),
           toolId,
           taskId: taskId || undefined,
           query: typeof args?.query === 'string' ? args.query : undefined,
@@ -3139,12 +3138,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         push({
           url: result.url,
           title: result.title || result.name || undefined,
-          snippet:
-            typeof result.content === 'string'
-              ? result.content.slice(0, 400)
-              : typeof result.snippet === 'string'
-                ? result.snippet.slice(0, 400)
-                : undefined,
+          snippet: citationSnippet(result.content, result.snippet),
           toolId,
           taskId: taskId || undefined,
           query: typeof args?.url === 'string' ? args.url : undefined,
