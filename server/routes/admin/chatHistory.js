@@ -439,8 +439,9 @@ export default function registerAdminChatHistoryRoutes(app) {
    *
    * Uses the same predicates as the scheduled sweeps: stored chats are only
    * swept while durable chats are configured (switching the feature off must
-   * not start deleting what is kept), and the ledger only while its cleanup
-   * is enabled.
+   * not start deleting what is kept), and ledger runs only while its cleanup
+   * is enabled — the journals of finished chat and API runs go either way.
+   * A ledger walk already in progress (the daily one) is joined, not repeated.
    */
   app.post(
     buildServerPath('/api/admin/chat-history/retention/_run'),
@@ -484,12 +485,15 @@ export default function registerAdminChatHistoryRoutes(app) {
         }
 
         if (target === 'ledger' || target === 'all') {
-          if (settings.runLog.cleanupEnabled) {
-            const { removed } = await runLog.cleanup(settings.runLog.retentionDays);
-            result.ledger = { ran: true, removed };
-          } else {
-            result.ledger = { ran: false, removed: 0, reason: 'cleanupDisabled' };
-          }
+          // As the scheduler does: with the cleanup off, summaries are kept but
+          // the journals of finished chat and API runs are still deleted.
+          const enabled = settings.runLog.cleanupEnabled;
+          const { removed, journals } = await runLog.cleanup(
+            enabled ? settings.runLog.retentionDays : 0
+          );
+          result.ledger = enabled
+            ? { ran: true, removed, journals }
+            : { ran: false, removed: 0, journals, reason: 'cleanupDisabled' };
         }
 
         logAudit({

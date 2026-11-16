@@ -85,7 +85,9 @@ export const JOURNAL_SWEPT_KINDS = new Set(['chat', 'inference']);
 /**
  * Whether a summary describes a run whose journal may go once `cutoffMs` has
  * passed since it ended: a swept kind, ended before the cutoff, journal still
- * there.
+ * there, and not `paused` — a turn paused for an approval or a clarification
+ * continues as a new run, and nothing else records what the paused segment
+ * did, so its journal follows `runLog.retentionDays`.
  *
  * @param {Object} summary - Stored run summary.
  * @param {number} cutoffMs - Epoch ms; the run must have ended before it.
@@ -93,6 +95,7 @@ export const JOURNAL_SWEPT_KINDS = new Set(['chat', 'inference']);
  */
 export function journalSweepable(summary, cutoffMs) {
   if (!JOURNAL_SWEPT_KINDS.has(summary?.kind) || summary.journalDeletedAt) return false;
+  if (summary.status === 'paused') return false;
   const ended = Date.parse(summary.endedAt || '');
   return Number.isFinite(ended) && ended < cutoffMs;
 }
@@ -514,10 +517,15 @@ export class RunLedgerStore {
    * @returns {Promise<void>}
    */
   async deleteJournal(runId) {
-    await this._logs().deleteStream(runStreamName(runId));
-    await this._queueSummaryWrite(() =>
-      this._summaries().patch(runId, { journalDeletedAt: new Date().toISOString() })
-    );
+    // Under the run lock: a recovering append (`RunLog.appendRecovered`)
+    // takes it too, so it sees either the journal or the marker, never the
+    // gap between them in which it would start a new one-event journal.
+    // Not queued: a failed patch must fail the delete, so the journal is not
+    // counted as gone and the next walk retries.
+    await this.withRunLock(runId, async () => {
+      await this._logs().deleteStream(runStreamName(runId));
+      await this._summaries().patch(runId, { journalDeletedAt: new Date().toISOString() });
+    });
   }
 
   /**
@@ -595,7 +603,9 @@ export class RunLedgerStore {
    * ({@link journalSweepable} against `journalCutoffMs`): runs that ended on
    * a worker that died before its own journal sweep, and journals kept from
    * before the journal sweep existed. It costs nothing extra — the walk
-   * happens anyway.
+   * happens anyway. Only actionable summaries (due by age, or with a due
+   * journal) are kept by the scan, so the summaries already swept do not use
+   * up the repository's scan bound.
    *
    * @param {number|null} cutoffMs - Epoch milliseconds; older runs go. `null`
    *   keeps every run (retention off) and only collects journals.
@@ -615,13 +625,20 @@ export class RunLedgerStore {
     // `includeAnonymous`: the listings hide anonymous runs by design, but a
     // sweep that inherited that filter would never delete their documents
     // and never run the delete cascade for them.
-    for (const summary of await this._scanSummaries({ includeAnonymous: true })) {
+    const expired = summary => {
+      if (!retain) return false;
       const touched = Date.parse(summary.endedAt || summary.updatedAt || summary.startedAt || '');
-      if (retain && Number.isFinite(touched) && touched < cutoffMs && sweepableByAge(summary)) {
+      return Number.isFinite(touched) && touched < cutoffMs && sweepableByAge(summary);
+    };
+    const journalDue = summary =>
+      Number.isFinite(journalCutoffMs) && journalSweepable(summary, journalCutoffMs);
+    const match = summary => expired(summary) || journalDue(summary);
+    for (const summary of await this._scanSummaries({ includeAnonymous: true, match })) {
+      if (expired(summary)) {
         await this.deleteRun(summary.runId);
         cascadeIds.add(summary.runId);
         removed += 1;
-      } else if (Number.isFinite(journalCutoffMs) && journalSweepable(summary, journalCutoffMs)) {
+      } else if (journalDue(summary)) {
         journalCandidates.push(summary);
       }
     }
@@ -711,16 +728,17 @@ export class RunLedgerStore {
    * bound truncates, and paging here would cut the set *before* the day-range
    * filter and the final `limit` are applied.
    *
-   * @param {{kind?: string, principalId?: string, includeAnonymous?: boolean}} filter
-   *   Narrowing hints. `includeAnonymous` is for the retention sweep only.
+   * @param {{kind?: string, principalId?: string, includeAnonymous?: boolean, match?: Function}} filter
+   *   Narrowing hints. `includeAnonymous` is for the retention sweep only;
+   *   `match` keeps only the summaries it accepts, inside the scan bound.
    * @returns {Promise<Object[]>} The summaries, newest first.
    * @private
    */
-  async _scanSummaries({ kind, principalId, includeAnonymous = false }) {
+  async _scanSummaries({ kind, principalId, includeAnonymous = false, match }) {
     const summaries = this._summaries();
     const page = principalId
-      ? await summaries.listByOwner(principalId, { kind, archived: 'all' })
-      : await summaries.listAll({ includeAnonymous });
+      ? await summaries.listByOwner(principalId, { kind, archived: 'all', match })
+      : await summaries.listAll({ includeAnonymous, match });
     return page?.items || [];
   }
 }

@@ -76,7 +76,8 @@ access, `GET /api/runs/:runId` and the admin run list.
 | Run kind                                   | Journal after the run ended                        |
 | ------------------------------------------ | -------------------------------------------------- |
 | `chat` (chat turns, Responses app turns)   | deleted after 15 minutes, once the chat released the run |
-| `inference` (`/v1/chat/completions`, Responses model calls) | deleted after 15 minutes       |
+| `inference` (`/v1/chat/completions`, Responses model calls) | deleted after 15 minutes, once the chat (a Responses conversation) released the run |
+| any kind that ended `paused` (approval, clarification) | kept until `retentionDays`: the turn continues as a new run, and nothing else records the paused part |
 | `workflow`, `agent`, everything else       | kept until `retentionDays` (their evidence is not recorded yet) |
 
 **This does not depend on `chats.evidence.enabled`.** With evidence off, the journal of a finished
@@ -85,15 +86,18 @@ the stored answer itself. Nor does it depend on `cleanupEnabled`, which only gov
 
 **Why 15 minutes.** A reloaded chat whose document still shows the run as active replays its
 journal (`reattachToRun`); within the grace period the replay still finds `run/end` and settles.
-A chat turn whose chat still holds it as the active run (its process died before the answer was
+A run whose chat still holds it as the active run (its process died before the answer was
 stored) keeps its journal until crash recovery has settled it.
 
 **How the sweep finds them.** Each worker remembers the chat and inference runs that ended on it
 and, once a minute, deletes the journals of those that ended more than 15 minutes ago — one
 summary read per run, nothing scanned, so the cost follows the run rate, not the number of retained
 summaries. What no worker took (a worker that died within the grace period, journals kept before
-the upgrade) is picked up by the daily retention walk, which reads every summary anyway. The first
-start after the upgrade therefore deletes the backlog of finished chat journals in one pass.
+the upgrade) is picked up by the daily retention walk, which reads every summary anyway and keeps
+only those it can act on, so summaries whose journal is already gone do not use up its scan bound.
+One walk deletes at most 2,000 journals; a larger backlog after the upgrade is worked off over
+several days, 2,000 per walk (the walk runs at start-up and daily, and **Admin → Chat History →
+Run retention now** runs one on demand, joining a walk already in progress).
 
 **What reads a journal, and what it gets afterwards.**
 
@@ -105,7 +109,8 @@ start after the upgrade therefore deletes the backlog of finished chat journals 
 | Evidence record builder | runs right after the answer is stored, inside the grace period |
 | Crash recovery (`chatRecovery.js`) | only for runs that never ended or whose chat still holds them — journals that are kept |
 | "Has the run ended?" (stop, clarification end, recovery) | answered from the summary |
-| Feedback / human events on an old run | the event is not written (the feedback itself is stored as before) |
+| Feedback on an old answer (`POST /api/feedback`) | the ledger event is not written; the feedback itself is stored as before |
+| `POST /api/runs/:runId/human-events` | `404 JOURNAL_NOT_KEPT` |
 
 ## Identity modes
 

@@ -106,6 +106,17 @@ async function stopRun(runId, meta, cause) {
   return null;
 }
 
+/**
+ * The 404 of a finished run whose journal was deleted after its grace period.
+ * @returns {ServiceError}
+ */
+function journalNotKept() {
+  return new ServiceError(
+    'JOURNAL_NOT_KEPT',
+    'The events of this run are no longer kept; read its evidence record instead'
+  );
+}
+
 export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs'), adminAuth, async (req, res) => {
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 1000);
@@ -145,12 +156,7 @@ export default function registerRunRoutes(app) {
     const events = await runLog.readEvents(runId, { afterSeq: after, limit });
     // A finished chat or inference run keeps its journal for 15 minutes only;
     // what it did is in its evidence record (`/evidence`) from then on.
-    if (events.length === 0 && (await runLog.isJournalDeleted(runId))) {
-      throw new ServiceError(
-        'JOURNAL_NOT_KEPT',
-        'The events of this run are no longer kept; read its evidence record instead'
-      );
-    }
+    if (events.length === 0 && (await runLog.isJournalDeleted(runId))) throw journalNotKept();
     // The cursor stands for the last raw ledger sequence this page read. A
     // projected page can be empty (headers, budget events, compactions
     // produce no envelopes) while more of the ledger remains, so the walk
@@ -467,6 +473,8 @@ export default function registerRunRoutes(app) {
       },
       { kind: auth.meta?.kind || 'chat' }
     );
+    // Not written because the run finished and its journal is gone.
+    if (!event && (await runLog.isJournalDeleted(runId))) throw journalNotKept();
     let effect = null;
     if (kind === 'stop') {
       const cause = await userAbortCause('run_stop', req.user, {

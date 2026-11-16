@@ -24,8 +24,9 @@ stay until their chat is deleted or retention removes them. See [Chat Evidence R
 
 - **Less disk for the run ledger:** the journal of a finished chat turn or `/v1` / Responses run
   (`contents/data/logs/run/`) is deleted 15 minutes after the run ended; its run summary stays for
-  `runLog.retentionDays`. The first start after the upgrade removes the backlog of such journals.
-  Workflow and agent runs keep theirs. This happens also with the evidence record switched off,
+  `runLog.retentionDays`. The backlog of such journals is removed after the upgrade, at most 2,000
+  per daily cleanup. Workflow and agent runs, and runs paused for an approval or a question, keep
+  theirs. This happens also with the evidence record switched off,
   in which case nothing of what went into an answer is kept. See
   [Run Ledger](../../run-ledger.md#journals-of-finished-runs).
 
