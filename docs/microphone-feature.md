@@ -1,11 +1,20 @@
-# Microphone Feature Documentation
+---
+description: "Let users dictate messages with the browser, Azure or a transcription model."
+audience: admin
+type: how-to
+adminPage: /admin/voice-input
+---
+
+# Microphone Input
 
 ## Overview
 
 The microphone feature allows users to dictate messages instead of typing. It supports two operation modes, an optional transcript overlay, and multiple speech recognition backends (browser-native, Azure Cognitive Services, and any transcription model — Voxtral on vLLM or Mistral, Gemini Transcribe Live, Gemini Transcribe, Whisper on T-Systems LLM Hub or OpenAI — streamed through iHub).
 
+> [!NOTE]
 > **Dictation vs. transcription.** This page covers **dictation** — live microphone speech dropped into the **input field** for the user to edit and send. A separate feature, **transcription**, turns a recording or an uploaded audio/video clip into the **user's message** — a recording grows the message while the user speaks and sends it on stop — using a `modelType: "transcription"` model; the chat model then answers it. Both can be enabled on the same app and share the same authenticated `/api/voice/realtime` WebSocket. See [Transcription Models](models.md#transcription-models) and [Audio File Support](audio-file-support.md#two-audio-paths-multimodal-vs-voxtral-transcription).
 
+> [!NOTE]
 > **Voice mode.** A third feature builds on the same voice input: **[voice mode](#voice-mode-spoken-conversation)** is a spoken conversation with the app. The user talks, the app answers out loud and can be interrupted. It is a preview feature and listens with the speech service configured on this page.
 
 ## Modes
@@ -76,6 +85,7 @@ raw audio via `getUserMedia` + `AudioContext`/`AudioWorklet`, this mode requires
 context (HTTPS, or `localhost`) and does not depend on the browser's Web Speech API — so
 it also works in Firefox.
 
+> [!IMPORTANT]
 > **Upgrading from an earlier version:** the `vllm-realtime` service and its endpoint under
 > `speech.realtime` (`url`, `model`, `apiKey`, `enabled`) are gone. Migration V151 moves the
 > endpoint onto a transcription model and switches the platform default and apps to it. See
@@ -109,6 +119,7 @@ instead of editing `platform.json` by hand:
   `https://<region>.api.cognitive.microsoft.com` for a token, so don't set one when
   air-gapped.
 
+  > [!IMPORTANT]
   > **Migrating from `VITE_AZURE_SUBSCRIPTION_ID`:** earlier builds baked the Azure key
   > into the client bundle via this env var. It is no longer used — set the key under
   > **Admin → Voice Input** (`speech.azure.subscriptionKey`) instead.
@@ -249,6 +260,7 @@ The microphone feature surfaces errors directly in the chat input placeholder fo
 
 ## Voice Mode (Spoken Conversation)
 
+> [!NOTE]
 > **Preview.** Voice mode is off until an admin enables the **Voice Mode** feature under **Admin → Features** (`voiceMode`) and switches it on under **Admin → Voice Input**.
 
 Voice mode turns a chat into a spoken conversation. The user talks, the app answers out loud, and the user can interrupt at any time. It is the **same chat**: same app, model, tools and sources, and the same history. The only difference is an instruction added to the app's system prompt that keeps answers short and easy to listen to. Voice mode is part of voice input: it listens with the app's speech recognition service (see [Speech Recognition Services](#speech-recognition-services)) and speaks with a [text-to-speech model](text-to-speech.md).

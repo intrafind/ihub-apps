@@ -1,4 +1,11 @@
-# Upload Feature Documentation
+---
+description: "Let users attach files, images, audio and cloud documents to a chat, configured per app."
+audience: admin
+type: reference
+adminPage: /admin/apps
+---
+
+# File Upload
 
 ## Overview
 
@@ -99,7 +106,8 @@ The system can also extract the audio track from video files using the Web Audio
 
 The video itself never leaves the browser when `extractAudio` is on. An **MP4 or MOV can be up to 50 GB**: only its index and its audio are read, not the picture. Other containers (WebM, MKV, ...) and videos sent as they are (`extractAudio: false`) work up to about 2 GB, which is all a browser can read into memory. See [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb).
 
-> **Note:** Audio upload requires a model that supports audio input. OpenAI (GPT-4o Audio models) and Google Gemini support audio; Anthropic Claude does not.
+> [!NOTE]
+> Audio upload requires a model that supports audio input. OpenAI (GPT-4o Audio models) and Google Gemini support audio; Anthropic Claude does not.
 
 ### Files from Storage Providers
 
@@ -147,6 +155,7 @@ many formats, e.g. `.log`, `.yaml`, `.srt`). With it enabled:
 `text/*` is off by default and has to be selected explicitly in the admin format selector
 ("Any text file").
 
+> [!NOTE]
 > `.xlsx`, `.xls`, `.pptx`, and `.ppt` are fully supported by the processing engine but are not included in the default `supportedFormats` list. Add their MIME types explicitly to enable them.
 
 ### Images

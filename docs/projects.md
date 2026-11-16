@@ -1,3 +1,10 @@
+---
+description: "Give apps, workflows and agents knowledge: documents, links and instructions in one container."
+audience: admin
+type: how-to
+adminPage: /admin/projects
+---
+
 # Projects
 
 A **project** is one container for knowledge: documents, instructions and, for user projects,

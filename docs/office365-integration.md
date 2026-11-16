@@ -1,3 +1,10 @@
+---
+description: "Let users attach files from OneDrive, SharePoint and Teams in chats."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
 # Office 365 Integration
 
 The Office 365 integration enables users to browse and upload files from OneDrive, SharePoint sites, and Microsoft Teams directly within iHub Apps chat interfaces.
@@ -55,7 +62,8 @@ iHub Apps requests **only the scopes required for the sources you enable** in th
 | Followed SharePoint Sites | adds `Sites.Read.All`, upgrades `Files.Read` → `Files.Read.All` | **Yes** |
 | Microsoft Teams | adds `Team.ReadBasic.All`, `Channel.ReadBasic.All`, upgrades `Files.Read` → `Files.Read.All` | **Yes** |
 
-> **Tip — avoid admin consent**: If you only enable **Personal OneDrive** in the provider's `sources` configuration (see Step 5), iHub Apps will request `Files.Read` instead of `Files.Read.All`. None of the requested scopes require admin consent, so any end user can connect their account without involving an Entra ID (Azure AD) administrator.
+> [!TIP]
+> **Avoid admin consent:** If you only enable **Personal OneDrive** in the provider's `sources` configuration (see Step 5), iHub Apps will request `Files.Read` instead of `Files.Read.All`. None of the requested scopes require admin consent, so any end user can connect their account without involving an Entra ID (Azure AD) administrator.
 
 ### Permissions you may need to register in Azure
 
@@ -80,7 +88,8 @@ Register all of the permissions you might use. Azure only prompts the user for t
 6. Click **"Add permissions"**
 7. **Only if** you are using SharePoint or Teams sources: click **"Grant admin consent for [your organization]"** and confirm. For personal-OneDrive-only setups you can skip this step — Azure will prompt the user for consent on first sign-in.
 
-   > **Note**: If you grant admin consent for the broader `.All` scopes but only enable Personal OneDrive in the provider config, iHub Apps will still only request the narrower scopes — admin consent doesn't force broader access than the app asks for.
+   > [!NOTE]
+   > If you grant admin consent for the broader `.All` scopes but only enable Personal OneDrive in the provider config, iHub Apps will still only request the narrower scopes — admin consent doesn't force broader access than the app asks for.
 
 ---
 
@@ -97,7 +106,8 @@ The redirect URI is the URL Microsoft redirects to after the user grants access.
    - **Development**: `http://localhost:3000/api/integrations/office365/{installationId}/callback`
    - These per-installation callbacks are aliases of iHub's one integration callback `…/api/integrations/oauth/callback`; registering that one instead (and entering it as the installation's **Redirect URI**) works as well.
 
-   > **Important**: `{installationId}` is the id of the installation in iHub Apps (e.g., `office365` or `o365-emea`). The URI must match exactly, including the base path and the installation id. The installation's **Settings** tab shows the URI to register, with a **Copy** button.
+   > [!IMPORTANT]
+   > `{installationId}` is the id of the installation in iHub Apps (e.g., `office365` or `o365-emea`). The URI must match exactly, including the base path and the installation id. The installation's **Settings** tab shows the URI to register, with a **Copy** button.
 
 5. Under **"Implicit grant and hybrid flows"**, leave all checkboxes unchecked
 6. Click **"Configure"**
@@ -168,10 +178,13 @@ The installation lives in `contents/config/integrations.json`; the client secret
 }
 ```
 
+> [!NOTE]
 > **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
+> [!NOTE]
 > **Which apps offer it:** an app binds storage providers under **Admin → Apps → Edit → Integrations → Storage providers** (`app.integrations`: the installation id, `com.intrafind/office365` for every Office 365 installation, or `type:storage` for all storage providers). The chat's file picker offers the bound providers the user's groups grant. See [Apps → Upload](apps.md#upload-configuration).
 
+> [!IMPORTANT]
 > **Upgrades:** migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V206 renamed that installation to the provider's former `id` (e.g. `office365-1`) and installed further Office 365 providers V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs and the users' connections stay valid. V206 also restored a tenant id V200 could not decrypt and deleted the tenant id credentials (`cloudstorage_<id>_tenant`) nothing uses any more.
 
 ---
@@ -206,9 +219,11 @@ Once configured, users authorize iHub Apps to access their Microsoft 365 content
 8. iHub Apps exchanges the code for access and refresh tokens (stored encrypted)
 9. The user can now browse their OneDrive, SharePoint sites, and Teams files
 
-> **Token Lifetime**: Access tokens from Microsoft expire after approximately 1 hour. iHub Apps automatically refreshes them using the refresh token. If the refresh token is no longer valid (e.g., the user revoked consent), the user will be prompted to reconnect.
+> [!NOTE]
+> **Token Lifetime:** Access tokens from Microsoft expire after approximately 1 hour. iHub Apps automatically refreshes them using the refresh token. If the refresh token is no longer valid (e.g., the user revoked consent), the user will be prompted to reconnect.
 
-> **Consent Prompt**: The OAuth flow includes `prompt=consent` to ensure a refresh token is always issued. This means users will see the consent screen on every initial connection, even if they have previously authorized the app.
+> [!NOTE]
+> **Consent Prompt:** The OAuth flow includes `prompt=consent` to ensure a refresh token is always issued. This means users will see the consent screen on every initial connection, even if they have previously authorized the app.
 
 ---
 

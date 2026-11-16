@@ -1,3 +1,9 @@
+---
+description: "Send iHub's outbound HTTP and HTTPS traffic through a corporate proxy."
+audience: admin
+type: how-to
+---
+
 # Proxy Configuration
 
 This document explains how to configure HTTP/HTTPS proxy support in iHub Apps.
@@ -6,6 +12,7 @@ This document explains how to configure HTTP/HTTPS proxy support in iHub Apps.
 
 iHub Apps supports routing HTTP and HTTPS requests through a proxy server. This is useful when your infrastructure requires all outbound connections to go through a corporate proxy.
 
+> [!NOTE]
 > This is the **outbound** proxy iHub uses for egress. It is unrelated to two
 > similarly named settings: `proxyAuth` (inbound login via headers set by a
 > reverse proxy, see [Authentication](external-authentication.md)) and

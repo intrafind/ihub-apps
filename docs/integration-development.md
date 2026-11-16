@@ -1,3 +1,9 @@
+---
+description: "Build an integration that connects iHub to another system."
+audience: developer
+type: how-to
+---
+
 # Building an Integration
 
 This guide is for developers who connect iHub to another system: a wiki, a ticket tracker, a

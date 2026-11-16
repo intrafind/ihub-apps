@@ -1,3 +1,9 @@
+---
+description: "How end users work with iHub: the start page, apps, chats, files, prompts and settings."
+audience: user
+type: tutorial
+---
+
 # User Guide
 
 This guide walks you through iHub Apps as an end user: the start page, apps and their start forms,

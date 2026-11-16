@@ -1,4 +1,11 @@
-# Image Upload Feature Documentation
+---
+description: "Let users attach images to messages and resize them before they are sent."
+audience: admin
+type: reference
+adminPage: /admin/apps
+---
+
+# Image Upload
 
 ## Overview
 

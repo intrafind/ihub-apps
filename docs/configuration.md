@@ -1,3 +1,10 @@
+---
+description: "Where an installation keeps its configuration under contents/, and how to back it up."
+audience: admin
+type: concept
+adminPage: /admin/backup
+---
+
 # Configuration Storage
 
 An installation's configuration is the tree under `contents/` — `platform.json`

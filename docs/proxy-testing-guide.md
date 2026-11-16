@@ -1,4 +1,10 @@
-# Proxy Support Fix - Testing Guide
+---
+description: "Check that iHub's outbound traffic really goes through the configured proxy."
+audience: admin
+type: troubleshooting
+---
+
+# Proxy Testing
 
 This guide helps you verify that the proxy support fix is working correctly.
 

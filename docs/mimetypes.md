@@ -1,3 +1,9 @@
+---
+description: "Define which file types users may upload and how the UI shows them."
+audience: admin
+type: reference
+---
+
 # Mimetype Configuration
 
 The `mimetypes.json` configuration file defines which file types are supported for upload and how they are displayed in the UI. This configuration is located at `server/defaults/config/mimetypes.json` and can be overridden in `contents/config/mimetypes.json`.

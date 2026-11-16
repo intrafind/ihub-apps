@@ -1,3 +1,9 @@
+---
+description: "How iHub's encryption key protects stored secrets, and how to keep it safe in production."
+audience: admin
+type: how-to
+---
+
 # Encryption Key Management
 
 iHub Apps uses encryption to securely store sensitive data like provider API keys and user OAuth tokens. This document explains how the encryption key is managed and what you need to know for production deployments.

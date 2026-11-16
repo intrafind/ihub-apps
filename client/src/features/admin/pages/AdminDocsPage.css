@@ -1,0 +1,402 @@
+/*
+ * SPDX-FileCopyrightText: IntraFind Software AG
+ * SPDX-License-Identifier: LicenseRef-iHub-Apps
+ */
+
+/*
+ * Admin → Documentation: the documentation components the Markdown renderer does not style for a
+ * docs page — callouts, framed tables, heading anchors, code blocks with the toolbar on top — and
+ * the quieter link, inline-code and quotation styles. Everything is scoped to `.docs-prose`, the
+ * article of the documentation page; the chat renderer is untouched.
+ */
+
+.docs-prose {
+  overflow-wrap: break-word;
+}
+
+/* --- Links: readable, not shouting ------------------------------------------------------------ */
+.docs-prose a {
+  color: #4f46e5;
+  font-weight: 500;
+  text-decoration-line: underline;
+  text-decoration-color: rgb(79 70 229 / 0.3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.docs-prose a:hover {
+  text-decoration-color: currentColor;
+}
+[data-theme='dark'] .docs-prose a {
+  color: #818cf8;
+  text-decoration-color: rgb(129 140 248 / 0.35);
+}
+
+/* --- Headings: an h2 opens a section, so it carries a rule ------------------------------------- */
+.docs-prose h2 {
+  margin-top: 3rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  letter-spacing: -0.01em;
+}
+.docs-prose h3 {
+  margin-top: 2.25rem;
+}
+[data-theme='dark'] .docs-prose h2 {
+  border-bottom-color: #1f2937;
+}
+.docs-prose :is(h2, h3, h4) {
+  scroll-margin-top: 5rem;
+  position: relative;
+}
+
+.docs-prose .docs-heading-anchor {
+  margin-left: 0.5rem;
+  color: #9ca3af;
+  font-weight: 400;
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.docs-prose :is(h2, h3, h4):hover .docs-heading-anchor,
+.docs-prose .docs-heading-anchor:focus-visible {
+  opacity: 1;
+}
+.docs-prose .docs-heading-anchor:hover {
+  color: #4f46e5;
+}
+
+/* --- Inline code: a token chip, not bold monospace -------------------------------------------- */
+.docs-prose :not(pre) > code {
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.375rem;
+  background: #f3f4f6;
+  color: #1f2937;
+  font-size: 0.85em;
+  font-weight: 500;
+  /* Long paths and keys wrap instead of widening the page on a phone. */
+  overflow-wrap: anywhere;
+}
+.docs-prose :not(pre) > code::before,
+.docs-prose :not(pre) > code::after {
+  content: none;
+}
+[data-theme='dark'] .docs-prose :not(pre) > code {
+  background: #1f2937;
+  color: #e5e7eb;
+}
+.docs-prose a > code {
+  color: inherit;
+}
+
+/* --- Quotations: plain, not italic citations --------------------------------------------------- */
+.docs-prose blockquote {
+  font-style: normal;
+  font-weight: 400;
+  border-left-width: 2px;
+  border-left-color: #d1d5db;
+  color: #4b5563;
+}
+.docs-prose blockquote p::before,
+.docs-prose blockquote p::after {
+  content: none;
+}
+[data-theme='dark'] .docs-prose blockquote {
+  border-left-color: #374151;
+  color: #9ca3af;
+}
+
+/* --- Callouts (GitHub alerts) ----------------------------------------------------------------- */
+.docs-prose .docs-callout {
+  --callout-accent: #0284c7;
+  --callout-bg: #f0f9ff;
+  --callout-border: #bae6fd;
+  margin: 1.5rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--callout-border);
+  border-left: 4px solid var(--callout-accent);
+  border-radius: 0.5rem;
+  background: var(--callout-bg);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+.docs-prose .docs-callout > :first-child {
+  margin-top: 0;
+}
+.docs-prose .docs-callout > :last-child {
+  margin-bottom: 0;
+}
+.docs-prose .docs-callout p {
+  margin: 0.5rem 0;
+}
+.docs-prose .docs-callout-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--callout-accent);
+  font-weight: 600;
+}
+.docs-prose .docs-callout-title::before {
+  content: '';
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask: var(--callout-icon) center / contain no-repeat;
+  mask: var(--callout-icon) center / contain no-repeat;
+}
+.docs-prose .docs-callout-note {
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.253a.25.25 0 0 1 .244.304l-.459 2.066A1.75 1.75 0 0 0 10.747 15H11a.75.75 0 0 0 0-1.5h-.253a.25.25 0 0 1-.244-.304l.459-2.066A1.75 1.75 0 0 0 9.253 9H9Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+}
+.docs-prose .docs-callout-tip {
+  --callout-accent: #059669;
+  --callout-bg: #ecfdf5;
+  --callout-border: #a7f3d0;
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M10 1a6 6 0 0 0-3.815 10.631C7.237 12.5 8 13.443 8 14.456v.644a.75.75 0 0 0 .572.729 6.016 6.016 0 0 0 2.856 0A.75.75 0 0 0 12 15.1v-.644c0-1.013.762-1.957 1.815-2.825A6 6 0 0 0 10 1ZM8.863 17.414a.75.75 0 0 0-.226 1.483 9.066 9.066 0 0 0 2.726 0 .75.75 0 0 0-.226-1.483 7.553 7.553 0 0 1-2.274 0Z'/%3E%3C/svg%3E");
+}
+.docs-prose .docs-callout-important {
+  --callout-accent: #4f46e5;
+  --callout-bg: #eef2ff;
+  --callout-border: #c7d2fe;
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M10 2c-2.236 0-4.43.18-6.57.524C1.993 2.755 1 4.014 1 5.426v5.148c0 1.413.993 2.67 2.43 2.902 1.168.188 2.352.327 3.55.414.28.02.521.18.642.413l1.713 3.293a.75.75 0 0 0 1.33 0l1.713-3.293a.783.783 0 0 1 .642-.413 41.102 41.102 0 0 0 3.55-.414c1.437-.231 2.43-1.49 2.43-2.902V5.426c0-1.413-.993-2.67-2.43-2.902A41.289 41.289 0 0 0 10 2ZM10 5a.75.75 0 0 1 .75.75v2.5a.75.75 0 0 1-1.5 0v-2.5A.75.75 0 0 1 10 5Zm0 6.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+}
+.docs-prose .docs-callout-warning {
+  --callout-accent: #d97706;
+  --callout-bg: #fffbeb;
+  --callout-border: #fde68a;
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+}
+.docs-prose .docs-callout-caution {
+  --callout-accent: #dc2626;
+  --callout-bg: #fef2f2;
+  --callout-border: #fecaca;
+  --callout-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill-rule='evenodd' d='M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0Zm-8-5a.75.75 0 0 1 .75.75v4.5a.75.75 0 0 1-1.5 0v-4.5A.75.75 0 0 1 10 5Zm0 10a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+}
+[data-theme='dark'] .docs-prose .docs-callout {
+  --callout-bg: rgb(12 74 110 / 0.25);
+  --callout-border: rgb(12 74 110 / 0.6);
+  --callout-accent: #38bdf8;
+}
+[data-theme='dark'] .docs-prose .docs-callout-tip {
+  --callout-bg: rgb(6 78 59 / 0.25);
+  --callout-border: rgb(6 78 59 / 0.6);
+  --callout-accent: #34d399;
+}
+[data-theme='dark'] .docs-prose .docs-callout-important {
+  --callout-bg: rgb(49 46 129 / 0.3);
+  --callout-border: rgb(49 46 129 / 0.7);
+  --callout-accent: #a5b4fc;
+}
+[data-theme='dark'] .docs-prose .docs-callout-warning {
+  --callout-bg: rgb(120 53 15 / 0.25);
+  --callout-border: rgb(120 53 15 / 0.6);
+  --callout-accent: #fbbf24;
+}
+[data-theme='dark'] .docs-prose .docs-callout-caution {
+  --callout-bg: rgb(127 29 29 / 0.25);
+  --callout-border: rgb(127 29 29 / 0.6);
+  --callout-accent: #f87171;
+}
+
+/* --- Tables: framed, header row, scroll inside the frame -------------------------------------- */
+.docs-prose .docs-table {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+}
+.docs-prose .docs-table table {
+  margin: 0;
+  min-width: 100%;
+  font-size: 0.875rem;
+}
+.docs-prose .docs-table thead th {
+  padding: 0.625rem 1rem;
+  background: #f9fafb;
+  color: #374151;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+.docs-prose .docs-table td {
+  padding: 0.625rem 1rem;
+  vertical-align: top;
+  border-top: 1px solid #f3f4f6;
+}
+.docs-prose .docs-table tbody tr:first-child td {
+  border-top: 0;
+}
+.docs-prose .docs-table td:first-child {
+  white-space: nowrap;
+}
+[data-theme='dark'] .docs-prose .docs-table {
+  border-color: #1f2937;
+}
+[data-theme='dark'] .docs-prose .docs-table thead th {
+  background: rgb(31 41 55 / 0.6);
+  color: #e5e7eb;
+  border-bottom-color: #1f2937;
+}
+[data-theme='dark'] .docs-prose .docs-table td {
+  border-top-color: #1f2937;
+}
+
+/* --- Code blocks: toolbar on top, no download, dark in both themes ----------------------------- */
+/* Mermaid diagrams share the container class but keep their own layout (zoom controls overlay
+   the top right of the diagram). */
+.docs-prose .code-block-container:not(.mermaid-container) {
+  display: flex;
+  flex-direction: column-reverse;
+  margin: 1.5rem 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0.5rem;
+  box-shadow: 0 0 0 1px rgb(17 24 39 / 0.1);
+}
+.docs-prose .code-block-container > pre {
+  margin: 0;
+  border-radius: 0;
+  background: #0d1117;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+.docs-prose .code-block-container:not(.mermaid-container) > .code-block-toolbar {
+  border-top: 0;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  border-radius: 0;
+  background: #161b22;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+.docs-prose .code-block-container:not(.mermaid-container) > .code-block-toolbar span,
+.docs-prose .code-block-container:not(.mermaid-container) > .code-block-toolbar button {
+  color: #9ca3af;
+}
+.docs-prose .code-block-container:not(.mermaid-container) > .code-block-toolbar button:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: #f3f4f6;
+}
+.docs-prose .code-download-btn {
+  display: none !important;
+}
+[data-theme='dark'] .docs-prose .code-block-container:not(.mermaid-container) {
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+/* Mermaid diagrams keep a light canvas; only the frame and toolbar follow the theme. */
+[data-theme='dark'] .docs-prose .mermaid-diagram-container .code-block-toolbar {
+  background: #111827;
+  border-top-color: #1f2937;
+}
+[data-theme='dark'] .docs-prose .mermaid-container {
+  border-color: #1f2937;
+}
+[data-theme='dark'] .docs-prose .mermaid-container .code-block-toolbar span,
+[data-theme='dark'] .docs-prose .mermaid-container .code-block-toolbar button {
+  color: #9ca3af;
+}
+
+/* --- Images: framed screenshots; GitHub-style side-by-side rows stay side by side ------------- */
+.docs-prose img {
+  border-radius: 0.5rem;
+  box-shadow:
+    0 0 0 1px rgb(17 24 39 / 0.08),
+    0 1px 3px rgb(17 24 39 / 0.08);
+}
+.docs-prose p[align='center'] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 1rem;
+}
+.docs-prose p[align='center'] img {
+  margin: 0;
+  max-width: 100%;
+}
+
+/* --- Lists: one-line link lists are dense ------------------------------------------------------ */
+.docs-prose li {
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+/* --- Syntax highlighting: highlight.js tokens in GitHub Dark colours ------------------------------
+   Colours from highlight.js's github-dark theme (BSD-3-Clause), scoped to the docs on purpose: its own theme files style every `.hljs` on the page,
+   theme files style every `.hljs`, which would restyle code elsewhere in the app (chat artifacts) once the docs had been opened. */
+.docs-prose pre code.hljs {
+  color: #c9d1d9;
+}
+.docs-prose .hljs-doctag,
+.docs-prose .hljs-keyword,
+.docs-prose .hljs-meta .hljs-keyword,
+.docs-prose .hljs-template-tag,
+.docs-prose .hljs-template-variable,
+.docs-prose .hljs-type,
+.docs-prose .hljs-variable.language_ {
+  color: #ff7b72;
+}
+.docs-prose .hljs-title,
+.docs-prose .hljs-title.class_,
+.docs-prose .hljs-title.class_.inherited__,
+.docs-prose .hljs-title.function_ {
+  color: #d2a8ff;
+}
+.docs-prose .hljs-attr,
+.docs-prose .hljs-attribute,
+.docs-prose .hljs-literal,
+.docs-prose .hljs-meta,
+.docs-prose .hljs-number,
+.docs-prose .hljs-operator,
+.docs-prose .hljs-variable,
+.docs-prose .hljs-selector-attr,
+.docs-prose .hljs-selector-class,
+.docs-prose .hljs-selector-id {
+  color: #79c0ff;
+}
+.docs-prose .hljs-regexp,
+.docs-prose .hljs-string,
+.docs-prose .hljs-meta .hljs-string {
+  color: #a5d6ff;
+}
+.docs-prose .hljs-built_in,
+.docs-prose .hljs-symbol {
+  color: #ffa657;
+}
+.docs-prose .hljs-comment,
+.docs-prose .hljs-code,
+.docs-prose .hljs-formula {
+  color: #8b949e;
+}
+.docs-prose .hljs-name,
+.docs-prose .hljs-quote,
+.docs-prose .hljs-selector-tag,
+.docs-prose .hljs-selector-pseudo {
+  color: #7ee787;
+}
+.docs-prose .hljs-subst {
+  color: #c9d1d9;
+}
+.docs-prose .hljs-section {
+  color: #1f6feb;
+  font-weight: bold;
+}
+.docs-prose .hljs-bullet {
+  color: #f2cc60;
+}
+.docs-prose .hljs-emphasis {
+  color: #c9d1d9;
+  font-style: italic;
+}
+.docs-prose .hljs-strong {
+  color: #c9d1d9;
+  font-weight: bold;
+}
+.docs-prose .hljs-addition {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+.docs-prose .hljs-deletion {
+  color: #ffdcd7;
+  background-color: #67060c;
+}

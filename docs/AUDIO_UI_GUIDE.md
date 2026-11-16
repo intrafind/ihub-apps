@@ -1,4 +1,10 @@
-# Audio Upload UI Features - Visual Guide
+---
+description: "What users see when they upload audio files: previews, file info and limits."
+audience: user
+type: reference
+---
+
+# Audio Upload UI
 
 This document describes the UI changes for audio file upload support.
 

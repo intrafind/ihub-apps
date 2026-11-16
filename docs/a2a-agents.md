@@ -1,4 +1,11 @@
-# Remote A2A agents as tools
+---
+description: "Call agents that speak the Agent-to-Agent protocol as tools."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
+# Remote A2A Agents as Tools
 
 iHub can call agents that speak the [Agent-to-Agent protocol (A2A) 0.3](https://a2a-protocol.org)
 — a Langdock agent, an agent built with Google ADK or the `@a2a-js/sdk`, or another iHub — as

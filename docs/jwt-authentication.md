@@ -1,3 +1,10 @@
+---
+description: "Accept JWTs from an existing token provider for API access."
+audience: admin
+type: how-to
+adminPage: /admin/auth
+---
+
 # JWT Authentication
 
 The iHub Apps platform supports **external JWT authentication**, allowing systems with existing JWT providers to integrate seamlessly without implementing OIDC flows. This enables direct API access using pre-issued JWT tokens.

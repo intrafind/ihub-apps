@@ -1,4 +1,11 @@
-# LDAP Group Lookup - Customer Quick Start Guide
+---
+description: "Read users' LDAP groups and map them to iHub groups, such as admins."
+audience: admin
+type: how-to
+adminPage: /admin/groups
+---
+
+# LDAP Group Lookup Quick Start
 
 ## Overview
 

@@ -1,4 +1,11 @@
-# Read Aloud (Text-to-Speech)
+---
+description: "Add a play button to chat messages that reads answers aloud."
+audience: admin
+type: how-to
+adminPage: /admin/voice-input
+---
+
+# Read Aloud
 
 Read aloud puts a **play button** on every chat message. Clicking it sends the
 message to a text-to-speech (TTS) model, and the audio starts playing while the
@@ -104,6 +111,7 @@ one-word reply. One message is always read with one voice.
 A custom voice is cloned from a single recording of a speaker. It is the way
 to get a German voice, or the voice of a specific person.
 
+> [!WARNING]
 > **Get consent first.** Only clone the voice of someone who agreed to it: an
 > employee who said yes, or a voice actor licensed for it. iHub asks you to
 > confirm this before it creates a voice.

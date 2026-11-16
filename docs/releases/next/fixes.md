@@ -807,3 +807,20 @@ Each color of **UI Customization → Theme & styles** has a color picker, a hex 
 swatches. A screen reader announced the picker and the field without a name, and the swatches only by
 a tooltip. They are labelled with the name of the color now (the hex field with its visible label, the
 picker as "<color> (color picker)", each swatch by its value).
+
+## Mermaid Diagrams Show in Full
+
+Diagrams in chat answers and in the documentation were cut off after 150 pixels, so most of a
+flowchart was hidden until you opened it full screen. They now show at their own height, up to
+70 % of the window; zoom and "Full" still show the rest.
+
+## Admin Area Opens in Dark Mode When You Chose It
+
+Opening an admin page directly — a bookmark, a link, a reload — showed it in light mode even when
+dark mode was selected; only pages reached from the chat were dark.
+
+## Admin Warnings Are Readable on a Phone
+
+The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
+space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
+the full width and the links move below it.

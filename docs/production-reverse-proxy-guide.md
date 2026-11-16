@@ -1,4 +1,10 @@
-# Production Reverse Proxy Deployment Guide
+---
+description: "Run iHub behind nginx, Apache or Traefik, also under a subpath."
+audience: admin
+type: how-to
+---
+
+# Reverse Proxy Deployment
 
 ## Overview
 
@@ -94,7 +100,8 @@ export ALLOWED_ORIGINS="https://www.myserver.com"
 PORT=3001 npm start
 ```
 
-> **Tip:** If your proxy uses a custom header instead of `X-Forwarded-Prefix`, set
+> [!TIP]
+> If your proxy uses a custom header instead of `X-Forwarded-Prefix`, set
 > `BASE_PATH_HEADER` to the header name (e.g., `export BASE_PATH_HEADER=x-custom-prefix`).
 
 The header is used only when the request comes from a proxy that `trustProxy` in `platform.json`
@@ -461,7 +468,8 @@ const knownRoutes = [
 
 When a user visits `https://www.myserver.com/ihub/admin/sources`, the function finds `admin` at segment index 1 and determines that the base path is `/ihub`.
 
-> **Important:** When adding new top-level routes to `App.jsx`, you must also add them to this array in `client/src/utils/runtimeBasePath.js`. Failure to do so causes subpath deployments to misdetect the base path for those routes.
+> [!IMPORTANT]
+> When adding new top-level routes to `App.jsx`, you must also add them to this array in `client/src/utils/runtimeBasePath.js`. Failure to do so causes subpath deployments to misdetect the base path for those routes.
 
 ## Docker Deployment
 
@@ -496,7 +504,8 @@ services:
     restart: unless-stopped
 ```
 
-> **Note:** No `BASE_PATH` or `VITE_BASE_PATH` build args are needed. The Nginx
+> [!NOTE]
+> No `BASE_PATH` or `VITE_BASE_PATH` build args are needed. The Nginx
 > configuration sets the `X-Forwarded-Prefix` header, and the server detects the
 > subpath automatically at runtime.
 

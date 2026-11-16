@@ -1,8 +1,15 @@
-# Running iHub Apps with SSL/HTTPS
+---
+description: "Serve iHub over HTTPS, directly or behind a TLS-terminating proxy."
+audience: admin
+type: how-to
+---
+
+# Running with SSL/HTTPS
 
 This guide explains how to serve iHub Apps over HTTPS so that browsers and API
 clients connect to it securely.
 
+> [!NOTE]
 > **Scope.** This document is about **inbound** TLS — encrypting traffic
 > _to_ iHub Apps. If instead you need iHub Apps to **trust an external
 > service** that uses a self-signed certificate (a custom LLM endpoint, an
@@ -161,6 +168,7 @@ USE_HTTPS=true
 ALLOWED_ORIGINS=https://www.myserver.com
 ```
 
+> [!NOTE]
 > Binding to port `443` requires elevated privileges. Either run behind a proxy,
 > grant the capability with `setcap 'cap_net_bind_service=+ep' $(which node)`,
 > or use a high port (e.g. `3443`) and map it externally.

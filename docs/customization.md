@@ -1,4 +1,11 @@
-# Customizing iHub Apps
+---
+description: "Change labels, translations, branding and pages without touching code."
+audience: admin
+type: how-to
+adminPage: /admin/ui
+---
+
+# Customization
 
 This guide explains how to customize iHub Apps — labels, translations, branding,
 apps, models, styles, and pages — **without ever editing the files that ship with
@@ -21,6 +28,7 @@ separate from the codebase so they:
 - can be version-controlled or mounted as a volume independently,
 - never cause merge conflicts with the shipped `shared/` and `server/` files.
 
+> [!IMPORTANT]
 > If you ever find yourself editing a file under `shared/` or `server/`, stop —
 > there is an override mechanism under `contents/` for it instead.
 
@@ -127,8 +135,9 @@ Labels and translations are the most common customization, but the same
 | Writing styles / output formatting                | `contents/config/styles.json`      | [Styles](styles.md)                        |
 | Custom pages (Markdown or React)                  | `contents/pages/{lang}/{id}.md`/`.jsx` | [Content Management](content-management.md) |
 | Knowledge (admin projects)                        | `contents/projects/*.json`         | [Projects](projects.md)                    |
-| Available tools                                   | `contents/tools/*.json`            | [Tools](tools.md)                          |
+| Available tools                                   | `contents/tools/*.json`            | [Tool Calling](tool-calling.md)                          |
 
+> [!NOTE]
 > **Config reload:** Apps, models, UI, groups, styles, sources, and tools reload
 > automatically via the config cache. Changes to `platform.json` (server
 > behaviour, auth) require a server restart. See

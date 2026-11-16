@@ -1,3 +1,9 @@
+---
+description: "Which personal data iHub stores, where, for how long, and how to delete it."
+audience: admin
+type: reference
+---
+
 # PII Data Handling
 
 This document is the authoritative reference for what personally identifiable
@@ -30,7 +36,8 @@ without reverse-engineering the codebase.
 | OAuth refresh tokens | Yes (hashed) | `contents/data/oauth-refresh-tokens.json`; **30 d** | `oauth.refreshTokenExpirationDays` |
 | Integration tokens | Yes (encrypted) | `contents/integrations/`; AES-256-GCM | Per-user revoke; admin disable |
 
-> **Bottom line**: out of the box, chat content is stored on the server only as
+> [!NOTE]
+> **Bottom line:** out of the box, chat content is stored on the server only as
 > temporary chats, deleted `chats.temporaryRetentionHours` (24 by default) after
 > their last activity, sooner when the user starts a new chat or clears one. Beyond that, the durable PII is the user identity (when
 > local accounts are used), audit entries for admin actions,

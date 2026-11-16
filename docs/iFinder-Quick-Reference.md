@@ -1,4 +1,11 @@
-# iFinder Integration - Quick Reference
+---
+description: "The settings and checks for connecting iFinder at a glance."
+audience: admin
+type: reference
+adminPage: /admin/integrations
+---
+
+# iFinder Quick Reference
 
 ## Recommended: Keyless (OIDC/OAuth) Setup
 
@@ -172,5 +179,5 @@ console.log(jwt.generateIFinderJWT({id: 'test', email: 'test@example.com'}));
 
 - [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md)
 - [Full iFinder Integration Documentation](iFinder-Integration.md)
-- [Tools Documentation](tools.md)
+- [Tool Calling](tool-calling.md)
 - [Authentication Configuration](jwt-authentication.md)

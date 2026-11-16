@@ -83,7 +83,7 @@ export default function AdminDemoAccountsAlert({
         }`}
       >
         {warn && <ExclamationTriangleIcon className="w-5 h-5 shrink-0" aria-hidden="true" />}
-        <p className="flex-1 min-w-0">
+        <p className="min-w-0 flex-[1_1_16rem]">
           {warn
             ? status.showDemoAccounts
               ? t(
@@ -126,7 +126,7 @@ export default function AdminDemoAccountsAlert({
         className="max-w-5xl mx-auto flex flex-wrap items-center gap-3 p-4 rounded-lg border bg-amber-50 dark:bg-amber-900/30 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200"
       >
         <ExclamationTriangleIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
-        <p className="text-sm flex-1 min-w-0">
+        <p className="text-sm min-w-0 flex-[1_1_16rem]">
           {t(
             'admin.demoAccountsAlert.message',
             'The login page shows the demo accounts, and {{accounts}} still use the password they ship with. Anyone who opens the login page can sign in with them. Turn off "Show Demo Accounts in Login Form" or change their passwords.',

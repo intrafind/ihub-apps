@@ -1,3 +1,9 @@
+---
+description: "Set configuration values and secrets through environment variables."
+audience: admin
+type: reference
+---
+
 # Environment Variables
 
 iHub Apps supports two categories of environment variable configuration:

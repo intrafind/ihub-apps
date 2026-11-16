@@ -1,4 +1,11 @@
-# LDAP Group Mapping Troubleshooting Guide
+---
+description: "Find out why LDAP users do not get the iHub groups you expect."
+audience: admin
+type: troubleshooting
+adminPage: /admin/groups
+---
+
+# LDAP Group Mapping Troubleshooting
 
 This guide helps you troubleshoot LDAP group mapping issues in iHub Apps.
 

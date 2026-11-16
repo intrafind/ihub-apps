@@ -1,4 +1,10 @@
-# iHub Apps - Technical Architecture
+---
+description: "The technical architecture of iHub: components, data flow and design decisions."
+audience: developer
+type: concept
+---
+
+# Architecture
 
 iHub Apps is an enterprise-grade platform for creating, managing, and deploying AI-powered applications. This document provides comprehensive technical details of the system architecture, components, and data flow patterns.
 

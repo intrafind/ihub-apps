@@ -1,3 +1,9 @@
+---
+description: "Content a run produced that is kept as its own versioned object."
+audience: developer
+type: reference
+---
+
 # Artifacts
 
 An **artifact** is content a run produced that is worth keeping in its own
@@ -12,6 +18,7 @@ that produced it was a conversation, a workflow execution or an agent run. So
 there is one store, addressed by a **scope**, and every producer writes through
 it.
 
+> [!NOTE]
 > **Status.** Chat turns are the first producer. The legacy agent artifact tree
 > under `contents/data/agent-artifacts/` is a separate, older mechanism and has
 > **not** moved yet — see [What has not moved yet](#what-has-not-moved-yet).
@@ -101,6 +108,7 @@ Two rules keep it that way, and the conformance suite enforces both:
 against any provider that declares the capability, so a future backend is
 tested against the same expectations the filesystem one meets.
 
+> [!NOTE]
 > `blobStore` is a different capability from `blobs`, which says the *append
 > log* can park payloads beside a stream — the run ledger's spill files. The
 > two are unrelated stores.

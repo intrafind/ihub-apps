@@ -1,4 +1,11 @@
-# OAuth 2.0 Authorization Code Flow
+---
+description: "Implement a login with the OAuth 2.0 authorization code flow against iHub."
+audience: developer
+type: reference
+adminPage: /admin/oauth/clients
+---
+
+# OAuth Authorization Code Flow
 
 This document is the primary developer reference for implementing OAuth 2.0 Authorization Code login against iHub Apps. After reading this, you should be able to build a working OAuth login integration from scratch.
 
@@ -62,6 +69,7 @@ Add the `oauth` block to `contents/config/platform.json` and restart the server:
 }
 ```
 
+> [!IMPORTANT]
 > OAuth configuration requires a server restart to take effect. Other configuration changes do not.
 
 ### 2. Ensure JWT uses RS256
@@ -293,6 +301,7 @@ curl -X POST https://your-ihub-instance.com/api/oauth/token \
   }'
 ```
 
+> [!NOTE]
 > Refresh tokens are only issued when `offline_access` is in the requested scopes and the client has `refresh_token` in its `grantTypes` array.
 
 ## API Endpoint Reference
@@ -542,6 +551,7 @@ To skip the consent screen entirely (appropriate for first-party applications):
 }
 ```
 
+> [!WARNING]
 > Use trusted clients carefully. They bypass user consent, meaning users cannot deny access.
 
 ### URL client IDs (Client ID Metadata Documents)
@@ -804,6 +814,7 @@ async function verifyToken(token, clientId) {
 }
 ```
 
+> [!NOTE]
 > The `issuer` value is the base URL of your iHub server. It can be overridden via `platform.oauth.issuer` in platform configuration.
 
 ## Scopes

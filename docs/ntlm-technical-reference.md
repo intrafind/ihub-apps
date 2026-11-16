@@ -1,4 +1,10 @@
-# NTLM Authentication Flow - Detailed Technical Reference
+---
+description: "The NTLM authentication flow in detail, step by step."
+audience: developer
+type: reference
+---
+
+# NTLM Technical Reference
 
 ## Development Environment: localhost:3000 ↔ localhost:5173
 

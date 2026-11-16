@@ -1,4 +1,10 @@
-# SSE v2 — the one streaming dialect
+---
+description: "The one event-stream dialect every run-scoped stream of the server speaks."
+audience: developer
+type: reference
+---
+
+# SSE v2 Streaming
 
 Every run-scoped stream the server offers speaks the same dialect: the chat
 stream (`GET /api/apps/:appId/chat/:chatId`), the workflow execution stream

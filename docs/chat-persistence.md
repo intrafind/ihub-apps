@@ -1,4 +1,11 @@
-# Chat Persistence (Chat History)
+---
+description: "How chats are stored on the server, synchronized and cleaned up."
+audience: developer
+type: reference
+adminPage: /admin/chat-history
+---
+
+# Chat Persistence
 
 Every chat lives on the server. The transcript is two documents in the
 [storage provider](storage.md), the server assembles the history it sends to the
@@ -23,6 +30,7 @@ What varies is whether a chat is **kept** or **temporary**:
 The **Chat History** feature (`chatPersistence`) decides whether chats can be
 kept at all. It ships **on**: switch it off and every chat is temporary.
 
+> [!NOTE]
 > **One protocol.** Every surface — the web app, the Outlook pane, the browser
 > extension, Nextcloud, an integration on the chat route — posts the new
 > message and lets the server hold the rest. A caller that wants to send the

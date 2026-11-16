@@ -1,4 +1,11 @@
-# Audio File Upload Support
+---
+description: "Let users upload audio files for transcription and analysis by models that accept audio."
+audience: admin
+type: how-to
+adminPage: /admin/apps
+---
+
+# Audio File Support
 
 iHub Apps supports audio file uploads for transcription, analysis, and processing using Google Gemini and OpenAI models. This feature enables applications to work with audio content including speech-to-text, speaker identification, sentiment analysis, and audio summarization.
 

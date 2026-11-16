@@ -1,3 +1,9 @@
+---
+description: "iHub's accessibility targets, keyboard and screen reader support, testing and known limits."
+audience: admin
+type: reference
+---
+
 # Accessibility
 
 iHub Apps is committed to meeting **WCAG 2.2 Level AA** accessibility standards. This page describes the compliance targets, keyboard navigation patterns, screen reader considerations, testing procedures, and known limitations.
@@ -270,6 +276,7 @@ The plugin's *recommended* ruleset is enabled, with each rule downgraded from `e
 node scripts/check-a11y-diff.js origin/main
 ```
 
+> [!NOTE]
 > **Note on ESLint compatibility:** `eslint-plugin-jsx-a11y` declares an ESLint `<= 9` peer range, while this project runs ESLint 10. A `package.json` `overrides` entry (`"eslint-plugin-jsx-a11y": { "eslint": "$eslint" }`) reconciles the peer dependency; the plugin is fully functional with ESLint 10's flat config.
 
 ### Manual Testing Checklist

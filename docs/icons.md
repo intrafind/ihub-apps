@@ -1,3 +1,9 @@
+---
+description: "The built-in icon library and how to use your own icons."
+audience: admin
+type: reference
+---
+
 # Icons
 
 iHub Apps uses [Heroicons v2](https://heroicons.com/) as its built-in icon library. All icons are

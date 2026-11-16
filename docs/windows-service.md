@@ -1,4 +1,10 @@
-# Running iHub Apps as a Windows Service
+---
+description: "Run iHub as a Windows service that starts with the system."
+audience: admin
+type: how-to
+---
+
+# Windows Service
 
 iHub Apps can be registered as a native Windows Service so it starts automatically with Windows, runs in the background without a logged-in user, and restarts automatically on failure.
 

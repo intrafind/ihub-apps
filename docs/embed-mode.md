@@ -1,4 +1,10 @@
-# Embedding iHub in Another Product (Embed Mode)
+---
+description: "Show iHub inside another product in an iframe and control it from the host."
+audience: admin
+type: how-to
+---
+
+# Embed Mode
 
 An embedding host — iFinder, a portal, an intranet page — can show iHub in an iframe and steer its
 chrome and appearance with URL parameters. With **`embed=true`**, iHub keeps everything those

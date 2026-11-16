@@ -1,4 +1,10 @@
-# Troubleshooting Guide
+---
+description: "Diagnose and fix common problems with installation, sign-in, models and deployment."
+audience: admin
+type: troubleshooting
+---
+
+# Troubleshooting
 
 This comprehensive troubleshooting guide helps you diagnose and resolve common issues with iHub Apps across installation, configuration, authentication, runtime, and deployment scenarios.
 
@@ -1083,6 +1089,7 @@ https.get('https://your.internal.host/api', (res) => {
 "
 ```
 
+> [!TIP]
 > **First check the OS certificate store.** On Node 24.5 or later iHub trusts the operating system's
 > certificate store by default, unless `NODE_USE_SYSTEM_CA=0` is set or Node was started with an
 > explicit CA option. When the startup log says `Added the operating system certificate store to

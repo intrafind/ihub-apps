@@ -1,3 +1,10 @@
+---
+description: "Sign users in with an OpenID Connect provider and map their groups."
+audience: admin
+type: how-to
+adminPage: /admin/auth
+---
+
 # OIDC Authentication
 
 This document explains how to configure and use OpenID Connect (OIDC) authentication in iHub Apps.

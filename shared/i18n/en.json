@@ -6296,7 +6296,21 @@
       "loadingPage": "Loading page...",
       "notFound": "This documentation page does not exist in this version.",
       "loadError": "Failed to load the documentation page",
-      "backHome": "Go to the documentation start page"
+      "backHome": "Go to the documentation start page",
+      "contentsShort": "Contents",
+      "breadcrumb": "Breadcrumb",
+      "onThisPage": "On this page",
+      "previous": "Previous",
+      "next": "Next",
+      "pagination": "Previous and next page",
+      "browse": "Browse the documentation",
+      "morePages": "+{{count}} more",
+      "openSettings": "Open in admin",
+      "linkToSection": "Link to this section",
+      "resultCount_one": "{{count}} result",
+      "resultCount_other": "{{count}} results",
+      "collapseAll": "Collapse all",
+      "expandAll": "Expand all"
     },
     "aiDisclosure": {
       "title": "AI notice",

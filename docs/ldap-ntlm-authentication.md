@@ -1,3 +1,10 @@
+---
+description: "Sign users in against LDAP or Active Directory, or with Windows (NTLM) authentication."
+audience: admin
+type: how-to
+adminPage: /admin/auth
+---
+
 # LDAP and NTLM Authentication
 
 This document describes how to configure and use LDAP and NTLM/Windows authentication in iHub Apps.
@@ -78,6 +85,7 @@ directory that keeps users and groups in separate subtrees just names those two:
 }
 ```
 
+> [!IMPORTANT]
 > **Upgrading:** nothing changes for a provider that spells every field out.
 > `baseDn` and `preset` are additions, not replacements, and a provider without
 > them resolves exactly as it did before — including group search staying off

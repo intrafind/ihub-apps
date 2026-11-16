@@ -1,3 +1,9 @@
+---
+description: "How much CPU, memory, storage and GPU an installation needs."
+audience: admin
+type: reference
+---
+
 # Sizing
 
 How much CPU, memory, storage and GPU an iHub installation needs, from the load tests of

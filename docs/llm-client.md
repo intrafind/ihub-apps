@@ -1,4 +1,10 @@
-# LLMClient — the one way to call a model
+---
+description: "LLMClient, the one way the server calls a language model."
+audience: developer
+type: reference
+---
+
+# LLM Client
 
 Every language-model call in the server goes through `LLMClient`
 (`server/services/loop/LLMClient.js`): chat, workflow and agent nodes, the

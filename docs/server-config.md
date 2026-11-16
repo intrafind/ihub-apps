@@ -1,3 +1,9 @@
+---
+description: "Command-line options and environment variables for running the iHub server."
+audience: admin
+type: reference
+---
+
 # Server Configuration
 
 This section covers environment variables and options for running the iHub Apps server.

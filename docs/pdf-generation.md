@@ -1,4 +1,10 @@
-# Document and File Generation (PDF, Word, PowerPoint, Excel, Web Artifacts, Code, ZIP) and System Skills
+---
+description: "Let models create PDF, Word, PowerPoint and Excel files, code and archives on the server."
+audience: admin
+type: reference
+---
+
+# Document and File Generation
 
 iHub generates PDF files, Word documents, PowerPoint presentations and Excel workbooks on the server, without Python, Office or a browser. The engines serve two purposes:
 

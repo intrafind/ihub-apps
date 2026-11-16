@@ -1,4 +1,11 @@
-# Feedback Feature
+---
+description: "Collect ratings and comments on answers and review them in the admin area."
+audience: admin
+type: how-to
+adminPage: /admin/feedback
+---
+
+# Feedback
 
 **Comprehensive guide to the user feedback system for administrators**
 

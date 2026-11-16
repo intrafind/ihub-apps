@@ -1,3 +1,10 @@
+---
+description: "How binary updates are signed and verified before they are installed."
+audience: admin
+type: how-to
+adminPage: /admin/updates
+---
+
 # Update Signing
 
 Binary installations install an update only if the archive is signed by a key

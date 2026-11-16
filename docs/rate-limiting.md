@@ -1,4 +1,10 @@
-# Rate Limiting Implementation
+---
+description: "The request limits that protect the API, and how to change them."
+audience: admin
+type: reference
+---
+
+# Rate Limiting
 
 This document describes the comprehensive rate limiting implementation added to protect the iHub Apps API endpoints.
 
@@ -149,7 +155,8 @@ Rate limiting is fully configurable through the `platform.json` configuration fi
 }
 ```
 
-> **Note**: The `limit` values shown above are example overrides. The built-in defaults apply when no `rateLimit` section is present in `platform.json`: 500 req/min for most types, 50 req/15 min for auth, 300 req/min for OAuth, and 30 failed req/15 min for the OAuth token endpoints.
+> [!NOTE]
+> The `limit` values shown above are example overrides. The built-in defaults apply when no `rateLimit` section is present in `platform.json`: 500 req/min for most types, 50 req/15 min for auth, 300 req/min for OAuth, and 30 failed req/15 min for the OAuth token endpoints.
 
 ### Configuration Options
 

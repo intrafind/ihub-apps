@@ -1,3 +1,10 @@
+---
+description: "Roll out the browser extension so users can chat about the page they are reading."
+audience: admin
+type: how-to
+adminPage: /admin/browser-extension
+---
+
 # Browser Extension
 
 The iHub Apps **browser extension** lets a signed-in user pipe the content of
@@ -6,6 +13,7 @@ a reply, ask a question grounded in the page — without leaving the page. It
 is the web-page analogue of the [Outlook add-in](outlook-add-in.md): same
 OAuth flow, same `/api/chat` pipeline, different host.
 
+> [!NOTE]
 > This page covers the **side-panel browser extension** that the user
 > installs in Chrome / Edge / Firefox. For the read-only Outlook task pane,
 > see [Outlook Add-in Rollout](outlook-add-in.md). The two integrations are
@@ -135,6 +143,7 @@ This single action does the following automatically — no manual
 After enabling, the page shows the OAuth client ID with a link to
 **View OAuth Client** where you can audit or restrict it further.
 
+> [!NOTE]
 > If you ever rotate or delete this client manually, click **Disable** then
 > **Enable** again to recreate it. The system is idempotent — it only
 > creates a new client when `oauthClientId` is empty.

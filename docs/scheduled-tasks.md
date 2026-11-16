@@ -1,3 +1,10 @@
+---
+description: "Run saved prompts on a schedule and deliver the results to users."
+audience: admin
+type: how-to
+adminPage: /admin/scheduled-tasks
+---
+
 # Scheduled Tasks
 
 A scheduled task is a saved prompt that runs by itself: every weekday at 08:00,

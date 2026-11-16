@@ -1,8 +1,15 @@
-## Models Configuration
+---
+description: "Configure the language models iHub offers, their providers, parameters and capabilities."
+audience: admin
+type: reference
+adminPage: /admin/models
+---
+
+# Models
 
 The models configuration defines the AI models available in the iHub application. These settings are managed through individual JSON files in the `contents/models/` directory.
 
-### Basic Model Structure
+## Basic Model Structure
 
 Each model is defined with the following properties:
 
@@ -19,7 +26,7 @@ Each model is defined with the following properties:
 }
 ```
 
-### Property Details
+## Property Details
 
 | Property                       | Type    | Default  | Description                                                                                    |
 | ------------------------------ | ------- | -------- | ---------------------------------------------------------------------------------------------- |
@@ -57,7 +64,7 @@ Each model is defined with the following properties:
 | `contentMarking`               | Object  | `{ "text": { "by": "none" } }` | How the model's output (text, image, audio) is marked as AI generated. See [Output Marking](#output-marking-contentmarking) below |
 | `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |
 
-### Output Marking (`contentMarking`)
+## Output Marking (`contentMarking`)
 
 Declares what the provider (or iHub) does to mark this model's generated text as AI generated, for the
 provenance object every output carries (see [Provenance Records](provenance.md)). Chat models only.
@@ -97,7 +104,7 @@ A model without the block counts as `none`. **Admin → Models** shows "Not mark
 column as a hint and has an *Output marking* section in the editor. There is no gate: a model that is not
 marked still works.
 
-#### Filled in on import
+### Filled in on import
 
 A model imported from a provider that says how it marks its output (**Import from URL**, or **Sync models** on the
 provider's page) takes over that declaration, so it does not have to be entered model by model. iHub never infers it
@@ -141,7 +148,7 @@ What iHub can and cannot do with it:
   entered stays. A "Not marked" you chose on purpose looks the same as the default `none` and is offered again:
   untick it in the dialog.
 
-### Sampling Parameters
+## Sampling Parameters
 
 iHub does not set a temperature. Apps, prompts, agents and workflows carry no sampling
 setting, and neither does the chat: current models are tuned for specific sampling values
@@ -198,7 +205,7 @@ that are set. Some models take only one of `temperature` and `topP`. Claude Haik
 Anthropic or Bedrock, for example, rejects a request that sets both. For such a model set
 just one of the two; the provider's error names the parameters when a request is refused.
 
-#### Models that reject sampling parameters
+### Models that reject sampling parameters
 
 Anthropic removed sampling parameters from its newer reasoning models. On Claude
 Opus 5, Claude Sonnet 5, Claude Fable 5.x and Claude Opus 4.7/4.8, sending
@@ -221,14 +228,14 @@ the whole `sampling` block is ignored for the model: the Anthropic adapter sends
 (Claude Haiku 4.5 and earlier, and every other provider) accept sampling parameters,
 so leave the flag unset for them.
 
-### Tools
+## Tools
 
 Tools are the actions of installed integrations (Admin → Integrations). Apps, workflow nodes and agent
 profiles get them by binding the installation under `integrations`; tool files are no longer used and there is no tool
 list in a config. A model must support tool calling (`supportsTools`) when it runs with a bound
 integration or with web search. See [Integrations](integrations.md).
 
-### Providers
+## Providers
 
 The system currently supports the following providers:
 
@@ -282,7 +289,7 @@ The system currently supports the following providers:
    - Bedrock service limits are enforced by the server-side adapter before each request: max 5 documents per request and a strict filename character allowlist (alphanumerics, single spaces, `-`, `()`, `[]`)
    - See [AWS Bedrock](#aws-bedrock) below for full setup instructions
 
-### Custom LLM Providers
+## Custom LLM Providers
 
 A gateway that serves many models behind one API key — T-Systems AI Foundation Services (LLM Hub),
 a company LLM proxy, a shared vLLM server — is set up as its own provider under **Admin →
@@ -316,7 +323,7 @@ The API key of a linked model is the model's own `apiKey` if it has one, otherwi
 on its provider. A linked model never uses the key of its API type, so an LLM Hub model speaking
 the OpenAI API is never sent the OpenAI key.
 
-### Importing Models from an Endpoint
+## Importing Models from an Endpoint
 
 **Admin → Models → Import from URL** reads the model list of an endpoint and creates the models
 you pick, so they need not be typed in one by one.
@@ -444,7 +451,7 @@ alias (`claude-haiku-4-5`): an alias is matched to its snapshot, so that model i
 snapshot is not offered again as a new model. A model that is missing from an Anthropic listing is never reported as
 gone. Each applied item has its own result, so one failure does not stop the others.
 
-#### Syncing a single model
+### Syncing a single model
 
 Every model that belongs to a gateway, **Google** or **Anthropic** provider has a **Sync with provider** button in its
 editor (**Admin → Models →** the model, under *Provider*). It opens the same dialog, limited to that model: what
@@ -477,7 +484,7 @@ cannot be asked, in which case nothing is changed.
 The import uses `POST /api/admin/models/_discover` (with `gateway: "ifinder-model-gateway"` for a gateway), which
 returns the normalized list without storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.
 
-### Models on a New Installation
+## Models on a New Installation
 
 A new installation ships only local models, all disabled: **Local vLLM** (chat,
 `http://localhost:8080/v1`), **Voxtral Mini (Transcription)** (self-hosted Voxtral realtime on vLLM,
@@ -491,7 +498,7 @@ on Mistral's API, and the Gemini transcription and text-to-speech models) are in
 Official Marketplace** under **Admin → Marketplace**, with the settings they
 shipped with, such as a preset voice. Existing installations keep the models they have.
 
-### Models from the Marketplace
+## Models from the Marketplace
 
 A model installed from **Admin → Marketplace** brings its own configuration, including the
 endpoint `url`. The installer drops any `apiKey` from the item, but when the model has no key of
@@ -503,9 +510,9 @@ Review such a model before you test or enable it: check the endpoint URL and the
 on its edit page. The marketplace detail panel and the model's edit page both show this reminder,
 and a model is installed from its detail panel rather than straight from the browse grid.
 
-### AWS Bedrock
+## AWS Bedrock
 
-#### Authentication
+### Authentication
 
 The adapter uses Bedrock's long-lived API key feature. Mint a key in the AWS console (Bedrock → API keys → Create API key) and configure it via any of:
 
@@ -515,7 +522,7 @@ The adapter uses Bedrock's long-lived API key feature. Mint a key in the AWS con
 
 Resolution order matches every other provider: model.apiKey → providers.json → env. Keys configured via the admin UI are encrypted at rest using AES-256-GCM.
 
-#### Region configuration
+### Region configuration
 
 Each model can override the AWS Region via `config.region`. The Admin Model Editor renders a "Region" field with autocomplete suggestions. Supported values:
 
@@ -530,7 +537,7 @@ If you write the modelId with an explicit prefix (e.g., `us.anthropic.claude-son
 
 Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`.
 
-#### Supported models (Converse-compatible families)
+### Supported models (Converse-compatible families)
 
 | Model family | Vision | Documents | Tools | Notes |
 | --- | --- | --- | --- | --- |
@@ -545,18 +552,18 @@ Fallback order: `model.config.region` → `providers.json` `bedrock.config.regio
 | AI21 Jamba 1.5 Mini / Large | no | yes | partial | |
 | DeepSeek R1 / V3.x | no | yes | yes (V3.1+) | |
 
-#### Limits enforced by the adapter
+### Limits enforced by the adapter
 
 - **Documents per request:** Bedrock caps at 5; the adapter rejects requests with more.
 - **Document filename:** Bedrock requires `^[A-Za-z0-9\-()[\] ]{1,200}$` with no consecutive whitespace. The adapter sanitizes upstream filenames automatically (strips disallowed chars, removes extensions, collapses spaces).
 - **Image format:** restricted to `png`, `jpeg`, `gif`, `webp`. Other formats are dropped with a warning.
 - **Empty content blocks** (`{ text: '' }`) are stripped before sending — Bedrock rejects them.
 
-#### Ready-to-import example models
+### Ready-to-import example models
 
 Example configurations for the most common Bedrock models are in the **iHub Official Marketplace**. Open Admin → Marketplace and filter for "bedrock" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
 
-### Transcription Models
+## Transcription Models
 
 Models with `modelType: "transcription"` are **speech-to-text** models, not chat models. Users select them in the chat's model selector: an uploaded audio file, an uploaded video (audio track extracted client-side) or a recording is then answered with its transcript, which is stored in the chat as the answer — a chat model selected afterwards can work with it. The streaming ones (`vllm-realtime`, `mistral`, `google-live`) can also take **dictation**: the microphone button streams to the configured one and the text lands in the input field. See [Realtime Voice & Transcription](voice-transcription.md) for the full deployment guide (vLLM setup, reverse proxy, limits, security) and [Audio File Support](audio-file-support.md) for how apps use them.
 
@@ -637,7 +644,7 @@ Every transcription model file ships **disabled**. Enable the one you want:
 - `voxtral-mini-transcribe-realtime` — set `MISTRAL_API_KEY` (or a per-model key) and enable. **Enabling it sends user audio to Mistral**, which is why it is off by default. Migration `V149` seeds it, disabled.
 - `gemini-3.5-transcribe-live` / `gemini-3.5-transcribe` — set `GOOGLE_API_KEY` (or a per-model key) and enable. **Enabling either sends user audio to Google**, and the batch model additionally stores it in Google's Files API (48 h retention) for the duration of the request; that is why neither is on by default. Migration `V089` seeds both, disabled.
 
-#### Batch providers and memory
+### Batch providers and memory
 
 A batch provider has no upstream socket to stream into, so the server holds the
 whole recording in memory until the client stops. Two caps bound that, both
@@ -650,7 +657,7 @@ under `platform.speech.realtime`:
 
 The default per-connection cap holds the hour of audio an app transcribes by default (one hour of 16 kHz PCM16 is ≈115 MB). Raise `maxBufferedAudioBytes` for recordings longer than ≈70 minutes (two hours ≈ 230 MB) and size `maxBufferedAudioBytesTotal` against the memory the instance can spare — `maxConnections` × `maxBufferedAudioBytes` is the theoretical worst case.
 
-### Text-to-Speech Models
+## Text-to-Speech Models
 
 Models with `modelType: "tts"` read chat messages aloud: they power the play
 button on every message (see [Read Aloud (Text-to-Speech)](text-to-speech.md)).
@@ -683,7 +690,7 @@ key, `MISTRAL_API_KEY` or `GOOGLE_API_KEY`), and choose it under
 **Admin → Voice Input → Read aloud**. **Admin → Models → Test** speaks a short
 sentence and reports how much audio came back.
 
-### Image Generation Defaults
+## Image Generation Defaults
 
 For models with `supportsImageGeneration: true`, the `imageGeneration` object sets the default parameters:
 
@@ -706,6 +713,7 @@ For models with `supportsImageGeneration: true`, the `imageGeneration` object se
 
 App-level `imageGeneration` settings (see [Apps documentation](apps.md)) override these model defaults.
 
+> [!IMPORTANT]
 > **Upgrading from `imageGeneration.imageSize`.** Image size used to be
 > configured in Google's own units (`"1K"`, `"2K"`, `"4K"`) and passed straight
 > through. It is now `quality`, which the Google adapter translates into the
@@ -714,7 +722,7 @@ App-level `imageGeneration` settings (see [Apps documentation](apps.md)) overrid
 > allowed"*. Migration `V103` converts stored configs (`1K`→`Low`, `2K`→`Medium`,
 > `4K`→`High`); update hand-written ones the same way.
 
-#### Connect ceiling and image models
+### Connect ceiling and image models
 
 The [connect ceiling](llm-client.md#stream-deadlines) bounds the phase before a
 provider's first response byte, so an endpoint that never answers fails in
@@ -747,7 +755,7 @@ Raise it further for large renders on a slow link; `0` disables the ceiling for
 that model and leaves the call to `REQUEST_TIMEOUT`. Migration `V103` adds
 `60000` to existing image models that do not already set one.
 
-### Model Thinking Configuration
+## Model Thinking Configuration
 
 For models that support extended thinking (such as Claude claude-3-7-sonnet), the `thinking` object configures the reasoning mode:
 
@@ -770,6 +778,7 @@ For models that support extended thinking (such as Claude claude-3-7-sonnet), th
 
 App-level `thinking` settings override these model defaults for a specific app.
 
+> [!IMPORTANT]
 > **Reasoning effort is a level, never a number.** `thinking.budget` is gone
 > from model, app and workflow-node configs alike, and from the API. It looked
 > like a token allowance and was nothing of the kind: no adapter ever put the
@@ -808,7 +817,7 @@ App-level `thinking` settings override these model defaults for a specific app.
 > `preferredModel` just went away still has one. If a retired model was your
 > system-wide default, the migration says so — pick a new one in Admin → Models.
 
-#### Provider-specific behavior
+### Provider-specific behavior
 
 Each adapter keeps its own provider-specific request/response handling, but they all
 surface reasoning the same way in the UI (a separate "thinking" stream):
@@ -832,7 +841,7 @@ surface reasoning the same way in the UI (a separate "thinking" stream):
   field. Requires the vLLM server to be started with a matching `--reasoning-parser`.
   See [Local LLM Providers](local-llm-providers.md#reasoning-thinking-output).
 
-### Native Web Search
+## Native Web Search
 
 Apps with `websearch.useNativeSearch` (the default) use the provider's built-in search on models from the `anthropic`, `google` and `openai-responses` providers — see [Web Tools → Native Search Providers](web-tools.md#native-search-providers). The optional `nativeWebSearch` object tunes this per model:
 
@@ -854,7 +863,7 @@ Apps with `websearch.useNativeSearch` (the default) use the provider's built-in 
 
 The number of searches per call is capped by the app (`websearch.maxSearches`) or the workflow node (`maxWebSearches`), not by the model.
 
-### Prompt Caching
+## Prompt Caching
 
 Providers cache the start of prompts they have seen recently — tool definitions, the system
 prompt, the conversation so far — and bill those input tokens at a discount. `promptCaching.enabled`
@@ -893,7 +902,7 @@ A prompt only hits the cache when it starts exactly like an earlier one. Keep pe
 per-request variables (`{{user_name}}`, `{{time}}`, `{{timezone}}`) out of the start of system
 prompts; the shipped defaults use `{{date}}` only, which changes once a day.
 
-### Model Selection in Apps
+## Model Selection in Apps
 
 ![The model selector in the chat input](assets/screenshots/model-picker.png)
 
@@ -928,7 +937,7 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
 
 4.  **First Available Model**: If none of the above are set, the app will simply use the first model from the list of available models.
 
-### Restricting Available Models
+## Restricting Available Models
 
 Apps can also specify which models are allowed to be used via the `allowedModels` property. This will restrict the models available in the model selection dropdown for that app.
 
@@ -936,7 +945,7 @@ Apps can also specify which models are allowed to be used via the `allowedModels
 "allowedModels": ["local-vllm", "gemini-1.5-flash"]
 ```
 
-### Adding New Models
+## Adding New Models
 
 To add a new model:
 
@@ -944,7 +953,7 @@ To add a new model:
 2. Ensure the provider adapter in `server/adapters/` supports the provider
 3. Provide required credentials in your environment variables
 
-#### Example: Adding GPT-5 with Responses API
+### Example: Adding GPT-5 with Responses API
 
 ```json
 {

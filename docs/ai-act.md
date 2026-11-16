@@ -1,3 +1,10 @@
+---
+description: "Meet the transparency duties of Article 50 of the EU AI Act with iHub."
+audience: admin
+type: how-to
+adminPage: /admin/eu-ai-act
+---
+
 # EU AI Act (Article 50)
 
 How iHub Apps helps an operator meet the transparency duties of Art. 50 of the EU AI Act. This page is
@@ -133,6 +140,7 @@ An admin can turn every EU AI Act feature of iHub off with one switch on **Admin
 deployments where the measures do not apply (internal-only tools, non-EU operation, research sandboxes). The
 switch is deliberate and attributable: the person, the time and a written reason are stored on the server.
 
+> [!IMPORTANT]
 > **Legal note (draft wording, [LEGAL] pending legal review, not legal advice).** Regulation (EU) 2024/1689
 > places transparency duties on providers and deployers of AI systems according to their role and use. Turning
 > these measures off does not remove those duties. By turning them off you confirm that you have assessed that

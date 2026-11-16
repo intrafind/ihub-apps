@@ -1,4 +1,10 @@
-# Self-Signed SSL Certificate Handling
+---
+description: "Connect to internal services that use self-signed or private-CA certificates."
+audience: admin
+type: how-to
+---
+
+# Self-Signed SSL Certificates
 
 When iHub Apps needs to communicate with external services that use self-signed SSL certificates (such as internal APIs, local development servers, or enterprise services), Node.js will reject these connections by default for security reasons.
 
@@ -112,7 +118,8 @@ export NODE_EXTRA_CA_CERTS=/path/to/custom-ca-bundle.pem
 
 ## Alternative Approach: Disable Certificate Verification
 
-> ⚠️ **Security Warning**: This approach disables SSL certificate verification, making your application vulnerable to man-in-the-middle attacks. Use only in development or secure network environments.
+> [!WARNING]
+> This approach disables SSL certificate verification, making your application vulnerable to man-in-the-middle attacks. Use only in development or secure network environments.
 
 ### Platform Configuration Method (Recommended)
 
@@ -222,7 +229,8 @@ Add the environment variable to your `config.env` file:
 NODE_TLS_REJECT_UNAUTHORIZED=0
 ```
 
-> ⚠️ **Important**: The platform configuration method with domain whitelisting is recommended over environment variables. When using `NODE_TLS_REJECT_UNAUTHORIZED=0`, ALL outbound HTTPS connections will skip certificate verification globally.
+> [!IMPORTANT]
+> The platform configuration method with domain whitelisting is recommended over environment variables. When using `NODE_TLS_REJECT_UNAUTHORIZED=0`, ALL outbound HTTPS connections will skip certificate verification globally.
 
 ## Production Deployment Guidance
 

@@ -1,3 +1,9 @@
+---
+description: "How releases are versioned, built and published."
+audience: developer
+type: reference
+---
+
 # Release Process
 
 This document describes the automated release process for iHub Apps: version synchronization

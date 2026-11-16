@@ -1,3 +1,10 @@
+---
+description: "Use several CPU cores on one host with iHub's worker cluster."
+audience: admin
+type: how-to
+adminPage: /admin/system-resources
+---
+
 # Scaling with Multiple Workers
 
 iHub Apps runs a Node.js cluster so a single host can use multiple CPU cores
@@ -34,6 +41,7 @@ PORT=8080 WORKERS=8 npm run start:prod
 WORKERS=1 npm run start:prod
 ```
 
+> [!IMPORTANT]
 > **Changed in this release.** Earlier versions pinned each client to one
 > worker by hashing its TCP peer address. Behind a reverse proxy that address is
 > the same for everyone, so one worker served all traffic while the rest idled.

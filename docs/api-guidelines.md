@@ -1,3 +1,9 @@
+---
+description: "The rules every HTTP endpoint of iHub follows."
+audience: developer
+type: reference
+---
+
 # API Guidelines
 
 The rules every HTTP endpoint of iHub Apps follows. They exist because the API grew endpoint by endpoint and

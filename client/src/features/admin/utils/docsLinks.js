@@ -123,17 +123,39 @@ export function repositoryLinkTarget(href, sourcePath) {
  *
  * @param {string} html
  * @param {string} sourcePath the file the HTML was rendered from, relative to docs/
- * @param {{ headingIds?: boolean }} [options]
+ * @param {{ headingIds?: boolean, docsComponents?: boolean, dropLeadingH1?: boolean,
+ *   anchorLabel?: string }} [options] `docsComponents` turns GitHub alerts into callouts, wraps
+ *   tables in a scroll frame and adds `#` links to h2–h4 (needs `headingIds`); `dropLeadingH1`
+ *   removes an H1 that opens the page.
  * @returns {string}
  */
-export function rewriteDocsHtml(html, sourcePath, { headingIds = false } = {}) {
+export function rewriteDocsHtml(
+  html,
+  sourcePath,
+  {
+    headingIds = false,
+    docsComponents = false,
+    dropLeadingH1 = false,
+    anchorLabel = 'Link to this section'
+  } = {}
+) {
   if (typeof document === 'undefined' || !html) return html;
   const template = document.createElement('template');
   template.innerHTML = html;
   const root = template.content;
+  // The route of the page itself: an in-page `#fragment` link must stay on it. Rendered as-is it
+  // resolves against the document's <base href> and leaves the admin UI.
+  const pageRoute = docsLinkTarget(sourcePath.split('/').pop(), sourcePath);
 
   for (const anchor of root.querySelectorAll('a[href]')) {
     const href = anchor.getAttribute('href');
+    if (href.startsWith('#') && href.length > 1 && pageRoute) {
+      const target = `${pageRoute}${href}`;
+      anchor.setAttribute('href', buildPath(target));
+      anchor.dataset.docsLink = target;
+      if (anchor.getAttribute('title') === href) anchor.removeAttribute('title');
+      continue;
+    }
     // The shared renderer shows a link's raw destination as its tooltip; for a rewritten link
     // that is a repository path the admin cannot use.
     const dropRawTooltip = () => {
@@ -174,7 +196,103 @@ export function rewriteDocsHtml(html, sourcePath, { headingIds = false } = {}) {
     }
   }
 
+  // The viewer shows the page title in its own header; the page's H1 would repeat it.
+  if (dropLeadingH1 && root.firstElementChild?.tagName === 'H1') root.firstElementChild.remove();
+
+  if (docsComponents) {
+    renderCallouts(root);
+    wrapTables(root);
+    if (headingIds && pageRoute) addHeadingAnchors(root, pageRoute, anchorLabel);
+  }
+
   return template.innerHTML;
+}
+
+/** GitHub alert types, and the bold lead-ins older pages use for the same thing. */
+export const CALLOUT_TYPES = ['note', 'tip', 'important', 'warning', 'caution'];
+const ALERT_MARKER_RE = /^\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*/i;
+const BOLD_LEAD_TYPES = {
+  note: 'note',
+  tip: 'tip',
+  important: 'important',
+  warning: 'warning',
+  caution: 'caution',
+  danger: 'caution',
+  upgrading: 'warning',
+  recommended: 'tip'
+};
+
+/**
+ * Turn `> [!NOTE]` blockquotes (GitHub alerts) into callouts: `<div class="docs-callout
+ * docs-callout-note" role="note">` with a `docs-callout-title` line. A blockquote that opens with a
+ * bold "Note:" / "Tip:" / "Warning:" … lead-in becomes the same callout, so pages not yet converted
+ * read the same way. Any other blockquote stays a quotation.
+ */
+function renderCallouts(root) {
+  for (const quote of root.querySelectorAll('blockquote')) {
+    const first = quote.firstElementChild;
+    if (!first || first.tagName !== 'P') continue;
+    let type = null;
+    let title = null;
+
+    const lead = first.firstChild;
+    if (lead?.nodeType === 3 && ALERT_MARKER_RE.test(lead.textContent)) {
+      type = ALERT_MARKER_RE.exec(lead.textContent)[1].toLowerCase();
+      lead.textContent = lead.textContent.replace(ALERT_MARKER_RE, '');
+      // `[!NOTE]` alone on its line: the rest of the paragraph starts after a <br> or is empty.
+      if (first.firstChild?.nodeName === 'BR') first.firstChild.remove();
+    } else if (
+      first.firstElementChild?.tagName === 'STRONG' &&
+      first.firstChild === first.firstElementChild
+    ) {
+      const strong = first.firstElementChild;
+      const label = strong.textContent.trim().replace(/[:.]$/, '');
+      const mapped = BOLD_LEAD_TYPES[label.toLowerCase()];
+      if (mapped) {
+        type = mapped;
+        title = label;
+        strong.remove();
+        const rest = first.firstChild;
+        if (rest?.nodeType === 3) rest.textContent = rest.textContent.replace(/^\s*:?\s*/, '');
+      }
+    }
+    if (!type) continue;
+    if (!first.textContent.trim() && !first.querySelector('img, code, a')) first.remove();
+
+    const callout = document.createElement('div');
+    callout.className = `docs-callout docs-callout-${type}`;
+    callout.setAttribute('role', 'note');
+    const heading = document.createElement('p');
+    heading.className = 'docs-callout-title';
+    heading.textContent = title || type.charAt(0).toUpperCase() + type.slice(1);
+    callout.append(heading, ...quote.childNodes);
+    quote.replaceWith(callout);
+  }
+}
+
+/** Wrap every table so a wide one scrolls inside its frame instead of widening the page. */
+function wrapTables(root) {
+  for (const table of root.querySelectorAll('table')) {
+    if (table.parentElement?.classList.contains('docs-table')) continue;
+    const wrapper = document.createElement('div');
+    wrapper.className = 'docs-table';
+    table.replaceWith(wrapper);
+    wrapper.append(table);
+  }
+}
+
+/** A `#` link after every h2–h4 that points at the heading itself. */
+function addHeadingAnchors(root, pageRoute, label) {
+  for (const heading of root.querySelectorAll('h2[id], h3[id], h4[id]')) {
+    const target = `${pageRoute}#${encodeURIComponent(heading.id)}`;
+    const anchor = document.createElement('a');
+    anchor.className = 'docs-heading-anchor';
+    anchor.setAttribute('href', buildPath(target));
+    anchor.setAttribute('aria-label', `${label}: ${heading.textContent.trim()}`);
+    anchor.dataset.docsLink = target;
+    anchor.textContent = '#';
+    heading.append(anchor);
+  }
 }
 
 /**

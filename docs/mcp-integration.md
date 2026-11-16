@@ -1,3 +1,10 @@
+---
+description: "Use tools from MCP servers in iHub, and offer iHub's apps to MCP clients."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
 # MCP Integration
 
 iHub speaks the [Model Context Protocol](https://modelcontextprotocol.io)
@@ -858,7 +865,8 @@ Optionally enable `platform.oauth.dcr.enabled: true` (_Dynamic client
 registration_ toggle) so MCP clients such as Claude can register their
 OAuth client automatically instead of an admin creating one by hand.
 
-> ⚠️ **Restart required:** OAuth configuration is read at startup (see
+> [!IMPORTANT]
+> **Restart required:** OAuth configuration is read at startup (see
 > [OAuth Authorization Code](oauth-authorization-code.md#1-enable-oauth-in-platform-configuration)).
 > After enabling the OAuth authorization server for the first time,
 > restart the server. The consent screen keeps no server-side session: its

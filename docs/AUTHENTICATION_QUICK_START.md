@@ -1,4 +1,11 @@
-# Authentication Quick Start Guide
+---
+description: "Choose a sign-in mode and set up anonymous, local, OIDC, LDAP or proxy authentication."
+audience: admin
+type: how-to
+adminPage: /admin/auth
+---
+
+# Authentication Quick Start
 
 This guide provides a quick reference for the iHub Apps authentication system.
 

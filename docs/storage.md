@@ -1,3 +1,9 @@
+---
+description: "The storage abstraction between runtime data and where it is kept."
+audience: developer
+type: reference
+---
+
 # Storage Providers
 
 The storage abstraction is the seam between runtime data and where that data

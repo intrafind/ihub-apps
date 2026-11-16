@@ -13,6 +13,7 @@ import {
   parseReleaseSections,
   renderReleaseNotesChapter
 } from '../server/utils/releaseNotes.js';
+import { splitDocsFrontMatter } from '../shared/docsFrontMatter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -61,7 +62,8 @@ async function parseSummary() {
  * Read and process a markdown file
  */
 async function processMarkdownFile(file, index) {
-  const content = await readFile(file.fullPath, 'utf-8');
+  // The front-matter is metadata for the admin docs viewer, not text.
+  const { body: content } = splitDocsFrontMatter(await readFile(file.fullPath, 'utf-8'));
 
   // Add section separator
   const separator = index === 0 ? '' : '\n\n---\n\n';

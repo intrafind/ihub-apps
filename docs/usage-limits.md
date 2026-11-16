@@ -1,3 +1,10 @@
+---
+description: "Cap how many tokens a user may spend per model and period, and see who is close to a limit."
+audience: admin
+type: how-to
+adminPage: /admin/usage
+---
+
 # Usage Limits
 
 Usage limits cap how many tokens one user may use, per model and across all models, in daily, weekly and monthly windows. Users see their budgets and when each one resets; administrators see everyone's usage against their limits.

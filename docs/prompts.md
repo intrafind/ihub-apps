@@ -1,4 +1,11 @@
-# Prompts Library
+---
+description: "Provide reusable prompts that users browse, search and insert into a chat."
+audience: admin
+type: how-to
+adminPage: /admin/prompts
+---
+
+# Prompt Library
 
 The prompt library holds reusable prompts that users browse on `/prompts`, find with `/` in an empty chat input, and insert into a chat. It has two kinds of prompts:
 
@@ -185,6 +192,7 @@ If a prompt has an `appId` and declares variables that its text does not use, th
 
 What the user types into a field goes into the text as typed; one field's value is never filled in by another. The final text is an ordinary chat message, though, so when it is sent the server fills in the automatic variables in it, as it does in anything typed into the chat. A value that contains `{{date}}` is sent with the date.
 
+> [!IMPORTANT]
 > **Upgrading:** Prompts used `[content]` before. Migration `V136` rewrites every `[content]` in `contents/prompts/*.json` (and in a legacy `config/prompts.json`) to `{{content}}`. `[content]` is no longer recognized.
 
 ## User Prompts

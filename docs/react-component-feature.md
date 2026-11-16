@@ -1,4 +1,11 @@
-# React Component Rendering Feature
+---
+description: "Build interactive pages from JSX files that iHub renders as React components."
+audience: developer
+type: how-to
+adminPage: /admin/pages
+---
+
+# React Component Pages
 
 iHub Apps now supports rendering interactive React components directly from JSX files. This powerful feature allows you to create dynamic, interactive pages alongside traditional markdown content.
 

@@ -1,4 +1,11 @@
-# Telemetry & Observability
+---
+description: "Export OpenTelemetry traces, metrics and logs of LLM operations."
+audience: admin
+type: how-to
+adminPage: /admin/telemetry
+---
+
+# Telemetry and Observability
 
 iHub Apps emits OpenTelemetry signals for every LLM operation following the official
 [Generative AI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).

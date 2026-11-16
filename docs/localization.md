@@ -1,3 +1,10 @@
+---
+description: "How translations are loaded and how to override individual keys."
+audience: admin
+type: how-to
+adminPage: /admin/localization
+---
+
 # Localization
 
 This document describes how server-side translations are loaded and how customers can override individual keys.

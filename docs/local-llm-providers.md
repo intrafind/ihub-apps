@@ -1,4 +1,11 @@
-# Local LLM Providers Integration Guide
+---
+description: "Connect self-hosted models from LM Studio, Jan.ai or vLLM through their OpenAI-compatible APIs."
+audience: admin
+type: how-to
+adminPage: /admin/providers
+---
+
+# Local LLM Providers
 
 This comprehensive guide covers how to integrate local LLM providers (LM Studio, Jan.ai, and vLLM) with iHub Apps for privacy-focused, offline AI capabilities.
 
@@ -252,11 +259,13 @@ For multi-device access:
 
 vLLM is a high-performance inference server optimized for serving large language models at scale.
 
+> [!TIP]
 > **Tool calling, image, or audio not working with vLLM?** See the dedicated
 > [vLLM Server Start Parameters](vllm-server-parameters.md) guide — these capabilities must be
 > enabled with the correct vLLM start flags (`--enable-auto-tool-choice`, `--tool-call-parser`,
 > `--limit-mm-per-prompt`), and the iHub model config flags must match.
 
+> [!TIP]
 > **EU AI Act text watermark?** vLLM can watermark generated text and iHub can detect it again. See
 > [Text Watermarking](ai-act-text-watermarking.md).
 
@@ -431,7 +440,8 @@ support reasoning — iHub reads `reasoning` (current vLLM) or `reasoning_conten
   chat. `reasoning_effort` does not shorten the thinking on models that ignore it (Qwen3), and
   `"thoughts": false` only hides the text.
 
-> Note: the `reasoning` field only appears when vLLM was started with a matching
+> [!NOTE]
+> The `reasoning` field only appears when vLLM was started with a matching
 > `--reasoning-parser`. Without it, vLLM inlines the chain-of-thought into the normal
 > content and no separate thinking stream is shown.
 

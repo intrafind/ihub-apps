@@ -1,10 +1,17 @@
-# vLLM Server Start Parameters (Tool Calling, Images & Audio)
+---
+description: "The vLLM start parameters that tool calling, image input and audio input depend on."
+audience: admin
+type: reference
+---
+
+# vLLM Server Parameters
 
 This guide explains the **vLLM server start parameters** that most often cause support
 requests when running models behind iHub Apps. If tool/function calling, image input, or
 audio input "does not work" with a vLLM-served model, the cause is almost always a missing
 or mismatched start flag on the vLLM side — **not** the iHub configuration.
 
+> [!NOTE]
 > **TL;DR** — vLLM only enables these capabilities when you start it with the right flags.
 > iHub talks to vLLM through the standard OpenAI-compatible API, so it can only use what the
 > server was started with. Match the model config flags in iHub (`supportsTools`,
@@ -18,6 +25,7 @@ or mismatched start flag on the vLLM side — **not** the iHub configuration.
 - Multimodal inputs (image / video / audio): <https://docs.vllm.ai/en/latest/features/multimodal_inputs.html>
 - Supported models (check per-model capabilities): <https://docs.vllm.ai/en/latest/models/supported_models.html>
 
+> [!NOTE]
 > vLLM parameter names occasionally change between releases. The flags below reflect recent
 > vLLM versions. Always cross-check against the docs for **your** installed version
 > (`vllm --version`).
@@ -96,6 +104,7 @@ model's tool-call output.
 | Kimi K2                              | `kimi_k2`                  |
 | Generic Python-list-format models    | `pythonic`                 |
 
+> [!NOTE]
 > The list of parsers grows with each vLLM release (e.g. `olmo3`, `cohere_command3`,
 > `hunyuan_a13b`, `minimax`, `openai`, …). Run `vllm serve --help | grep -A3 tool-call-parser`
 > or check the [tool calling docs](https://docs.vllm.ai/en/latest/features/tool_calling.html)
@@ -197,6 +206,7 @@ Other useful flags:
 --trust-remote-code                        # required by some vision models' processors
 ```
 
+> [!NOTE]
 > iHub sends images **inline as base64 data URLs**, so `--allowed-local-media-path` and
 > `--allowed-media-domains` are generally **not** required for the iHub → vLLM path. They
 > only matter if you pass URLs/local paths directly.
@@ -230,6 +240,7 @@ vllm serve microsoft/Phi-3.5-vision-instruct \
 }
 ```
 
+> [!TIP]
 > Keep the iHub upload limits aligned with the vLLM `--limit-mm-per-prompt` image count.
 > If iHub lets users attach 5 images but vLLM allows only 2, requests with 3+ images fail.
 > See [Image Upload Feature](image-upload-feature.md) for the iHub-side upload settings.
@@ -406,6 +417,7 @@ vllm serve --help
 vllm --version
 ```
 
+> [!TIP]
 > Most vLLM "it doesn't work" cases are resolved by **restarting vLLM with the correct start
 > parameters** above and aligning the iHub model config flags. iHub cannot enable a capability
 > that the underlying vLLM server was not started to support.

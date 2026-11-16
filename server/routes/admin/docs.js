@@ -39,7 +39,9 @@ export default function registerAdminDocsRoutes(app, { docsDir = defaultDocsDir 
 
   /**
    * GET /api/admin/docs/toc
-   * The navigation tree from SUMMARY.md plus pages that exist but are not in it.
+   * The navigation tree from SUMMARY.md (`{ title, path, description?, children }` per page,
+   * `{ title, path: null, part: true, children: [] }` per part heading) plus pages that exist but
+   * are not in it and are not marked `hidden: true` in their front-matter.
    */
   app.get(buildServerPath('/api/admin/docs/toc'), adminAuth, async (req, res) => {
     res.json(await loadDocsToc(docsDir));
@@ -47,7 +49,9 @@ export default function registerAdminDocsRoutes(app, { docsDir = defaultDocsDir 
 
   /**
    * GET /api/admin/docs/page?path=integrations.md
-   * One page as Markdown. The path only selects one of the pages the listing found.
+   * One page: `{ path, title, description?, audience?, type?, adminPage?, since?, markdown }`.
+   * The Markdown comes without its front-matter. The path only selects one of the pages the
+   * listing found.
    */
   app.get(buildServerPath('/api/admin/docs/page'), adminAuth, async (req, res) => {
     const requested = typeof req.query.path === 'string' ? req.query.path : '';
@@ -59,7 +63,8 @@ export default function registerAdminDocsRoutes(app, { docsDir = defaultDocsDir 
 
   /**
    * GET /api/admin/docs/search?q=oidc+groups
-   * Sections of all pages that contain every term, best match first.
+   * Sections of all pages that contain every term (matched at the start of a word), best match
+   * first: `{ path, title, description?, heading, anchor, snippet }`.
    */
   app.get(buildServerPath('/api/admin/docs/search'), adminAuth, async (req, res) => {
     const query = typeof req.query.q === 'string' ? req.query.q.slice(0, 200) : '';
