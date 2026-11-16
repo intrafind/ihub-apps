@@ -773,6 +773,14 @@ export class ConfigStore {
     const documents = location ? documentsFor(location.ns) : null;
     if (!documents) return updateOnDisk(relPath, mutate);
 
+    // A provider that can change a document under its lock does: the compare-and-set
+    // below, with a users.json rewrite per acknowledgement from several workers at once,
+    // lost round after round and ran out of attempts (a 409 to the person confirming).
+    if (typeof documents.update === 'function') {
+      const outcome = await documents.update(location.ns, location.key, mutate);
+      if (outcome) return outcome;
+    }
+
     for (let attempt = 1; ; attempt++) {
       const document = await documents.get(location.ns, location.key);
       if (!document && (await this.exists(relPath))) {

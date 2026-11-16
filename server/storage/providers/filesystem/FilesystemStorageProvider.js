@@ -264,6 +264,21 @@ class NamespaceRoutingDocumentStore extends DocumentStore {
   }
 
   /**
+   * A read-change-write under the document's lock, from the store that owns
+   * its namespace (see RawDocumentStore#update); null when that store has none,
+   * and the caller falls back to compare-and-set.
+   *
+   * @param {string} ns - Namespace
+   * @param {string} key - Document key
+   * @param {Function} mutate - See RawDocumentStore#update
+   * @returns {Promise<Object|null>}
+   */
+  async update(ns, key, mutate) {
+    const store = this.storeFor(ns);
+    return typeof store.update === 'function' ? store.update(ns, key, mutate) : null;
+  }
+
+  /**
    * Both stores behind this router implement `scan`, so the router does.
    *
    * Worth stating rather than inheriting: the base class answers false, and a
