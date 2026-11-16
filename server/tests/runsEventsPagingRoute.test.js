@@ -44,6 +44,7 @@ const { default: registerRunRoutes } = await import('../routes/runs.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 
 const app = express();
+app.use(express.json());
 registerRunRoutes(app);
 app.use(errorHandler);
 
@@ -85,6 +86,16 @@ describe('run ledger events: cursor paging', () => {
     const res = await request(app).get('/api/runs/run1/events?view=sse').expect(404);
     expect(res.body.code).toBe('JOURNAL_NOT_KEPT');
     expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+  });
+
+  it('answers 404 JOURNAL_NOT_KEPT to a human event on a run whose journal was deleted', async () => {
+    journalDeleted.mockResolvedValueOnce(true);
+    jest.spyOn(runLog, 'appendRecovered').mockResolvedValueOnce(null);
+    const res = await request(app)
+      .post('/api/runs/run1/human-events')
+      .send({ kind: 'feedback', rating: 'positive' })
+      .expect(404);
+    expect(res.body.code).toBe('JOURNAL_NOT_KEPT');
   });
 
   it('refuses a cursor it did not issue with INVALID_CURSOR', async () => {

@@ -76,7 +76,7 @@ jest.unstable_mockModule('../services/loop/RunLog.js', () => ({
     isEnabled: () => true,
     cleanup: async days => {
       state.cleanups.push(days);
-      return { removed: 3 };
+      return { removed: 3, journals: 4 };
     }
   }
 }));
@@ -354,7 +354,7 @@ describe('POST /api/admin/chat-history/retention/_run', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.chats).toEqual({ ran: true, removed: 2 });
-    expect(response.body.ledger).toEqual({ ran: true, removed: 3 });
+    expect(response.body.ledger).toEqual({ ran: true, removed: 3, journals: 4 });
     expect(state.sweeps[0]).toMatchObject({ retentionDays: 90, maxChatsPerUser: 200 });
     expect(state.cleanups).toEqual([30]);
   });
@@ -387,14 +387,19 @@ describe('POST /api/admin/chat-history/retention/_run', () => {
     expect(state.sweeps).toHaveLength(0);
   });
 
-  test('skips the ledger when its cleanup is disabled', async () => {
+  test('keeps ledger runs when its cleanup is disabled, but still deletes due journals', async () => {
     state.stored.runLog.cleanupEnabled = false;
     const response = await request(createTestApp())
       .post('/api/admin/chat-history/retention/_run')
       .send({ target: 'ledger' });
 
-    expect(response.body.ledger).toMatchObject({ ran: false, reason: 'cleanupDisabled' });
-    expect(state.cleanups).toHaveLength(0);
+    expect(response.body.ledger).toEqual({
+      ran: false,
+      removed: 0,
+      journals: 4,
+      reason: 'cleanupDisabled'
+    });
+    expect(state.cleanups).toEqual([0]);
   });
 
   test('rejects an unknown target', async () => {

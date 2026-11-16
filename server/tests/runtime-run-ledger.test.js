@@ -24,7 +24,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { RunLog, JOURNAL_GRACE_MS } from '../services/loop/RunLog.js';
+import { RunLog, JOURNAL_GRACE_MS, chatReleasedRun } from '../services/loop/RunLog.js';
 import { RunLedgerStore, runStreamName, runLockName } from '../services/loop/runLedgerStore.js';
 import { LockTimeoutError } from '../storage/errors.js';
 import { spillRefSchema } from '../services/loop/contracts/runLogEvents.js';
@@ -935,5 +935,125 @@ describe('run ledger: journal only (phase 4)', () => {
       },
       { bus: soloBus() }
     );
+  });
+
+  it('the default check keeps the journal of any run whose chat still holds it', async () => {
+    const chats = new Map();
+    const repository = { getChat: async id => chats.get(id) || null };
+    await withLedger(
+      async ({ runLog }) => {
+        const { runId: chatTurn } = await finishedRun(runLog, 'chat', { chatId: 'c1' });
+        // A Responses turn in a conversation: kind `inference`, claims its chat.
+        const { runId: apiTurn } = await finishedRun(runLog, 'inference', { chatId: 'c2' });
+        const { runId: released } = await finishedRun(runLog, 'chat', { chatId: 'c3' });
+        const { runId: noChat } = await finishedRun(runLog, 'inference');
+        chats.set('c1', { id: 'c1', activeRunId: chatTurn });
+        chats.set('c2', { id: 'c2', activeRunId: apiTurn });
+        chats.set('c3', { id: 'c3', activeRunId: null });
+
+        assert.deepEqual(await runLog.sweepJournals(afterGrace()), { journals: 2 });
+        assert.ok((await runLog.readEvents(chatTurn)).length > 0);
+        assert.ok((await runLog.readEvents(apiTurn)).length > 0);
+        assert.deepEqual(await runLog.readEvents(released), []);
+        assert.deepEqual(await runLog.readEvents(noChat), []);
+
+        // Released (or the chat deleted) later: the daily walk takes them.
+        chats.set('c1', { id: 'c1', activeRunId: null });
+        chats.delete('c2');
+        const { journals } = await runLog.cleanup(90, { now: afterGrace() });
+        assert.equal(journals, 2);
+      },
+      { isRunSettled: summary => chatReleasedRun(summary, { repository }) }
+    );
+  });
+
+  it('keeps the journal of a paused run until retention', async () => {
+    await withLedger(async ({ runLog }) => {
+      const { runId } = await runLog.startRun({ kind: 'chat', user: USER });
+      runLog.append(runId, RUN_LOG_EVENTS.RUN_END, { status: 'paused', finishReason: 'approval' });
+      await runLog.flush();
+      const now = afterGrace();
+      assert.deepEqual(await runLog.sweepJournals(now), { journals: 0 });
+      assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 0 });
+      assert.ok((await runLog.readEvents(runId)).length > 0);
+    });
+  });
+
+  it('the walk counts only actionable summaries and deletes at most its budget', async () => {
+    await withLedger(async ({ runLog }) => {
+      const ids = [];
+      for (let i = 0; i < 3; i += 1) ids.push((await finishedRun(runLog)).runId);
+      const fresh = new RunLog({
+        forceEnabled: true,
+        getPlatformConfig: () => ({}),
+        store: runLog._store,
+        isRunSettled: async () => true
+      });
+      try {
+        const now = afterGrace();
+        const repo = runLog._store._summaries();
+        const listAll = repo.listAll.bind(repo);
+        let match;
+        repo.listAll = opts => {
+          match = opts.match;
+          return listAll(opts);
+        };
+        assert.deepEqual(await fresh.cleanup(90, { now, journalBudget: 2 }), {
+          removed: 0,
+          journals: 2
+        });
+        assert.equal(
+          match({
+            kind: 'chat',
+            status: 'completed',
+            endedAt: new Date(Date.now() - DAY_MS).toISOString(),
+            journalDeletedAt: new Date().toISOString()
+          }),
+          false,
+          'a swept summary does not use up the scan bound'
+        );
+        assert.deepEqual(await fresh.cleanup(90, { now, journalBudget: 2 }), {
+          removed: 0,
+          journals: 1
+        });
+        for (const id of ids) assert.deepEqual(await runLog.readEvents(id), []);
+      } finally {
+        await fresh.stop();
+      }
+    });
+  });
+
+  it('joins a walk in progress instead of starting a second one', async () => {
+    await withLedger(async ({ runLog }) => {
+      const first = runLog.cleanup(90);
+      assert.equal(runLog.cleanup(90), first);
+      await first;
+      assert.notEqual(runLog.cleanup(90), first);
+    });
+  });
+
+  it('counts a journal as deleted only when both the stream and the marker are written', async () => {
+    await withLedger(async ({ runLog, provider }) => {
+      const { runId } = await finishedRun(runLog);
+      const now = afterGrace();
+      const deleteStream = provider.logs.deleteStream.bind(provider.logs);
+      provider.logs.deleteStream = async () => {
+        throw new Error('disk gone');
+      };
+      assert.deepEqual(await runLog.sweepJournals(now), { journals: 0 });
+      assert.ok((await runLog.readEvents(runId)).length > 0);
+      provider.logs.deleteStream = deleteStream;
+
+      const repo = runLog._store._summaries();
+      const patch = repo.patch.bind(repo);
+      repo.patch = async () => {
+        throw new Error('summary not written');
+      };
+      assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 0 });
+      assert.equal(await runLog.isJournalDeleted(runId), false, 'retried by the next walk');
+      repo.patch = patch;
+      assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 1 });
+      assert.equal(await runLog.isJournalDeleted(runId), true);
+    });
   });
 });
