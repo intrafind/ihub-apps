@@ -120,8 +120,8 @@ function parseResult(result) {
  * system. Decided by the call, never by a source's `provider`: an MCP tool
  * named like a web search is a connected system, whatever its sources say.
  */
-function defaultOriginOf(toolId, toolDef) {
-  const kind = activityOriginOf(toolDef || { id: toolId });
+function defaultOriginOf(toolDef) {
+  const kind = activityOriginOf(toolDef);
   if (!kind) return undefined;
   const label = kind === 'integration' ? integrationLabelOf(toolDef) : null;
   return label ? { kind, label } : { kind };
@@ -214,7 +214,7 @@ export function extractToolSources({
   failed = false
 }) {
   const parsed = parseResult(result);
-  const origin = defaultOriginOf(toolId, toolDef);
+  const origin = defaultOriginOf(toolDef);
   const defaults = {
     provider: defaultProviderOf(toolId, toolDef),
     private: true,

@@ -237,7 +237,8 @@ export async function discoverActions({
       error: parameterError,
       guidance: localized(action.guidance, language),
       examples: (action.examples || []).map(e => localized(e, language)).filter(Boolean),
-      sources: sourcesDeclarationFor(definition, instance, action)
+      sources: sourcesDeclarationFor(definition, instance, action),
+      activity: action.activity
     });
   }
   return results;

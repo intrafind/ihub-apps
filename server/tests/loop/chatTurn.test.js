@@ -319,12 +319,14 @@ const webSearchTool = {
   name: 'webSearch',
   // Runs the platform's own web search script: its hits are public.
   script: 'braveSearch.js',
+  activity: { kind: 'search', origin: 'web' },
   description: 'search the web',
   parameters: { type: 'object', properties: { query: { type: 'string' } } }
 };
 const fetchTool = {
   id: 'read_url',
   name: 'read_url',
+  activity: { kind: 'fetch', origin: 'web' },
   description: 'fetch a page',
   parameters: { type: 'object', properties: { url: { type: 'string' } } }
 };
@@ -831,9 +833,11 @@ test('search tool: sources/added carries the pages found and read, even when the
 test('iFinder tools: each call that finds documents reports them as sources/added, with a ref for the provider’s actions; a failed search reports only its query', async t => {
   const chatId = newChatId('ifinder-sources');
   const frames = captureFrames(t, chatId);
+  const iFinderKinds = { iFinder_search: 'search', iFinder_getContent: 'fetch' };
   const iFinderTool = name => ({
     id: name,
     name,
+    activity: { kind: iFinderKinds[name] || 'tool', origin: 'ifinder' },
     description: name,
     parameters: { type: 'object', properties: { query: { type: 'string' } } }
   });
@@ -2024,6 +2028,7 @@ test('the turn summary carries its sources: queries and pages for the stored ans
 const knowledgeSearchTool = {
   id: 'knowledge_search',
   name: 'knowledge_search',
+  activity: { kind: 'search', origin: 'project' },
   description: 'search the projects',
   parameters: { type: 'object', properties: { query: { type: 'string' } } }
 };

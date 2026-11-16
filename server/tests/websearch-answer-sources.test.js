@@ -105,6 +105,8 @@ cachePage(NEWS, 'Berlin today', 'The city opens its outdoor pools this weekend.'
 const braveSearchTool = {
   id: 'braveSearch',
   name: 'braveSearch',
+  // What the integration generator declares for the search action of an engine.
+  activity: { kind: 'search', origin: 'web' },
   description: 'Search the web',
   _integration: { definition: 'com.intrafind/brave-search', action: 'search', instanceId: 'brave' },
   parameters: {

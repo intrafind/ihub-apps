@@ -112,6 +112,8 @@ async function test({ instance, values }) {
 const connector = {
   id: 'ldapBrowser',
   actions: Object.fromEntries(BROWSER_ACTIONS.map(name => [name, action(name)])),
+  /** A search of the directory tree is a search of the connected system, never of the web. */
+  activity: { browse_search: { kind: 'search', origin: 'integration' } },
   test,
   /**
    * For the installed list: whether the configuration resolves, the transport

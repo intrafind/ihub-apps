@@ -12,6 +12,7 @@
   "enabled": true,
   "functions": {
     "search": {
+      "activity": { "kind": "search", "origin": "project" },
       "description": {
         "en": "Search the projects for passages that answer a question. Returns ranked passages with the document and section they come from, numbered for citation. Search with the key terms of the question; search again with other terms (synonyms, English terms, configuration keys) when the results do not answer it, or read a document in full with knowledge_read.",
         "de": "Durchsucht die Projekte nach Passagen, die eine Frage beantworten. Liefert bewertete Passagen mit Dokument und Abschnitt, nummeriert zum Zitieren. Mit den Schlüsselbegriffen der Frage suchen; bei unpassenden Treffern mit anderen Begriffen (Synonyme, englische Begriffe, Konfigurationsschlüssel) erneut suchen oder ein Dokument mit knowledge_read vollständig lesen."
@@ -48,6 +49,7 @@
       }
     },
     "read": {
+      "activity": { "kind": "fetch", "origin": "project" },
       "description": {
         "en": "Read one document in full, or one of its sections, by the document id from a search result, from knowledge_list or from the document list of a searched project in the system prompt: a listed document can be read directly, without searching first. A long document comes back as an outline; pass a section id or heading to read that section, or 'focus' (the question you are answering) to get the sections of the document that answer it, verbatim, with an outline of the rest.",
         "de": "Ein Dokument vollständig oder abschnittsweise lesen, anhand der Dokument-ID aus einem Suchergebnis, aus knowledge_list oder aus der Dokumentliste eines durchsuchten Projekts im Systemprompt: Ein gelistetes Dokument kann direkt gelesen werden, ohne vorher zu suchen. Ein langes Dokument wird als Gliederung geliefert; mit einer Abschnitts-ID oder Überschrift den Abschnitt lesen, oder mit 'focus' (die zu beantwortende Frage) die Abschnitte des Dokuments erhalten, die sie beantworten, wörtlich, mit einer Gliederung des Rests."
@@ -88,6 +90,7 @@
       }
     },
     "list": {
+      "activity": { "kind": "search", "origin": "project" },
       "description": {
         "en": "List the documents of the available projects with their id, name, title and short description (when known), kind, size, status and origin (uploaded, picked, linked, written). Read a listed document directly with knowledge_read. The system prompt lists the documents of a searched project only up to a limit; call this for the rest. A long list comes in pages: when the result has a nextCursor, call again with that cursor for the rest.",
         "de": "Dokumente der verfügbaren Projekte mit ID, Name, Titel und Kurzbeschreibung (soweit bekannt), Art, Größe, Status und Herkunft (hochgeladen, ausgewählt, verlinkt, geschrieben) auflisten. Ein gelistetes Dokument direkt mit knowledge_read lesen. Der Systemprompt listet die Dokumente eines durchsuchten Projekts nur bis zu einer Grenze; für den Rest dieses Tool aufrufen. Eine lange Liste kommt seitenweise: Enthält das Ergebnis einen nextCursor, mit diesem Cursor erneut aufrufen, um den Rest zu erhalten."

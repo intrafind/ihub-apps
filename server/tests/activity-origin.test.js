@@ -14,6 +14,7 @@
  *  V5  a web hit and the page fetched later are one source
  *  G10 a page read that delivered no text is not an opened page
  */
+import { builtInTool, toolDefOf } from './helpers/builtInTools.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createStreamState, reduceRunEvents, getRun } from '../../shared/run/runReducer.js';
@@ -66,20 +67,20 @@ test('V2: an answer whose only retrieval was read_url is based on the web', () =
   const outcome = {
     ...extractToolOutcome({
       toolId: 'read_url',
-      toolDef: { id: 'read_url' },
+      toolDef: builtInTool('read_url'),
       result: { url: 'https://example.org/a', content: 'text' }
     }),
     rawResult: { url: 'https://example.org/a', content: 'text' },
     sources: extractToolSources({
       toolId: 'read_url',
-      toolDef: { id: 'read_url' },
+      toolDef: builtInTool('read_url'),
       args: { url: 'https://example.org/a' },
       result: { url: 'https://example.org/a', content: 'text' }
     })
   };
   knowledgeSourceSeam.postTool(
     { addKnowledgeSource: source => added.push(source), addIntegration: () => {} },
-    { toolId: 'read_url', toolDef: { id: 'read_url' } },
+    { toolId: 'read_url', toolDef: builtInTool('read_url') },
     outcome
   );
   assert.deepEqual(answerBasisOf({ knowledgeSources: added }), [{ kind: 'web' }]);
@@ -103,13 +104,13 @@ test('V3b: a skill the app switched on is not "started by the user"', () => {
 test('V5: a web hit and the page fetched later are one source', () => {
   const hit = extractToolSources({
     toolId: 'braveSearch',
-    toolDef: { id: 'braveSearch' },
+    toolDef: builtInTool('braveSearch'),
     args: { query: 'q' },
     result: { results: [{ url: 'https://example.org/a', title: 'A' }] }
   });
   const page = extractToolSources({
     toolId: 'read_url',
-    toolDef: { id: 'read_url' },
+    toolDef: builtInTool('read_url'),
     args: { url: 'https://example.org/a' },
     result: { url: 'https://example.org/a', title: 'A', content: 'text', wordCount: 1 }
   });
@@ -124,7 +125,7 @@ test('G10: a read at the end of a page delivered no text and is not "opened"', (
     offset: 5000,
     truncated: false
   };
-  const call = { toolId: 'read_url', toolDef: { id: 'read_url' }, result };
+  const call = { toolId: 'read_url', toolDef: builtInTool('read_url'), result };
   // Today's bug, kept as the reason for the declared outcome: the source says ok.
   assert.equal(extractToolSources(call).items[0].read.ok, true);
   assert.equal(extractToolOutcome(call).readOutcome, 'empty');
@@ -133,7 +134,7 @@ test('G10: a read at the end of a page delivered no text and is not "opened"', (
 // ── result count and read outcome, declared by the server ───────────────────
 
 const outcome = (toolId, result, extra = {}) =>
-  extractToolOutcome({ toolId, toolDef: { id: toolId }, result, ...extra });
+  extractToolOutcome({ toolId, toolDef: toolDefOf(toolId), result, ...extra });
 
 test('a web search declares how many hits it returned, zero included', () => {
   assert.deepEqual(
@@ -209,10 +210,12 @@ const seam = (toolId, toolDef, out) => {
 };
 
 test('a read_url that opened nothing does not make the answer web based', () => {
-  assert.deepEqual(seam('read_url', { id: 'read_url' }, { readOutcome: 'empty' }), []);
-  assert.deepEqual(seam('read_url', { id: 'read_url' }, { error: new Error('x') }), []);
-  assert.deepEqual(seam('read_url', { id: 'read_url' }, {}), []);
-  assert.deepEqual(seam('read_url', { id: 'read_url' }, { readOutcome: 'opened' }), ['websearch']);
+  assert.deepEqual(seam('read_url', builtInTool('read_url'), { readOutcome: 'empty' }), []);
+  assert.deepEqual(seam('read_url', builtInTool('read_url'), { error: new Error('x') }), []);
+  assert.deepEqual(seam('read_url', builtInTool('read_url'), {}), []);
+  assert.deepEqual(seam('read_url', builtInTool('read_url'), { readOutcome: 'opened' }), [
+    'websearch'
+  ]);
 });
 
 test('recalling earlier sources names the origin they came from, when it is one place', () => {
@@ -232,13 +235,13 @@ test('recalling earlier sources names the origin they came from, when it is one 
 test('web, project, iFinder and connected-system sources carry the call’s origin', () => {
   const web = extractToolSources({
     toolId: 'braveSearch',
-    toolDef: { id: 'braveSearch' },
+    toolDef: builtInTool('braveSearch'),
     result: { results: [{ url: 'https://a.example/', title: 'A' }] }
   });
   assert.deepEqual(web.items[0].origin, { kind: 'web' });
   const doc = extractToolSources({
     toolId: 'iFinder_search',
-    toolDef: { id: 'iFinder_search' },
+    toolDef: builtInTool('iFinder_search'),
     args: { query: 'q' },
     result: { searchProfile: 'p', results: [{ id: 'd1', title: 'Doc' }] }
   });
@@ -255,12 +258,31 @@ test('web, project, iFinder and connected-system sources carry the call’s orig
 });
 
 test('an MCP tool named like a web search is a connected system, and so are its sources', () => {
+  const toolDef = { id: 'mcp_x__web_search', _mcp: { serverId: 'x', originalName: 'web_search' } };
+  // It reports what it found through the envelope; the call's origin is the connected system's.
   const frame = extractToolSources({
-    toolId: 'mcp_x__web_search',
-    toolDef: { id: 'mcp_x__web_search', _mcp: { serverId: 'x', originalName: 'web_search' } },
-    result: { results: [{ url: 'https://a.example/' }] }
+    toolId: toolDef.id,
+    toolDef,
+    result: { sources: [{ id: 'h1', title: 'Hit', url: 'https://a.example/' }] }
   });
   assert.equal(frame.items[0].origin.kind, 'integration');
+  // Its name alone makes no web search of it: nothing reads the hits as web pages.
+  assert.equal(
+    extractToolSources({
+      toolId: toolDef.id,
+      toolDef,
+      result: { results: [{ url: 'https://a.example/' }] }
+    }),
+    null
+  );
+  // An admin who declares it a web search makes its hits web sources, still private.
+  const declared = { ...toolDef, activity: { kind: 'search', origin: 'web' } };
+  const web = extractToolSources({
+    toolId: declared.id,
+    toolDef: declared,
+    result: { results: [{ url: 'https://a.example/' }] }
+  });
+  assert.deepEqual([web.items[0].origin.kind, web.items[0].private], ['web', true]);
 });
 
 test('provider-run web search reports web sources', () => {
@@ -547,22 +569,22 @@ test('a share carries the origin type, never the name of what was searched', () 
 test('a source’s origin, the call’s activity origin and the footer kind agree', () => {
   const cases = [
     {
-      toolDef: { id: 'braveSearch' },
+      toolDef: builtInTool('braveSearch'),
       result: { results: [{ url: 'https://a.example/' }] },
       kind: 'web'
     },
     {
-      toolDef: { id: 'read_url' },
+      toolDef: builtInTool('read_url'),
       result: { url: 'https://a.example/', content: 'x' },
       kind: 'web'
     },
     {
-      toolDef: { id: 'iFinder_search' },
+      toolDef: builtInTool('iFinder_search'),
       result: { searchProfile: 'p', results: [{ id: 'd1', title: 'D' }] },
       kind: 'ifinder'
     },
     {
-      toolDef: { id: 'knowledge_read' },
+      toolDef: builtInTool('knowledge_read'),
       result: {
         content: 'x',
         sources: [
@@ -581,7 +603,7 @@ test('a source’s origin, the call’s activity origin and the footer kind agre
     const frame = extractToolSources({ toolId: toolDef.id, toolDef, result });
     assert.equal(frame.items[0].origin.kind, kind, `${toolDef.id}: source origin`);
     assert.equal(toolDisplayOf(toolDef).activityOrigin, kind, `${toolDef.id}: activity origin`);
-    const source = classifyToolKnowledgeSource(toolDef.id, toolDef);
+    const source = classifyToolKnowledgeSource(toolDef);
     assert.equal(
       answerBasisOf({ knowledgeSources: [source] })[0].kind,
       kind,
@@ -599,8 +621,12 @@ test('a connected server’s content blocks are not counted as search hits', () 
   assert.deepEqual(extractToolOutcome({ toolId: toolDef.id, toolDef, result: blocks }), {});
 });
 
-test('a connected server’s JSON hit list is still counted', () => {
-  const toolDef = { id: 'mcp_x__web_search', _mcp: { serverId: 'x', originalName: 'web_search' } };
+test('a connected server’s JSON hit list is still counted, once it is declared a web search', () => {
+  const toolDef = {
+    id: 'mcp_x__web_search',
+    _mcp: { serverId: 'x', originalName: 'web_search' },
+    activity: { kind: 'search', origin: 'web' }
+  };
   const hits = [{ url: 'https://a.example/' }, { url: 'https://b.example/' }];
   assert.deepEqual(extractToolOutcome({ toolId: toolDef.id, toolDef, result: hits }), {
     resultCount: 2

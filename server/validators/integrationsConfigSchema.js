@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { zSafeId } from './common.js';
 import { APPROVAL_MODES, DATA_FLOWS } from '../../shared/toolApproval.js';
 import { FINGERPRINT_PATTERN } from '../utils/actionFingerprint.js';
+import { activityDeclarationSchema } from '../services/tools/toolCategory.js';
 import {
   AUTH_MODES,
   integrationIdSchema,
@@ -61,7 +62,9 @@ export const actionOverrideSchema = z.object({
   guidance: boundedLocalizedSchema.optional(),
   examples: z.array(boundedLocalizedSchema).max(MAX_ACTION_EXAMPLES).optional(),
   sideEffect: z.enum(SIDE_EFFECTS).optional(),
-  dataFlow: z.enum(DATA_FLOWS).optional()
+  dataFlow: z.enum(DATA_FLOWS).optional(),
+  /** What the tool is and where it looks (`services/tools/toolCategory`): corrects a mislabelled MCP or custom tool. */
+  activity: activityDeclarationSchema.optional()
 });
 
 const installedActionsSchema = z.object({

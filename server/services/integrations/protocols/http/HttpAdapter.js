@@ -188,7 +188,8 @@ export async function discoverActions({
       needsToken: false,
       available,
       guidance: localized(action.guidance, language, ''),
-      examples: (action.examples || []).map(e => localized(e, language, '')).filter(Boolean)
+      examples: (action.examples || []).map(e => localized(e, language, '')).filter(Boolean),
+      activity: action.activity
     });
   }
   return out;

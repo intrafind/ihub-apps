@@ -86,7 +86,9 @@ export function expandShippedTool(tool) {
     description: cfg.description || tool.description,
     parameters: cfg.parameters || {},
     method: fn,
-    passthrough: cfg.passthrough || tool.passthrough || false
+    passthrough: cfg.passthrough || tool.passthrough || false,
+    // What the function is in the chat (`services/tools/toolCategory`): its own, else the file's.
+    ...(cfg.activity || tool.activity ? { activity: cfg.activity || tool.activity } : {})
   }));
 }
 

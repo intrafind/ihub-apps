@@ -119,6 +119,7 @@ const searchTool = {
   name: 'webSearch',
   // Runs the platform's own web search script: its hits are public.
   script: 'braveSearch.js',
+  activity: { kind: 'search', origin: 'web' },
   description: 'search',
   parameters: {
     type: 'object',
@@ -128,6 +129,7 @@ const searchTool = {
 };
 const fetchTool = {
   id: 'read_url',
+  activity: { kind: 'fetch', origin: 'web' },
   description: 'fetch',
   parameters: { type: 'object', properties: { url: { type: 'string' } } }
 };
@@ -926,13 +928,14 @@ test('image lift seam: an image in the tool result becomes a vision tool message
   });
 });
 
-test('knowledge-source seam classifies tools and grounding', async () => {
+test('knowledge-source seam classifies tools by their declared category, never by their id', async () => {
   const { loop } = makeLoop(
     [
       toolTurn([
         { name: 'webSearch', args: {} },
-        { name: 'source_docs', args: {} },
-        { name: 'people_search', args: {} }
+        { name: 'docs_lookup', args: {} },
+        { name: 'people_search', args: {} },
+        { name: 'foo_search', args: {} }
       ]),
       textTurn('done')
     ],
@@ -943,12 +946,15 @@ test('knowledge-source seam classifies tools and grounding', async () => {
     messages: baseMessages,
     tools: [
       searchTool,
-      { id: 'source_docs', parameters: {} },
-      { id: 'people_search', parameters: {} }
+      { id: 'docs_lookup', activity: { kind: 'search', origin: 'documents' }, parameters: {} },
+      // Says "search" in its id and declares nothing: a plain call, no source.
+      { id: 'people_search', parameters: {} },
+      // A connected system is never the web, whatever its id says.
+      { id: 'foo_search', _mcp: { serverId: 's' }, parameters: {} }
     ],
     executeTool: okTool
   });
-  assert.deepEqual(result.knowledgeSources.sort(), ['sources', 'websearch']);
+  assert.deepEqual(result.knowledgeSources.sort(), ['documents', 'integration', 'websearch']);
 });
 
 test('passthrough seam streams the tool answer and ends the turn without a model follow-up', async () => {

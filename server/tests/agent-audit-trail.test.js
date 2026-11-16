@@ -8,8 +8,8 @@
  *   A) buildStepLogUpdates() preserves EVERY iteration's transcript in
  *      `_stepLogHistory[nodeId]` (cyclic agent↔verify rounds no longer
  *      overwrite each other), while `_stepLogs[nodeId]` keeps the latest.
- *   B) _isCitationProducingTool() recognizes braveSearch (and any *search*
- *      tool), so search-result URLs actually become citations.
+ *   B) a tool that is a search or a fetch (by its declared category) has its
+ *      result URLs captured as citations; any other tool is ignored.
  *
  * Run directly: `node server/tests/agent-audit-trail.test.js`.
  */
@@ -125,21 +125,38 @@ async function run() {
     );
   }
 
-  console.log('\n🧪 B — braveSearch is recognized as citation-producing\n');
+  console.log('\n🧪 B — only searches and fetches become citations\n');
   {
     const p = new PromptNodeExecutor({ llmClient: {}, chatService: {} });
-    check('braveSearch → citation-producing', p._isCitationProducingTool('braveSearch') === true);
-    check('webSearch → citation-producing', p._isCitationProducingTool('webSearch') === true);
-    check('read_url → citation-producing', p._isCitationProducingTool('read_url') === true);
+    const captured = (toolId, toolDef) => {
+      const state = { data: {} };
+      p._captureCitationsFromToolResult({
+        toolId,
+        toolDef,
+        args: {},
+        result: [{ url: 'https://example.com/a', title: 'A' }],
+        state,
+        taskId: null
+      });
+      return (state.data._citations || []).length > 0;
+    };
     check(
-      'source_ lookups → citation-producing',
-      p._isCitationProducingTool('source_kb1') === true
+      'a declared web search → citation-producing',
+      captured('braveSearch', { id: 'braveSearch', activity: { kind: 'search', origin: 'web' } })
     );
+    check(
+      'a declared fetch → citation-producing',
+      captured('read_url', { id: 'read_url', activity: { kind: 'fetch', origin: 'web' } })
+    );
+    check(
+      'a tool whose id says search but declares nothing → NOT citation-producing',
+      !captured('foo_search', { id: 'foo_search' })
+    );
+    check('no tool definition → NOT citation-producing', !captured('webSearch', undefined));
     check(
       'non-search tool (createTask) → NOT citation-producing',
-      p._isCitationProducingTool('createTask') === false
+      !captured('createTask', { id: 'createTask' })
     );
-    check('set_plan → NOT citation-producing', p._isCitationProducingTool('set_plan') === false);
   }
 
   console.log('\n🧪 C — verifier failures carried into per-round history (bounded)\n');

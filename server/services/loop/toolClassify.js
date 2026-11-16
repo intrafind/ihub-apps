@@ -50,20 +50,3 @@ export function classifyToolResult(toolMessage) {
     RATE_LIMIT_PATTERN.test(String(parsed.code || ''));
   return { failed: true, rateLimited, message };
 }
-
-/**
- * Heuristic used by the wrap-up nudge: tools that produce citations (search,
- * fetch, source lookups) must not be replaced by invented URLs.
- * @param {string} toolId
- * @returns {boolean}
- */
-export function isCitationProducingTool(toolId) {
-  const id = String(toolId || '').toLowerCase();
-  if (!id) return false;
-  return (
-    id.includes('search') ||
-    id === 'read_url' ||
-    id.startsWith('source_') ||
-    id.startsWith('knowledge_')
-  );
-}

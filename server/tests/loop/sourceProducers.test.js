@@ -16,7 +16,7 @@ import {
   MAX_FRAME_BYTES,
   registerSourceProducer
 } from '../../services/sources/index.js';
-import { isWebSearchTool, webSourceProducer } from '../../services/sources/producers/web.js';
+import { webSourceProducer } from '../../services/sources/producers/web.js';
 import { publishDefinitionTypes } from '../../services/integrations/integrationTypes.js';
 import { declarationOf } from '../../services/sources/producers/declared.js';
 import {
@@ -29,10 +29,24 @@ import { sourcesAddedData } from '../../services/loop/contracts/runLogEvents.js'
 /** The platform's own web search tools, as their shipped definitions run them. */
 const SCRIPTS = { braveSearch: 'braveSearch.js', qwantSearch: 'qwantSearch.js' };
 
+/** What the tools these tests call declare (the shipped definitions do; the id never decides). */
+const WEB = { kind: 'search', origin: 'web' };
+const DECLARED = {
+  braveSearch: WEB,
+  qwantSearch: WEB,
+  staanSearch: WEB,
+  webSearch: WEB,
+  read_url: { kind: 'fetch', origin: 'web' }
+};
+
 const extract = (toolId, result, extra = {}) =>
   extractToolSources({
     toolId,
-    toolDef: { id: toolId, ...(SCRIPTS[toolId] ? { script: SCRIPTS[toolId] } : {}) },
+    toolDef: {
+      id: toolId,
+      ...(SCRIPTS[toolId] ? { script: SCRIPTS[toolId] } : {}),
+      ...(DECLARED[toolId] ? { activity: DECLARED[toolId] } : {})
+    },
     result,
     ...extra
   });
@@ -141,6 +155,7 @@ test('web: a failed page read is still a page the turn tried', () => {
   assert.deepEqual(
     extractToolSources({
       toolId: 'read_url',
+      toolDef: { id: 'read_url', activity: DECLARED.read_url },
       args: { url: 'https://down.example/' },
       result: { error: true },
       failed: true
@@ -149,22 +164,51 @@ test('web: a failed page read is still a page the turn tried', () => {
   );
 });
 
-test('web: which tools are web search', () => {
-  for (const id of ['braveSearch', 'qwantSearch', 'staanSearch', 'webSearch', 'tavily_search']) {
-    assert.equal(isWebSearchTool(id), true, id);
+test('web: which tools are web search is their declared category, never their id', () => {
+  const webTool = id => ({ id, activity: { kind: 'search', origin: 'web' } });
+  const reader = { id: 'read_url', activity: { kind: 'fetch', origin: 'web' } };
+  for (const id of ['braveSearch', 'qwantSearch', 'staanSearch', 'anything']) {
+    assert.equal(webSourceProducer.matches({ toolId: id, toolDef: webTool(id) }), true, id);
   }
-  for (const id of ['iFinder_search', 'source_handbook', 'app__websearch', 'jira_search']) {
-    assert.equal(isWebSearchTool(id), false, id);
+  assert.equal(webSourceProducer.matches({ toolId: 'read_url', toolDef: reader }), true);
+  for (const id of [
+    'webSearch',
+    'tavily_search',
+    'iFinder_search',
+    'app__websearch',
+    'jira_search'
+  ]) {
+    assert.equal(webSourceProducer.matches({ toolId: id, toolDef: { id } }), false, id);
+    assert.equal(webSourceProducer.matches({ toolId: id }), false, id);
   }
+  // A connected system that is not declared a web search is not one.
+  assert.equal(
+    webSourceProducer.matches({
+      toolId: 'tavily_search',
+      toolDef: { id: 'x', _mcp: { serverId: 's' } }
+    }),
+    false
+  );
 });
 
-test('web: MCP search tools named after an engine are read from JSON text', () => {
+test('web: an MCP tool an admin declared a web search is read from JSON text', () => {
   const text = JSON.stringify([{ link: 'https://example.com/', name: 'Ex' }]);
+  const declared = { id: 'mcp_web_search', _mcp: { serverId: 's' }, activity: WEB };
+  const run = result => extractToolSources({ toolId: 'mcp_web_search', toolDef: declared, result });
   assert.deepEqual(
-    extract('mcp_web_search', text).items.map(item => [item.url, item.title]),
-    [['https://example.com/', 'Ex']]
+    run(text).items.map(item => [item.url, item.title, item.private]),
+    [['https://example.com/', 'Ex', true]]
   );
-  assert.equal(extract('mcp_web_search', 'plain text answer'), null);
+  assert.equal(run('plain text answer'), null);
+  // Named like a search engine but declaring nothing: not a web search.
+  assert.equal(
+    extractToolSources({
+      toolId: 'mcp_web_search',
+      toolDef: { id: 'mcp_web_search', _mcp: { serverId: 's' } },
+      result: text
+    })?.items.every(item => item.provider !== 'web') ?? true,
+    true
+  );
   assert.equal(
     extract('braveSearch', { results: [{ url: 'javascript:alert(1)' }, { url: 'nope' }] }),
     null
@@ -174,7 +218,8 @@ test('web: MCP search tools named after an engine are read from JSON text', () =
 test('web: only the platform’s own web search scripts make their hits public', () => {
   const hits = { results: [{ title: 'Intranet page', url: 'https://wiki.corp.example/x' }] };
   const privacyOf = (toolId, toolDef) =>
-    extractToolSources({ toolId, toolDef, result: hits }).items[0].private;
+    extractToolSources({ toolId, toolDef: { ...toolDef, activity: WEB }, result: hits }).items[0]
+      .private;
   const brave = { id: 'braveSearch', script: 'braveSearch.js' };
   assert.equal(privacyOf('braveSearch', brave), false);
   assert.equal(privacyOf('webSearch', { id: 'webSearch', script: 'qwantSearch.js' }), false);
@@ -194,6 +239,8 @@ test('web: the search action of a shipped engine makes its hits public', () => {
   const engineTool = (id, instanceId, definition, action = 'search') => ({
     id,
     type: 'integration',
+    // What the integration generator sets for the search action of an engine.
+    ...(action === 'search' ? { activity: WEB } : {}),
     _integration: { instanceId, action, definition }
   });
   const result = {
@@ -217,7 +264,7 @@ test('web: the search action of a shipped engine makes its hits public', () => {
   // The page reader is a platform tool; a page it read is private.
   const read = webSourceProducer.fromToolResult({
     toolId: 'read_url',
-    toolDef: { id: 'read_url', script: 'readUrl.js' },
+    toolDef: { id: 'read_url', script: 'readUrl.js', activity: DECLARED.read_url },
     args: { url: 'https://example.com/a' },
     result: { url: 'https://example.com/a', content: 'body', wordCount: 1 }
   });
@@ -243,6 +290,8 @@ test('web: a third-party engine’s search reports web sources, kept private', (
     const toolDef = {
       id: 'acme__search',
       type: 'integration',
+      // The integration generator declares the search action of a web-search definition.
+      activity: WEB,
       _integration: { instanceId: 'acme', action: 'search', definition: 'org.acme/search' }
     };
     const result = { results: [{ title: 'Hit', url: 'https://acme.example/hit' }] };
@@ -252,9 +301,9 @@ test('web: a third-party engine’s search reports web sources, kept private', (
       frame.items.map(item => [item.url, item.private]),
       [['https://acme.example/hit', true]]
     );
-    // Without the type, the id alone does not make it a web search.
-    publishDefinitionTypes([]);
-    assert.equal(webSourceProducer.matches({ toolId: 'acme__search', toolDef }), false);
+    // Without the declaration, the id alone does not make it a web search.
+    const { activity: _declared, ...undeclared } = toolDef;
+    assert.equal(webSourceProducer.matches({ toolId: 'acme__search', toolDef: undeclared }), false);
   } finally {
     publishDefinitionTypes([]);
   }
@@ -373,7 +422,7 @@ test('envelope: sources the call reported beside its result belong to its own re
   assert.equal(
     extractToolSources({
       toolId: 'braveSearch',
-      toolDef: { id: 'braveSearch' },
+      toolDef: { id: 'braveSearch', activity: WEB },
       result: {},
       reported
     }),

@@ -10,65 +10,36 @@
  * @module services/loop/seams/knowledgeSourceSeam
  */
 
-import { getDefinitionTypes } from '../../integrations/integrationTypes.js';
 import { classifyToolResult } from '../toolClassify.js';
 import { integrationLabelOf } from '../../../utils/toolIntegrationLabel.js';
 import { activityOriginOfSource } from '../../chat/answerBasis.js';
-
-/** iHub's own tools (scheduling, …) are not a connected system. */
-const IHUB_DEFINITION = 'com.intrafind/ihub';
-
-/** The page reader: opening a page the model was pointed at (or found) is the web. */
-const PAGE_READER_TOOL_ID = 'read_url';
+import { categoryOf } from '../../tools/toolCategory.js';
 
 /**
- * The source of a tool, by its id alone: the built-in search and retrieval
- * tools. A project is its own source; `sources` is only what an admin
- * configured.
- * @param {string} toolId
- * @returns {'websearch'|'ifinder'|'project'|'sources'|null}
+ * The knowledge source an origin stands for (the inverse of the footer's
+ * `KIND_OF_SOURCE`): what the badge and the answer basis count.
  */
-export function classifyKnowledgeSource(toolId) {
-  const id = String(toolId || '').toLowerCase();
-  if (!id) return null;
-  // The page reader reads the open web.
-  if (id === PAGE_READER_TOOL_ID) return 'websearch';
-  // iFinder searches the organisation's own document index, not the web.
-  if (id.startsWith('ifinder')) return 'ifinder';
-  // The project knowledge tools search the projects the chat was given.
-  if (id.startsWith('knowledge_')) return 'project';
-  if (id === 'web-search' || id === 'websearch' || id.includes('search')) {
-    if (id.includes('people') || id.includes('planner')) return null;
-    if (id === 'deepresearch' || id === 'researchplanner') return null;
-    return 'websearch';
-  }
-  if (id.startsWith('source_') || id.includes('retrieval')) return 'sources';
-  return null;
-}
+const SOURCE_OF_ORIGIN = Object.freeze({
+  web: 'websearch',
+  ifinder: 'ifinder',
+  iassistant: 'iassistant',
+  project: 'project',
+  documents: 'documents',
+  integration: 'integration'
+});
 
 /**
- * The source of a tool call. An installed integration, an MCP server or
- * a remote agent is a connected system (`integration`) — a directory lookup or
- * a Jira search is not a web search, whatever its id says — unless the
- * integration is a web search itself. Everything else is classified by id.
- * @param {string} toolId
+ * The source of a tool call: where the tool looks (its category,
+ * `services/tools/toolCategory`), never its id. A connected system (an
+ * installed integration, an MCP server, a remote agent) is `integration` — a
+ * directory lookup or a Jira search is not a web search, whatever its id says —
+ * unless it declares another origin.
  * @param {Object} [toolDef]
- * @returns {'websearch'|'ifinder'|'project'|'sources'|'integration'|null}
+ * @returns {'websearch'|'ifinder'|'iassistant'|'project'|'documents'|'integration'|null}
  */
-export function classifyToolKnowledgeSource(toolId, toolDef) {
-  // The loop's own tools (skills, tool search) inform nobody: `search_tools`
-  // finds tools, not pages.
-  if (toolDef?.isInternalTool) return null;
-  const integration = toolDef?._integration;
-  if (integration) {
-    if (integration.definition === IHUB_DEFINITION) return null;
-    const type = getDefinitionTypes()[integration.definition];
-    if (type === 'web-search') return 'websearch';
-    // Built-ins that kept their tool id (`iFinder_search`) keep their badge.
-    return classifyKnowledgeSource(toolId) === 'ifinder' ? 'ifinder' : 'integration';
-  }
-  if (toolDef?._mcp || toolDef?._a2a) return 'integration';
-  return classifyKnowledgeSource(toolId);
+export function classifyToolKnowledgeSource(toolDef) {
+  const { origin } = categoryOf(toolDef);
+  return (origin && SOURCE_OF_ORIGIN[origin]) || null;
 }
 
 /** The tool that reads a source an earlier answer of the chat found (`tools/chatSources.js`). */
@@ -80,16 +51,15 @@ export const RECALL_TOOL_ID = 'chat_sources_read';
  * covers the providers' own search (grounding) too; an iAssistant document is
  * an `ifinder` source.
  * @param {string} provider
- * @returns {'websearch'|'ifinder'|'project'|'sources'|'integration'}
+ * @returns {'websearch'|'ifinder'|'project'|'integration'}
  */
 export function classifySourceProvider(provider) {
   const id = String(provider || '');
   if (id === 'web') return 'websearch';
   if (id === 'ifinder') return 'ifinder';
   if (id === 'project') return 'project';
-  if (id.startsWith('mcp:')) return 'integration';
-  // Any other provider is the id of the tool that found it.
-  return classifyKnowledgeSource(id) || 'integration';
+  // Any other provider is a connected system (a declared `provider`, an MCP server).
+  return 'integration';
 }
 
 /**
@@ -134,7 +104,7 @@ export const knowledgeSourceSeam = {
       if (origins.length === 1) outcome.activityOrigin = origins[0];
       return;
     }
-    const source = classifyToolKnowledgeSource(info.toolId, info.toolDef);
+    const source = classifyToolKnowledgeSource(info.toolDef);
     if (!source) return;
     // A connected system that returned nothing but an error informed nothing.
     if (source === 'integration' && (outcome.error || classifyToolResult(outcome.message).failed)) {
@@ -143,7 +113,8 @@ export const knowledgeSourceSeam = {
     // A page read that delivered no text (a failed fetch, an offset at the end
     // of the page, a refusal) informed nothing: the answer does not rest on the web.
     if (
-      String(info.toolId).toLowerCase() === PAGE_READER_TOOL_ID &&
+      source === 'websearch' &&
+      categoryOf(info.toolDef).kind === 'fetch' &&
       outcome.readOutcome !== 'opened'
     ) {
       return;

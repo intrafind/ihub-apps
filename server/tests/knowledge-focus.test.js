@@ -30,6 +30,10 @@ import { registerKnowledgeProvider } from '../services/knowledge/registry.js';
 import { setTextReader } from '../services/knowledge/ItemTextService.js';
 import { LocalKnowledgeProvider } from '../services/knowledge/LocalKnowledgeProvider.js';
 import { extractToolSources } from '../services/sources/index.js';
+import { builtInTool } from './helpers/builtInTools.js';
+
+/** A declared web search, as the integration generator sets it. */
+const WEB = { kind: 'search', origin: 'web' };
 import { estimateTokens } from '../../shared/tokenEstimator.js';
 
 const filler = n =>
@@ -734,7 +738,12 @@ describe('the sources panel shows the passages of a focused page read', () => {
   ];
 
   it('merges the reported passages into the page source', () => {
-    const frame = extractToolSources({ toolId: 'read_url', result: page, reported });
+    const frame = extractToolSources({
+      toolId: 'read_url',
+      toolDef: builtInTool('read_url'),
+      result: page,
+      reported
+    });
     assert.equal(frame.items.length, 1, 'one source for the page');
     assert.equal(frame.items[0].url, 'https://docs.example.com/manual');
     assert.deepEqual(
@@ -756,7 +765,7 @@ describe('the sources panel shows the passages of a focused page read', () => {
     };
     const frame = extractToolSources({
       toolId: 'braveSearch',
-      toolDef: { script: 'braveSearch.js' },
+      toolDef: { id: 'braveSearch', script: 'braveSearch.js', activity: WEB },
       args: { query: 'enterprise plan price' },
       result,
       reported
@@ -771,7 +780,7 @@ describe('the sources panel shows the passages of a focused page read', () => {
 
     const other = extractToolSources({
       toolId: 'braveSearch',
-      toolDef: { script: 'somethingElse.js' },
+      toolDef: { id: 'braveSearch', script: 'somethingElse.js', activity: WEB },
       args: { query: 'enterprise plan price' },
       result,
       reported
@@ -781,7 +790,11 @@ describe('the sources panel shows the passages of a focused page read', () => {
   });
 
   it('a read without reported passages is what it was', () => {
-    const frame = extractToolSources({ toolId: 'read_url', result: page });
+    const frame = extractToolSources({
+      toolId: 'read_url',
+      toolDef: builtInTool('read_url'),
+      result: page
+    });
     assert.equal(frame.items.length, 1);
     assert.equal(frame.items[0].passages, undefined);
   });
@@ -789,6 +802,7 @@ describe('the sources panel shows the passages of a focused page read', () => {
   it('only web sources are taken from what a page read reports', () => {
     const frame = extractToolSources({
       toolId: 'read_url',
+      toolDef: builtInTool('read_url'),
       result: page,
       reported: [{ provider: 'project', kind: 'document', ref: { id: 'x' }, title: 'Other' }]
     });

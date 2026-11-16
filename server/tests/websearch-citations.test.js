@@ -42,6 +42,7 @@ import {
   urlKey
 } from '../../shared/sources/index.js';
 import { extractToolSources } from '../services/sources/index.js';
+import { builtInTool } from './helpers/builtInTools.js';
 
 /** An answer's set, folded from its frames the way the loop and the client fold them. */
 const setOf = (...frames) =>
@@ -349,7 +350,7 @@ describe('shared/sources', () => {
     const sources = setOf(
       extractToolSources({
         toolId: 'braveSearch',
-        toolDef: { id: 'braveSearch', script: 'braveSearch.js' },
+        toolDef: { ...builtInTool('braveSearch'), script: 'braveSearch.js' },
         args: { query: 'langdock' },
         result: {
           results: [
@@ -362,17 +363,20 @@ describe('shared/sources', () => {
       }),
       extractToolSources({
         toolId: 'read_url',
+        toolDef: builtInTool('read_url'),
         args: { url: 'https://docs.langdock.com/' },
         result: { url: 'https://docs.langdock.com/', content: 'text', wordCount: 812 }
       }),
       extractToolSources({
         toolId: 'read_url',
+        toolDef: builtInTool('read_url'),
         args: { url: 'https://blocked.example/' },
         result: { error: true },
         failed: true
       }),
       extractToolSources({
         toolId: 'iFinder_search',
+        toolDef: builtInTool('iFinder_search'),
         args: { query: 'internal' },
         result: { results: [{ id: 'intra-1', title: 'Internal', url: 'https://intranet/' }] }
       })

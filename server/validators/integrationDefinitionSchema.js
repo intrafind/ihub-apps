@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import semver from 'semver';
 import { sourceDeclarationSchema } from '../services/sources/producers/declared.js';
+import { activityDeclarationSchema } from '../services/tools/toolCategory.js';
 import { INTEGRATION_TYPES } from '../services/integrations/integrationTypes.js';
 
 /**
@@ -875,6 +876,13 @@ export const integrationActionSchema = z.object({
   response: httpResponseMappingSchema.optional(),
   sideEffect: z.enum(SIDE_EFFECTS).prefault('unknown'),
   dataFlow: z.enum(DATA_FLOWS).prefault('external'),
+  /**
+   * What the action is in the chat (a search, a fetch of one page or document,
+   * a plain call) and where it looks, by origin (`services/tools/toolCategory`).
+   * Without it the action is a plain call; the `search` action of a
+   * `web-search` definition searches the web.
+   */
+  activity: activityDeclarationSchema.optional(),
   enabledByDefault: z.boolean().prefault(true),
   /**
    * An app binds this action only by naming it in the binding's `actions`; a

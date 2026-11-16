@@ -52,8 +52,9 @@ import {
 } from '../services/sources/producers/project.js';
 import { extractToolSources } from '../services/sources/index.js';
 import { normalizeSource, mergeSources, emptySourceSet } from '../../shared/sources/index.js';
-import { classifyKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
-import { activityKindOf } from '../utils/toolDisplay.js';
+import { classifyToolKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
+import { categoryOf } from '../services/tools/toolCategory.js';
+import { builtInTool } from './helpers/builtInTools.js';
 import {
   content as providerContent,
   metadata as providerMetadata
@@ -1262,9 +1263,13 @@ describe('tools', () => {
   });
 
   it('is classified as project knowledge, never as web search', () => {
-    assert.equal(classifyKnowledgeSource('knowledge_search'), 'project');
-    assert.equal(activityKindOf('knowledge_search', 'project'), 'search');
-    assert.equal(activityKindOf('knowledge_read', 'project'), 'fetch');
+    const search = builtInTool('knowledge_search');
+    assert.equal(classifyToolKnowledgeSource(search), 'project');
+    assert.deepEqual(categoryOf(search), { kind: 'search', origin: 'project' });
+    assert.deepEqual(categoryOf(builtInTool('knowledge_read')), {
+      kind: 'fetch',
+      origin: 'project'
+    });
   });
 });
 

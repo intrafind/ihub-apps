@@ -2,83 +2,101 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Knowledge-source badge vocabulary: which tools count as a web search. iFinder
- * searches the organisation's document index, so its answers must not be
- * badged "Based on web search".
+ * Knowledge-source badge vocabulary: which tools count as a web search. It is
+ * the tool's declared category, never its id: iFinder searches the
+ * organisation's document index, so its answers must not be badged "Based on
+ * web search", and neither must a people directory, Jira or an MCP tool that
+ * merely has "search" in its name.
  */
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyKnowledgeSource } from '../../services/loop/seams/knowledgeSourceSeam.js';
+import { classifyToolKnowledgeSource } from '../../services/loop/seams/knowledgeSourceSeam.js';
 
-test('web search tools are web search', () => {
-  assert.equal(classifyKnowledgeSource('braveSearch'), 'websearch');
-  assert.equal(classifyKnowledgeSource('qwantSearch'), 'websearch');
-  assert.equal(classifyKnowledgeSource('webSearch'), 'websearch');
+const web = { activity: { kind: 'search', origin: 'web' } };
+
+test('a tool that declares a web search is web search, by its declaration and not its id', () => {
+  assert.equal(classifyToolKnowledgeSource({ id: 'braveSearch', ...web }), 'websearch');
+  assert.equal(classifyToolKnowledgeSource({ id: 'anything', ...web }), 'websearch');
+  assert.equal(
+    classifyToolKnowledgeSource({ id: 'read_url', activity: { kind: 'fetch', origin: 'web' } }),
+    'websearch'
+  );
 });
 
-test('iFinder functions are iFinder documents, not web search', () => {
-  assert.equal(classifyKnowledgeSource('iFinder_search'), 'ifinder');
-  assert.equal(classifyKnowledgeSource('iFinder_getContent'), 'ifinder');
-  assert.equal(classifyKnowledgeSource('iFinder.search'), 'ifinder');
+test('iFinder and project knowledge keep their own badge', () => {
+  const ifinder = id => ({ id, activity: { kind: 'search', origin: 'ifinder' } });
+  assert.equal(classifyToolKnowledgeSource(ifinder('iFinder_search')), 'ifinder');
+  assert.equal(classifyToolKnowledgeSource(ifinder('iFinder_getContent')), 'ifinder');
+  assert.equal(
+    classifyToolKnowledgeSource({
+      id: 'knowledge_search',
+      activity: { kind: 'search', origin: 'project' }
+    }),
+    'project'
+  );
 });
 
-test('configured sources and unrelated tools keep their classification', () => {
-  assert.equal(classifyKnowledgeSource('source_handbook'), 'sources');
-  assert.equal(classifyKnowledgeSource('entraPeopleSearch'), null);
-  assert.equal(classifyKnowledgeSource('jira'), null);
-  assert.equal(classifyKnowledgeSource(''), null);
+test('a tool that declares nothing is not a source, whatever its id says', () => {
+  for (const id of [
+    'webSearch',
+    'entraPeopleSearch',
+    'jira_searchIssues',
+    'foo_search',
+    'source_handbook'
+  ]) {
+    assert.equal(classifyToolKnowledgeSource({ id }), null, id);
+  }
+  assert.equal(classifyToolKnowledgeSource(undefined), null);
 });
 
 test('an integration, MCP server or remote agent is a connected system', async () => {
-  const { classifyToolKnowledgeSource } =
-    await import('../../services/loop/seams/knowledgeSourceSeam.js');
-  const { publishDefinitionTypes } =
-    await import('../../services/integrations/integrationTypes.js');
-  publishDefinitionTypes([
-    { definition: { id: 'com.intrafind/ldap-directory', type: 'people-directory' } },
-    { definition: { id: 'com.intrafind/brave-search', type: 'web-search' } }
-  ]);
   const integration = (definition, instanceId = 'x') => ({
     _integration: { definition, instanceId }
   });
   // A directory lookup is not "AI knowledge" — the answer came from the directory.
   assert.equal(
-    classifyToolKnowledgeSource(
-      'muc-ad__search_people',
-      integration('com.intrafind/ldap-directory')
-    ),
+    classifyToolKnowledgeSource({
+      id: 'muc-ad__search_people',
+      activity: { kind: 'search', origin: 'integration' },
+      ...integration('com.intrafind/ldap-directory')
+    }),
     'integration'
   );
   // A Jira search is not a web search, whatever its id says.
   assert.equal(
-    classifyToolKnowledgeSource('jira_searchTickets', integration('com.intrafind/jira')),
+    classifyToolKnowledgeSource({
+      id: 'jira_searchIssues',
+      ...integration('com.intrafind/jira')
+    }),
     'integration'
   );
-  // A web-search integration stays a web search; iFinder keeps its badge.
+  // A web-search integration declares the web (the generator sets it).
   assert.equal(
-    classifyToolKnowledgeSource('braveSearch', integration('com.intrafind/brave-search')),
+    classifyToolKnowledgeSource({
+      id: 'braveSearch',
+      ...web,
+      ...integration('com.intrafind/brave-search')
+    }),
     'websearch'
-  );
-  assert.equal(
-    classifyToolKnowledgeSource('iFinder_search', integration('com.intrafind/ifinder')),
-    'ifinder'
   );
   // iHub's own tools are not a connected system.
   assert.equal(
-    classifyToolKnowledgeSource('schedule_task', integration('com.intrafind/ihub')),
+    classifyToolKnowledgeSource({ id: 'schedule_task', ...integration('com.intrafind/ihub') }),
     null
   );
   assert.equal(
-    classifyToolKnowledgeSource('github__search_code', { _mcp: { serverId: 'github' } }),
+    classifyToolKnowledgeSource({ id: 'github__search_code', _mcp: { serverId: 'github' } }),
     'integration'
+  );
+  // An MCP tool an admin declared a web search says so; the id never does.
+  assert.equal(
+    classifyToolKnowledgeSource({ id: 'foo_search', _mcp: { serverId: 's' }, ...web }),
+    'websearch'
   );
   assert.equal(
-    classifyToolKnowledgeSource('a2a__agent__skill', { _a2a: { agentId: 'agent' } }),
+    classifyToolKnowledgeSource({ id: 'a2a__agent__skill', _a2a: { agentId: 'agent' } }),
     'integration'
   );
-  // Without a definition the id decides, as before.
-  assert.equal(classifyToolKnowledgeSource('webSearch', { id: 'webSearch' }), 'websearch');
-  publishDefinitionTypes([]);
 });
 
 test('a connected system counts only when the call returned data', async () => {
@@ -113,9 +131,8 @@ test('a recalled source counts as the kind of source it was found as', async () 
   assert.equal(classifySourceProvider('project'), 'project');
   // An MCP server is a connected system, even one that searches.
   assert.equal(classifySourceProvider('mcp:brave-search'), 'integration');
-  // Otherwise the provider is the id of the tool that found it.
-  assert.equal(classifySourceProvider('braveSearch'), 'websearch');
-  assert.equal(classifySourceProvider('source_handbook'), 'sources');
+  // Any other provider is a connected system; a provider id is never read as a tool id.
+  assert.equal(classifySourceProvider('braveSearch'), 'integration');
   assert.equal(classifySourceProvider('jira'), 'integration');
 });
 

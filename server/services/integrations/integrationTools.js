@@ -14,7 +14,12 @@ import {
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
 import { fingerprintOfTool, fingerprintsOfActions, observeInBackground } from './actionReview.js';
-import { integrationInstructionsOf, withActionOverrides } from './actionGuidance.js';
+import {
+  actionOverrideOf,
+  integrationInstructionsOf,
+  withActionOverrides
+} from './actionGuidance.js';
+import { WEB_SEARCH_ACTION, isWebSearchDefinition } from '../search/webSearchEngines.js';
 import { recordActionEvent } from './actionUsage.js';
 import {
   registerScopeProvider,
@@ -64,6 +69,21 @@ export function isIntegrationTool(tool) {
 }
 
 /**
+ * What a generated tool is (`services/tools/toolCategory`): the action's own
+ * declaration (the definition's, or the admin's correction), else the engine
+ * contract: the `search` action of a web search definition searches the web.
+ * Anything else declares nothing and is a plain call.
+ * @returns {{activity?: {kind: string, origin?: string, place?: string}}}
+ */
+function activityOfAction(definition, action) {
+  if (action.activity) return { activity: action.activity };
+  if (action.name === WEB_SEARCH_ACTION && isWebSearchDefinition(definition.id)) {
+    return { activity: { kind: 'search', origin: 'web' } };
+  }
+  return {};
+}
+
+/**
  * A tool from an action of an installation. The description is the admin's
  * override or the definition's; the action's guidance travels on the marker
  * (`_integration.guidance`) and reaches the system prompt through
@@ -101,6 +121,7 @@ export function toolFromAction(resolved, rawAction, language, fingerprint = null
     readOnly: action.sideEffect === 'read',
     examples: action.examples,
     sources: action.sources,
+    ...activityOfAction(definition, action),
     instructions: integrationInstructionsOf(definition, instance, language).text || undefined,
     // A connector may add fields of its own (a people directory's or an LDAP browser's marker).
     ...(action.extras && typeof action.extras === 'object' ? action.extras : {})
@@ -183,8 +204,11 @@ function withToolOverrides(tool, instance, language, fingerprint, instructions) 
         language
       )
     : null;
+  // The admin's correction of what the tool is (`actions.overrides[<tool>].activity`).
+  const activity = actionName ? actionOverrideOf(instance, actionName).activity : undefined;
   return {
     ...tool,
+    ...(activity ? { activity } : {}),
     ...(shaped?.overridden.description ? { description: shaped.description } : {}),
     ...(instructions ? { instructions } : {}),
     ...(shaped?.examples.length ? { examples: shaped.examples } : {}),

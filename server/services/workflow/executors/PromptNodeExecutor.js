@@ -77,6 +77,7 @@ import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 import { isFeatureEnabled } from '../../../featureRegistry.js';
 import { describeSkillCatalog, renderActiveSkillBlock } from '../../skillAccess.js';
 import { resolveMaxOutputTokens } from '../../../../shared/outputTokens.js';
+import { isCitationProducing } from '../../tools/toolCategory.js';
 
 // Bound on the {{previousTaskResults}} digest baked into a per-task worker's
 // prompt (the synthesizer is exempt — it needs the full corpus). Keeps the
@@ -2142,6 +2143,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       try {
         this._captureCitationsFromToolResult({
           toolId,
+          toolDef: matchedTool,
           args,
           result,
           state: context._workflowState,
@@ -3083,14 +3085,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    *   - `{ url, content, ... }` (read_url and similar)
    *   - `{ items: [...] }` / `{ sources: [...] }` (other variants)
    *
-   * Tools whose IDs match the citation-producing allowlist below are
-   * scanned. Other tools (createTask, write_memory, …) are ignored.
+   * Tools whose category is a search or a fetch (`services/tools/toolCategory`)
+   * are scanned. Other tools (createTask, write_memory, …) are ignored.
    *
    * @private
    */
-  _captureCitationsFromToolResult({ toolId, args, result, state, taskId }) {
+  _captureCitationsFromToolResult({ toolId, toolDef, args, result, state, taskId }) {
     if (!state || !state.data) return;
-    if (!this._isCitationProducingTool(toolId)) return;
+    if (!isCitationProducing(toolDef)) return;
 
     const newEntries = [];
     const seen = new Set((state.data._citations || []).map(s => s.url).filter(Boolean));
@@ -3350,35 +3352,6 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     );
 
     return out;
-  }
-
-  /**
-   * Heuristic for whether a tool call produces citable URLs. Used by
-   * citation capture to skip irrelevant tool calls (memory writes, task
-   * creation, etc.) so the ledger stays clean.
-   *
-   * Both web tools (webSearch, read_url) and configured
-   * knowledge-base lookups (`source_*`) qualify — when an agent consults
-   * one of its configured sources, the document URL becomes a citation
-   * just like a web search result.
-   *
-   * @private
-   */
-  _isCitationProducingTool(toolId) {
-    if (typeof toolId !== 'string') return false;
-    const id = toolId.toLowerCase();
-    // Any *search* tool (webSearch, braveSearch, tavilySearch, …) plus the
-    // content extractor and configured source_ lookups. Previously this only
-    // matched the literal `websearch`, so the configured `braveSearch` tool
-    // produced ZERO citations — its result URLs were silently dropped. The
-    // harvest below guards on a url field, so a non-search tool that happens to
-    // match contributes nothing anyway.
-    if (id.includes('search') || id === 'read_url') return true;
-    if (id.startsWith('source_')) return true;
-    // Native provider search (Google, Anthropic) doesn't appear in the tool
-    // call loop — it rides alongside the assistant message as grounding
-    // metadata instead — so we don't try to capture from a tool result here.
-    return false;
   }
 
   /**
