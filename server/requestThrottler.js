@@ -17,6 +17,7 @@ import { httpFetch } from './utils/httpConfig.js';
 import { recordRateLimitHit } from './telemetry/metrics.js';
 import { isClusterBusActive, request, respondInPrimary } from './clusterBus.js';
 import logger from './utils/logger.js';
+import { resolveEnvVars } from './utils/envVars.js';
 
 /**
  * Throttle settings of ids that have no tool file any more (the built-in web
@@ -43,15 +44,127 @@ function normalizeLimit(value) {
   return typeof value === 'number' && value >= 1 ? value : Infinity;
 }
 
-function getConcurrency(id = 'default') {
+/** Providers that are always served by the installation's own hardware. */
+const SELF_HOSTED_PROVIDERS = new Set(['local', 'vllm-realtime']);
+
+/** Providers whose API others implement too (vLLM, LM Studio, ...): the URL decides. */
+const URL_DECIDES_PROVIDERS = new Set(['openai', 'openai-responses', 'mistral']);
+
+/**
+ * Hosts of hosted model APIs (and their subdomains). They rate-limit per API
+ * key, so their models keep the cloud default `requestConcurrency`.
+ */
+const CLOUD_API_HOSTS = [
+  'openai.com',
+  'azure.com',
+  'mistral.ai',
+  'openrouter.ai',
+  'anthropic.com',
+  'googleapis.com',
+  'amazonaws.com',
+  'groq.com',
+  'together.xyz',
+  'deepseek.com',
+  'x.ai',
+  'fireworks.ai',
+  'perplexity.ai',
+  'cohere.com',
+  'cohere.ai'
+];
+
+/**
+ * True when a model runs on the installation's own hardware (vLLM, LM Studio,
+ * Ollama, ...): `provider: "local"`, or an OpenAI- or Mistral-compatible model
+ * whose URL is not a known hosted API. Such a backend batches requests, so it
+ * gets `requestConcurrencyLocal` instead of the cloud default. Bedrock,
+ * Anthropic, Google and iAssistant models, and models whose URL cannot be
+ * read, count as hosted.
+ *
+ * @param {{provider?: string, url?: string}} model - Model config
+ * @returns {boolean}
+ */
+export function isSelfHostedModel(model) {
+  if (SELF_HOSTED_PROVIDERS.has(model?.provider)) return true;
+  if (!URL_DECIDES_PROVIDERS.has(model?.provider) || typeof model.url !== 'string') return false;
+  let host;
+  try {
+    host = new URL(resolveEnvVars(model.url)).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return !CLOUD_API_HOSTS.some(cloud => host === cloud || host.endsWith(`.${cloud}`));
+}
+
+/**
+ * How many calls to an id may run at once, cluster-wide: a registered hint,
+ * then the model's own `concurrency`, then the platform default for its kind
+ * of model — `requestConcurrencyLocal` for a self-hosted model (falling back
+ * to `requestConcurrency` when unset), `requestConcurrency` for everything
+ * else.
+ *
+ * @param {string} id - Model id, tool id or 'default'
+ * @returns {number} The limit; Infinity for none
+ */
+export function getConcurrency(id = 'default') {
   const platform = configCache.getPlatform() || {};
   const { data: models = [] } = configCache.getModels() || {};
   const model = models.find(m => m.id === id);
   const hint = throttleHints.get(id);
   if (hint && typeof hint.concurrency === 'number') return normalizeLimit(hint.concurrency);
   if (model && typeof model.concurrency === 'number') return normalizeLimit(model.concurrency);
-  const limit = platform.requestConcurrency;
-  return normalizeLimit(limit);
+  if (model && typeof platform.requestConcurrencyLocal === 'number' && isSelfHostedModel(model)) {
+    return normalizeLimit(platform.requestConcurrencyLocal);
+  }
+  return normalizeLimit(platform.requestConcurrency);
+}
+
+/** A call that waited at least this long for a slot is reported. */
+export const SLOW_SLOT_WAIT_MS = 2000;
+
+/** At most one warning per id in this interval; the count covers the rest. */
+const SLOW_SLOT_WAIT_LOG_INTERVAL_MS = 60 * 1000;
+
+/** id → { count, unlogged, loggedAt }, in this process. */
+const slowSlotWaits = new Map();
+
+/**
+ * Count, and log at most once a minute per id, a call that waited long for a
+ * slot: the sign that the model's concurrency is lower than the demand, so
+ * admins can raise it (or the backend's capacity).
+ *
+ * @param {string} id - Model or tool id
+ * @param {number} waitedMs - Time from asking for a slot to getting one
+ */
+function noteSlotWait(id, waitedMs) {
+  if (!(waitedMs >= SLOW_SLOT_WAIT_MS)) return;
+  const entry = slowSlotWaits.get(id) || { count: 0, unlogged: 0, loggedAt: 0 };
+  entry.count += 1;
+  entry.unlogged += 1;
+  slowSlotWaits.set(id, entry);
+  const now = Date.now();
+  if (now - entry.loggedAt < SLOW_SLOT_WAIT_LOG_INTERVAL_MS) return;
+  logger.warn(
+    'Request throttle: calls waited for a free slot; raise the concurrency if the backend can take more',
+    {
+      component: 'RequestThrottler',
+      id,
+      slowWaits: entry.unlogged,
+      lastWaitMs: Math.round(waitedMs),
+      thresholdMs: SLOW_SLOT_WAIT_MS
+    }
+  );
+  entry.loggedAt = now;
+  entry.unlogged = 0;
+}
+
+/**
+ * Calls of this process that waited at least SLOW_SLOT_WAIT_MS for a slot,
+ * per id, since start.
+ *
+ * @returns {Record<string, number>}
+ */
+export function getSlowSlotWaits() {
+  return Object.fromEntries([...slowSlotWaits].map(([id, entry]) => [id, entry.count]));
 }
 
 function getDelay(id = 'default') {
@@ -104,9 +217,11 @@ function localThrottledRun(id, fn, concurrencyOf = getConcurrency, delayOf = get
   }
 
   const queue = queues.get(id);
+  const askedAt = Date.now();
 
   return new Promise((resolve, reject) => {
     const execute = async () => {
+      noteSlotWait(id, Date.now() - askedAt);
       actives.set(id, actives.get(id) + 1);
       try {
         const delay = delayOf(id);
@@ -161,6 +276,7 @@ let nextTicket = 1;
 
 async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayOf) {
   const ticket = `${process.pid}:${nextTicket++}`;
+  const askedAt = Date.now();
   const grant = await request(
     ACQUIRE_CHANNEL,
     { id, limit, delayMs, ticket, pid: process.pid },
@@ -177,6 +293,7 @@ async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayO
     return localThrottledRun(id, fn, concurrencyOf, delayOf);
   }
   if (grant.queued) recordRateLimitHit('llm', id);
+  noteSlotWait(id, Date.now() - askedAt);
   try {
     if (grant.waitMs > 0) await new Promise(r => setTimeout(r, grant.waitMs));
     return await fn();
