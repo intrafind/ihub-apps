@@ -1087,7 +1087,7 @@ Global JWT signing algorithm used when the server issues tokens (local auth, NTL
 | ----------- | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `algorithm` | String | `"RS256"` | JWT signing algorithm. `"RS256"` uses RSA public/private key pairs. Other values depend on the `jsonwebtoken` library (e.g., `"HS256"`, `"ES256"`) |
 
-For key generation instructions see [JWT Key Generation](ifinder-jwt-key-generation.md).
+For key generation instructions see [iFinder Authentication → Legacy: manual key exchange](ifinder-oidc-jwt.md#legacy-manual-key-exchange).
 
 ## iFinder Integration
 
@@ -1128,7 +1128,7 @@ iFinder is no longer configured in `platform.json`. It is a [built-in installed 
 | `allowUserSearchProfileChange` | Boolean | `true`     | `false` pins every chat to `defaultSearchProfile`: neither the user nor the model can pick another profile |
 | `timeout`, `downloadDir`, `searchEndpoint`, `documentEndpoint`, `fieldsEndpoint`, `facetsEndpoint` | | | Advanced: request timeout, download directory, API paths |
 
-No key material is ever stored in a config file: the private key is a credential in the central credential store (`contents/config/credentials.json`), or the `IFINDER_PRIVATE_KEY` environment variable. See [JWT Key Generation](ifinder-jwt-key-generation.md).
+No key material is ever stored in a config file: the private key is a credential in the central credential store (`contents/config/credentials.json`), or the `IFINDER_PRIVATE_KEY` environment variable. See [iFinder Authentication → Legacy: manual key exchange](ifinder-oidc-jwt.md#legacy-manual-key-exchange).
 
 The search settings belong to iFinder search; iAssistant has its own in the [`iassistant` installation](#iassistant-integration). Both run on the connection above. Users pick the search profile per chat in the chat input (see [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask)); the server checks the pick against the user's profiles (read as for `iFinder_listProfiles`) and the allow-list on every turn, and the pick binds every `iFinder_*` call of the chat. Apps get the `iFinder_*` tools by binding the installation, see [Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
 

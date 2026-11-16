@@ -515,7 +515,7 @@ If group mapping isn't working:
 
 4. **Ensure exact case match** - LDAP group names must match exactly in `mappings`
 
-For detailed troubleshooting, see [LDAP Group Mapping Troubleshooting Guide](LDAP-GROUP-MAPPING-TROUBLESHOOTING.md).
+For detailed troubleshooting, see [LDAP Group Lookup and Mapping → Troubleshooting](LDAP-GROUP-LOOKUP-QUICKSTART.md#troubleshooting).
 
 ## API Endpoints
 

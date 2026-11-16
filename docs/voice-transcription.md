@@ -424,7 +424,7 @@ There is no per-app transcription switch: a transcription model is picked in the
 > [!IMPORTANT]
 > **Breaking change.** The app block `transcription` (`enabled`, `defaultEnabled`, `modelId`, `inputs`, `streaming`, `maxDurationSeconds`) and the platform setting `speech.transcription.defaultModelId` are gone. Migration V167 removes them and adds the model an app transcribed with to its `allowedModels` when the app restricts models.
 
-`upload.videoUpload.maxFileSizeMB` accepts up to `51200` (50 GB): half an hour of video is 10 GB and more. The video is never uploaded, and an **MP4 or MOV of any size** is not read whole: only its index and its audio are (see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb)), so the memory used follows the audio, not the video. Other containers (WebM, MKV, ...) are decoded from the whole file in memory, which a browser can do up to about 2 GB; above that they are refused with a message that asks for MP4 or MOV. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio Extraction](audio-extraction.md#extracted-audio-format)). An hour of audio is a WAV of 115 MB.
+`upload.videoUpload.maxFileSizeMB` accepts up to `51200` (50 GB): half an hour of video is 10 GB and more. The video is never uploaded, and an **MP4 or MOV of any size** is not read whole: only its index and its audio are (see [Audio File Support → Large videos](audio-file-support.md#large-videos-mp4-and-mov-up-to-50-gb)), so the memory used follows the audio, not the video. Other containers (WebM, MKV, ...) are decoded from the whole file in memory, which a browser can do up to about 2 GB; above that they are refused with a message that asks for MP4 or MOV. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio File Support → Extracted audio format](audio-file-support.md#extracted-audio-format)). An hour of audio is a WAV of 115 MB.
 
 ### What users see
 
@@ -630,6 +630,6 @@ Server-side, all bridge activity is logged with `component: "RealtimeSTT"` — c
 
 - [Models](models.md) — model configuration reference, including transcription models
 - [Microphone Feature](microphone-feature.md) — dictation UI configuration
-- [Audio File Support](audio-file-support.md) / [Audio Extraction](audio-extraction.md) — the multimodal upload path and in-browser audio extraction
+- [Audio File Support](audio-file-support.md) — the multimodal upload path and in-browser audio extraction
 - [Production Reverse Proxy Guide](production-reverse-proxy-guide.md) — full nginx/Apache/Traefik deployment guide
 - [Scaling with Multiple Workers](scaling.md) — cluster mode details
