@@ -43,6 +43,8 @@ import { docsRoute, flattenDocsPages, groupDocsSections, locateDocsPage } from '
 
 const HOME_PAGE = 'README.md';
 const SCROLLER_ID = 'admin-main-content';
+/** How long a landing is held in place while images and diagrams load, unless the admin scrolls. */
+const LANDING_HOLD_MS = 5000;
 /** Admin routes a page's `adminPage` front-matter may link to. */
 const ADMIN_ROUTE_RE = /^\/admin(\/[\w-]+)*\/?$/;
 
@@ -314,6 +316,8 @@ function AdminDocsPage() {
   // path changes, and that reset must not overwrite the position of the entry being left.
   const entryKeyRef = useRef(location.key);
   const entryLandedRef = useRef(false);
+  /** Re-applies the current landing (remembered position or heading) while the page settles. */
+  const landingRef = useRef(null);
   useEffect(() => {
     const scroller = getScroller();
     if (!scroller) return undefined;
@@ -346,18 +350,50 @@ function AdminDocsPage() {
     const id = location.hash ? decodeFragment(location.hash.slice(1)) : '';
     const target = id ? document.getElementById(id) : null;
     const remembered = scrollPositionsRef.current.get(location.key);
+    let land = null;
     if (navigationType === 'POP' && remembered !== undefined) {
-      scroller.scrollTop = remembered;
+      land = () => {
+        scroller.scrollTop = remembered;
+      };
     } else if (target && typeof target.scrollIntoView === 'function') {
       // Headings carry a scroll margin for the sticky header.
-      target.scrollIntoView({ block: 'start' });
+      land = () => target.scrollIntoView({ block: 'start' });
     } else {
       scroller.scrollTop = 0;
     }
+    land?.();
+    landingRef.current = land;
     entryLandedRef.current = true;
     // Move focus to the new page for keyboard and screen-reader users, except on first load.
     if (firstPageShownRef.current && !id) titleRef.current?.focus({ preventScroll: true });
     firstPageShownRef.current = true;
+  }, [pageReady, html, location.key, location.hash, navigationType]);
+
+  // Images, diagrams and highlighted code finish after the landing and push the content down, so
+  // a remembered position or a heading would end up above where the admin was reading. Keep the
+  // landing in place while the article grows, until the admin scrolls or it has settled.
+  useEffect(() => {
+    const article = articleRef.current;
+    const scroller = getScroller();
+    if (!landingRef.current || !article || !scroller || typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => landingRef.current?.());
+    const release = () => {
+      landingRef.current = null;
+      observer.disconnect();
+    };
+    const userEvents = ['wheel', 'touchstart', 'pointerdown'];
+    userEvents.forEach(type => scroller.addEventListener(type, release, { passive: true }));
+    window.addEventListener('keydown', release);
+    const timer = setTimeout(release, LANDING_HOLD_MS);
+    observer.observe(article);
+    return () => {
+      observer.disconnect();
+      userEvents.forEach(type => scroller.removeEventListener(type, release));
+      window.removeEventListener('keydown', release);
+      clearTimeout(timer);
+    };
   }, [pageReady, html, location.key, location.hash, navigationType]);
 
   useEffect(() => {
