@@ -98,8 +98,10 @@ export function startSamplers({ cfg, metrics, adminClient }) {
     timers.push(setInterval(tick, intervalMs));
   }
 
-  if (firstShard && cfg.sampling.vllmMetricsUrl) {
-    const tick = createVllmObserver({ url: cfg.sampling.vllmMetricsUrl, metrics, log });
+  // One vLLM per GPU model; with several, gauges are llm.<modelId>.* instead of llm.*.
+  for (const target of firstShard ? cfg.sampling.vllmTargets || [] : []) {
+    const prefix = target.id ? `llm.${target.id}` : 'llm';
+    const tick = createVllmObserver({ url: target.url, prefix, metrics, log });
     tick().catch(() => metrics.count('sampler.failed'));
     timers.push(setInterval(tick, intervalMs));
   }

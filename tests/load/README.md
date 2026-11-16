@@ -97,7 +97,7 @@ Use an existing instance, or the sizing lab. The lab gives you a fixed CPU budge
 IHUB_CPUS=2 IHUB_WORKERS=2 docker compose -f tests/load/docker-compose.yml up -d
 ```
 
-The compose file already lifts the per-IP rate limits. The AI-use acknowledgement stays enforced, as shipped: `run.mjs` confirms it for each user before the clock starts and logs how many chat turns still got a 428 (that must be 0). `IHUB_AI_ACK_ENFORCE=false` turns it off for a comparison run. The compose file allows the stub host for crawling and whitelists `gpu-01.local.intrafind.io` for TLS. **You need the VPN** for the GPU.
+The compose file already lifts the per-IP rate limits. The AI-use acknowledgement stays enforced, as shipped: `run.mjs` confirms it for each user before the clock starts and logs how many chat turns still got a 428 (that must be 0). `IHUB_AI_ACK_ENFORCE=false` turns it off for a comparison run. The compose file allows the stub host for crawling and whitelists gpu-01, cloud-gpu-01 and gpu-02 for TLS (override with `IHUB_SSL_DOMAIN_WHITELIST='["host", …]'`). **You need the VPN** for the GPU.
 
 ### 2. Prepare it
 
@@ -135,6 +135,19 @@ LT_BASE_URL=http://localhost:3000 node tests/load/run.mjs --profile capacity-gpu
 ```bash
 LT_BASE_URL=http://localhost:3000 LT_THINKING=off node tests/load/run.mjs --profile capacity-gpu
 ```
+
+#### Several GPUs
+
+iHub has no load balancing across models yet (#3692), so a multi-GPU run registers each GPU as its own model and splits the users: `LT_LLM_URLS` lists the GPUs, setup registers them as `loadtest-gpu`, `loadtest-gpu-2`, `loadtest-gpu-3` (served name and context window discovered per GPU), and with `LT_MODEL_ID=loadtest-gpu` (the `capacity-gpu` default) or `loadtest-gpu-*` every VU takes `gpuModelIds[vu % n]` for all its turns, as a user who picked a model would. Set the same `LT_LLM_URLS` for setup **and** run; a profile can list them as `setup.gpus` instead.
+
+```bash
+export LT_BASE_URL=http://localhost:3000
+export LT_LLM_URLS=https://gpu-01.local.intrafind.io,https://cloud-gpu-01.dev.intrafind.io,https://gpu-02.local.intrafind.io
+node tests/load/setup.mjs --profile capacity-gpu
+node tests/load/run.mjs --profile capacity-gpu
+```
+
+The runner scrapes `/metrics` of every GPU, and the report adds a "Per model / GPU" table: turns, share, answer TTFT p50/p95 and the vLLM gauges per GPU and stage. Mind that the stages count users across all GPUs, and that the slowest GPU sets the shared TTFT p95 the SLO judges.
 
 The rate-limit run goes against an instance with the **shipped limits**, where only `authApi` is lifted so the runner can log its users in:
 
@@ -229,7 +242,7 @@ The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU l
 | -------------------------------------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------- |
 | `LT_BASE_URL`                                                              | `http://localhost:3000`             | iHub base URL, including a subpath such as `/ihub`                      |
 | `LT_PROFILE`                                                               | `smoke`                             | Name in `profiles/` or a path to a JSON file                            |
-| `LT_MODEL_ID`                                                              | profile                             | Model for the chats: `loadtest-stub`, `loadtest-gpu` or an existing one |
+| `LT_MODEL_ID`                                                              | profile                             | `loadtest-stub`, `loadtest-gpu` (all GPUs), `loadtest-gpu-2`, any other |
 | `LT_APP_ID`                                                                | `chat`                              | App the chats use                                                       |
 | `LT_STAGES`                                                                | profile                             | Override, e.g. `10:60:300,20:60:300` (VUs:ramp s:hold s, …)             |
 | `LT_VU_SCALE`                                                              | 1                                   | Multiplies every stage's VUs                                            |
@@ -237,6 +250,7 @@ The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU l
 | `LT_USER_COUNT` / `--users`                                                | max VUs                             | Users to create and use (`lt-0001`…)                                    |
 | `LT_USER_PASSWORD`, `LT_ADMIN_USER`, `LT_ADMIN_PASSWORD`                   | see `lib/config.mjs`                | Credentials                                                             |
 | `LT_LLM_URL`                                                               | `https://gpu-01.local.intrafind.io` | GPU base URL for `loadtest-gpu`; `none` skips it                        |
+| `LT_LLM_URLS`                                                              | –                                   | Several GPUs, comma-separated: `loadtest-gpu`, `loadtest-gpu-2`, …      |
 | `LT_LLM_MODEL_NAME`, `LT_LLM_API_KEY`                                      | discovered / none                   | Served model name, key                                                  |
 | `LT_LLM_SUPPORTS_TOOLS`                                                    | `auto`                              | gpu-01 supports tools; `none` makes every turn a single LLM call        |
 | `LT_LLM_CONCURRENCY`                                                       | 100                                 | iHub's queue limit for the model (1–100)                                |

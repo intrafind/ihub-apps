@@ -10,7 +10,10 @@
 - { name: IHUB_PLATFORM__AI_ACKNOWLEDGEMENT__ENFORCE, value: 'false' }
 # Crawl the in-cluster stub site; reach the GPU through the internal CA.
 - { name: IHUB_PLATFORM__SSRF__ALLOWED_HOSTS, value: '["loadtest-stubs.ihub-loadtest.svc"]' }
-- { name: IHUB_PLATFORM__SSL__DOMAIN_WHITELIST, value: '["gpu-01.local.intrafind.io"]' }
+- {
+    name: IHUB_PLATFORM__SSL__DOMAIN_WHITELIST,
+    value: '["gpu-01.local.intrafind.io","cloud-gpu-01.dev.intrafind.io","gpu-02.local.intrafind.io"]'
+  }
 - { name: IHUB_PLATFORM__SSL__IGNORE_INVALID_CERTIFICATES, value: 'true' }
 - { name: IHUB_PLATFORM__PROJECTS__LIMITS__MAX_PROJECTS_PER_USER, value: '50' }
 # iHub's own Prometheus metrics on :9464 (optional; pod CPU/memory come from cAdvisor).

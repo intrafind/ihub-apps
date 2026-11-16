@@ -29,10 +29,27 @@ const max = arr => (arr.length ? Math.max(...arr) : null);
 const fmt = (v, d = 0) =>
   v === null || v === undefined || Number.isNaN(v) ? '–' : round(v, d).toLocaleString('en-US');
 
+const escapeRe = str => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Model ids seen in per-model turn counters (model.<id>.turn.*) or per-GPU gauges (llm.<id>.*). */
+function modelIds({ counts, gauges }) {
+  const ids = new Set();
+  for (const n of Object.keys(counts)) {
+    const m = /^model\.(.+)\.turn\.(ok|error)$/.exec(n);
+    if (m) ids.add(m[1]);
+  }
+  for (const n of Object.keys(gauges)) {
+    const m = /^llm\.(.+)\.running$/.exec(n);
+    if (m) ids.add(m[1]);
+  }
+  return [...ids].sort();
+}
+
 export function stageStats(result) {
   const { meta, metrics } = result;
   const { trends, counts, gauges } = metrics;
   const cfg = meta.config;
+  const models = modelIds(metrics);
   return meta.timeline.map(stage => {
     const k = String(stage.index);
     const holdMin = (stage.hold.end - stage.hold.start) / 60000;
@@ -76,6 +93,20 @@ export function stageStats(result) {
     const rss = gaugeValues(gauges, /^server\.rss\.(w\d+|standalone)$/, k);
     const rssPrimary = gaugeValues(gauges, /^server\.rss\.primary$/, k);
     const expected = cfg.llm?.expectedTtftMs;
+    // vLLM gauges under one prefix: `llm` (single GPU / stub) or `llm.<modelId>`.
+    const vllm = prefix => {
+      const re = name => new RegExp(`^${escapeRe(prefix)}\\.${name}$`);
+      return {
+        runningAvg: avg(g(re('running'))),
+        runningMax: max(g(re('running'))),
+        waitingAvg: avg(g(re('waiting'))),
+        waitingMax: max(g(re('waiting'))),
+        kvCacheMax: max(g(re('kvCachePct'))),
+        genTokPerSec: avg(g(re('genTokPerSec'))),
+        promptTokPerSec: avg(g(re('promptTokPerSec'))),
+        preemptionsPerMin: avg(g(re('preemptionsPerSec'))) * 60 || null
+      };
+    };
     return {
       index: stage.index,
       name: stage.name,
@@ -118,15 +149,20 @@ export function stageStats(result) {
       },
       stubInflightMax: max(gaugeValues(gauges, /^stub\.inflight$/, k)),
       firstToken,
+      // Per model: turns and answer TTFT from the runner, vLLM gauges per GPU.
+      byModel: Object.fromEntries(
+        models.map(id => [
+          id,
+          {
+            ok: sum(counts, `model.${id}.turn.ok`, k),
+            err: sum(counts, `model.${id}.turn.error`, k),
+            ttft: summarize(values(trends, `model.${id}.ttft`, k)),
+            ...vllm(`llm.${id}`)
+          }
+        ])
+      ),
       llm: {
-        runningAvg: avg(g(/^llm\.running$/)),
-        runningMax: max(g(/^llm\.running$/)),
-        waitingAvg: avg(g(/^llm\.waiting$/)),
-        waitingMax: max(g(/^llm\.waiting$/)),
-        kvCacheMax: max(g(/^llm\.kvCachePct$/)),
-        genTokPerSec: avg(g(/^llm\.genTokPerSec$/)),
-        promptTokPerSec: avg(g(/^llm\.promptTokPerSec$/)),
-        preemptionsPerMin: avg(g(/^llm\.preemptionsPerSec$/)) * 60 || null,
+        ...vllm('llm'),
         gpuUtilAvg: avg(g(/^prom\.gpuUtilPct$/)),
         gpuMemMax: max(g(/^prom\.gpuMemUsedPct$/))
       },
@@ -182,8 +218,11 @@ function bottleneckHint(stat) {
     return 'Storage lock timeouts (503): filesystem persistence contention — check disk/NFS latency; more CPU will not help.';
   if (stat.runner.eldP99Max > 100)
     return 'The load generator itself is saturated (event-loop p99 > 100 ms) — add runner shards; these numbers are not trustworthy.';
-  if (stat.llm.waitingAvg > 1 || stat.llm.kvCacheMax > 95)
-    return `GPU saturated: vLLM queues requests (waiting avg ${fmt(stat.llm.waitingAvg, 1)}, KV cache max ${fmt(stat.llm.kvCacheMax)}%) — the LLM is the limit, not iHub. More GPU capacity, smaller project context or fewer thinking tokens.`;
+  const busyGpu = [['', stat.llm], ...Object.entries(stat.byModel)].find(
+    ([, l]) => l.waitingAvg > 1 || l.kvCacheMax > 95
+  );
+  if (busyGpu)
+    return `GPU saturated${busyGpu[0] ? ` (${busyGpu[0]})` : ''}: vLLM queues requests (waiting avg ${fmt(busyGpu[1].waitingAvg, 1)}, KV cache max ${fmt(busyGpu[1].kvCacheMax)}%) — the LLM is the limit, not iHub. More GPU capacity, smaller project context or fewer thinking tokens.`;
   if (stat.pod.throttledPctAvg > 20)
     return `CPU throttling ${fmt(stat.pod.throttledPctAvg)}% of periods: the pod's CPU limit is below what its workers use — set WORKERS to the CPU limit (or raise the limit).`;
   if (stat.server.workerCpuAvg > 80)
@@ -262,7 +301,7 @@ export function renderMarkdown(result) {
     `- Run: \`${cfg.runId}\` · ${new Date(meta.startedAt).toISOString()} → ${new Date(meta.endedAt).toISOString()}`
   );
   L.push(
-    `- Target: ${cfg.baseUrl} · app \`${cfg.appId}\` · model \`${cfg.modelId || 'app default'}\``
+    `- Target: ${cfg.baseUrl} · app \`${cfg.appId}\` · model ${cfg.vuModelIds ? `${cfg.vuModelIds.map(id => `\`${id}\``).join(', ')} (round robin per VU)` : `\`${cfg.modelId || 'app default'}\``}`
   );
   const host = meta.serverInfo?.host;
   L.push(
@@ -356,7 +395,7 @@ export function renderMarkdown(result) {
     L.push(`- First failing level: ${a.firstFail.stat.name} (${a.firstFail.stat.vus} VUs).`);
   if (a.hint) L.push(`- **Likely bottleneck:** ${a.hint}`);
   L.push('');
-  L.push(...renderLlmAndPod(a));
+  L.push(...renderLlmAndPod(a, cfg));
   L.push(...renderRateLimits(result, a));
   L.push('## Errors by stage');
   L.push('');
@@ -396,7 +435,7 @@ export function timelineCsv(result) {
 
 const has = v => v !== null && v !== undefined && !Number.isNaN(v);
 
-function renderLlmAndPod(a) {
+function renderLlmAndPod(a, cfg) {
   const L = [];
   if (a.stats.some(s => s.firstToken || has(s.llm.runningMax) || has(s.llm.gpuUtilAvg))) {
     L.push('### LLM / GPU');
@@ -414,6 +453,31 @@ function renderLlmAndPod(a) {
     L.push('');
     L.push(
       '"First token" counts thinking tokens; "Answer TTFT" waits for visible answer text. A growing `waiting` count or KV cache near 100% means vLLM is queueing: the GPU is the limit.'
+    );
+    L.push('');
+  }
+  const models = Object.keys(a.stats[0]?.byModel || {});
+  if (models.length > 1) {
+    const gpuUrl = Object.fromEntries((cfg.setup?.gpus || []).map(g => [g.id, g.url]));
+    L.push('### Per model / GPU');
+    L.push('');
+    L.push(
+      '| Stage | Model | Turns ok / err | Share | Answer TTFT p50 / p95 | vLLM running avg / max | waiting avg / max | KV cache max | Gen tok/s | Prompt tok/s | Preemptions/min |'
+    );
+    L.push('|---|---|---|---:|---|---|---|---:|---:|---:|---:|');
+    for (const s of a.stats) {
+      const total = models.reduce((acc, id) => acc + s.byModel[id].ok + s.byModel[id].err, 0);
+      for (const id of models) {
+        const m = s.byModel[id];
+        const host = gpuUrl[id] ? ` (${new URL(gpuUrl[id]).host})` : '';
+        L.push(
+          `| ${s.name} | \`${id}\`${host} | ${m.ok} / ${m.err} | ${total ? fmt(((m.ok + m.err) / total) * 100) : '–'}% | ${fmt(m.ttft?.p50)} / ${fmt(m.ttft?.p95)} | ${fmt(m.runningAvg, 1)} / ${fmt(m.runningMax)} | ${fmt(m.waitingAvg, 1)} / ${fmt(m.waitingMax)} | ${fmt(m.kvCacheMax)}% | ${fmt(m.genTokPerSec)} | ${fmt(m.promptTokPerSec)} | ${fmt(m.preemptionsPerMin, 1)} |`
+        );
+      }
+    }
+    L.push('');
+    L.push(
+      "Turns and TTFT per model come from the runner (hold phase); the vLLM columns from each GPU's own `/metrics`. Every VU keeps one model, so the turn share follows the VU split, and a slower GPU shows as a higher TTFT, not a smaller share."
     );
     L.push('');
   }

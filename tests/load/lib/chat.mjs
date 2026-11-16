@@ -17,6 +17,7 @@
  *   <label>.promptTokens  prompt size the server reported (shows injected project context)
  *   <label>.tools         tool calls in the turn (knowledge_search …)
  *   counters: <label>.turn.ok | <label>.turn.error | <label>.streamMiss
+ * Per model (when the turn names one): model.<id>.turn.ok | .turn.error, model.<id>.ttft
  */
 
 import { performance } from 'node:perf_hooks';
@@ -225,6 +226,7 @@ export class ChatSession {
     if (streamError || (ended && ended.status && ended.status !== 'completed')) {
       const code = streamError?.code || `RUN_${String(ended.status).toUpperCase()}`;
       metrics.count(`${label}.turn.error`);
+      if (payload.modelId) metrics.count(`model.${payload.modelId}.turn.error`);
       metrics.error(label, code);
       const err = new Error(`${label} turn failed: ${code}`);
       err.code = code;
@@ -234,6 +236,10 @@ export class ChatSession {
 
     metrics.count(`${label}.turn.ok`);
     if (ttft !== null) metrics.trend(`${label}.ttft`, ttft);
+    if (payload.modelId) {
+      metrics.count(`model.${payload.modelId}.turn.ok`);
+      if (ttft !== null) metrics.trend(`model.${payload.modelId}.ttft`, ttft);
+    }
     if (firstAny !== null) metrics.trend(`${label}.firstToken`, firstAny);
     if (thinkingChars) metrics.trend(`${label}.thinkingChars`, thinkingChars);
     metrics.trend(`${label}.duration`, tEnd - tSend);
@@ -278,6 +284,7 @@ export async function inferenceTurn(ctx, { model, messages, label = 'inference' 
       /* ignore */
     }
     metrics.count(`${label}.turn.error`);
+    metrics.count(`model.${model}.turn.error`);
     metrics.error(label, code);
     throw Object.assign(new Error(`${label}: ${code}`), { code });
   }
@@ -296,6 +303,8 @@ export async function inferenceTurn(ctx, { model, messages, label = 'inference' 
   const total = performance.now() - tSend;
   metrics.count(`${label}.turn.ok`);
   if (ttft !== null) metrics.trend(`${label}.ttft`, ttft);
+  metrics.count(`model.${model}.turn.ok`);
+  if (ttft !== null) metrics.trend(`model.${model}.ttft`, ttft);
   metrics.trend(`${label}.duration`, total);
   metrics.trend(`${label}.outputChars`, chars);
   if (usage?.prompt_tokens) metrics.trend(`${label}.promptTokens`, usage.prompt_tokens);

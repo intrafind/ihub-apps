@@ -18,7 +18,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { performance } from 'node:perf_hooks';
-import { loadConfig, userName, publicConfig } from './lib/config.mjs';
+import { loadConfig, userName, publicConfig, modelForVu } from './lib/config.mjs';
 import { Metrics } from './lib/metrics.mjs';
 import { Client, login, ensureAiAcknowledged } from './lib/http.mjs';
 import { loadFixtures } from './lib/fixtures.mjs';
@@ -58,7 +58,7 @@ for (const name of Object.keys(cfg.mix)) {
 }
 
 log(
-  `profile ${cfg.name} · shard ${shardIndex + 1}/${shardCount} · target ${cfg.baseUrl} · app ${cfg.appId} · model ${cfg.modelId || '(app default)'}`
+  `profile ${cfg.name} · shard ${shardIndex + 1}/${shardCount} · target ${cfg.baseUrl} · app ${cfg.appId} · model ${cfg.vuModelIds ? `${cfg.vuModelIds.join(' | ')} (round robin per VU)` : cfg.modelId || '(app default)'}`
 );
 const timelinePreview = buildTimeline(cfg.stages);
 const totalSec = Math.round(timelinePreview.at(-1).hold.end / 1000);
@@ -163,7 +163,8 @@ const crawlGate = new Semaphore(cfg.scenarios.projectBuild?.crawl?.maxConcurrent
 async function runVu(vuIndex, isActive) {
   const session = sessions.get(vuIndex % cfg.users.count);
   const ctx = {
-    config: cfg,
+    // Sticky per VU: a user keeps the model it picked for every turn.
+    config: { ...cfg, modelId: modelForVu(cfg, vuIndex) },
     client: session.client,
     metrics,
     fixtures,

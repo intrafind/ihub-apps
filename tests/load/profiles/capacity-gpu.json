@@ -1,6 +1,6 @@
 {
   "name": "capacity-gpu",
-  "description": "End to end with the real LLM (loadtest-gpu = Qwen/Qwen3.6-35B-A3B-FP8 on gpu-01, 173k context). Open-ended ramp: finds how many concurrent users the GPU serves before TTFT degrades, with real tool calls, thinking and project context. vLLM metrics are scraped from gpu-01 automatically. Stops after the first failing level.",
+  "description": "End to end with the real LLM (loadtest-gpu = Qwen/Qwen3.6-35B-A3B-FP8 on gpu-01, 173k context). Open-ended ramp: finds how many concurrent users the GPU serves before TTFT degrades, with real tool calls, thinking and project context. vLLM metrics are scraped from gpu-01 automatically. Stops after the first failing level. With LT_LLM_URLS (several GPUs, each its own model loadtest-gpu, loadtest-gpu-2, …) the VUs spread round robin over them, one model per VU, and the stages count users across all GPUs.",
   "modelId": "loadtest-gpu",
   "answerLengthHint": "Answer in about 120 words.",
   "stages": [

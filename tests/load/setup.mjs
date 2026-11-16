@@ -14,7 +14,7 @@
  *      (rate limits, LLM throttle, AI acknowledgement, project limits).
  *   2. Enables the `userProjects` feature flag (preview, off by default).
  *   3. Registers the models: `loadtest-gpu` (real LLM, name discovered by the
- *      server) and/or `loadtest-stub` (paced fake LLM).
+ *      server; more GPUs become loadtest-gpu-2, -3 …) and/or `loadtest-stub` (paced fake LLM).
  *   4. Creates users lt-0001…lt-NNNN one at a time (the users file has no lock).
  *   5. Logs each user in once and confirms the AI-use notice if enforced.
  *   6. Creates "LT-chat" projects with documents for the projectChat scenario:
@@ -143,11 +143,11 @@ async function upsertModel(model) {
 
 const v1 = url => `${url.replace(/\/+$/, '').replace(/\/v1(\/chat\/completions)?$/, '')}/v1`;
 
-// The stub mirrors the GPU model's context window so project chats inject the same amount.
+// The stub mirrors the first GPU model's context window so project chats inject the same amount.
 let discoveredContext = null;
-if (cfg.setup.gpu?.url && !flags['skip-models']) {
-  const g = cfg.setup.gpu;
+for (const g of flags['skip-models'] ? [] : cfg.setup.gpus) {
   let modelName = g.modelName;
+  let contextWindow = null;
   if (!modelName) {
     // Discovery runs on the iHub server, so it also proves that iHub reaches the
     // GPU host through its proxy/TLS settings.
@@ -157,14 +157,15 @@ if (cfg.setup.gpu?.url && !flags['skip-models']) {
     if (res.status !== 200 || !res.body?.models?.length) {
       console.error(
         `Model discovery at ${v1(g.url)} failed (${res.status}): ${JSON.stringify(res.body).slice(0, 300)}\n` +
-          '  If the GPU uses the internal CA: add the host to ssl.domainWhitelist and set ssl.ignoreInvalidCertificates\n' +
-          '  (IHUB_PLATFORM__SSL__DOMAIN_WHITELIST=\'["gpu-01.local.intrafind.io"]\'), or set LT_LLM_MODEL_NAME to skip discovery.'
+          `  If the GPU uses the internal CA: add ${new URL(g.url).host} to ssl.domainWhitelist and set ssl.ignoreInvalidCertificates\n` +
+          '  (IHUB_PLATFORM__SSL__DOMAIN_WHITELIST=\'["gpu-01.local.intrafind.io", …]\'), or set LT_LLM_MODEL_NAME to skip discovery.'
       );
       process.exit(2);
     }
     modelName = res.body.models[0].id;
-    discoveredContext = res.body.models.find(m => m.id === modelName)?.contextWindow || null;
-    log(`GPU serves: ${res.body.models.map(m => m.id).join(', ')} → using ${modelName}`);
+    contextWindow = res.body.models.find(m => m.id === modelName)?.contextWindow || null;
+    if (g === cfg.setup.gpus[0]) discoveredContext = contextWindow;
+    log(`${g.id}: GPU serves ${res.body.models.map(m => m.id).join(', ')} → using ${modelName}`);
   }
   await upsertModel({
     id: g.id,
@@ -173,7 +174,7 @@ if (cfg.setup.gpu?.url && !flags['skip-models']) {
     description: { en: 'Real LLM for load tests' },
     url: `${v1(g.url)}/chat/completions`,
     provider: g.provider,
-    contextWindow: discoveredContext || g.contextWindow,
+    contextWindow: contextWindow || g.contextWindow,
     maxOutputTokens: g.maxOutputTokens,
     supportsTools: g.supportsTools,
     concurrency: g.concurrency,
