@@ -17,7 +17,6 @@ import { httpFetch } from './utils/httpConfig.js';
 import { recordRateLimitHit } from './telemetry/metrics.js';
 import { isClusterBusActive, request, respondInPrimary } from './clusterBus.js';
 import logger from './utils/logger.js';
-import { resolveEnvVars } from './utils/envVars.js';
 
 /**
  * Throttle settings of ids that have no tool file any more (the built-in web
@@ -44,63 +43,9 @@ function normalizeLimit(value) {
   return typeof value === 'number' && value >= 1 ? value : Infinity;
 }
 
-/** Providers that are always served by the installation's own hardware. */
-const SELF_HOSTED_PROVIDERS = new Set(['local', 'vllm-realtime']);
-
-/** Providers whose API others implement too (vLLM, LM Studio, ...): the URL decides. */
-const URL_DECIDES_PROVIDERS = new Set(['openai', 'openai-responses', 'mistral']);
-
-/**
- * Hosts of hosted model APIs (and their subdomains). They rate-limit per API
- * key, so their models keep the cloud default `requestConcurrency`.
- */
-const CLOUD_API_HOSTS = [
-  'openai.com',
-  'azure.com',
-  'mistral.ai',
-  'openrouter.ai',
-  'anthropic.com',
-  'googleapis.com',
-  'amazonaws.com',
-  'groq.com',
-  'together.xyz',
-  'deepseek.com',
-  'x.ai',
-  'fireworks.ai',
-  'perplexity.ai',
-  'cohere.com',
-  'cohere.ai'
-];
-
-/**
- * True when a model runs on the installation's own hardware (vLLM, LM Studio,
- * Ollama, ...): `provider: "local"`, or an OpenAI- or Mistral-compatible model
- * whose URL is not a known hosted API. Such a backend batches requests, so it
- * gets `requestConcurrencyLocal` instead of the cloud default. Bedrock,
- * Anthropic, Google and iAssistant models, and models whose URL cannot be
- * read, count as hosted.
- *
- * @param {{provider?: string, url?: string}} model - Model config
- * @returns {boolean}
- */
-export function isSelfHostedModel(model) {
-  if (SELF_HOSTED_PROVIDERS.has(model?.provider)) return true;
-  if (!URL_DECIDES_PROVIDERS.has(model?.provider) || typeof model.url !== 'string') return false;
-  let host;
-  try {
-    host = new URL(resolveEnvVars(model.url)).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-  return !CLOUD_API_HOSTS.some(cloud => host === cloud || host.endsWith(`.${cloud}`));
-}
-
 /**
  * How many calls to an id may run at once, cluster-wide: a registered hint,
- * then the model's own `concurrency`, then the platform default for its kind
- * of model — `requestConcurrencyLocal` for a self-hosted model (falling back
- * to `requestConcurrency` when unset), `requestConcurrency` for everything
- * else.
+ * then the model's own `concurrency`, then the platform's `requestConcurrency`.
  *
  * @param {string} id - Model id, tool id or 'default'
  * @returns {number} The limit; Infinity for none
@@ -112,9 +57,6 @@ export function getConcurrency(id = 'default') {
   const hint = throttleHints.get(id);
   if (hint && typeof hint.concurrency === 'number') return normalizeLimit(hint.concurrency);
   if (model && typeof model.concurrency === 'number') return normalizeLimit(model.concurrency);
-  if (model && typeof platform.requestConcurrencyLocal === 'number' && isSelfHostedModel(model)) {
-    return normalizeLimit(platform.requestConcurrencyLocal);
-  }
   return normalizeLimit(platform.requestConcurrency);
 }
 

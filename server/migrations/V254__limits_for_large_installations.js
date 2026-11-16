@@ -6,8 +6,8 @@
  *
  * The shipped limits were sized for a small team. Behind one corporate NAT
  * address a company of thousands shared one per-IP budget, so a few hundred
- * busy users got 429s; and every self-hosted model ran at most 5 calls at
- * once, although a vLLM GPU serves about 30 busy users together.
+ * busy users got 429s; and every model ran at most 5 calls at once,
+ * although a vLLM GPU serves about 30 busy users together.
  *
  *   - The general limiters (`rateLimit.default`, `adminApi`, `publicApi`,
  *     `inferenceApi`) count a signed-in request per user (`keyBy: "user"`)
@@ -18,9 +18,9 @@
  *   - `rateLimit.authApi` now counts per IP address and username; the new
  *     `perIpLimit` caps one address. An own limit higher than the shipped
  *     ceiling raises the ceiling too, so nothing gets stricter.
- *   - `requestConcurrencyLocal` is the concurrency of self-hosted models.
- *     Where `requestConcurrency` is still the shipped 5, they get the shipped
- *     value; where the admin set an own value, they keep it.
+ *   - `requestConcurrency` (calls per model at once, unless the model sets
+ *     its own `concurrency`) rises where it is still the shipped 5; an
+ *     admin's own value stays, and a missing one stays missing (unlimited).
  *
  * The new values are read from server/defaults/config/platform.json, which is
  * also where fresh installs get them, so the defaults live in one place.
@@ -92,12 +92,10 @@ export async function up(ctx) {
     set('rateLimit.authApi.perIpLimit', Math.max(shipped.rateLimit.authApi.perIpLimit, ownLimit));
   }
 
-  const concurrency = platform.requestConcurrency;
-  if (concurrency === PREVIOUS_REQUEST_CONCURRENCY) {
-    set('requestConcurrencyLocal', shipped.requestConcurrencyLocal);
-  } else if (typeof concurrency === 'number') {
-    // An own value (or "unlimited" below 1) keeps applying to every model.
-    set('requestConcurrencyLocal', concurrency);
+  if (platform.requestConcurrency === PREVIOUS_REQUEST_CONCURRENCY) {
+    platform.requestConcurrency = shipped.requestConcurrency;
+    changed = true;
+    ctx.log(`requestConcurrency: 5 → ${shipped.requestConcurrency} calls per model at once`);
   }
 
   if (changed) {

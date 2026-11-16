@@ -7,7 +7,7 @@
  * The migration raises a limit only where it still carries the old shipped
  * value, keeps an admin's own values (never making anything stricter), and
  * adds the new fields: `keyBy` / `anonymousLimit` on the general limiters,
- * `authApi.perIpLimit` and `requestConcurrencyLocal`. The new values come
+ * `authApi.perIpLimit`, and raises `requestConcurrency`. The new values come
  * from server/defaults/config/platform.json.
  */
 import fs from 'node:fs/promises';
@@ -109,8 +109,8 @@ describe('V254 limits_for_large_installations', () => {
     }
     assert.equal(platform.rateLimit.authApi.limit, 30);
     assert.equal(platform.rateLimit.authApi.perIpLimit, shipped.rateLimit.authApi.perIpLimit);
-    assert.equal(platform.requestConcurrency, 5);
-    assert.equal(platform.requestConcurrencyLocal, shipped.requestConcurrencyLocal);
+    assert.equal(platform.requestConcurrency, shipped.requestConcurrency);
+    assert.notEqual(shipped.requestConcurrency, 5);
     // Limiters the change is not about stay as they were.
     assert.deepEqual(platform.rateLimit.oauthApi, previousShipped().rateLimit.oauthApi);
   });
@@ -138,15 +138,15 @@ describe('V254 limits_for_large_installations', () => {
     // The address ceiling is never below an own per-address limit.
     assert.equal(platform.rateLimit.authApi.limit, 100000);
     assert.equal(platform.rateLimit.authApi.perIpLimit, 100000);
-    // Own concurrency keeps applying to self-hosted models.
-    assert.equal(platform.requestConcurrencyLocal, 100);
+    // An own concurrency stays.
+    assert.equal(platform.requestConcurrency, 100);
   });
 
   it('leaves concurrency unlimited where requestConcurrency is unset', async () => {
     const { ctx, read } = await seed({ defaultLanguage: 'en' });
     await up(ctx);
     const platform = await read();
-    assert.equal(platform.requestConcurrencyLocal, undefined);
+    assert.equal(platform.requestConcurrency, undefined);
     assert.equal(platform.rateLimit, undefined);
   });
 

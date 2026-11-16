@@ -104,8 +104,7 @@
       "deployment.environment": "${NODE_ENV:-production}"
     }
   },
-  "requestConcurrency": 5,
-  "requestConcurrencyLocal": 32,
+  "requestConcurrency": 25,
   "llm": {
     "connectTimeoutMs": 30000,
     "streamIdleTimeoutMs": 60000
