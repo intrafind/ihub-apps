@@ -1,16 +1,18 @@
 ---
-description: "Send iHub's outbound HTTP and HTTPS traffic through a corporate proxy."
+description: "Send iHub's outbound HTTP and HTTPS traffic through a corporate proxy, and check that it really goes through it."
 audience: admin
 type: how-to
 ---
 
 # Proxy Configuration
 
-This document explains how to configure HTTP/HTTPS proxy support in iHub Apps.
+This page explains how to send iHub's outbound HTTP and HTTPS traffic through a proxy, and how to
+verify that it does.
 
 ## Overview
 
-iHub Apps supports routing HTTP and HTTPS requests through a proxy server. This is useful when your infrastructure requires all outbound connections to go through a corporate proxy.
+iHub Apps supports routing HTTP and HTTPS requests through a proxy server. This is useful when
+your infrastructure requires all outbound connections to go through a corporate proxy.
 
 > [!NOTE]
 > This is the **outbound** proxy iHub uses for egress. It is unrelated to two
@@ -61,7 +63,8 @@ the environment variables below). Add it by hand, or let the admin UI write it:
 
 ### 3. Environment Variables
 
-Set the following environment variables in your `.env` file:
+Set the following environment variables in your `.env` file (`config.env` in the binary
+distribution):
 
 ```bash
 HTTP_PROXY=http://proxy.example.com:8080
@@ -72,6 +75,7 @@ NO_PROXY=localhost,127.0.0.1,.local
 ### Configuration Priority
 
 The system checks for proxy settings in the following order:
+
 1. Platform configuration (`platform.json`)
 2. Application environment variables (`.env`, or `config.env` in the binary distribution)
 3. System environment variables
@@ -85,6 +89,7 @@ field. Placeholders survive a save from the admin UI.
 ## Configuration Options
 
 ### `proxy.enabled`
+
 - **Type**: Boolean
 - **Default**: `true` (and an absent `proxy` block means the same thing)
 - **Description**: Master switch for all outbound requests. Set it to `false` to go
@@ -98,14 +103,17 @@ field. Placeholders survive a save from the admin UI.
   switched off.
 
 ### `proxy.http`
+
 - **Type**: String
 - **Description**: HTTP proxy URL for HTTP requests (e.g., `http://proxy.example.com:8080`)
 
 ### `proxy.https`
+
 - **Type**: String
 - **Description**: HTTPS proxy URL for HTTPS requests (e.g., `http://proxy.example.com:8080`)
 
 ### `proxy.noProxy`
+
 - **Type**: Comma-separated string **or** array of strings — both are accepted and
   normalized to the same list
 - **Description**: Hosts that should bypass the proxy
@@ -116,17 +124,18 @@ field. Placeholders survive a save from the admin UI.
 
 Entry semantics:
 
-| Entry              | Matches                                     | Does not match  |
-| ------------------ | ------------------------------------------- | --------------- |
-| `api.example.com`  | exactly that hostname                       | subdomains      |
-| `.example.com`     | `api.example.com`, `a.b.example.com`        | `example.com`   |
-| `*.example.com`    | same as `.example.com`                      | `example.com`, `notexample.com` |
+| Entry             | Matches                              | Does not match                  |
+| ----------------- | ------------------------------------ | ------------------------------- |
+| `api.example.com` | exactly that hostname                | subdomains                      |
+| `.example.com`    | `api.example.com`, `a.b.example.com` | `example.com`                   |
+| `*.example.com`   | same as `.example.com`               | `example.com`, `notexample.com` |
 
 **Not supported** (unlike some `NO_PROXY` implementations): CIDR ranges
 (`10.0.0.0/8`), IP ranges, `host:port` entries (`example.com:8080`), and the
 catch-all `*`. To disable proxying entirely, set `proxy.enabled` to `false`.
 
 ### `proxy.urlPatterns`
+
 - **Type**: Array of strings (regex patterns)
 - **Description**: Optional allowlist of regular expressions tested against the
   full URL. When the list is **empty, every URL is proxied**. When it has
@@ -208,41 +217,187 @@ connectivity test.
 
 ## What Uses Proxy?
 
-When proxy is enabled, the following components will route through the proxy:
+When a proxy is configured, these outbound requests go through it (subject to `noProxy` and
+`urlPatterns`):
 
-1. **LLM API Requests**: All requests to OpenAI, Anthropic, Google, Mistral, etc.
-2. **Web Search**: Brave Search API calls
-3. **Integrations**: JIRA, Entra, iFinder, and other external integrations
-4. **Tools**: Web content extraction, screenshot tools, etc.
+1. **LLM API requests**: OpenAI, Anthropic, Google, Mistral and other model providers
+2. **Web search**: the Brave, Staan and Qwant search APIs
+3. **Integrations**: Jira, Entra, iFinder and other external integrations
+4. **Tools**: web content extraction, screenshot tools and similar
+
+Without a proxy, iHub uses direct connections; there is no proxy-related log output per request.
+
+## Verify the proxy
+
+### 1. Check what is configured
+
+**Admin → Security → Outbound Proxy** shows the settings in effect and where each value comes from
+(`platform.json` or the environment). Without the admin UI:
+
+- Look for a top-level `proxy` block (`enabled`, `http`, `https`, `noProxy`, `urlPatterns`) in
+  `contents/config/platform.json`. It is unrelated to the `proxyAuth` setting in the same file.
+- Check `HTTP_PROXY`, `HTTPS_PROXY` and `NO_PROXY` in `.env` / `config.env` and in the shell
+  environment of the server process.
+- Read the server log from startup. Component `HttpConfig` logs `Proxy configuration loaded` with
+  the proxy URLs and the bypass list it found (passwords redacted), or `No proxy configured` if
+  nothing is set anywhere.
+
+After editing `platform.json` or the environment by hand, restart the server. Changes saved in the
+admin UI apply immediately.
+
+### 2. Run the connectivity test
+
+**Admin → Security → Outbound Proxy → Test connectivity** probes one URL with the settings on
+screen, saved or not. It reports the routing decision, whether the proxy answers, the HTTP status
+and timings, and a classification with a next step (see [Admin API](#admin-api) for the list). Use
+the URL of the service that fails, for example your LLM provider's API host.
+
+### 3. Watch the requests in the log
+
+Make a request that leaves iHub, such as a chat with a cloud model. For every outbound request,
+component `HttpConfig` logs one of these `info` messages:
+
+| Message                             | Meaning                                                                 |
+| ----------------------------------- | ----------------------------------------------------------------------- |
+| `Using proxy for URL`               | The request goes through the proxy (`proxyUrl`, `url`).                 |
+| `Bypassing proxy for URL`           | The host is in `noProxy`; the request goes direct.                      |
+| `URL does not match proxy patterns` | `urlPatterns` is set and the URL matches none; the request goes direct. |
+
+```json
+{
+  "component": "HttpConfig",
+  "level": "info",
+  "message": "Using proxy for URL",
+  "proxyUrl": "http://proxy.example.com:8080",
+  "url": "https://api.openai.com/v1/chat/completions"
+}
+```
+
+If the request succeeds and the log shows `Using proxy for URL`, the proxy works. A
+`ConnectTimeoutError` after `Using proxy for URL` means the proxy or its allow-list is in the way;
+see [Troubleshooting](#troubleshooting).
+
+### 4. Reproduce a failing request outside iHub
+
+To tell whether the proxy or the destination is the problem, send the same request directly and
+through the proxy with `curl`, then through iHub's own code. The example uses Brave Search; the
+pattern works for any integration if you swap the URL, headers and variable names.
+
+In the running server, the Brave key comes from the credential the **Brave Search** engine
+installation references (**Admin → Integrations → Web search**), or from `BRAVE_SEARCH_API_KEY`
+when it references none. The engine's **Test** button runs the same live search through the
+server. The commands below pass the key as an environment variable either way. Run them from the
+iHub install directory (the one containing `server/`), since the last one imports a file by
+relative path.
+
+**Linux / macOS:**
+
+```bash
+# What's configured?
+grep -A8 '"proxy"' contents/config/platform.json
+env | grep -i _proxy
+
+# Direct request to Brave (bypasses the proxy), the same request iHub sends
+curl -sS -v --connect-timeout 10 --max-time 20 \
+  -H "X-Subscription-Token: YOUR_BRAVE_API_KEY" \
+  -H "Accept: application/json" \
+  "https://api.search.brave.com/res/v1/web/search?q=test"
+
+# Same request, explicitly through the proxy iHub is configured to use
+curl -sS -v --connect-timeout 10 --max-time 20 \
+  -x "http://your-proxy:8080" \
+  -H "X-Subscription-Token: YOUR_BRAVE_API_KEY" \
+  -H "Accept: application/json" \
+  "https://api.search.brave.com/res/v1/web/search?q=test"
+
+# Best fidelity: run the request through iHub's own code (same proxy
+# agent, retry and SSL logic the live server uses) and print the result
+BRAVE_SEARCH_API_KEY="YOUR_BRAVE_API_KEY" \
+HTTPS_PROXY="http://your-proxy:8080" \
+node --input-type=module -e "
+import braveSearch from './server/tools/braveSearch.js';
+const result = await braveSearch({ query: 'test', maxResults: 3 });
+console.log(JSON.stringify(result, null, 2));
+"
+```
+
+**Windows (Command Prompt):** set variables with `set NAME=value && command`, and use double
+quotes, since cmd does not treat `'` as a quote character.
+
+```bat
+:: What's configured?
+findstr /I "proxy" contents\config\platform.json
+set | findstr /I _proxy
+
+:: Direct request to Brave (bypasses the proxy)
+curl -sS -v --connect-timeout 10 --max-time 20 -H "X-Subscription-Token: YOUR_BRAVE_API_KEY" -H "Accept: application/json" "https://api.search.brave.com/res/v1/web/search?q=test"
+
+:: Same request, explicitly through the proxy iHub is configured to use
+curl -sS -v --connect-timeout 10 --max-time 20 -x "http://your-proxy:8080" -H "X-Subscription-Token: YOUR_BRAVE_API_KEY" -H "Accept: application/json" "https://api.search.brave.com/res/v1/web/search?q=test"
+
+:: Best fidelity: run the request through iHub's own code and print the result
+set BRAVE_SEARCH_API_KEY=YOUR_BRAVE_API_KEY && set HTTPS_PROXY=http://your-proxy:8080 && node --input-type=module -e "import braveSearch from './server/tools/braveSearch.js'; const result = await braveSearch({ query: 'test', maxResults: 3 }); console.log(JSON.stringify(result, null, 2));"
+```
+
+Compare the runs:
+
+| Result                                           | Where the problem is                                                                                                                                                          |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Direct succeeds fast, proxied hangs or times out | The proxy, or its domain allow-list.                                                                                                                                          |
+| Both hang                                        | Not the proxy: check firewall, DNS and egress rules on that host.                                                                                                             |
+| Both succeed                                     | The proxy is fine. Check the affected host's configuration: `proxy.noProxy` or `proxy.urlPatterns` can exclude one domain (such as Brave's) while everything else is proxied. |
+
+### 5. Test against a local proxy (optional)
+
+To see iHub's traffic arrive at a proxy you control, run a local one such as `mitmproxy`:
+
+```bash
+pip install mitmproxy
+mitmproxy -p 8080
+```
+
+Then point iHub at it:
+
+```json
+{
+  "proxy": {
+    "enabled": true,
+    "http": "http://localhost:8080",
+    "https": "http://localhost:8080"
+  }
+}
+```
+
+Remove `localhost` from `noProxy` for this test, or the bypass list skips the proxy.
 
 ## Admin API
 
 All three endpoints require admin authentication and are documented in the
 OpenAPI spec under the **Admin - Proxy** tag.
 
-| Endpoint                   | Purpose                                                                                              |
-| -------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `GET /api/admin/proxy/config`  | The stored block, the configuration in effect, and the origin of each field. Passwords redacted.   |
-| `PUT /api/admin/proxy/config`  | Validate and store the block, then refresh the cache. Encrypts URLs; keeps `${ENV_VAR}` verbatim.  |
-| `POST /api/admin/proxy/_test`   | Probe one URL. Body: `{ "url": "...", "timeoutMs": 10000, "config": { ... } }`.                    |
+| Endpoint                      | Purpose                                                                                           |
+| ----------------------------- | ------------------------------------------------------------------------------------------------- |
+| `GET /api/admin/proxy/config` | The stored block, the configuration in effect, and the origin of each field. Passwords redacted.  |
+| `PUT /api/admin/proxy/config` | Validate and store the block, then refresh the cache. Encrypts URLs; keeps `${ENV_VAR}` verbatim. |
+| `POST /api/admin/proxy/_test` | Probe one URL. Body: `{ "url": "...", "timeoutMs": 10000, "config": { ... } }`.                   |
 
 The test endpoint answers with the routing decision (`proxied`, `bypassed`,
 `excluded`, `disabled`, `direct`), whether the proxy answered at TCP level, the
 HTTP status, timings split between the proxy connection and the request, and a
 `classification` with a `nextStep`:
 
-| Classification        | Meaning                                                          |
-| --------------------- | ---------------------------------------------------------------- |
-| `ok`                  | The target answered with a non-error status                      |
-| `http_error`          | Transport worked; the target returned 4xx/5xx                    |
-| `proxy_unreachable`   | No TCP connection to the proxy                                   |
-| `proxy_auth_required` | The proxy answered `407`                                         |
-| `proxy_dns_failure`   | The proxy hostname does not resolve                              |
-| `dns_failure`         | The target hostname does not resolve                             |
-| `tls_failure`         | Certificate verification failed                                  |
-| `timeout`             | No response within the timeout                                   |
-| `target_unreachable`  | Direct connection to the target refused                          |
-| `request_failed`      | Anything else — see the server log (component `HttpConfig`)      |
+| Classification        | Meaning                                                     |
+| --------------------- | ----------------------------------------------------------- |
+| `ok`                  | The target answered with a non-error status                 |
+| `http_error`          | Transport worked; the target returned 4xx/5xx               |
+| `proxy_unreachable`   | No TCP connection to the proxy                              |
+| `proxy_auth_required` | The proxy answered `407`                                    |
+| `proxy_dns_failure`   | The proxy hostname does not resolve                         |
+| `dns_failure`         | The target hostname does not resolve                        |
+| `tls_failure`         | Certificate verification failed                             |
+| `timeout`             | No response within the timeout                              |
+| `target_unreachable`  | Direct connection to the target refused                     |
+| `request_failed`      | Anything else — see the server log (component `HttpConfig`) |
 
 The test honors the SSRF allowlist: a target that resolves to a private IP is
 refused unless the host is listed in `ssrf.allowedHosts` (Admin → Security →
@@ -262,19 +417,30 @@ check next. The scenarios below are what its classifications mean in practice.
 ### Proxy Connection Timeout
 
 If you see timeout errors like:
+
 ```
 ConnectTimeoutError: Connect Timeout Error (attempted address: api.example.com:443)
 ```
 
 Check that:
-1. The proxy URL is correct and accessible
-2. The proxy server is running and accepting connections
+
+1. The proxy is reachable from the iHub host: `curl -x http://your-proxy:8080 https://api.openai.com`
+2. The proxy URL is correct, and the proxy is running and accepting connections
 3. Your firewall allows connections to the proxy
-4. Proxy authentication credentials are correct (if required)
+4. The proxy allows HTTPS through the `CONNECT` method, and does not block the target domain; some
+   corporate proxies block AI API domains
+5. Proxy credentials are correct (if required). URL-encode special characters in the username and
+   password
+
+Then [reproduce the request outside iHub](#4-reproduce-a-failing-request-outside-ihub) to see which
+side fails.
 
 ### SSL Certificate Issues
 
-If you encounter SSL certificate errors with your proxy, you can configure the application to skip certificate validation for specific hosts. `ignoreInvalidCertificates` only takes effect for the hosts listed in `domainWhitelist`; with an empty whitelist every certificate is still validated (see [SSL Certificates](ssl-certificates.md)):
+If you encounter SSL certificate errors with your proxy, you can configure the application to skip
+certificate validation for specific hosts. `ignoreInvalidCertificates` only takes effect for the
+hosts listed in `domainWhitelist`; with an empty whitelist every certificate is still validated
+(see [SSL Certificates](ssl-certificates.md)):
 
 ```json
 {
@@ -289,26 +455,25 @@ If you encounter SSL certificate errors with your proxy, you can configure the a
 }
 ```
 
-**Warning**: Only use `ignoreInvalidCertificates` in development or when you trust your proxy server.
+> [!WARNING]
+> Only use `ignoreInvalidCertificates` in development or when you trust your proxy server.
 
 ### Debugging Proxy Issues
 
-Enable debug logging to see proxy activity:
+The per-request `HttpConfig` messages in [Watch the requests in the log](#3-watch-the-requests-in-the-log)
+show the routing decision for every URL. For protocol-level detail, start the server with Node.js
+debug output:
 
 ```bash
-NODE_DEBUG=http,https node server/server.js
+NODE_DEBUG=http,https,fetch node server/server.js
 ```
 
-Look for log messages like:
-```
-Using proxy http://10.151.2.26:8080 for URL: https://api.openai.com/...
-```
+## Security Notes
 
-## Technical Details
-
-The proxy implementation uses:
-- `http-proxy-agent` for HTTP requests
-- `https-proxy-agent` for HTTPS requests
-- `node-fetch` for compatibility with proxy agents
-
-The system automatically switches between native `fetch()` and `node-fetch` based on whether a proxy is configured, ensuring optimal performance when no proxy is needed.
+1. **Credentials in configuration:** proxy URLs saved through the admin UI are encrypted; still
+   restrict file permissions on `platform.json` and `contents/.encryption-key`.
+2. **Environment variables:** an alternative to keeping proxy credentials in `platform.json` at
+   all, either directly or through an `${ENV_VAR}` placeholder.
+3. **Certificate checks:** relax them only for whitelisted hosts you trust, see
+   [SSL Certificate Issues](#ssl-certificate-issues).
+4. **Proxy logs:** the proxy can log all traffic that passes through it, including API requests.
