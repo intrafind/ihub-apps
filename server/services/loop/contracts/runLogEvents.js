@@ -27,6 +27,7 @@ import {
   LEDGER_IDENTITY_MODES
 } from '../../../../shared/runEvents.js';
 import { interactionSchema, interactionAnswerSchema, humanEventSchema } from './interaction.js';
+import { MAX_PLACES, MAX_PLACE_NAME } from '../../../../shared/run/places.js';
 
 export const runKindSchema = z.enum(RUN_KINDS);
 export const runStatusSchema = z.enum(RUN_STATUSES);
@@ -312,6 +313,12 @@ export const toolCallData = z.object({
  * One thing a producer found for the user — a web page, a document, a record
  * — as `shared/sources/source.js` normalizes it. See `docs/answer-sources.md`.
  */
+/** A place a call looked in: a project or a search profile, by name, with who owns it. */
+export const placeSchema = z.object({
+  name: z.string().min(1).max(MAX_PLACE_NAME),
+  ownership: z.enum(['user', 'admin']).optional()
+});
+
 export const sourceSchema = z.object({
   id: z.string(),
   provider: z.string(),
@@ -426,7 +433,9 @@ export const toolResultData = z.object({
   /** Hits a search returned, `0` included; absent when the server does not know. */
   resultCount: z.number().int().nonnegative().optional(),
   /** What a page or document read delivered: `opened` (text) or `empty`. */
-  readOutcome: z.enum(['opened', 'empty']).optional()
+  readOutcome: z.enum(['opened', 'empty']).optional(),
+  /** Where the call looked: the projects or the search profile, by name. */
+  places: z.array(placeSchema).max(MAX_PLACES).optional()
 });
 
 export const toolDisabledData = z.object({

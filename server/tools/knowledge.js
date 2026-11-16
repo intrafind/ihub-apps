@@ -24,9 +24,10 @@ import { resolveProjectScope } from '../services/knowledge/ProjectScope.js';
 import { KNOWLEDGE_TOOL_MODES } from '../../shared/knowledgeModes.js';
 import { providerFor } from '../services/knowledge/registry.js';
 import { KnowledgeError } from '../services/knowledge/types.js';
-import { projectSource } from '../services/sources/producers/project.js';
+import { projectPlace, projectSource } from '../services/sources/producers/project.js';
 import {
   allocatePassageMarkers,
+  reportToolCallPlaces,
   reportToolCallSources
 } from '../services/sources/toolCallScope.js';
 import { RESULT_BUDGET_CHARS } from '../sources/documentRetrieval.js';
@@ -137,6 +138,8 @@ export async function search(params) {
     if (!searchable.length)
       return { hits: [], unavailable: [], note: 'No project is available in this chat.' };
     const targets = pick(searchable, params.project);
+    // Where the search looked, by name, beside its result: the row says which project.
+    reportToolCallPlaces(targets.map(entry => projectPlace(entry.project)));
     const query = String(params.query || '').trim();
     if (!query) return { error: 'query is required', code: 'INVALID_REF' };
     const limit = Math.min(MAX_LIMIT, Math.max(1, Number(params.limit) || 8));
@@ -233,6 +236,7 @@ export async function read(params) {
       };
     const provider = providerFor(entry.project);
     const item = (entry.project.items || []).find(candidate => candidate.id === documentId);
+    reportToolCallPlaces([projectPlace(entry.project)]);
     const respond = result => ({
       document: documentId,
       project: entry.project.id,

@@ -45,7 +45,11 @@ import { getToolsForApp } from '../services/tools/appTools.js';
 import { runTool } from '../services/tools/runTool.js';
 import { linkedProjectIds } from '../services/projects/projectLinks.js';
 import { list, read, search } from '../tools/knowledge.js';
-import { projectSource, projectSourceProducer } from '../services/sources/producers/project.js';
+import {
+  projectPlace,
+  projectSource,
+  projectSourceProducer
+} from '../services/sources/producers/project.js';
 import { extractToolSources } from '../services/sources/index.js';
 import { normalizeSource, mergeSources, emptySourceSet } from '../../shared/sources/index.js';
 import { classifyKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
@@ -1018,6 +1022,42 @@ describe('tools', () => {
     assert.equal(scoped.code, 'PROJECT_NOT_FOUND');
     const nothing = await search({ ...params({ query: 'x' }), appConfig: { id: 'chat' } });
     assert.deepEqual(nothing.hits, []);
+  });
+
+  it('search and read report the project they looked in, by name, beside the result', async () => {
+    const searched = [];
+    const found = await runToolCallScope(
+      [],
+      () => search(params({ query: 'deposit returned' })),
+      null,
+      searched
+    );
+    assert.ok(found.hits.length > 0, JSON.stringify(found));
+    assert.deepEqual(searched, [projectPlace(textProject)]);
+    assert.equal(searched[0].ownership, 'user');
+    assert.ok(searched[0].name, 'the place has a name');
+    // Beside the result: the model reads nothing more.
+    assert.equal(JSON.stringify(found).includes('ownership'), false);
+
+    const opened = [];
+    const doc = await runToolCallScope(
+      [],
+      () => read(params({ document: 'itm_contract' })),
+      null,
+      opened
+    );
+    assert.equal(doc.document, 'itm_contract');
+    assert.deepEqual(opened, [projectPlace(textProject)]);
+
+    // A search that reaches no project names none.
+    const none = [];
+    await runToolCallScope(
+      [],
+      () => search({ ...params({ query: 'x' }), appConfig: { id: 'chat' } }),
+      null,
+      none
+    );
+    assert.deepEqual(none, []);
   });
 
   it('search keeps the whole serialized result within its byte budget', async () => {

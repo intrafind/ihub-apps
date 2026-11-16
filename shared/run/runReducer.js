@@ -26,6 +26,7 @@ import { emptySourceSet, mergeSources } from '../sources/sourceSet.js';
 import { generatedFilesOf } from '../generatedFiles.js';
 import { ARGS_OUTCOMES, KNOWN_ARGS_OUTCOMES, PROGRESS_PHASES } from './argProgress.js';
 import { KNOWLEDGE_REFRESH_PHASE } from './knowledgeRefresh.js';
+import { normalizePlaces } from './places.js';
 
 const TERMINAL_STATUSES = new Set(['completed', 'aborted', 'error', 'budget_exhausted']);
 
@@ -791,6 +792,8 @@ export function reduceRunEvent(state, envelope) {
           Number.isInteger(data.resultCount) && data.resultCount >= 0 ? data.resultCount : null,
         readOutcome:
           data.readOutcome === 'opened' || data.readOutcome === 'empty' ? data.readOutcome : null,
+        // Where the server says the call looked (a project, a search profile), by name.
+        places: normalizePlaces(data.places),
         sources: Array.isArray(base.sources) ? base.sources : [],
         // The finished MCP App view: tool input + the full result it draws.
         mcpApp: data.mcpApp || base.mcpApp || null,

@@ -2094,6 +2094,10 @@ and in what a screen reader hears.
   favour of "Opened"; **N opened** counts only pages that delivered text.
 - **A search that found nothing says so** (**no results**), when the server knows it. Nothing is
   claimed when the number is not known.
+- **A row names where it looked.** A project search reads **Searched the project Project Alpha
+  for …** and an iFinder search names its search profile (**Searched iFinder (Contracts) for …**),
+  once the call has finished. The collapsed line stays at the type. A shared chat shows the names
+  of what an admin owns (an admin project, a search profile) and never a user's project name.
 - **A skill is shown once**, in the activity block, always with the reason: started manually, chosen
   by the model, set by the app, or kept from an earlier message. The purple chip above the answer is
   gone.

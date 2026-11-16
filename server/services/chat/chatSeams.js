@@ -556,6 +556,7 @@ export function chatToolSeam({
         ...(outcome.activityOrigin ? { activityOrigin: outcome.activityOrigin } : {}),
         ...(Number.isInteger(outcome.resultCount) ? { resultCount: outcome.resultCount } : {}),
         ...(outcome.readOutcome ? { readOutcome: outcome.readOutcome } : {}),
+        ...(outcome.places?.length ? { places: outcome.places } : {}),
         ...(mcpApp ? { mcpApp } : {}),
         ...(authRequired ? { authRequired } : {}),
         ...(scheduledTaskProposal ? { scheduledTaskProposal } : {}),

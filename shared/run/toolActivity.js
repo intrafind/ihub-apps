@@ -49,6 +49,7 @@
 
 import { SKILL_ACTIVATORS } from '../runEvents.js';
 import { ARGS_OUTCOMES, FAILED_ARGS_OUTCOMES } from './argProgress.js';
+import { normalizePlaces } from './places.js';
 
 /**
  * Tool ids with their own chat UI. `activate_skill` is shown as a `skill` row
@@ -471,6 +472,9 @@ function callRow(run, { tool, stream }, finished) {
       // not declared, never worked out from `sources`.
       resultCount: kind === 'search' ? (tool?.resultCount ?? null) : null,
       readOutcome: kind === 'fetch' ? (tool?.readOutcome ?? null) : null,
+      // Where the server says the call looked (a project, a search profile), by
+      // name: never worked out here. Empty = not said.
+      places: kind === 'search' || kind === 'fetch' ? normalizePlaces(tool?.places) : [],
       query,
       url,
       documentId,
@@ -500,6 +504,7 @@ function nativeSearchRow(run, finished) {
     origin: 'web',
     resultCount: null,
     readOutcome: null,
+    places: [],
     toolId: 'webSearch',
     name: 'webSearch',
     // The provider reports no end of its search; once the answer streams,

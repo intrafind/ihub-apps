@@ -910,12 +910,13 @@ therefore shows what the live one showed, in the same components.
   segment of the collapsed line) in the answer's activity block, saying why it is there; there is no
   chip above the answer. A skill's `activatedBy` is `user`, `app` (the app's `autoActivate`), `model` or
   `chat` (kept from an earlier message); the stored activity items keep `integration`, `origin`,
-  `resultCount` and `readOutcome` (see [SSE v2](sse-v2.md#where-a-tool-call-looked)). A share keeps the
-  origin type and the counts of each activity row, never an integration or search-profile name on
-  a non-public row. Public web-search rows are shared whole and keep their integration name (for
-  example "Brave Search"). In the
-  share's project scope, a user-owned project's id and name are set to null and an admin-owned
-  project is kept.
+  `resultCount`, `readOutcome` and `places` (the projects or the search profile a call looked in, by
+  name; see [SSE v2](sse-v2.md#where-a-tool-call-looked)). A share keeps the origin type and the
+  counts of each activity row, never an integration name on a non-public row, and the names of what
+  an admin owns (`places` with `ownership: admin`: an admin project, an iFinder search profile), but
+  never a user's project name. Public web-search rows are shared whole and keep their integration
+  name (for example "Brave Search"). In the share's project scope, a user-owned project's id and
+  name are set to null and an admin-owned project is kept.
 - **Recorded:** the turns of a persisted chat, and the workflow runs a tool
   started inside them. The answer text, reasoning and pictures are not — the
   transcript and the [artifact store](artifacts.md) hold those.

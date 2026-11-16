@@ -223,15 +223,53 @@ function fetchLabel(t, item) {
   return t('toolActivity.openingGeneric');
 }
 
+/** The origins whose rows have wording that names the place they looked in. */
+const NAMED_ORIGINS = new Set(['project', 'ifinder']);
+
+/** Most place names a row shows; the rest is a count. */
+const MAX_PLACE_NAMES_SHOWN = 2;
+
+/**
+ * The names of the places a call looked in (`item.places`, named by the
+ * server), for its row: the first two, then "+N more". Empty when the server
+ * named none.
+ */
+export function placeNamesOf(t, item) {
+  const names = (Array.isArray(item.places) ? item.places : [])
+    .map(place => place?.name)
+    .filter(Boolean);
+  if (names.length === 0) return '';
+  const shown = names.slice(0, MAX_PLACE_NAMES_SHOWN).join(', ');
+  return names.length > MAX_PLACE_NAMES_SHOWN
+    ? t('toolActivity.placesMore', { names: shown, count: names.length - MAX_PLACE_NAMES_SHOWN })
+    : shown;
+}
+
+/**
+ * The named variant of a row phrase, when the origin has one, the call has
+ * finished (a name is known only then) and the server named a place; else null.
+ */
+function namedPhrase(t, item, origin, key) {
+  if (!NAMED_ORIGINS.has(origin) || item.status === 'running') return null;
+  const name = placeNamesOf(t, item);
+  if (!name) return null;
+  return t(`toolActivity.origin.${origin}.${key}`, { name, count: item.places.length });
+}
+
 /**
  * The phrase of a finished or running search row, before its query chip:
- * "Searched the project for". Generic ("Searched for") when the server named no origin.
+ * "Searched the project for", or "Searched the project Project Alpha for" once
+ * the server has named where it looked. Generic ("Searched for") when the
+ * server named no origin.
  */
 export function searchRowPhrase(t, item) {
   const origin = phrasedOrigin(item);
   const running = item.status === 'running';
   if (!origin) return t('toolActivity.searchedFor', 'Searched for');
-  return t(`toolActivity.origin.${origin}.${running ? 'rowSearching' : 'rowSearched'}`);
+  return (
+    namedPhrase(t, item, origin, 'rowSearchedNamed') ??
+    t(`toolActivity.origin.${origin}.${running ? 'rowSearching' : 'rowSearched'}`)
+  );
 }
 
 /** The phrase of a page or document read row: "Opened web page", "Web page returned no text", "Opening…". */
@@ -241,7 +279,10 @@ export function openRowPhrase(t, item) {
   const running = item.status === 'running';
   if (!origin) return running ? t('toolActivity.openingGeneric') : t('toolActivity.openedGeneric');
   if (running) return t(`toolActivity.origin.${origin}.rowOpening`);
-  if (item.readOutcome === 'empty') return t(`toolActivity.origin.${origin}.rowOpenedEmpty`);
+  const empty = item.readOutcome === 'empty';
+  const named = namedPhrase(t, item, origin, empty ? 'rowOpenedEmptyNamed' : 'rowOpenedNamed');
+  if (named) return named;
+  if (empty) return t(`toolActivity.origin.${origin}.rowOpenedEmpty`);
   return t(`toolActivity.origin.${origin}.rowOpened`);
 }
 

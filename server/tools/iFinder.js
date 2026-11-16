@@ -6,6 +6,7 @@ import iFinderScopes, {
   resolveToolSearchProfile,
   searchProfileNames
 } from '../services/integrations/scopes/iFinderScopes.js';
+import { reportToolCallPlaces } from '../services/sources/toolCallScope.js';
 
 /**
  * The call's params with the search profile it may search in: the chat's
@@ -43,6 +44,9 @@ async function withSearchProfileName(params, run) {
   ]);
   const searchProfile = result && typeof result === 'object' ? result.searchProfile : undefined;
   const name = typeof searchProfile === 'string' ? names.get(searchProfile) : undefined;
+  // The profile is where the call looked: named on its row. Profiles are an
+  // admin's configuration, so a share may carry the name.
+  if (name && !result?.error) reportToolCallPlaces([{ name, ownership: 'admin' }]);
   return name && !result.error ? { ...result, searchProfileName: name } : result;
 }
 

@@ -548,7 +548,7 @@ function SearchRow({ item, details }) {
   return (
     <li>
       <RowLine icon={<StatusIcon item={item} fallback="search" />}>
-        <span className={item.status === 'running' ? ACTIVE_LABEL : ''}>
+        <span className={`max-w-full ${item.status === 'running' ? ACTIVE_LABEL : ''}`}>
           {queries.length
             ? searchRowPhrase(t, item)
             : t('toolActivity.ranTool', 'Ran {{name}}', { name: item.name })}
@@ -594,7 +594,7 @@ function FetchRow({ item, details }) {
   return (
     <li>
       <RowLine icon={<StatusIcon item={item} fallback="document" />}>
-        <span className={item.status === 'running' ? ACTIVE_LABEL : ''}>
+        <span className={`max-w-full ${item.status === 'running' ? ACTIVE_LABEL : ''}`}>
           {openRowPhrase(t, item)}
         </span>
         {url ? (

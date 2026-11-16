@@ -8500,6 +8500,7 @@
     "openingGeneric": "Opening…",
     "openingHost": "Opening {{host}}",
     "openedGeneric": "Opened",
+    "placesMore": "{{names}} +{{count}} more",
     "originDocuments": "Document sources",
     "noResults": "no results",
     "via": "via {{name}}",
@@ -8538,7 +8539,13 @@
         "opening": "Opening “{{title}}”",
         "rowOpening": "Opening document in the project",
         "rowOpened": "Opened document in the project",
-        "rowOpenedEmpty": "Document in the project returned no text"
+        "rowOpenedEmpty": "Document in the project returned no text",
+        "rowSearchedNamed_one": "Searched the project {{name}} for",
+        "rowSearchedNamed_other": "Searched the projects {{name}} for",
+        "rowOpenedNamed_one": "Opened document in the project {{name}}",
+        "rowOpenedNamed_other": "Opened document in the projects {{name}}",
+        "rowOpenedEmptyNamed_one": "Document in the project {{name}} returned no text",
+        "rowOpenedEmptyNamed_other": "Document in the projects {{name}} returned no text"
       },
       "ifinder": {
         "searchingFor": "Searching iFinder for “{{query}}”",
@@ -8548,7 +8555,10 @@
         "opening": "Opening “{{title}}”",
         "rowOpening": "Opening document in iFinder",
         "rowOpened": "Opened document in iFinder",
-        "rowOpenedEmpty": "Document in iFinder returned no text"
+        "rowOpenedEmpty": "Document in iFinder returned no text",
+        "rowSearchedNamed": "Searched iFinder ({{name}}) for",
+        "rowOpenedNamed": "Opened document in iFinder ({{name}})",
+        "rowOpenedEmptyNamed": "Document in iFinder ({{name}}) returned no text"
       },
       "iassistant": {
         "searchingFor": "Searching iAssistant for “{{query}}”",

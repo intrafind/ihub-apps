@@ -211,7 +211,7 @@ the client alone.
 
 ## Where a Tool Call Looked
 
-`activityOrigin`, `resultCount`, `readOutcome` are optional and additive; a client keeps working when
+`activityOrigin`, `resultCount`, `readOutcome` and `places` are optional and additive; a client keeps working when
 one is missing and never works them out from a tool id, a provider or `activityScope` (which stays for
 this release).
 
@@ -224,6 +224,13 @@ this release).
   (`opened`: a page or document read delivered text; `empty`: it completed without, for example
   `read_url` with an `offset` at the end of the page). They carry `activityOrigin` for a call whose
   origin only the result tells (`chat_sources_read` recalling sources of one origin).
+- `tool/completed` and the ledger `tool/result` may also carry `places`: where the call looked, by
+  name, `[{ name, ownership? }]` (at most 10, names of at most 120 characters, `ownership` is `user`
+  or `admin`). A project search or read names its projects; an iFinder tool names its search
+  profile (an admin's configuration, so `admin`). The tool reports them beside its result
+  (`reportToolCallPlaces`), so the model reads nothing more, and the server decides: a client
+  never works a name out from a source or a tool id. Absent when the server names none. A row
+  shows the names; the stored activity keeps them, and a share keeps only the `admin` ones.
 - `skill.activation` `activatedBy`: `user | app | model | chat` (`chat`: kept from an earlier message).
 ## A chat turn on the wire
 

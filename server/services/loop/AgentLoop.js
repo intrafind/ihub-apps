@@ -1078,6 +1078,8 @@ export class AgentLoop {
     let lifted = null;
     // Sources the call reports beside its result (services/sources/toolCallScope).
     const reported = [];
+    // Where the call looked (projects, a search profile), by name, beside its result.
+    const places = [];
     if (!toolDef) {
       const available = ctx.tools.map(t => t.id).filter(Boolean);
       const safeMessage =
@@ -1127,7 +1129,8 @@ export class AgentLoop {
                     info,
                     signal: ctx.signal
                   }),
-                ctx.toolTurn
+                ctx.toolTurn,
+                places
               ),
             ctx.signal,
             () => abortError('Agent loop aborted (cancelled or timed out)')
@@ -1177,6 +1180,7 @@ export class AgentLoop {
       message: bound.message,
       durationMs: Date.now() - started,
       error: failure,
+      ...(places.length ? { places } : {}),
       ...(lifted ? { lifted } : {}),
       // What the call found, taken from the full result: the previews that
       // reach clients are too short to hold it (see services/sources).
@@ -1227,7 +1231,8 @@ export class AgentLoop {
       knowledgeSource: outcome.knowledgeSource,
       ...(outcome.activityOrigin ? { activityOrigin: outcome.activityOrigin } : {}),
       ...(Number.isInteger(outcome.resultCount) ? { resultCount: outcome.resultCount } : {}),
-      ...(outcome.readOutcome ? { readOutcome: outcome.readOutcome } : {})
+      ...(outcome.readOutcome ? { readOutcome: outcome.readOutcome } : {}),
+      ...(outcome.places?.length ? { places: outcome.places } : {})
     });
     if (outcome.sources) {
       await ctx.addSources(outcome.sources, {
