@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { fetchUsageFeedbackSummary } from '../../../api/usageReportsAdminApi';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -19,6 +19,8 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import FeedbackReview from '../components/feedback/FeedbackReview';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
 const TRACKING_MODES = ['anonymous', 'pseudonymous', 'identified'];
 
@@ -53,7 +55,6 @@ function AdminFeedbackPage() {
   const { refreshConfig } = usePlatformConfig();
 
   const [activeTab, setActiveTab] = useState('settings');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
@@ -69,52 +70,48 @@ function AdminFeedbackPage() {
   const [appSaving, setAppSaving] = useState(null);
   const [usage, setUsage] = useState(null);
 
-  const load = async () => {
-    try {
-      setLoading(true);
-      const [featuresResponse, platformResponse, meta, appList, usageData] = await Promise.all([
-        makeAdminApiCall('/admin/features', { method: 'GET' }),
-        makeAdminApiCall('/admin/configs/platform', { method: 'GET' }),
-        fetchAdminUsageMeta().catch(() => null),
-        fetchAdminApps().catch(() => []),
-        fetchUsageFeedbackSummary({ range: '90d' }).catch(() => null)
-      ]);
-
-      const feedbackFeature = (featuresResponse.data?.items || []).find(f => f.id === 'feedback');
-      const platform = platformResponse.data || {};
-      const next = {
-        collectionEnabled: feedbackFeature ? feedbackFeature.enabled !== false : true,
-        storageEnabled: platform.features?.feedbackTracking !== false,
-        trackingMode: meta?.trackingMode || platform.features?.usageTrackingMode || 'pseudonymous'
-      };
-      setSaved(next);
-      setDraft(next);
-      setApps(
-        (Array.isArray(appList) ? appList : []).map(app => ({
-          id: app.id,
-          name: getLocalizedContent(app.name, lang) || app.id,
-          appEnabled: app.enabled !== false,
-          feedbackEnabled: app.features?.feedback !== false
-        }))
-      );
-      setUsage(usageData);
-      setMessage(null);
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          getAdminApiErrorMessage(error) ||
-          t('admin.feedback.loadError', 'Failed to load feedback settings')
-      });
-    } finally {
-      setLoading(false);
+  // The settings tab shows no form and no Save until its settings loaded: the
+  // toggles would otherwise start from defaults that may not be what is stored.
+  const settingsLoad = useAdminConfigLoad({
+    sources: {
+      settings: {
+        load: async () => {
+          const [featuresResponse, platformResponse, meta, appList, usageData] = await Promise.all([
+            makeAdminApiCall('/admin/features', { method: 'GET' }),
+            makeAdminApiCall('/admin/configs/platform', { method: 'GET' }),
+            fetchAdminUsageMeta().catch(() => null),
+            fetchAdminApps().catch(() => []),
+            fetchUsageFeedbackSummary({ range: '90d' }).catch(() => null)
+          ]);
+          return { featuresResponse, platformResponse, meta, appList, usageData };
+        },
+        onLoad: ({ featuresResponse, platformResponse, meta, appList, usageData }) => {
+          const feedbackFeature = (featuresResponse.data?.items || []).find(
+            f => f.id === 'feedback'
+          );
+          const platform = platformResponse.data || {};
+          const next = {
+            collectionEnabled: feedbackFeature ? feedbackFeature.enabled !== false : true,
+            storageEnabled: platform.features?.feedbackTracking !== false,
+            trackingMode:
+              meta?.trackingMode || platform.features?.usageTrackingMode || 'pseudonymous'
+          };
+          setSaved(next);
+          setDraft(next);
+          setApps(
+            (Array.isArray(appList) ? appList : []).map(app => ({
+              id: app.id,
+              name: getLocalizedContent(app.name, lang) || app.id,
+              appEnabled: app.enabled !== false,
+              feedbackEnabled: app.features?.feedback !== false
+            }))
+          );
+          setUsage(usageData);
+        }
+      }
     }
-  };
-
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
+  });
+  const ready = settingsLoad.status === 'ready';
 
   const hasChanges = useMemo(
     () =>
@@ -125,6 +122,7 @@ function AdminFeedbackPage() {
   );
 
   const handleSave = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage(null);
@@ -373,7 +371,7 @@ function AdminFeedbackPage() {
       </div>
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {loading ? (
+        {settingsLoad.status === 'loading' ? (
           <LoadingSpinner />
         ) : (
           <>
@@ -397,7 +395,16 @@ function AdminFeedbackPage() {
               </nav>
             </div>
 
-            {activeTab === 'settings' ? renderSettings() : renderReview()}
+            {activeTab !== 'settings' ? (
+              renderReview()
+            ) : ready ? (
+              renderSettings()
+            ) : (
+              <AdminLoadGate
+                load={settingsLoad}
+                resourceLabel={t('admin.feedback.resource', 'feedback settings')}
+              />
+            )}
           </>
         )}
       </div>

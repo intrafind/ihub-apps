@@ -1,40 +1,33 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
 function SsrfConfig() {
   const { t } = useTranslation();
   const [allowedHosts, setAllowedHosts] = useState([]);
   const [newHost, setNewHost] = useState('');
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/ssrf/config', { method: 'GET' });
-        setAllowedHosts(
-          Array.isArray(response.data.allowedHosts) ? response.data.allowedHosts : []
-        );
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text:
-            error.message ||
-            t('admin.system.ssrf.configLoadError', 'Failed to load SSRF configuration')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () => (await makeAdminApiCall('/admin/ssrf/config', { method: 'GET' })).data,
+        onLoad: data => {
+          setAllowedHosts(Array.isArray(data.allowedHosts) ? data.allowedHosts : []);
+        }
       }
-    };
-    void fetchConfig();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const handleAddHost = () => {
     const trimmed = newHost.trim();
@@ -54,6 +47,7 @@ function SsrfConfig() {
   };
 
   const handleSave = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
     try {
@@ -77,13 +71,19 @@ function SsrfConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
         <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-gray-100">
           {t('admin.system.ssrf.title', 'SSRF Allowlist')}
         </h2>
-        <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+        <AdminLoadGate
+          load={load}
+          resourceLabel={t('admin.system.ssrf.title', 'SSRF Allowlist')}
+          loadingFallback={
+            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+          }
+        />
       </div>
     );
   }

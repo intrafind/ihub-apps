@@ -23,6 +23,7 @@ import {
   LinkIcon
 } from '@heroicons/react/24/outline';
 import AdminDemoAccountsAlert from '../components/AdminDemoAccountsAlert';
+import AdminLoadError from '../components/AdminLoadError';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUpdateCheck } from '../hooks/useUpdateCheck';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
@@ -613,9 +614,22 @@ export default function AdminOverview() {
     user?.permissions?.contentAdmin && !user?.permissions?.adminAccess && !user?.isAdmin
   );
 
-  const { stats, platformInfo, recentActivity, isLoading, isFreshInstance } = useOverviewData({
-    contentAdminOnly: isContentAdminOnly
-  });
+  const { stats, platformInfo, recentActivity, isLoading, isFreshInstance, loadError, retry } =
+    useOverviewData({
+      contentAdminOnly: isContentAdminOnly
+    });
+
+  // A failed apps request is an error with Retry, never the fresh-install view (SH-B2).
+  const loadErrorBanner = loadError ? (
+    <AdminLoadError
+      framed={false}
+      className="mb-6"
+      resourceLabel={t('admin.overview.resource', 'the overview')}
+      status={loadError.status}
+      message={loadError.detail}
+      onRetry={retry}
+    />
+  ) : null;
 
   // Runs alongside the dashboard data rather than as part of it: this one
   // reaches api.github.com, and the page must render before it answers — or not
@@ -723,6 +737,8 @@ export default function AdminOverview() {
           </p>
         </div>
 
+        {loadErrorBanner}
+
         {/* Content stat cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           {statCards.map(({ key, ...card }) => (
@@ -758,6 +774,8 @@ export default function AdminOverview() {
           {t('admin.overview.subtitle', 'Platform overview and quick actions')}
         </p>
       </div>
+
+      {loadErrorBanner}
 
       {/* Stat cards */}
       {!isFreshInstance && (

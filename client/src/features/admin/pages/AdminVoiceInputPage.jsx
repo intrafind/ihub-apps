@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -78,7 +80,6 @@ const toPublicSpeech = (speech, dictationModels) => ({
 function AdminVoiceInputPage() {
   const { t, i18n } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_SPEECH);
@@ -92,11 +93,6 @@ function AdminVoiceInputPage() {
   const [ttsSample, setTtsSample] = useState('');
   const readAloudTest = useReadAloudPlayback(READ_ALOUD_TEST_ID);
   const voiceModeFlagEnabled = useFeatureFlags().isEnabled('voiceMode', false);
-
-  useEffect(() => {
-    void loadConfig();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
 
   // The admin model list, not the public /api/models: that one is filtered by
   // the admin's own model permissions, and admin access does not imply them.
@@ -129,23 +125,28 @@ function AdminVoiceInputPage() {
     setSavedConfig(speech);
   };
 
-  const loadConfig = async () => {
-    try {
-      setLoading(true);
-      await fetchSpeech();
-      setMessage('');
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text:
-          error.message || t('admin.voiceInput.loadError', 'Failed to load voice input settings')
-      });
-    } finally {
-      setLoading(false);
+  // No form and no Save until the settings loaded: Save writes the Azure
+  // block and the defaults of this form into platform.json, which after a
+  // failed load would replace the stored speech settings.
+  const load = useAdminConfigLoad({
+    sources: {
+      platform: {
+        load: async () =>
+          toFormSpeech(
+            ((await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data || {})
+              .speech
+          ),
+        onLoad: speech => {
+          setConfig(speech);
+          setSavedConfig(speech);
+        }
+      }
     }
-  };
+  });
+  const ready = load.status === 'ready';
 
   const handleSave = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage('');
@@ -160,7 +161,7 @@ function AdminVoiceInputPage() {
         voiceMode: toSavedVoiceMode(config.voiceMode, platform.speech?.voiceMode)
       };
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
-      // Re-read so the keys show their redacted state again. Not loadConfig():
+      // Re-read so the keys show their redacted state again. Not the first load:
       // it blanks the page while loading and clears the message, so the
       // success notice never showed and the test panel lost its state.
       await fetchSpeech();
@@ -244,13 +245,21 @@ function AdminVoiceInputPage() {
   const setVoiceMode = patch =>
     setConfig(prev => ({ ...prev, voiceMode: { ...prev.voiceMode, ...patch } }));
 
-  if (loading) {
+  if (!ready) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
-            <p className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
-          </div>
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.voiceInput.resource', 'voice settings')}
+            loadingFallback={
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                <p className="text-gray-600 dark:text-gray-400">
+                  {t('common.loading', 'Loading...')}
+                </p>
+              </div>
+            }
+          />
         </div>
       </div>
     );

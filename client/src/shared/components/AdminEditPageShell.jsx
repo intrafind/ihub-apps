@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 import { useTranslation } from 'react-i18next';
 import AdminBreadcrumb from '../../features/admin/components/AdminBreadcrumb';
+import AdminLoadError from '../../features/admin/components/AdminLoadError';
 import ConfirmDialog from './ConfirmDialog';
 import LoadingSpinner from './LoadingSpinner';
 
@@ -45,6 +46,15 @@ import LoadingSpinner from './LoadingSpinner';
  *   `ChangeHistoryDrawer`, which several pages render alongside the form).
  * @param {{state: 'blocked'|'unblocked', proceed: Function, reset: Function}} props.blocker -
  *   from `useAdminResourceEditor`/`useUnsavedChanges`; drives the "Unsaved Changes" dialog.
+ * @param {{status: number|null, detail: string}|null} [props.loadError] - from
+ *   `useAdminResourceEditor`. When set, the breadcrumb and the load error (with an
+ *   in-place Retry) are rendered INSTEAD of `children` and `extra`: a form for a
+ *   resource that did not load would only hold defaults, and saving them would
+ *   overwrite the stored resource.
+ * @param {() => Promise<void>} [props.onRetry] - `retryLoad` from `useAdminResourceEditor`
+ * @param {string} [props.resourceLabel] - what failed to load, e.g. 'model "gpt-4"'
+ * @param {{label: string, onClick: function}} [props.notFoundAction] - shown for a 404
+ *   instead of Retry, e.g. "Back to Models"
  */
 function AdminEditPageShell({
   loading,
@@ -54,7 +64,11 @@ function AdminEditPageShell({
   breadcrumbs,
   children,
   extra,
-  blocker
+  blocker,
+  loadError = null,
+  onRetry,
+  resourceLabel,
+  notFoundAction
 }) {
   const { t } = useTranslation();
 
@@ -66,6 +80,23 @@ function AdminEditPageShell({
         </div>
       )
     );
+  }
+
+  if (loadError) {
+    const failed = (
+      <div className={contentClassName}>
+        <AdminBreadcrumb crumbs={breadcrumbs} />
+        <AdminLoadError
+          framed={false}
+          resourceLabel={resourceLabel ?? t('admin.load.resourceFallback', 'this item')}
+          status={loadError.status ?? null}
+          message={loadError.detail}
+          onRetry={onRetry}
+          action={loadError.status === 404 ? notFoundAction : undefined}
+        />
+      </div>
+    );
+    return outerClassName ? <div className={outerClassName}>{failed}</div> : failed;
   }
 
   const content = (

@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { ApprovalModeSelect } from './ToolApprovalFields';
 
 /**
@@ -31,35 +33,31 @@ export function toolApprovalFromForm(form) {
 function ToolApprovalConfig() {
   const { t } = useTranslation();
   const [form, setForm] = useState({ default: '', internal: '', external: '' });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
-        const defaults = response.data?.toolApproval?.defaults || {};
-        setForm({
-          default: defaults.default || '',
-          internal: defaults.internal || '',
-          external: defaults.external || ''
-        });
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text:
-            error.message ||
-            t('admin.toolApproval.loadError', 'The tool approval settings could not be loaded.')
-        });
-      } finally {
-        setLoading(false);
+  // No form and no Save until the settings loaded: saving the empty form after
+  // a failed load would clear the stored approval defaults.
+  const load = useAdminConfigLoad({
+    sources: {
+      platform: {
+        load: async () =>
+          (await makeAdminApiCall('/admin/configs/platform', { method: 'GET' })).data,
+        onLoad: data => {
+          const defaults = data?.toolApproval?.defaults || {};
+          setForm({
+            default: defaults.default || '',
+            internal: defaults.internal || '',
+            external: defaults.external || ''
+          });
+        }
       }
-    };
-    void load();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const save = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage(null);
     try {
@@ -87,11 +85,17 @@ function ToolApprovalConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <Icon name="loader" className="h-6 w-6 animate-spin text-primary-600" />
-      </div>
+      <AdminLoadGate
+        load={load}
+        resourceLabel={t('admin.toolApproval.resource', 'tool approval settings')}
+        loadingFallback={
+          <div className="flex items-center justify-center py-8">
+            <Icon name="loader" className="h-6 w-6 animate-spin text-primary-600" />
+          </div>
+        }
+      />
     );
   }
 

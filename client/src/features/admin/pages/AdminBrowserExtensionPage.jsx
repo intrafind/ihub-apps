@@ -7,11 +7,13 @@ import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminBrowserExtensionPage() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [message, setMessage] = useState(null);
@@ -41,29 +43,36 @@ function AdminBrowserExtensionPage() {
     return out;
   };
 
+  const fetchStatus = async () =>
+    (await makeAdminApiCall('/admin/browser-extension/status', { method: 'GET' })).data;
+
+  /** Put a loaded status into the form state. */
+  const applyStatus = data => {
+    setStatus(data);
+    setDisplayName(sanitizeLocalized(data.displayName));
+    setDescription(sanitizeLocalized(data.description));
+    setStarterPrompts(
+      Array.isArray(data.starterPrompts)
+        ? data.starterPrompts.map(p => ({
+            _id: crypto.randomUUID(),
+            title: sanitizeLocalized(p?.title),
+            message: sanitizeLocalized(p?.message)
+          }))
+        : []
+    );
+    setExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
+    setAllowedGroups(
+      Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
+        ? data.allowedGroups
+        : ['browser-extension']
+    );
+  };
+
+  // Reload after Enable/Disable or a save; the first load goes through the gate below.
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/browser-extension/status', { method: 'GET' });
-      const data = res.data;
-      setStatus(data);
-      setDisplayName(sanitizeLocalized(data.displayName));
-      setDescription(sanitizeLocalized(data.description));
-      setStarterPrompts(
-        Array.isArray(data.starterPrompts)
-          ? data.starterPrompts.map(p => ({
-              _id: crypto.randomUUID(),
-              title: sanitizeLocalized(p?.title),
-              message: sanitizeLocalized(p?.message)
-            }))
-          : []
-      );
-      setExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
-      setAllowedGroups(
-        Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
-          ? data.allowedGroups
-          : ['browser-extension']
-      );
+      applyStatus(await fetchStatus());
     } catch (_err) {
       setMessage({
         type: 'error',
@@ -92,13 +101,19 @@ function AdminBrowserExtensionPage() {
     }
   };
 
+  // No form, Enable or Save until the status loaded: saving after a failed
+  // load would store empty prompts and defaults over the real ones (IN-B6).
+  const load = useAdminConfigLoad({
+    sources: { status: { load: fetchStatus, onLoad: applyStatus } }
+  });
+  const ready = load.status === 'ready';
+
   useEffect(() => {
-    void loadStatus();
     void loadGroups();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   const handleToggle = async () => {
+    if (!ready) return;
     if (!status) return;
     const action = status.enabled ? '_disable' : '_enable';
     try {
@@ -218,6 +233,7 @@ function AdminBrowserExtensionPage() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage(null);
@@ -340,7 +356,12 @@ function AdminBrowserExtensionPage() {
           </div>
         )}
 
-        {loading ? (
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.browserExtension.resource', 'browser extension settings')}
+          />
+        ) : loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-emerald-600 rounded-full animate-spin" />
           </div>

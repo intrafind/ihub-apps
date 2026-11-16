@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   fetchAdminApps,
@@ -9,6 +9,7 @@ import {
   fetchAdminPrompts,
   makeAdminApiCall
 } from '../../../api/adminApi';
+import { describeAdminLoadError } from './useAdminConfigLoad';
 
 /**
  * Fetches and computes data for the admin Overview dashboard.
@@ -19,6 +20,11 @@ import {
  * does, so one unreachable host holds the whole dashboard on its loading
  * skeletons. The GitHub update check lives in `useUpdateCheck` for exactly that
  * reason (issue #2150).
+ *
+ * A failed apps request never reads as a fresh install: `isFreshInstance` is
+ * true only when the apps list loaded and is empty. When it failed, `loadError`
+ * says why ({ status, code, detail, retryAfterSeconds }) and `retry()` loads the
+ * dashboard again in place (SH-B2).
  *
  * @param {Object} [options]
  * @param {boolean} [options.contentAdminOnly] - When true, the caller is a
@@ -33,9 +39,40 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
   const [recentActivity, setRecentActivity] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFreshInstance, setIsFreshInstance] = useState(false);
+  const [loadError, setLoadError] = useState(null);
+  // Bumped by retry(); re-runs the effect below without a page reload.
+  const [attempt, setAttempt] = useState(0);
+  const retryResolversRef = useRef([]);
+
+  const retry = useCallback(
+    () =>
+      new Promise(resolve => {
+        retryResolversRef.current.push(resolve);
+        setAttempt(n => n + 1);
+      }),
+    []
+  );
 
   useEffect(() => {
     let cancelled = false;
+
+    /** Settle the promises of retry() calls once this attempt has finished. */
+    const settleRetries = () => {
+      const resolvers = retryResolversRef.current;
+      retryResolversRef.current = [];
+      resolvers.forEach(resolve => resolve());
+    };
+
+    /**
+     * What the apps request says about the instance. Only a loaded, empty list
+     * makes a fresh install; a failed request makes an error, never "no apps".
+     */
+    const readApps = appsResult => {
+      if (appsResult.status !== 'fulfilled') {
+        return { apps: null, appsError: describeAdminLoadError(appsResult.reason) };
+      }
+      return { apps: Array.isArray(appsResult.value) ? appsResult.value : [], appsError: null };
+    };
 
     // Content-admin-only view: fetch just the resources they manage. These all
     // pass contentAdminAuth on the server, so no 403s are triggered.
@@ -48,7 +85,7 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
 
       if (cancelled) return;
 
-      const apps = appsResult.status === 'fulfilled' ? appsResult.value : [];
+      const { apps, appsError } = readApps(appsResult);
       const prompts = promptsResult.status === 'fulfilled' ? promptsResult.value : [];
       const projects = projectsResult.status === 'fulfilled' ? projectsResult.value : [];
 
@@ -57,8 +94,10 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
 
       setStats({
         apps: {
-          value: appCount,
-          sub: t('admin.overview.apps.enabledCount', '{{count}} enabled', { count: enabledApps }),
+          value: appsError ? '—' : appCount,
+          sub: appsError
+            ? t('admin.overview.apps.unavailable', 'not loaded')
+            : t('admin.overview.apps.enabledCount', '{{count}} enabled', { count: enabledApps }),
           href: '/admin/apps'
         },
         prompts: {
@@ -77,8 +116,10 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
 
       setPlatformInfo(null);
       setRecentActivity(null);
-      setIsFreshInstance(appCount === 0);
+      setIsFreshInstance(!appsError && appCount === 0);
+      setLoadError(appsError);
       setIsLoading(false);
+      settleRetries();
     };
 
     const load = async () => {
@@ -93,7 +134,7 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
 
       if (cancelled) return;
 
-      const apps = appsResult.status === 'fulfilled' ? appsResult.value : [];
+      const { apps, appsError } = readApps(appsResult);
       const usageTotals =
         usageResult.status === 'fulfilled' ? usageResult.value?.data?.totals || null : null;
       const versionData = versionResult.status === 'fulfilled' ? versionResult.value?.data : null;
@@ -114,8 +155,10 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
 
       setStats({
         apps: {
-          value: appCount,
-          sub: t('admin.overview.apps.enabledCount', '{{count}} enabled', { count: enabledApps }),
+          value: appsError ? '—' : appCount,
+          sub: appsError
+            ? t('admin.overview.apps.unavailable', 'not loaded')
+            : t('admin.overview.apps.enabledCount', '{{count}} enabled', { count: enabledApps }),
           href: '/admin/apps'
         },
         users: {
@@ -155,9 +198,12 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
         }
       }
 
-      // Fresh instance: no apps created
-      setIsFreshInstance(appCount === 0);
+      // Fresh instance: the apps list loaded and is empty. A failed request
+      // is an error to show, not an empty instance.
+      setIsFreshInstance(!appsError && appCount === 0);
+      setLoadError(appsError);
       setIsLoading(false);
+      settleRetries();
     };
 
     if (contentAdminOnly) {
@@ -168,7 +214,7 @@ export function useOverviewData({ contentAdminOnly = false } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [t, contentAdminOnly]);
+  }, [t, contentAdminOnly, attempt]);
 
-  return { stats, platformInfo, recentActivity, isLoading, isFreshInstance };
+  return { stats, platformInfo, recentActivity, isLoading, isFreshInstance, loadError, retry };
 }

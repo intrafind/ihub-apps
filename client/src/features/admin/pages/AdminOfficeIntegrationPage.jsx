@@ -9,6 +9,8 @@ import Icon from '../../../shared/components/Icon';
 import ReorderableList from '../components/ReorderableList';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall, getAdminApiErrorMessage, fetchAdminApps } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
@@ -133,7 +135,7 @@ const readStartPage = value => ({
 function AdminOfficeIntegrationPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState(false);
@@ -190,39 +192,46 @@ function AdminOfficeIntegrationPage() {
     return out;
   };
 
+  const fetchStatus = async () =>
+    (await makeAdminApiCall('/admin/office-integration/status', { method: 'GET' })).data;
+
+  /** Put a loaded status into the form state. */
+  const applyStatus = data => {
+    setStatus(data);
+    setDisplayName(sanitizeLocalized(data.displayName));
+    setDescription(sanitizeLocalized(data.description));
+    setOfficeJsMode(data.officeJsMode || 'cdn');
+    setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
+    setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
+    setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
+    setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
+    setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
+    setStartPage(readStartPage(data.startPage));
+    // Null when there is no OAuth client to read; the card says so.
+    const access = data.appAccess ? readAppAccess(data.appAccess) : DEFAULT_APP_ACCESS;
+    setAppAccess(access);
+    setSavedAppAccess(access);
+    setDefaultMailAction(
+      MAIL_ACTION_CHOICES.includes(data.defaultMailAction)
+        ? data.defaultMailAction
+        : DEFAULT_MAIL_ACTION
+    );
+    setStarterPrompts(
+      Array.isArray(data.starterPrompts)
+        ? data.starterPrompts.map(p => ({
+            _id: crypto.randomUUID(),
+            title: sanitizeLocalized(p?.title),
+            message: sanitizeLocalized(p?.message)
+          }))
+        : []
+    );
+  };
+
+  // Reload after Enable/Disable or a save; the first load goes through the gate below.
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/office-integration/status', { method: 'GET' });
-      const data = res.data;
-      setStatus(data);
-      setDisplayName(sanitizeLocalized(data.displayName));
-      setDescription(sanitizeLocalized(data.description));
-      setOfficeJsMode(data.officeJsMode || 'cdn');
-      setOfficeJsCdnUrl(data.officeJsCdnUrl || '');
-      setOfficeJsCustomUrl(data.officeJsCustomUrl || '');
-      setOfficeJsResolvedUrl(data.officeJsResolvedUrl || '');
-      setOfficeJsResolvedMode(data.officeJsResolvedMode || '');
-      setOfficeJsPresets(Array.isArray(data.officeJsCdnPresets) ? data.officeJsCdnPresets : []);
-      setStartPage(readStartPage(data.startPage));
-      // Null when there is no OAuth client to read; the card says so.
-      const access = data.appAccess ? readAppAccess(data.appAccess) : DEFAULT_APP_ACCESS;
-      setAppAccess(access);
-      setSavedAppAccess(access);
-      setDefaultMailAction(
-        MAIL_ACTION_CHOICES.includes(data.defaultMailAction)
-          ? data.defaultMailAction
-          : DEFAULT_MAIL_ACTION
-      );
-      setStarterPrompts(
-        Array.isArray(data.starterPrompts)
-          ? data.starterPrompts.map(p => ({
-              _id: crypto.randomUUID(),
-              title: sanitizeLocalized(p?.title),
-              message: sanitizeLocalized(p?.message)
-            }))
-          : []
-      );
+      applyStatus(await fetchStatus());
     } catch (_err) {
       setMessage({
         type: 'error',
@@ -233,10 +242,12 @@ function AdminOfficeIntegrationPage() {
     }
   };
 
-  useEffect(() => {
-    void loadStatus();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
+  // No form, Enable or Save until the status loaded: saving after a failed
+  // load would store empty prompts and defaults over the real ones (IN-B6).
+  const load = useAdminConfigLoad({
+    sources: { status: { load: fetchStatus, onLoad: applyStatus } }
+  });
+  const ready = load.status === 'ready';
 
   useEffect(() => {
     let mounted = true;
@@ -335,6 +346,7 @@ function AdminOfficeIntegrationPage() {
   };
 
   const handleToggle = async () => {
+    if (!ready) return;
     if (!status) return;
     const action = status.enabled ? '_disable' : '_enable';
     try {
@@ -362,6 +374,7 @@ function AdminOfficeIntegrationPage() {
   };
 
   const handleRegenerateAddinId = async () => {
+    if (!ready) return;
     if (
       !window.confirm(
         t(
@@ -523,6 +536,7 @@ function AdminOfficeIntegrationPage() {
       : officeJsPresets;
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     // An empty "limited" list would be stored as no restriction at all, the
     // opposite of what choosing "only selected apps" means — so it is refused
     // here, and by the server, rather than saved.
@@ -682,7 +696,12 @@ function AdminOfficeIntegrationPage() {
           </div>
         )}
 
-        {loading ? (
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.officeIntegration.resource', 'Office integration settings')}
+          />
+        ) : loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
           </div>

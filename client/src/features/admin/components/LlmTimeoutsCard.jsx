@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 import { LLM_TIMEOUT_KEYS, LLM_TIMEOUT_MAX_MS } from '../../../../../shared/llmProviders.js';
 import Icon from '../../../shared/components/Icon';
 
@@ -40,11 +42,8 @@ function LlmTimeoutsCard() {
   const [saved, setSaved] = useState({});
   const [defaults, setDefaults] = useState({});
   const [effective, setEffective] = useState({});
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
-  // A failed load has nothing to summarise; it is shown beside the title, not inside the collapsed body.
-  const [loadError, setLoadError] = useState(null);
   const [open, setOpen] = useState(false);
 
   const apply = useCallback(data => {
@@ -54,27 +53,26 @@ function LlmTimeoutsCard() {
     setForm(toForm(data?.saved));
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    makeAdminApiCall('/admin/llm-timeouts')
-      .then(response => {
-        if (!cancelled) apply(response.data);
-      })
-      .catch(error => {
-        if (!cancelled) setLoadError(getAdminApiErrorMessage(error));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [apply]);
+  // No form and no Save until the timeouts loaded: a save sends both fields,
+  // so editing one after a failed load would reset the other to its default.
+  const load = useAdminConfigLoad({
+    sources: {
+      timeouts: {
+        load: async () => (await makeAdminApiCall('/admin/llm-timeouts')).data,
+        onLoad: apply
+      }
+    }
+  });
+  const loading = load.status === 'loading';
+  const ready = load.status === 'ready';
+  // A failed load has nothing to summarise; it is shown beside the title, not inside the collapsed body.
+  const loadError = load.error?.detail ?? null;
 
   const dirty = LLM_TIMEOUT_KEYS.some(key => String(saved[key] ?? '') !== String(form[key]));
 
   const handleSave = async event => {
     event.preventDefault();
+    if (!ready) return;
     setSaving(true);
     setMessage(null);
     try {
@@ -164,10 +162,16 @@ function LlmTimeoutsCard() {
             'Apply to every model unless its provider or the model sets its own. Changes take effect on the next request; no restart is needed. Leave a field empty to use the default.'
           )}
         </p>
-        {loading ? (
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            {t('common.loading', 'Loading...')}
-          </p>
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.providers.timeouts.title', 'Timeouts for all providers')}
+            loadingFallback={
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                {t('common.loading', 'Loading...')}
+              </p>
+            }
+          />
         ) : (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

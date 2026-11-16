@@ -256,13 +256,15 @@ function AdminModelEditPage() {
     loading,
     error,
     setError,
+    loadError,
+    retryLoad,
     save,
     reload,
     isDirty,
     blocker
   } = useAdminResourceEditor({ resourceId: modelId, loadResource, makeDefault, saveResource });
-  // A failed load leaves `data` null; fall back to the blank form so the page still
-  // renders (with the error banner) instead of crashing.
+  // A failed load leaves `data` null; the shell then shows the load error instead
+  // of the form. The blank form only keeps the header expressions from crashing.
   const formData = loadedData ?? DEFAULT_MODEL_DATA;
 
   useEffect(() => {
@@ -371,6 +373,13 @@ function AdminModelEditPage() {
         />
       }
       blocker={blocker}
+      loadError={loadError}
+      onRetry={retryLoad}
+      resourceLabel={t('admin.models.edit.resource', 'model "{{id}}"', { id: modelId })}
+      notFoundAction={{
+        label: t('admin.models.edit.backToModels'),
+        onClick: () => navigate('/admin/models')
+      }}
     >
       {/* Header */}
       <div className="mb-8">

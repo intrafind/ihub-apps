@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from '../components/AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
 function AdminNextcloudEmbedPage() {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [message, setMessage] = useState(null);
@@ -36,26 +38,33 @@ function AdminNextcloudEmbedPage() {
     return out;
   };
 
+  const fetchStatus = async () =>
+    (await makeAdminApiCall('/admin/nextcloud-embed/status', { method: 'GET' })).data;
+
+  /** Put a loaded status into the form state. */
+  const applyStatus = data => {
+    setStatus(data);
+    setDisplayName(sanitizeLocalized(data.displayName));
+    setDescription(sanitizeLocalized(data.description));
+    setStarterPrompts(
+      Array.isArray(data.starterPrompts)
+        ? data.starterPrompts.map(p => ({
+            _id: crypto.randomUUID(),
+            title: sanitizeLocalized(p?.title),
+            message: sanitizeLocalized(p?.message)
+          }))
+        : []
+    );
+    setAllowedHostOrigins(
+      Array.isArray(data.allowedHostOrigins) ? data.allowedHostOrigins.slice() : []
+    );
+  };
+
+  // Reload after Enable/Disable or a save; the first load goes through the gate below.
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/nextcloud-embed/status', { method: 'GET' });
-      const data = res.data;
-      setStatus(data);
-      setDisplayName(sanitizeLocalized(data.displayName));
-      setDescription(sanitizeLocalized(data.description));
-      setStarterPrompts(
-        Array.isArray(data.starterPrompts)
-          ? data.starterPrompts.map(p => ({
-              _id: crypto.randomUUID(),
-              title: sanitizeLocalized(p?.title),
-              message: sanitizeLocalized(p?.message)
-            }))
-          : []
-      );
-      setAllowedHostOrigins(
-        Array.isArray(data.allowedHostOrigins) ? data.allowedHostOrigins.slice() : []
-      );
+      applyStatus(await fetchStatus());
     } catch (err) {
       console.error('[nextcloud-embed] loadStatus failed', err);
       setMessage({
@@ -67,12 +76,15 @@ function AdminNextcloudEmbedPage() {
     }
   };
 
-  useEffect(() => {
-    void loadStatus();
-    // eslint-disable-next-line @eslint-react/exhaustive-deps
-  }, []);
+  // No form, Enable or Save until the status loaded: saving after a failed
+  // load would store empty prompts and defaults over the real ones (IN-B6).
+  const load = useAdminConfigLoad({
+    sources: { status: { load: fetchStatus, onLoad: applyStatus } }
+  });
+  const ready = load.status === 'ready';
 
   const handleToggle = async () => {
+    if (!ready) return;
     if (!status) return;
     // Capture the pre-toggle state *before* the await; reading `status.enabled`
     // after `loadStatus()` resolves would refer to the post-toggle state and
@@ -160,6 +172,7 @@ function AdminNextcloudEmbedPage() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     try {
       setSaving(true);
       setMessage(null);
@@ -252,7 +265,12 @@ function AdminNextcloudEmbedPage() {
           </div>
         )}
 
-        {loading ? (
+        {!ready ? (
+          <AdminLoadGate
+            load={load}
+            resourceLabel={t('admin.nextcloudEmbed.resource', 'Nextcloud embed settings')}
+          />
+        ) : loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-8 h-8 border-4 border-gray-200 border-t-indigo-600 rounded-full animate-spin" />
           </div>

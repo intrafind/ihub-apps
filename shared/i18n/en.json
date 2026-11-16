@@ -950,7 +950,8 @@
         "tryIt": "Try it",
         "tryFlagOff": "Enable the \"Voice Mode\" preview feature first",
         "tryItHint": "Starts a voice session in this browser with the speech service chosen under \"Voice input\" above, the text-to-speech model and the settings in this form, without saving them. With a transcription model, \"Enable voice mode\" must have been saved once; it needs the microphone and a text-to-speech model that is enabled."
-      }
+      },
+      "resource": "voice settings"
     },
     "agents": {
       "memory": {
@@ -1251,7 +1252,8 @@
         "basicInfo": "Basic Information",
         "basicInfoDesc": "Basic information about the model",
         "configuration": "Configuration",
-        "configurationDesc": "Advanced configuration options for the model"
+        "configurationDesc": "Advanced configuration options for the model",
+        "resource": "model \"{{id}}\""
       },
       "fields": {
         "id": "Model ID",
@@ -1691,7 +1693,8 @@
           "disabledDesc": "Enable the authorization server to allow external applications and resource servers to authenticate via OAuth 2.0.",
           "enabledSuccess": "Authorization server enabled successfully",
           "disabledSuccess": "Authorization server disabled successfully",
-          "toggleError": "Failed to update authorization server"
+          "toggleError": "Failed to update authorization server",
+          "resource": "authorization server settings"
         },
         "personalKeys": {
           "enable": "Personal API Keys",
@@ -1879,7 +1882,13 @@
         "sharedSecretHeaderLabel": "Shared Secret Header",
         "sharedSecretLabel": "Shared Secret",
         "sharedSecretHelp": "A secret the proxy sends in the shared secret header. When set, the headers are used only on requests that carry it. Together with trusted proxies, both must match: for a proxy elsewhere, add its address above or clear the list to rely on the secret alone."
-      }
+      },
+      "resource": "authentication settings",
+      "subtitle": "Configure multiple authentication methods and user access settings. Enable dual authentication for maximum flexibility.",
+      "save": "Save Configuration",
+      "saving": "Saving...",
+      "saved": "Authentication configuration saved.",
+      "saveFailed": "Failed to save configuration: {{error}}"
     },
     "officeIntegration": {
       "title": "Office Integration",
@@ -2003,7 +2012,8 @@
       "regenerateAddinId": "Generate new ID",
       "regenerateAddinIdConfirm": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?",
       "regenerateAddinIdDone": "New add-in ID generated. Download the manifest and deploy it again.",
-      "regenerateAddinIdError": "Failed to generate a new add-in ID"
+      "regenerateAddinIdError": "Failed to generate a new add-in ID",
+      "resource": "Office integration settings"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -2046,7 +2056,8 @@
       "step1": "Configure a Nextcloud cloud-storage provider under Admin → Integrations → Nextcloud (this powers the OAuth + WebDAV flow).",
       "step2": "Add your Nextcloud origin (e.g. https://cloud.example.com) above so the embed page accepts iframe and postMessage from it.",
       "step3": "Build & install the bundled Nextcloud app skeleton (see nextcloud-app/README.md in the iHub repo).",
-      "step4": "Users right-click any file in Nextcloud Files → \"Chat with iHub\" — the embed opens with the documents pre-attached."
+      "step4": "Users right-click any file in Nextcloud Files → \"Chat with iHub\" — the embed opens with the documents pre-attached.",
+      "resource": "Nextcloud embed settings"
     },
     "cloudStorage": {
       "office365": "Microsoft Office 365",
@@ -2448,7 +2459,8 @@
       "note2": "Log level changes are persisted to platform.json configuration",
       "note3": "Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more",
       "note4": "Use \"info\" level for production, \"debug\" for development",
-      "note5": "Authentication debug logging is separate and requires restart"
+      "note5": "Authentication debug logging is separate and requires restart",
+      "resource": "logging settings"
     },
     "nav": {
       "chatHistory": "Chat History",
@@ -2552,7 +2564,8 @@
         "cimdApprovalRequired": "Require approval (recommended)",
         "cimdApprovalAuto": "Connect automatically",
         "a2aDefaultSkill": "A2A default skill",
-        "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none)."
+        "a2aDefaultSkillDesc": "The app or workflow a message runs when the A2A client names none, as app__<appId> or workflow__<workflowId>. Clients can always choose a skill with metadata.skillId or by using the per-skill endpoint /a2a/skills/<skillId>. Leave empty to require a choice (a caller with exactly one skill needs none).",
+        "resource": "MCP gateway settings"
       }
     },
     "telemetry": {
@@ -2595,7 +2608,8 @@
       "save": "Save Telemetry Settings",
       "referenceTitle": "Reference",
       "refEnvHint": "Standard OTEL_* environment variables (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_SERVICE_NAME, ...) are honored at startup.",
-      "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats."
+      "refMetricsHint": "Custom iHub metrics: ihub.app.usage, ihub.prompt.usage, ihub.errors, ihub.conversations, ihub.active.users, ihub.active.chats.",
+      "resource": "telemetry settings"
     },
     "systemResources": {
       "title": "System resources",
@@ -3155,7 +3169,9 @@
         "toolSearchOff": "Off: send every tool",
         "toolSearchHelp": "When the tools of this app are too many for one request, the biggest integrations are left out and listed in the prompt; the model finds a tool with search_tools and the tools it finds are added to the request. Keeps requests small and tool choice sharp. Set \"Always loaded\" on an integration to keep it out of the search.",
         "toolSearchBudget": "Token budget for tool definitions",
-        "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window."
+        "toolSearchBudgetHelp": "Tokens the tool definitions of one request may take before integrations are left to the search. Default 6000; never more than a tenth of the model's context window.",
+        "resource": "app \"{{id}}\"",
+        "backToApps": "Back to Apps"
       },
       "reorder": "Reorder",
       "reorderHelp": "Drag a row or use the arrows to set the order apps appear in for users — in the apps browser, on the start page and in the sidebar. Every app is listed, so search and filters do not apply here. Nothing is saved until you choose \"Save order\".",
@@ -4502,7 +4518,8 @@
       "linkTarget": "Open link in",
       "styles": {
         "colorPicker": "{{name}} (color picker)"
-      }
+      },
+      "resource": "UI settings"
     },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",
@@ -4794,7 +4811,8 @@
       "review": {
         "unavailable": "Feedback statistics are not available.",
         "range": "Ratings of the last 90 days."
-      }
+      },
+      "resource": "feedback settings"
     },
     "usage": {
       "reviewFeedback": "Review feedback",
@@ -5259,6 +5277,10 @@
       },
       "users": {
         "active": "{{count}} active (30d)"
+      },
+      "resource": "the overview",
+      "apps": {
+        "unavailable": "not loaded"
       }
     },
     "copilotAgent": {
@@ -5325,7 +5347,8 @@
       "downloading": "Building…",
       "download": "Download agent package",
       "prereqHttps": "iHub's public address uses HTTPS",
-      "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)"
+      "prereqHttpsOff": "iHub's public address is not HTTPS, and Copilot only calls HTTPS addresses — set the MCP gateway's Public URL (or forward X-Forwarded-Proto from the proxy)",
+      "resource": "Copilot agent settings"
     },
     "apiKeyStatus": {
       "ok": "Key found",
@@ -6022,7 +6045,8 @@
       "newOrChangedDefault": "Always ask (default)",
       "newOrChangedHelp": "An action added since the last review, or whose side effect or input changed, asks at least this way until you mark it reviewed. Applies once approval is set on this integration.",
       "presetAlwaysHelp": "Preselected: always ask. This integration sends data outside and does not declare reliably which of its actions only read. You can change it now or later on the integration page.",
-      "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page."
+      "presetWritesHelp": "Preselected: ask unless an action only reads. You can change it now or later on the integration page.",
+      "resource": "tool approval settings"
     },
     "integrationBuilder": {
       "a2a": {
@@ -6798,6 +6822,22 @@
       "relatedNoticeText": "— the notice in the empty chat and the guardrail wording",
       "relatedAck": "AI acknowledgement",
       "relatedAckText": "— the confirmation before the first message, stored with the user"
+    },
+    "load": {
+      "title": "Couldn't load {{resource}}",
+      "nothingChanged": "Nothing was changed.",
+      "rateLimited": "Too many requests right now.",
+      "retry": "Retry",
+      "retrying": "Retrying…",
+      "retryIn": "Retry in {{seconds}} s",
+      "forbiddenTitle": "You can't view {{resource}}",
+      "forbidden": "Your account has no access to this page.",
+      "notFoundTitle": "Not found: {{resource}}",
+      "notFound": "It may have been deleted or renamed.",
+      "resourceFallback": "this item"
+    },
+    "browserExtension": {
+      "resource": "browser extension settings"
     }
   },
   "cloudStorage": {

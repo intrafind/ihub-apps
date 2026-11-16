@@ -251,6 +251,8 @@ function AdminAppEditPage() {
     loading,
     error,
     setError,
+    loadError,
+    retryLoad,
     isNew: isNewApp,
     save,
     blocker
@@ -406,6 +408,30 @@ function AdminAppEditPage() {
   const handleModeChange = mode => {
     setEditingMode(mode);
   };
+
+  // A failed load: the shell shows the error with an in-place Retry, and no form
+  // (rendering it would only show defaults that a Save would store).
+  if (loadError && !loading) {
+    return (
+      <AdminEditPageShell
+        loading={false}
+        contentClassName="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+        breadcrumbs={[
+          { label: 'Admin', href: '/admin' },
+          { label: 'Apps', href: '/admin/apps' },
+          { label: appId }
+        ]}
+        blocker={blocker}
+        loadError={loadError}
+        onRetry={retryLoad}
+        resourceLabel={t('admin.apps.edit.resource', 'app "{{id}}"', { id: appId })}
+        notFoundAction={{
+          label: t('admin.apps.edit.backToApps', 'Back to Apps'),
+          onClick: () => navigate('/admin/apps')
+        }}
+      />
+    );
+  }
 
   if (error && !loading) {
     return (

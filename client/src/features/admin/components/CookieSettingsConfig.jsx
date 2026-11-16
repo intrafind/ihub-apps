@@ -1,43 +1,41 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminLoadGate from './AdminLoadGate';
+import { useAdminConfigLoad } from '../hooks/useAdminConfigLoad';
 
 function CookieSettingsConfig() {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     disableSecure: false
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Fetch current cookie settings configuration on mount
-  useEffect(() => {
-    const fetchCookieSettings = async () => {
-      try {
-        const response = await makeAdminApiCall('/admin/configs/platform', {
-          method: 'GET'
-        });
-        setConfig({
-          disableSecure: response.data?.cookieSettings?.disableSecure || false
-        });
-        setMessage('');
-      } catch (error) {
-        setMessage({
-          type: 'error',
-          text: error.message || t('admin.system.cookieSettings.configSaveError')
-        });
-      } finally {
-        setLoading(false);
+  // The card shows no form and no Save until its settings loaded: saving
+  // the defaults after a failed load would overwrite the stored ones (PL-B3).
+  const load = useAdminConfigLoad({
+    sources: {
+      config: {
+        load: async () =>
+          (
+            await makeAdminApiCall('/admin/configs/platform', {
+              method: 'GET'
+            })
+          ).data,
+        onLoad: data => {
+          setConfig({
+            disableSecure: data?.cookieSettings?.disableSecure || false
+          });
+        }
       }
-    };
-
-    void fetchCookieSettings();
-  }, [t]);
+    }
+  });
+  const ready = load.status === 'ready';
 
   const handleToggleDisableSecure = e => {
     setConfig(prev => ({
@@ -47,6 +45,7 @@ function CookieSettingsConfig() {
   };
 
   const handleSaveConfig = async () => {
+    if (!ready) return;
     setSaving(true);
     setMessage('');
 
@@ -74,11 +73,17 @@ function CookieSettingsConfig() {
     }
   };
 
-  if (loading) {
+  if (!ready) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <Icon name="loader" className="h-6 w-6 animate-spin text-primary-600" />
-      </div>
+      <AdminLoadGate
+        load={load}
+        resourceLabel={t('admin.system.cookieSettings.title')}
+        loadingFallback={
+          <div className="flex items-center justify-center py-8">
+            <Icon name="loader" className="h-6 w-6 animate-spin text-primary-600" />
+          </div>
+        }
+      />
     );
   }
 
