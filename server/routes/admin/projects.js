@@ -303,7 +303,7 @@ export default function registerAdminProjectsRoutes(app) {
       refreshMode,
       refreshIdleDays,
       refreshWaitSeconds,
-      ingest: { concurrency: ingest.concurrency, fetchConcurrency: ingest.fetchConcurrency },
+      ingest: { fetchConcurrency: ingest.fetchConcurrency },
       indexCache,
       textCache,
       knowledgeModes,
@@ -333,8 +333,7 @@ export default function registerAdminProjectsRoutes(app) {
    *       refreshed only when used; 0 never) and `refreshWaitSeconds` (how long
    *       a chat turn or a workflow step waits for outdated documents before it
    *       reads them; 0 does not wait) and `ingest` (`fetchConcurrency`: pages
-   *       and files checked at once per server process; `concurrency`:
-   *       conversions at once) and `indexCache` (`maxEntries`, `maxHeapShare`)
+   *       and files checked at once per server process) and `indexCache` (`maxEntries`, `maxHeapShare`)
    *       and `textCache` (`maxHeapShare`): the per-process search-index and
    *       item-text caches, a `maxHeapShare` of null being the built-in budget
    *       (#3650). Full admins only.
@@ -401,9 +400,6 @@ export default function registerAdminProjectsRoutes(app) {
         ...(body.refreshIdleDays !== undefined ? { refreshIdleDays: body.refreshIdleDays } : {}),
         ...(body.refreshWaitSeconds !== undefined
           ? { refreshWaitSeconds: body.refreshWaitSeconds }
-          : {}),
-        ...(body.ingest?.concurrency !== undefined
-          ? { 'ingest.concurrency': body.ingest.concurrency }
           : {}),
         ...(body.ingest?.fetchConcurrency !== undefined
           ? { 'ingest.fetchConcurrency': body.ingest.fetchConcurrency }

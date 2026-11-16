@@ -104,9 +104,7 @@ if (
     'IHUB_PLATFORM__PROJECTS__LIMITS__MAX_PROJECTS_PER_USER=50'
   );
 }
-log(
-  `projects.ingest.concurrency=${platform.projects?.ingest?.concurrency ?? 2} per worker · telemetry=${platform.telemetry?.enabled ? platform.telemetry.provider || 'on' : 'off'}`
-);
+log(`telemetry=${platform.telemetry?.enabled ? platform.telemetry.provider || 'on' : 'off'}`);
 
 const features = await admin.get('/api/admin/features');
 const userProjectsOn = (features.body?.items || []).find(f => f.id === 'userProjects')?.enabled;

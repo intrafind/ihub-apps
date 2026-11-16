@@ -790,10 +790,10 @@ describe('ingest queue', () => {
     assert.deepEqual(started.slice(2), ['urgent']);
   });
 
-  it('converts at most `concurrency` jobs at once, those someone waits for first', async () => {
+  it('converts one file at a time per process, the ones someone waits for first', async () => {
     const ingest = new ProjectIngestService({
       service: {},
-      platform: () => ({ projects: { ingest: { concurrency: 2, fetchConcurrency: 8 } } })
+      platform: () => ({ projects: { ingest: { fetchConcurrency: 8 } } })
     });
     const order = [];
     const take = async (itemId, background) => {
@@ -805,14 +805,22 @@ describe('ingest queue', () => {
     const second = take('bg2', true);
     const third = take('pick', false);
     const releaseFirst = await first;
-    await third;
-    assert.deepEqual(order, ['bg1', 'pick'], 'the last conversion slot is not a background one');
-    assert.equal(ingest.converting, 2);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(order, ['bg1'], 'one conversion at a time');
+    assert.equal(ingest.converting, 1);
     releaseFirst();
     releaseFirst(); // A second release gives nothing back.
-    await second;
+    const releasePick = await third;
+    assert.deepEqual(
+      order,
+      ['bg1', 'pick'],
+      'the job someone waits for goes before the background'
+    );
+    assert.equal(ingest.converting, 1);
+    releasePick();
+    (await second)();
     assert.deepEqual(order, ['bg1', 'pick', 'bg2']);
-    assert.equal(ingest.converting, 2);
+    assert.equal(ingest.converting, 0);
   });
 });
 

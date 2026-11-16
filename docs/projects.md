@@ -164,9 +164,10 @@ answer from the stored text at once while the refresh runs behind. The project p
 refreshed when used**.
 
 **Checking and converting have separate limits** per server process: `ingest.fetchConcurrency`
-jobs run at once (8 by default, up to 32), each fetching its source, but only `ingest.concurrency`
-of them convert at once (2 by default, up to 8), the step that reads a document into text and needs
-the memory. Many pages are checked in parallel, while conversions stay few. Both are set in
+jobs run at once (8 by default, up to 32), each fetching its source, but only one of them converts
+at a time, the step that reads a document into text and needs the CPU and memory. Many pages are
+checked in parallel, while each server process reads one file at a time on its extraction thread;
+more `WORKERS` read more files at once. `ingest.fetchConcurrency` is set in
 **Admin → Projects → Project settings**.
 
 - **Files from websites** are refreshed on their own (in mode `always`, and in mode `auto` while
@@ -1266,7 +1267,7 @@ would go past it.
     "ingest": { "concurrency": 2, "staleAfterMinutes": 30 },
     "indexCache": { "maxEntries": 32, "maxHeapShare": 0.1 },
     "textCache": { "maxHeapShare": 0.06 },
-    "extraction": { "threads": 1, "timeoutMs": 60000, "memoryMb": 1024 }
+    "extraction": { "timeoutMs": 60000, "memoryMb": 1024 }
   }
 }
 ```
@@ -1293,13 +1294,11 @@ would go past it.
 | `scan.command`              | `""`                | The scanner command; `{path}` is replaced by the file, or the path is appended. Exit code 0 is clean, 1 infected, anything else an error. |
 | `scan.timeoutMs`            | `30000`             | How long the scanner may run.                                                                            |
 | `scan.onError`              | `reject`            | What a scanner error does to the file: `reject` fails it, `allow` lets it through.                       |
-| `ingest.concurrency`        | `2`                 | Conversions (scan and extraction) at once per server process, at most 8. **Admin → Projects → Project settings**. |
-| `ingest.fetchConcurrency`   | `8`                 | Jobs at once per server process, each fetching its source before it waits for a conversion; at most 32, never fewer than `ingest.concurrency`. **Admin → Projects → Project settings**. |
+| `ingest.fetchConcurrency`   | `8`                 | Jobs at once per server process, each fetching its source before it waits for the conversion; 1 to 32. **Admin → Projects → Project settings**. |
 | `ingest.staleAfterMinutes`  | `30`                | After how long a waiting or extracting item counts as interrupted.                                       |
 | `indexCache.maxEntries`     | `32`                | Search indexes (one per project and version) a server process keeps; 1 to 10000. A miss rebuilds the index on the event loop (60–90 ms for a 590,000-character project) and reads the texts again. Size it from the working set: `ihub.projects.active` and the index-cache hit rate in [Telemetry](telemetry.md). **Admin → Projects → Project settings**. |
 | `indexCache.maxHeapShare`   | built-in (see below) | Share of the process's heap limit the cached indexes may use, 0.01 to 0.5; an index character is counted as 4.5 bytes of heap. Entered as a percentage in **Admin → Projects → Project settings**; empty is the built-in budget. |
 | `textCache.maxHeapShare`    | built-in (see below) | Share of the process's heap limit the decrypted item texts may use, 0.01 to 0.5; at least 16 MB. **Admin → Projects → Project settings** (percentage; empty is the built-in budget). |
-| `extraction.threads`        | `1`                 | Worker threads per server process that read uploaded files (all formats) and render the pages of scanned PDFs, so the event loop stays free; 0 to 4. `0` reads on the event loop as before. Each thread loads its own copy of the extractors (about 100 MB), so raise it only where cores are spare. Restart to apply. File only. |
 | `extraction.timeoutMs`      | `60000`             | Time one file may take in a thread, 1000 to 600000. The thread is terminated and the file fails with `EXTRACTION_TIMEOUT` (an item shows it as its error; a chat upload answers 400 with that code). The wait for a free thread does not count. |
 | `extraction.memoryMb`       | `1024`, or half the process heap if lower | Heap limit of one extraction thread, 128 to 8192; the thread's heap comes on top of the process's own, so in a memory-limited container (small worker heap) the default is smaller. A process started with `--max-old-space-size` (iHub sets it itself for workers sized to a container memory limit, see [Scaling](scaling.md)) overrides this cap: the thread then gets the worker's heap limit, so plan memory for the worker plus one thread of that size. A file that needs more fails with `EXTRACTION_FAILED` and the thread is replaced. |
 | `tierPolicy`                | `ihub`              | `ihub`: local projects only. `both` and `ifinder`: users add their iFinder smart collections to their projects from the catalog, and create, rename, configure and delete them (see [The iFinder tier](#the-ifinder-tier-smart-collections)). Local projects stay creatable under every value. |
@@ -1308,7 +1307,7 @@ would go past it.
 
 **Extraction threads.** Reading a file (SheetJS, Word, pdfium, …) is CPU work that used to run on the
 event loop, so every request of that process waited, chat streams included. It now runs in a small pool of
-worker threads per process: the bytes are copied to the thread (moved when the caller hands the buffer
+worker thread per process, which project items and chat uploads share: the bytes are copied to the thread (moved when the caller hands the buffer
 over), only the text comes back, and a scanned PDF's page images are rendered there too. A thread that
 times out, runs out of memory or dies is replaced by the next file; waiting files queue
 (`ihub.extraction.queue.duration` in [Telemetry](telemetry.md)). The zip-bomb checks run in the thread.

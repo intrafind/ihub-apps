@@ -296,7 +296,7 @@ describe('AdminProjectsPage – sharing of user projects', () => {
         maxProjectsPerUser: 20
       },
       refreshWaitSeconds: 15,
-      ingest: { concurrency: 2, fetchConcurrency: 8 },
+      ingest: { fetchConcurrency: 8 },
       maxFilesCeiling: 200
     });
     mockApi.saveProjectSettings.mockImplementation(async settings => ({
@@ -309,22 +309,18 @@ describe('AdminProjectsPage – sharing of user projects', () => {
     );
     expect(wait).toHaveValue(15);
     expect(screen.getByLabelText('Files and web pages checked at once')).toHaveValue(8);
-    expect(screen.getByLabelText('Documents converted at once')).toHaveValue(2);
+    expect(screen.queryByLabelText('Documents converted at once')).toBeNull();
 
     fireEvent.change(wait, { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Files and web pages checked at once'), {
       target: { value: '16' }
-    });
-    // Out of range: kept as it was.
-    fireEvent.change(screen.getByLabelText('Documents converted at once'), {
-      target: { value: '99' }
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(mockApi.saveProjectSettings).toHaveBeenCalledWith(
         expect.objectContaining({
           refreshWaitSeconds: 30,
-          ingest: { concurrency: 2, fetchConcurrency: 16 }
+          ingest: { fetchConcurrency: 16 }
         })
       )
     );

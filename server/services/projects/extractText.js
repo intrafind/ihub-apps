@@ -951,7 +951,7 @@ export async function extractText(input, options = {}) {
 
 /**
  * Extract on the calling thread — the event loop. What `extractText` does with
- * `projects.extraction.threads: 0`, and the reference the thread's output is
+ * `threads: 0` in tests, and the reference the thread's output is
  * tested against.
  *
  * @param {{bytes: Buffer, contentType?: string, name?: string}} input

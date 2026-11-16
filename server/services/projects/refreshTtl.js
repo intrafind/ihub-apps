@@ -80,15 +80,21 @@ export const MAX_REFRESH_WAIT_SECONDS = 120;
 /**
  * Pages and files checked at once per server process: a check is mostly a
  * conditional request, cheap in CPU and memory. Converting what changed is
- * bounded on its own (`ingest.concurrency`).
+ * bounded on its own ({@link CONVERSIONS_PER_PROCESS}).
  */
 export const DEFAULT_FETCH_CONCURRENCY = 8;
 
 /** The highest number of checks at once an installation may set. */
 export const MAX_FETCH_CONCURRENCY = 32;
 
-/** The highest number of conversions at once an installation may set. */
-export const MAX_CONVERT_CONCURRENCY = 8;
+/**
+ * Files read into text at once per server process — project items and chat
+ * uploads alike — on the process's one extraction thread. Not configurable:
+ * a second thread per process only competed with the event loops for the same
+ * cores (load test, 8 vCPU: no faster ingestion, slower chats, ~300 MB more
+ * per worker). Capacity scales with `WORKERS`.
+ */
+export const CONVERSIONS_PER_PROCESS = 1;
 
 /** A refresh mode as the API and the stored documents take it. */
 export const zRefreshMode = z.enum(REFRESH_MODES);

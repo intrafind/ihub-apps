@@ -181,11 +181,10 @@ iHub product counters & gauges:
 - `ihub.extraction.duration` - histogram (seconds) of text extraction from a file,
   labelled by `format` (`pdf`, `docx`, `pptx`, `xlsx`, `odt`, `ods`, `odp`, `html`,
   `eml`, `msg`, `text`). It is the time of the extraction itself, failures included:
-  measured in the extraction thread (not counting the wait for it), or on the event
-  loop with `projects.extraction.threads: 0`. A file stopped at the time budget is
+  measured in the extraction thread (not counting the wait for it). A file stopped at the time budget is
   recorded with the budget under `format="unknown"`
 - `ihub.extraction.queue.duration` - histogram (seconds) of the time a file waited for a
-  free extraction thread; rising values mean `projects.extraction.threads` is too low
+  free extraction thread; rising values mean a server process gets more files than one thread reads; add `WORKERS`
 - `ihub.stream.outcome` - streaming chat outcomes (`completed`, `aborted`, `error`)
 - `ihub.ratelimit.hits` - throttler / rate-limit hits, labelled by `ratelimit.scope`
   (`http`, `llm`) and `ratelimit.route`

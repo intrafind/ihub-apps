@@ -38,7 +38,7 @@ import {
   DEFAULT_REFRESH_MODE,
   DEFAULT_REFRESH_TTL_SECONDS,
   DEFAULT_REFRESH_WAIT_SECONDS,
-  MAX_CONVERT_CONCURRENCY,
+  CONVERSIONS_PER_PROCESS,
   MAX_FETCH_CONCURRENCY,
   MAX_REFRESH_WAIT_SECONDS,
   normalizeRefreshMode,
@@ -50,7 +50,6 @@ import {
   DEFAULT_EXTRACTION_TIMEOUT_MS,
   DEFAULT_INDEX_CACHE_ENTRIES,
   MAX_EXTRACTION_MEMORY_MB,
-  MAX_EXTRACTION_THREADS,
   MAX_EXTRACTION_TIMEOUT_MS,
   MIN_EXTRACTION_MEMORY_MB,
   MIN_EXTRACTION_TIMEOUT_MS,
@@ -96,11 +95,9 @@ export const DEFAULT_PROJECT_SETTINGS = Object.freeze({
   kinds: Object.freeze({}),
   encryption: Object.freeze({ keyProvider: 'local-file' }),
   scan: Object.freeze({ provider: 'none', command: '', timeoutMs: 30000, onError: 'reject' }),
-  // `concurrency`: conversions (scan and extraction) at once per server
-  // process; `fetchConcurrency`: jobs at once, each fetching its source before
-  // it waits for a conversion slot (#3622).
+  // `fetchConcurrency`: jobs at once per server process, each fetching its
+  // source before it waits for the conversion slot (#3622).
   ingest: Object.freeze({
-    concurrency: 2,
     fetchConcurrency: DEFAULT_FETCH_CONCURRENCY,
     staleAfterMinutes: 30
   })
@@ -148,6 +145,7 @@ export function projectSettings(platformConfig) {
   const tierPolicy = TIER_POLICIES.includes(block.tierPolicy)
     ? block.tierPolicy
     : defaults.tierPolicy;
+  const ingest = ingestSettings(block.ingest, defaults.ingest);
   return {
     tierPolicy,
     // The app a project chat starts in when its project names none ('' for the
@@ -205,7 +203,7 @@ export function projectSettings(platformConfig) {
       timeoutMs: readPositive(block.scan?.timeoutMs, defaults.scan.timeoutMs),
       onError: block.scan?.onError === 'allow' ? 'allow' : 'reject'
     },
-    ingest: ingestSettings(block.ingest, defaults.ingest),
+    ingest,
     indexCache: {
       maxEntries: Math.min(
         MAX_INDEX_CACHE_ENTRIES,
@@ -219,15 +217,11 @@ export function projectSettings(platformConfig) {
 }
 
 /**
- * The `extraction` block (#3649): how many threads read files, the time one
- * file may take, and the heap one thread may use. `threads: 0` reads on the
- * event loop, as before the threads existed.
+ * The `extraction` block (#3649): the time one file may take and the heap the
+ * thread may use. Every server process has one extraction thread
+ * ({@link CONVERSIONS_PER_PROCESS}).
  */
 function extractionSettings(block) {
-  // One thread keeps the event loop free and reads as fast as the event loop did;
-  // a second only adds throughput where a core is spare, and every thread loads
-  // its own copy of the extractors (about 100 MB).
-  const fallbackThreads = 1;
   // `null` and '' mean "not set" (Number(null) would be 0 threads).
   const read = (value, fallback) =>
     value === null || value === '' ? fallback : readNumber(value, fallback);
@@ -239,10 +233,9 @@ function extractionSettings(block) {
     DEFAULT_EXTRACTION_MEMORY_MB,
     Math.max(MIN_EXTRACTION_MEMORY_MB, Math.floor(processHeapMb / 2))
   );
-  const threads = read(block?.threads, fallbackThreads);
   const clamp = (value, min, max) => Math.min(max, Math.max(min, Math.floor(value)));
   return {
-    threads: clamp(threads, 0, MAX_EXTRACTION_THREADS),
+    threads: CONVERSIONS_PER_PROCESS,
     timeoutMs: clamp(
       read(block?.timeoutMs, DEFAULT_EXTRACTION_TIMEOUT_MS),
       MIN_EXTRACTION_TIMEOUT_MS,
@@ -269,22 +262,16 @@ function readHeapShare(value) {
 }
 
 /**
- * The `ingest` block: conversions at once, and jobs at once (each fetching
- * before it waits for a conversion), never fewer jobs than conversions.
+ * The `ingest` block: jobs at once, each fetching before it waits for the
+ * process's conversion slot. `concurrency` is that slot count, fixed at
+ * {@link CONVERSIONS_PER_PROCESS}.
  */
 function ingestSettings(block, defaults) {
-  const concurrency = Math.min(
-    MAX_CONVERT_CONCURRENCY,
-    readPositive(block?.concurrency, defaults.concurrency)
-  );
   return {
-    concurrency,
-    fetchConcurrency: Math.max(
-      concurrency,
-      Math.min(
-        MAX_FETCH_CONCURRENCY,
-        readPositive(block?.fetchConcurrency, defaults.fetchConcurrency)
-      )
+    concurrency: CONVERSIONS_PER_PROCESS,
+    fetchConcurrency: Math.min(
+      MAX_FETCH_CONCURRENCY,
+      readPositive(block?.fetchConcurrency, defaults.fetchConcurrency)
     ),
     staleAfterMinutes: readPositive(block?.staleAfterMinutes, defaults.staleAfterMinutes)
   };

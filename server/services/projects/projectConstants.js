@@ -146,7 +146,6 @@ export const MIN_CACHE_HEAP_SHARE = 0.01;
 export const MAX_CACHE_HEAP_SHARE = 0.5;
 
 /** `projects.extraction`: the threads that read uploaded files off the event loop (#3649). */
-export const MAX_EXTRACTION_THREADS = 4;
 export const DEFAULT_EXTRACTION_TIMEOUT_MS = 60_000;
 export const MIN_EXTRACTION_TIMEOUT_MS = 1_000;
 export const MAX_EXTRACTION_TIMEOUT_MS = 600_000;
