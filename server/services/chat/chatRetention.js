@@ -476,6 +476,7 @@ export function startChatRetentionSweep({
 } = {}) {
   if (sweepTimer) return stopChatRetentionSweep;
   let lastHistorySweepAt = null;
+  let lastRunEvidenceSweepAt = null;
 
   const tick = () => {
     if (sweeping) return inFlight;
@@ -509,14 +510,18 @@ export function startChatRetentionSweep({
         isChatHistoryConfigured(getFeatures() || {}, platform, storageReady) &&
         (lastHistorySweepAt === null || now() - lastHistorySweepAt >= historyIntervalMs);
       if (historyDue) lastHistorySweepAt = now();
+      // Evidence of runs without a chat is no history: its daily sweep runs
+      // whether or not the history is on.
+      const runEvidenceDue =
+        lastRunEvidenceSweepAt === null || now() - lastRunEvidenceSweepAt >= historyIntervalMs;
+      if (runEvidenceDue) lastRunEvidenceSweepAt = now();
       await sweepChats({
         repository: repository || getChatRepository(),
         retentionDays: historyDue ? retentionDays : 0,
         maxChatsPerUser: historyDue ? maxChatsPerUser : 0,
         temporaryRetentionHours,
         originalRetentionDays: historyDue ? chatFileSettings(platform).originalRetentionDays : 0,
-        // Not a history rule: `/v1` runs keep evidence with the history off too.
-        runEvidenceRetentionDays: retentionDays,
+        runEvidenceRetentionDays: runEvidenceDue ? retentionDays : 0,
         now
       });
     } catch (error) {

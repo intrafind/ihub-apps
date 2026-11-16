@@ -81,7 +81,7 @@ export async function shutdown() {
   // (the force-exit timer bounds the whole shutdown anyway).
   try {
     const { evidenceWritesSettled } = await import('../services/chat/ChatEvidenceRepository.js');
-    await Promise.race([evidenceWritesSettled(), new Promise(r => setTimeout(r, 3000).unref())]);
+    await Promise.race([evidenceWritesSettled(), new Promise(r => setTimeout(r, 2000).unref())]);
   } catch (error) {
     logger.error('Could not wait for evidence records on shutdown', {
       component: 'Server',

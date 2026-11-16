@@ -80,24 +80,50 @@ describe('Inference API file quotas', () => {
     await assert.rejects(put(chat, 1, policy), error => error.code === 'QUOTA_CHAT_BYTES');
   });
 
-  it("counts a chat's evidence records against its byte quota", async () => {
+  it("counts a chat's evidence against a user upload, never against a file of an answer", async () => {
     const policy = { quotas: { maxChatBytes: 1000 } };
-    await put(chat, 1, policy);
+    const upload = n =>
+      repo.put(chat, {
+        ownerId: 'u1',
+        name: `u${n}.txt`,
+        mimeType: 'text/plain',
+        text: 'x'.repeat(100),
+        policy,
+        countEvidence: true
+      });
+    await upload(1);
     const evidence = new ChatEvidenceRepository({
       documents: provider.documents,
       blobs: provider.blobs
     });
-    const text = JSON.stringify('y'.repeat(900));
     await evidence.writeRecord(
       'chat',
       chat.id,
       { messageId: 'm1' },
-      new Map([['b'.repeat(64), text]]),
-      { maxContentBytes: 1e6 }
+      new Map([['b'.repeat(64), JSON.stringify('y'.repeat(900))]])
     );
-    await assert.rejects(put(chat, 2, policy), error => error.code === 'QUOTA_CHAT_BYTES');
+    await assert.rejects(upload(2), error => error.code === 'QUOTA_CHAT_BYTES');
+    // A file stored during an answer (tool output, MCP) is not checked against it.
+    await put(chat, 3, policy);
     // Another chat is not charged for it.
     await put({ type: 'chat', id: 'other-chat' }, 1, policy);
+  });
+
+  it('refuses a user upload when the evidence usage cannot be read', async () => {
+    repo._evidence.chatBytes = async () => {
+      throw new Error('listing failed');
+    };
+    await assert.rejects(
+      repo.put(chat, {
+        ownerId: 'u1',
+        name: 'u.txt',
+        mimeType: 'text/plain',
+        text: 'x',
+        policy: { quotas: { maxChatBytes: 1000 } },
+        countEvidence: true
+      }),
+      error => error.code === 'QUOTA_CHAT_BYTES'
+    );
   });
 
   it('0 removes the API limits', async () => {

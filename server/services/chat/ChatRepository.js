@@ -2127,6 +2127,9 @@ export class ChatRepository {
         applyChatPatch(chat, { messageCount: messages.length }),
         chatEtag
       );
+      // Right after the transcript write: the record goes with the answer even
+      // when the artifact or file cleanup below fails.
+      this._deleteEvidenceOf(chatId, [removed]);
       const orphaned = artifactIdsOfMessages([removed]);
       if (orphaned.length > 0) {
         const stillUsed = new Set(artifactIdsOfMessages(messages));
@@ -2147,7 +2150,6 @@ export class ChatRepository {
           await this.fileStore().deleteMany(this.fileScope(chatId), deletableFiles);
         }
       }
-      this._deleteEvidenceOf(chatId, [removed]);
       return { deleted: true, chat: updated };
     });
   }

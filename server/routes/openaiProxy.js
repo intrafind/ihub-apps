@@ -477,6 +477,9 @@ export default function registerOpenAIProxyRoutes(
       }
     });
 
+    // The run's id, so the caller can read or delete its evidence record
+    // (`/api/runs/{runId}/evidence`, #3687).
+    if (run.runId) res.setHeader('X-Run-Id', run.runId);
     const telemetry = {
       runId: run.runId,
       purpose: APP_ID,
@@ -585,9 +588,9 @@ export default function registerOpenAIProxyRoutes(
         return failUpstream(error);
       }
       run.finish(result);
-      recordEvidence(evidenceOf(result));
       recordValidation(result.structuredOutput);
       if (result.structuredOutput && !result.structuredOutput.valid) {
+        recordEvidence({ ...evidenceOf(result), status: 'error' });
         return sendFlatError(res, outputValidationError(result.structuredOutput));
       }
       const response = {
@@ -622,6 +625,7 @@ export default function registerOpenAIProxyRoutes(
         marking: result.marking?.text,
         user
       });
+      recordEvidence({ ...evidenceOf(result), ...(provenance ? { provenance } : {}) });
       if (provenance) applyProvenanceHeaders(res, outputId);
       return res.json(withProvenance(response, provenance));
     }
@@ -731,17 +735,21 @@ export default function registerOpenAIProxyRoutes(
       }
       const result = liftJsonToolResult(llmStream.result(), format);
       run.finish(result);
-      recordEvidence(evidenceOf(result));
       if (validate && !clientDisconnected && result.toolCalls.length === 0) {
         // The text is already on the wire, so there is no second attempt: an
         // answer that does not validate ends the stream with an in-band error.
         const verdict = { ...createOutputValidator(format)(result.content), attempts: 1 };
         recordValidation(verdict);
         if (!verdict.valid) {
+          recordEvidence({ ...evidenceOf(result), status: 'error' });
           write(inBandError(outputValidationError(verdict)));
           return finish();
         }
       }
+      recordEvidence({
+        ...evidenceOf(result),
+        ...(streamProvenance ? { provenance: streamProvenance } : {})
+      });
       if (streamOptions?.include_usage === true && !clientDisconnected) {
         write({
           id: completionId,
@@ -861,6 +869,8 @@ export default function registerOpenAIProxyRoutes(
     const outputId = newOutputId();
     const created = Math.floor(Date.now() / 1000);
     const runId = newRunId('chat');
+    // The run's id, so the caller can read or delete its evidence record (#3687).
+    res.setHeader('X-Run-Id', runId);
     let clientDisconnected = false;
     let sentRole = false;
     let streamed = '';

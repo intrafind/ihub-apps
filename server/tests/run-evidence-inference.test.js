@@ -19,7 +19,7 @@ import RequestBuilder from '../services/chat/RequestBuilder.js';
 import { AgentLoop } from '../services/loop/AgentLoop.js';
 import { getStorage } from '../storage/bootstrap.js';
 import { getChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
-import { recordRunEvidence } from '../services/chat/evidenceRecord.js';
+import { evidenceWritesSettled, recordRunEvidence } from '../services/chat/evidenceRecord.js';
 import { makeClient, sseResponse, openaiText, captureRunLog } from './loop/helpers/llmFixtures.js';
 
 const MODELS = [
@@ -107,14 +107,19 @@ async function recordsOf(ownerId, count) {
 describe('evidence of /v1/chat/completions runs', () => {
   it('records a plain model call and an app turn for the caller', async () => {
     const app = setup({ id: 'user-ada', name: 'Ada' });
+    const runIds = [];
     for (const model of ['plain', 'app:helper']) {
       const res = await request(app)
         .post(CHAT)
         .send({ model, messages: [{ role: 'user', content: 'Hello' }] });
       assert.equal(res.status, 200, JSON.stringify(res.body));
+      assert.ok(res.headers['x-run-id'], 'the run id is returned');
+      runIds.push(res.headers['x-run-id']);
     }
+    await evidenceWritesSettled();
     const records = await recordsOf('user-ada', 2);
     assert.equal(records.length, 2);
+    assert.deepEqual(records.map(doc => doc.key).sort(), [...runIds].sort());
     for (const doc of records) {
       assert.equal(doc.data.runId, doc.key);
       assert.equal(doc.data.calls.length, 1);
@@ -135,6 +140,59 @@ describe('evidence of /v1/chat/completions runs', () => {
       'with its system prompt'
     );
     assert.ok(appRecord.data.app.config, 'and the app configuration as stored');
+  });
+
+  it('records an answer the structured-output check rejected as an error', async () => {
+    const app = setup({ id: 'user-bob', name: 'Bob' });
+    const res = await request(app)
+      .post(CHAT)
+      .send({
+        model: 'plain',
+        messages: [{ role: 'user', content: 'Hello' }],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: 'answer',
+            schema: { type: 'object', properties: { a: { type: 'string' } }, required: ['a'] }
+          }
+        }
+      });
+    assert.notEqual(res.status, 200, 'not JSON, so rejected');
+    await evidenceWritesSettled();
+    const doc = await getChatEvidenceRepository().getRecord('run', res.headers['x-run-id']);
+    assert.equal(doc.data.status, 'error');
+  });
+
+  it('drops a record whose run was deleted before it was written', async () => {
+    const { runId } = await ledger.runLog.startRun({ kind: 'inference', user: { id: 'user-cy' } });
+    ledger.runLog.append(runId, 'request/header', {
+      step: 0,
+      requestId: 'r',
+      model: 'plain',
+      provider: 'local',
+      requestHash: 'h',
+      messagesHash: 'h',
+      messageCount: 0,
+      reason: 'initial',
+      messages: [],
+      toolSchemasHash: null
+    });
+    ledger.runLog.endRun(runId, { status: 'completed' });
+    // The journal as the build read it, then the run is deleted before the write.
+    const events = await ledger.runLog.readEvents(runId);
+    await ledger.runLog.deleteRun(runId);
+    // The build reads the journal as it was; the check under the lock reads it now.
+    let built = false;
+    const journal = {
+      readEvents: async (id, options) => {
+        if (built) return ledger.runLog.readEvents(id, options);
+        built = true;
+        return events;
+      },
+      readSpill: async () => null
+    };
+    await recordRunEvidence({ runId, user: { id: 'user-cy' }, runLog: journal });
+    assert.equal(await getChatEvidenceRepository().getRecord('run', runId), null);
   });
 
   it('records nothing for an anonymous caller', async () => {

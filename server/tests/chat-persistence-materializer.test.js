@@ -32,6 +32,7 @@ import {
   ChatEvidenceRepository,
   evidenceWritesSettled
 } from '../services/chat/ChatEvidenceRepository.js';
+import { recordChatEvidence } from '../services/chat/evidenceRecord.js';
 import configCache from '../configCache.js';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 
@@ -1139,6 +1140,41 @@ describe('chatMaterializer: the evidence record', () => {
       await answer(repository);
       await repository.deleteChat(CHAT_ID);
       assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 }, 'the chat takes all of it');
+    });
+  });
+
+  it('writes no record for an answer that left the transcript before the write', async () => {
+    await withEvidence(async ({ repository, provider }) => {
+      await userTurn(repository);
+      const ref = await recordChatEvidence({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        messageId: 'gone-already',
+        summary: { status: 'success', content: 'x' },
+        runLog: journal
+      });
+      assert.equal(ref, null);
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 });
+    });
+  });
+
+  it('a message delete removes the record even when the artifact cleanup after it fails', async () => {
+    await withEvidence(async ({ repository, evidence, provider }) => {
+      await userTurn(repository);
+      const message = await answer(repository);
+      // The answer names an artifact whose cleanup throws.
+      const transcript = await provider.documents.get('chat-messages', CHAT_ID);
+      transcript.data.messages[1].artifacts = [{ id: 'art-1', kind: 'image' }];
+      await provider.documents.put('chat-messages', CHAT_ID, transcript.data);
+      repository.artifactStore = () => ({
+        deleteMany: async () => {
+          throw new Error('artifact store down');
+        }
+      });
+      await assert.rejects(repository.deleteMessage(CHAT_ID, message.id), /artifact store down/);
+      await evidenceWritesSettled();
+      assert.equal(await evidence.getRecord('chat', CHAT_ID, message.id), null);
     });
   });
 

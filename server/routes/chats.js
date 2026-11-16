@@ -651,7 +651,9 @@ export default function registerChatRoutes(app) {
       appConfig: chatApp,
       policy,
       store: fileStore,
-      user: req.user
+      user: req.user,
+      // A user's upload is what the chat's evidence counts against (#3687).
+      countEvidence: true
     });
     return sendCreated(
       res,
