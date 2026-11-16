@@ -8203,9 +8203,17 @@
       "holdToTalkTouch": "Hold the button to talk"
     },
     "tools": {
+      "search": "Searching…",
       "searchWeb": "Searching the web…",
+      "searchProject": "Searching the project…",
+      "searchIfinder": "Searching iFinder…",
+      "searchIassistant": "Searching iAssistant…",
       "searchDocuments": "Looking in the documents…",
+      "searchIntegration": "Searching {{name}}…",
+      "searchIntegrationGeneric": "Searching a connected system…",
+      "read": "Reading…",
       "readPage": "Reading a page…",
+      "readDocument": "Reading a document…",
       "working": "Working on it…"
     },
     "input": {

@@ -15,6 +15,7 @@ import {
 import { loadVoiceModePrefs, saveVoiceModePrefs } from '../utils/voiceModePrefs';
 import {
   activeToolOf,
+  toolKeyOf,
   answerForClarification,
   toSpokenText,
   toolStatusLabel
@@ -104,7 +105,7 @@ async function untilIdle(latestRef, timeoutMs = STOPPED_RUN_GRACE_MS) {
  */
 function nextToolAction(turn, assistant, t) {
   const tool = activeToolOf(assistant);
-  const toolKey = tool ? `${tool.kind}:${tool.scope}` : null;
+  const toolKey = toolKeyOf(tool);
   if (toolKey === turn.toolKey) return null;
   turn.toolKey = toolKey;
   if (!tool) return { type: 'TOOL_FINISHED' };

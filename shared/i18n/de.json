@@ -8202,9 +8202,17 @@
       "holdToTalkTouch": "Zum Sprechen die Schaltfläche gedrückt halten"
     },
     "tools": {
+      "search": "Sucht…",
       "searchWeb": "Durchsucht das Web…",
+      "searchProject": "Durchsucht das Projekt…",
+      "searchIfinder": "Durchsucht iFinder…",
+      "searchIassistant": "Durchsucht iAssistant…",
       "searchDocuments": "Durchsucht die Dokumente…",
+      "searchIntegration": "Durchsucht {{name}}…",
+      "searchIntegrationGeneric": "Durchsucht ein angebundenes System…",
+      "read": "Liest…",
       "readPage": "Liest eine Seite…",
+      "readDocument": "Liest ein Dokument…",
       "working": "Arbeitet daran…"
     },
     "input": {

@@ -2097,6 +2097,9 @@ and in what a screen reader hears.
   favour of "Opened"; **N opened** counts only pages that delivered text.
 - **A search that found nothing says so** (**no results**), when the server knows it. Nothing is
   claimed when the number is not known.
+- **Voice mode says where it looks.** While the app searches, voice mode's status label now names
+  the place (**Searching the project…**, **Searching iFinder…**, **Searching Jira…**) in the words of
+  the activity line, instead of **Looking in the documents…** for everything inside the organisation.
 - **A row names where it looked.** A project search reads **Searched the project Project Alpha
   for …** and an iFinder search names its search profile (**Searched iFinder (Contracts) for …**),
   once the call has finished. The collapsed line stays at the type. A shared chat shows the names
