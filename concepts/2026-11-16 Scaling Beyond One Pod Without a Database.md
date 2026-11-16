@@ -73,7 +73,7 @@ The filesystem storage provider says the same about itself: `multiInstance: fals
 | --- | --- | --- | --- |
 | A. Cookie affinity (documented today) | none | required | Works for browser chat. Leaves every symptom in the table above except the first. Not load-tested. |
 | **B. Bus over a mesh of primaries** | none | not required | **Proposed.** Reuses the interface every module already speaks. |
-| C. Redis or NATS behind the bus | one service | not required | Least code. One more thing to run, secure and monitor at every customer. |
+| C. Redis or NATS behind the bus | one service | not required | Least code. One more thing to run, secure and monitor at every customer. Worked out in §9. |
 | D. Bus over the shared volume (polled log) | none | not required | Too slow for tokens and for stop. Usable as a fallback for config invalidation. |
 | E. PostgreSQL provider with LISTEN/NOTIFY (storage design §10) | a database | not required | Still the plan for customers who want a database. B does not block it: both sit behind the same bus interface. |
 
@@ -248,6 +248,8 @@ Until step 4 is done, cookie affinity stays the documented setup for several pod
 6. If a customer cannot provide a shared volume: is the reason that the cluster only offers
    single-node volumes, or that nothing shared is allowed at all? And is S3-compatible object
    storage available there? See §8.
+7. Is a broker (NATS, Redis or Valkey) acceptable as a required component for installations with
+   several pods? Do customers already run one? See §9.
 
 ## 7. Documentation to fix independently of this proposal
 
@@ -320,3 +322,122 @@ read is higher than on a local volume, so the load test of phase 4 has to be rep
 3. If nothing shared is allowed, neither a volume nor object storage, there is no way to run
    several pods without a database short of building one (option C). The choice is then between
    option E and one pod.
+
+## 9. With a broker: NATS or Redis
+
+Option C of §3. It gives up the goal of adding no new component, and in return removes most of
+the custom protocol of §4: no links between pods, no peer discovery, no replicated presence and
+no leader pod. This section describes what it would look like, so the two routes can be compared.
+Nothing here was built or measured, and the features named for each broker need checking against
+the version that would be shipped.
+
+### 9.1 Topology
+
+```
+   Pod A                         Pod B
+ worker  worker                worker  worker
+    \      |                     |      /
+     \     |                     |     /
+      ──────┴──── broker ────────┴─────
+              (3 nodes for availability)
+```
+
+- **Every worker connects to the broker itself.** The primary no longer relays anything. The rule
+  "vCPU = workers + 1" (`docs/sizing.md`) and the single-core ceiling of the primary go away.
+- **Pods are interchangeable.** The ingress needs no affinity, and scaling means adding pods, also
+  small ones with one or two workers.
+- **The bus interface stays.** The modules of §2 keep calling `publish`, `subscribe`, `request`
+  and the presence maps of `server/clusterBus.js`. The IPC transport stays as well, for one pod
+  without a broker: development, the binary build, small installations.
+
+### 9.2 What the broker replaces
+
+| Bus function today | NATS | Redis |
+| --- | --- | --- |
+| Publish to all other workers | subject | Pub/Sub channel |
+| Message to the worker that holds a chat or run | one subject per chat or run; the holder is subscribed, nobody needs to know who it is | one channel per chat or run |
+| Presence maps (who holds what) | mostly unnecessary; a request to a subject nobody listens on is answered at once with "no responders" | keys with an expiry |
+| Request/reply and gather | built in | built on Pub/Sub with reply channels, as the bus does today |
+| Counters held by the primary (§4.6) | key-value store with compare-and-set | atomic increment with expiry; the simplest fit |
+| Locks, leases, scheduler owner | key-value entry created only if absent, with a time-to-live | `SET` with "only if absent" and an expiry |
+| Config invalidation | subject, or a watch on a key-value bucket | channel |
+| Live events of a run, and replay after a reconnect | JetStream stream, read from a sequence number | Redis Stream, read from an entry id |
+| Links between pods: discovery, handshake, snapshot (§4.2–4.4) | not needed | not needed |
+| Leader pod (§4.6) | not needed | not needed |
+
+The ids of §4.5 must still be unique across pods.
+
+### 9.3 Who streams, and how
+
+1. The worker that runs the turn publishes each event to the subject or stream of that run.
+2. The worker that holds the browser's connection reads it and writes the SSE response. With
+   [Chat Streaming on the POST Response](./2026-10-05%20Chat%20Streaming%20on%20the%20POST%20Response.md)
+   these are the same worker: it writes to the response directly and publishes only so that the
+   events are kept and other readers can follow.
+3. After a reload, in a second tab, or when a pod was lost, any pod reads the run from the last
+   sequence the client has seen: first the events it missed, then the live ones.
+
+This is what the run ledger does today with files and a per-run sequence
+(`GET /api/runs/:id/events?after=<seq>`). Delivery then survives the loss of a pod. The generation
+itself still ends with the worker that runs it.
+
+Load: one pod at its planned capacity (700 test users × 1.35 messages per minute, 250 tokens per
+answer in the load test) produces about 4,000 events per second if every token is one event. That
+is small for either broker, but publishing with a write acknowledgement per event is not free;
+batching, or live events without acknowledgement plus a batched durable copy, needs measuring.
+
+### 9.4 NATS or Redis
+
+| | NATS with JetStream | Redis (or Valkey) |
+| --- | --- | --- |
+| Where data lives | on disk, on each broker node's own volume | in memory, with snapshots or an append-only file; the data has to fit into memory |
+| Availability | three nodes with a quorum; an acknowledged write survives the loss of one node | Sentinel or Cluster with asynchronous replication; a failover can lose writes that were already acknowledged |
+| Run ledger | can hold the whole ledger with a retention time | only the live window, capped by length or age; the ledger stays on the storage provider |
+| Documents and files | has a key-value store and an object store, so it could replace the shared volume of §8 — and would then be the database | not suitable |
+| Counters | compare-and-set loop | native atomic increment |
+| Request/reply | native | to be built |
+| At customers | less common; usually a new service for them | common, often already running, available as a managed service |
+| Licence | Apache-2.0 | changed in 2024 and 2025; Valkey is the BSD-licensed fork. To be checked before anything is bundled. |
+
+Either client is a new outbound connection and must honour the SSL whitelist: its TLS options
+take `getTlsBypassOptions(url)` from `server/utils/httpConfig.js`, with a test for a whitelisted
+and a non-whitelisted host. TLS to the broker is mandatory, as for the links of §4.2.
+
+### 9.5 What a broker does not solve
+
+- **Storage.** Chats, uploads, project documents and configuration still need a home all pods
+  reach: the shared volume (§4.7), object storage, or a database (§8). With locks on the broker,
+  items 2 and 3 of §4.7 (lease files, scheduler lock) go away; item 1 (attribute caching) stays.
+  Putting documents and files into NATS as well removes the shared volume, but makes NATS the
+  system of record for about 50 GB per month, with listing by owner built on key names.
+- **Availability of the broker.** It becomes the one thing every pod depends on. When it is
+  unreachable, each pod behaves like a single pod: turns it runs and streams itself keep working,
+  stop and steering from another pod fail, config changes arrive with the TTL refresh, and, by
+  the decision of §4.6, new logins are refused.
+- **POST-response streaming** is still worth doing first: it takes the token traffic of ordinary
+  turns off the broker's critical path.
+
+### 9.6 Mesh or broker
+
+| | Mesh of primaries (§4) | Broker |
+| --- | --- | --- |
+| New component at the customer | none | one, three nodes for availability |
+| Code in iHub | transport, discovery, handshake, replicated presence, leader pod | a transport behind the bus interface; counters and locks on the broker |
+| Primary as relay | stays, also between pods | gone |
+| Counters across pods | leader pod, with the partition cases of §4.6 | one shared counter |
+| Mid-run reconnect on another pod | relay from the pod that runs the turn, or the ledger on the volume | read the run's stream from a sequence |
+| Number of pods | full mesh, meant for a handful | not limited by the bus |
+
+Recommendation:
+
+1. Build one of the two, not both. Two cross-pod transports double the failure cases to test.
+2. If a required broker is acceptable (open question 7), prefer it over the mesh: less protocol
+   of our own to get right, and it removes the primary's ceiling.
+3. NATS if the broker should also carry the run ledger and must not lose acknowledged events when
+   a node fails. Redis or Valkey if customers already run it and the bus, counters and locks are
+   enough, with the ledger staying on the storage provider.
+4. If no new component is acceptable, the mesh of §4 remains the proposal.
+
+Phases with a broker, replacing rows 2 and 5 of §5: a transport interface in `clusterBus.js` with
+the IPC and the broker implementation and the ids of §4.5; then counters and locks on the broker;
+then the load test with 2 and 4 pods; optionally the run ledger on JetStream.
