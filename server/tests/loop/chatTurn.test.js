@@ -2197,3 +2197,29 @@ test('a tool round counts the search by origin and outcome, and the answer by it
   assert.deepEqual(adds['ihub.answer.basis'], [{ 'answer.kinds_bucket': '1' }]);
   assert.equal(adds['ihub.answer.origin.mismatch'], undefined);
 });
+
+test('a search that returns an error too large to keep is still counted as an error', async t => {
+  const adds = {};
+  const meter = {
+    createHistogram: () => ({ record() {} }),
+    createCounter: name => ({
+      add: (value, labels) => (adds[name] ||= []).push(labels ?? {})
+    }),
+    createObservableGauge: () => ({ addCallback() {} })
+  };
+  initializeMetrics({ getMeter: () => meter });
+
+  const chatId = newChatId('metrics-oversized-error');
+  captureFrames(t, chatId);
+  // Above the spill threshold (64 KiB), the loop keeps a preview of the result,
+  // which no longer says it was an error: the call is classified before that.
+  const { service } = makeService(
+    [toolTurn([{ name: 'webSearch', args: { query: 'berlin' } }]), textTurn('Sorry.')],
+    {
+      runTool: async () => ({ error: true, message: 'upstream failed', detail: 'x'.repeat(80000) })
+    }
+  );
+  await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
+
+  assert.deepEqual(adds['ihub.tool.calls'], [{ 'tool.origin': 'web', 'tool.outcome': 'error' }]);
+});

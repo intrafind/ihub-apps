@@ -832,7 +832,8 @@ function kindsBucketOf(kinds) {
 
 /**
  * Record an answer by how many kinds of source its basis names.
- * @param {number} kinds - non-model kinds in the basis (0 for the model's own knowledge)
+ * @param {number} kinds - non-model source kinds in the basis. `0` means no named
+ *   source kind: the model's own knowledge, or a passthrough answer that used none.
  */
 export function recordAnswerBasis(kinds) {
   if (!answerBasisCounter) return;
@@ -847,7 +848,9 @@ export function recordAnswerBasis(kinds) {
  * Record that a user opened a source's content or details through its integration.
  * The server sees the document request, not which button caused it, so a
  * preview and a download are both `content`.
- * @param {string} provider - the integration (or built-in provider) that answered
+ * @param {string} provider - a category, never an instance id: the integration's catalog
+ *   definition, the id of a built-in provider, or `unknown` (see `documentProviderCategory`).
+ *   The length bound below is a last defence, not what keeps the set small.
  * @param {'content'|'details'} action
  */
 export function recordSourceAction(provider, action) {

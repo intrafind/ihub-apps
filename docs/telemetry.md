@@ -204,15 +204,18 @@ iHub product counters & gauges:
   tool is a classifier gap. `empty` needs the server to have declared a count of zero (or a
   page read that delivered no text); a result that does not say is `unknown`, never `empty`.
   The share of `empty` per origin shows which origin does not match how people ask
-- `ihub.answer.basis` - answers, labelled by `answer.kinds_bucket` (`0` for the model's own
-  knowledge, `1`, `2`, `3+`): how many kinds of source the answer's basis names. Everything
-  but `0` is an answer that used a source, which is the denominator for mixed-origin shares
+- `ihub.answer.basis` - answers, labelled by `answer.kinds_bucket` (`0`, `1`, `2`, `3+`): how
+  many kinds of source the answer's basis names. `0` means no named source kind: the model's own
+  knowledge, or a passthrough answer (a tool's own output) that used none. Everything but `0` is
+  an answer that used a source, which is the denominator for mixed-origin shares
 - `ihub.answer.origin.mismatch` - answers whose sources name an origin that the footer's basis
   leaves out, so the footer and the Sources panel would disagree. Expected to stay at 0
-- `ihub.source.actions` - opens of a source document through its integration, labelled by
-  `source.provider` and `source.action` (`content`, `details`). The server sees the document
-  request, not the button, so a preview and a download are both `content`; opens of an
-  external link are not visible to the server
+- `ihub.source.actions` - successful requests for a source document's content or details
+  through its integration, labelled by `source.provider` and `source.action` (`content`,
+  `details`). `source.provider` is the integration's catalog definition (for example
+  `com.intrafind/ifinder`), `project` for the project provider, or `unknown`; two installations
+  of one integration share a label. The server sees the request, not the button, so a preview
+  and a download are both `content`, and opens of an external link are not counted
 - `ihub.structured_output.validation` - server-side structured-output checks of
   the inference API, labelled by `structured_output.outcome` (`valid`,
   `valid_after_retry`, `invalid`, `skipped`, `not_reached`) and
