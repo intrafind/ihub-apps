@@ -398,6 +398,25 @@ describe('user routes', () => {
     expect(res.body.history).toEqual([]);
   });
 
+  test('GET re-reads users.json for a "not yet" only when enforcement is on', async () => {
+    const { default: configStore } = await import('../services/config/ConfigStore.js');
+    const spy = jest.spyOn(configStore, 'readJsonStrict');
+    const app = buildApp();
+    const me = () =>
+      request(app).get('/api/eu-ai-act/acknowledgements/me').set('x-user', asUser('alice'));
+    try {
+      store.files[PLATFORM].aiAcknowledgement.enforce = false;
+      for (let i = 0; i < 3; i++) expect((await me()).body.acknowledged).toBe(false);
+      expect(spy).not.toHaveBeenCalled();
+
+      store.files[PLATFORM].aiAcknowledgement.enforce = true;
+      expect((await me()).body.acknowledged).toBe(false);
+      expect(spy).toHaveBeenCalledTimes(1);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   test('GET with the feature off carries no text', async () => {
     store.files[PLATFORM].aiAcknowledgement.enabled = false;
     const res = await request(buildApp())

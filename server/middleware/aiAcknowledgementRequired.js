@@ -30,8 +30,9 @@ import logger from '../utils/logger.js';
 /**
  * Whether the caller has a valid acknowledgement.
  *
- * A principal with a users.json record is judged by it (re-read once from the
- * store before refusing: another worker may have written it milliseconds ago).
+ * A principal with a users.json record is judged by it. With enforcement on it
+ * is re-read once from the store before refusing (another worker may have
+ * written it milliseconds ago); ask-only answers from the cached copy.
  * Anyone else, an anonymous guest above all, by the signed cookie.
  *
  * @param {import('express').Request} req
@@ -50,6 +51,11 @@ export async function evaluateAcknowledgement(req, settings) {
   let user = record(userId);
   if (user) {
     if (isAcknowledged(user, settings)) return { acknowledged: true, hasRecord: true };
+    // Ask-only (`enforce: false`) blocks nothing, so a cached "not yet" costs at most a
+    // dialog shown again until the config sync reaches this worker. Re-reading there ran
+    // on every page load (GET /me) of everyone who never confirms: a full read, parse
+    // and re-cache of users.json each time.
+    if (!settings.enforce) return { acknowledged: false, hasRecord: true };
     try {
       const fresh = (await loadUsersFresh(file)).users || {};
       user = Object.hasOwn(fresh, userId) ? fresh[userId] : null;
