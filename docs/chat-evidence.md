@@ -7,8 +7,10 @@ as long as the chat and is deleted with it. Runs without a chat (`/v1/chat/compl
 Responses API without a conversation) get the same record.
 
 Design: [`concepts/2026-11-15 Chat Evidence Record and Journal-Only Run Ledger.md`](../concepts/2026-11-15%20Chat%20Evidence%20Record%20and%20Journal-Only%20Run%20Ledger.md)
-(issue #3687). This page describes phase 1: the record, its storage, deletion and the read
-endpoints. The run ledger is unchanged.
+(issue #3687). This page describes the record, its storage, deletion and the read endpoints. The
+record is built from the run's journal right after the answer is stored; the journal of a finished
+chat or `/v1` run is deleted 15 minutes later (see [Run Ledger](run-ledger.md#journals-of-finished-runs)),
+so from then on the record is the only account of what went into the answer.
 
 ## Switch and limits
 
@@ -25,8 +27,10 @@ endpoints. The run ledger is unchanged.
 
 - `enabled` (default `true`): off stops new records, and the read endpoints answer
   `404 EVIDENCE_NOT_RECORDED`. Records stored before stay until their chat is deleted or retention
-  removes them (turning it on again makes them readable); the run ledger is unchanged. Turning it
-  on applies to answers stored from then on. Migration `V251` writes the defaults.
+  removes them (turning it on again makes them readable). Turning it on applies to answers stored
+  from then on. Migration `V251` writes the defaults. **Off means nothing is kept:** the run
+  ledger deletes the journal of a finished chat or `/v1` run 15 minutes after it ended whether the
+  switch is on or not, so with it off nothing of what went into an answer survives the run.
 - `maxContentBytes` (default 10 MB): the cap of one item (one message, tool result, tool
   definition). A larger item is not stored; the record lists it under `truncated` with its hash and
   size. Uploaded documents and pictures are not items: the record refers to their chat file.
@@ -212,9 +216,10 @@ off), `404 NOT_FOUND` (not your chat), `400 BAD_REQUEST` (not a lower-case hex S
 
 ## Not in phase 1
 
-Legal hold, the `knowledge/passages` event, content-addressed writes at request time, deleting
-journals after materialization, and workflow/agent evidence (`children`, `workflow-evidence`) are
-later phases of the design.
+Legal hold, the `knowledge/passages` event, content-addressed writes at request time and
+workflow/agent evidence (`children`, `workflow-evidence`) are later phases of the design. Deleting
+journals after materialization (phase 4) is in: see
+[Run Ledger](run-ledger.md#journals-of-finished-runs).
 
 > ponytail: an upload's quota check and a message delete's sweep list the chat's evidence
 > (O(records and packs of the chat)); a record write lists nothing. Keep a per-chat counter or

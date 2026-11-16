@@ -53,7 +53,11 @@ coalesced on a timer, because that state is updated on every streamed chunk
 and a document write on the streaming path is not acceptable.
 
 Append-log streams are named `run:<runId>` and carry a run's events, with its
-spilled payloads as blobs beside them. Leases are taken on `chat:<id>` for a
+spilled payloads as blobs beside them. They are the journal of active runs: the
+stream of a finished chat or `/v1` run is deleted 15 minutes after it ended
+(its summary in `runs` stays), so `logs/run/` holds the running runs plus the
+workflow and agent runs — see
+[Journals of finished runs](run-ledger.md#journals-of-finished-runs). Leases are taken on `chat:<id>` for a
 chat's read-modify-write, on `interaction:<id>` for the answer critical
 section, on `runlog:<runId>` while a recovering worker continues a run's
 sequence, and on `runtime-import:<store>` for the one-time connection re-index.

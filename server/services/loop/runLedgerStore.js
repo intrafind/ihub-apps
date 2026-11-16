@@ -73,6 +73,30 @@ function sweepableByAge(summary) {
   return TERMINAL_EXECUTION_STATUSES.has(summary?.status);
 }
 
+/**
+ * Run kinds whose journal is deleted once the run has ended and its content is
+ * kept elsewhere: a chat turn's answer and evidence live with the chat, a
+ * `/v1/chat/completions` or Responses run (`inference`) keeps its run evidence.
+ * Workflow, agent and every other kind keep their journal until
+ * `runLog.retentionDays` — their evidence is not recorded yet.
+ */
+export const JOURNAL_SWEPT_KINDS = new Set(['chat', 'inference']);
+
+/**
+ * Whether a summary describes a run whose journal may go once `cutoffMs` has
+ * passed since it ended: a swept kind, ended before the cutoff, journal still
+ * there.
+ *
+ * @param {Object} summary - Stored run summary.
+ * @param {number} cutoffMs - Epoch ms; the run must have ended before it.
+ * @returns {boolean}
+ */
+export function journalSweepable(summary, cutoffMs) {
+  if (!JOURNAL_SWEPT_KINDS.has(summary?.kind) || summary.journalDeletedAt) return false;
+  const ended = Date.parse(summary.endedAt || '');
+  return Number.isFinite(ended) && ended < cutoffMs;
+}
+
 /** Stream kind every run's events are filed under in the append log. */
 export const RUN_STREAM_KIND = 'run';
 
@@ -473,6 +497,30 @@ export class RunLedgerStore {
   }
 
   /**
+   * One run's summary, or null.
+   *
+   * @param {string} runId - Run id.
+   * @returns {Promise<Object|null>}
+   */
+  async getSummary(runId) {
+    return this._summaries().get(runId);
+  }
+
+  /**
+   * Delete a run's journal — its event stream and spilled payloads — and mark
+   * the summary, which stays until `runLog.retentionDays`.
+   *
+   * @param {string} runId - Run id.
+   * @returns {Promise<void>}
+   */
+  async deleteJournal(runId) {
+    await this._logs().deleteStream(runStreamName(runId));
+    await this._queueSummaryWrite(() =>
+      this._summaries().patch(runId, { journalDeletedAt: new Date().toISOString() })
+    );
+  }
+
+  /**
    * Record that a run is gone: its summary document is removed.
    *
    * @param {string} runId - Run id.
@@ -543,33 +591,50 @@ export class RunLedgerStore {
    * not cover — a stream whose run was never summarized — is caught by
    * `logs.sweep()` afterwards.
    *
-   * @param {number} cutoffMs - Epoch milliseconds; older runs go.
-   * @returns {Promise<{removed: number, cascadeIds: string[]}>} How many runs
-   *   were removed and which ids the caller must run its cascade for.
+   * The same walk collects the summaries whose journal is due
+   * ({@link journalSweepable} against `journalCutoffMs`): runs that ended on
+   * a worker that died before its own journal sweep, and journals kept from
+   * before the journal sweep existed. It costs nothing extra — the walk
+   * happens anyway.
+   *
+   * @param {number|null} cutoffMs - Epoch milliseconds; older runs go. `null`
+   *   keeps every run (retention off) and only collects journals.
+   * @param {Object} [opts]
+   * @param {number} [opts.journalCutoffMs] - Collect journals of runs that
+   *   ended before this.
+   * @returns {Promise<{removed: number, cascadeIds: string[], journalCandidates: Object[]}>}
+   *   How many runs were removed, which ids the caller must run its cascade
+   *   for, and the summaries whose journal is due.
    */
-  async cleanup(cutoffMs) {
+  async cleanup(cutoffMs, { journalCutoffMs } = {}) {
     let removed = 0;
     const cascadeIds = new Set();
+    const journalCandidates = [];
+    const retain = Number.isFinite(cutoffMs);
 
     // `includeAnonymous`: the listings hide anonymous runs by design, but a
     // sweep that inherited that filter would never delete their documents
     // and never run the delete cascade for them.
     for (const summary of await this._scanSummaries({ includeAnonymous: true })) {
       const touched = Date.parse(summary.endedAt || summary.updatedAt || summary.startedAt || '');
-      if (!Number.isFinite(touched) || touched >= cutoffMs) continue;
-      if (!sweepableByAge(summary)) continue;
-      await this.deleteRun(summary.runId);
-      cascadeIds.add(summary.runId);
-      removed += 1;
+      if (retain && Number.isFinite(touched) && touched < cutoffMs && sweepableByAge(summary)) {
+        await this.deleteRun(summary.runId);
+        cascadeIds.add(summary.runId);
+        removed += 1;
+      } else if (Number.isFinite(journalCutoffMs) && journalSweepable(summary, journalCutoffMs)) {
+        journalCandidates.push(summary);
+      }
     }
 
-    // Scoped to this ledger's own streams. The sweep is driven from
-    // `runLog.retentionDays`, which is a policy about runs — store-wide, it
-    // would delete any other consumer's streams on that policy.
-    const swept = await this._logs().sweep({ olderThan: cutoffMs, kind: RUN_STREAM_KIND });
-    removed += swept?.streams || 0;
+    if (retain) {
+      // Scoped to this ledger's own streams. The sweep is driven from
+      // `runLog.retentionDays`, which is a policy about runs — store-wide, it
+      // would delete any other consumer's streams on that policy.
+      const swept = await this._logs().sweep({ olderThan: cutoffMs, kind: RUN_STREAM_KIND });
+      removed += swept?.streams || 0;
+    }
 
-    return { removed, cascadeIds: [...cascadeIds] };
+    return { removed, cascadeIds: [...cascadeIds], journalCandidates };
   }
 
   // ── locking ────────────────────────────────────────────────────────────

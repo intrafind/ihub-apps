@@ -312,7 +312,9 @@ export const CHAT_ERROR_CODES = Object.freeze({
   SOURCE_INVALID: 400,
   SOURCE_FAILED: 502,
   /** No evidence record was kept for this answer or run (#3687). */
-  EVIDENCE_NOT_RECORDED: 404
+  EVIDENCE_NOT_RECORDED: 404,
+  /** The journal of a finished run was deleted after its grace period; its evidence record remains. */
+  JOURNAL_NOT_KEPT: 404
 });
 
 /** MCP App views (`server/routes/mcpAppRoutes.js`) and the approval of their tool calls. */

@@ -1063,8 +1063,8 @@
       "ledger": {
         "advanced": "Erweitert",
         "cleanupEnabled": "Alte Läufe täglich löschen",
-        "cleanupEnabledHelp": "Wenn ausgeschaltet, bleiben Ledger-Läufe unabhängig von der Aufbewahrung unten erhalten.",
-        "description": "Ein anhängbares Ereignisprotokoll pro Lauf (Chats, Workflows, Agenten). Chats werden daraus wiederhergestellt, daher zeichnet es immer auf, wenn der Chatspeicher verfügbar ist.",
+        "cleanupEnabledHelp": "Wenn ausgeschaltet, bleiben Laufzusammenfassungen unabhängig von der Aufbewahrung unten erhalten. Die Ereignisse beendeter Chat- und API-Läufe werden in jedem Fall 15 Minuten nach dem Lauf gelöscht.",
+        "description": "Ein anhängbares Ereignisprotokoll pro Lauf (Chats, Workflows, Agenten). Chats werden daraus wiederhergestellt, daher zeichnet es immer auf, wenn der Chatspeicher verfügbar ist. Es ist das Journal laufender Läufe: Die Ereignisse eines beendeten Chat- oder API-Laufs werden 15 Minuten nach seinem Ende gelöscht, sobald seine Antwort gespeichert ist; was der Lauf getan hat, bleibt im Nachweis. Workflow- und Agentenläufe behalten ihre Ereignisse.",
         "enabled": "Run-Ledger aufzeichnen",
         "enabledHelp": "Erfordert zusätzlich die Funktion „Run-Ledger“.",
         "flushIntervalMs": "Flush-Intervall (ms)",
@@ -1076,7 +1076,7 @@
         "identityModeWarning": "Ein Wechsel zu oder von „Pseudonymisiert“ ändert die ID, unter der Chats aufgelistet werden: Vor dem Wechsel gespeicherte Chats erscheinen nicht mehr im Verlauf ihrer Besitzer.",
         "identityPseudonymized": "Pseudonymisiert – ein stabiler Hash statt der Benutzer-ID",
         "retentionDays": "Aufbewahrung (Tage)",
-        "retentionDaysHelp": "Ältere Läufe werden von der täglichen Bereinigung gelöscht. 0 bewahrt Läufe unbegrenzt auf.",
+        "retentionDaysHelp": "Ältere Laufzusammenfassungen (und die Ereignisse von Workflow- und Agentenläufen) werden von der täglichen Bereinigung gelöscht. 0 bewahrt sie unbegrenzt auf.",
         "spillThresholdBytes": "Auslagerungsschwelle (Bytes)",
         "spillThresholdBytesHelp": "Ereignisdaten, die größer sind, werden als separate Datei statt inline gespeichert.",
         "title": "Run-Ledger"
@@ -1164,7 +1164,7 @@
         "title": "Nachweis",
         "description": "Für jede gespeicherte Antwort ein Nachweis, was eingegangen und was herausgekommen ist: der Systemprompt, die Nachrichten und Tool-Definitionen jedes Modellaufrufs, jeder Tool-Aufruf mit Argumenten und Ergebnis sowie die Modelleinstellungen. Er lebt mit dem Chat und wird mit ihm gelöscht. Lesen können ihn der Eigentümer und Admins; ein geteilter Chat teilt ihn nicht.",
         "enabled": "Nachweis führen",
-        "enabledHelp": "Aus beendet neue Nachweise; bereits gespeicherte bleiben, bis ihr Chat gelöscht wird oder die Aufbewahrung sie entfernt, und das Laufprotokoll (Run Ledger) bleibt unverändert. Nachweise entstehen aus dem Laufprotokoll, das gespeicherte Chats einschalten. Eingeschaltet gilt es für Antworten, die ab dann gespeichert werden."
+        "enabledHelp": "Aus beendet neue Nachweise; bereits gespeicherte bleiben, bis ihr Chat gelöscht wird oder die Aufbewahrung sie entfernt. Nachweise entstehen aus dem Laufprotokoll (Run Ledger), das gespeicherte Chats einschalten. Das Laufprotokoll löscht die Ereignisse eines beendeten Chat- oder API-Laufs 15 Minuten nach seinem Ende, ob der Nachweis an ist oder nicht; ausgeschaltet bleibt also nichts davon erhalten, was in eine Antwort eingegangen ist. Eingeschaltet gilt es für Antworten, die ab dann gespeichert werden."
       },
       "sharing": {
         "title": "Chats teilen",
@@ -10517,6 +10517,7 @@
     "SOURCE_INVALID": "Die Dateireferenz ist ungültig.",
     "SOURCE_FAILED": "Die Datei konnte nicht aus dem angebundenen System abgerufen werden.",
     "EVIDENCE_NOT_RECORDED": "Für diese Antwort wurde kein Nachweis gespeichert.",
+    "JOURNAL_NOT_KEPT": "Die Ereignisse dieses Laufs werden nicht mehr aufbewahrt. Lesen Sie stattdessen seinen Nachweis.",
     "MCP_AUTH_REFRESH_FAILED": "Die Anmeldung beim MCP-Server konnte nicht erneuert werden. Versuchen Sie es gleich noch einmal.",
     "APPROVAL_REQUIRED_NO_USER": "Dieser Aufruf benötigt die Freigabe einer Person, und dieser Client kann sie nicht einholen.",
     "APPROVAL_ALREADY_ANSWERED": "Diese Freigabe wurde bereits beantwortet.",

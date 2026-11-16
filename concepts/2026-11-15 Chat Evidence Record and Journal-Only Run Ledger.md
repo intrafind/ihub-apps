@@ -353,6 +353,8 @@ Each phase is shippable on its own.
 4. **Journal only.** The grace-period sweep deletes the journals of materialized runs.
    `runLog.retentionDays` applies to summaries only. Docs: `docs/run-ledger.md`,
    `docs/storage.md`, the breaking-changes entry for `GET /api/runs/:id/events`.
+   *Implemented (2026-11-16):* per-worker sweep of runs that ended there plus the daily retention
+   walk as catch-up (`RunLog.sweepJournals`, `journalDeletedAt` on the summary), `JOURNAL_NOT_KEPT`.
 5. **Workflows and agents.** Node and step evidence, `workflow-evidence`, the execution delete,
    retention and the legal hold.
 6. **Load lab** at 800 users on aged data: disk growth per hour, ELD, overhead, compared with

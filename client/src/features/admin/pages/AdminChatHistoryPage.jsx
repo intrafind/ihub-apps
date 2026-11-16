@@ -1226,7 +1226,7 @@ function AdminChatHistoryPage() {
               label={t('admin.chatHistory.evidence.enabled', 'Keep an evidence record')}
               help={t(
                 'admin.chatHistory.evidence.enabledHelp',
-                'Off stops new records; records already stored stay until their chat is deleted or retention removes them, and the run ledger is unchanged. Records are built from the run ledger, which stored chats keep on. Turning it on applies to answers stored from then on.'
+                'Off stops new records; records already stored stay until their chat is deleted or retention removes them. Records are built from the run ledger, which stored chats keep on. The ledger deletes the events of a finished chat or API run 15 minutes after it ended whether this is on or not, so with it off nothing of what went into an answer is kept. Turning it on applies to answers stored from then on.'
               )}
               checked={settings.evidence.enabled}
               onChange={value => updateSetting('evidence', 'enabled', value)}
@@ -1385,7 +1385,7 @@ function AdminChatHistoryPage() {
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {t(
               'admin.chatHistory.ledger.description',
-              'An append-only event log per run (chats, workflows, agents). Chats are rebuilt from it, so it records whenever chat storage is available.'
+              'An append-only event log per run (chats, workflows, agents). Chats are rebuilt from it, so it records whenever chat storage is available. It is the journal of active runs: the events of a finished chat or API run are deleted 15 minutes after it ended, once its answer is stored; what the run did stays in the evidence record. Workflow and agent runs keep their events.'
             )}
           </p>
           <div className="space-y-4">
@@ -1405,7 +1405,7 @@ function AdminChatHistoryPage() {
                 label={t('admin.chatHistory.ledger.cleanupEnabled', 'Delete old runs daily')}
                 help={t(
                   'admin.chatHistory.ledger.cleanupEnabledHelp',
-                  'When off, ledger runs are kept regardless of the retention below.'
+                  'When off, run summaries are kept regardless of the retention below. The events of finished chat and API runs are deleted 15 minutes after the run either way.'
                 )}
                 checked={settings.runLog.cleanupEnabled}
                 onChange={value => updateSetting('runLog', 'cleanupEnabled', value)}
@@ -1461,7 +1461,7 @@ function AdminChatHistoryPage() {
                 label={t('admin.chatHistory.ledger.retentionDays', 'Retention (days)')}
                 help={t(
                   'admin.chatHistory.ledger.retentionDaysHelp',
-                  'Runs older than this are deleted by the daily cleanup. 0 keeps runs forever.'
+                  'Run summaries (and the events of workflow and agent runs) older than this are deleted by the daily cleanup. 0 keeps them forever.'
                 )}
                 value={settings.runLog.retentionDays}
                 onChange={value => updateSetting('runLog', 'retentionDays', value)}

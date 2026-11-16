@@ -143,6 +143,14 @@ export default function registerRunRoutes(app) {
     const after = offsetFromCursor(req.query.cursor);
     const limit = limitFrom(req.query.limit, { fallback: 1000, max: 5000 });
     const events = await runLog.readEvents(runId, { afterSeq: after, limit });
+    // A finished chat or inference run keeps its journal for 15 minutes only;
+    // what it did is in its evidence record (`/evidence`) from then on.
+    if (events.length === 0 && (await runLog.isJournalDeleted(runId))) {
+      throw new ServiceError(
+        'JOURNAL_NOT_KEPT',
+        'The events of this run are no longer kept; read its evidence record instead'
+      );
+    }
     // The cursor stands for the last raw ledger sequence this page read. A
     // projected page can be empty (headers, budget events, compactions
     // produce no envelopes) while more of the ledger remains, so the walk
