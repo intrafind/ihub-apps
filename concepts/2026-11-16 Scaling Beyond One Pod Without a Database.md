@@ -22,7 +22,7 @@ The storage design plans multi-instance on PostgreSQL. This document describes a
 
 1. Extend the cluster bus so the primaries of all pods talk to each other directly.
 2. Move the chat stream onto the POST response, so little traffic has to cross pods.
-3. Keep the shared `contents/` volume as the only shared state, and verify the file locks and
+3. Keep the shared `contents/` volume as the only shared state (§8 covers the case without one), and verify the file locks and
    cache re-validation on the volume type customers use.
 
 What stays required: a shared read-write-many `contents/` volume, and the same secrets on every
@@ -105,11 +105,11 @@ process would have to join the mesh itself.
   challenge and both pod ids, keyed with a key derived from the JWT secret, which all pods must
   share anyway. A captured handshake is therefore useless on another connection. A link without
   a valid answer is closed, and no bus message is accepted before both sides have answered.
-- **TLS:** `wss://` by default; the client side merges `getWebSocketTlsOptions(url)` so a private
-  CA works (`server/utils/httpConfig.js`). The handshake authenticates the peer but does not
-  encrypt the link, and a reconnect to a running turn can carry chat content. Whether plaintext
-  may be allowed by an explicit setting, for clusters whose network already encrypts pod traffic,
-  is open question 6.
+- **TLS:** mandatory. Links are `wss://` only, and a pod refuses a plaintext link; there is no
+  setting to turn this off. The handshake authenticates the peer but does not encrypt the link,
+  and a reconnect to a running turn can carry chat content. Every pod therefore needs a
+  certificate the other pods trust; the client side merges `getWebSocketTlsOptions(url)` so a
+  private CA works (`server/utils/httpConfig.js`).
 - **Framing:** the JSON envelopes the IPC channel already carries.
 
 ### 4.3 Finding the other pods
@@ -166,11 +166,10 @@ there are several primaries.
   route `primaryOnly` questions to the leader. When the leader dies, counters restart at zero on
   the next leader; for rate limits and throttling that is acceptable, for login lockout it needs a
   decision.
-- **A pod that cannot reach a live leader** (§4.9) must not silently fall back to its own
-  counters for login lockout, or the limit can be exceeded across the partition. Rate limits and
-  throttling may count locally until the link is back. For login lockout the choice is between
-  refusing logins on that pod and a local limit that is safe on its own (the configured limit
-  divided by the number of pods); see open question 2.
+- **A pod that cannot reach a live leader** (§4.9) refuses logins until the link is back. It
+  does not fall back to its own counters, so the lockout limit cannot be exceeded across a
+  partition. Sessions that already exist keep working. Rate limits and throttling count locally
+  until the link is back.
 
 ### 4.7 Storage on a shared volume
 
@@ -221,7 +220,7 @@ in phase 3 should not be run before it.
 | A bus link breaks, both pods alive | Each pod serves what it holds. Stop and steering for turns on the other pod fail until the link is back; config changes arrive with the TTL refresh. Links reconnect with backoff and exchange a new snapshot. |
 | Rolling update | Pods join and leave the mesh one at a time. The envelope needs a version field from the first release, so two versions can run side by side. |
 | Leader pod dies (phase 2) | The lease expires, another pod takes over, counters restart. |
-| A pod loses its link to a live leader (phase 2) | Rate limits and throttling count locally until the link is back. Login lockout follows the policy chosen in §4.6. |
+| A pod loses its link to a live leader (phase 2) | That pod refuses new logins until the link is back; existing sessions keep working. Rate limits and throttling count locally. |
 
 ## 5. Phases
 
@@ -239,21 +238,85 @@ Until step 4 is done, cookie affinity stays the documented setup for several pod
 
 1. Which volume types do customers use for `contents/`? The answer decides how much of §4.7 is
    testing and how much is new code.
-2. Is "limit × pods" acceptable for login lockout until phase 5? And from phase 5 on, what does a
-   pod do for login lockout when it cannot reach the leader: refuse logins, or apply a reduced
-   local limit?
+2. Is "limit × pods" acceptable for login lockout until phase 5?
 3. Should a pod with `WORKERS=1` be allowed in a mesh, or does a mesh require a primary?
 4. How do clients without cookies (MCP, API keys, Office add-in, browser extension) behave behind
    cookie affinity today? If they already break, phase 2 is more urgent than the sizing numbers
    suggest.
 5. Does the PostgreSQL plan (storage design §10) stay, with the mesh as the transport for
    installations without a database, or does the mesh replace the LISTEN/NOTIFY transport?
-6. Is TLS on the bus links mandatory, or may an installation turn it off when the cluster network
-   already encrypts pod traffic (a service mesh, an encrypting CNI)? Mandatory TLS means every pod
-   needs a certificate the other pods trust.
+6. If a customer cannot provide a shared volume: is the reason that the cluster only offers
+   single-node volumes, or that nothing shared is allowed at all? And is S3-compatible object
+   storage available there? See §8.
 
 ## 7. Documentation to fix independently of this proposal
 
 `docs/multi-server-deployment.md` is out of date: it recommends `sessionAffinity: ClientIP`, which
 `docs/scaling.md` describes as sending all traffic to one pod, and it still describes the sticky
 cluster and a `MemoryStore`-era rate limiter.
+
+## 8. Without a shared volume
+
+Everything above assumes one `contents/` directory that all pods read and write. The mesh moves
+live traffic between pods; it does not store anything. Without the volume, four kinds of state
+need another home:
+
+| State | Size and write rate | Today |
+| --- | --- | --- |
+| Configuration (apps, models, groups, platform) | small, written by admins | files, cached per worker |
+| Keys and secrets | tiny, written once | files, or environment variables |
+| Runtime data: chats, run ledger, uploads, project documents and indexes | about 50 GB per month for 1,000 employees (`docs/sizing.md`), written on every turn | storage provider on the filesystem |
+| Coordination: locks, leases, the scheduler owner, the leader pod (§4.6), peer discovery by lease files (§4.3) | tiny, written often | lease files |
+
+### Options
+
+| Option | New code in iHub | What it costs |
+| --- | --- | --- |
+| A. Build the shared volume inside the cluster: an NFS server pod on a single-node volume, or a storage layer such as Longhorn or Rook-CephFS | none | One more thing to run. A single NFS pod is a single point of failure for all iHub pods. The tests of §4.7 apply unchanged. |
+| B. Object storage (S3-compatible) as the storage provider | a new provider | Not a file system and not a database. See below. |
+| C. One volume per pod, replicated over the bus | a replication layer | This is building a replicated database: ordering of writes, conflicts, bringing a new pod up to date (copying 150 GB), and electing a leader without a shared lease. Not proposed for runtime data. |
+| D. One volume per pod, each user pinned to a pod | routing by user at the ingress | No availability gain: a lost pod takes its users' chats offline. Shared projects would live on one pod only. Not proposed. |
+| E. A database (the PostgreSQL plan, storage design §10) | planned there | Outside the goal of this document. Uploads and artifacts still need a shared volume or object storage in that plan. |
+
+### B in more detail
+
+The storage provider is already split into facets (`server/storage/`), and they map to an object
+store to different degrees:
+
+- **Blobs** (`BlobStore`) were designed with an S3-compatible backend in mind: put, get, delete,
+  list.
+- **Documents** (`DocumentStore`) become one object each. The etag-guarded writes need conditional
+  writes in the object store; whether the stores customers use support them must be checked per
+  store.
+- **Locks** (`LockManager`) need a create-if-absent with expiry, again built on conditional writes.
+- **Append logs** (`AppendLog`, the run ledger) are the poor fit, and the reason the storage design
+  dropped S3: an object cannot be appended to. With the mesh, live events travel over the bus, so
+  the ledger could be written as batched segment objects; a pod that dies loses the events of its
+  last unwritten batch.
+- **Change notifications** ride the bus (§4.7 item 4).
+- **Search indexes of projects** are files read into memory today; they would be downloaded to a
+  local cache per pod.
+
+The provider conformance suite is the acceptance gate, as for every other provider. Latency per
+read is higher than on a local volume, so the load test of phase 4 has to be repeated on it.
+
+### What changes in the mesh proposal
+
+- Peer discovery works by DNS only (§4.3, source 1).
+- The leader pod (§4.6) and the scheduler owner need a lease that is not a file on the volume: a
+  conditional write in the object store, or the Kubernetes Lease API.
+- Keys and secrets come from environment variables on every pod, as `docs/scaling.md` already
+  requires for several replicas.
+- Configuration is small and has few writers, so it is the one kind of state where option C is
+  realistic on its own: the leader pod is the only writer and the others receive each change over
+  the bus. With option B it is simply another namespace in the object store.
+
+### Recommendation
+
+1. Find out why there is no shared volume (open question 6). If the cluster only offers
+   single-node volumes, option A works today with no change to iHub.
+2. As the product answer, option B. It is a substantial provider, and it removes the dependence
+   on NFS behaviour that §4.7 lists as the main risk.
+3. If nothing shared is allowed, neither a volume nor object storage, there is no way to run
+   several pods without a database short of building one (option C). The choice is then between
+   option E and one pod.
