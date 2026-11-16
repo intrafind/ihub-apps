@@ -106,6 +106,17 @@ async function stopRun(runId, meta, cause) {
   return null;
 }
 
+/**
+ * The 404 of a finished run whose journal was deleted after its grace period.
+ * @returns {ServiceError}
+ */
+function journalNotKept() {
+  return new ServiceError(
+    'JOURNAL_NOT_KEPT',
+    'The events of this run are no longer kept; read its evidence record instead'
+  );
+}
+
 export default function registerRunRoutes(app) {
   app.get(buildServerPath('/api/runs'), adminAuth, async (req, res) => {
     const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 100, 1), 1000);
@@ -143,6 +154,9 @@ export default function registerRunRoutes(app) {
     const after = offsetFromCursor(req.query.cursor);
     const limit = limitFrom(req.query.limit, { fallback: 1000, max: 5000 });
     const events = await runLog.readEvents(runId, { afterSeq: after, limit });
+    // A finished chat or inference run keeps its journal for 15 minutes only;
+    // what it did is in its evidence record (`/evidence`) from then on.
+    if (events.length === 0 && (await runLog.isJournalDeleted(runId))) throw journalNotKept();
     // The cursor stands for the last raw ledger sequence this page read. A
     // projected page can be empty (headers, budget events, compactions
     // produce no envelopes) while more of the ledger remains, so the walk
@@ -195,7 +209,7 @@ export default function registerRunRoutes(app) {
    *     description: >-
    *       For `/v1/chat/completions` and Responses API runs without a conversation: what went
    *       into and came out of every model call and tool call. Content is referenced as
-   *       `sha256:<hex>` and read through `/api/runs/{runId}/evidence-content/{sha256}`. The
+   *       `sha256:<hex>` and read through `/api/runs/{runId}/evidence/content/{sha256}`. The
    *       run's caller only. See docs/chat-evidence.md.
    *     tags: [Runs]
    *     parameters:
@@ -217,7 +231,7 @@ export default function registerRunRoutes(app) {
 
   /**
    * @swagger
-   * /api/runs/{runId}/evidence-content/{sha256}:
+   * /api/runs/{runId}/evidence/content/{sha256}:
    *   get:
    *     summary: One piece of content a run's evidence record refers to
    *     description: The canonical JSON of the item named `sha256:<hex>`. The run's caller only.
@@ -231,7 +245,7 @@ export default function registerRunRoutes(app) {
    *       404: { description: No such content, not the caller's, or switched off (EVIDENCE_NOT_RECORDED) }
    */
   app.get(
-    buildServerPath('/api/runs/:runId/evidence-content/:sha256'),
+    buildServerPath('/api/runs/:runId/evidence/content/:sha256'),
     authRequired,
     async (req, res) => {
       const { runId, sha256 } = req.params;
@@ -459,6 +473,8 @@ export default function registerRunRoutes(app) {
       },
       { kind: auth.meta?.kind || 'chat' }
     );
+    // Not written because the run finished and its journal is gone.
+    if (!event && (await runLog.isJournalDeleted(runId))) throw journalNotKept();
     let effect = null;
     if (kind === 'stop') {
       const cause = await userAbortCause('run_stop', req.user, {

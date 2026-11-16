@@ -7,9 +7,11 @@ which model saw which messages (`request/header`), what came back
 (`message/assistant`), tool calls and results, retries, compactions, budget
 checkpoints, interactions raised and answered, and how the run ended.
 
-It is the single source of truth behind run detail pages, re-sync of live
-streams, audit, cost accounting and support debugging ("what exactly did the
-model see?").
+It is the journal behind run detail pages, re-sync of live streams, cost
+accounting and support debugging ("what exactly did the model see?"). For chat
+turns and `/v1` runs it is kept only while the run is active: 15 minutes after
+such a run ended, its journal is deleted and the [evidence record](chat-evidence.md)
+is the lasting account (see [Journals of finished runs](#journals-of-finished-runs)).
 
 ## Enabling
 
@@ -44,12 +46,15 @@ change anything on a running installation.
 | --------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `enabled`             | `true`    | Second switch under the feature flag; `false` keeps the in-memory event stream (live views) but writes nothing to disk — ignored while a storage provider is up |
 | `identityMode`        | `default` | What is recorded about the acting user — see below                                                                     |
-| `retentionDays`       | `90`      | Runs older than this are deleted by the daily sweep. Keep it at or above `chats.retentionDays` — see below             |
-| `cleanupEnabled`      | `true`    | Turn the sweep off to keep runs forever (or to run your own)                                                           |
+| `retentionDays`       | `90`      | Run summaries (and the journals of workflow and agent runs) older than this are deleted by the daily sweep. Keep it at or above `chats.retentionDays` — see below |
+| `cleanupEnabled`      | `true`    | Turn the sweep off to keep run summaries forever (or to run your own). Journals of finished chat and `/v1` runs are deleted either way |
 | `flushIntervalMs`     | `2000`    | Buffered appends are flushed to disk at this interval (and on run end / shutdown)                                      |
 | `spillThresholdBytes` | `65536`   | Tool results and assistant content above this size are stored as separate spill files and referenced from the event    |
 
-**`retentionDays` and chat retention.** Deleting a chat (by a user or by the
+**`retentionDays` and chat retention.** `retentionDays` applies to run
+summaries, and to the journals of workflow and agent runs; the journals of
+finished chat and `/v1` runs are gone after 15 minutes (see
+[Journals of finished runs](#journals-of-finished-runs)). Deleting a chat (by a user or by the
 chat retention sweep) deletes its runs, so runs never outlive their chat by
 much. The reverse is not true: the run sweep removes runs by their own age,
 also those of a chat that is still kept. Set `runLog.retentionDays` at least
@@ -58,6 +63,54 @@ refer to runs that are gone; a higher value only keeps the runs of
 non-chat work (workflows, agents, scheduled tasks) longer, and costs disk —
 on a busy installation the run history can be the largest part of
 `contents/data`.
+
+## Journals of finished runs
+
+The ledger is the **journal of active runs**. Once a chat turn or a `/v1/chat/completions` /
+Responses run has ended and its content is kept elsewhere — the answer stored in the chat with its
+[evidence record](chat-evidence.md), or the run's own evidence record — its journal (the
+`run:<runId>` stream and its spill blobs) is deleted after a **grace period of 15 minutes**. The run
+summary in `runs` stays until `retentionDays`, gets `journalDeletedAt`, and keeps answering run
+access, `GET /api/runs/:runId` and the admin run list.
+
+| Run kind                                   | Journal after the run ended                        |
+| ------------------------------------------ | -------------------------------------------------- |
+| `chat` (chat turns, Responses app turns)   | deleted after 15 minutes, once the chat released the run |
+| `inference` (`/v1/chat/completions`, Responses model calls) | deleted after 15 minutes, once the chat (a Responses conversation) released the run |
+| any kind that ended `paused` (approval, clarification) | kept until `retentionDays`: the turn continues as a new run, and nothing else records the paused part |
+| `workflow`, `agent`, everything else       | kept until `retentionDays` (their evidence is not recorded yet) |
+
+**This does not depend on `chats.evidence.enabled`.** With evidence off, the journal of a finished
+chat or `/v1` run is deleted all the same, and nothing of what went into the answer is kept beyond
+the stored answer itself. Nor does it depend on `cleanupEnabled`, which only governs the summaries.
+
+**Why 15 minutes.** A reloaded chat whose document still shows the run as active replays its
+journal (`reattachToRun`); within the grace period the replay still finds `run/end` and settles.
+A run whose chat still holds it as the active run (its process died before the answer was
+stored) keeps its journal until crash recovery has settled it.
+
+**How the sweep finds them.** Each worker remembers the chat and inference runs that ended on it
+and, once a minute, deletes the journals of those that ended more than 15 minutes ago — one
+summary read per run, nothing scanned, so the cost follows the run rate, not the number of retained
+summaries. What no worker took (a worker that died within the grace period, journals kept before
+the upgrade) is picked up by the daily retention walk, which reads every summary anyway and keeps
+only those it can act on, so summaries whose journal is already gone do not use up its scan bound.
+One walk deletes at most 2,000 journals; a larger backlog after the upgrade is worked off over
+several days, 2,000 per walk (the walk runs at start-up and daily, and **Admin → Chat History →
+Run retention now** runs one on demand, joining a walk already in progress).
+
+**What reads a journal, and what it gets afterwards.**
+
+| Reader | After the journal is deleted |
+| ------ | ---------------------------- |
+| `GET /api/runs/:runId/events` (reattach, live gap re-sync) | `404 JOURNAL_NOT_KEPT`; read the evidence instead (`GET /api/chats/{chatId}/evidence/{messageId}`, `GET /api/runs/{runId}/evidence`). The client only calls it for active runs |
+| `GET /api/runs/:runId` | the summary; `seq` is `0` |
+| Run access (owner check) | the summary, as before |
+| Evidence record builder | runs right after the answer is stored, inside the grace period |
+| Crash recovery (`chatRecovery.js`) | only for runs that never ended or whose chat still holds them — journals that are kept |
+| "Has the run ended?" (stop, clarification end, recovery) | answered from the summary |
+| Feedback on an old answer (`POST /api/feedback`) | the ledger event is not written; the feedback itself is stored as before |
+| `POST /api/runs/:runId/human-events` | `404 JOURNAL_NOT_KEPT` |
 
 ## Identity modes
 
@@ -176,7 +229,7 @@ window, not the history.
 | --------------------------------------------------------- | ------------------------- | -------------------------------------------------------------- |
 | `GET /api/runs?from&to&kind&principalId&limit`            | admin                     | List runs from the run index                                   |
 | `GET /api/runs/:runId`                                    | owner or admin            | Run metadata                                                   |
-| `GET /api/runs/:runId/events?cursor=<c>&limit=<n>`       | owner or admin            | Read events (re-sync a live stream); the response is `{ runId, items, nextCursor }`, the cursor standing for the last raw sequence the page read; a page that read nothing has `nextCursor: null` |
+| `GET /api/runs/:runId/events?cursor=<c>&limit=<n>`       | owner or admin            | Read events (re-sync a live stream); the response is `{ runId, items, nextCursor }`, the cursor standing for the last raw sequence the page read; a page that read nothing has `nextCursor: null`. `404 JOURNAL_NOT_KEPT` for a finished chat or `/v1` run whose journal was deleted |
 | `DELETE /api/runs/:runId`                                 | owner or admin            | Delete the run, its spill files and its interactions (cascade) |
 | `GET /api/runs/:runId/interactions`                       | owner or admin            | Interactions of a run                                          |
 | `POST /api/runs/:runId/interactions/:interactionId/answer`| owner, approver or admin  | Answer a question / approval / review                          |
@@ -269,7 +322,8 @@ file (`locks/`), so two recovering workers never allocate the same number.
   provider's leases are advisory and single-machine, so two installations
   pointed at one directory are still not supported; a provider with real
   distributed locks is what changes that.
-- **Gap re-sync needs the ledger.** A client that reconnects to a live stream
+- **Gap re-sync needs the ledger.** It works for active runs only: the journal
+  of a finished chat or `/v1` run is deleted 15 minutes after it ended. A client that reconnects to a live stream
   fills the gap from `GET /api/runs/:runId/events`, retrying a failed read with
   backoff (five attempts) before it gives up and keeps its live view. The ledger
   is always on while the storage provider is up, so gap re-sync always has
@@ -296,3 +350,5 @@ timestamp on its summary — its end, or its last update. Deleting a
 chat conversation or a workflow execution through their own endpoints triggers
 the same cascade for the run they belong to. Workflow *state* has a sweep of
 its own with its own window — see [Workflows](workflows.md).
+The journals of finished chat and `/v1` runs go much earlier, 15 minutes after
+the run ended — see [Journals of finished runs](#journals-of-finished-runs).

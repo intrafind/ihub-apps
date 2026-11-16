@@ -76,7 +76,8 @@ export const RUN_SUMMARY_FIELDS = Object.freeze([
   'inputPreview',
   'models',
   'triggeredBy',
-  'archived'
+  'archived',
+  'journalDeletedAt'
 ]);
 
 /**
@@ -197,7 +198,10 @@ export function normalizeRunSummary(input = {}) {
     inputPreview: obj(input.inputPreview) || str(input.inputPreview),
     models: Array.isArray(input.models) ? [...input.models] : [],
     triggeredBy: obj(input.triggeredBy),
-    archived: input.archived === true
+    archived: input.archived === true,
+    // When the run's journal (event stream and spills) was deleted after the
+    // grace period; the summary outlives it (`RunLog.sweepJournals`).
+    journalDeletedAt: str(input.journalDeletedAt)
   };
 }
 

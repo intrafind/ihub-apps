@@ -45,7 +45,7 @@ import {
   hasRemote as busHasRemote,
   createPresenceMap
 } from '../../clusterBus.js';
-import { RunLedgerStore } from './runLedgerStore.js';
+import { RunLedgerStore, JOURNAL_SWEPT_KINDS, journalSweepable } from './runLedgerStore.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -55,6 +55,42 @@ const DEFAULT_RETENTION_DAYS = 90;
  * one. See `RunLog#_deleted`.
  */
 const MAX_TOMBSTONES = 5000;
+
+/**
+ * How long the journal of a finished chat or inference run is kept after the
+ * run ended. `reattachToRun` replays the journal of a run the chat document
+ * still shows as active; within this window the replay still finds `run/end`.
+ */
+export const JOURNAL_GRACE_MS = 15 * 60 * 1000;
+/** How often each worker deletes the journals of its own runs that are due. */
+const JOURNAL_SWEEP_INTERVAL_MS = 60 * 1000;
+/**
+ * Journals one daily walk deletes at most. Each delete takes the run's lock and
+ * the appender; an upgrade's backlog is worked off over several walks rather
+ * than in one burst.
+ */
+export const JOURNAL_DELETES_PER_WALK = 2000;
+
+/**
+ * Whether a finished run's content is kept outside its journal, so the journal
+ * may go: a chat run is, once its chat no longer holds it as the active run
+ * (the answer is stored, or the chat is gone). An interrupted turn that still
+ * holds its chat is settled by `chatRecovery`, which reads the journal.
+ *
+ * @param {Object} summary - Run summary.
+ * @param {Object} [deps]
+ * @param {Object} [deps.repository] - chat repository (default: the shared one)
+ * @returns {Promise<boolean>}
+ */
+export async function chatReleasedRun(summary, { repository } = {}) {
+  // Any kind: a Responses turn in a conversation is an `inference` run that
+  // claims its chat the same way a chat turn does.
+  const chatId = summary?.refs?.chatId;
+  if (typeof chatId !== 'string' || !chatId) return true;
+  const chats = repository || (await import('../chat/ChatRepository.js')).getChatRepository();
+  const chat = await chats.getChat(chatId);
+  return chat?.activeRunId !== summary.runId;
+}
 
 /** Cluster bus channel on which the owner of a run appends on behalf of other workers. */
 export const RUNLOG_APPEND_CHANNEL = 'runlog:append';
@@ -108,6 +144,9 @@ export class RunLog {
    * @param {Object} [opts.locks] - lock facet, overriding the storage provider's
    * @param {Object} [opts.runSummaries] - ready-made run summary repository
    * @param {RunLedgerStore} [opts.store] - the persistence half, fully assembled
+   * @param {(summary: Object) => Promise<boolean>} [opts.isRunSettled] - whether a
+   *   finished run's content is stored elsewhere, so its journal may be deleted
+   *   (default: a chat run whose chat released it)
    */
   constructor(opts = {}) {
     this._getPlatform = opts.getPlatformConfig || (() => configCache.getPlatform?.() || {});
@@ -118,6 +157,17 @@ export class RunLog {
     this._globalListeners = new Set();
     this._deleteHooks = new Set();
     this._cleanupTimer = null;
+    this._journalTimer = null;
+    /** The retention walk in progress, shared by every caller that asks meanwhile. */
+    this._cleanupInFlight = null;
+    /**
+     * Chat and inference runs that ended on this worker and still have a
+     * journal: run id → end time (ms). {@link RunLog#sweepJournals} drains it,
+     * so a tick looks at the runs of the last minutes, never at every summary.
+     * @type {Map<string, number>}
+     */
+    this._endedJournals = new Map();
+    this._isRunSettled = opts.isRunSettled || (summary => chatReleasedRun(summary));
     this._bus = opts.bus || {
       request: busRequest,
       respond: busRespond,
@@ -385,6 +435,16 @@ export class RunLog {
     return this._store.withRunLock(runId, async () => {
       await this.flush();
       const persisted = await this._diskLastSeq(runId);
+      // A finished run whose journal was deleted: an append (feedback on an
+      // old answer) would re-create a journal of one event nothing sweeps.
+      if (persisted === 0 && (await this.isJournalDeleted(runId))) {
+        logger.debug('RunLog append on a run whose journal was deleted — dropped', {
+          component: 'RunLog',
+          runId,
+          type
+        });
+        return null;
+      }
       const entry =
         this._runs.get(runId) || this._register(runId, this._newEntry({ kind, owned: false }));
       if (persisted > entry.seq) entry.seq = persisted;
@@ -560,6 +620,11 @@ export class RunLog {
           usage: parsed.usage,
           endedAt: event.ts
         });
+        // The kind may be a lazy default ('chat'); the sweep re-checks the
+        // summary, which is authoritative.
+        if (JOURNAL_SWEPT_KINDS.has(entry.kind)) {
+          this._endedJournals.set(runId, Date.parse(event.ts));
+        }
       }
     }
     if (type === RUN_LOG_EVENTS.RUN_END) {
@@ -630,7 +695,21 @@ export class RunLog {
     if (meta) return meta.ended === true;
     if (!this.isEnabled()) return false;
     const last = await this._store.lastEvent(runId);
-    return last?.type === RUN_LOG_EVENTS.RUN_END;
+    if (last) return last.type === RUN_LOG_EVENTS.RUN_END;
+    // No journal: deleted after the run ended (`sweepJournals`), or never written.
+    return Boolean((await this._store.getSummary(runId))?.endedAt);
+  }
+
+  /**
+   * Whether the run's journal was deleted after it ended (see `sweepJournals`).
+   *
+   * @param {string} runId
+   * @returns {Promise<boolean>}
+   */
+  async isJournalDeleted(runId) {
+    if (!this.isEnabled()) return false;
+    assertRunId(runId);
+    return Boolean((await this._store.getSummary(runId))?.journalDeletedAt);
   }
 
   getRunMeta(runId) {
@@ -874,19 +953,126 @@ export class RunLog {
    * payloads, their summary, and the same cascade `deleteRun` performs
    * (delete hooks, e.g. the run's interactions).
    *
-   * @param {number} retentionDays - days to keep; `<= 0` disables the sweep
-   * @returns {Promise<{removed:number}>}
+   * The same walk deletes the journals of finished chat and inference runs
+   * that no worker's {@link RunLog#sweepJournals} took: runs of a worker that
+   * died within the grace period, and journals kept before the sweep existed.
+   *
+   * @param {number} retentionDays - days to keep; `<= 0` keeps every run and
+   *   only deletes due journals
+   * A walk already in progress is joined rather than started a second time.
+   *
+   * @param {Object} [opts]
+   * @param {number} [opts.now=Date.now()] - current time (ms)
+   * @param {number} [opts.journalBudget=JOURNAL_DELETES_PER_WALK] - journals
+   *   deleted at most; the rest wait for the next walk
+   * @returns {Promise<{removed:number, journals:number}>}
    */
-  async cleanup(retentionDays) {
-    if (!Number.isFinite(retentionDays) || retentionDays <= 0) return { removed: 0 };
-    if (!this.isEnabled()) return { removed: 0 };
-    const cutoff = Date.now() - retentionDays * DAY_MS;
-    const { removed, cascadeIds } = await this._store.cleanup(cutoff);
+  cleanup(retentionDays, opts = {}) {
+    if (this._cleanupInFlight) return this._cleanupInFlight;
+    const walk = this._cleanup(retentionDays, opts).finally(() => {
+      if (this._cleanupInFlight === walk) this._cleanupInFlight = null;
+    });
+    this._cleanupInFlight = walk;
+    return walk;
+  }
+
+  /** @private */
+  async _cleanup(
+    retentionDays,
+    { now = Date.now(), journalBudget = JOURNAL_DELETES_PER_WALK } = {}
+  ) {
+    if (!this.isEnabled()) return { removed: 0, journals: 0 };
+    const cutoff =
+      Number.isFinite(retentionDays) && retentionDays > 0 ? now - retentionDays * DAY_MS : null;
+    const { removed, cascadeIds, journalCandidates } = await this._store.cleanup(cutoff, {
+      journalCutoffMs: now - JOURNAL_GRACE_MS
+    });
     // One cascade for the whole sweep rather than one per run: a batched hook
     // sees every id at once and pays its namespace scan once.
     await this._cascadeDeleteMany(cascadeIds.filter(runId => isValidRunId(runId)));
     if (removed > 0) logger.info('RunLog retention cleanup', { component: 'RunLog', removed });
-    return { removed };
+    const journals = await this._deleteJournals(journalCandidates, journalBudget);
+    return { removed, journals };
+  }
+
+  /**
+   * Delete the journals of the chat and inference runs that ended on this
+   * worker more than {@link JOURNAL_GRACE_MS} ago. Their summaries stay.
+   *
+   * Incremental: it reads only the runs this worker saw end since the last
+   * sweep (one summary read each), so its cost follows the run rate, not the
+   * number of retained summaries. What it misses — a worker that died, an
+   * upgrade's backlog — the daily {@link RunLog#cleanup} walk picks up.
+   *
+   * @param {number} [now=Date.now()] - current time (ms)
+   * @returns {Promise<{journals:number}>} how many journals were deleted
+   */
+  async sweepJournals(now = Date.now()) {
+    if (!this.isEnabled()) return { journals: 0 };
+    const cutoff = now - JOURNAL_GRACE_MS;
+    const due = [];
+    for (const [runId, endedAt] of this._endedJournals) {
+      if (endedAt >= cutoff) continue;
+      this._endedJournals.delete(runId);
+      due.push(runId);
+    }
+    const candidates = [];
+    for (const runId of due) {
+      try {
+        const summary = await this._store.getSummary(runId);
+        if (journalSweepable(summary, cutoff)) candidates.push(summary);
+      } catch (err) {
+        logger.warn('RunLog journal sweep: summary not read', {
+          component: 'RunLog',
+          runId,
+          error: err.message
+        });
+      }
+    }
+    return { journals: await this._deleteJournals(candidates) };
+  }
+
+  /**
+   * Delete the journal of each summary whose content is stored elsewhere.
+   * A run that is not settled yet is left for the daily walk.
+   *
+   * @param {Object[]} summaries - due summaries ({@link journalSweepable})
+   * @param {number} [budget=Infinity] - stop after this many deletes
+   * @returns {Promise<number>} how many journals were deleted
+   * @private
+   */
+  async _deleteJournals(summaries, budget = Infinity) {
+    let deleted = 0;
+    for (const summary of summaries) {
+      if (deleted >= budget) break;
+      try {
+        if (!(await this._isRunSettled(summary))) continue;
+        await this._store.deleteJournal(summary.runId);
+        deleted += 1;
+      } catch (err) {
+        logger.warn('RunLog journal not deleted', {
+          component: 'RunLog',
+          runId: summary.runId,
+          error: err.message
+        });
+      }
+    }
+    if (deleted > 0) logger.info('RunLog journals deleted', { component: 'RunLog', deleted });
+    return deleted;
+  }
+
+  /**
+   * Start this worker's journal sweep. Every worker runs one: the runs it
+   * sweeps are the ones that ended on it.
+   */
+  startJournalSweep() {
+    if (this._journalTimer) return;
+    this._journalTimer = setInterval(() => {
+      this.sweepJournals().catch(err =>
+        logger.error('RunLog journal sweep failed', { component: 'RunLog', error: err.message })
+      );
+    }, JOURNAL_SWEEP_INTERVAL_MS);
+    if (typeof this._journalTimer.unref === 'function') this._journalTimer.unref();
   }
 
   startCleanupScheduler() {
@@ -895,8 +1081,8 @@ export class RunLog {
       const cfg = this._runLogConfig();
       const enabled = cfg.cleanupEnabled !== false;
       const days = Number.isFinite(cfg.retentionDays) ? cfg.retentionDays : DEFAULT_RETENTION_DAYS;
-      if (!enabled) return;
-      this.cleanup(days).catch(err =>
+      // Retention off keeps runs, not journals: the walk still deletes due ones.
+      this.cleanup(enabled ? days : 0).catch(err =>
         logger.error('RunLog cleanup failed', { component: 'RunLog', error: err.message })
       );
     };
@@ -908,6 +1094,8 @@ export class RunLog {
   async stop() {
     if (this._cleanupTimer) clearInterval(this._cleanupTimer);
     this._cleanupTimer = null;
+    if (this._journalTimer) clearInterval(this._journalTimer);
+    this._journalTimer = null;
     this._unrespond?.();
     this._unrespond = null;
     this._unrespondMeta?.();

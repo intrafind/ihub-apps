@@ -72,6 +72,13 @@ small on purpose. The evidence goes into two new namespaces of the storage provi
   `<chatId>/<sha256>`. A system prompt, passage, tool result or history message is written once
   per chat, however often it is sent.
 
+> **Changed 2026-11-16 (performance, section 10):** the content is no longer one blob per item but
+> **one pack per answer** (`<scope(chatId)>__<scope(messageId)>`, a JSON object
+> `{ "<sha256>": item }`). Record v2 maps every item to the answer whose pack holds it (`content`);
+> an item the previous record already maps is not stored again. Content is read through a record:
+> `GET /api/chats/{chatId}/evidence/{messageId}/content/{sha256}`. Current layout:
+> `docs/chat-evidence.md`.
+
 The assistant message carries no pointer: the record is keyed by the chat and the answer's message
 id, and holds the message id and the hash of the answer's content (`output.contentSha256`). This
 keeps the record off the answer path (implementation review, phase 1).
@@ -142,7 +149,8 @@ The record is built at **materialization, from the run's journal**. The same cod
 a normal end and for crash recovery, because `chatRecovery` already reads the journal of a run
 whose process died.
 
-Write path while the run is active:
+Write path while the run is active (**superseded 2026-11-16**: content stays in the journal while
+the run is active; see section 10 and phase 3 of the plan):
 
 1. `LLMClient._recordRequestHeader` writes the system prompt, each message and the tool
    definitions into `chat-evidence-content` (put-if-absent by hash). The journal's
@@ -266,8 +274,9 @@ through `chatDeletion.js` and the retention sweeps, so the check sits in those t
 Decided: the owner and admins can read the evidence; nobody else can.
 
 - `GET /api/chats/{chatId}/messages/{messageId}/evidence`: the owner. Content references stay
-  hashes. `GET /api/chats/{chatId}/evidence-content/{sha256}` returns one blob. The same pair
-  exists for runs without a chat under `/api/runs/{runId}/evidence`.
+  hashes. `GET /api/chats/{chatId}/evidence/{messageId}/content/{sha256}` returns one item through
+  the record that names it. The same pair exists for runs without a chat under
+  `/api/runs/{runId}/evidence` and `/api/runs/{runId}/evidence/content/{sha256}`.
 - `GET /api/admin/chats/{chatId}/messages/{messageId}/evidence` (and the run variant): admins,
   including hidden chats under a legal hold, written to the audit log.
 - A shared chat does **not** share its evidence. It contains the app's system prompt and raw tool
@@ -292,10 +301,27 @@ Decided: the owner and admins can read the evidence; nobody else can.
 
 ### 10. Performance
 
-Expected direction, to be measured in the load lab before the ledger deletion ships:
+Measured (2026-11-16, load lab and a benchmark in the Linux container): evidence cost about 4 CPU
+points at 800 users. The cost is the number of **durable writes**, not the bytes: every blob and
+document goes through `atomicWriteFile` (temp file, fsync, rename, directory fsync). With one blob
+per item, an answer took about 12 fsyncs and 40–90 file operations — about 5 ms CPU per answer.
+Removing the mkdirs and stats alone gave no measurable gain.
 
-- Writes per model call: the new user message, new tool results and an unchanged-prompt hash
-  check, instead of the full history (#3684 already removed the file copies).
+Decided:
+
+- **Content stays in the journal while the run is active.** Journal appends are batched, with no
+  fsync per event. Moving content into the evidence store per model call (the former phase 3)
+  would add durable writes per call, the opposite of the goal.
+- **At materialization, one pack per answer.** The items an answer stores go into one blob; the
+  record (v2) maps each item to the pack that holds it. Dedup needs no listing: the write reads
+  the chat's previous record (found through the messages the write already reads to check that
+  the answer is still stored) and references what it maps. Two durable writes per answer — pack
+  and record — about 4 fsyncs instead of about 12.
+- Deleting messages sweeps per pack (a pack stays while any record points into it); chat and run
+  deletes stay prefix deletes.
+
+Still expected, to be measured before the ledger deletion ships:
+
 - Steady-state disk: chats + evidence instead of chats + 90 days of ledger. The ledger itself
   drops to the active runs, roughly concurrency × run size.
 - One journal read per answer at materialization, from the page cache.
@@ -316,12 +342,19 @@ Each phase is shippable on its own.
    chat files, artifacts, user-account cleanup), audit log entries, admin UI to manage held users
    and groups. Tests: every deletion path against a held user and with `keepUserDeleted`;
    temporary chats of a held user are still deleted.
-3. **Content-addressed writes.** `request/header` and spills write into the evidence content
-   store, and the journal holds only references. Add the `knowledge/passages` event. Load lab:
-   ledger growth and event-loop delay vs #3684.
+3. **One pack per answer** (done 2026-11-16, section 10). Content stays in the journal during
+   the run (batched appends, no fsync per event); writing it into the evidence store per model
+   call would add durable writes per call. At materialization the answer's new items go into one
+   pack blob and the record (v2) maps every item to its pack, deduplicated against the chat's
+   previous record without listing. Content is read per record
+   (`…/evidence/{messageId}/content/{sha256}`); v1 records are not read (clean cut, release
+   candidates only). Lab: ≈12 fsyncs → 4 and ~5 ms CPU per answer saved. Still open from the old
+   phase 3: the `knowledge/passages` event.
 4. **Journal only.** The grace-period sweep deletes the journals of materialized runs.
    `runLog.retentionDays` applies to summaries only. Docs: `docs/run-ledger.md`,
    `docs/storage.md`, the breaking-changes entry for `GET /api/runs/:id/events`.
+   *Implemented (2026-11-16):* per-worker sweep of runs that ended there plus the daily retention
+   walk as catch-up (`RunLog.sweepJournals`, `journalDeletedAt` on the summary), `JOURNAL_NOT_KEPT`.
 5. **Workflows and agents.** Node and step evidence, `workflow-evidence`, the execution delete,
    retention and the legal hold.
 6. **Load lab** at 800 users on aged data: disk growth per hour, ELD, overhead, compared with

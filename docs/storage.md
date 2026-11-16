@@ -24,7 +24,7 @@ startup. Durable chats were the first consumer; the runtime stores followed.
 | `chats`, `chat-messages`    | every conversation and its transcript — temporary unless the Chat History feature keeps it | the chat's principal        | [Chat Persistence](chat-persistence.md)  |
 | `artifacts`                 | what a run produced: a metadata document and a blob per artifact | –                        | [Artifacts](artifacts.md)                |
 | `chat-files`                | files uploaded to a chat or a scheduled task, or through the Inference API: a metadata document per file (the extracted text, page images and original are blobs beside it) and the `_meta__server-bytes` counter that enforces the server-wide quota | the owner | [Chat and Scheduled-Task Files](chat-files.md) |
-| `chat-evidence`, `chat-evidence-content` | the evidence record of each stored answer (what went into every model call and every tool call) and the content it refers to, stored once per chat by SHA-256; deleted with the chat | the chat's principal | [Chat Evidence Record](chat-evidence.md) |
+| `chat-evidence`, `chat-evidence-content` | the evidence record of each stored answer (what went into every model call and every tool call) and the content it refers to, one pack of items per answer (an item a previous answer stored is referenced, not copied); deleted with the chat | the chat's principal | [Chat Evidence Record](chat-evidence.md) |
 | `run-evidence`, `run-evidence-content` | the same record for runs without a chat (`/v1` completions, the Responses API without a stored conversation) | the caller | [Chat Evidence Record](chat-evidence.md) |
 | `runs`                      | one summary per run — chats, workflow executions, agent runs | the run's principal         | [Run Ledger](run-ledger.md)              |
 | `interactions`              | pending and recently settled human interactions              | the raising run's principal | [Run Ledger](run-ledger.md)              |
@@ -53,7 +53,11 @@ coalesced on a timer, because that state is updated on every streamed chunk
 and a document write on the streaming path is not acceptable.
 
 Append-log streams are named `run:<runId>` and carry a run's events, with its
-spilled payloads as blobs beside them. Leases are taken on `chat:<id>` for a
+spilled payloads as blobs beside them. They are the journal of active runs: the
+stream of a finished chat or `/v1` run is deleted 15 minutes after it ended
+(its summary in `runs` stays), so `logs/run/` holds the running runs plus the
+workflow and agent runs — see
+[Journals of finished runs](run-ledger.md#journals-of-finished-runs). Leases are taken on `chat:<id>` for a
 chat's read-modify-write, on `interaction:<id>` for the answer critical
 section, on `runlog:<runId>` while a recovering worker continues a run's
 sequence, and on `runtime-import:<store>` for the one-time connection re-index.

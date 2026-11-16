@@ -128,6 +128,7 @@ describe('evidence of /v1/chat/completions runs', () => {
       const content = await getChatEvidenceRepository().getContent(
         'run',
         doc.key,
+        doc.data,
         message.message.replace('sha256:', '')
       );
       assert.equal(JSON.parse(content.toString('utf8')).role, 'user');

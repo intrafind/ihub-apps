@@ -132,6 +132,9 @@ const ROUTE_STEPS = [
   () => startActionUsageTracking(interactionService),
   // Every worker: the active watermark key's id for the adapters (#3331). The value is never cached.
   () => startWatermarkKeySnapshot(),
+  // Every worker: deletes the journals of the chat and API runs that ended on
+  // it 15 minutes ago (the daily cleanup below catches what a dead worker left).
+  () => runLog.startJournalSweep(),
   // Once per cluster: only the worker that owns the singletons runs the sweeps.
   (_app, { ownsClusterSingletons }) => {
     if (ownsClusterSingletons) {

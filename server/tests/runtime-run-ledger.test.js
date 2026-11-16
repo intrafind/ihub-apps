@@ -24,7 +24,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
-import { RunLog } from '../services/loop/RunLog.js';
+import { RunLog, JOURNAL_GRACE_MS, chatReleasedRun } from '../services/loop/RunLog.js';
 import { RunLedgerStore, runStreamName, runLockName } from '../services/loop/runLedgerStore.js';
 import { LockTimeoutError } from '../storage/errors.js';
 import { spillRefSchema } from '../services/loop/contracts/runLogEvents.js';
@@ -62,7 +62,7 @@ function soloBus() {
  * @param {Object} [options.bus] - Cluster bus override.
  * @returns {Promise<Object>} Provider, run log and the directory.
  */
-async function openLedger({ storageDir, bus } = {}) {
+async function openLedger({ storageDir, bus, isRunSettled } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-run-ledger-'));
   const storage = storageDir || path.join(root, 'storage');
   const provider = new FilesystemStorageProvider({ baseDir: storage, flushIntervalMs: 25 });
@@ -71,6 +71,7 @@ async function openLedger({ storageDir, bus } = {}) {
     forceEnabled: true,
     getPlatformConfig: () => ({}),
     ...(bus ? { bus } : {}),
+    ...(isRunSettled ? { isRunSettled } : {}),
     logs: provider.logs,
     documents: provider.documents,
     locks: provider.locks
@@ -556,8 +557,12 @@ describe('run ledger: deletion and retention', () => {
         [freshRun]
       );
 
-      assert.deepEqual(await runLog.cleanup(0), { removed: 0 }, 'retention is disabled at <= 0');
-      assert.deepEqual(await runLog.cleanup(-1), { removed: 0 });
+      assert.deepEqual(
+        await runLog.cleanup(0),
+        { removed: 0, journals: 0 },
+        'retention is disabled at <= 0'
+      );
+      assert.deepEqual(await runLog.cleanup(-1), { removed: 0, journals: 0 });
       assert.ok(await provider.documents.get(RUNS_NAMESPACE, freshRun));
     });
   });
@@ -782,5 +787,273 @@ describe('RunLedgerStore: the persistence half on its own', () => {
       await provider.shutdown();
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('run ledger: journal only (phase 4)', () => {
+  /** A finished run of `kind`, with one spilled payload. */
+  async function finishedRun(runLog, kind = 'chat', refs = {}) {
+    const { runId } = await runLog.startRun({ kind, user: USER, refs });
+    const ref = await runLog.spill(runId, 'result', { big: 'payload' });
+    runLog.append(runId, RUN_LOG_EVENTS.RUN_END, { status: 'completed', finishReason: 'stop' });
+    await runLog.flush();
+    return { runId, ref };
+  }
+
+  const afterGrace = () => Date.now() + JOURNAL_GRACE_MS + 1000;
+
+  it('keeps the journal within the grace period, so a reattach still finds run/end', async () => {
+    await withLedger(async ({ runLog }) => {
+      const { runId } = await finishedRun(runLog);
+      assert.deepEqual(await runLog.sweepJournals(), { journals: 0 });
+      const events = await runLog.readEvents(runId);
+      assert.equal(events.at(-1).type, RUN_LOG_EVENTS.RUN_END);
+      assert.equal(await runLog.isJournalDeleted(runId), false);
+    });
+  });
+
+  it('deletes the journal and its spills after the grace period and keeps the summary', async () => {
+    await withLedger(async ({ runLog, provider }) => {
+      const { runId, ref } = await finishedRun(runLog, 'chat');
+      const { runId: apiRun } = await finishedRun(runLog, 'inference');
+
+      assert.deepEqual(await runLog.sweepJournals(afterGrace()), { journals: 2 });
+      await runLog.flush();
+
+      for (const id of [runId, apiRun]) {
+        assert.deepEqual(await runLog.readEvents(id), []);
+        const summary = (await provider.documents.get(RUNS_NAMESPACE, id)).data;
+        assert.equal(summary.status, 'completed', 'the summary stays');
+        assert.ok(summary.journalDeletedAt);
+        assert.equal(await runLog.isJournalDeleted(id), true);
+      }
+      await assert.rejects(runLog.readSpill(runId, ref), /not found/);
+      // Without a journal, "has it ended" is answered from the summary.
+      runLog._drop(runId);
+      assert.equal(await runLog.hasEnded(runId), true);
+    });
+  });
+
+  it('keeps the journals of workflow and agent runs, running runs and unsettled chats', async () => {
+    const unsettled = new Set();
+    await withLedger(
+      async ({ runLog }) => {
+        const { runId: workflow } = await finishedRun(runLog, 'workflow');
+        const { runId: agent } = await finishedRun(runLog, 'agent');
+        const { runId: running } = await runLog.startRun({ kind: 'chat', user: USER });
+        runLog.append(running, RUN_LOG_EVENTS.HUMAN_EVENT, humanEvent('still going'));
+        const { runId: notStored } = await finishedRun(runLog, 'chat', { chatId: 'c1' });
+        unsettled.add(notStored);
+        await runLog.flush();
+
+        const now = afterGrace();
+        assert.deepEqual(await runLog.sweepJournals(now), { journals: 0 });
+        assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 0 });
+        for (const id of [workflow, agent, running, notStored]) {
+          assert.ok((await runLog.readEvents(id)).length > 0, `${id} keeps its journal`);
+        }
+
+        // Once its answer is stored, the daily walk takes it.
+        unsettled.clear();
+        assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 1 });
+        assert.deepEqual(await runLog.readEvents(notStored), []);
+      },
+      { isRunSettled: async summary => !unsettled.has(summary.runId) }
+    );
+  });
+
+  it('the daily walk deletes what a dead worker left; the tick does not scan summaries', async () => {
+    const first = await openLedger();
+    let runId;
+    try {
+      ({ runId } = await finishedRun(first.runLog));
+      await first.runLog.stop();
+    } finally {
+      await first.provider.shutdown();
+    }
+    // The worker died before its tick: a new process does not know the run.
+    await withLedger(
+      async ({ runLog, provider }) => {
+        // Many retained summaries: the tick must not read them.
+        for (let i = 0; i < 50; i += 1) {
+          await provider.documents.put(
+            RUNS_NAMESPACE,
+            `old-${i}`,
+            {
+              runId: `old-${i}`,
+              kind: 'chat',
+              ownerId: 'u1',
+              status: 'completed',
+              startedAt: '2026-01-01T00:00:00.000Z',
+              endedAt: '2026-01-01T00:00:00.000Z',
+              journalDeletedAt: '2026-01-01T00:15:00.000Z'
+            },
+            { ownerId: 'u1' }
+          );
+        }
+        let summaryReads = 0;
+        const store = runLog._store;
+        const getSummary = store.getSummary.bind(store);
+        store.getSummary = id => {
+          summaryReads += 1;
+          return getSummary(id);
+        };
+        store._scanSummaries = () => assert.fail('the tick must not walk the summaries');
+
+        const { runId: ownRun } = await finishedRun(runLog);
+        assert.deepEqual(await runLog.sweepJournals(afterGrace()), { journals: 1 });
+        assert.equal(summaryReads, 1, 'one summary read per run that ended here');
+        assert.deepEqual(await runLog.readEvents(ownRun), []);
+        assert.ok((await runLog.readEvents(runId)).length > 0, 'not seen by this worker');
+
+        delete store._scanSummaries;
+        const { journals } = await runLog.cleanup(90, { now: afterGrace() });
+        assert.equal(journals, 1);
+        assert.deepEqual(await runLog.readEvents(runId), []);
+      },
+      { storageDir: first.storageDir }
+    );
+    await fs.rm(first.root, { recursive: true, force: true });
+  });
+
+  it('an append to a run whose journal is gone does not re-create it', async () => {
+    await withLedger(
+      async ({ runLog }) => {
+        const { runId } = await finishedRun(runLog);
+        await runLog.sweepJournals(afterGrace());
+        await runLog.flush();
+        runLog._drop(runId);
+        const event = await runLog.appendRecovered(runId, RUN_LOG_EVENTS.HUMAN_EVENT, {
+          kind: 'feedback',
+          rating: 'positive',
+          by: 'u1',
+          at: new Date().toISOString()
+        });
+        assert.equal(event, null);
+        await runLog.flush();
+        assert.deepEqual(await runLog.readEvents(runId), []);
+      },
+      { bus: soloBus() }
+    );
+  });
+
+  it('the default check keeps the journal of any run whose chat still holds it', async () => {
+    const chats = new Map();
+    const repository = { getChat: async id => chats.get(id) || null };
+    await withLedger(
+      async ({ runLog }) => {
+        const { runId: chatTurn } = await finishedRun(runLog, 'chat', { chatId: 'c1' });
+        // A Responses turn in a conversation: kind `inference`, claims its chat.
+        const { runId: apiTurn } = await finishedRun(runLog, 'inference', { chatId: 'c2' });
+        const { runId: released } = await finishedRun(runLog, 'chat', { chatId: 'c3' });
+        const { runId: noChat } = await finishedRun(runLog, 'inference');
+        chats.set('c1', { id: 'c1', activeRunId: chatTurn });
+        chats.set('c2', { id: 'c2', activeRunId: apiTurn });
+        chats.set('c3', { id: 'c3', activeRunId: null });
+
+        assert.deepEqual(await runLog.sweepJournals(afterGrace()), { journals: 2 });
+        assert.ok((await runLog.readEvents(chatTurn)).length > 0);
+        assert.ok((await runLog.readEvents(apiTurn)).length > 0);
+        assert.deepEqual(await runLog.readEvents(released), []);
+        assert.deepEqual(await runLog.readEvents(noChat), []);
+
+        // Released (or the chat deleted) later: the daily walk takes them.
+        chats.set('c1', { id: 'c1', activeRunId: null });
+        chats.delete('c2');
+        const { journals } = await runLog.cleanup(90, { now: afterGrace() });
+        assert.equal(journals, 2);
+      },
+      { isRunSettled: summary => chatReleasedRun(summary, { repository }) }
+    );
+  });
+
+  it('keeps the journal of a paused run until retention', async () => {
+    await withLedger(async ({ runLog }) => {
+      const { runId } = await runLog.startRun({ kind: 'chat', user: USER });
+      runLog.append(runId, RUN_LOG_EVENTS.RUN_END, { status: 'paused', finishReason: 'approval' });
+      await runLog.flush();
+      const now = afterGrace();
+      assert.deepEqual(await runLog.sweepJournals(now), { journals: 0 });
+      assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 0 });
+      assert.ok((await runLog.readEvents(runId)).length > 0);
+    });
+  });
+
+  it('the walk counts only actionable summaries and deletes at most its budget', async () => {
+    await withLedger(async ({ runLog }) => {
+      const ids = [];
+      for (let i = 0; i < 3; i += 1) ids.push((await finishedRun(runLog)).runId);
+      const fresh = new RunLog({
+        forceEnabled: true,
+        getPlatformConfig: () => ({}),
+        store: runLog._store,
+        isRunSettled: async () => true
+      });
+      try {
+        const now = afterGrace();
+        const repo = runLog._store._summaries();
+        const listAll = repo.listAll.bind(repo);
+        let match;
+        repo.listAll = opts => {
+          match = opts.match;
+          return listAll(opts);
+        };
+        assert.deepEqual(await fresh.cleanup(90, { now, journalBudget: 2 }), {
+          removed: 0,
+          journals: 2
+        });
+        assert.equal(
+          match({
+            kind: 'chat',
+            status: 'completed',
+            endedAt: new Date(Date.now() - DAY_MS).toISOString(),
+            journalDeletedAt: new Date().toISOString()
+          }),
+          false,
+          'a swept summary does not use up the scan bound'
+        );
+        assert.deepEqual(await fresh.cleanup(90, { now, journalBudget: 2 }), {
+          removed: 0,
+          journals: 1
+        });
+        for (const id of ids) assert.deepEqual(await runLog.readEvents(id), []);
+      } finally {
+        await fresh.stop();
+      }
+    });
+  });
+
+  it('joins a walk in progress instead of starting a second one', async () => {
+    await withLedger(async ({ runLog }) => {
+      const first = runLog.cleanup(90);
+      assert.equal(runLog.cleanup(90), first);
+      await first;
+      assert.notEqual(runLog.cleanup(90), first);
+    });
+  });
+
+  it('counts a journal as deleted only when both the stream and the marker are written', async () => {
+    await withLedger(async ({ runLog, provider }) => {
+      const { runId } = await finishedRun(runLog);
+      const now = afterGrace();
+      const deleteStream = provider.logs.deleteStream.bind(provider.logs);
+      provider.logs.deleteStream = async () => {
+        throw new Error('disk gone');
+      };
+      assert.deepEqual(await runLog.sweepJournals(now), { journals: 0 });
+      assert.ok((await runLog.readEvents(runId)).length > 0);
+      provider.logs.deleteStream = deleteStream;
+
+      const repo = runLog._store._summaries();
+      const patch = repo.patch.bind(repo);
+      repo.patch = async () => {
+        throw new Error('summary not written');
+      };
+      assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 0 });
+      assert.equal(await runLog.isJournalDeleted(runId), false, 'retried by the next walk');
+      repo.patch = patch;
+      assert.deepEqual(await runLog.cleanup(90, { now }), { removed: 0, journals: 1 });
+      assert.equal(await runLog.isJournalDeleted(runId), true);
+    });
   });
 });

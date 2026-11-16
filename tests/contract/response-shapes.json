@@ -729,10 +729,10 @@
       "truncated": "boolean"
     }
   },
-  "GET /api/admin/chats/:chatId/evidence-content/:sha256": {
+  "GET /api/admin/chats/:chatId/evidence/:messageId": {
     "skipped": "its parent path is not a readable list"
   },
-  "GET /api/admin/chats/:chatId/evidence/:messageId": {
+  "GET /api/admin/chats/:chatId/evidence/:messageId/content/:sha256": {
     "skipped": "its parent path is not a readable list"
   },
   "GET /api/admin/configs/platform": {
@@ -2908,7 +2908,7 @@
   "GET /api/admin/runs/:runId/evidence": {
     "skipped": "its parent path is not a readable list"
   },
-  "GET /api/admin/runs/:runId/evidence-content/:sha256": {
+  "GET /api/admin/runs/:runId/evidence/content/:sha256": {
     "skipped": "its parent path is not a readable list"
   },
   "GET /api/admin/scheduled-tasks": {
@@ -4501,10 +4501,10 @@
   "GET /api/chats/:chatId/artifacts/:artifactId/provenance": {
     "skipped": "its parent list has no entry in the seed"
   },
-  "GET /api/chats/:chatId/evidence-content/:sha256": {
+  "GET /api/chats/:chatId/evidence/:messageId": {
     "skipped": "its parent path is not a readable list"
   },
-  "GET /api/chats/:chatId/evidence/:messageId": {
+  "GET /api/chats/:chatId/evidence/:messageId/content/:sha256": {
     "skipped": "its parent path is not a readable list"
   },
   "GET /api/chats/:chatId/files": {
@@ -6194,7 +6194,7 @@
   "GET /api/runs/:runId/evidence": {
     "skipped": "its parent list has no entry in the seed"
   },
-  "GET /api/runs/:runId/evidence-content/:sha256": {
+  "GET /api/runs/:runId/evidence/content/:sha256": {
     "skipped": "its parent list has no entry in the seed"
   },
   "GET /api/runs/:runId/interactions": {
