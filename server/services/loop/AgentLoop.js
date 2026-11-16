@@ -1167,6 +1167,10 @@ export class AgentLoop {
       }
     }
 
+    // Whether the call failed, from the result as the tool returned it: once an
+    // oversized result is bounded, the transcript holds a preview wrapper that
+    // no longer says so.
+    const callFailed = !!failure || classifyToolResult(message).failed;
     const bound = await this._boundToolMessage(ctx, message, { call, toolId, iteration });
     const outcome = {
       rawResult,
@@ -1204,7 +1208,7 @@ export class AgentLoop {
     if (display.activityKind === 'search' || display.activityKind === 'fetch') {
       recordToolCall(
         outcome.activityOrigin || display.activityOrigin,
-        toolCallOutcomeOf(outcome, verdict)
+        toolCallOutcomeOf(outcome, { failed: callFailed })
       );
     }
     this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_RESULT, {

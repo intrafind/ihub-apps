@@ -37,6 +37,7 @@ import logger from '../../utils/logger.js';
 import { recordSourceAction } from '../../telemetry/metrics.js';
 import {
   describeDocumentProvider,
+  documentProviderCategory,
   resolveDocumentProvider
 } from '../../services/integrations/documentAccess.js';
 
@@ -149,7 +150,7 @@ router.get(
     } catch (error) {
       throw failureOf(error, 'content');
     }
-    recordSourceAction(req.params.integration, 'content');
+    recordSourceAction(documentProviderCategory(req.params.integration), 'content');
     return sendProviderContent(res, namedBy(filename, content));
   }
 );
@@ -162,7 +163,7 @@ router.get('/:integration/files/:id', authRequired, async (req, res) => {
   }
   try {
     const details = await provider.metadata({ ref, user: req.user });
-    recordSourceAction(req.params.integration, 'details');
+    recordSourceAction(documentProviderCategory(req.params.integration), 'details');
     return res.json(details);
   } catch (error) {
     throw failureOf(error, 'metadata');
