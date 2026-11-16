@@ -8142,7 +8142,10 @@
     "switchToLight": "Switch to light mode",
     "switchToDark": "Switch to dark mode",
     "switchToAuto": "Switch to auto mode",
-    "followingSystem": "Following system preference"
+    "followingSystem": "Following system preference",
+    "themeAuto": "Theme: Auto (follows system)",
+    "themeLight": "Theme: Light",
+    "themeDark": "Theme: Dark"
   },
   "theme": {
     "title": "Theme & Appearance",
