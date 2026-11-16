@@ -6,6 +6,8 @@ import { makeAdminApiCall } from '../../../../api/adminApi';
 import { AudioBufferRecorder } from '../../../../utils/audioRecorder';
 import { audioBufferToWav } from '../../../../utils/wav';
 import { getMicrophoneErrorMessage } from '../../../voice/utils/speechService';
+import ConfirmDialog from '../../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../../hooks/useConfirmAction';
 
 /** Languages Voxtral TTS speaks (server/tts/language.js). */
 export const TTS_LANGUAGES = ['en', 'de', 'fr', 'es', 'it', 'nl', 'pt', 'hi', 'ar'];
@@ -71,6 +73,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [created, setCreated] = useState(null);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const recorderRef = useRef(null);
 
   // Leaving the page releases the microphone and the preview.
@@ -92,28 +95,34 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
     }
   };
 
-  const deleteVoice = async voice => {
-    if (
-      !confirm(
-        t(
-          'admin.models.ttsVoices.deleteConfirm',
-          'Delete the voice "{{name}}" from the provider account? Models that use it can no longer speak with it.',
-          { name: voice.name }
-        )
-      )
-    ) {
-      return;
-    }
-    try {
-      await makeAdminApiCall(`/admin/models/${modelId}/tts/voices/${voice.id}`, {
-        method: 'DELETE'
-      });
-      setVoices(prev => (prev || []).filter(v => v.id !== voice.id));
-    } catch (error) {
-      setListError(
-        errorText(error, t('admin.models.ttsVoices.deleteError', 'Could not delete the voice'))
-      );
-    }
+  /**
+   * Named confirmation, then deletes the voice from the provider account.
+   * A failure stays in the dialog.
+   *
+   * @param {{ id: string, name: string }} voice
+   */
+  const deleteVoice = voice => {
+    requestConfirm({
+      title: t('admin.models.ttsVoices.deleteTitle', 'Delete voice "{{name}}"?', {
+        name: voice.name
+      }),
+      message: t(
+        'admin.models.ttsVoices.deleteConfirm',
+        'Delete the voice "{{name}}" from the provider account? Models that use it can no longer speak with it.',
+        { name: voice.name }
+      ),
+      irreversible: true,
+      confirmLabel: t('admin.confirm.delete', 'Delete'),
+      danger: true,
+      errorMessage: error =>
+        errorText(error, t('admin.models.ttsVoices.deleteError', 'Could not delete the voice')),
+      action: async () => {
+        await makeAdminApiCall(`/admin/models/${modelId}/tts/voices/${voice.id}`, {
+          method: 'DELETE'
+        });
+        setVoices(prev => (prev || []).filter(v => v.id !== voice.id));
+      }
+    });
   };
 
   // `preview` is an object URL for a recording made here, or '' for an
@@ -483,6 +492,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
           </div>
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

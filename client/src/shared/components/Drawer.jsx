@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import useFocusTrap, { getFocusableElements } from '../hooks/useFocusTrap';
+import useOverlayStack from '../hooks/useOverlayStack';
 
 /** Panel width from the `sm` breakpoint up; below it the panel is full width. */
 const WIDTHS = {
@@ -115,6 +116,9 @@ function Drawer({
     returnFocusOnDeactivate: true
   });
   useBodyScrollLock(open);
+  // Joins the shared overlay stack without an Escape handler: the drawer
+  // handles Escape itself (below) and only while it is the topmost overlay.
+  const { isTop } = useOverlayStack(open);
 
   // Runs after the focus trap's activation: when it found nothing to focus,
   // focus the panel itself so the keyboard is inside the dialog.
@@ -135,7 +139,8 @@ function Drawer({
       if (modalOwner && modalOwner !== panel) return;
 
       if (event.key === 'Escape') {
-        if (!closeOnEscape) return;
+        // A Modal or ConfirmDialog opened above the drawer gets the Escape.
+        if (!closeOnEscape || !isTop()) return;
         event.preventDefault();
         onClose?.();
         return;
@@ -156,7 +161,7 @@ function Drawer({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose, closeOnEscape]);
+  }, [open, onClose, closeOnEscape, isTop]);
 
   if (typeof document === 'undefined') return null;
 

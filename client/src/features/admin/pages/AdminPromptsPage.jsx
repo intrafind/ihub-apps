@@ -21,6 +21,10 @@ import { useFilterState } from '../hooks/useFilterState';
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { buildBulkToggleConfirm } from '../utils/bulkToggleConfirm';
+import { deleteConfirmText } from '../utils/confirmText';
 
 function PromptNameCell({ prompt, currentLanguage }) {
   return (
@@ -46,6 +50,7 @@ function PromptNameCell({ prompt, currentLanguage }) {
 function AdminPromptsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
@@ -116,36 +121,43 @@ function AdminPromptsPage() {
     }
   };
 
-  const enableAllPrompts = async () => {
-    try {
-      await togglePrompts('*', true);
-      await loadPrompts();
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
+  const promptName = prompt => getLocalizedContent(prompt.name, currentLanguage) || prompt.id;
+
+  /**
+   * Enable All / Disable All toggle every prompt (`*`) for every user, so they
+   * open a confirmation naming the count and the prompts first (AI-B2).
+   *
+   * @param {boolean} enable - Target state.
+   */
+  const confirmToggleAll = enable => {
+    requestConfirm({
+      ...buildBulkToggleConfirm({
+        items: prompts,
+        enable,
+        itemsLabel: t('admin.confirm.plural.prompts', 'prompts'),
+        getName: promptName,
+        t
+      }),
+      action: async () => {
+        await togglePrompts('*', enable);
+        await loadPrompts();
+      }
+    });
   };
 
-  const disableAllPrompts = async () => {
-    try {
-      await togglePrompts('*', false);
-      await loadPrompts();
-    } catch (err) {
-      setError(getAdminApiErrorMessage(err));
-    }
-  };
-
-  const handleDeletePrompt = async promptId => {
-    if (
-      !confirm(t('admin.prompts.deleteConfirm', 'Are you sure you want to delete this prompt?'))
-    ) {
-      return;
-    }
-    try {
-      await makeAdminApiCall(`/admin/prompts/${promptId}`, { method: 'DELETE' });
-      await loadPrompts();
-    } catch (err) {
-      alert(err.message || 'Failed to delete prompt');
-    }
+  const handleDeletePrompt = prompt => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'prompt',
+        typeFallback: 'prompt',
+        name: promptName(prompt),
+        t
+      }),
+      action: async () => {
+        await makeAdminApiCall(`/admin/prompts/${prompt.id}`, { method: 'DELETE' });
+        await loadPrompts();
+      }
+    });
   };
 
   const handleClonePrompt = prompt => {
@@ -340,7 +352,7 @@ function AdminPromptsPage() {
       label: t('admin.prompts.delete', 'Delete'),
       icon: 'trash',
       destructive: true,
-      onClick: p => handleDeletePrompt(p.id)
+      onClick: p => handleDeletePrompt(p)
     }
   ];
 
@@ -402,14 +414,14 @@ function AdminPromptsPage() {
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={enableAllPrompts}
+                  onClick={() => confirmToggleAll(true)}
                 >
                   {t('admin.common.enableAll', 'Enable All')}
                 </button>
                 <button
                   type="button"
                   className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600"
-                  onClick={disableAllPrompts}
+                  onClick={() => confirmToggleAll(false)}
                 >
                   {t('admin.common.disableAll', 'Disable All')}
                 </button>
@@ -554,6 +566,7 @@ function AdminPromptsPage() {
           <VariablesTabContent />
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }
@@ -608,8 +621,8 @@ function VariablesTabContent() {
       setHasChanges(false);
     } catch (err) {
       console.error('Error saving platform config:', err);
+      // Shown in the page's error callout; no native alert on top of it.
       setError(getAdminApiErrorMessage(err));
-      alert(err.message || 'Failed to save global prompt variables');
     } finally {
       setSaving(false);
     }

@@ -12,6 +12,10 @@ import {
 } from '../../../api/adminApi';
 import RegistryFormDialog from '../components/marketplace/RegistryFormDialog';
 import AdminLoadError from '../components/AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
+import { isShippedRegistry } from '../utils/shippedRegistries';
 
 /**
  * Admin page for managing marketplace registries.
@@ -30,6 +34,9 @@ function AdminMarketplaceRegistriesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingRegistry, setEditingRegistry] = useState(null);
   const [refreshingId, setRefreshingId] = useState(null);
+  // A failed row action (refresh, enable/disable), shown inline above the list.
+  const [actionError, setActionError] = useState(null);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   /**
    * Loads all registries from the server and updates local state.
@@ -59,37 +66,53 @@ function AdminMarketplaceRegistriesPage() {
    */
   const handleRefresh = async id => {
     setRefreshingId(id);
+    setActionError(null);
     try {
       await refreshMarketplaceRegistry(id);
       await loadRegistries();
     } catch (err) {
-      alert(err.message || 'Refresh failed');
+      setActionError(
+        err.message || t('admin.marketplace.registries.refreshFailed', 'Refresh failed')
+      );
     } finally {
       setRefreshingId(null);
     }
   };
 
   /**
-   * Deletes a registry after user confirmation.
+   * Deletes a registry after a named confirmation (AX-B14). A registry iHub
+   * ships has no restore path in the UI, so its dialog also asks for the
+   * registry id to be typed.
    *
    * @param {Object} registry - The registry object to delete
    */
-  const handleDelete = async registry => {
-    if (
-      !confirm(
-        t(
-          'admin.marketplace.registries.confirmDelete',
-          `Delete registry "${registry.name}"? This will remove all cached catalog data.`
+  const handleDelete = registry => {
+    const shipped = isShippedRegistry(registry);
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'registry',
+        typeFallback: 'registry',
+        name: registry.name || registry.id,
+        t,
+        message: t(
+          'admin.marketplace.registries.deleteConsequence',
+          'Its catalog disappears from the marketplace and the cached catalog data is removed. Items already installed from it stay installed.'
         )
-      )
-    )
-      return;
-    try {
-      await deleteMarketplaceRegistry(registry.id);
-      await loadRegistries();
-    } catch (err) {
-      alert(err.message || 'Delete failed');
-    }
+      }),
+      consequences: shipped
+        ? [
+            t(
+              'admin.marketplace.registries.deleteShipped',
+              'This registry ships with iHub. There is no "restore default": to get it back, you have to add it again by hand.'
+            )
+          ]
+        : undefined,
+      typedConfirmation: shipped ? { token: registry.id } : undefined,
+      action: async () => {
+        await deleteMarketplaceRegistry(registry.id);
+        await loadRegistries();
+      }
+    });
   };
 
   /**
@@ -98,11 +121,14 @@ function AdminMarketplaceRegistriesPage() {
    * @param {Object} registry - The registry object to toggle
    */
   const handleToggleEnabled = async registry => {
+    setActionError(null);
     try {
       await updateMarketplaceRegistry(registry.id, { ...registry, enabled: !registry.enabled });
       await loadRegistries();
     } catch (err) {
-      alert(err.message || 'Update failed');
+      setActionError(
+        err.message || t('admin.marketplace.registries.updateFailed', 'Update failed')
+      );
     }
   };
 
@@ -160,6 +186,17 @@ function AdminMarketplaceRegistriesPage() {
 
           {/* Error message */}
           {error && <AdminLoadError message={error} framed={false} action={null} />}
+          {actionError && (
+            <AdminLoadError
+              message={actionError}
+              framed={false}
+              className="mb-4"
+              action={{
+                label: t('common.dismiss', 'Dismiss'),
+                onClick: () => setActionError(null)
+              }}
+            />
+          )}
 
           {/* Empty state */}
           {!loading && !error && registries.length === 0 && (
@@ -297,6 +334,7 @@ function AdminMarketplaceRegistriesPage() {
           }}
         />
       )}
+      <ConfirmDialog {...confirmDialogProps} />
     </>
   );
 }

@@ -531,15 +531,45 @@ If you navigate away from an edit page with unsaved changes, a confirmation dial
 
 The warning also appears if you try to close or refresh the browser tab while a form is dirty.
 
+Dialogs with a form, such as **Install integration** and **Add an existing key** (EU AI Act), ask **Discard changes?** when you press Escape, the ✕ or Cancel after typing something; **Keep editing** returns to the form. A click beside such a dialog does nothing while it holds input. When one dialog opens over another, Escape closes only the top one.
+
+---
+
+## Confirmations
+
+Actions that remove something, change what every user sees or replace stored data ask first. The dialog names the item and what will happen, and its button names the action (**Delete**, **Disable All**, **Import and replace**), never just "OK". Cancel has the focus when the dialog opens, and Escape cancels. If the action fails, the error appears in the dialog, which stays open so you can try again or cancel.
+
+| Action | What the dialog tells you |
+| --- | --- |
+| Delete an app, model, prompt, provider, skill, workflow, asset or TTS voice | The type and name of the item |
+| Delete a credential | Which installed integrations use it and will stop working (tools, MCP servers and sign-in settings that reference it are not checked) |
+| Delete a marketplace registry | Its name; a registry that ships with iHub (**iHub Official Marketplace**) also asks you to type its id, because it has no "restore default" |
+| **Enable All** / **Disable All** on Apps, Models and Prompts | How many items change and their names. **Disable All** on Models also clears the default model; when models are enabled again, the first chat model in the list becomes the default |
+| Change the usage **Tracking mode** | What the new mode records; it applies to usage records written from then on |
+| **Run cleanup now** (Audit Log) | The cut-off date; older audit log files are deleted for good |
+| **Trigger Force Refresh** (Advanced) | Every browser clears its cached files and reloads the next time iHub is loaded in it |
+| **Rotate Secret** (OAuth client) | The client's name; the new secret then appears once in a dialog with **Copy**. If you close it without copying, it asks once more |
+| **Import Configuration** (Backup & Restore) | See [Backup & Restore](#backup--restore) |
+
+Where you have to type a value to confirm, it is shown next to the field with a **Copy** button; pasting it is fine. The value must match exactly (capital letters count).
+
 ---
 
 ## Backup & Restore
 
 Go to **Platform → Backup & Restore** to export and import the full platform configuration.
 
-**Export:** Downloads a ZIP file containing all configuration JSON files from `contents/`. The filename includes the current timestamp.
+**Export:** Downloads a ZIP file of everything in `contents/` except `.backups`: configuration, users, chats and uploaded data. The filename includes the current timestamp.
 
-**Import:** Upload a previously exported ZIP. The current configuration is automatically backed up before the import is applied. After import, the server applies any pending configuration migrations automatically.
+> **Store the export like a key.** The ZIP is not encrypted. It contains the encryption key for stored secrets (`.encryption-key`), the JWT signing keys (`.jwt-private-key.pem`, `.jwt-secret`) and the users' password hashes (`config/users.json`). Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it and delete copies you no longer need. The page shows the same warning.
+
+**Import:**
+
+1. Select **Import Configuration** and choose a previously exported ZIP. Choosing the file uploads nothing yet.
+2. A dialog names the file and its size, says that everything in `contents/` is replaced, and that the current contents are kept as a pre-import copy in `contents/.backups`.
+3. Type the address of this server (shown in the dialog, for example `ihub.example.com`) and select **Import and replace**. Cancel or Escape leaves everything as it is.
+
+If the import fails, the dialog stays open and its error says what happened to the current configuration. After an import, the server applies any pending configuration migrations automatically. Users, passwords and keys come from the file, so you may have to sign in again.
 
 The replaced configuration is kept in `contents/.backups/<timestamp>/`; the three newest backups are kept and older ones are removed. `.backups` is never exported and never restored from an archive. Only one import runs at a time; a second one started meanwhile is refused and can be retried once the first has finished.
 

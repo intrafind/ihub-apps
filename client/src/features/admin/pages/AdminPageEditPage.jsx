@@ -35,6 +35,8 @@ function AdminPageEditPage() {
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  // Inline message under the Page ID field (no native alert).
+  const [idError, setIdError] = useState(null);
 
   const { blocker, markSaved } = useUnsavedChanges(initialData, page);
 
@@ -73,9 +75,11 @@ function AdminPageEditPage() {
   const handleSubmit = async e => {
     e.preventDefault();
     if (!page.id) {
-      alert(t('admin.pages.fields.idRequired', 'ID is required'));
+      setIdError(t('admin.pages.fields.idRequired', 'ID is required'));
+      document.getElementById('page-id')?.focus();
       return;
     }
+    setIdError(null);
     const trimmed = page.allowedGroups.trim();
     const pageData = {
       ...page,
@@ -123,17 +127,32 @@ function AdminPageEditPage() {
         />
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="page-id"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.pages.fields.id', 'Page ID')}
             </label>
             <input
+              id="page-id"
               type="text"
+              aria-invalid={idError ? 'true' : undefined}
+              aria-describedby={idError ? 'page-id-error' : undefined}
               value={page.id}
               onChange={e => setPage(prev => ({ ...prev, id: e.target.value }))}
               disabled={!isNew}
               required
               className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             />
+            {idError && (
+              <p
+                id="page-id-error"
+                role="alert"
+                className="mt-1 text-sm text-red-700 dark:text-red-300"
+              >
+                {idError}
+              </p>
+            )}
           </div>
           <DynamicLanguageEditor
             label={t('admin.pages.fields.title', 'Title')}

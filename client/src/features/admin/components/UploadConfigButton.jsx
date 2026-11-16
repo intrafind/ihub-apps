@@ -9,8 +9,23 @@ import Icon from '../../../shared/components/Icon';
  * skipped by Tab; the button is the single, labelled control for mouse, touch
  * and keyboard users (an invisible input stretched over a button is focusable
  * with no label and no visible focus ring).
+ *
+ * @param {Object} props
+ * @param {(event: Event) => void} props.onChange - Called with the input's change event.
+ * @param {boolean} [props.uploading=false] - Disables the button and shows the spinner.
+ * @param {string} props.label - Button text.
+ * @param {string} [props.uploadingLabel] - Button text while uploading.
+ * @param {string} [props.title] - Tooltip.
+ * @param {string} [props.accept='.json'] - File types the picker offers (`accept` attribute).
  */
-function UploadConfigButton({ onChange, uploading = false, label, uploadingLabel, title }) {
+function UploadConfigButton({
+  onChange,
+  uploading = false,
+  label,
+  uploadingLabel,
+  title,
+  accept = '.json'
+}) {
   const inputRef = useRef(null);
 
   return (
@@ -18,7 +33,7 @@ function UploadConfigButton({ onChange, uploading = false, label, uploadingLabel
       <input
         ref={inputRef}
         type="file"
-        accept=".json"
+        accept={accept}
         onChange={onChange}
         className="sr-only"
         tabIndex={-1}

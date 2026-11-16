@@ -173,7 +173,29 @@
     "expandObject": "Expand object ({{count}} fields)",
     "details": "Details",
     "tryAgain": "Try again",
-    "done": "Done"
+    "done": "Done",
+    "dismiss": "Dismiss",
+    "confirmDialog": {
+      "irreversible": "This can't be undone.",
+      "typeToConfirm": "To confirm, type",
+      "copyToken": "Copy",
+      "busy": "Working…"
+    },
+    "discardDialog": {
+      "title": "Discard changes?",
+      "body": "What you entered will be lost.",
+      "bodyNamed": "What you entered in \"{{title}}\" will be lost.",
+      "keepEditing": "Keep editing",
+      "discard": "Discard"
+    },
+    "secretReveal": {
+      "onlyOnce": "This is the only time the secret is shown. Store it now.",
+      "fieldLabel": "Secret",
+      "copied": "Copied",
+      "copyFailed": "Couldn't copy. Select the text and copy it.",
+      "notCopiedWarning": "You haven't copied the secret yet. Close anyway?",
+      "closeAnyway": "Close anyway"
+    }
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -1414,7 +1436,8 @@
         "create": "Create voice",
         "creating": "Creating…",
         "createError": "Could not create the voice",
-        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model."
+        "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model.",
+        "deleteTitle": "Delete voice \"{{name}}\"?"
       },
       "import": {
         "button": "Import from URL",
@@ -1528,7 +1551,9 @@
         "done": "(done)",
         "todo": "(to do)"
       },
-      "moreActions": "More model actions"
+      "moreActions": "More model actions",
+      "disableAllDefault": "The default model setting is cleared. When models are enabled again, the first chat model in the list becomes the default.",
+      "disableAllDefaultNamed": "The default model setting is cleared (\"{{name}}\" is the default now). When models are enabled again, the first chat model in the list becomes the default, not necessarily \"{{name}}\"."
     },
     "auth": {
       "configuration": "Authentication Configuration",
@@ -1804,6 +1829,12 @@
           "tokenExpirationHelp": "Also the window a block takes to bite: an access token already issued stays valid until it expires.",
           "unblock": "Unblock",
           "unblocked": "Unblocked {{name}}"
+        },
+        "redirectUriInvalid": "Not added: redirect URIs must use HTTPS (or http://localhost for development).",
+        "rotateSecretNamedTitle": "Rotate the secret of \"{{name}}\"?",
+        "rotateSecretAction": "Rotate secret",
+        "secretReveal": {
+          "title": "New secret for \"{{name}}\""
         }
       },
       "ldap": {
@@ -2003,7 +2034,8 @@
       "regenerateAddinId": "Generate new ID",
       "regenerateAddinIdConfirm": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?",
       "regenerateAddinIdDone": "New add-in ID generated. Download the manifest and deploy it again.",
-      "regenerateAddinIdError": "Failed to generate a new add-in ID"
+      "regenerateAddinIdError": "Failed to generate a new add-in ID",
+      "regenerateAddinIdTitle": "Generate a new add-in ID?"
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -2057,7 +2089,7 @@
       "forceTitle": "Force Client Refresh",
       "forceDesc": "Trigger a force refresh for all clients. This will clear all browser caches, localStorage, and force clients to reload all assets (JS, CSS, fonts, configurations) without using browser cache. The disclaimer acceptance will be preserved.",
       "warningTitle": "Warning",
-      "warningDesc": "This action will force all connected clients to reload their browsers on their next page interaction. Use this when deploying critical updates or when clients need to clear cached data.",
+      "warningDesc": "Every browser that uses iHub clears its cached files and reloads the next time iHub is loaded in it. Use this when deploying critical updates or when clients need to clear cached data.",
       "trigger": "Trigger Force Refresh",
       "triggering": "Triggering Force Refresh...",
       "triggerSuccess": "Force refresh triggered successfully! New salt: {{salt}}. All clients will refresh on their next page load.",
@@ -2255,7 +2287,12 @@
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Disabling the secure cookie flag allows cookies to be transmitted over unencrypted HTTP connections. This makes your authentication tokens vulnerable to interception. Only use this in secure, internal network environments without SSL.",
         "defaultBehavior": "By default, cookies are marked as secure in production environments, which means they will only be sent over HTTPS connections. This is the recommended security setting."
-      }
+      },
+      "forceRefreshConfirmTitle": "Force a refresh for all users?",
+      "forceRefreshConfirmMessage": "Every browser that uses iHub clears its cached files and its locally stored data, then reloads the next time iHub is loaded in it. Pages that are open now are not interrupted.",
+      "forceRefreshConfirmKept": "The disclaimer acceptance is kept; other settings stored only in the browser are cleared.",
+      "forceRefreshConfirmAction": "Force refresh",
+      "forceRefreshDone": "Force refresh triggered. Every browser clears its cached files and reloads the next time iHub is loaded in it."
     },
     "security": {
       "description": "SSL, CORS, cookie settings, rate limits, outbound proxy, and encryption configuration",
@@ -2810,7 +2847,11 @@
           "removePin": "Remove pin",
           "addPin": "Add pin",
           "pinInvalid": "Each pin needs an item as <type>:<name> (for example integration:org.ckan__open-data-portal) and a version range."
-        }
+        },
+        "deleteConsequence": "Its catalog disappears from the marketplace and the cached catalog data is removed. Items already installed from it stay installed.",
+        "deleteShipped": "This registry ships with iHub. There is no \"restore default\": to get it back, you have to add it again by hand.",
+        "refreshFailed": "Refresh failed",
+        "updateFailed": "Update failed"
       },
       "detail": {
         "description": "Description",
@@ -3369,7 +3410,11 @@
         "disconnectConfirm": "Disconnect \"{{user}}\" from {{label}}? They have to sign in again to use it.",
         "resetRegistration": "Reset OAuth client registration",
         "resetConfirm": "Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.",
-        "resetDone": "OAuth client registration reset"
+        "resetDone": "OAuth client registration reset",
+        "disconnectTitle": "Disconnect \"{{user}}\" from {{label}}?",
+        "disconnectAction": "Disconnect",
+        "resetTitle": "Reset the OAuth client registration of {{label}}?",
+        "resetAction": "Reset registration"
       },
       "runsCode": "Runs code on this server",
       "incompatibleReason": "This installation offers no actions: its definition {{reason}}.",
@@ -4462,7 +4507,9 @@
       "backedUp": "Configuration backed up to: {{path}}",
       "missingSection": "The configuration lacks the section \"{{section}}\".",
       "assets": {
-        "savedNotice": "Uploads and deletions here take effect immediately; they are not part of the unsaved changes. Use the path of an uploaded file in the other tabs."
+        "savedNotice": "Uploads and deletions here take effect immediately; they are not part of the unsaved changes. Use the path of an uploaded file in the other tabs.",
+        "deleteConsequence": "Pages, styles and settings that link to this file show a broken link.",
+        "deleted": "Asset deleted successfully"
       },
       "footer": {
         "title": "Footer",
@@ -4501,7 +4548,11 @@
       },
       "linkTarget": "Open link in",
       "styles": {
-        "colorPicker": "{{name}} (color picker)"
+        "colorPicker": "{{name}} (color picker)",
+        "variableName": "Name (without --)",
+        "variableValue": "Value",
+        "addVariableRequired": "Enter a name and a value for the variable.",
+        "addVariableConfirm": "Add variable"
       }
     },
     "groupSelect": {
@@ -4706,7 +4757,10 @@
         "noGroups": "None",
         "moreDetails": "More details",
         "rawEntry": "Raw entry (JSON)"
-      }
+      },
+      "cleanupConfirmTitle": "Delete audit entries older than {{date}}?",
+      "cleanupConfirmMessage": "The audit log files older than the retention period ({{days}} days) are deleted from the server now, instead of at the next scheduled cleanup.",
+      "cleanupConfirmAction": "Delete old entries"
     },
     "filters": {
       "multiSelect": {
@@ -4987,7 +5041,11 @@
           "anonymousDesc": "Users and conversations are recorded as irreversible fingerprints.",
           "pseudonymousDesc": "Each conversation is recorded as its own user; no user ids are stored.",
           "identifiedDesc": "Records name the real user id.",
-          "label": "Tracking mode"
+          "label": "Tracking mode",
+          "confirmTitle": "Change the tracking mode to \"{{mode}}\"?",
+          "confirmScope": "Applies to the usage records written from now on, for every user.",
+          "confirmAction": "Change tracking mode",
+          "changed": "Tracking mode changed to \"{{mode}}\"."
         },
         "subtitle": "Requests and tokens of every model call — chats, agents, workflows, scheduled tasks and the API.",
         "surface": {
@@ -5176,7 +5234,8 @@
       "systemTooltip": "Delivered with iHub. It cannot be changed or deleted.",
       "systemNotice": "This is a system skill delivered with iHub. It is updated with iHub and cannot be changed or deleted here. Enable it for an app in the app’s Skills settings.",
       "providedTools": "Tools this skill provides:",
-      "view": "View"
+      "view": "View",
+      "deletedNamed": "Skill \"{{name}}\" deleted."
     },
     "scheduledTasks": {
       "saved": "Settings saved",
@@ -5231,9 +5290,12 @@
       "memory": {
         "summary": "{{chars}} chars · v{{version}} · {{updatedAt}}",
         "clear": "Clear memory",
-        "confirmClear": "Clear the memory of \"{{name}}\" of {{owner}}? The owner loses these notes."
+        "confirmClear": "Clear the memory of \"{{name}}\" of {{owner}}? The owner loses these notes.",
+        "clearTitle": "Clear the memory of \"{{name}}\"?",
+        "clearAction": "Clear notes"
       },
-      "memoryEnabledHint": "Off: runs neither read nor update the notes of a task (the notes are kept), and \"Only when something changed\" notifies after every run."
+      "memoryEnabledHint": "Off: runs neither read nor update the notes of a task (the notes are kept), and \"Only when something changed\" notifies after every run.",
+      "deleteConsequence": "The task stops running and its owner can no longer see it or its runs."
     },
     "overview": {
       "storage": {
@@ -6798,6 +6860,74 @@
       "relatedNoticeText": "— the notice in the empty chat and the guardrail wording",
       "relatedAck": "AI acknowledgement",
       "relatedAckText": "— the confirmation before the first message, stored with the user"
+    },
+    "common": {
+      "enableAll": "Enable All",
+      "disableAll": "Disable All"
+    },
+    "confirm": {
+      "deleteTitle": "Delete {{type}} \"{{name}}\"?",
+      "deleteMessage": "The {{type}} is removed for all users.",
+      "delete": "Delete",
+      "failed": "The action failed.",
+      "andMore_one": "and {{count}} more",
+      "andMore_other": "and {{count}} more",
+      "types": {
+        "app": "app",
+        "model": "model",
+        "prompt": "prompt",
+        "provider": "provider",
+        "skill": "skill",
+        "workflow": "workflow",
+        "registry": "registry",
+        "asset": "asset",
+        "credential": "credential"
+      },
+      "plural": {
+        "apps": "apps",
+        "models": "models",
+        "prompts": "prompts"
+      },
+      "bulk": {
+        "enableTitle": "Enable all {{items}}?",
+        "disableTitle": "Disable all {{items}}?",
+        "enableMessage_one": "{{count}} of {{total}} {{items}} is disabled now and will be enabled. Users with access see it right away:",
+        "enableMessage_other": "{{count}} of {{total}} {{items}} are disabled now and will be enabled. Users with access see them right away:",
+        "disableMessage_one": "{{count}} of {{total}} {{items}} is enabled now and will be disabled. Users lose access right away:",
+        "disableMessage_other": "{{count}} of {{total}} {{items}} are enabled now and will be disabled. Users lose access right away:",
+        "nothingToEnable": "All {{total}} {{items}} are already enabled.",
+        "nothingToDisable": "All {{total}} {{items}} are already disabled."
+      }
+    },
+    "backup": {
+      "sensitivity": {
+        "title": "Store the export like a key",
+        "body": "The export is not encrypted. It contains the encryption key for stored secrets, the JWT signing keys and the users' password hashes. Anyone who has the file can decrypt every stored secret and create valid sign-in tokens. Keep it where only administrators can read it, and delete copies you no longer need."
+      },
+      "importConfirm": {
+        "title": "Replace all contents with \"{{name}}\"?",
+        "message": "Importing replaces everything in contents/ on this server: configuration, users and groups, keys, chats and uploaded data.",
+        "file": "File: {{name}} ({{size}})",
+        "preImportCopy": "Current contents are kept as a pre-import copy in contents/.backups (the last 3 are kept).",
+        "signIn": "Users, passwords and keys come from the file: you may have to sign in again.",
+        "typeHost": "To confirm, type this server's address",
+        "action": "Import and replace"
+      }
+    },
+    "credentials": {
+      "usageUnknown": "Couldn't check which integrations use \"{{id}}\".",
+      "usedBy_one": "Used by {{count}} installed integration, which stops working:",
+      "usedBy_other": "Used by {{count}} installed integrations, which stop working:",
+      "notUsedByIntegrations": "No installed integration uses it.",
+      "notChecked": "Tools, MCP servers and sign-in settings that reference it are not checked here; they fail until they get another credential.",
+      "deleteNamed": "Delete credential \"{{id}}\""
+    },
+    "editor": {
+      "resetTitle": "Reset all changes?",
+      "resetAction": "Reset changes",
+      "switchToJsonTitle": "Switch to the JSON editor?",
+      "switchToFormTitle": "Switch to the form editor?",
+      "switchAction": "Switch editor"
     }
   },
   "cloudStorage": {
@@ -9615,7 +9745,9 @@
     "reload": "Reload (discard my edits)",
     "keepEditing": "Keep editing",
     "versionConflict": "Conflict: memory was modified elsewhere. Reload to see the latest.",
-    "staleNotice": "The notes changed since you started editing (a run may have updated them)."
+    "staleNotice": "The notes changed since you started editing (a run may have updated them).",
+    "clearTitle": "Clear all notes?",
+    "clearAction": "Clear notes"
   },
   "usageGuide": {
     "question": "How do I use this app?",

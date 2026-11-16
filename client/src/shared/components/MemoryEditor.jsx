@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import ConfirmDialog from './ConfirmDialog';
 
 /**
  * Whether a failed save was a version conflict. Agent memory (admin API) and
@@ -76,6 +77,7 @@ export default function MemoryEditor({
   const [error, setError] = useState(null);
   const [conflict, setConflict] = useState(false);
   const [stale, setStale] = useState(false);
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   // The page's callbacks change identity on every render; the effects below
   // must depend on `id` and `reloadKey` only.
@@ -175,14 +177,13 @@ export default function MemoryEditor({
     }
   }
 
-  async function handleClear() {
-    if (
-      !window.confirm(
-        t('memoryEditor.clearConfirm', 'Clear all notes? This removes everything written so far.')
-      )
-    ) {
-      return;
-    }
+  /** Clear asks first (ConfirmDialog, not window.confirm); the dialog runs performClear. */
+  function handleClear() {
+    setConfirmingClear(true);
+  }
+
+  async function performClear() {
+    setConfirmingClear(false);
     const clearingFor = idRef.current;
     setSaving(true);
     setError(null);
@@ -319,6 +320,18 @@ export default function MemoryEditor({
         value={body}
         readOnly={readOnly}
         onChange={e => setBody(e.target.value)}
+      />
+      <ConfirmDialog
+        isOpen={confirmingClear}
+        title={t('memoryEditor.clearTitle', 'Clear all notes?')}
+        message={t(
+          'memoryEditor.clearConfirm',
+          'Clear all notes? This removes everything written so far.'
+        )}
+        confirmLabel={t('memoryEditor.clearAction', 'Clear notes')}
+        danger
+        onConfirm={performClear}
+        onDeny={() => setConfirmingClear(false)}
       />
     </div>
   );

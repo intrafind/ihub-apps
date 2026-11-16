@@ -245,8 +245,8 @@ describe('MemoryEditor', () => {
       );
       const { props, rerender } = setup({ id: 'a', clear });
       await flush();
-      jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
       fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Clear notes' }));
       await flush();
 
       const loadB = jest.fn().mockResolvedValue(DOC_B);
@@ -323,8 +323,8 @@ describe('MemoryEditor', () => {
     expect(textarea()).toHaveAttribute('readonly');
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
 
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear notes' }));
     await flush();
     expect(clear).toHaveBeenCalledTimes(1);
   });
@@ -338,13 +338,14 @@ describe('MemoryEditor', () => {
     setup({ clear, load });
     await flush();
 
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(false);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByRole('alertdialog', { name: 'Clear all notes?' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await flush();
     expect(clear).not.toHaveBeenCalled();
 
-    jest.spyOn(window, 'confirm').mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Clear notes' }));
     await flush();
     expect(clear).toHaveBeenCalledTimes(1);
     expect(textarea()).toHaveValue('');

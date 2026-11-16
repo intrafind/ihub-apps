@@ -11,6 +11,11 @@ import {
   updateCredential,
   deleteCredential
 } from '../../../api/adminApi';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { fetchInstalledIntegrations } from '../../../api/integrationsAdminApi';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText, namedList } from '../utils/confirmText';
+import { installationsUsingCredential } from '../utils/credentialUsage';
 
 /**
  * Admin page for managing the central credential store.
@@ -360,6 +365,7 @@ function AdminCredentialsPage() {
   const [editing, setEditing] = useState(null); // null | 'new' | profileId
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   const isEdit = editing !== null && editing !== 'new';
 
@@ -423,27 +429,61 @@ function AdminCredentialsPage() {
     }
   };
 
+  /**
+   * Named, dependency-aware delete (IN-B3, client part): before the dialog
+   * opens, the installed integrations are read to list the ones that use this
+   * credential. The server does not check references, so this list is the
+   * admin's warning; if it can't be read, the dialog says so and still allows
+   * the delete.
+   *
+   * @param {string} id - Credential profile id.
+   */
   const remove = async id => {
-    if (
-      !window.confirm(
-        t('admin.credentials.deleteConfirm', 'Delete credential "{{id}}"? This cannot be undone.', {
-          id
-        })
-      )
-    )
-      return;
+    let usedBy = null;
     try {
-      await deleteCredential(id);
-      setMessage({ type: 'success', text: t('admin.credentials.deleted', 'Credential deleted') });
-      await load();
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text: t('admin.credentials.deleteError', 'Delete failed: {{error}}', {
-          error: err.response?.data?.detail || err.message
-        })
-      });
+      const installed = await fetchInstalledIntegrations();
+      usedBy = installationsUsingCredential(installed?.items, id);
+    } catch {
+      usedBy = null;
     }
+
+    const usageMessage =
+      usedBy === null
+        ? t('admin.credentials.usageUnknown', {
+            id,
+            defaultValue: 'Couldn\'t check which integrations use "{{id}}".'
+          })
+        : usedBy.length > 0
+          ? t('admin.credentials.usedBy', {
+              count: usedBy.length,
+              defaultValue: 'Used by {{count}} installed integrations, which stop working:'
+            })
+          : t('admin.credentials.notUsedByIntegrations', 'No installed integration uses it.');
+
+    requestConfirm({
+      ...deleteConfirmText({ typeKey: 'credential', typeFallback: 'credential', name: id, t }),
+      message: usageMessage,
+      consequences: [
+        ...namedList(
+          (usedBy || []).map(item => item.label),
+          t
+        ),
+        t(
+          'admin.credentials.notChecked',
+          'Tools, MCP servers and sign-in settings that reference it are not checked here; they fail until they get another credential.'
+        )
+      ],
+      irreversible: true,
+      errorMessage: err =>
+        t('admin.credentials.deleteError', 'Delete failed: {{error}}', {
+          error: err.response?.data?.detail || err.message
+        }),
+      action: async () => {
+        await deleteCredential(id);
+        setMessage({ type: 'success', text: t('admin.credentials.deleted', 'Credential deleted') });
+        await load();
+      }
+    });
   };
 
   if (loading) {
@@ -531,6 +571,9 @@ function AdminCredentialsPage() {
                     </button>
                     <button
                       onClick={() => remove(c.id)}
+                      aria-label={t('admin.credentials.deleteNamed', 'Delete credential "{{id}}"', {
+                        id: c.id
+                      })}
                       className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
                     >
                       <Icon name="trash" size="sm" />
@@ -646,6 +689,7 @@ function AdminCredentialsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

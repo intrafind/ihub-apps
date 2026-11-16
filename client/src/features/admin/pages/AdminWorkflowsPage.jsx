@@ -18,6 +18,9 @@ import {
 import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
 import UploadConfigButton from '../components/UploadConfigButton';
 import AdminLoadError from '../components/AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
 
 function WorkflowNameCell({ workflow, currentLanguage }) {
   return (
@@ -62,6 +65,9 @@ function AdminWorkflowsPage() {
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [uploading, setUploading] = useState(false);
+  // A failed row action (clone) — shown inline above the list, not in alert().
+  const [actionError, setActionError] = useState(null);
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   useEffect(() => {
     void loadWorkflows();
@@ -90,21 +96,23 @@ function AdminWorkflowsPage() {
     }
   };
 
-  const handleDeleteWorkflow = async workflowId => {
-    if (
-      !confirm(t('admin.workflows.deleteConfirm', 'Are you sure you want to delete this workflow?'))
-    ) {
-      return;
-    }
-    try {
-      await deleteAdminWorkflow(workflowId);
-      await loadWorkflows();
-    } catch (err) {
-      alert(err.message || 'Failed to delete workflow');
-    }
+  const handleDeleteWorkflow = workflow => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'workflow',
+        typeFallback: 'workflow',
+        name: getLocalizedContent(workflow.name, currentLanguage) || workflow.id,
+        t
+      }),
+      action: async () => {
+        await deleteAdminWorkflow(workflow.id);
+        await loadWorkflows();
+      }
+    });
   };
 
   const handleCloneWorkflow = async workflow => {
+    setActionError(null);
     try {
       const clonedWorkflow = { ...workflow, id: `${workflow.id}-copy` };
       if (typeof clonedWorkflow.name === 'object') {
@@ -118,14 +126,14 @@ function AdminWorkflowsPage() {
       await loadWorkflows();
     } catch (err) {
       if (getAdminApiErrorMessage(err).includes('already exists')) {
-        alert(
+        setActionError(
           t(
             'admin.workflows.cloneExists',
             'A workflow with ID "${id}" already exists. Please rename before cloning.'
           ).replace('${id}', `${workflow.id}-copy`)
         );
       } else {
-        alert(err.message || 'Failed to clone workflow');
+        setActionError(getAdminApiErrorMessage(err));
       }
     }
   };
@@ -293,7 +301,7 @@ function AdminWorkflowsPage() {
       label: t('admin.workflows.delete', 'Delete'),
       icon: 'trash',
       destructive: true,
-      onClick: w => handleDeleteWorkflow(w.id)
+      onClick: w => handleDeleteWorkflow(w)
     }
   ];
 
@@ -348,6 +356,15 @@ function AdminWorkflowsPage() {
           </div>
         </div>
 
+        {actionError && (
+          <AdminLoadError
+            message={actionError}
+            framed={false}
+            className="mt-4"
+            action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setActionError(null) }}
+          />
+        )}
+
         <div className="mt-6 flex flex-wrap items-center gap-3">
           <SearchInput
             value={searchTerm}
@@ -384,6 +401,7 @@ function AdminWorkflowsPage() {
           />
         </div>
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

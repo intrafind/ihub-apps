@@ -13,14 +13,22 @@ import BreakdownTable from '../components/usage/BreakdownTable';
 import ReliabilityPanel from '../components/usage/ReliabilityPanel';
 import RequestLog from '../components/usage/RequestLog';
 import useUsageReportState from '../components/usage/useUsageReportState';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 
 const MODES = ['anonymous', 'pseudonymous', 'identified'];
 
-/** Tracking mode switch: who a usage record names. */
+/**
+ * Tracking mode switch: who a usage record names. Choosing another mode opens
+ * a confirmation that explains the new mode (OB-B7); the select keeps showing
+ * the saved mode until the change is confirmed and saved. A failed save stays
+ * in the dialog; a successful one is announced.
+ */
 function TrackingMode() {
   const { t } = useTranslation();
   const [mode, setMode] = useState(null);
-  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState('');
+  const { requestConfirm, dialogProps, isOpen: confirming } = useConfirmAction();
 
   useEffect(() => {
     fetchAdminUsageMeta()
@@ -46,18 +54,36 @@ function TrackingMode() {
         {t('admin.usage.reports.mode.label', 'Tracking mode')}
         <select
           value={mode}
-          disabled={saving}
-          onChange={async e => {
+          disabled={confirming}
+          onChange={e => {
             const next = e.target.value;
-            setSaving(true);
-            try {
-              await updateAdminUsageTrackingMode(next);
-              setMode(next);
-            } catch (err) {
-              console.error('Failed to update tracking mode', err);
-            } finally {
-              setSaving(false);
-            }
+            if (next === mode) return;
+            const nextLabel = t(`admin.usage.trackingModes.${next}`, next);
+            setNotice('');
+            requestConfirm({
+              title: t('admin.usage.reports.mode.confirmTitle', {
+                mode: nextLabel,
+                defaultValue: 'Change the tracking mode to "{{mode}}"?'
+              }),
+              message: descriptions[next],
+              consequences: [
+                t(
+                  'admin.usage.reports.mode.confirmScope',
+                  'Applies to the usage records written from now on, for every user.'
+                )
+              ],
+              confirmLabel: t('admin.usage.reports.mode.confirmAction', 'Change tracking mode'),
+              action: async () => {
+                await updateAdminUsageTrackingMode(next);
+                setMode(next);
+                setNotice(
+                  t('admin.usage.reports.mode.changed', {
+                    mode: nextLabel,
+                    defaultValue: 'Tracking mode changed to "{{mode}}".'
+                  })
+                );
+              }
+            });
           }}
           className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
         >
@@ -69,6 +95,10 @@ function TrackingMode() {
         </select>
       </label>
       <span className="max-w-xs sm:text-right">{descriptions[mode]}</span>
+      <span role="status" className="max-w-xs text-green-700 dark:text-green-300 sm:text-right">
+        {notice}
+      </span>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

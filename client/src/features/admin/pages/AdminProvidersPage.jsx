@@ -25,6 +25,9 @@ import LlmTimeoutsCard from '../components/LlmTimeoutsCard';
 import ModelsTabsHeader from '../components/ModelsTabsHeader';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import { isLlmProviderEntry } from '../utils/modelsArea';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
 
 /** Linked model names shown in the list before "+N more". */
 const LINKED_MODEL_PREVIEW = 3;
@@ -130,6 +133,7 @@ function CategorySection({ isLlm, title, count, children }) {
 function AdminProvidersPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const navigate = useNavigate();
   const featureFlags = useFeatureFlags();
   // The models page may be hidden (admin.pages.models): then its links are not offered.
@@ -285,24 +289,25 @@ function AdminProvidersPage() {
     navigate('/admin/providers/new');
   };
 
-  const deleteProvider = async (providerId, providerName) => {
-    if (
-      !confirm(
-        t('admin.providers.deleteConfirm', 'Delete provider "{{name}}"?', { name: providerName })
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/admin/providers/${providerId}`, {
-        method: 'DELETE'
-      });
-      await loadData();
-    } catch (err) {
-      console.error('Error deleting provider:', err);
-      setError(getAdminApiErrorMessage(err));
-    }
+  /**
+   * Named delete. The server refuses a provider that models still use; that
+   * refusal is shown inside the dialog.
+   */
+  const deleteProvider = (providerId, providerName) => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'provider',
+        typeFallback: 'provider',
+        name: providerName,
+        t
+      }),
+      action: async () => {
+        await makeAdminApiCall(`/admin/providers/${providerId}`, {
+          method: 'DELETE'
+        });
+        await loadData();
+      }
+    });
   };
 
   // Filter providers based on search term
@@ -805,6 +810,7 @@ function AdminProvidersPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

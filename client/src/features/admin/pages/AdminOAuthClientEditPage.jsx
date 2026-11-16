@@ -29,6 +29,8 @@ function AdminOAuthClientEditPage() {
   const [availablePrompts, setAvailablePrompts] = useState([]);
   const [redirectUriInput, setRedirectUriInput] = useState('');
   const [postLogoutUriInput, setPostLogoutUriInput] = useState('');
+  // Inline validation message per redirect-URI field (no native alert).
+  const [uriErrors, setUriErrors] = useState({});
   const [initialData, setInitialData] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -214,19 +216,29 @@ function AdminOAuthClientEditPage() {
    *
    * @param {'redirectUris'|'postLogoutRedirectUris'} field - The formData field to append to
    * @param {string} value - The raw URI string entered by the admin
+   * @returns {boolean} true when the URI was added (the caller then clears the
+   *   input); false keeps the input so the admin can fix it, with an inline error.
    */
   const handleRedirectUriAdd = (field, value) => {
     const trimmed = value.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
     // Validate: must be https:// or http://localhost
     if (!trimmed.startsWith('https://') && !trimmed.match(/^http:\/\/localhost(:\d+)?/)) {
-      alert('Redirect URIs must use HTTPS (or http://localhost for development)');
-      return;
+      setUriErrors(prev => ({
+        ...prev,
+        [field]: t(
+          'admin.auth.oauth.redirectUriInvalid',
+          'Not added: redirect URIs must use HTTPS (or http://localhost for development).'
+        )
+      }));
+      return false;
     }
+    setUriErrors(prev => ({ ...prev, [field]: null }));
     setFormData(prev => ({
       ...prev,
       [field]: [...(prev[field] || []), trimmed]
     }));
+    return true;
   };
 
   /**
@@ -601,6 +613,10 @@ function AdminOAuthClientEditPage() {
                             type="text"
                             value={redirectUriInput}
                             onChange={e => setRedirectUriInput(e.target.value)}
+                            aria-invalid={uriErrors.redirectUris ? 'true' : undefined}
+                            aria-describedby={
+                              uriErrors.redirectUris ? 'redirectUris-error' : undefined
+                            }
                             placeholder={t(
                               'admin.auth.oauth.redirectUriPlaceholder',
                               'https://yourapp.com/callback'
@@ -609,22 +625,33 @@ function AdminOAuthClientEditPage() {
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleRedirectUriAdd('redirectUris', redirectUriInput);
-                                setRedirectUriInput('');
+                                if (handleRedirectUriAdd('redirectUris', redirectUriInput)) {
+                                  setRedirectUriInput('');
+                                }
                               }
                             }}
                           />
                           <button
                             type="button"
                             onClick={() => {
-                              handleRedirectUriAdd('redirectUris', redirectUriInput);
-                              setRedirectUriInput('');
+                              if (handleRedirectUriAdd('redirectUris', redirectUriInput)) {
+                                setRedirectUriInput('');
+                              }
                             }}
                             className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                           >
                             {t('common.add', 'Add')}
                           </button>
                         </div>
+                        {uriErrors.redirectUris && (
+                          <p
+                            id="redirectUris-error"
+                            role="alert"
+                            className="text-sm text-red-700 dark:text-red-300"
+                          >
+                            {uriErrors.redirectUris}
+                          </p>
+                        )}
                         <p className="text-xs text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.auth.oauth.redirectUriHint',
@@ -658,6 +685,12 @@ function AdminOAuthClientEditPage() {
                             type="text"
                             value={postLogoutUriInput}
                             onChange={e => setPostLogoutUriInput(e.target.value)}
+                            aria-invalid={uriErrors.postLogoutRedirectUris ? 'true' : undefined}
+                            aria-describedby={
+                              uriErrors.postLogoutRedirectUris
+                                ? 'postLogoutRedirectUris-error'
+                                : undefined
+                            }
                             placeholder={t(
                               'admin.auth.oauth.postLogoutUriPlaceholder',
                               'https://yourapp.com/logged-out'
@@ -666,22 +699,37 @@ function AdminOAuthClientEditPage() {
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
-                                setPostLogoutUriInput('');
+                                if (
+                                  handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput)
+                                ) {
+                                  setPostLogoutUriInput('');
+                                }
                               }
                             }}
                           />
                           <button
                             type="button"
                             onClick={() => {
-                              handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
-                              setPostLogoutUriInput('');
+                              if (
+                                handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput)
+                              ) {
+                                setPostLogoutUriInput('');
+                              }
                             }}
                             className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
                           >
                             {t('common.add', 'Add')}
                           </button>
                         </div>
+                        {uriErrors.postLogoutRedirectUris && (
+                          <p
+                            id="postLogoutRedirectUris-error"
+                            role="alert"
+                            className="text-sm text-red-700 dark:text-red-300"
+                          >
+                            {uriErrors.postLogoutRedirectUris}
+                          </p>
+                        )}
                       </div>
                     </div>
 

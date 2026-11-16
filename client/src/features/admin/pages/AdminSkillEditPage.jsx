@@ -21,6 +21,8 @@ import {
   updateSkill
 } from '../../../api/adminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
 /**
  * AdminSkillEditPage - Detail / edit page for a single installed skill.
  *
@@ -35,6 +37,7 @@ import AdminLoadError from '../components/AdminLoadError';
  */
 function AdminSkillEditPage() {
   const { t } = useTranslation();
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const { skillName } = useParams();
   const navigate = useNavigate();
 
@@ -140,20 +143,22 @@ function AdminSkillEditPage() {
   };
 
   /**
-   * Deletes the skill after user confirmation, then navigates back to the list.
+   * Asks for a named confirmation, deletes the skill, then navigates back to
+   * the list. A failure stays in the dialog.
    */
-  const handleDelete = async () => {
-    if (!confirm(t('admin.skills.deleteConfirm', 'Are you sure you want to delete this skill?'))) {
-      return;
-    }
-
-    try {
-      await deleteSkill(skillName);
-      navigate('/admin/skills');
-    } catch (err) {
-      console.error('Error deleting skill:', err);
-      setError(err.message || 'Failed to delete skill');
-    }
+  const handleDelete = () => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'skill',
+        typeFallback: 'skill',
+        name: skill?.displayName || skillName,
+        t
+      }),
+      action: async () => {
+        await deleteSkill(skillName);
+        navigate('/admin/skills');
+      }
+    });
   };
 
   // ---------------------------------------------------------------------------
@@ -706,6 +711,7 @@ function AdminSkillEditPage() {
         onConfirm={() => blocker.proceed?.()}
         onDeny={() => blocker.reset?.()}
       />
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

@@ -20,6 +20,8 @@ import {
 import AdminLoadError from '../components/AdminLoadError';
 import AuditEntryDetailDrawer from '../components/AuditEntryDetailDrawer';
 import { getAuditActorLink, getAuditResourceLink } from '../utils/auditLinks';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useConfirmAction } from '../hooks/useConfirmAction';
 
 const ACTION_PILL_COLORS = {
   create: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -117,10 +119,15 @@ function PresetChip({ active, onClick, children, ariaLabel }) {
   );
 }
 
+/**
+ * The retention policy chip and "Run cleanup now". Cleanup deletes audit log
+ * files for good, so it asks first, naming the cut-off date (OB-B8).
+ */
 function AuditLogRetentionBadge({ t }) {
   const [policy, setPolicy] = useState(null);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState(null);
+  const { requestConfirm, dialogProps } = useConfirmAction();
 
   useEffect(() => {
     let cancelled = false;
@@ -138,24 +145,40 @@ function AuditLogRetentionBadge({ t }) {
 
   if (!policy) return null;
 
-  const runCleanup = async () => {
-    setRunning(true);
+  const runCleanup = () => {
+    const cutoff = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000);
     setMessage(null);
-    try {
-      const res = await makeAdminApiCall('/admin/audit-log/retention/_run', { method: 'POST' });
-      const removed = res.data?.deleted?.length ?? 0;
-      setMessage(
-        removed > 0
-          ? t('admin.auditLog.cleanupRemoved', '{{count}} files removed', { count: removed })
-          : t('admin.auditLog.cleanupNoop', 'Nothing to remove')
-      );
-    } catch (e) {
-      setMessage(
-        t('admin.auditLog.cleanupError', 'Cleanup failed: {{error}}', { error: e.message })
-      );
-    } finally {
-      setRunning(false);
-    }
+    requestConfirm({
+      title: t('admin.auditLog.cleanupConfirmTitle', 'Delete audit entries older than {{date}}?', {
+        date: cutoff.toLocaleDateString()
+      }),
+      message: t(
+        'admin.auditLog.cleanupConfirmMessage',
+        'The audit log files older than the retention period ({{days}} days) are deleted from the server now, instead of at the next scheduled cleanup.',
+        { days: policy.retentionDays }
+      ),
+      irreversible: true,
+      confirmLabel: t('admin.auditLog.cleanupConfirmAction', 'Delete old entries'),
+      danger: true,
+      errorMessage: e =>
+        t('admin.auditLog.cleanupError', 'Cleanup failed: {{error}}', { error: e.message }),
+      action: async () => {
+        setRunning(true);
+        try {
+          const res = await makeAdminApiCall('/admin/audit-log/retention/_run', {
+            method: 'POST'
+          });
+          const removed = res.data?.deleted?.length ?? 0;
+          setMessage(
+            removed > 0
+              ? t('admin.auditLog.cleanupRemoved', '{{count}} files removed', { count: removed })
+              : t('admin.auditLog.cleanupNoop', 'Nothing to remove')
+          );
+        } finally {
+          setRunning(false);
+        }
+      }
+    });
   };
 
   const retentionLabel = policy.cleanupEnabled
@@ -194,7 +217,10 @@ function AuditLogRetentionBadge({ t }) {
             : t('admin.auditLog.runCleanup', 'Run cleanup now')}
         </button>
       )}
-      {message && <span className="text-xs text-gray-500 dark:text-gray-400">{message}</span>}
+      <span role="status" className="text-xs text-gray-500 dark:text-gray-400">
+        {message}
+      </span>
+      <ConfirmDialog {...dialogProps} />
     </div>
   );
 }

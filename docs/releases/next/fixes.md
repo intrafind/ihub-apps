@@ -824,3 +824,25 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Admin: Destructive Actions Ask First and Name What They Affect
+
+Choosing a backup ZIP no longer replaces the whole configuration on the spot, and Enable All,
+Disable All, Force Client Refresh, audit cleanup and the usage tracking mode no longer act on one
+click. Every such action now opens a dialog that names the item and what will happen, with a
+button that names the action. If the action fails, the error stays in the dialog.
+
+- **Backup import:** choosing a file only opens a dialog with its name and size; you type this
+  server's address to import. The current contents are kept in `contents/.backups`. The Import
+  button now works with the keyboard.
+- **Backup page:** a warning says the export holds the encryption key, the JWT signing keys and
+  the password hashes, and must be stored like a key.
+- **Enable All / Disable All** on Apps, Models and Prompts state how many items change and name
+  them; Disable All on Models says the default model is cleared.
+- **Deletes** of apps, models, prompts, providers, skills, workflows, assets and credentials name
+  the item; a credential's dialog lists the installed integrations that use it. The shipped
+  **iHub Official Marketplace** registry asks for its id to be typed before it is deleted.
+- **Rotate Secret** on an OAuth client shows the new secret in a dialog with Copy instead of a
+  browser alert. No browser `alert`/`confirm`/`prompt` boxes remain in the admin area.
+- Dialogs with a form (Install integration, Add an existing key) ask before Escape, ✕ or Cancel
+  discards what you typed, and Escape closes only the topmost dialog.

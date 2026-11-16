@@ -23,6 +23,9 @@ import {
 import { createStarterWorkflow } from '../../workflows/editor/workflowEditorUtils';
 import { appsUsingWorkflow, withCleanToolDescription } from '../../workflows/utils/chatIntegration';
 import AdminLoadError from '../components/AdminLoadError';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 /**
  * Admin page for editing or creating a single workflow definition.
  * Provides metadata editing, group-based permissions, and a full JSON editor.
@@ -34,7 +37,8 @@ import AdminLoadError from '../components/AdminLoadError';
  * Follows the same patterns as AdminPromptEditPage.jsx.
  */
 function AdminWorkflowEditPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const { id } = useParams();
   const navigate = useNavigate();
   const isNewWorkflow = !id;
@@ -260,25 +264,22 @@ function AdminWorkflowEditPage() {
   };
 
   /**
-   * Deletes the current workflow after user confirmation.
+   * Asks for a named confirmation, deletes the workflow and returns to the
+   * list. A failure stays in the dialog.
    */
-  const handleDelete = async () => {
-    if (
-      !confirm(t('admin.workflows.deleteConfirm', 'Are you sure you want to delete this workflow?'))
-    ) {
-      return;
-    }
-
-    try {
-      setSaving(true);
-      await deleteAdminWorkflow(id);
-      navigate('/admin/workflows');
-    } catch (err) {
-      console.error('Error deleting workflow:', err);
-      setError(err.message || 'Failed to delete workflow');
-    } finally {
-      setSaving(false);
-    }
+  const handleDelete = () => {
+    requestConfirm({
+      ...deleteConfirmText({
+        typeKey: 'workflow',
+        typeFallback: 'workflow',
+        name: getLocalizedContent(workflowData?.name, i18n.language) || id,
+        t
+      }),
+      action: async () => {
+        await deleteAdminWorkflow(id);
+        navigate('/admin/workflows');
+      }
+    });
   };
 
   if (loading) {
@@ -578,6 +579,7 @@ function AdminWorkflowEditPage() {
         onConfirm={() => blocker.proceed?.()}
         onDeny={() => blocker.reset?.()}
       />
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

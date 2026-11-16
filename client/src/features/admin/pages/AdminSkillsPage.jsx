@@ -17,6 +17,10 @@ import {
   toggleSkill
 } from '../../../api/adminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminStatusNotice from '../components/AdminStatusNotice';
+import { useConfirmAction } from '../hooks/useConfirmAction';
+import { deleteConfirmText } from '../utils/confirmText';
 /** The tabs of the page, as `?tab=` names them. */
 const TABS = ['skills', 'user'];
 
@@ -45,6 +49,8 @@ function AdminSkillsPage() {
   const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [uploading, setUploading] = useState(false);
+  const [notice, setNotice] = useState('');
+  const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   useEffect(() => {
     void loadSkills();
@@ -101,22 +107,25 @@ function AdminSkillsPage() {
   };
 
   /**
-   * Deletes a skill after user confirmation, then reloads the list.
+   * Asks for a named confirmation, then deletes the skill and reloads the list.
+   * A failure stays in the dialog; success is announced in the status line.
    * @param {string} skillName - The unique name identifier of the skill
    */
-  const handleDeleteSkill = async skillName => {
-    if (!confirm(t('admin.skills.deleteConfirm', 'Are you sure you want to delete this skill?'))) {
-      return;
-    }
-
-    try {
-      await deleteSkill(skillName);
-      await loadSkills();
-      alert(t('admin.skills.deleteSuccess', 'Skill deleted successfully'));
-    } catch (err) {
-      console.error('Error deleting skill:', err);
-      alert(err.message || 'Failed to delete skill');
-    }
+  const handleDeleteSkill = skillName => {
+    setNotice('');
+    requestConfirm({
+      ...deleteConfirmText({ typeKey: 'skill', typeFallback: 'skill', name: skillName, t }),
+      action: async () => {
+        await deleteSkill(skillName);
+        await loadSkills();
+        setNotice(
+          t('admin.skills.deletedNamed', {
+            name: skillName,
+            defaultValue: 'Skill "{{name}}" deleted.'
+          })
+        );
+      }
+    });
   };
 
   /**
@@ -319,6 +328,8 @@ function AdminSkillsPage() {
                 action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
               />
             )}
+
+            <AdminStatusNotice message={notice} onDismiss={() => setNotice('')} className="mt-4" />
 
             {/* Search and filter controls */}
             <div className="mt-8 flex flex-col sm:flex-row gap-4">
@@ -557,6 +568,7 @@ function AdminSkillsPage() {
           </>
         )}
       </div>
+      <ConfirmDialog {...confirmDialogProps} />
     </div>
   );
 }

@@ -173,7 +173,6 @@ describe('AdminScheduledTasksPage: memory', () => {
   });
 
   it('clears the notes through the admin endpoint after confirmation, then reloads the list', async () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
     await renderPage();
     const listCalls = () =>
       makeAdminApiCall.mock.calls.filter(
@@ -184,26 +183,32 @@ describe('AdminScheduledTasksPage: memory', () => {
     await act(async () => {
       fireEvent.click(within(rowOf('Task a')).getByRole('button', { name: 'Clear memory' }));
     });
+    // A named confirmation, not window.confirm; nothing is cleared before it.
+    const dialog = screen.getByRole('alertdialog');
+    expect(dialog).toHaveTextContent('Task a');
+    expect(memoryCalls()).toHaveLength(0);
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Clear notes' }));
+    });
     await flush();
 
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Task a'));
     expect(memoryCalls()).toEqual([['/admin/scheduled-tasks/a/memory', { method: 'DELETE' }]]);
     expect(listCalls()).toHaveLength(2);
-    confirm.mockRestore();
   });
 
   it('does nothing when the admin declines to clear', async () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(false);
     await renderPage();
     await act(async () => {
       fireEvent.click(within(rowOf('Task a')).getByRole('button', { name: 'Clear memory' }));
     });
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' })
+    );
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(memoryCalls()).toHaveLength(0);
-    confirm.mockRestore();
   });
 
   it('shows an error and keeps the page when clearing fails', async () => {
-    const confirm = jest.spyOn(window, 'confirm').mockReturnValue(true);
     const original = makeAdminApiCall.getMockImplementation();
     makeAdminApiCall.mockImplementation(async (url, options) => {
       if (/\/memory$/.test(url)) throw new Error('Storage unavailable');
@@ -213,11 +218,16 @@ describe('AdminScheduledTasksPage: memory', () => {
     await act(async () => {
       fireEvent.click(within(rowOf('Task a')).getByRole('button', { name: 'Clear memory' }));
     });
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Clear notes' })
+      );
+    });
     await flush();
 
+    // The failure is shown in the dialog, which stays open for a retry or Cancel.
     expect(screen.getByRole('alert')).toHaveTextContent('Storage unavailable');
     expect(within(rowOf('Task a')).getByRole('button', { name: 'Clear memory' })).toBeEnabled();
-    confirm.mockRestore();
   });
 
   it('saves the three memory settings with the other limits', async () => {
