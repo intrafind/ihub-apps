@@ -823,6 +823,13 @@ export function recordAnswerOriginMismatch() {
   }
 }
 
+/** The bucket of an answer by its number of source kinds: `0` (none), `1`, `2`, `3+`. */
+function kindsBucketOf(kinds) {
+  if (!Number.isInteger(kinds) || kinds <= 0) return '0';
+  if (kinds >= 3) return '3+';
+  return String(kinds);
+}
+
 /**
  * Record an answer by how many kinds of source its basis names.
  * @param {number} kinds - non-model kinds in the basis (0 for the model's own knowledge)
@@ -830,8 +837,7 @@ export function recordAnswerOriginMismatch() {
 export function recordAnswerBasis(kinds) {
   if (!answerBasisCounter) return;
   try {
-    const bucket = !Number.isInteger(kinds) || kinds <= 0 ? '0' : kinds >= 3 ? '3+' : String(kinds);
-    answerBasisCounter.add(1, filterMetricLabels({ 'answer.kinds_bucket': bucket }));
+    answerBasisCounter.add(1, filterMetricLabels({ 'answer.kinds_bucket': kindsBucketOf(kinds) }));
   } catch (error) {
     console.warn('Failed to record answer basis:', error.message);
   }
