@@ -93,7 +93,7 @@ TIFF images (`image/tiff`, `image/tif`) are supported when added to `supportedFo
 | `maxFileSizeMB` | number (1–2000) | `20` | Maximum file size in megabytes |
 | `supportedFormats` | string[] | `['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg', 'audio/mp4']` | Must match `audio/*` |
 
-The system can also extract the audio track from video files using the Web Audio API, as a 16 kHz mono WAV (see [Audio Extraction](audio-extraction.md)).
+The system can also extract the audio track from video files using the Web Audio API, as a 16 kHz mono WAV (see [Audio File Support → Video uploads](audio-file-support.md#video-uploads-audio-extraction)).
 
 ### `videoUpload` Options
 
@@ -104,7 +104,7 @@ The system can also extract the audio track from video files using the Web Audio
 | `maxFileSizeMB` | number (1–51200) | `50` | Maximum file size in megabytes, up to 50 GB |
 | `supportedFormats` | string[] | `['video/mp4', 'video/webm', 'video/quicktime']` | Must match `video/*` |
 
-The video itself never leaves the browser when `extractAudio` is on. An **MP4 or MOV can be up to 50 GB**: only its index and its audio are read, not the picture. Other containers (WebM, MKV, ...) and videos sent as they are (`extractAudio: false`) work up to about 2 GB, which is all a browser can read into memory. See [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb).
+The video itself never leaves the browser when `extractAudio` is on. An **MP4 or MOV can be up to 50 GB**: only its index and its audio are read, not the picture. Other containers (WebM, MKV, ...) and videos sent as they are (`extractAudio: false`) work up to about 2 GB, which is all a browser can read into memory. See [Audio File Support → Large videos](audio-file-support.md#large-videos-mp4-and-mov-up-to-50-gb).
 
 > [!NOTE]
 > Audio upload requires a model that supports audio input. OpenAI (GPT-4o Audio models) and Google Gemini support audio; Anthropic Claude does not.
@@ -359,7 +359,7 @@ With `storageMode: client_text_only` all file processing happens **client-side**
    Processing that takes more than a moment shows a progress panel above the message box with the file name, the step, a progress bar and a **Stop** button. Stopping attaches nothing for that file and shows no error; files attached before stay. Sending is held back until the attachment is there. What the panel reports depends on the format:
 
    - **PDF, PPTX, DOCX, TIFF** — real progress and a real Stop. A PDF names the page it reads (_Page 12 of 340_), a PowerPoint the slide (_Slide 3 of 40_), a TIFF the page it converts; Word reports its steps (opening, converting, finishing up). Stop lands at the next page, slide or step: pdf.js is told to destroy the document, which ends its worker, and the plain text extraction does not start in its place. A scanned PDF reports the pages it renders as images (the first five) as a step of its own
-   - **Text, images, audio, video** — how much of the file has been read; for a video, the steps of [extracting its audio](audio-extraction.md#progress-and-stop)
+   - **Text, images, audio, video** — how much of the file has been read; for a video, the steps of [extracting its audio](audio-file-support.md#progress-and-stop)
    - **XLSX/XLS, ODT/ODS/ODP, MSG** — how much of the file has been read, then an animated bar without a value: a single call of a library takes the file apart. Stop returns at once, and what the browser is still doing is dropped when it ends
    - The percentage never goes down, and a document of any number of pages is reported at most once per percent point (the page counter itself, at most ten times a second)
    - The cloud storage picker, source documents opened from the chat and the Office add-in read the file as before and show no panel

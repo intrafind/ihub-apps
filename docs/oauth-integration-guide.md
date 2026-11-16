@@ -1,5 +1,7 @@
 ---
-description: "Call iHub's APIs from another application with OAuth 2.0 client credentials."
+description:
+  "Call iHub's APIs from another application with OAuth 2.0 client credentials: setup, tokens,
+  static API keys, curl examples for apps, models and streaming chat, and troubleshooting."
 audience: developer
 type: how-to
 adminPage: /admin/oauth/clients
@@ -8,51 +10,48 @@ adminPage: /admin/oauth/clients
 # OAuth Client Credentials
 
 > [!NOTE]
-> This guide covers the OAuth 2.0 Client Credentials flow (machine-to-machine API access).
-> For user login with Authorization Code Flow, see [OAuth Authorization Code Flow](oauth-authorization-code.md).
-
-This guide explains how to use OAuth 2.0 Client Credentials to access iHub Apps APIs programmatically from external applications.
-
-## Table of Contents
-
-1. [Overview](#overview)
-2. [Getting Started](#getting-started)
-3. [Obtaining Credentials](#obtaining-credentials)
-4. [Generating Tokens](#generating-tokens)
-5. [Using Tokens](#using-tokens)
-6. [Token Management](#token-management)
-7. [Security Best Practices](#security-best-practices)
-8. [Incident Response](#incident-response)
-9. [Troubleshooting](#troubleshooting)
+> This page covers the OAuth 2.0 Client Credentials flow: machine-to-machine access without a
+> signed-in user. For user login from an external app, see
+> [OAuth Authorization Code Flow](oauth-authorization-code.md). For a key that acts as one user, see
+> [Personal API Keys](personal-api-keys.md).
 
 ## Overview
 
-OAuth 2.0 Client Credentials is a grant type designed for machine-to-machine authentication. It allows your applications to authenticate with iHub Apps without user interaction.
+With client credentials, a backend service authenticates to iHub with a client ID and secret and
+gets a short-lived bearer token. No user interaction is involved.
 
-### Key Features
-
-- **No User Interaction**: Automated, server-to-server authentication
-- **Secure**: Industry-standard OAuth 2.0 protocol
-- **Granular Permissions**: Control access to specific apps and models
-- **Credential Rotation**: Zero-downtime secret rotation
-- **Audit Trail**: Complete logging of all OAuth operations
+- **Scoped access**: each client is limited to the scopes, apps, models and prompts an admin grants.
+- **Rotation**: secrets can be rotated, and clients suspended, at any time.
+- **Audit**: creating, changing, rotating and generating keys for clients is recorded in
+  **Admin → Audit Log**.
 
 ## Getting Started
 
 ### Prerequisites
 
-- Admin access to iHub Apps
-- OAuth must be enabled in platform configuration
+- Admin access to iHub
 - A client application that needs API access
 
 ### Enable OAuth
 
-Add to `contents/config/platform.json`:
+Two switches in `platform.json` are involved:
+
+| Setting | What it turns on |
+| --- | --- |
+| `oauth.enabled.clients` | Managing OAuth clients, and accepting the tokens they are issued |
+| `oauth.enabled.authz` | The OAuth endpoints, including `POST /api/oauth/token` and `/api/oauth/introspect` |
+
+Client credentials need both. In the admin UI, turn on **OAuth Clients** under **Admin → OAuth →
+Clients** and the authorization server under **Admin → OAuth → Server**. Or edit
+`contents/config/platform.json`:
 
 ```json
 {
   "oauth": {
-    "enabled": true,
+    "enabled": {
+      "authz": true,
+      "clients": true
+    },
     "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
     "maxTokenExpirationMinutes": 1440
@@ -60,13 +59,18 @@ Add to `contents/config/platform.json`:
 }
 ```
 
-Restart the server for changes to take effect.
+`clientsFile` is optional; it defaults to `config/oauth-clients.json` in the contents directory.
+Restart the server after editing the file by hand.
 
 ## Obtaining Credentials
 
-### Step 1: Create OAuth Client
+### Step 1: Create an OAuth Client
 
-Use the admin API to create a new OAuth client:
+In the admin UI, open **Admin → OAuth → Clients** and click **Create OAuth Client**. Set the name,
+the token expiration and the allowed apps, models and prompts. The client ID and secret are shown
+once, after saving.
+
+Or use the admin API:
 
 ```bash
 curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients \
@@ -82,30 +86,39 @@ curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients \
   }'
 ```
 
-**Response:**
+| Field | Notes |
+| --- | --- |
+| `name` | Required |
+| `scopes` | Scopes the client may request; default none |
+| `allowedApps`, `allowedModels`, `allowedPrompts` | IDs the client may use; an empty or missing list means all (`["*"]`) |
+| `allowedGroups` | Authorization Code flow only: groups a signing-in user must belong to; empty means any |
+| `tokenExpirationMinutes` | Default `oauth.defaultTokenExpirationMinutes` (60); at most `oauth.maxTokenExpirationMinutes` (1440) |
+
+The answer is `201 Created`, with a `Location` header and the new client:
 
 ```json
 {
-  "success": true,
-  "message": "OAuth client created successfully. Save the client_secret - it will not be shown again.",
-  "client": {
-    "clientId": "client_abc123...",
-    "clientSecret": "d4f5e6a7b8c9...",
-    "name": "My Integration",
-    "scopes": ["chat", "models"],
-    "tokenExpirationMinutes": 60
-  }
+  "clientId": "client_abc123...",
+  "clientSecret": "d4f5e6a7b8c9...",
+  "name": "My Integration",
+  "description": "External system integration",
+  "scopes": ["chat", "models"],
+  "allowedApps": ["chat", "summarizer"],
+  "allowedModels": ["gpt-4", "claude-3"],
+  "allowedPrompts": ["*"],
+  "allowedGroups": [],
+  "tokenExpirationMinutes": 60
 }
 ```
 
-⚠️ **Important**: Save the `clientSecret` immediately. It will never be shown again!
+> [!WARNING]
+> Save the `clientSecret` immediately. It is never shown again.
 
 ### Step 2: Configure Your Application
 
-Store the credentials securely in your application:
+Store the credentials securely, for example in environment variables:
 
 ```bash
-# Environment variables (recommended)
 export IHUB_CLIENT_ID="client_abc123..."
 export IHUB_CLIENT_SECRET="d4f5e6a7b8c9..."
 export IHUB_API_URL="https://your-ihub-instance.com"
@@ -113,9 +126,7 @@ export IHUB_API_URL="https://your-ihub-instance.com"
 
 ## Generating Tokens
 
-### OAuth Flow
-
-#### 1. Request Access Token
+### Request an Access Token
 
 ```bash
 curl -X POST https://your-ihub-instance.com/api/oauth/token \
@@ -128,7 +139,11 @@ curl -X POST https://your-ihub-instance.com/api/oauth/token \
   }'
 ```
 
-**Response:**
+`scope` is optional; without it the token gets all of the client's scopes. The endpoint also accepts
+a form-encoded body (`application/x-www-form-urlencoded`), and the client ID and secret in an HTTP
+Basic `Authorization` header instead of the body.
+
+Response:
 
 ```json
 {
@@ -139,110 +154,71 @@ curl -X POST https://your-ihub-instance.com/api/oauth/token \
 }
 ```
 
-#### 2. Code Examples
+### Code Examples
 
-##### Node.js
+#### Node.js
 
 ```javascript
 const axios = require('axios');
 
 async function getAccessToken() {
-  try {
-    const response = await axios.post(
-      'https://your-ihub-instance.com/api/oauth/token',
-      {
-        grant_type: 'client_credentials',
-        client_id: process.env.IHUB_CLIENT_ID,
-        client_secret: process.env.IHUB_CLIENT_SECRET,
-        scope: 'chat models'
-      }
-    );
-    
-    return response.data.access_token;
-  } catch (error) {
-    console.error('Token generation failed:', error.response?.data);
-    throw error;
-  }
+  const response = await axios.post(`${process.env.IHUB_API_URL}/api/oauth/token`, {
+    grant_type: 'client_credentials',
+    client_id: process.env.IHUB_CLIENT_ID,
+    client_secret: process.env.IHUB_CLIENT_SECRET,
+    scope: 'chat models'
+  });
+  return response.data.access_token;
 }
 
-// Use the token
 async function callAPI() {
   const token = await getAccessToken();
-  
   const response = await axios.post(
-    'https://your-ihub-instance.com/api/chat/completions',
-    {
-      model: 'gpt-4',
-      messages: [{ role: 'user', content: 'Hello' }]
-    },
-    {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      }
-    }
+    `${process.env.IHUB_API_URL}/api/inference/v1/chat/completions`,
+    { model: 'gpt-4', messages: [{ role: 'user', content: 'Hello' }] },
+    { headers: { Authorization: `Bearer ${token}` } }
   );
-  
   return response.data;
 }
 ```
 
-##### Python
+#### Python
 
 ```python
-import requests
 import os
+import requests
 
 def get_access_token():
-    url = f"{os.environ['IHUB_API_URL']}/api/oauth/token"
-    
-    response = requests.post(url, json={
+    response = requests.post(f"{os.environ['IHUB_API_URL']}/api/oauth/token", json={
         'grant_type': 'client_credentials',
         'client_id': os.environ['IHUB_CLIENT_ID'],
         'client_secret': os.environ['IHUB_CLIENT_SECRET'],
         'scope': 'chat models'
     })
-    
     response.raise_for_status()
     return response.json()['access_token']
 
 def call_api():
     token = get_access_token()
-    
-    url = f"{os.environ['IHUB_API_URL']}/api/chat/completions"
-    headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json'
-    }
-    
-    response = requests.post(url, json={
-        'model': 'gpt-4',
-        'messages': [{'role': 'user', 'content': 'Hello'}]
-    }, headers=headers)
-    
+    response = requests.post(
+        f"{os.environ['IHUB_API_URL']}/api/inference/v1/chat/completions",
+        json={'model': 'gpt-4', 'messages': [{'role': 'user', 'content': 'Hello'}]},
+        headers={'Authorization': f'Bearer {token}'},
+    )
     response.raise_for_status()
     return response.json()
 ```
 
 ## Using Tokens
 
-### API Request Format
+Send the token in the `Authorization` header of every API request:
 
-All API requests must include the token in the `Authorization` header:
-
-```
+```text
 Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
-### Token Expiration
-
-Tokens expire after the configured duration (default: 60 minutes). Your application should:
-
-1. Check token expiration before use
-2. Request a new token when expired
-3. Implement token caching to reduce requests
-
-### Example: Token Caching
+Tokens expire after the client's configured duration (default 60 minutes). Cache the token, reuse
+it until shortly before `expires_in` runs out, then request a new one:
 
 ```javascript
 class TokenManager {
@@ -250,71 +226,42 @@ class TokenManager {
     this.clientId = clientId;
     this.clientSecret = clientSecret;
     this.token = null;
-    this.expiresAt = null;
+    this.expiresAt = 0;
   }
-  
+
   async getToken() {
-    // Check if token is still valid
-    if (this.token && this.expiresAt > Date.now()) {
-      return this.token;
-    }
-    
-    // Request new token
-    const response = await axios.post(
-      'https://your-ihub-instance.com/api/oauth/token',
-      {
-        grant_type: 'client_credentials',
-        client_id: this.clientId,
-        client_secret: this.clientSecret
-      }
-    );
-    
+    if (this.token && this.expiresAt > Date.now()) return this.token;
+
+    const response = await axios.post(`${process.env.IHUB_API_URL}/api/oauth/token`, {
+      grant_type: 'client_credentials',
+      client_id: this.clientId,
+      client_secret: this.clientSecret
+    });
     this.token = response.data.access_token;
-    this.expiresAt = Date.now() + (response.data.expires_in * 1000) - 60000; // 1 min buffer
-    
+    this.expiresAt = Date.now() + response.data.expires_in * 1000 - 60000; // 1 min buffer
     return this.token;
   }
 }
 ```
 
-## Testing OAuth with curl
+## Examples with curl
 
-This section provides step-by-step examples for testing OAuth authentication using curl commands.
+Copy-paste commands for testing a client and for scripts. They need `curl`, `jq` and `uuidgen`.
 
-### Complete Workflow Example
-
-#### Step 1: Generate Access Token
+### Set Up the Shell
 
 ```bash
-# Set environment variables for convenience
-export IHUB_API_URL="http://localhost:3000"  # or https://your-ihub-instance.com
+export IHUB_API_URL="https://your-ihub-instance.com"   # no trailing slash; http://localhost:3000 locally
 export CLIENT_ID="client_abc123"
 export CLIENT_SECRET="your_client_secret"
-
-# Request access token
-curl -X POST "$IHUB_API_URL/api/oauth/token" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"grant_type\": \"client_credentials\",
-    \"client_id\": \"$CLIENT_ID\",
-    \"client_secret\": \"$CLIENT_SECRET\"
-  }" | jq .
 ```
 
-**Expected Response:**
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "scope": "chat models"
-}
-```
+If iHub runs under a base path, include it in `IHUB_API_URL` (for example
+`https://example.com/ihub`).
 
-#### Step 2: Extract and Save Token
+### Get and Save a Token
 
 ```bash
-# Save token to environment variable
 export ACCESS_TOKEN=$(curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
   -H "Content-Type: application/json" \
   -d "{
@@ -323,208 +270,344 @@ export ACCESS_TOKEN=$(curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
     \"client_secret\": \"$CLIENT_SECRET\"
   }" | jq -r '.access_token')
 
-# Verify token was saved
 echo "Token: ${ACCESS_TOKEN:0:50}..."
 ```
 
-#### Step 3: Test OpenAI-Compatible Endpoint
+To see the whole answer, drop `| jq -r '.access_token'` and pipe to `jq .` instead.
 
-Test the `/api/inference/v1/chat/completions` endpoint (OpenAI-compatible):
+### Check a Token
+
+Introspection tells whether a token is valid and shows its metadata. The caller authenticates with
+its own client ID and secret (or an admin session):
 
 ```bash
-curl -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
+curl -s -X POST "$IHUB_API_URL/api/oauth/introspect" \
   -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Hello, this is a test!"
-      }
-    ],
-    "max_tokens": 100
-  }' | jq .
+  -d "{
+    \"token\": \"$ACCESS_TOKEN\",
+    \"client_id\": \"$CLIENT_ID\",
+    \"client_secret\": \"$CLIENT_SECRET\"
+  }" | jq .
 ```
 
-#### Step 4: Test App-Specific Chat Endpoint
-
-Test the app-specific chat endpoint:
-
-```bash
-APP_ID="your-app-id"
-CHAT_ID=$(uuidgen)
-curl -X POST "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [{ "role": "user", "content": "Hello, this is a test!" }],
-    "modelId": "gpt-4"
-  }' | jq .
+```json
+{
+  "active": true,
+  "scopes": ["chat", "models"],
+  "exp": 1705664400,
+  "iat": 1705660800,
+  "token_type": "oauth_client_credentials",
+  "client_id": "client_abc123",
+  "client_name": "My Integration",
+  "allowedApps": ["chat", "summarizer"],
+  "allowedModels": ["gpt-4", "claude-3"]
+}
 ```
 
-Every chat is stored server-side: post only the new message, reusing `CHAT_ID` for follow-ups.
-More than one message is refused with `400 CLIENT_HISTORY_NOT_ALLOWED`. See
-[API Curl Examples](oauth-api-examples.md#3g-multi-turn-conversation).
+An expired or invalid token answers `{ "active": false }`. To decode a token locally, use
+[jwt.io](https://jwt.io) or `echo "$ACCESS_TOKEN" | cut -d. -f2 | base64 -d | jq .`.
 
-#### Step 5: List Available Models
+### Call the OpenAI-Compatible API
+
+The simplest call is one request and one answer. List the models (and apps, as `app:` models) the
+client may use:
 
 ```bash
-curl -X GET "$IHUB_API_URL/api/inference/v1/models" \
+curl -s "$IHUB_API_URL/api/inference/v1/models" \
   -H "Authorization: Bearer $ACCESS_TOKEN" | jq .
 ```
 
-**Expected Response:**
 ```json
 {
   "object": "list",
   "data": [
+    { "object": "model", "id": "gpt-4" },
+    { "object": "model", "id": "claude-3" }
+  ]
+}
+```
+
+Send a chat completion:
+
+```bash
+curl -s -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-4",
+    "messages": [{ "role": "user", "content": "Hello, this is a test!" }],
+    "max_tokens": 100
+  }' | jq .
+```
+
+This API is stateless: send the whole conversation each time. See
+[OpenAI-compatible API](openai-compatible-api.md).
+
+### List Apps and Models
+
+```bash
+curl -s "$IHUB_API_URL/api/apps" -H "Authorization: Bearer $ACCESS_TOKEN" | jq .
+```
+
+```json
+{
+  "items": [
     {
-      "object": "model",
-      "id": "gpt-4"
-    },
-    {
-      "object": "model",
-      "id": "claude-3"
+      "id": "chat-assistant",
+      "name": { "en": "Chat Assistant" },
+      "description": { "en": "General-purpose AI assistant" },
+      "color": "#4F46E5",
+      "icon": "chat",
+      "preferredModel": "gpt-4o"
     }
   ]
 }
 ```
 
-### Testing with Static API Keys (Long-Term Tokens)
-
-If you've generated a static API key, you can use it directly without the OAuth flow:
+List only the app IDs, or the models:
 
 ```bash
-# Set your static API key
-export STATIC_API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+curl -s "$IHUB_API_URL/api/apps" -H "Authorization: Bearer $ACCESS_TOKEN" | jq -r '.items[].id'
+curl -s "$IHUB_API_URL/api/models" -H "Authorization: Bearer $ACCESS_TOKEN" | jq .
+```
 
-# Test inference endpoint with static key
-curl -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
-  -H "Authorization: Bearer $STATIC_API_KEY" \
+### Chat with an App over SSE
+
+Chatting with an app uses two requests that share a chat ID you generate:
+
+1. **GET** `/api/apps/{appId}/chat/{chatId}` opens a Server-Sent Events stream. Open it first.
+2. **POST** to the same URL sends the message. The answer streams back over the open GET.
+
+```text
+Client                                         Server
+  |--- GET  /api/apps/{appId}/chat/{chatId} --->|  opens the SSE stream
+  |<-- 200 OK, text/event-stream ---------------|
+  |--- POST /api/apps/{appId}/chat/{chatId} --->|  sends the message
+  |<-- event: stream/connected -----------------|
+  |<-- event: run/started ----------------------|
+  |<-- event: step/delta  (text arrives) -------|
+  |<-- event: run/ended   (answer complete) ----|
+  |<-- 200 OK {"status":"streaming"} -----------|
+```
+
+#### Open the Stream
+
+```bash
+export APP_ID="chat-assistant"
+export CHAT_ID=$(uuidgen)
+
+curl -N -s "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
+  -H "Accept: text/event-stream" &
+SSE_PID=$!
+```
+
+`-N` turns off buffering so events print as they arrive. The command runs in the background.
+
+#### Send a Message
+
+```bash
+curl -s -X POST "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "gpt-4",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Hello with static key!"
-      }
-    ]
+    "messages": [{ "role": "user", "content": "Summarize the benefits of cloud computing in 3 bullet points." }],
+    "modelId": "gpt-4o",
+    "outputFormat": "markdown"
   }' | jq .
 ```
 
-### Introspecting Tokens
-
-Check if your token is valid and view its metadata:
-
-```bash
-curl -X POST "$IHUB_API_URL/api/oauth/introspect" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"token\": \"$ACCESS_TOKEN\"
-  }" | jq .
-```
-
-**Expected Response:**
 ```json
 {
-  "active": true,
-  "client_id": "client_abc123",
-  "scopes": ["chat", "models"],
-  "exp": 1705664400,
-  "iat": 1705660800
+  "status": "streaming",
+  "chatId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-### Common Testing Scenarios
+POST body fields:
 
-#### Test Invalid Credentials
+| Field | Type | Description |
+| --- | --- | --- |
+| `messages` | array | **Required.** Exactly one `{ role, content }` object, the new message; the server holds the history (see [Multi-turn conversation](#multi-turn-conversation)) |
+| `modelId` | string | Override the app's default model |
+| `outputFormat` | string | `markdown`, `text`, `json` or `html` |
+| `language` | string | BCP 47 language code, for example `de` |
+| `enabledTools` | array | Tool names to enable for this request |
+| `thinkingEnabled` | boolean | Turn on extended thinking |
+| `ephemeral` | boolean | First turn only: make the chat temporary (never listed or shared, deleted after `chats.temporaryRetentionHours`) |
+
+#### Read the Events
+
+Every frame is an SSE v2 envelope `{ v: 2, seq, runId, ts, type, data }`; the SSE `event:` field
+carries the same `type`. One chat turn is one run:
+
+```text
+event: stream/connected
+data: {"v":2,"seq":0,"runId":"550e8400-...","ts":"2026-03-16T10:30:00Z","type":"stream/connected","data":{"runId":"550e8400-...","lastSeq":0,"protocol":2}}
+
+event: run/started
+data: {"v":2,"seq":1,"runId":"chat-7f3a…","ts":"…","type":"run/started","data":{"kind":"chat","model":"gpt-4o","refs":{"chatId":"550e8400-...","appId":"chat-assistant"}}}
+
+event: step/delta
+data: {"v":2,"seq":2,"runId":"chat-7f3a…","ts":"…","type":"step/delta","data":{"step":0,"kind":"text","content":"Cloud computing"}}
+
+event: step/completed
+data: {"v":2,"seq":3,"runId":"chat-7f3a…","ts":"…","type":"step/completed","data":{"step":0,"content":"Cloud computing offers…","toolCalls":[],"finishReason":"stop"}}
+
+event: run/ended
+data: {"v":2,"seq":4,"runId":"chat-7f3a…","ts":"…","type":"run/ended","data":{"status":"completed","finishReason":"stop"}}
+```
+
+| Event | Description |
+| --- | --- |
+| `stream/connected` | Stream open; `lastSeq` is the last sequence number the server has for this stream |
+| `run/started` | A run (one chat turn, or a workflow launched from the chat) began; `refs.messageId` links it to the message |
+| `step/delta` | Streamed content; `kind` is `text`, `thinking` or `image` (concatenate the `content` of `text` deltas) |
+| `step/completed` | One model call finished (`content`, `toolCalls`, `usage`, `citations`) |
+| `tool/started` / `tool/progress` / `tool/completed` | Tool execution; `tool/progress` also carries search status, citations and grounding |
+| `interaction/raised` | The model asks the user a question (`ask_user`); the run pauses (`run/paused`) |
+| `meta` | Conversation title and IDs |
+| `stream/error` | An error occurred; check `code` and `message` |
+| `run/ended` | Answer complete; `status` and `finishReason` say why |
+
+Full tables: [SSE v2 Streaming](sse-v2.md).
+
+#### Multi-turn conversation
+
+Every chat is stored server-side. For a follow-up, reuse the chat ID and post **only the new
+message**; the server reads the rest of the history from its store:
+
 ```bash
-# Should return 401 Unauthorized
-curl -v -X POST "$IHUB_API_URL/api/oauth/token" \
+curl -s -X POST "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
+  -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "grant_type": "client_credentials",
-    "client_id": "invalid_client",
-    "client_secret": "invalid_secret"
-  }'
+  -d '{ "messages": [{ "role": "user", "content": "What are the main providers?" }] }' | jq .
 ```
 
-#### Test Expired Token
+A request with more than one message is refused with `400` and code `CLIENT_HISTORY_NOT_ALLOWED`.
+Add `"ephemeral": true` to the first turn for a temporary chat that is not kept in the history. To
+send the whole conversation yourself, use the stateless
+[OpenAI-compatible API](#call-the-openai-compatible-api). See
+[Chat Persistence](chat-persistence.md).
+
+#### Stop and Clean Up
+
+Stop an answer in progress (the server answers `204 No Content`), then close the stream:
+
 ```bash
-# Use an expired token - should return 401 Unauthorized
-curl -v -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
-  -H "Authorization: Bearer EXPIRED_TOKEN_HERE" \
+curl -s -X POST "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID/stop" \
+  -H "Authorization: Bearer $ACCESS_TOKEN"
+
+kill $SSE_PID 2>/dev/null
+```
+
+#### Without a Stream
+
+The answer only ever arrives over the SSE stream; the POST answers `{ "status": "streaming" }` when
+the turn has ended. Without an open stream the turn still runs and a kept chat stores its answer, but
+nothing reaches the caller. For a single request and response, use the
+[OpenAI-compatible API](#call-the-openai-compatible-api).
+
+### Use a Static API Key
+
+A [static API key](#static-api-keys) is used exactly like an access token, without the token
+request:
+
+```bash
+export STATIC_API_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+curl -s -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "Authorization: Bearer $STATIC_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "Test"}]
-  }'
+  -d '{ "model": "gpt-4", "messages": [{ "role": "user", "content": "Hello with static key!" }] }' | jq .
 ```
 
-#### Test Missing Authorization Header
+### Get a User Token Instead
+
+To act for a signed-in user rather than as a client, use the Authorization Code flow with PKCE (the
+client needs the `authorization_code` grant). Full reference:
+[OAuth Authorization Code Flow](oauth-authorization-code.md).
+
+1. Generate the PKCE values and open the authorize URL in a browser:
+
+   ```bash
+   export CODE_VERIFIER=$(openssl rand -base64 32 | tr -d '=' | tr '+/' '-_')
+   export CODE_CHALLENGE=$(printf '%s' "$CODE_VERIFIER" \
+     | openssl dgst -sha256 -binary | openssl base64 -A | tr -d '=' | tr '+/' '-_')
+   export STATE=$(openssl rand -hex 16)
+   export REDIRECT_URI="https://your-app.example.com/auth/callback"
+
+   echo "$IHUB_API_URL/api/oauth/authorize?response_type=code&client_id=$CLIENT_ID&redirect_uri=$REDIRECT_URI&scope=openid+profile+email&state=$STATE&code_challenge=$CODE_CHALLENGE&code_challenge_method=S256"
+   ```
+
+2. The user signs in and approves. The browser is redirected to
+   `https://your-app.example.com/auth/callback?code=AUTH_CODE&state=STATE`.
+3. Exchange the code (it expires after 10 minutes):
+
+   ```bash
+   export AUTH_CODE="the_code_from_callback"
+
+   curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
+     -H "Content-Type: application/json" \
+     -d "{
+       \"grant_type\": \"authorization_code\",
+       \"code\": \"$AUTH_CODE\",
+       \"redirect_uri\": \"$REDIRECT_URI\",
+       \"client_id\": \"$CLIENT_ID\",
+       \"code_verifier\": \"$CODE_VERIFIER\"
+     }" | jq .
+   ```
+
+   The answer carries `access_token`, `id_token` and, if refresh tokens are enabled, a
+   `refresh_token`.
+
+4. Refresh the access token later:
+
+   ```bash
+   curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
+     -H "Content-Type: application/json" \
+     -d "{
+       \"grant_type\": \"refresh_token\",
+       \"refresh_token\": \"$REFRESH_TOKEN\",
+       \"client_id\": \"$CLIENT_ID\"
+     }" | jq .
+   ```
+
+`GET /api/auth/status` shows which sign-in methods the server offers (`authMethods.local`,
+`authMethods.oidc` with its `providers`, and so on). A browser sign-in through an OIDC provider
+(`/api/auth/oidc/<provider>`) ends in an `authToken` cookie, which suits browsers, not scripts.
+
+### Test Error Cases
+
 ```bash
-# Should return 401 Unauthorized
-curl -v -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+# Wrong credentials: 401 invalid_client
+curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
   -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [{"role": "user", "content": "Test"}]
-  }'
-```
+  -d '{ "grant_type": "client_credentials", "client_id": "invalid_client", "client_secret": "invalid_secret" }'
 
-### Debugging Tips
-
-#### 1. Verbose Output
-Add `-v` flag to see full request/response details:
-```bash
-curl -v -X POST "$IHUB_API_URL/api/oauth/token" ...
-```
-
-#### 2. Save Response to File
-```bash
-curl -X POST "$IHUB_API_URL/api/oauth/token" \
+# Expired token, or no Authorization header: 401
+curl -s -o /dev/null -w "%{http_code}\n" -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
   -H "Content-Type: application/json" \
-  -d "{...}" \
-  -o token_response.json
+  -d '{ "model": "gpt-4", "messages": [{ "role": "user", "content": "Test" }] }'
 ```
 
-#### 3. Decode JWT Token
-Use [jwt.io](https://jwt.io) or decode in terminal:
-```bash
-# macOS/Linux with base64
-echo "$ACCESS_TOKEN" | cut -d. -f2 | base64 -d | jq .
-```
-
-#### 4. Check Server Logs
-Monitor server logs for authentication issues:
-```bash
-# If running locally
-tail -f server/logs/server.log
-
-# Or check stdout/stderr if running in foreground
-```
+Add `-v` to any curl command to see the full request and response headers, and `-o file.json` to
+save a response.
 
 ### Complete Test Script
 
-Here's a complete bash script to test OAuth authentication:
+The script gets a token, checks it, lists models and apps, calls the OpenAI-compatible API and
+chats with the first app over SSE. Save it as `test-oauth.sh`:
 
 ```bash
 #!/bin/bash
+set -euo pipefail
 
-# Configuration
 IHUB_API_URL="${IHUB_API_URL:-http://localhost:3000}"
 CLIENT_ID="${CLIENT_ID:-your_client_id}"
 CLIENT_SECRET="${CLIENT_SECRET:-your_client_secret}"
 
-echo "Testing OAuth Authentication..."
-echo "API URL: $IHUB_API_URL"
-echo "Client ID: $CLIENT_ID"
-echo ""
-
-# Step 1: Get access token
-echo "1. Requesting access token..."
+echo "1. Requesting an access token..."
 TOKEN_RESPONSE=$(curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
   -H "Content-Type: application/json" \
   -d "{
@@ -532,63 +615,51 @@ TOKEN_RESPONSE=$(curl -s -X POST "$IHUB_API_URL/api/oauth/token" \
     \"client_id\": \"$CLIENT_ID\",
     \"client_secret\": \"$CLIENT_SECRET\"
   }")
-
 ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r '.access_token')
-
 if [ "$ACCESS_TOKEN" = "null" ] || [ -z "$ACCESS_TOKEN" ]; then
-  echo "❌ Failed to get access token"
+  echo "Failed to get an access token:"
   echo "$TOKEN_RESPONSE" | jq .
   exit 1
 fi
+AUTH="Authorization: Bearer $ACCESS_TOKEN"
 
-echo "✅ Access token obtained: ${ACCESS_TOKEN:0:50}..."
-echo ""
-
-# Step 2: Introspect token
-echo "2. Introspecting token..."
-INTROSPECT_RESPONSE=$(curl -s -X POST "$IHUB_API_URL/api/oauth/introspect" \
+echo "2. Introspecting the token..."
+curl -s -X POST "$IHUB_API_URL/api/oauth/introspect" \
   -H "Content-Type: application/json" \
-  -d "{\"token\": \"$ACCESS_TOKEN\"}")
+  -d "{\"token\": \"$ACCESS_TOKEN\", \"client_id\": \"$CLIENT_ID\", \"client_secret\": \"$CLIENT_SECRET\"}" | jq .
 
-echo "$INTROSPECT_RESPONSE" | jq .
-echo ""
+echo "3. Listing models..."
+curl -s "$IHUB_API_URL/api/inference/v1/models" -H "$AUTH" | jq -r '.data[].id'
 
-# Step 3: List models
-echo "3. Listing available models..."
-MODELS_RESPONSE=$(curl -s -X GET "$IHUB_API_URL/api/inference/v1/models" \
-  -H "Authorization: Bearer $ACCESS_TOKEN")
+echo "4. Chat completion..."
+curl -s -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
+  -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{ "model": "gpt-4", "messages": [{ "role": "user", "content": "Say hello in one word" }], "max_tokens": 10 }' | jq .
 
-echo "$MODELS_RESPONSE" | jq .
-echo ""
+echo "5. Listing apps..."
+APP_ID=$(curl -s "$IHUB_API_URL/api/apps" -H "$AUTH" | jq -r '.items[0].id')
+echo "   Using app: $APP_ID"
 
-# Step 4: Test chat completion
-echo "4. Testing chat completion..."
-CHAT_RESPONSE=$(curl -s -X POST "$IHUB_API_URL/api/inference/v1/chat/completions" \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "gpt-4",
-    "messages": [
-      {
-        "role": "user",
-        "content": "Say hello in one word"
-      }
-    ],
-    "max_tokens": 10
-  }')
+echo "6. Chatting over SSE..."
+CHAT_ID=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid)
+curl -N -s "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID" -H "$AUTH" -H "Accept: text/event-stream" &
+SSE_PID=$!
+sleep 1
+curl -s -X POST "$IHUB_API_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
+  -H "$AUTH" -H "Content-Type: application/json" \
+  -d '{ "messages": [{ "role": "user", "content": "Say hello and tell me one fun fact. Keep it short." }] }' | jq .
+kill $SSE_PID 2>/dev/null || true
 
-echo "$CHAT_RESPONSE" | jq .
-echo ""
-
-echo "✅ OAuth authentication test completed!"
+echo "Done."
 ```
 
-Save this script as `test-oauth.sh`, make it executable with `chmod +x test-oauth.sh`, and run it:
+Run it:
 
 ```bash
+export IHUB_API_URL="http://localhost:3000"
 export CLIENT_ID="client_abc123"
 export CLIENT_SECRET="your_secret"
-export IHUB_API_URL="http://localhost:3000"
+chmod +x test-oauth.sh
 ./test-oauth.sh
 ```
 
@@ -596,23 +667,21 @@ export IHUB_API_URL="http://localhost:3000"
 
 ### Static API Keys
 
-For applications that don't support OAuth flow, you can generate long-lived static API keys:
+For applications that cannot run the token request, generate a long-lived static API key for a
+client:
 
 ```bash
 curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients/client_abc123/generate-token \
   -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "expirationDays": 365
-  }'
+  -d '{ "expirationDays": 365 }'
 ```
 
-**Response:**
+`expirationDays` defaults to 365 and must be between 1 and 3650. A suspended client gets no key. The
+answer is `201 Created`:
 
 ```json
 {
-  "success": true,
-  "message": "Static API key generated successfully. Save this key - it will not be shown again.",
   "api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
   "token_type": "Bearer",
   "expires_in": 31536000,
@@ -621,210 +690,96 @@ curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients/client_abc12
 }
 ```
 
-Use the static key exactly like a regular token:
+> [!WARNING]
+> Save the key immediately. It is not shown again.
 
-```bash
-curl -X POST https://your-ihub-instance.com/api/chat/completions \
-  -H "Authorization: Bearer STATIC_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{...}'
-```
+Use it like an access token (see [Use a Static API Key](#use-a-static-api-key)).
 
 ### Token Introspection
 
-Check if a token is valid:
-
-```bash
-curl -X POST https://your-ihub-instance.com/api/oauth/introspect \
-  -H "Content-Type: application/json" \
-  -d '{
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-  }'
-```
-
-**Response:**
-
-```json
-{
-  "active": true,
-  "client_id": "client_abc123",
-  "scopes": ["chat", "models"],
-  "exp": 1705664400,
-  "iat": 1705660800
-}
-```
+See [Check a Token](#check-a-token).
 
 ## Security Best Practices
 
-### 1. Protect Client Secrets
+1. **Protect client secrets.** Never commit them to version control; keep them in environment
+   variables or a secret manager; use different clients for development and production; rotate
+   secrets regularly.
+2. **Use HTTPS** in production, so credentials and tokens are encrypted in transit.
+3. **Cache tokens.** Request a new token when the old one is about to expire, not for every call.
+4. **Handle a `401`** by requesting a new token once and retrying; give up after a few attempts.
+5. **Grant the minimum.** Give each client only the scopes, apps and models it needs:
 
-- **Never commit secrets to version control**
-- Store secrets in environment variables or secret managers
-- Use different credentials for development and production
-- Rotate secrets regularly
-
-### 2. Use HTTPS
-
-Always use HTTPS in production to protect credentials in transit:
-
-```javascript
-// ❌ Never do this in production
-const apiUrl = 'http://your-ihub-instance.com';
-
-// ✅ Always use HTTPS
-const apiUrl = 'https://your-ihub-instance.com';
-```
-
-### 3. Implement Token Caching
-
-Don't request a new token for every API call. Cache tokens and reuse them until expiration.
-
-### 4. Handle Errors Gracefully
-
-```javascript
-async function callAPIWithRetry(maxRetries = 3) {
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      const token = await getAccessToken();
-      return await callAPI(token);
-    } catch (error) {
-      if (error.response?.status === 401 && i < maxRetries - 1) {
-        // Token expired or invalid, retry
-        continue;
-      }
-      throw error;
-    }
-  }
-}
-```
-
-### 5. Limit Permissions
-
-Only grant the minimum scopes and access needed:
-
-```json
-{
-  "scopes": ["chat"],
-  "allowedApps": ["summarizer"],
-  "allowedModels": ["gpt-4"]
-}
-```
+   ```json
+   {
+     "scopes": ["chat"],
+     "allowedApps": ["summarizer"],
+     "allowedModels": ["gpt-4"]
+   }
+   ```
 
 ## Incident Response
 
-### If a Secret is Compromised
+### If a Secret Is Compromised
 
-#### 1. Immediate Action - Suspend the Client
+1. **Suspend the client.** Every token of a suspended client is refused at once (`403
+   access_denied`):
 
-```bash
-curl -X PUT https://your-ihub-instance.com/api/admin/oauth/clients/client_abc123 \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "active": false
-  }'
-```
+   ```bash
+   curl -X PUT https://your-ihub-instance.com/api/admin/oauth/clients/client_abc123 \
+     -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
+     -H "Content-Type: application/json" \
+     -d '{ "active": false }'
+   ```
 
-This immediately invalidates all tokens issued to this client.
+2. **Investigate.** Check **Admin → Audit Log** for changes to the client and the server logs for
+   its requests.
+3. **Rotate the secret.** Tokens issued before the rotation stop working (`401 invalid_token`,
+   "Token was issued before the last secret rotation"):
 
-#### 2. Investigate
+   ```bash
+   curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients/client_abc123/rotate-secret \
+     -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+   ```
 
-Check audit logs for unauthorized access:
+   ```json
+   {
+     "clientId": "client_abc123",
+     "clientSecret": "new_secret_xyz...",
+     "rotatedAt": "2026-01-19T12:00:00.000Z"
+   }
+   ```
 
-```bash
-# SSH into server
-grep "client_id=client_abc123" /var/log/ihub-apps/oauth-audit.log
-```
+   The admin UI offers the same as **Rotate Client Secret** on the client.
 
-#### 3. Rotate Secret
-
-```bash
-curl -X POST https://your-ihub-instance.com/api/admin/oauth/clients/client_abc123/rotate-secret \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
-```
-
-**Response:**
-
-```json
-{
-  "success": true,
-  "message": "Client secret rotated successfully. Save the new secret - it will not be shown again.",
-  "clientId": "client_abc123",
-  "clientSecret": "new_secret_xyz...",
-  "rotatedAt": "2026-01-19T12:00:00.000Z"
-}
-```
-
-#### 4. Update Application
-
-Update your application with the new secret:
-
-```bash
-export IHUB_CLIENT_SECRET="new_secret_xyz..."
-```
-
-#### 5. Re-enable Client
-
-```bash
-curl -X PUT https://your-ihub-instance.com/api/admin/oauth/clients/client_abc123 \
-  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "active": true
-  }'
-```
+4. **Update the application** with the new secret (`IHUB_CLIENT_SECRET`).
+5. **Re-enable the client** with the same `PUT` and `{ "active": true }`.
 
 ## Troubleshooting
 
-### Error: invalid_client
+Errors of the OAuth endpoints have the form `{ "error": "...", "error_description": "..." }`.
 
-**Cause**: Wrong client ID or secret
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| `400 invalid_request`, "OAuth is not enabled on this server" | `oauth.enabled.authz` is off | [Enable OAuth](#enable-oauth) |
+| `400` "OAuth clients are not enabled on this server" (admin API) | `oauth.enabled.clients` is off | [Enable OAuth](#enable-oauth) |
+| `400 invalid_request`, "client_id and client_secret are required" | A credential is missing from the request | Send both, in the body or as HTTP Basic |
+| `400 unsupported_grant_type` | Wrong or missing `grant_type` | Use `client_credentials` |
+| `400 invalid_scope` | A requested scope is not allowed for the client | Request only the client's scopes, or leave `scope` out |
+| `401 invalid_client` | Wrong client ID or secret | Check for typos and whitespace; check the secret was not rotated |
+| `403 access_denied` | The client is suspended | Ask an administrator to reactivate it |
+| `401` on an API call | Token expired, invalid or missing | Request a new token; check the `Authorization` header |
+| `401 invalid_token`, "Token was issued before the last secret rotation" | The secret was rotated | Request a new token with the new secret |
+| `404 Not Found` | Wrong app ID or base path | Take the app ID from `/api/apps`; include a base path such as `/ihub` in the URL |
+| SSE stream closes at once | The GET was not authorized | Check the token and the `Authorization` header |
+| No events after the POST | The stream was not open yet | Open the GET before sending the POST |
+| `400 invalid_grant` (authorization code) | The code expired (after 10 minutes) or was used | Start the authorization again |
 
-**Solution**:
-- Verify credentials are correct
-- Check for typos or whitespace
-- Ensure client is active
+## Related Documentation
 
-### Error: invalid_grant
-
-**Cause**: Wrong grant_type
-
-**Solution**: Use `"grant_type": "client_credentials"`
-
-### Error: invalid_scope
-
-**Cause**: Requested scope not allowed for this client
-
-**Solution**: Check client configuration and only request allowed scopes
-
-### Error: token_expired
-
-**Cause**: Token has expired
-
-**Solution**: Request a new token
-
-### Error: access_denied
-
-**Cause**: Client is suspended
-
-**Solution**: Contact administrator to reactivate the client
-
-### Error: insufficient_scope
-
-**Cause**: Token lacks required permissions for the operation
-
-**Solution**: Request a token with appropriate scopes or update client permissions
-
-## Additional Resources
-
-- [RFC 6749: OAuth 2.0 Authorization Framework](https://tools.ietf.org/html/rfc6749)
-- [OAuth 2.0 Security Best Current Practice](https://tools.ietf.org/html/draft-ietf-oauth-security-topics)
-- iHub Apps API Documentation: `/api/docs` (Swagger UI)
-
-## Support
-
-For questions or issues:
-
-1. Check server logs: `tail -f logs/oauth-audit.log`
-2. Review this guide
-3. Contact your iHub Apps administrator
+- [OAuth Authorization Code Flow](oauth-authorization-code.md): user login from external apps
+- [Personal API Keys](personal-api-keys.md): keys that act as one user
+- [OpenAI-compatible API](openai-compatible-api.md): the `/api/inference/v1` endpoints
+- [SSE v2 Streaming](sse-v2.md): the event stream in full
+- [Authentication Architecture](authentication-architecture.md): all sign-in methods
+- [RFC 6749: OAuth 2.0](https://datatracker.ietf.org/doc/html/rfc6749)
+- API reference (Swagger UI): `/api/docs` on your server

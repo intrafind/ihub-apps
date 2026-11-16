@@ -55,12 +55,17 @@ For server-to-server API access without a logged-in user, use the [Client Creden
 
 ### 1. Enable OAuth in platform configuration
 
-Add the `oauth` block to `contents/config/platform.json` and restart the server:
+Turn on **Admin → OAuth → Server** (`oauth.enabled.authz`, the authorization endpoints) and
+**Admin → OAuth → Clients** (`oauth.enabled.clients`), or set them in the `oauth` block of
+`contents/config/platform.json` and restart the server:
 
 ```json
 {
   "oauth": {
-    "enabled": true,
+    "enabled": {
+      "authz": true,
+      "clients": true
+    },
     "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
     "maxTokenExpirationMinutes": 1440,

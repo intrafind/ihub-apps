@@ -1,103 +1,119 @@
 ---
-description: "Search and read documents from iFinder in chats, with the user's own permissions."
+description: "Connect iFinder and iAssistant: setup, app binding, the search tools, the chat UI, troubleshooting and a query cheat sheet."
 audience: admin
 type: how-to
 adminPage: /admin/integrations
 ---
 
-# iFinder Integration
+# iFinder and iAssistant Integration
 
-This document provides comprehensive information about the iFinder document management system integration in iHub Apps.
+iFinder is IntraFind's enterprise search. iHub connects to it so that models can search the
+documents your organisation indexed, read their text and metadata, and answer with links to them.
+iAssistant is the retrieval-augmented answering service that runs on the same iFinder server. Every
+call runs as the signed-in iHub user, so results follow iFinder's own permissions.
 
 ## Overview
 
-The iFinder integration allows iHub Apps to search, retrieve, and analyze documents from your iFinder document management system. Users can interact with documents using natural language through AI assistants that automatically search for relevant content, extract document metadata, fetch full document text, and provide insights.
+iHub ships two built-in integrations under **Admin → Integrations**:
 
-## Features
+| Integration | Installation id | What it gives you |
+| --- | --- | --- |
+| **iFinder** | `ifinder` | Seven search and discovery tools, the per-chat search profile picker, the **Sources** panel for iFinder documents, the shipped **iFinder Search** app |
+| **iAssistant** | `iassistant` | The `iassistant-conversation` model (multi-turn answers grounded in iFinder documents) and the **Ask the iAssistant** action for apps on any other model |
 
-### Core Functionality
+iAssistant has no base URL of its own: it uses the connection and the token of the `ifinder`
+installation. Install iFinder first.
 
-- **🔍 Document Search**: Search for documents using natural language queries
-- **📄 Content Retrieval**: Fetch full document content for analysis and summarization
-- **ℹ️ Metadata Access**: Get detailed document metadata (author, creation date, file type, etc.)
-- **🖍️ Passage Highlighting**: Jump from a cited passage to its position in the source document and
-  highlight it in the in-app PDF preview
-- **🔐 Secure Authentication**: User-based JWT authentication for all operations
-- **👤 User Context**: All operations respect the authenticated user's permissions
+```mermaid
+graph TB
+    A[iHub user] --> C[iHub server]
+    C --> E[iFinder tools]
+    C --> F[iAssistant model and ask action]
+    E --> H[iFinder public API]
+    F --> I[iAssistant conversation API]
+    H --> J[iFinder index]
+    I --> J
+    L[Per-user JWT] --> H
+    L --> I
+```
 
-### AI-Powered Capabilities
+What users can do:
 
-- **Conversational Interface**: Ask questions about documents in natural language
-- **Content Analysis**: Summarize, analyze, or extract information from documents
-- **Smart Search**: Find documents based on content, metadata, or contextual queries
-- **Multi-step Operations**: Chain operations (search → analyze → summarize)
-- **Context Awareness**: Remember documents discussed in the conversation
+- Search documents in natural language; the model builds Lucene queries, filters, facets and
+  sorting.
+- Read a document's text or metadata, and summarise, compare or analyse it.
+- Follow up on documents listed earlier in the chat.
+- Jump from a cited passage to its position in the source document, highlighted in the PDF preview.
+- Pick the search profile (or iAssistant) per chat.
+
+Anonymous users can never use iFinder or iAssistant: every call needs a signed-in user.
+
+## Prerequisites
+
+- An iFinder instance with the public API reachable from the iHub server over HTTPS. If it uses a
+  private CA, add its host to `ssl.domainWhitelist` in `platform.json`.
+- For iAssistant: the iAssistant service enabled on that iFinder.
+- iHub user authentication configured (local, OIDC, LDAP, proxy, …). iFinder must recognise the
+  identity iHub sends as the token subject (usually the e-mail address).
+- A trust relationship between iHub and iFinder, so iFinder accepts the per-user tokens iHub sends.
+  See [Authentication](#authentication).
+- Search profiles set up in iFinder with the right user permissions. Ask your iFinder administrator;
+  typical profiles are `searchprofile-standard`, or dedicated ones for policies, HR or technical
+  documents.
 
 ## Configuration
 
-iFinder is a [built-in installed integration](integrations.md#built-in-integrations):
-it is configured under **Admin → Integrations → iFinder** (**Install**,
-later **Edit**), and its settings are stored as the `ifinder` installation in
-`contents/config/integrations.json`, not in `platform.json`. The installation's
-own switch enables or disables the integration; **Test** checks the connection.
+iFinder is a [built-in installed integration](integrations.md#built-in-integrations). Its settings
+are the `ifinder` installation in `contents/config/integrations.json`, not `platform.json`. The file
+reloads automatically. The installation's own switch (`enabled`) turns the integration on and off.
 
-> [!NOTE]
-> **Who issues the iFinder token.** By default iHub signs the token itself
-> (**Authentication** = *JWT signed by iHub*, `authMode: "ihubSigned"`, with a
-> private key or the iHub OIDC key pair). When iHub and iFinder share one OIDC provider, iHub can instead exchange
-> each user's sign-in token at that provider (`"oidcTokenExchange"`); no key is
-> needed then. See [Shared OIDC Provider (Token Exchange)](ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange).
+### Install iFinder
 
-### 1. Environment Variables
+1. Set up authentication first. For the recommended keyless setup, set the OAuth issuer URL under
+   **Admin → Authentication → OAuth Server** and restart, then configure iFinder to trust iHub. See
+   [iFinder Authentication](ifinder-oidc-jwt.md).
+2. Open **Admin → Integrations**, pick **iFinder** in the catalog and click **Install** (later
+   **Edit**).
+3. Enter the **iFinder base URL**, for example `https://ifinder.example.com`.
+4. Choose the **Authentication** and its settings:
+   - *JWT signed by iHub* with **Sign with iHub's OIDC key pair** ticked (recommended), or
+   - *JWT signed by iHub* with a **Private key** credential (legacy), or
+   - *OIDC token exchange* when iHub and iFinder share an OIDC provider.
+5. Set **User identity sent to iFinder** to the attribute iFinder knows users by (usually
+   `email`).
+6. Set the **Default search profile** and, optionally, the **Offered search profiles**.
+7. Click **Test**. It runs the full [connection diagnostics](#testing-the-connection) on the values
+   in the wizard, before anything is saved.
+8. Click **Install** / **Save**.
+9. Grant the installation to the groups that may use iFinder (`permissions.integrations` in
+   `groups.json`), and bind it to apps (see [Binding to apps](#binding-to-apps)).
 
-Set these environment variables for iFinder integration:
+The private key is never stored in a config file. For the legacy key setup, create a credential
+under **Admin → Credentials** (type **Secret**, the PEM key as its value) and pick it in the
+**Private key** field; the installation stores a `privateKeyRef` that points at it.
 
-```bash
-# Required: iFinder API Configuration
-IFINDER_API_URL=https://your-ifinder-instance.com
-IFINDER_SEARCH_PROFILE=your-default-search-profile
-IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
-MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
------END PRIVATE KEY-----"
-# Takes precedence over the credential selected in the installation.
-```
+### iFinder installation fields
 
-**Important Notes:**
-
-- **IFINDER_API_URL** and **IFINDER_PRIVATE_KEY** win over the installation's base URL and private key when set
-- **IFINDER_PRIVATE_KEY**: Must be in PEM format for RS256 JWT signing
-- **Line breaks**: Use actual newlines or `\n` escapes - the system will convert them automatically
-- **Search Profile**: `IFINDER_SEARCH_PROFILE` applies only while the installation's **Default search profile** is empty
-- Request timeout and download directory are advanced settings of the installation (`timeout`, `downloadDir`); there is no environment variable for them
-
-### 2. The iFinder Installation
-
-Open **Admin → Integrations**, pick **iFinder** in the catalog and
-**Install** (or **Edit** the existing installation). The wizard asks for the
-connection, the authentication and the search settings; advanced fields are
-folded away. The private key is never stored in a config file: create a
-credential (Admin → Credentials, type "Secret", pasting the PEM key as its
-value) and pick it in the **Private key** field; the installation stores a
-`privateKeyRef` pointing at it.
+Advanced fields are folded away in the wizard.
 
 | Field | Key | Default | Description |
 | --- | --- | --- | --- |
-| iFinder base URL | `baseUrl` | - | The iFinder instance. `IFINDER_API_URL` wins over it when set |
+| iFinder base URL | `baseUrl` | - | The iFinder server; the public API paths are appended. `IFINDER_API_URL` wins over it when set |
 | Authentication | `authMode` | `ihubSigned` | `ihubSigned` (iHub signs the token) or `oidcTokenExchange` (a shared OIDC provider issues it, see [Shared OIDC Provider](ifinder-oidc-jwt.md#shared-oidc-provider-token-exchange)) |
 | Sign with iHub's OIDC key pair | `useOidcKeyPair` | `false` | Keyless signing with the iHub OIDC key, verified by iFinder through JWKS (recommended) |
-| Private key | `privateKeyRef` | - | Credential holding the PEM private key; ignored with `useOidcKeyPair`. `IFINDER_PRIVATE_KEY` wins over it |
-| User identity sent to iFinder | `jwtSubjectField` | `email` | Which user attribute becomes the token's `sub`: `email`, `username`, `id`, `name` or `domain\username` (offered as suggestions), or a template with `${user.field}` placeholders such as `CONTOSO\${user.username}` (see [`jwtSubjectField` supported values](platform.md#jwtsubjectfield-supported-values)) |
-| Signing algorithm, JWT issuer, JWT audience, Token lifetime, Token scope | `algorithm`, `issuer`, `audience`, `tokenExpirationSeconds`, `defaultScope` | `RS256`, `ihub-apps`, `ifinder-api`, `3600`, `fa_index_read` | Advanced token settings for `ihubSigned` |
+| Private key | `privateKeyRef` | - | Credential holding the PEM private key; ignored with `useOidcKeyPair` or token exchange. `IFINDER_PRIVATE_KEY` wins over it |
+| User identity sent to iFinder | `jwtSubjectField` | `email` | Which user attribute becomes the token's `sub`: `email`, `username`, `id`, `name` or `domain\username`, or a template with `${user.field}` placeholders such as `CONTOSO\${user.username}` (see [`jwtSubjectField` supported values](platform.md#jwtsubjectfield-supported-values)) |
+| Signing algorithm, JWT issuer, JWT audience, Token lifetime (seconds), Token scope | `algorithm`, `issuer`, `audience`, `tokenExpirationSeconds`, `defaultScope` | `RS256`, `ihub-apps`, `ifinder-api`, `3600`, `fa_index_read` | Advanced token settings for `ihubSigned`. The lifetime accepts 60 to 86400 seconds |
 | OIDC provider for token exchange, grant, audience, scopes | `tokenExchangeProvider`, `tokenExchangeGrant`, `tokenExchangeAudience`, `tokenExchangeScopeIndexRead`, `tokenExchangeScopeAssistant`, `tokenExchangeScopeSmartCollections`, `tokenExchangeExtraScopes` | - | The `oidcTokenExchange` settings, see [Configure iHub](ifinder-oidc-jwt.md#configure-ihub) |
-| Default search profile | `defaultSearchProfile` | `searchprofile-standard` | The profile the tools search until the user picks another one |
-| Offered search profiles | `allowedSearchProfiles` | `[]` (all of the user's) | Which of the user's profiles the chat picker offers and the tools may search |
+| Default search profile | `defaultSearchProfile` | `searchprofile-standard` | Searched when neither the chat nor the model names a profile. `IFINDER_SEARCH_PROFILE` applies only while this is empty |
+| Offered search profiles | `allowedSearchProfiles` | `[]` (all of the user's) | Which of the user's profiles the chat picker offers and the tools may search. The default profile is always allowed |
 | Users may change the search profile | `allowUserSearchProfileChange` | `true` | `false` pins every chat to the default profile |
 | Search profile application | `searchProfileApplication` | `ifinder` | The iFinder application whose profile assignments are read for a user (advanced) |
-| Request timeout (ms), Download directory | `timeout`, `downloadDir` | `30000`, `contents/data/ifinder-downloads` | Advanced |
+| Request timeout (ms) | `timeout` | `30000` | Bounds every iFinder tool call (advanced) |
+| Download directory | `downloadDir` | `contents/data/ifinder-downloads` | Where fetched files are stored (advanced) |
 | Search, Document, Fields, Facets endpoint path | `searchEndpoint`, `documentEndpoint`, `fieldsEndpoint`, `facetsEndpoint` | the iFinder public API paths | Advanced; change only for a non-standard deployment |
 
-The installation in `contents/config/integrations.json` looks like this (the
-file reloads automatically):
+The installation in `contents/config/integrations.json`:
 
 ```json
 {
@@ -107,12 +123,11 @@ file reloads automatically):
       "definition": "com.intrafind/ifinder",
       "enabled": true,
       "values": {
-        "baseUrl": "https://your-ifinder-instance.com",
+        "baseUrl": "https://ifinder.example.com",
         "authMode": "ihubSigned",
-        "useOidcKeyPair": false,
-        "privateKeyRef": "ifinder",
+        "useOidcKeyPair": true,
         "jwtSubjectField": "email",
-        "defaultSearchProfile": "your-default-search-profile",
+        "defaultSearchProfile": "searchprofile-standard",
         "allowedSearchProfiles": [],
         "allowUserSearchProfileChange": true
       }
@@ -121,74 +136,132 @@ file reloads automatically):
 }
 ```
 
-Installations that configured iFinder in `platform.json` are moved here by
-migration V192 on the first start, which also removes `contents/tools/iFinder.json`
-and rewrites the apps (see [Binding the tools to an app](#binding-the-tools-to-an-app)).
+For the legacy key setup, use `"useOidcKeyPair": false` and `"privateKeyRef": "<credential id>"`.
+To keep a development key apart from production, give it its own credential (for example
+`ifinder_dev`); there is no per-environment variable name.
 
-### 3. JWT Configuration
+There is no rate-limit or retry setting on the installation: use the platform's `rateLimit`
+settings or a gateway in front of iFinder. Request logging is the platform's `logging.level`.
 
-> [!TIP]
-> **Recommended: keyless authentication.** Instead of generating and exchanging
-> an RSA key pair, enable **Sign with iHub's OIDC key pair** (`useOidcKeyPair`). iHub then signs the iFinder
-> JWT with its built-in OIDC signing key and iFinder verifies it by fetching the
-> public key from iHub's JWKS endpoint — no `privateKey`/`IFINDER_PRIVATE_KEY`
-> and no manual key upload into iFinder. See
-> [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md). The manual
-> key configuration described below is the legacy alternative.
+Installations that configured iFinder in `platform.json` are moved here by migration V192 on the
+first start, which also removes `contents/tools/iFinder.json` and rewrites the apps to bind the
+installation.
 
-The iFinder integration uses JWT tokens for authentication with the following structure:
+### Environment variables
+
+| Variable | Effect |
+| --- | --- |
+| `IFINDER_API_URL` | Wins over the installation's base URL |
+| `IFINDER_PRIVATE_KEY` | PEM private key; wins over the **Private key** credential. Ignored with `useOidcKeyPair`. Real newlines or `\n` escapes both work |
+| `IFINDER_SEARCH_PROFILE` | Used only while the installation's **Default search profile** is empty |
+| `IASSISTANT_PROFILE_ID` | Used only while the iAssistant installation's **Default conversation profile** is empty |
+
+```bash
+IFINDER_API_URL=https://ifinder.example.com
+IFINDER_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQDKrCFR...
+-----END PRIVATE KEY-----"
+```
+
+There is no `IFINDER_PRIVATE_KEY_FILE` and no environment variable for the timeout or download
+directory. Precedence, highest first: environment variables (`IFINDER_SEARCH_PROFILE` only as a
+fallback), the installation's values, the built-in defaults. Restart the server after changing an
+environment variable.
+
+## Authentication
+
+iFinder trusts a call only when it carries a JWT for the user. There are three ways to establish
+that trust; [iFinder Authentication](ifinder-oidc-jwt.md) describes each one step by step, including
+the iFinder-side settings.
+
+| Mode | Settings | Key management |
+| --- | --- | --- |
+| **Keyless (recommended)** | `authMode: "ihubSigned"`, `useOidcKeyPair: true`, `oauth.issuer` in `platform.json` | None: iFinder fetches iHub's public key from `/.well-known/jwks.json` |
+| **Shared OIDC provider** | `authMode: "oidcTokenExchange"` and the `tokenExchange*` fields | None: the provider issues the token; only users who signed in through that provider can use iFinder |
+| **Manual key pair (legacy)** | `authMode: "ihubSigned"`, `privateKeyRef` or `IFINDER_PRIVATE_KEY` | Generate an RSA key pair, upload the public key into iFinder, rotate by hand |
+
+In the `ihubSigned` modes iHub signs one token per user and call with these claims:
 
 ```json
 {
   "sub": "user.email@example.com",
   "name": "User Name",
-  "admin": true/false,
-  "iat": 1516239022,
+  "iat": 1643723400,
+  "exp": 1643727000,
+  "iss": "https://ihub.example.com",
+  "aud": "ifinder-api",
   "scope": "fa_index_read"
 }
 ```
 
-**Key Requirements:**
+- `sub` comes from **User identity sent to iFinder**. If the user lacks that attribute, the call
+  fails with an error naming the field; iHub never falls back to another attribute.
+- `iss` is the OAuth issuer URL in keyless mode, otherwise the **JWT issuer** (`ihub-apps`).
+- `scope` is `fa_index_read` for search. iAssistant calls request `fa_iassistant`, and the calls
+  that list a user's smart collections (projects of the iFinder tier, see
+  [Projects](projects.md#the-ifinder-tier-smart-collections)) request `fi_smartcollections`; the
+  user needs those roles in iFinder.
 
-- **Algorithm**: RS256 (RSA with SHA-256) by default; RS384, RS512, ES256, ES384 and ES512 are also available in the installation's **Signing algorithm** setting
-- **Private Key**: Must be in PEM format
-- **Scope**: `fa_index_read` for document access. The calls that list a user's smart collections
-  (projects of the iFinder tier, see [Projects](projects.md#the-ifinder-tier-smart-collections))
-  request `fi_smartcollections` explicitly, and the user needs that role in iFinder.
-- **User Context**: Tokens are generated per authenticated user
+The same token serves the iFinder tools and iAssistant.
 
-### 4. User Authentication
+## Setting up iAssistant
 
-Users must be authenticated to use iFinder features. The system supports:
+1. Install and test iFinder first.
+2. Open **Admin → Integrations**, pick **iAssistant** and click **Install**.
+3. Leave **iFinder installation** at `ifinder`.
+4. Set the **Default conversation profile** (the iAssistant profile id used when an app names none)
+   and the **Default search profile**.
+5. Click **Test**: besides the connection, it lists the conversation profiles iAssistant offers and
+   checks that the default profile is among them.
+6. Make sure the `iassistant-conversation` model exists in `contents/models/` and is enabled (it
+   ships in `server/defaults/models/`).
 
-- **Anonymous Users**: Cannot access iFinder (throws authentication error)
-- **Authenticated Users**: Can search and access documents based on iFinder permissions
-- **Admin Users**: Automatically marked as admin in JWT tokens
+| Field | Key | Default | Description |
+| --- | --- | --- | --- |
+| iFinder installation | `connection` | `ifinder` | The iFinder installation whose base URL and token iAssistant uses (required) |
+| Default conversation profile | `defaultProfileId` | - | Used when an app sets no `iassistant.profileId`. `IASSISTANT_PROFILE_ID` applies while empty |
+| Default search profile | `defaultSearchProfile` | `searchprofile-standard` | Searched when neither the app nor the model names a profile |
+| Check the user's access to the search profile | `verifySearchProfileAccess` | `true` | Before a conversation starts, check the user has the profile; fall back to the user's default when not |
+| Answer only from retrieved documents | `groundedOnly` | `false` | Installation-wide default; an app's `iassistant.groundedOnly` wins |
+| Search profile cache (ms) | `searchProfileCacheTtlMs` | `300000` | How long a user's profile list is cached (advanced) |
 
-## Available Tools
+```json
+{
+  "id": "iassistant",
+  "definition": "com.intrafind/iassistant",
+  "enabled": true,
+  "values": {
+    "connection": "ifinder",
+    "defaultProfileId": "iassistant-workspace",
+    "defaultSearchProfile": "searchprofile-standard",
+    "verifySearchProfileAccess": true,
+    "groundedOnly": false
+  }
+}
+```
 
-The iFinder integration exposes these functions under the `iFinder.` namespace
-(`iFinder_<function>` when called over the MCP gateway):
+There are two ways to use iAssistant:
 
-| Function | Purpose |
-| --- | --- |
-| `search` | Find documents with a Lucene query, filters, facets, sorting and paging |
-| `getContent` | Fetch a document's extracted text |
-| `getMetadata` | Fetch a document's metadata without its text |
-| `getFields` | The index field catalog — which fields exist and which need `.keyword` |
-| `getFacetValues` | Enumerate the values of one facet |
-| `listProfiles` | The search profiles this user can reach |
-| `discover` | One probe returning totals, top facets, sample titles and the field catalog |
+- **As the chat model.** An app on the `iassistant-conversation` model that binds the installation
+  (`"integrations": { "iassistant": { "actions": [] } }`) talks to iAssistant in multi-turn
+  conversations. Per-app settings are in [Apps → iAssistant Configuration](apps.md#iassistant-configuration).
+- **As a tool for other models.** The action **Ask the iAssistant** (`ask`, tool
+  `iassistant__ask`) sends one question and returns one grounded answer, with the cited documents
+  as the answer's sources. It is opt-in per app: tick it under **Admin → Apps → Edit → Installed
+  integrations → iAssistant**, or `"integrations": { "iassistant": { "actions": ["ask"] } }`. The
+  iAssistant the user picked in the chat (or the app pinned) is the one asked. See
+  [Integrations → Built-in integrations](integrations.md#built-in-integrations).
 
-The last four are the **discovery** surface; see
-[Discovering what is searchable](#discovering-what-is-searchable).
+iAssistant has no request timeout of its own: a turn is bounded by the model's `connectTimeoutMs`
+and `streamIdleTimeoutMs` (see [Platform → Request timeouts](platform.md#request-timeouts)).
+
+## Binding to apps
 
 ### Binding the tools to an app
 
-The tools are the actions of the `ifinder` installation, so an app does not list
-them in a tool list. It binds the installation under `integrations`, naming the
-actions it wants (the tool ids without the `iFinder_` prefix), or none for all
-of them:
+The iFinder tools are the actions of the `ifinder` installation, so an app does not list them as
+tools. It binds the installation under `integrations` and names the actions it wants (the tool ids
+without the `iFinder_` prefix), or none for all of them:
 
 ```json
 "integrations": {
@@ -196,46 +269,170 @@ of them:
 }
 ```
 
-`"actions": []` binds the installation without tools, which still gives the chat
-the search profile picker. The binding is also the requirement: the app is
-offered to users only while the installation exists and is enabled, and
-**Admin → Apps** names a missing one. **Admin → Apps → Edit → Installed
-integrations** writes the object. Which groups may use iFinder is the grant of the
-`ifinder` installation (`permissions.integrations`). See
-[Apps → Integrations](apps.md#integrations-binding-an-installed-integration).
+- `"actions": []` binds the installation without tools, which still gives the chat the search
+  profile picker.
+- The binding is also a requirement: the app is offered to users only while the installation exists
+  and is enabled, and **Admin → Apps** names a missing one.
+- **Admin → Apps → Edit → Installed integrations** writes the object.
+- Which groups may use iFinder is the grant of the `ifinder` installation
+  (`permissions.integrations` in `groups.json`).
+- `pinnedScope` fixes the app to one search profile.
+
+See [Apps → Integrations](apps.md#integrations-binding-an-installed-integration) and
+[Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask).
+
+### Example apps
+
+An enterprise knowledge chat (`contents/apps/enterprise-knowledge-chat.json`):
+
+```json
+{
+  "id": "enterprise-knowledge-chat",
+  "order": 1,
+  "name": { "en": "Enterprise Knowledge Chat", "de": "Unternehmenswissen Chat" },
+  "description": {
+    "en": "Chat with enterprise knowledge using iFinder document search",
+    "de": "Chat mit Unternehmenswissen über iFinder-Dokumentensuche"
+  },
+  "color": "#2563eb",
+  "icon": "building-columns",
+  "system": {
+    "en": "You are an enterprise knowledge assistant with access to company documents through iFinder. Answer from the retrieved information and always cite sources."
+  },
+  "preferredModel": "gpt-4o",
+  "integrations": {
+    "ifinder": { "actions": ["search", "getContent"] }
+  },
+  "category": "Enterprise",
+  "enabled": true
+}
+```
+
+Add `"websearch": { "enabled": true }` to research both the web and iFinder; tell the model in the
+system prompt to distinguish internal from external sources.
+
+An HR app pinned to one profile, with the installation offering several:
+
+```json
+{
+  "id": "ifinder",
+  "definition": "com.intrafind/ifinder",
+  "enabled": true,
+  "values": {
+    "baseUrl": "https://ifinder.example.com",
+    "useOidcKeyPair": true,
+    "defaultSearchProfile": "searchprofile-standard",
+    "allowedSearchProfiles": [
+      "searchprofile-standard",
+      "searchprofile-hr-docs",
+      "searchprofile-tech-docs",
+      "searchprofile-policies"
+    ],
+    "allowUserSearchProfileChange": true
+  }
+}
+```
+
+```json
+{
+  "id": "hr-assistant",
+  "name": { "en": "HR Assistant" },
+  "preferredModel": "gpt-4o",
+  "integrations": {
+    "ifinder": {
+      "actions": ["search", "getContent"],
+      "pinnedScope": "searchprofile-hr-docs"
+    }
+  }
+}
+```
+
+## Testing the connection
+
+Click **Test** on the iFinder or iAssistant installation under **Admin → Integrations** (the install
+wizard has the same button for unsaved values). Instead of a single pass/fail, it walks the whole
+connection path and reports what it saw at each step:
+
+| Step | What it proves |
+| --- | --- |
+| Configuration | Which key signs the JWT, which subject field is used, which endpoints and profile are configured |
+| Base URL | Scheme, hostname, port, and whether the hostname is fully qualified |
+| DNS resolution | Whether the iHub server resolves the hostname, and to which addresses |
+| TCP / TLS connection | Whether the port answers; certificate subject, issuer, expiry and trust result |
+| JWT generation (or Token exchange) | The decoded header and payload, and the subject derived for you |
+| JWT signature | That iHub verifies its own token with the matching public key |
+| Issuer reachable | The issuer and JWKS URL **iFinder itself has to call back to** (keyless mode) |
+| JWKS endpoint | That the endpoint publishes keys and the token's `kid` is among them |
+| API request | The exact URL and method, response status, headers and a body excerpt |
+
+Each failing step lists what to check; expand a step for the raw observations as JSON. The test runs
+as your own account: the JWT is minted for the signed-in admin and is never returned. To see the
+subject for another kind of user, sign in as such a user and run the test.
+
+The same checks are available over the API, for example for monitoring (there is no built-in
+scheduled health check):
+
+```bash
+curl -X POST https://ihub.example.com/api/admin/integrations/installed/ifinder/_test \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+curl -X POST https://ihub.example.com/api/admin/integrations/installed/iassistant/_test \
+  -H "Authorization: Bearer $ADMIN_TOKEN"
+```
+
+Without a body the saved installation is tested; a body shaped like an installation (`values`,
+`enabled`, …) tests those values instead. The search term and profile are not parameters: the test
+uses the configured default profile with a fixed query, so no request value can change which URL iHub
+contacts. The response's `result` has `success`, a `summary` of step counts, and the ordered `steps`
+with `status` (`ok` / `warn` / `fail` / `skip`), `message`, `details` and `hints`.
+
+The test cannot check reachability **from the iFinder host**. For keyless mode, run this there:
+
+```bash
+curl -sv https://ihub.example.com/.well-known/jwks.json
+```
+
+After the test passes, check the whole flow by hand:
+
+1. As an anonymous user, iFinder apps are not available.
+2. As a signed-in user, the **iFinder Search** app finds documents, reads one and shows its
+   metadata.
+3. Users with different iFinder permissions see different results.
+4. An app on the `iassistant-conversation` model answers with sources and keeps context across
+   turns.
+
+## Available Tools
+
+The iFinder installation exposes these functions under the `iFinder.` namespace (tool ids
+`iFinder_<function>`, also over the MCP gateway):
+
+| Function | Purpose | Required parameter | Example |
+| --- | --- | --- | --- |
+| `search` | Find documents with a Lucene query, filters, facets, sorting and paging | `query` | `{query: "contracts 2024"}` |
+| `getContent` | Fetch a document's extracted text | `documentId` | `{documentId: "doc123"}` |
+| `getMetadata` | Fetch a document's metadata without its text | `documentId` | `{documentId: "doc123"}` |
+| `getFields` | The index field catalog: which fields exist and which need `.keyword` | - | `{filterPrefix: "cust."}` |
+| `getFacetValues` | Enumerate the values of one facet | `facet` | `{facet: "application.keyword"}` |
+| `listProfiles` | The search profiles this user can reach | - | `{}` |
+| `discover` | One probe returning totals, top facets, sample titles and the field catalog | `searchProfile` | `{searchProfile: "searchprofile-standard"}` |
+
+The last four are the discovery surface; see [Discovering what is searchable](#discovering-what-is-searchable).
 
 ### iFinder.search
 
-Search for documents using natural language queries.
+Parameters:
 
-**Parameters:**
-
-- `query` (required): Lucene query string — `AND`/`OR`/`NOT`, quoted phrases,
-  `field:value`, wildcards and ranges. `*` matches everything.
-- `maxResults` (optional): Maximum results to return (default: 10, max: 100)
-- `from` (optional): Offset of the first hit, for paging past the 100-hit cap
-- `filter` (optional): Array of Lucene query strings ANDed with the query but
-  excluded from relevance ranking — the right place for narrowing criteria
-- `searchProfile` (optional): Specific search profile ID
-- `returnFields` (optional): Array of specific fields to return (`*` for all)
-- `returnFacets` (optional): Array of facet fields to aggregate alongside the hits
-- `sort` (optional): Array of `field:asc` / `field:desc` criteria
-
-**Field names and `.keyword`.** Every text field is indexed twice: the plain
-name (`creators`) is analyzed for relevance-ranked matching, and the `.keyword`
-name (`creators.keyword`) holds the exact value used for filtering, faceting and
-sorting. Dates, numbers and booleans take no suffix, and some text fields
-(`title`, `content`, `url`, `subject`) have no `.keyword` variant at all — a
-filter on one of those matches nothing rather than erroring. `iFinder.getFields`
-reports the correct name per field per purpose.
-
-**Example Usage:**
+- `query` (required): Lucene query string with `AND`/`OR`/`NOT`, quoted phrases, `field:value`,
+  wildcards and ranges, plus the [IntraFind operators](#intrafind-operators). `*` matches everything.
+- `maxResults`: maximum hits (default 10, max 100).
+- `from`: offset of the first hit, for paging past the 100-hit cap.
+- `filter`: array of Lucene query strings ANDed with the query but excluded from relevance ranking;
+  the right place for narrowing criteria.
+- `searchProfile`: search profile id.
+- `returnFields`: fields to return (`*` for all).
+- `returnFacets`: facet fields to aggregate alongside the hits.
+- `sort`: array of `field:asc` / `field:desc`.
 
 ```javascript
-// Basic search
-iFinder.search({ query: 'contract proposals 2024' });
-
-// Advanced search with options
 iFinder.search({
   query: 'technical documentation',
   maxResults: 20,
@@ -245,8 +442,6 @@ iFinder.search({
   sort: ['modificationDate:desc']
 });
 ```
-
-**Response Format:**
 
 ```json
 {
@@ -267,78 +462,48 @@ iFinder.search({
       "score": 0.95
     }
   ],
-  "facets": {...}
+  "facets": {}
 }
 ```
 
-Each hit carries its `id` — the value `getContent` and `getMetadata` take as
-`documentId` — along with `creators`, `owners`, `creationDate` and
-`modificationDate` (the field "newest first" sorts on), so a result list can be
-judged and followed up on without a metadata call per hit. Keys a source has no
-value for are omitted rather than sent as `null`.
+Each hit carries its `id` (the `documentId` that `getContent` and `getMetadata` take), `creators`,
+`owners`, `creationDate` and `modificationDate` (the field "newest first" sorts on), so a result list
+can be judged without a metadata call per hit. Keys a source has no value for are omitted.
+
+**Field names and `.keyword`.** Every text field is indexed twice: the plain name (`creators`) is
+analysed for relevance-ranked matching, and the `.keyword` name (`creators.keyword`) holds the exact
+value for filtering, faceting and sorting. Dates, numbers and booleans take no suffix. Some text
+fields (`title`, `content`, `url`, `subject`) have no `.keyword` variant at all, and a filter on one
+matches nothing rather than failing. `iFinder.getFields` reports the right name per purpose.
 
 ### The IntraFind query syntax
 
-iFinder does not run a plain Lucene query parser. The search service hands
-OpenSearch the query as `intrafind_query_string` — a query type the IntraFind
-Insight plugin registers — instead of the built-in `query_string`. That parser
-takes all of Lucene's syntax plus a set of IntraFind operators, and they are
-available in `query` and in `filter` through the public API's `_search`
-endpoint:
+iFinder does not run a plain Lucene parser. The search service hands OpenSearch the query as
+`intrafind_query_string`, a query type of the IntraFind Insight plugin, which takes all of Lucene's
+syntax plus the [IntraFind operators](#intrafind-operators), in `query` and in `filter`. Boolean
+operators also accept German aliases (`UND`, `ODER`, `NICHT`), and a field prefix goes in front of
+any operator: `content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
 
-| Operator | Does |
-| --- | --- |
-| `MODE/e&Müller` | Exact — no lemma, compound or diacritic loosening |
-| `MODE/c&Bundesligaspiel` | Decompound — also matches documents saying just "Liga" |
-| `THES/&Stiefel` | Expand with thesaurus synonyms, broader and narrower terms |
-| `ENTITY/PERS` | Any person name, whatever it says — also `LOC`, `ORG`, `EMAIL`, `PHONE` |
-| `NEAR/S(vertrag kündigung)` | Both terms in the same sentence (`P` paragraph, `5` within 5 tokens) |
-| `UNIT/>=(5 kg)` | A weight over 5 kg written in the text, units converted |
-| `DATE/>=(2026-01-01)` | A date in the text, however it is written |
-| `NUMBER/[10 TO 100]` | A number in that range in the text |
-| `OR/2(a b c d)` | OR group where at least 2 clauses must match |
-
-Boolean operators also accept German aliases (`UND`, `ODER`, `NICHT`), and a
-field prefix goes in front of any operator:
-`content:NEAR/S(ENTITY/PERS AND Kündigungsfrist)`.
-
-Do not confuse these with the request body's `"query_type": "QueryStringQuery"`.
-That is the API's own discriminator for the *shape* of the query object; the
-engine-level query type is chosen server-side.
+Do not confuse this with the request body's `"query_type": "QueryStringQuery"`: that is the API's
+discriminator for the shape of the query object; the engine query type is chosen server-side.
 
 The search service enables the IntraFind parser by default
-(`searchservice.use-intrafind-queryparser`), and a search profile can override
-the engine query type, so the operators are normally on but a deployment can
-have them off. A parser that does not know an operator treats it as a literal
-term and quietly matches nothing, so verify by running a query with and without
-the operator and comparing `totalFound`.
-
-The `ifinder-search` skill documents the full grammar, every option and worked
-examples in `references/intrafind-query-syntax.md`.
+(`searchservice.use-intrafind-queryparser`), and a search profile can override the engine query
+type, so the operators are normally on but can be off. A parser that does not know an operator
+treats it as a literal term and quietly matches nothing: compare `totalFound` with and without the
+operator. The `ifinder-search` skill documents the full grammar with worked examples in
+`references/intrafind-query-syntax.md`.
 
 ### iFinder.getContent
 
-Retrieve the full content of a specific document for analysis.
+Parameters:
 
-**Parameters:**
-
-- `documentId` (required): The `id` of a search hit. A value that cannot be an
-  id — one containing whitespace, or a URL — is rejected before any request is
-  made, and a 404 carries the same hint: search for the document and pass the
-  `id` of the matching hit.
-- `maxLength` (optional): Maximum content length (default: 50000)
-- `searchProfile` (optional): Specific search profile ID
-
-**Example Usage:**
-
-```javascript
-iFinder.getContent({
-  documentId: 'doc123456',
-  maxLength: 10000
-});
-```
-
-**Response Format:**
+- `documentId` (required): the `id` of a search hit. A value that cannot be an id (one with
+  whitespace, or a URL) is rejected before any request; a 404 carries the same hint: search for the
+  document and pass the `id` of the matching hit.
+- `maxLength`: maximum characters returned (default 50000). Longer text is cut and `truncated` is
+  `true`.
+- `searchProfile`: search profile id.
 
 ```json
 {
@@ -358,397 +523,34 @@ iFinder.getContent({
 
 ### iFinder.getMetadata
 
-Get detailed metadata for a specific document without fetching content.
-
-**Parameters:**
-
-- `documentId` (required): The `id` of a search hit. A title, file name or link
-  is rejected with a hint that says how to obtain the id (search for the
-  document, e.g. `title:"…"`, and take the `id` of the matching hit); the same
-  hint comes back when no document has that id. The hit's `id` is always
-  requested, and a hit whose `id` differs from the one asked for is reported as
-  not found rather than returned as the wrong document.
-- `searchProfile` (optional): Specific search profile ID
-- `returnFields` (optional): Fields to return. Defaults to `id`, `title`,
-  `creators`, `owners`, `language`, `accessInfo.*`, `mediaType`, `sourceType`,
-  `file.*`, `sourceLocations.*`, `navigationTree`, `creationDate`,
-  `modificationDate`, `indexingDate`, `application`, `contentLength`,
-  `sourceName` and `url`.
-
-**Example Usage:**
-
-```javascript
-iFinder.getMetadata({ documentId: 'doc123456' });
-```
-
-**Response Format:**
-
-```json
-{
-  "documentId": "doc123456",
-  "title": "Q4 Contract Proposals",
-  "documentType": "pdf",
-  "mimeType": "application/pdf",
-  "size": 2048576,
-  "sizeFormatted": "2.0 MB",
-  "author": "John Smith",
-  "createdDate": "2024-01-15T10:30:00Z",
-  "lastModified": "2024-01-16T14:25:00Z",
-  "pageCount": 25,
-  "wordCount": 5420,
-  "tags": ["contracts", "proposals", "q4"],
-  "categories": ["legal", "business"]
-}
-```
-
-## Usage Examples
-
-### Basic Document Search
-
-```
-User: "Find documents about artificial intelligence from 2024"
-AI: I'll search for documents about artificial intelligence from 2024.
-
-[Uses iFinder.search with query "artificial intelligence 2024"]
-
-I found 8 documents about artificial intelligence from 2024:
-
-1. "AI Strategy Report 2024" by Jane Doe (PDF, 2.1MB)
-2. "Machine Learning Implementation Guide" by Tech Team (DOCX, 856KB)
-3. "AI Ethics Guidelines" by Legal Department (PDF, 1.2MB)
-...
-```
-
-### Document Analysis
-
-```
-User: "Can you analyze document doc789012 and summarize its key points?"
-AI: I'll fetch the content of document doc789012 and analyze it for you.
-
-[Uses iFinder.getContent to retrieve full document text]
-[Analyzes content and provides summary]
-
-Based on the document "AI Implementation Strategy", here are the key points:
-
-1. **Executive Summary**: The organization plans to integrate AI across 3 departments
-2. **Timeline**: 18-month rollout starting Q2 2024
-3. **Budget**: $2.3M allocated for AI infrastructure
-...
-```
-
-### Multi-step Document Discovery
-
-```
-User: "I need information about our latest contracts"
-AI: Let me search for recent contract documents.
-
-[Uses iFinder.search with query "contracts latest"]
-
-I found 12 recent contract documents. Would you like me to:
-1. Show you the most recent ones
-2. Analyze a specific contract
-3. Summarize all contract activity
-
-User: "Show me details about the top 3 most recent ones"
-AI: [Uses iFinder.getMetadata for top 3 documents]
-
-Here are the 3 most recent contracts:
-
-1. **Service Agreement - TechCorp** (doc456789)
-   - Signed: March 15, 2024
-   - Value: $150,000
-   - Duration: 12 months
-   - 15 pages, PDF format
-...
-```
-
-## User Interface
-
-### iFinder Search App
-
-The app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app: instead of the web, it researches the iFinder index, as the signed-in user. It ships enabled and binds the `ifinder` installation (`"integrations": { "ifinder": { "scopePicker": "menu" } }`): users see the app only while the installation under **Admin → Integrations** exists and is enabled.
-
-It handles two kinds of requests:
-
-- **Questions** ("What is the notice period in our supplier contracts?"): the model searches several times with different wording and operators, judges the hits by title, metadata and teasers, reads only the few documents it needs with `iFinder_getContent`, and answers with each statement linked to its document.
-- **Document searches** ("show my latest tickets", "presentations about project X from last month"): the model builds filters (person, date range, type, source, status) and a sort, and lists the matching documents with a link, date and the fields that matter. It does not read their content unless asked.
-
-Requests about the user ("my tickets", "documents I wrote") use the signed-in user's name and email, which the system prompt receives through `{{user_name}}` and `{{user_email}}`. Because iFinder stores names as `"LASTNAME, Firstname"`, and the stored spelling can differ from the profile name, the model first searches loosely on the last name with a facet on the matching `.keyword` field (`task.assignee.keyword`, `creators.keyword`, …) and then filters on the exact value it found.
-
-The documents each search found are listed in the chat's tool activity, like web search results, linked to their iFinder deep link.
-
-**Sources panel.** The documents the turn's `iFinder_search`, `iFinder_getMetadata` and `iFinder_getContent` calls found are listed in the **Sources** panel under the answer, the same way as the documents of an iAssistant answer and the pages of a web search (see [Answer Sources](answer-sources.md)). Each one has the full menu: **Preview (PDF)**, **Download**, **Details**, **Open in App**, **Copy link**, and **Add to email** in the Outlook task pane; its title opens the deep link. Each document carries a `ref` of document id and the search profile the tool searched, which the `ifinder` source provider (`GET /api/sources/ifinder/content|metadata`) resolves with the signed-in user's own permissions. The documents the answer links to — by the deep link, or by the document id in the link title — are listed under **Cited in this answer**, numbered like their badges in the text; the other hits under **Also considered**. One call lists at most 50 documents. With [chat history](chat-persistence.md) on, the documents are stored with the answer and the panel comes back when the chat is reopened; a [shared link](chat-sharing.md) never includes them.
-
-**Open in iHub.** A link such as `/apps?documentId=<id>&integration=ifinder` (the iFinder hit action) opens the app list with the document waiting. The apps offered are those that bind the iFinder integration (**Admin → Apps → Edit → Installed integrations**); the one the user picks receives the original file (an image as an image, for a model that sees) with the user's own iFinder permissions, whatever its local upload settings are. The iFinder installation must be configured and granted to the user's groups, otherwise the list says so. See [Auto-Send and URL Parameters](auto-send-feature.md#document-attachment-from-an-integration).
-
-The chat gets the **original file**, never iFinder's generated preview, and it is attached by reference: the server fetches it from iFinder with the user's own permissions, stores it with the chat and extracts the text, as for an upload without the upload; the browser never holds the document. Images and audio, which a model needs as bytes, are the exception and are fetched in the browser. The attachment chip says what the assistant gets and has buttons to download the original and the extracted text. See [Auto-Send and URL Parameters](auto-send-feature.md#how-it-works) and [Chat and Scheduled-Task Files](chat-files.md#in-the-ui).
-
-**Links and follow-up questions.** Only the message text of earlier turns is replayed to the model — not the tool results — so a document listed in one turn would be known by its title alone in the next, and a title is neither an id nor unique (the same file is usually indexed several times). The prompt therefore has the model write every document link as `[title](deepLink "source › location · id")`. The link title renders as a tooltip, so a user hovering a link sees which system and folder it opens (SharePoint › Vertrieb › Dokumente …) before clicking; the document id at its end is what a follow-up turn ("who wrote the second one?") passes to `iFinder_getMetadata` or `iFinder_getContent`, and it never appears in the visible text. A document the model knows only by title is searched for again (`title:"…"`) and matched by its deep link before either tool is called. Links without a title of their own get their decoded destination as the tooltip from the chat renderer.
-
-**App configuration:**
-
-- **App ID**: `ifinder-search`
-- **Integration**: the `ifinder` installation with all seven actions (`iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_getFields`, `iFinder_getFacetValues`, `iFinder_listProfiles`, `iFinder_discover`)
-- **Skills**: `ifinder-search` — the full query syntax and troubleshooting table, loaded on demand when the `skills` feature is on. Without it the system prompt carries the essentials (search in several steps, query vs. filter, the `.keyword` rule, sorting).
-
-The research behaviour lives in the system prompt, so an admin can adapt it — for example to name the ticket system or the custom `cust.*` fields of their deployment.
-
-### Choosing the search profile per chat
-
-Users pick where to search. In every app with iFinder tools, the iFinder Search app included, the **+** menu has an iFinder row under **Use in this chat** that shows the current profile and opens a submenu; picking a profile closes the menu, and a chip under the composer shows where the next question goes. The iAssistant is picked the same way. The list is the user's own search profiles with their display names, the same list `iFinder_listProfiles` reads, narrowed to the installation's **Offered search profiles** (`allowedSearchProfiles`) when an admin sets one.
-
-The choice is saved with the chat and restored when the chat is reopened. It binds the model: `iFinder_search`, `iFinder_getContent`, `iFinder_getMetadata`, `iFinder_getFacetValues` and `iFinder_discover` search the picked profile even when the model passes another `searchProfile`. iHub sets the scope on the tool call after the model's arguments, the same way it sets the user and the chat id, and tells the model the profile is fixed; `iFinder_listProfiles` is not offered in such a chat. Without a pick, a profile the model names itself is checked the same way: one the user does not have, or one outside the allow-list, is refused with a message listing the profiles that are available.
-
-Runs outside a chat keep a profile too. A [scheduled task](scheduled-tasks.md#where-a-task-searches) stores the profile (and iAssistant) of the chat it was scheduled from, or the one picked on its form, and every run searches it, even after the chat moved elsewhere. A [workflow step](workflows.md#integration-scopes-in-a-node) sets one with `integrationScopes`. Both are checked as the user running them: a profile they no longer have fails the run with an error naming it.
-
-The server checks the pick on every turn and never trusts the client value: a profile the user does not have, or one not on the allow-list, refuses the turn (`403 INTEGRATION_SCOPE_NOT_ALLOWED`). When iFinder cannot be asked for the list (403 for a user without `fi_ifinder_allow`, or iFinder is down), the picker offers the configured default and the allow-list with a short hint, and a profile that cannot be verified is passed on as before unless an allow-list narrows it. With the installation's **Users may change the search profile** off (`allowUserSearchProfileChange: false`), or an app's `integrations.ifinder.pinnedScope`, the profile is fixed and the picker only shows it. See [Apps → Integration scopes](apps.md#integration-scopes-where-to-search-and-whom-to-ask) for the app settings.
-
-The **Sources** panel under an answer says where each document was found: every card names the search profile by its display name (the id when the name is unknown), and the panel header says where the answer searched (**Searched in Contracts**) or which iAssistant it asked (**Asked HR assistant**). An iAssistant over all of the user's search profiles names, per document, the profile iFinder reports on it; when the documents come from several profiles, the panel can show one profile at a time. The labels are stored with the answer, so a reopened chat shows the same ones. See [Answer Sources → Integration scopes](answer-sources.md#integration-scopes).
-
-### Example User Interactions
-
-1. **"Show my latest tickets"**
-   - AI finds how the user's name is stored in `task.assignee`, filters on it and sorts by `modificationDate:desc`
-   - Returns a table of tickets with status and link
-
-2. **"Find all documents by John Smith from last month"**
-   - AI uses `iFinder_search` with a `creators.keyword` filter and a `modificationDate` range
-   - Returns filtered results with metadata
-
-3. **"What does our travel policy say about rental cars?"**
-   - AI searches with several wordings, reads the most relevant policy with `iFinder_getContent`
-   - Answers with the policy linked as the source
-
-4. **"Compare the content of documents A and B"**
-   - AI fetches content from both documents
-   - Performs comparative analysis
-
-### Passage Highlighting in the Document Preview
-
-When an answer cites iFinder documents, the **Documents** section below the answer lists each
-document with the passages the search backend returned. Those passages can be located and
-highlighted in the source document:
-
-- Expanding a document shows its passages; each has a magnifier button that opens the document at
-  that passage.
-- The document's overflow menu offers **Preview (PDF)**, which opens the same viewer with all of
-  that document's cited passages highlighted.
-- The viewer navigates highlight to highlight (buttons, or `Enter` / `Shift+Enter`), supports zoom
-  and download, and — when a document is cited more than once — can filter down to a single
-  passage.
-
-Both entries appear only for documents that expose an `ACCESS` link, which is what the
-`GET /api/integrations/ifinder/files/:id/content` route needs to resolve the binary. The preview requests that
-route with the PDF format, i.e. the PDF rendition iFinder generates for the document.
-
-**How passages are located.** A passage is a substring of the fulltext that the converter put into
-the search index, but the preview is a *generated* PDF whose text layer differs from that fulltext:
-whitespace and line breaks fall differently, ligatures may be expanded or not, words can be
-hyphenated across lines, and page headers or footers appear in the middle of the text stream.
-Matching therefore does not compare the strings directly. Both the passage and the page text are
-reduced to their Unicode letters and digits (NFKC-folded, lowercased), and the passage is searched
-in that reduced form, with an offset map back to the real text-layer positions. Consequences worth
-knowing:
-
-- Punctuation, spacing, casing and ligature differences never prevent a match, and matches are not
-  script-specific — Cyrillic, Greek and CJK passages work the same as Latin ones.
-- Passages that straddle a page break are highlighted on both pages.
-- If a header or footer interrupts a passage at a page break, the passage is split into
-  sentence-like fragments and matched individually, so it is highlighted partially rather than not
-  at all.
-- Highlights begin and end on a letter or digit, so trailing punctuation of a passage is not
-  included in the highlight.
-- If a passage genuinely does not occur in the generated PDF, the preview still opens and reports
-  "Passage not found".
-
-The matcher (`client/src/features/documentPreview/utils/passageMatcher.js`) is a port of the same
-module used by the iFinder searchbar preview, so both products resolve passages identically. Keep
-the two in sync when changing either.
-
-## Security Considerations
-
-### Authentication & Authorization
-
-- **User-Based Access**: All iFinder operations use the authenticated user's context
-- **JWT Security**: Tokens are signed with RS256 and include user identity
-- **Permission Enforcement**: iFinder's built-in security controls access
-- **No Anonymous Access**: Anonymous users cannot access iFinder features
-
-### Data Protection
-
-- **Encrypted Communication**: All API calls use HTTPS
-- **Token Expiration**: JWT tokens have configurable expiration (default: 1 hour)
-- **Audit Logging**: All document access is logged with user information
-- **Content Filtering**: Large documents are truncated to prevent memory issues
-
-### Configuration Security
-
-- **Private Key Protection**: Store JWT private keys securely
-- **Environment Variables**: Use environment variables for sensitive configuration
-- **Access Control**: Limit who can configure iFinder settings
-
-## Troubleshooting
-
-### Common Issues
-
-#### "iFinder search requires authenticated user"
-
-- **Cause**: User is anonymous or not properly authenticated
-- **Solution**: Ensure user is logged in through your authentication system
-
-#### "iFinder authentication failed. Please check JWT configuration."
-
-- **Cause**: Invalid private key or JWT configuration
-- **Solution**:
-  - Verify private key is in correct PEM format
-  - Check that key matches iFinder's public key
-  - Ensure the installation's signing algorithm matches the key type (RS* for RSA keys, ES* for EC keys) and what iFinder expects
-
-#### "iFinder search request timed out"
-
-- **Cause**: Network issues or slow iFinder instance
-- **Solution**:
-  - Raise the installation's **Request timeout (ms)** (advanced setting)
-  - Check network connectivity to iFinder instance
-
-#### "Document not found: doc123456"
-
-- **Cause**: Document ID doesn't exist or user lacks permissions
-- **Solution**:
-  - Verify document ID is correct
-  - Check user has access rights in iFinder
-  - Try searching to find the correct document ID
-
-### Debugging
-
-Enable debug logging by checking server logs for:
-
-- `iFinder Search: User X searching for "query"`
-- `iFinder Content: Fetching content for document...`
-- `Generating iFinder JWT for user...`
-
-### Configuration Testing
-
-Test your iFinder configuration:
-
-1. **Check Connection**: Verify `IFINDER_API_URL` is accessible
-2. **Test Authentication**: Try a simple search as an authenticated user
-3. **Validate JWT**: Use iFinder's token validation endpoint if available
-4. **Verify Permissions**: Ensure users have proper iFinder access rights
-
-## API Reference
-
-### Configuration Options
-
-The settings live in the `ifinder` installation (**Admin → Integrations → iFinder**, `values` in `contents/config/integrations.json`); the full list is under [Configuration](#2-the-ifinder-installation).
-
-| Setting          | Environment Variable     | Installation Field             | Default                           | Description                                                                    |
-| ---------------- | ------------------------ | ------------------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
-| Base URL         | `IFINDER_API_URL`        | `baseUrl`                      | -                                 | iFinder instance URL; the environment variable wins over the field             |
-| Search Profile   | `IFINDER_SEARCH_PROFILE` | `defaultSearchProfile`         | `searchprofile-standard`          | Default search profile ID; the field wins over the environment variable        |
-| Allowed Profiles | -                        | `allowedSearchProfiles`        | `[]` (all of the user's)          | Search profiles users may pick per chat, and the tools may search              |
-| Profile Change   | -                        | `allowUserSearchProfileChange` | `true`                            | `false` pins every chat to the default search profile                          |
-| Keyless (OIDC)   | -                        | `useOidcKeyPair`               | `false`                           | Sign with iHub's OIDC key and verify via JWKS — no key exchange (recommended)  |
-| Private Key      | `IFINDER_PRIVATE_KEY`    | `privateKeyRef`                | -                                 | JWT signing private key (PEM format, env var) or credential (Admin → Credentials); ignored when `useOidcKeyPair` is `true`. Env var takes precedence over the credential |
-| Timeout          | -                        | `timeout`                      | `30000`                           | Request timeout (milliseconds), advanced                                       |
-| Download Dir     | -                        | `downloadDir`                  | `contents/data/ifinder-downloads`          | Local download directory, advanced                                             |
-
-### Error Codes
-
-| Error       | Meaning                    | Resolution                                |
-| ----------- | -------------------------- | ----------------------------------------- |
-| `ENOENT`    | iFinder instance not found | Check `IFINDER_API_URL`                   |
-| `401`       | Authentication failed      | Verify JWT configuration and private key  |
-| `403`       | Access denied              | Check user permissions in iFinder         |
-| `404`       | Document not found         | Verify document ID or search for document |
-| `413`       | Content too large          | Reduce `maxLength` parameter              |
-| `ETIMEDOUT` | Request timed out          | Raise the installation's request timeout  |
-
-## Best Practices
-
-### Performance
-
-- **Use Appropriate Limits**: Set reasonable `maxResults` for searches
-- **Cache Search Results**: Consider caching frequent queries
-- **Content Length Limits**: Use `maxLength` to control memory usage
-- **Timeout Configuration**: Set appropriate timeouts for your network
-
-### User Experience
-
-- **Progressive Disclosure**: Show summaries before full content
-- **Search Refinement**: Help users refine broad searches
-- **Context Preservation**: Maintain conversation context for better UX
-- **Error Handling**: Provide clear error messages to users
-
-### Security
-
-- **Regular Key Rotation**: Rotate JWT private keys periodically
-- **Audit Access**: Monitor who accesses which documents
-- **Principle of Least Privilege**: Users should only access necessary documents
-- **Secure Configuration**: Protect configuration files and environment variables
-
-## Support
-
-For technical support with iFinder integration:
-
-1. **Check Logs**: Review server logs for detailed error messages
-2. **Test Configuration**: Verify all configuration settings
-3. **Check iFinder Status**: Ensure iFinder instance is accessible
-4. **Contact Support**: Provide logs and configuration details (redact sensitive info)
-
----
-
-## Lazy corpus workflows
-
-The audit-grade `stellungnahmen-review` workflow expects each
-Stellungnahme to be uploaded into chat. For ministry-scale
-consultations that produces 200+ documents and breaks the chat upload
-ceiling. A second workflow ships alongside it:
-
-**`stellungnahmen-review-ifinder`** — same extract-and-report flow,
-same evidence schema, but candidates come from iFinder by topic and
-each document's fulltext is fetched one at a time inside the iteration
-loop.
-
-Key shape:
-
-1. `corpus-search` runs with `fetchFulltext: false`, so it returns
-   only the candidate metadata (no fulltext yet).
-2. An LLM `refine-decision` node inspects the candidate list and can
-   request 1-3 additional topics. The outer search loop is capped at
-   3 rounds (`_maxSearchIterations`).
-3. The per-document loop calls `iFinder_getContent` as a `tool` node
-   for the current document only. `advance-doc` clears
-   `_currentDocContent` between iterations.
-4. The extract prompt and JSON schema are identical to the upload
-   variant — same audit guarantees, same downstream consumers.
-
-Trade-off: lazy loading shifts cost from "200 calls up front" to
-"N calls in-loop". When every candidate is processed the totals are
-equal; when refinement filtering prunes candidates, lazy wins.
-
-Trigger via chat with `@workflow stellungnahmen-review-ifinder` and
-supply the focus prompt + search profile ID.
+Parameters:
+
+- `documentId` (required): the `id` of a search hit. A title, file name or link is rejected with a
+  hint on how to get the id (search, for example `title:"…"`, and take the hit's `id`); the same hint
+  comes back when no document has that id. A hit whose `id` differs from the one asked for is
+  reported as not found rather than returned as the wrong document.
+- `searchProfile`: search profile id.
+- `returnFields`: fields to return. Defaults to `id`, `title`, `creators`, `owners`, `language`,
+  `accessInfo.*`, `mediaType`, `sourceType`, `file.*`, `sourceLocations.*`, `navigationTree`,
+  `creationDate`, `modificationDate`, `indexingDate`, `application`, `contentLength`, `sourceName`
+  and `url`.
+
+The result is the document's hit fields plus `documentId`, `searchProfile`, `took` and
+`totalFound`.
 
 ## Discovering what is searchable
 
-A caller that has to guess field names gets silent empty result sets, because a
-filter on a field that carries no `.keyword` variant matches nothing rather than
-failing. These four functions let a client — an app, an agent, or an MCP client
-such as Claude — read the answer off the deployment instead.
+A caller that guesses field names gets silent empty results, because a filter on a field without a
+`.keyword` variant matches nothing. These four functions let an app, an agent or an MCP client read
+the answer off the deployment instead.
 
 ### iFinder.getFields
 
-Returns the index field catalog, straight from the live OpenSearch mapping via
-`GET /public-api/retrieval/api/v1/schema-types/{schemaType}/fields`.
+Returns the index field catalog from the live OpenSearch mapping
+(`GET /public-api/retrieval/api/v1/schema-types/{schemaType}/fields`).
 
-**Parameters:**
-
-- `schemaType` (optional): Schema type to describe, default `document`
-- `filterPrefix` (optional): Only return fields whose name starts with this
-  prefix, e.g. `file.` or `cust.`
-
-**Response:**
+- `schemaType`: schema type to describe, default `document`.
+- `filterPrefix`: only fields starting with this prefix, for example `file.` or `cust.`.
 
 ```json
 {
@@ -768,13 +570,6 @@ Returns the index field catalog, straight from the live OpenSearch mapping via
       "filter": null,
       "aggregation": null,
       "sort": null
-    },
-    "modificationDate": {
-      "type": "date",
-      "fullTextSearch": null,
-      "filter": "modificationDate",
-      "aggregation": "modificationDate",
-      "sort": "modificationDate"
     }
   },
   "fullTextSearchable": ["..."],
@@ -784,25 +579,20 @@ Returns the index field catalog, straight from the live OpenSearch mapping via
 }
 ```
 
-A `null` means the field does not serve that purpose. This is also the only way
-to learn a deployment's custom `cust.*` fields, which no static documentation
-can list.
+A `null` means the field does not serve that purpose. This is also the only way to learn a
+deployment's custom `cust.*` fields.
 
 ### iFinder.getFacetValues
 
-Enumerates the values of a single facet — which sources, authors, applications
-or languages actually exist — with a document count per value. Returns far more
-values than the capped facet block that rides along with a search response.
+Enumerates the values of one facet (sources, authors, applications, languages) with a document
+count each; far more values than the capped facet block of a search response.
 
-**Parameters:**
-
-- `facet` (required): An aggregatable field name. Text fields need their
-  `.keyword` variant (`creators.keyword`).
-- `query` (optional): Scope query, default `*`
-- `filter` (optional): Additional Lucene filters narrowing what is counted
-- `maxValues` (optional): Default 50, max 1000
-- `sort` (optional): `count:desc` (default), `value:asc`, `value:desc`
-- `searchProfile` (optional)
+- `facet` (required): an aggregatable field; text fields need `.keyword` (`creators.keyword`).
+- `query`: scope query, default `*`.
+- `filter`: additional Lucene filters.
+- `maxValues`: default 50, max 1000.
+- `sort`: `count:desc` (default), `value:asc`, `value:desc`.
+- `searchProfile`.
 
 ```javascript
 iFinder.getFacetValues({ facet: 'application.keyword', maxValues: 100 });
@@ -810,11 +600,11 @@ iFinder.getFacetValues({ facet: 'application.keyword', maxValues: 100 });
 ```
 
 Use it before filtering on a value: casing and spelling are deployment data, so
-`application.keyword:pdf` and `application.keyword:PDF` are not the same query.
+`application.keyword:pdf` and `application.keyword:PDF` are different queries.
 
 ### iFinder.listProfiles
 
-Lists the search profiles the calling user may search with:
+Lists the search profiles the calling user may search:
 
 ```javascript
 iFinder.listProfiles();
@@ -823,70 +613,180 @@ iFinder.listProfiles();
 //                { id: 'searchprofile-legal', name: 'Legal', isDefault: false, isUserDefault: false }] }
 ```
 
-The iFinder public API has no "list my search profiles" endpoint — profile
-listing lives on the administration API, which an end-user token cannot reach.
-The list is read, as the user, from the configuration action of iFinder's
-internal search API (`GET /internal-api/v2/search?action=getconfiguration`),
-which is where the iFinder searchbar gets the profiles it offers. iFinder
-assigns profiles per application; the list is read for the installation's
-`searchProfileApplication` (default `ifinder`, the searchbar's). It is
-cached per user for five minutes.
+The iFinder public API has no "list my search profiles" endpoint, so the list is read as the user
+from iFinder's internal search API (`GET /internal-api/v2/search?action=getconfiguration`), where the
+iFinder searchbar gets its profiles. iFinder assigns profiles per application; the list is read for
+the installation's `searchProfileApplication`. It is cached per user for five minutes.
 
-- `isDefault` marks the installation's `defaultSearchProfile`. It is always
-  listed; `available: false` means the user does not have it.
+- `isDefault` marks the installation's `defaultSearchProfile`. It is always listed;
+  `available: false` means the user does not have it.
 - `isUserDefault` marks the user's own default profile in iFinder.
-- When iFinder cannot be asked (`source: 'configured-default'`), only the
-  configured default is reported. iFinder 6.9 answers 403 to a user without the
-  feature `fi_ifinder_allow`.
-- The installation's `allowedSearchProfiles` narrows the list; the default stays.
-- In a chat whose search profile is fixed (picked by the user, pinned by the
-  app or by `allowUserSearchProfileChange: false`) the tool is not offered;
-  called anyway it answers with that one profile and `fixed: true`.
+- When iFinder cannot be asked (`source: 'configured-default'`), only the configured default is
+  reported. iFinder 6.9 answers 403 to a user without the feature `fi_ifinder_allow`.
+- `allowedSearchProfiles` narrows the list; the default stays.
+- In a chat whose profile is fixed, the tool is not offered; called anyway, it returns that one
+  profile with `fixed: true`.
 
 ### iFinder.discover
 
-One probe over a search profile, returning its document count, the top values of
-the main facets, sample document titles, the field catalog, and a ready-to-paste
-markdown summary.
+One probe over a search profile: document count, top values of the main facets, sample titles, the
+field catalog and a ready-to-paste markdown summary.
 
-**Parameters:**
+- `searchProfile` (required).
+- `query`: scope query, default `*:*`.
+- `facets`: facet fields to probe.
+- `sampleSize`: sample documents, default 10.
+- `includeFields`: also fetch the field catalog, default `true`.
 
-- `searchProfile` (required)
-- `query` (optional): Scope query, default `*:*`
-- `facets` (optional): Facet fields to probe
-- `sampleSize` (optional): Sample documents to list, default 10
-- `includeFields` (optional): Also fetch the field catalog, default `true`
-
-Run it once against an unfamiliar profile before searching it. The `markdown`
-field is what the admin "build memory from tool" endpoint writes into an agent
-profile's long-term memory — see
-[Admin-driven corpus discovery](#admin-driven-corpus-discovery).
+Run it once against an unfamiliar profile. Its `markdown` field is what
+[Admin-driven corpus discovery](#admin-driven-corpus-discovery) writes into an agent profile's memory.
 
 ### Using it from an MCP client
 
-Over the MCP gateway these are `iFinder_getFields`, `iFinder_getFacetValues`,
-`iFinder_listProfiles` and `iFinder_discover`, and they need the calling group
-to be granted the `ifinder` installation (`permissions.integrations` in `groups.json`).
+Over the MCP gateway the tools are `iFinder_search`, `iFinder_getFields`, and so on; the calling
+group must be granted the `ifinder` installation (`permissions.integrations` in `groups.json`).
 
-The **`ifinder-search` skill** shipped in `contents/skills/` teaches a client the
-whole surface — query syntax, the `.keyword` rule, filters versus query terms,
-facets, paging, and the discovery loop — with a full field reference and a query
-cookbook alongside it. Grant it to a group and it is offered over the gateway as
-an MCP resource (`ihub://skill/ifinder-search`).
+The `ifinder-search` skill in `contents/skills/` teaches a client the whole surface: query syntax,
+the `.keyword` rule, filters versus query terms, facets, paging and the discovery loop, with a field
+reference and a query cookbook. Grant it to a group and it is offered over the gateway as an MCP
+resource (`ihub://skill/ifinder-search`).
 
-The skill is a _managed default_ (`MANAGED_DEFAULT_FILES` in
-`server/utils/setupUtils.js`): its guidance moves together with the iFinder
-tool descriptions and the search app prompt, so on every start the server
-refreshes `contents/skills/ifinder-search/` from the shipped files, also on
-installations that already have it. Local edits to those files are overwritten;
-to customize the skill, copy it under another skill id.
+> [!WARNING]
+> The skill is a managed default: on every start the server refreshes `contents/skills/ifinder-search/`
+> from the shipped files, so local edits are overwritten. To customise it, copy it under another
+> skill id.
 
-## Admin-driven corpus discovery
+## User interface
 
-Some workflows benefit from a precomputed "corpus map" — which sources
-contribute, which languages are represented, what the typical document
-titles look like — so a downstream planner doesn't have to discover
-this at runtime. iHub exposes a generic admin endpoint for this:
+### iFinder Search app
+
+The shipped app `ifinder-search` ("iFinder Search") is the iFinder counterpart of the Web Chat app:
+it researches the iFinder index as the signed-in user. It ships enabled and binds the `ifinder`
+installation with all seven actions (`"integrations": { "ifinder": { "scopePicker": "menu" } }`), so
+users see it only while the installation exists and is enabled. With the `skills` feature on, it
+loads the `ifinder-search` skill on demand; otherwise the system prompt carries the essentials.
+
+It handles two kinds of requests:
+
+- **Questions** ("What is the notice period in our supplier contracts?"): the model searches several
+  times with different wording and operators, judges hits by title, metadata and teasers, reads only
+  the documents it needs, and answers with each statement linked to its document.
+- **Document searches** ("show my latest tickets", "presentations about project X from last
+  month"): the model builds filters (person, date range, type, source, status) and a sort, and lists
+  the matching documents with link, date and relevant fields, without reading them unless asked.
+
+Requests about the user ("my tickets", "documents I wrote") use the user's name and e-mail, which the
+system prompt receives through `{{user_name}}` and `{{user_email}}`. iFinder stores names as
+`"LASTNAME, Firstname"`, so the model first searches loosely on the last name with a facet on the
+matching `.keyword` field (`task.assignee.keyword`, `creators.keyword`, …) and then filters on the
+exact value it found.
+
+The research behaviour lives in the system prompt, so you can adapt it, for example to name your
+ticket system or your custom `cust.*` fields.
+
+**Links and follow-up questions.** Only the message text of earlier turns is replayed to the model,
+not the tool results, so the prompt has the model write every document link as
+`[title](deepLink "source › location · id")`. The link title shows as a tooltip (which system and
+folder the link opens), and the document id at its end lets a follow-up ("who wrote the second
+one?") call `iFinder_getMetadata` or `iFinder_getContent`. A document known only by title is
+searched again (`title:"…"`) and matched by its deep link first.
+
+### Choosing the search profile per chat
+
+In every app with iFinder tools, the **+** menu has an iFinder row under **Use in this chat** that
+shows the current profile and opens a submenu; a chip under the composer then shows where the next
+question goes. The iAssistant is picked the same way. The list is the user's own search profiles
+(the same list `iFinder_listProfiles` reads), narrowed to **Offered search profiles** when set.
+
+- The choice is saved with the chat and restored when it is reopened.
+- It binds the model: `search`, `getContent`, `getMetadata`, `getFacetValues` and `discover` search
+  the picked profile even when the model passes another one, and `listProfiles` is not offered.
+- Without a pick, a profile the model names is checked the same way: one the user does not have, or
+  one outside the allow-list, is refused with a list of the available profiles.
+- The server checks the pick on every turn: a profile the user does not have, or one not on the
+  allow-list, refuses the turn (`403 INTEGRATION_SCOPE_NOT_ALLOWED`).
+- When iFinder cannot be asked for the list (403 for a user without `fi_ifinder_allow`, or iFinder is
+  down), the picker offers the configured default and the allow-list with a short hint.
+- With **Users may change the search profile** off, or an app's `integrations.ifinder.pinnedScope`,
+  the profile is fixed and the picker only shows it.
+
+Runs outside a chat keep a profile too. A [scheduled task](scheduled-tasks.md#where-a-task-searches)
+stores the profile (and iAssistant) of the chat it was scheduled from, or the one picked on its form.
+A [workflow step](workflows.md#integration-scopes-in-a-node) sets one with `integrationScopes`. Both
+are checked as the user running them: a profile they no longer have fails the run with an error
+naming it.
+
+### Sources panel
+
+The documents a turn's `iFinder_search`, `iFinder_getMetadata` and `iFinder_getContent` calls found
+are listed in the chat's tool activity and in the **Sources** panel under the answer, like the
+documents of an iAssistant answer and the pages of a web search (see
+[Answer Sources](answer-sources.md)).
+
+- Each document has **Preview (PDF)**, **Download**, **Details**, **Open in App**, **Copy link**,
+  and **Add to email** in the Outlook task pane; its title opens the deep link. They are resolved
+  with the user's own permissions (`GET /api/sources/ifinder/content|metadata`).
+- Documents the answer links to are listed under **Cited in this answer**, numbered like their
+  badges in the text; the other hits under **Also considered**. One call lists at most 50 documents.
+- Every card names the search profile by its display name, and the header says where the answer
+  searched (**Searched in Contracts**) or which iAssistant it asked (**Asked HR assistant**). See
+  [Answer Sources → Integration scopes](answer-sources.md#integration-scopes).
+- With [chat history](chat-persistence.md) on, the documents are stored with the answer; a
+  [shared link](chat-sharing.md) never includes them.
+
+### Passage highlighting in the document preview
+
+Expanding a cited document shows the passages the search returned; each has a magnifier button that
+opens the document at that passage. **Preview (PDF)** opens the same viewer with all of the
+document's cited passages highlighted. The viewer steps from highlight to highlight (buttons, or
+`Enter` / `Shift+Enter`), zooms, downloads, and can filter to one passage.
+
+Both entries appear only for documents with an `ACCESS` link, which
+`GET /api/integrations/ifinder/files/:id/content` needs to fetch the PDF rendition iFinder generates.
+
+The preview's text layer differs from the indexed fulltext, so passages are matched on letters and
+digits only (Unicode-normalised, case-insensitive):
+
+- Punctuation, spacing, casing and ligatures never prevent a match; any script works.
+- Passages across a page break are highlighted on both pages.
+- A passage interrupted by a header or footer is split into fragments and highlighted partially.
+- Trailing punctuation is not highlighted.
+- A passage that is not in the generated PDF opens the preview with "Passage not found".
+
+### Open in iHub
+
+A link such as `/apps?documentId=<id>&integration=ifinder` (the iFinder hit action) opens the app
+list with the document waiting. The apps offered are those that bind the iFinder integration; the
+one the user picks receives the **original file** (never iFinder's preview), fetched by the server
+with the user's own permissions and attached by reference, whatever the app's upload settings.
+Images and audio are fetched in the browser. The installation must be configured and granted to the
+user's groups, otherwise the list says so. See
+[Auto-Send and URL Parameters](auto-send-feature.md#document-attachment-from-an-integration) and
+[Chat and Scheduled-Task Files](chat-files.md#in-the-ui).
+
+## Corpus workflows
+
+### Lazy corpus workflows
+
+The `stellungnahmen-review` workflow expects each statement to be uploaded into the chat, which
+breaks the upload limit for consultations with 200+ documents. `stellungnahmen-review-ifinder` runs
+the same extract-and-report flow with the same evidence schema, but takes candidates from iFinder:
+
+1. `corpus-search` runs with `fetchFulltext: false` and returns only candidate metadata.
+2. An LLM `refine-decision` node inspects the candidates and can request 1 to 3 more topics; the
+   search loop is capped at 3 rounds (`_maxSearchIterations`).
+3. The per-document loop calls `iFinder_getContent` for the current document only.
+4. The extract prompt and JSON schema are identical to the upload variant.
+
+When every candidate is processed, the cost equals the upload variant; when refinement prunes
+candidates, the lazy variant is cheaper. Start it in a chat with
+`@workflow stellungnahmen-review-ifinder` and give the focus prompt and the search profile id.
+
+### Admin-driven corpus discovery
+
+A precomputed corpus map (which sources contribute, which languages, typical titles) saves an agent
+from discovering it at runtime. An admin endpoint runs a tool with admin context and writes the
+result into an agent profile's long-term memory under the given heading:
 
 ```
 POST /api/admin/agents/profiles/<profileId>/memory/from-tool
@@ -896,19 +796,96 @@ POST /api/admin/agents/profiles/<profileId>/memory/from-tool
     "mode": "replace-section" }
 ```
 
-The endpoint runs the named tool with admin context and writes the
-result to the agent profile's long-term memory under the given heading
-(`## iFinder corpus map`). Subsequent agent runs see that section
-through the existing memory auto-include; the
-`stellungnahmen-review-ifinder` workflow can also read it when started
-with a non-empty `agentProfileId`.
+Later agent runs see the `## iFinder corpus map` section through the memory auto-include;
+`stellungnahmen-review-ifinder` reads it when started with a non-empty `agentProfileId`. The endpoint
+requires an admin. No default agent profile binds `iFinder_discover`, so agents cannot call it at
+runtime. Re-run discovery when the index changes significantly.
 
-**Access control**: the endpoint is gated by `adminAuth` — any
-registered tool can be invoked with admin context. `iFinder_discover`
-is intentionally NOT bound by any default agent profile, so agents at runtime cannot call it; only the admin endpoint
-can. Operators re-run discovery when the underlying index changes
-significantly.
+## Security
 
----
+- Every call runs as the signed-in user; iFinder enforces document permissions. There is no service
+  account and anonymous users are refused.
+- Tokens are short-lived (**Token lifetime**, default one hour; shorten it for production, for
+  example `1800`).
+- Prefer the keyless mode: there is no private key to store, distribute or rotate. With the legacy
+  key, keep it in a credential or the environment, never in a file under version control, and rotate
+  it (see [Legacy: manual key exchange](ifinder-oidc-jwt.md#legacy-manual-key-exchange)).
+- Use HTTPS for iFinder. A private CA goes into `ssl.domainWhitelist`, never a global TLS bypass.
+- Limit who can edit the installation (admins) and who may use it (`permissions.integrations`).
+- Long documents are cut at `maxLength`.
 
-_Last updated: September 2026_
+## Troubleshooting
+
+Start with **Test** on the installation (see [Testing the connection](#testing-the-connection)). The
+two classic failures:
+
+- **iFinder answers 500.** The request reached iFinder, so the cause is on its side, most often that
+  iFinder cannot reach iHub's JWKS URL. Check the **Issuer reachable** step: an issuer of
+  `localhost` or a single-label hostname can never work. Set the externally reachable URL under
+  **Admin → Authentication → OAuth Server** and check it from the iFinder host with `curl`.
+- **iFinder answers 401 with an empty body.** The diagnostics print the claims sent (`sub`, `iss`,
+  `aud`, `alg`, `kid`) and any `WWW-Authenticate` header. Usual causes: an issuer that does not match
+  exactly (a trailing slash is enough), a `kid` not in the JWKS, a subject in the wrong format, clock
+  skew, or iFinder not configured to trust iHub at all.
+
+| Message | Cause | Fix |
+| --- | --- | --- |
+| *iFinder access requires authenticated user* / *iFinder JWT requires authenticated user* | The user is anonymous | Sign in; check the authentication mode and session |
+| *iFinder JWT subject could not be resolved: "JWT Subject Field" is set to …* | The user lacks the attribute **User identity sent to iFinder** names | Pick an attribute the user has, or supply it from the auth provider (for LDAP `domain\username`, the provider's **Domain** field) |
+| *iFinder private key not configured* | Legacy mode without a key | Pick a **Private key** credential, set `IFINDER_PRIVATE_KEY`, or tick **Sign with iHub's OIDC key pair** |
+| *iFinder private key must be in PEM format* | The key does not start with `-----BEGIN` | Paste the full PEM, including the `BEGIN`/`END` lines |
+| *iFinder authentication failed. Please check JWT configuration.* | Token generation or validation failed | Run **Test**; check the key matches the public key in iFinder, the algorithm matches the key type (RS\* for RSA, ES\* for EC), and the issuer, audience and scope |
+| *iFinder request timed out. Please try again.* | Network or slow iFinder | Raise **Request timeout (ms)**; check connectivity |
+| *Document not found: …* | Wrong id, or the user lacks access | Search for the document and use the hit's `id`; check permissions in iFinder |
+| `403 INTEGRATION_SCOPE_NOT_ALLOWED` | Search profile not available to the user or not on the allow-list | Check **Offered search profiles** and the user's profiles in iFinder |
+| Search returns nothing for a filter | Filter on a field without `.keyword`, or wrong casing of a value | Use `getFields` and `getFacetValues` |
+| *iFinder requires sign-in via …* and other token-exchange messages | Token exchange mode | See [Token exchange errors](ifinder-oidc-jwt.md#token-exchange-errors) |
+| *Tool 'iassistant__ask' not found* | iAssistant installation missing, disabled or not bound | Check the installation is enabled, the app binds it with `ask`, and the user's group may use it |
+| iAssistant model not found | `iassistant-conversation` missing or disabled | Make sure `contents/models/iassistant-conversation.json` exists with `"enabled": true` |
+
+To follow a request in the server log, look for entries of component `IFinderService` ("Searching
+for query in profile", "Fetching content for document") and `iFinderJwt` ("Generating iFinder JWT
+for user …", which names the subject, scope and issuer). Raise `logging.level` to `debug` to see
+the token payload and sign options.
+
+## Quick reference
+
+### Query cheat sheet
+
+| Task | Write |
+| --- | --- |
+| Words, ranked | `query: "annual report"` |
+| Exact phrase | `query: '"annual report"'` |
+| One field | `query: 'title:budget'` |
+| Exact value | `filter: ['creators.keyword:"DOE, John"']` |
+| Date range | `filter: ['modificationDate:[2026-01-01 TO *]']` |
+| Everything | `query: "*"` |
+| Newest first | `sort: ["modificationDate:desc"]` |
+| Value distribution | `returnFacets: ["sourceName.keyword"]` |
+| Page 2 of 50 | `maxResults: 50, from: 50` |
+
+Plain field name = analysed, for ranked matching; `.keyword` = exact value, for filters, facets and
+sorting. `title`, `content`, `url` and `subject` have no `.keyword`.
+
+### IntraFind operators
+
+| Operator | Does |
+| --- | --- |
+| `MODE/e&Müller` | Exact: no lemma, compound or diacritic loosening |
+| `MODE/c&Bundesligaspiel` | Decompound: also matches documents saying just "Liga" |
+| `THES/&Stiefel` | Expand with thesaurus synonyms, broader and narrower terms |
+| `ENTITY/PERS` | Any person name; also `LOC`, `ORG`, `EMAIL`, `PHONE` |
+| `NEAR/S(vertrag kündigung)` | Both terms in one sentence (`P` paragraph, `5` within 5 tokens) |
+| `UNIT/>=(5 kg)` | A weight over 5 kg written in the text, units converted |
+| `DATE/>=(2026-01-01)` | A date in the text, however it is written |
+| `NUMBER/[10 TO 100]` | A number in that range in the text |
+| `OR/2(a b c d)` | OR group where at least 2 clauses must match |
+
+### Setup checklist
+
+1. Authentication set up on both sides ([iFinder Authentication](ifinder-oidc-jwt.md)).
+2. iFinder installed with base URL, authentication, subject field and default profile; **Test**
+   green.
+3. Installation granted to the right groups.
+4. Apps bind `ifinder` (and `iassistant`), or use the shipped **iFinder Search** app.
+5. iAssistant installed on `ifinder`, `iassistant-conversation` model enabled, **Test** green.
