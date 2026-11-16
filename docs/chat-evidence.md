@@ -115,6 +115,15 @@ carry the full messages, `append` the new ones, `same` none), `request/retry`, `
 journal has no `request/header` gets **no record**: the record is built from the run ledger, so a
 run that was not recorded (the ledger off, which stored chats never allow) has none.
 
+**One answer is one run, also across a pause.** A turn that stops for a clarification or a tool
+approval is continued under the same run id once the person answers (see
+[Run Ledger](run-ledger.md#deployment-assumptions)), so the record of the answer lists the calls,
+tool calls and results from before the pause, the answer (`interaction/answered`, the user's
+message) and everything after it. `startedAt` is the start of the turn, `output.usage` the
+continuation's usage (the run's `run/end` counts the whole turn). When the paused run cannot be
+continued (another model, its journal gone) the answer is a run of its own and its record covers
+that run only, as before.
+
 - **Chat answers:** `chatMaterializer.settleAssistantTurn` stores the answer and releases the run as
   before, then starts `recordChatEvidence` in the background, never awaited. The record is keyed by
   the chat and the stored answer's message id; the answer itself carries no pointer. This is the one

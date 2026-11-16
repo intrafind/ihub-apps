@@ -679,6 +679,26 @@ export function fileIdsOfMessages(messages) {
 }
 
 /**
+ * The stored answer of a run: its assistant message after the run's last user
+ * message. A turn that paused for an approval and is continued under the same
+ * run id can have stored text at the pause; that text answers the question
+ * before the continuation, not the continuation itself.
+ *
+ * @param {Object[]} messages - Stored transcript.
+ * @param {string} runId - Run whose answer to find.
+ * @returns {Object|null}
+ */
+export function answerOfRun(messages, runId) {
+  let answer = null;
+  for (const message of messages || []) {
+    if (message?.runId !== runId) continue;
+    if (message.role === 'user') answer = null;
+    else if (message.role === 'assistant' && !answer) answer = message;
+  }
+  return answer;
+}
+
+/**
  * Index of the last stored message belonging to a run, or -1 when it wrote
  * none.
  *
@@ -1976,9 +1996,7 @@ export class ChatRepository {
         return { message: null, messages, conflict: true };
       }
       if (unlessAnswered && message?.runId) {
-        const answer = messages.find(
-          entry => entry.role === 'assistant' && entry.runId === message.runId
-        );
+        const answer = answerOfRun(messages, message.runId);
         if (answer) return { message: answer, messages, skipped: true };
       }
       // Messages this write removes from the transcript. Their artifact
@@ -2000,9 +2018,7 @@ export class ChatRepository {
       if (supersedeMessageId) {
         const index = messages.findIndex(stored => stored.id === supersedeMessageId);
         if (index === -1) {
-          const answer = message?.runId
-            ? messages.find(stored => stored.role === 'assistant' && stored.runId === message.runId)
-            : null;
+          const answer = message?.runId ? answerOfRun(messages, message.runId) : null;
           return { message: answer || null, messages, skipped: true };
         }
         discarded.push(messages[index]);

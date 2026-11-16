@@ -536,6 +536,13 @@ export function projectLedgerEvent(ev) {
         })
       ];
     case RUN_LOG_EVENTS.RUN_END:
+      // A chat turn that stopped for a clarification or an approval ends its
+      // segment with status `paused`; the run continues under the same id
+      // once the person answers (`run/resumed` follows), so a replay shows a
+      // pause, not an end.
+      if (d.status === 'paused') {
+        return [wrap(SSE_V2_EVENTS.RUN_PAUSED, { reason: 'interaction' })];
+      }
       return [
         wrap(SSE_V2_EVENTS.RUN_ENDED, {
           status: d.status || 'completed',

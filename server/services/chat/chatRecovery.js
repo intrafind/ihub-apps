@@ -40,6 +40,7 @@ import { getExecutionRegistry } from '../workflow/ExecutionRegistry.js';
 import { getWorkflowEngine } from '../workflow/WorkflowEngine.js';
 import { executionHandoff } from '../workflow/executionChat.js';
 import { settleAssistantTurn } from './chatMaterializer.js';
+import { answerOfRun } from './ChatRepository.js';
 import { rebuildRunActivity } from './runActivity.js';
 import logger from '../../utils/logger.js';
 
@@ -276,7 +277,9 @@ async function settle(chat, { repository, runLog }) {
   // The answer may be stored already — the process died between the append
   // and the release. Then only the release is missing.
   const { messages } = await repository.getMessages(chatId);
-  const answer = messages.find(m => m.role === 'assistant' && m.runId === runId);
+  // After the run's last question: text a paused turn stored before it was
+  // continued under the same run id is not the continuation's answer.
+  const answer = answerOfRun(messages, runId);
 
   let endRun;
   if (!answer) {
@@ -301,7 +304,7 @@ async function settle(chat, { repository, runLog }) {
     if (settled.skipped) {
       // The run ends the way the answer that was stored says.
       const { messages: current } = await repository.getMessages(chatId);
-      const stored = current.find(m => m.role === 'assistant' && m.runId === runId);
+      const stored = answerOfRun(current, runId);
       if (stored) endRun = endRunOf(stored);
     }
   } else {

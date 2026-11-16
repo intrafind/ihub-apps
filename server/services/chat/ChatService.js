@@ -32,7 +32,7 @@ import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 import { abortCause, abortReason, causeOfSignal, describeCause } from './abortCause.js';
 import defaultAgentLoop from '../loop/AgentLoop.js';
-import { OPTIONAL_COUNTERS } from '../loop/llmUsage.js';
+import { OPTIONAL_COUNTERS, addUsage } from '../loop/llmUsage.js';
 import { createContextTracker } from '../loop/contextTracker.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
@@ -427,6 +427,33 @@ class ChatService {
     }
   }
 
+  /**
+   * Continue the paused run a stored turn answers (`RunLog.continueRun`): only
+   * a chat run of this chat and app, started with the same model. Null when it
+   * cannot be continued; the turn then runs as a run of its own.
+   * @private
+   */
+  async _continueLedgerRun({ runId, interactionId, chatId, appId, modelId }) {
+    if (typeof this.runLog.continueRun !== 'function') return null;
+    try {
+      return await this.runLog.continueRun(runId, {
+        interactionId,
+        accept: start =>
+          start.data?.kind === 'chat' &&
+          start.data.refs?.chatId === chatId &&
+          (start.data.refs?.appId || null) === (appId || null) &&
+          (start.data.model || null) === (modelId || null)
+      });
+    } catch (err) {
+      logger.warn('Paused run could not be continued', {
+        component: COMPONENT,
+        runId,
+        error: err.message
+      });
+      return null;
+    }
+  }
+
   // ── the turn ───────────────────────────────────────────────────────────
 
   /**
@@ -453,6 +480,10 @@ class ChatService {
    * @param {string} [params.language='en']
    * @param {Object} [params.user]
    * @param {string} [params.runId] - run id to use (default: minted)
+   * @param {{interactionId?: string}} [params.continueRun] - `runId` names a paused run of this
+   *   chat whose interaction this turn answers: the turn continues that run (same id, one
+   *   journal for the whole turn) when `RunLog.continueRun` allows it, and otherwise runs
+   *   under a new id. Stored turns only.
    * @param {Object} [params.persistence] - stored-chat context. Every chat turn from the chat
    *   route carries one; a caller without one (an app invoked internally, a headless agent)
    *   runs an unstored turn.
@@ -514,6 +545,7 @@ class ChatService {
     language = 'en',
     user,
     runId: givenRunId,
+    continueRun = null,
     persistence = null,
     emitter = null,
     headless = !streaming,
@@ -545,7 +577,7 @@ class ChatService {
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
     const startedAt = Date.now();
-    const runId = givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat');
+    let runId = givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat');
     const refs = { chatId, appId: app?.id, ...(messageId ? { messageId } : {}) };
 
     // One in-flight request per chat: a new turn supersedes the previous one
@@ -604,6 +636,28 @@ class ChatService {
       activeRequests.set(chatId, controller);
     }
 
+    // A turn that answers a paused one continues its run, so the journal of
+    // that one run holds the whole turn — what happened before the pause, the
+    // answer, and the rest — and the answer's evidence record covers it all.
+    // When the run cannot be continued this turn runs under a new id, as
+    // every turn did before; the paused run keeps its `run/end` (`paused`).
+    let continued = null;
+    if (continueRun && runId === givenRunId) {
+      if (persistence?.repository) {
+        continued = await this._continueLedgerRun({
+          runId,
+          interactionId: continueRun.interactionId,
+          chatId,
+          appId: app?.id,
+          modelId: model?.id
+        });
+      }
+      // Never a second `run/start` in the paused run's journal.
+      if (!continued) runId = newRunId('chat');
+    }
+    // What the run used before the pause: its end counts the whole turn.
+    const carriedUsage = continued?.paused?.data?.usage || null;
+
     // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
     // A caller with its own consumer (the inference API turning frames into
     // OpenAI-shaped events) injects one; the chat UI gets the default one,
@@ -636,7 +690,9 @@ class ChatService {
       hasUserFileData: !!userFileData
     });
 
-    await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language, trigger });
+    if (!continued) {
+      await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language, trigger });
+    }
 
     // Scheduling tools resolve "tomorrow at nine" against the user's clock, so
     // the model has to be told what that clock says.
@@ -691,6 +747,7 @@ class ChatService {
           status: 'error',
           finishReason: 'error',
           error: refusal,
+          usage: carriedUsage,
           startedAt
         });
         if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
@@ -891,6 +948,11 @@ class ChatService {
     // From here the answered approval is used: a caller must not put it back.
     if (toolApproval && typeof toolApproval === 'object') toolApproval.started = true;
 
+    // Until this turn's wrap-up is done (answer stored, chat released, stream
+    // unbound — the `finally` below), a continuation of its run waits: a
+    // pause shows its card before that, and a quick answer must not race it.
+    const releaseRunHold =
+      typeof this.runLog.hold === 'function' ? this.runLog.hold(runId) : () => {};
     let outcome;
     try {
       const result = await this.agentLoop.run({
@@ -1060,7 +1122,8 @@ class ChatService {
       this._endLedgerRun(runId, {
         status: outcome.status,
         finishReason: outcome.finishReason,
-        usage: outcome.usage,
+        // A continued run's end counts what it used before the pause too.
+        usage: carriedUsage ? addUsage(carriedUsage, outcome.usage) : outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
         answerBasis: outcome.answerBasis,
@@ -1110,7 +1173,13 @@ class ChatService {
         error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
       });
       // Ledger first here too, for the reason above.
-      this._endLedgerRun(runId, { status: 'error', finishReason: 'error', error, startedAt });
+      this._endLedgerRun(runId, {
+        status: 'error',
+        finishReason: 'error',
+        error,
+        usage: carriedUsage,
+        startedAt
+      });
       // `_finishTurn` never ran, so nothing else releases the chat: without
       // this it stays `running` with a live `activeRunId` forever.
       if (persist) {
@@ -1134,6 +1203,7 @@ class ChatService {
       if (trackRequest && activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
       }
+      releaseRunHold();
     }
   }
 

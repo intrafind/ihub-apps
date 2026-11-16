@@ -1036,6 +1036,15 @@ test('projectLedgerEvent: an aborted run/end keeps who stopped it', () => {
   assert.deepEqual(ended.data, { status: 'aborted', finishReason: 'connection_closed', cause });
 });
 
+test('projectLedgerEvent: a run/end with status paused is a pause (the run continues later)', () => {
+  const [frame, ...rest] = projectLedgerEvent(
+    ledgerEvent(RUN_LOG_EVENTS.RUN_END, { status: 'paused', finishReason: 'approval' })
+  );
+  assert.equal(rest.length, 0);
+  assert.equal(frame.type, RUN_PAUSED);
+  assert.deepEqual(frame.data, { reason: 'interaction' });
+});
+
 test('projectLedgerEvent: run/paused, run/resumed', () => {
   const [paused] = projected(RUN_LOG_EVENTS.RUN_PAUSED, { reason: 'manual', interactionId: 'i1' });
   assert.equal(paused.type, RUN_PAUSED);

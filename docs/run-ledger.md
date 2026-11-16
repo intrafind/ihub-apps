@@ -77,7 +77,7 @@ access, `GET /api/runs/:runId` and the admin run list.
 | ------------------------------------------ | -------------------------------------------------- |
 | `chat` (chat turns, Responses app turns)   | deleted after 15 minutes, once the chat released the run |
 | `inference` (`/v1/chat/completions`, Responses model calls) | deleted after 15 minutes, once the chat (a Responses conversation) released the run |
-| any kind that ended `paused` (approval, clarification) | kept until `retentionDays`: the turn continues as a new run, and nothing else records the paused part |
+| any kind that ended `paused` (approval, clarification) | kept while paused: the answer continues the same run (see [below](#deployment-assumptions)), which then ends and is deleted 15 minutes later like any chat run; a pause nobody answers keeps its journal until `retentionDays` |
 | `workflow`, `agent`, everything else       | kept until `retentionDays` (their evidence is not recorded yet) |
 
 **This does not depend on `chats.evidence.enabled`.** With evidence off, the journal of a finished
@@ -331,11 +331,38 @@ file (`locks/`), so two recovering workers never allocate the same number.
 - **The stream format does not depend on the flag.** SSE v2 (`docs/sse-v2.md`)
   is the only chat / workflow / run stream; the ledger flag decides what is
   persisted, not what is sent.
-- **Paused chat runs end on their own.** A chat turn that asks a clarification
-  leaves its run paused; the run ends (`run/end` with `finishReason`
-  `clarification_answered` / `clarification_superseded` /
-  `clarification_expired`) when the next message answers or supersedes the
-  question, or when it expires. The answer feeds the next turn, a new run.
+- **A paused chat turn continues its run.** A chat turn that stops for a
+  clarification (`ask_user`) or a tool approval records `run/end` with status
+  `paused` (the run summary says `paused`). When the next chat message
+  answers it, that turn **continues the same run**: `run/resumed`
+  (`interactionId`, `pausedMs`) follows the pause and `interaction/answered`,
+  the summary is `running` again (`endedAt` cleared), the sequence goes on
+  after the last event, and the run ends with an ordinary `run/end` whose
+  `usage` counts the whole turn. One answer is one run, so its journal and the
+  [evidence record](chat-evidence.md) built from it hold everything: the
+  calls before the pause, the answer, and the rest. A turn can pause more
+  than once; each answer continues the same run. A replay shows the paused
+  `run/end` as `run/paused`, not as the end of the run.
+  - **From any worker.** `RunLog.continueRun` asks a worker that still owns
+    the run's sequence (it paused the run less than a minute ago) to hand it
+    over (`runlog:release`: it flushes and lets go); otherwise the sequence
+    continues from the persisted journal under the per-run lock, which is
+    also what happens after a restart. A continuation waits (at most 1.5 s)
+    until the turn that paused has stored its part and released the chat —
+    the card appears before that — and gets a run of its own if it has not,
+    or if the worker that owns the run does not answer.
+  - **When the turn gets a run of its own instead** (as every turn did
+    before): the journal is gone (deleted, `journalDeletedAt`) or has no `run/start`, the run is not paused
+    any more (continued or ended already), or it is not a chat run of the
+    same chat and app started with the same model. The paused run then keeps
+    its `run/end` with status `paused`. There is no age limit: a run is
+    continuable while its journal exists.
+  - **Unanswered questions still end on their own.** A clarification that is
+    superseded by another message or expires, or one answered outside the chat
+    (the answer endpoint), ends its run (`finishReason`
+    `clarification_superseded` / `clarification_expired` /
+    `clarification_answered`); an answer given in the chat is left to the
+    turn that continues the run.
 - **`runLog.enabled` defaults to `true`.** Migration V085 adds the block to an
   existing `platform.json`; like every migration it is forward-only.
 

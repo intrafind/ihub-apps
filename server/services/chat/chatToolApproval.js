@@ -316,8 +316,10 @@ async function takePending(repository, chatId, interactionId, grants, stored) {
  * @param {Object} [params.interactionService]
  * @param {Function} [params.authorizeInteraction]
  * @returns {Promise<{grants: string[], refusal: Object|null,
- *   commit: (() => Promise<{grants: string[], resume: Object|null, refusal: Object|null}>)|null}>}
+ *   commit: (() => Promise<{grants: string[], resume: Object|null, refusal: Object|null}>)|null,
+ *   pausedTurn?: {runId: string, interactionId: string}}>}
  *   `refusal` is `{ status, code, message }`: answer the request with it, run no turn.
+ *   `pausedTurn` names the run the approval paused, which the turn continues.
  */
 export async function prepareChatApproval({
   chatId,
@@ -388,6 +390,9 @@ export async function prepareChatApproval({
     return result;
   }
 
+  if (stored.runId) {
+    result.pausedTurn = { runId: stored.runId, interactionId: stored.interactionId };
+  }
   result.commit = async () =>
     commitChatApproval({
       chatId,

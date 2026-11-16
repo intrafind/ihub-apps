@@ -28,7 +28,7 @@ import {
   markChatDurable
 } from '../../sse.js';
 import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
-import runLog, { newRunId } from '../../services/loop/RunLog.js';
+import runLog, { newRunId, isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
 import interactionService from '../../services/loop/InteractionService.js';
@@ -660,8 +660,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    * message that carries `clarificationResponse` answers its interaction
    * (channel `chat`); any other message cancels clarifications the user
    * skipped past. Never blocks the turn.
+   *
+   * @returns {Promise<{runId: string, interactionId: string}|null>} the run this
+   *   message answered a clarification of — the turn continues it — or null
    */
   async function settleChatClarifications({ chatId, user, lastMessage }) {
+    let answered = null;
     const response = lastMessage?.clarificationResponse;
     const answeredId =
       response && typeof response === 'object'
@@ -687,6 +691,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             response.skipped ? { skipped: true } : { value: response.value },
             { user, channel: 'chat' }
           );
+          answered = { runId: interaction.runId, interactionId: interaction.id };
         } else {
           await interactionService.cancel(interaction.id, 'superseded');
         }
@@ -699,6 +704,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         error: err.message
       });
     }
+    return answered;
   }
 
   /**
@@ -722,7 +728,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
     persistence = null,
     toolApproval = null,
     canApproveTools = false,
-    runId = null
+    runId = null,
+    continueRun = null
   }) {
     await logInteraction('chat_request', buildLogData(true));
 
@@ -731,6 +738,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       chatId,
       messageId,
       ...(runId ? { runId } : {}),
+      ...(continueRun ? { continueRun } : {}),
       activatedSkills,
       streaming: true,
       buildLogData,
@@ -973,7 +981,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // A clarification (`ask_user`) is answered by the next message: settle the
         // pending interaction (channel `chat`) before the turn runs; any other
         // message supersedes clarifications the user chose not to answer.
-        await settleChatClarifications({
+        const answeredClarification = await settleChatClarifications({
           chatId,
           user: req.user,
           lastMessage: Array.isArray(messages) ? messages.at(-1) : null
@@ -1378,7 +1386,14 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // prompt is built, the refresh of outdated project documents it
         // waits for is shown on that run, and the turn then runs as it (or
         // fails as it, so the status line ends with the turn).
-        const turnRunId = newRunId('chat');
+        //
+        // A turn that answers a paused one (a clarification above, a tool
+        // approval) is named after the paused run: it continues that run, so
+        // one answer is one run (`ChatService.runTurn` falls back to a new id
+        // when the run cannot be continued).
+        const pausedTurn = answeredClarification || approvals.pausedTurn || null;
+        const continuesRun = pausedTurn && isValidRunId(pausedTurn.runId);
+        const turnRunId = continuesRun ? pausedTurn.runId : newRunId('chat');
         const refreshStatus = new RunStreamEmitter({ streamId: chatId, runId: turnRunId });
         const prep = await chatService.prepareChatRequest({
           ...chatRequestOptions,
@@ -1398,14 +1413,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             messageId,
             code: prep.error.code,
             message: errMsg,
-            runId: turnRunId
+            // Not the paused run's id: a second request answering the same
+            // pause must not end the run the first one may be continuing.
+            runId: continuesRun ? null : turnRunId
           });
           return res.json({ status: 'error', message: errMsg, code: prep.error.code });
         }
         const approvalRefusal = await commitApproval();
         if (approvalRefusal) {
           emitFailedRun(chatId, {
-            runId: turnRunId,
+            // Not the paused run's id: a refused second answer must not end
+            // the run the first one is continuing.
+            runId: continuesRun ? null : turnRunId,
             messageId,
             code: approvalRefusal.code,
             message: approvalRefusal.message
@@ -1439,7 +1458,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
           toolApproval,
           // Only a client that draws the approval card can answer one.
           canApproveTools: toolApprovalCapable === true,
-          runId: turnRunId
+          runId: turnRunId,
+          ...(continuesRun ? { continueRun: { interactionId: pausedTurn.interactionId } } : {})
         });
         // Refused at persistence: the chat's container changed under the
         // turn (`settleUserTurn`), and nothing of it was stored.

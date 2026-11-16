@@ -72,7 +72,7 @@ test('answered / superseded / expired clarifications end their paused chat runs'
 
   const a = await pausedChatRun(runLog, svc, 'chat-a');
   const endA = waitForEnd(runLog, a.runId);
-  await svc.answer(a.interaction.id, { value: 'EU' }, { user: { id: 'u1' }, channel: 'chat' });
+  await svc.answer(a.interaction.id, { value: 'EU' }, { user: { id: 'u1' }, channel: 'queue' });
   assert.deepEqual((await endA).data, {
     status: 'completed',
     finishReason: 'clarification_answered'
@@ -98,6 +98,17 @@ test('answered / superseded / expired clarifications end their paused chat runs'
   assert.equal(statuses[b.runId], 'aborted');
   assert.equal(statuses[c.runId], 'aborted');
 
+  unregister();
+  await svc.stop();
+  await runLog.stop();
+});
+
+test('an answer given in the chat is left to the turn it feeds, which continues the run', async () => {
+  const { runLog, svc, unregister } = await setup();
+  const e = await pausedChatRun(runLog, svc, 'chat-e');
+  await svc.answer(e.interaction.id, { value: 'EU' }, { user: { id: 'u1' }, channel: 'chat' });
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(await runLog.hasEnded(e.runId), false, 'no run/end behind the continuation');
   unregister();
   await svc.stop();
   await runLog.stop();

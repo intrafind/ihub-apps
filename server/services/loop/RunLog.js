@@ -96,9 +96,20 @@ export async function chatReleasedRun(summary, { repository } = {}) {
 export const RUNLOG_APPEND_CHANNEL = 'runlog:append';
 /** Cluster bus channel on which the owner of a run describes it to other workers. */
 export const RUNLOG_META_CHANNEL = 'runlog:meta';
+/**
+ * Cluster bus channel on which the owner of a paused run hands its sequence
+ * over to the worker that continues it. See `RunLog#continueRun`.
+ */
+export const RUNLOG_RELEASE_CHANNEL = 'runlog:release';
 /** Presence kind announcing which worker owns (allocates the sequence of) a run. */
 export const RUN_PRESENCE_KIND = 'run';
 const REMOTE_APPEND_TIMEOUT_MS = 2000;
+/**
+ * How long a continuation waits for the turn that paused the run to finish
+ * its wrap-up (`RunLog#hold`). Below the remote timeout, so a worker asked to
+ * hand a held run over still answers in time.
+ */
+const HOLD_WAIT_MS = 1500;
 
 /**
  * Whether `runId` is acceptable as a ledger run id: the same rule as every
@@ -200,11 +211,20 @@ export class RunLog {
      * @type {Set<string>}
      */
     this._deleted = new Set();
+    /**
+     * Runs a turn on this worker is still writing (`hold`), by id: a
+     * continuation waits for them. See `continueRun`.
+     * @type {Map<string, Promise<void>>}
+     */
+    this._holds = new Map();
     this._unrespond = this._bus.respond(RUNLOG_APPEND_CHANNEL, payload =>
       this._appendForRemote(payload)
     );
     this._unrespondMeta = this._bus.respond(RUNLOG_META_CHANNEL, payload =>
       this._metaForRemote(payload)
+    );
+    this._unrespondRelease = this._bus.respond(RUNLOG_RELEASE_CHANNEL, payload =>
+      this._releaseForRemote(payload)
     );
 
     this._store =
@@ -365,6 +385,144 @@ export class RunLog {
     }
     const seq = await this.lastSeq(runId);
     return this._register(runId, this._newEntry({ seq, kind, anonymous, owned: true }));
+  }
+
+  /**
+   * Continue a run that paused: its last lifecycle event is a `run/end` with
+   * status `paused` (a chat turn that stopped for a clarification or a tool
+   * approval). The run is open again under the same id: `run/resumed` is
+   * appended after the pause, the summary goes back to `running`, and the
+   * run ends again later with an ordinary `run/end`. One answer is then one
+   * run, and its journal holds the whole turn.
+   *
+   * Works from any worker. A worker that still owns the run's sequence (it
+   * paused the run a moment ago) hands it over first (`runlog:release`, it
+   * flushes and lets go); otherwise the sequence continues from the persisted
+   * ledger under the per-run lock, like `appendRecovered`.
+   *
+   * Returns null — and changes nothing — when the run cannot be continued:
+   * the ledger is off, the journal is gone or has no `run/start`, the run is
+   * not paused (running, ended, or already continued by another request), or
+   * `accept` refuses its `run/start`. The caller then starts a run of its own.
+   *
+   * @param {string} runId
+   * @param {Object} [opts]
+   * @param {string} [opts.interactionId] - the answered interaction, recorded on `run/resumed`
+   * @param {(start: Object) => boolean} [opts.accept] - checks the run's `run/start` event
+   * @returns {Promise<{start: Object, paused: Object}|null>} the run's `run/start` and the
+   *   `run/end` it paused with
+   */
+  async continueRun(runId, { interactionId, accept } = {}) {
+    if (!isValidRunId(runId) || !this.isEnabled()) return null;
+    // The turn that paused the run shows the question before it has stored
+    // what it produced and released the chat; continuing meanwhile would let
+    // that wrap-up act on the continuation. Wait for it, briefly.
+    if (!(await this._settled(runId))) return null;
+    const local = this._runs.get(runId);
+    if (local && !local.ended) return null;
+    if (!local?.owned && this._bus.hasRemote(RUN_PRESENCE_KIND, runId)) {
+      const reply = await this._bus.request(
+        RUNLOG_RELEASE_CHANNEL,
+        { runId },
+        { route: { kind: RUN_PRESENCE_KIND, key: runId }, timeoutMs: REMOTE_APPEND_TIMEOUT_MS }
+      );
+      // Still producing or wrapping up there, or no answer from a worker
+      // that still announces the run: not ours to take.
+      if (reply?.released !== true) return null;
+    }
+    return this._store.withRunLock(runId, async () => {
+      await this.flush();
+      const events = await this._store.readEvents(runId);
+      const start = events[0]?.type === RUN_LOG_EVENTS.RUN_START ? events[0] : null;
+      const paused = events.findLast(event =>
+        [RUN_LOG_EVENTS.RUN_START, RUN_LOG_EVENTS.RUN_END, RUN_LOG_EVENTS.RUN_RESUMED].includes(
+          event.type
+        )
+      );
+      if (!start || paused?.type !== RUN_LOG_EVENTS.RUN_END || paused.data?.status !== 'paused') {
+        return null;
+      }
+      if (typeof accept === 'function' && !accept(start)) return null;
+      const current = this._runs.get(runId);
+      if (current && !current.ended) return null;
+      const principal = start.data?.principal || {};
+      const entry = current || this._newEntry();
+      Object.assign(entry, {
+        seq: Math.max(entry.seq || 0, events.at(-1).seq || 0),
+        kind: start.data?.kind || 'chat',
+        anonymous: principal.anonymous === true,
+        principalId: principal.id ?? null,
+        identityMode: principal.mode || null,
+        startedAt: start.ts,
+        refs: start.data?.refs || {},
+        trigger: start.data?.trigger || null,
+        ended: false,
+        owned: true
+      });
+      this._register(runId, entry);
+      const pausedAt = Date.parse(paused.ts);
+      const resumed = this.append(runId, RUN_LOG_EVENTS.RUN_RESUMED, {
+        ...(interactionId ? { interactionId: String(interactionId) } : {}),
+        ...(Number.isFinite(pausedAt) ? { pausedMs: Math.max(0, Date.now() - pausedAt) } : {})
+      });
+      this._store.recordRunResumed({ runId, at: resumed.ts });
+      await this.flush();
+      return { start, paused };
+    });
+  }
+
+  /**
+   * Mark a run as still being written by a turn on this worker — from before
+   * its loop runs until its wrap-up (answer stored, chat released, stream
+   * unbound) is done. A continuation of the run (`continueRun`, here or asked
+   * from another worker) waits for the returned release, at most
+   * {@link HOLD_WAIT_MS}, and refuses after that.
+   *
+   * @param {string} runId
+   * @returns {() => void} release
+   */
+  hold(runId) {
+    let release;
+    const promise = new Promise(resolve => {
+      release = resolve;
+    });
+    this._holds.set(runId, promise);
+    return () => {
+      if (this._holds.get(runId) === promise) this._holds.delete(runId);
+      release();
+    };
+  }
+
+  /** Whether no turn on this worker holds `runId` (waiting up to HOLD_WAIT_MS). @private */
+  async _settled(runId) {
+    const held = this._holds.get(runId);
+    if (!held) return true;
+    let timer;
+    const timedOut = new Promise(resolve => {
+      timer = setTimeout(() => resolve(false), HOLD_WAIT_MS);
+      timer.unref?.();
+    });
+    const settled = await Promise.race([held.then(() => true), timedOut]);
+    clearTimeout(timer);
+    return settled;
+  }
+
+  /**
+   * Hand a paused run this worker owns over to the worker that continues it
+   * (`continueRun` there): flush, then stop owning its sequence. Silent for a
+   * run not owned here; `{ released: false }` for one still producing.
+   * @private
+   */
+  async _releaseForRemote(payload) {
+    const runId = payload?.runId;
+    const entry = typeof runId === 'string' ? this._runs.get(runId) : null;
+    if (!entry?.owned) return undefined;
+    if (!(await this._settled(runId)) || !entry.ended) return { released: false };
+    await this.flush();
+    entry.owned = false;
+    this._owned.delete(runId);
+    if (entry.listeners.size === 0) this._runs.delete(runId);
+    return { released: true };
   }
 
   /**
@@ -1100,6 +1258,8 @@ export class RunLog {
     this._unrespond = null;
     this._unrespondMeta?.();
     this._unrespondMeta = null;
+    this._unrespondRelease?.();
+    this._unrespondRelease = null;
     this._owned.clear();
     await this.flush();
   }

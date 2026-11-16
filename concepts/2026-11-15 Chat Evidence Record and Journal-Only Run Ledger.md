@@ -394,6 +394,14 @@ Each phase is shippable on its own.
 12. **Quota:** evidence counts against the chat's storage limit.
 13. **Storage backends:** every provider implements the prefix delete.
 14. **Switch:** evidence can be turned off (`chats.evidence.enabled`).
+15. **Paused turns (2026-11-16):** one answer is one run, also across a pause. A turn that stopped
+    for a clarification or a tool approval is continued under the same run id when it is answered
+    (`RunLog.continueRun`: `run/resumed` after the paused `run/end`, summary back to `running`,
+    sequence continued from any worker). Before, the continuation was a new run and the record of
+    the answer missed everything before the pause. It falls back to a new run when the paused run
+    cannot be continued (journal gone, not paused any more, another chat, app or model). For the
+    journal deletion of section 4: a continued run ends normally and is swept like any finished
+    chat run; one nobody answers stays `paused` until retention.
 
 ## Open questions
 
