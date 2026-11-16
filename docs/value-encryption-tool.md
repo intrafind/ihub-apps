@@ -1,5 +1,7 @@
 ---
-description: "Encrypt passwords and API keys for use in configuration and environment files."
+description:
+  "Encrypt passwords and API keys in Admin → Security for use in configuration files: the screen,
+  the API endpoint and where encrypted values work."
 audience: admin
 type: how-to
 adminPage: /admin/security
@@ -7,249 +9,141 @@ adminPage: /admin/security
 
 # Value Encryption Tool
 
-The Value Encryption Tool in the Admin System page allows administrators to encrypt sensitive values (like passwords, API keys, secrets) to store them securely in `.env` files or configuration files.
+The Value Encryption Tool turns a secret, such as a password, an API key or a client secret, into an
+encrypted `ENC[...]` value. You store that value in a configuration file instead of the plain text,
+and iHub decrypts it when it reads the field.
 
-## Overview
+| | |
+| --- | --- |
+| **Location** | **Admin → Security → Value Encryption** (`/admin/security`; the old `/admin/system` redirects there) |
+| **Access** | Administrators only |
+| **Algorithm** | AES-256-GCM, with the installation's encryption key (`TokenStorageService`) |
+| **Direction** | Encrypt only. The UI never decrypts a value |
 
-- **Location**: Admin → System → Value Encryption Tool
-- **Access**: Requires admin privileges
-- **Purpose**: Encrypt plaintext values for secure storage
-- **Format**: Uses AES-256-GCM encryption via TokenStorageService
+## Encrypt a Value
 
-## Features
+1. Sign in as an administrator and open **Admin → Security**.
+2. Select the **Value Encryption** section. An amber **Usage Instructions** panel sums up the steps
+   below.
+3. Type the secret into **Plaintext Value to Encrypt**. It is a password field, so the value stays
+   hidden.
+4. Click **Encrypt Value**, or press Enter. The button is disabled while the field is empty and
+   shows **Encrypting...** while the request runs.
+5. When **Value encrypted successfully** appears, the result shows in the read-only **Encrypted
+   Value** box. Click the box to select all of it, or click **Copy** in its top-right corner (the
+   page confirms with **Copied to clipboard!**).
+6. Paste the value into the secret field of your configuration (see
+   [Where Encrypted Values Work](#where-encrypted-values-work)).
 
-- ✅ One-way encryption (encrypt only, no decrypt via UI)
-- ✅ Copy-to-clipboard functionality
-- ✅ Real-time validation
-- ✅ Secure AES-256-GCM encryption
-- ✅ Compatible with existing TokenStorageService
-- ✅ Encrypted values automatically decrypted at runtime
+If the request fails, a red message reads **Failed to encrypt value: <reason>**, for example
+`Value is already encrypted`. If the browser refuses clipboard access, the page shows **Failed to
+copy to clipboard**; select the text in the box and copy it by hand.
 
-## Usage
+### Example
 
-### Step 1: Navigate to Admin System Page
+Input:
 
-1. Log in to iHub Apps as an administrator
-2. Navigate to **Admin → System**
-3. Scroll to the **Value Encryption Tool** section
-
-### Step 2: Encrypt a Value
-
-1. Enter your plaintext value (password, API key, etc.) in the input field
-2. Click the **"Encrypt Value"** button
-3. The encrypted value will appear in the text area below
-
-### Step 3: Copy and Store
-
-1. Click the **"Copy"** button to copy the encrypted value to clipboard
-2. Store the encrypted value in your `.env` file or configuration
-
-### Step 4: Use in Environment
-
-The encrypted value can be used in environment variables and will be automatically decrypted when the application loads it.
-
-## Example
-
-### Encrypting a Password
-
-**Plaintext Input:**
-```
+```text
 my-secret-password-123
 ```
 
-**Encrypted Output:**
-```
+Output:
+
+```text
 ENC[AES256_GCM,data:iUKy/kl7itql4QehbnMdN2QB30+eqw==,iv:Lrpa0jo1TMwsxqFevbrIhw==,tag:q7VzC7mPpsEDLpX6KrNNFA==,type:str]
 ```
 
-### Using in .env File
+Every run produces a different value for the same input, because each encryption uses a new random
+IV.
 
-Add the encrypted value to your `.env` file:
+## Where Encrypted Values Work
 
-```bash
-# LDAP Admin Password (encrypted)
-LDAP_ADMIN_PASSWORD=ENC[AES256_GCM,data:iUKy/kl7itql4QehbnMdN2QB30+eqw==,iv:Lrpa0jo1TMwsxqFevbrIhw==,tag:q7VzC7mPpsEDLpX6KrNNFA==,type:str]
+iHub decrypts an `ENC[...]` value where it reads a secret it keeps encrypted at rest, for example:
 
-# Active Directory Bind Password (encrypted)
-AD_BIND_PASSWORD=ENC[AES256_GCM,data:abc123...,iv:xyz789...,tag:def456...,type:str]
+- the secret of a credential profile (**Admin → Credentials**, `contents/config/credentials.json`),
+  such as an LDAP bind password referenced by `adminPasswordRef`
+  ([LDAP/NTLM Authentication](ldap-ntlm-authentication.md));
+- the `apiKey` of a provider or a model;
+- secrets in `platform.json`, such as the outbound proxy password or the Azure Speech subscription
+  key.
 
-# API Key (encrypted)
-CUSTOM_API_KEY=ENC[AES256_GCM,data:ghi789...,iv:jkl012...,tag:mno345...,type:str]
-```
+Most admin forms that save such a field encrypt it for you, so the tool is mainly for configuration
+files you write by hand or deploy from version control.
 
-### Automatic Decryption
-
-When the application loads environment variables, it automatically detects and decrypts values in `ENC[...]` format:
-
-```javascript
-// The application automatically handles decryption
-const password = process.env.LDAP_ADMIN_PASSWORD;
-// password will contain the decrypted plaintext value
-```
+> [!WARNING]
+> iHub does not decrypt environment variables. A `.env` entry such as
+> `OPENAI_API_KEY=ENC[...]` reaches the server as the literal `ENC[...]` text and fails. Keep plain
+> values in the environment (protected by the host), or put the encrypted value into the
+> configuration field itself.
 
 ## Security Considerations
 
-### Safe to Store in Version Control
-
-- Encrypted values are safe to commit to version control (Git, etc.)
-- The encryption key is stored separately in `contents/.encryption-key`
-- Without the encryption key, encrypted values cannot be decrypted
-
-### Encryption Key Management
-
-**Important**: Keep the encryption key secure!
-
-- **Key Location**: `contents/.encryption-key`
-- **Backup**: Always backup this file securely
-- **Multi-Server**: For multi-server deployments, use the same key across all servers
-
-You can also set the encryption key via environment variable:
-
-```bash
-export TOKEN_ENCRYPTION_KEY=your-64-char-hex-key
-```
-
-### One-Way Operation
-
-- The admin UI only provides encryption, not decryption
-- This prevents accidental exposure of secrets through the UI
-- Decryption happens automatically at runtime by the application
+- **Version control.** An encrypted value is safe to commit: without the key it cannot be
+  decrypted.
+- **The key.** Values are encrypted with the key in `contents/.encryption-key`, or the 64-character
+  hex key in the `TOKEN_ENCRYPTION_KEY` environment variable when that is set. Back the key up;
+  every server of a multi-server deployment needs the same key. If the key changes, existing values
+  can no longer be decrypted. See [Encryption Key Management](encryption-key-management.md).
+- **One way.** The admin UI only encrypts, so it cannot expose a stored secret. Decryption happens
+  only inside the server, when the value is used.
 
 ## API Endpoint
 
-The encryption tool uses the following API endpoint:
+The screen calls `POST /api/admin/encrypt-value`, which requires an administrator.
 
-**POST** `/api/admin/encrypt-value`
+Request:
 
-**Request:**
 ```json
 {
   "value": "plaintext-to-encrypt"
 }
 ```
 
-**Response:**
+Response (`200`):
+
 ```json
 {
-  "encryptedValue": "ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]",
-  "message": "Value encrypted successfully"
+  "encryptedValue": "ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]"
 }
 ```
 
-**Error Responses:**
-- `400`: Invalid value (empty or already encrypted)
-- `401`: Authentication required
-- `403`: Admin access required
-- `500`: Encryption failed
+Errors use the `application/problem+json` format; read `detail`:
 
-## Use Cases
+| Status | `detail` / cause |
+| --- | --- |
+| `400` | `Invalid value: must be a non-empty string` |
+| `400` | `Value is already encrypted` (the input is already in `ENC[...]` format) |
+| `401` | Not signed in |
+| `403` | Signed in, but not an administrator |
+| `500` | Encryption failed on the server; the server log has the cause |
 
-### LDAP/Active Directory Passwords
+## Value Format
 
-Encrypt passwords for LDAP/AD authentication:
-
-```bash
-# Before
-LDAP_ADMIN_PASSWORD=PlainTextPassword123
-
-# After
-LDAP_ADMIN_PASSWORD=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
-```
-
-### API Keys for LLM Providers
-
-Encrypt API keys for OpenAI, Anthropic, Google, etc.:
-
-```bash
-# Before
-OPENAI_API_KEY=sk-abc123def456...
-
-# After
-OPENAI_API_KEY=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
-```
-
-### Database Credentials
-
-Encrypt database passwords:
-
-```bash
-# Before
-DB_PASSWORD=my_database_password
-
-# After
-DB_PASSWORD=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
-```
-
-### OAuth Client Secrets
-
-Encrypt OAuth client secrets:
-
-```bash
-# Before
-OAUTH_CLIENT_SECRET=secret_abc123
-
-# After
-OAUTH_CLIENT_SECRET=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
-```
-
-## Troubleshooting
-
-### Encryption Key Missing
-
-If you see errors about missing encryption key:
-
-1. Check that `contents/.encryption-key` exists
-2. Ensure the file has proper read permissions (600)
-3. If using environment variable, verify `TOKEN_ENCRYPTION_KEY` is set
-
-### Decryption Fails
-
-If decryption fails:
-
-1. Verify the encryption key hasn't changed
-2. Check that the encrypted value format is correct (starts with `ENC[`)
-3. Ensure the value hasn't been corrupted (no line breaks, extra spaces)
-
-### Value Already Encrypted Error
-
-If you see "Value is already encrypted":
-
-- The input value is already in `ENC[...]` format
-- You don't need to encrypt it again
-- Use the value as-is in your configuration
-
-## Technical Details
-
-### Encryption Algorithm
-
-- **Algorithm**: AES-256-GCM
-- **Key Size**: 256 bits (32 bytes)
-- **IV Size**: 128 bits (16 bytes)
-- **Authentication**: GCM provides authenticated encryption
-
-### Format Structure
-
-```
+```text
 ENC[AES256_GCM,data:<base64>,iv:<base64>,tag:<base64>,type:str]
 ```
 
-- **data**: Base64-encoded encrypted data
-- **iv**: Base64-encoded initialization vector
-- **tag**: Base64-encoded authentication tag
-- **type**: Value type (always "str" for strings)
+| Part | Meaning |
+| --- | --- |
+| `data` | The encrypted value, base64-encoded |
+| `iv` | The 16-byte initialization vector, base64-encoded |
+| `tag` | The GCM authentication tag, base64-encoded |
+| `type` | Value type; always `str` |
 
-### TokenStorageService Integration
+The key is 256 bits (32 bytes). GCM authenticates the data, so a changed or truncated value fails to
+decrypt instead of producing wrong plain text.
 
-The encryption tool uses the existing `TokenStorageService` which provides:
+## Troubleshooting
 
-- Consistent encryption across the application
-- Secure key management
-- Automatic decryption at runtime
-- Support for both environment variables and configuration files
+| Problem | What to check |
+| --- | --- |
+| Error about a missing encryption key | `contents/.encryption-key` exists and is readable by the server (permissions `600`), or `TOKEN_ENCRYPTION_KEY` is set |
+| A value does not decrypt | The key has not changed since the value was encrypted; the value starts with `ENC[` and ends with `]`; it has no line breaks or added spaces; it sits in a configuration field, not an environment variable |
+| `Value is already encrypted` | The input is already an `ENC[...]` value. Use it as it is |
 
 ## Related Documentation
 
-- [LDAP/NTLM Authentication](./ldap-ntlm-authentication.md)
-- [Environment Variables](./environment-variables.md)
-- [Security Best Practices](./security.md)
-- [Encryption Key Management](./encryption-key-management.md)
+- [Encryption Key Management](encryption-key-management.md)
+- [LDAP/NTLM Authentication](ldap-ntlm-authentication.md)
+- [Environment Variables](environment-variables.md)
+- [Security Best Practices](security.md)

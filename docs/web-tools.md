@@ -968,7 +968,7 @@ The page reader includes protection against Server-Side Request Forgery (SSRF):
 
 8. **Brave Search requests hang or time out**
    - A search that works when called directly (e.g. from a browser or Postman on your own machine) but times out from iHub is usually the server's outbound proxy — either not configured when the network requires it, or configured but blocking/excluding Brave's domain
-   - See [Proxy Testing Guide → Still Getting Timeout Errors?](proxy-testing-guide.md#still-getting-timeout-errors) for Linux/macOS and Windows commands that reproduce the exact request iHub sends, with and without the proxy, so you can tell which side is failing
+   - See [Proxy Configuration → Reproduce a failing request outside iHub](proxy-configuration.md#4-reproduce-a-failing-request-outside-ihub) for Linux/macOS and Windows commands that reproduce the exact request iHub sends, with and without the proxy, so you can tell which side is failing
 
 ### Debugging
 
