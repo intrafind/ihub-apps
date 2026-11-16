@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { getLocalizedContent } from '../../utils/localizeContent';
+import { resolveTranslationRefs } from '../../utils/translationRefs';
 import { fetchAppDetails } from '../../api';
 
 /**
@@ -48,7 +49,11 @@ function DocumentTitle() {
     // Get platform name from config
     let platformName = t('product.name', 'iHub Apps'); // Default fallback
     if (uiConfig?.title) {
-      const localizedTitle = getLocalizedContent(uiConfig.title, currentLanguage);
+      // The shipped title is `$t(product.name)`: a reference to the product name.
+      const localizedTitle = resolveTranslationRefs(
+        getLocalizedContent(uiConfig.title, currentLanguage),
+        t
+      ).trim();
       if (localizedTitle) {
         platformName = localizedTitle;
       }

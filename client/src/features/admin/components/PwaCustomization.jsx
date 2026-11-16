@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import Switch from '../../../shared/components/Switch';
+import LocalizedWithDefaultField from './LocalizedWithDefaultField';
 
 const DISPLAY_OPTIONS = ['standalone', 'fullscreen', 'minimal-ui', 'browser'];
 
@@ -41,19 +42,7 @@ function PwaCustomization({ config, onUpdate, t }) {
   };
 
   return (
-    <div className="p-6 space-y-8">
-      <div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
-          {t('admin.ui.pwa.title', 'Progressive Web App (PWA)')}
-        </h3>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {t(
-            'admin.ui.pwa.subtitle',
-            'Allow users to install iHub Apps on their device home screen and enable offline fallback.'
-          )}
-        </p>
-      </div>
-
+    <div className="space-y-8">
       {/* Enable toggle */}
       <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div>
@@ -63,7 +52,7 @@ function PwaCustomization({ config, onUpdate, t }) {
           >
             {t('admin.ui.pwa.enable', 'Enable PWA')}
           </p>
-          <p id="pwa-enabled-help" className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          <p id="pwa-enabled-help" className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
             {t(
               'admin.ui.pwa.enableHint',
               'Injects web app manifest link and meta tags into all pages. Registers a service worker for offline fallback.'
@@ -80,39 +69,32 @@ function PwaCustomization({ config, onUpdate, t }) {
 
       {/* App identity */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+        <legend className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
           {t('admin.ui.pwa.identity', 'App Identity')}
         </legend>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              {t('admin.ui.pwa.name', 'App Name')}
-              <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
-                (max 60 chars)
-              </span>
-            </label>
-            <input
-              type="text"
-              maxLength={60}
-              value={pwa.name || ''}
-              onChange={e => handleChange('name', e.target.value)}
-              placeholder="iHub Apps"
-              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {t('admin.ui.pwa.nameHint', 'Shown on install prompt and app list')}
-            </p>
-          </div>
+          <LocalizedWithDefaultField
+            localized={false}
+            label={`${t('admin.ui.pwa.name', 'App Name')} ${t('admin.ui.pwa.maxChars60', '(max 60 chars)')}`}
+            hint={t('admin.ui.pwa.nameHint', 'Shown on install prompt and app list')}
+            value={pwa.name}
+            maxLength={60}
+            onChange={name => handleChange('name', name)}
+          />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="pwa-short-name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {t('admin.ui.pwa.shortName', 'Short Name')}
-              <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">
+              <span className="ml-1 text-xs font-normal text-gray-600 dark:text-gray-400">
                 (max 15 chars)
               </span>
             </label>
             <input
+              id="pwa-short-name"
               type="text"
               maxLength={15}
               value={pwa.shortName || ''}
@@ -120,17 +102,21 @@ function PwaCustomization({ config, onUpdate, t }) {
               placeholder="iHub"
               className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
               {t('admin.ui.pwa.shortNameHint', 'Shown under the home screen icon')}
             </p>
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label
+            htmlFor="pwa-description"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
             {t('admin.ui.pwa.description', 'Description')}
           </label>
           <input
+            id="pwa-description"
             type="text"
             maxLength={300}
             value={pwa.description || ''}
@@ -143,23 +129,30 @@ function PwaCustomization({ config, onUpdate, t }) {
 
       {/* Colors */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+        <legend className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
           {t('admin.ui.pwa.colors', 'Colors')}
         </legend>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="pwa-theme-color"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {t('admin.ui.pwa.themeColor', 'Theme Color')}
             </label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
+                aria-label={t('admin.ui.pwa.colorPicker', '{{name}} (color picker)', {
+                  name: t('admin.ui.pwa.themeColor', 'Theme Color')
+                })}
                 value={pwa.themeColor || '#003557'}
                 onChange={e => handleChange('themeColor', e.target.value)}
                 className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
+                id="pwa-theme-color"
                 type="text"
                 value={pwa.themeColor || '#003557'}
                 onChange={e => handleChange('themeColor', e.target.value)}
@@ -168,23 +161,30 @@ function PwaCustomization({ config, onUpdate, t }) {
                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
               {t('admin.ui.pwa.themeColorHint', 'Browser chrome / status bar color on Android')}
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="pwa-background-color"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {t('admin.ui.pwa.backgroundColor', 'Background Color')}
             </label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
+                aria-label={t('admin.ui.pwa.colorPicker', '{{name}} (color picker)', {
+                  name: t('admin.ui.pwa.backgroundColor', 'Background Color')
+                })}
                 value={pwa.backgroundColor || '#ffffff'}
                 onChange={e => handleChange('backgroundColor', e.target.value)}
                 className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
+                id="pwa-background-color"
                 type="text"
                 value={pwa.backgroundColor || '#ffffff'}
                 onChange={e => handleChange('backgroundColor', e.target.value)}
@@ -193,7 +193,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">
               {t(
                 'admin.ui.pwa.backgroundColorHint',
                 'Splash screen background before the app paints'
@@ -205,7 +205,7 @@ function PwaCustomization({ config, onUpdate, t }) {
 
       {/* Display mode */}
       <fieldset>
-        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
+        <legend className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide mb-3">
           {t('admin.ui.pwa.display', 'Display Mode')}
         </legend>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -224,7 +224,7 @@ function PwaCustomization({ config, onUpdate, t }) {
             </button>
           ))}
         </div>
-        <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-xs text-gray-600 dark:text-gray-400">
           {t(
             'admin.ui.pwa.displayHint',
             '"standalone" recommended — hides browser chrome for an app-like experience'
@@ -234,10 +234,10 @@ function PwaCustomization({ config, onUpdate, t }) {
 
       {/* Icons */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+        <legend className="text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wide">
           {t('admin.ui.pwa.icons', 'Icons')}
         </legend>
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           {t(
             'admin.ui.pwa.iconsHint',
             'Upload PNG icons via the Assets tab, then paste the URL below. Default icons are used when left empty.'
@@ -246,7 +246,10 @@ function PwaCustomization({ config, onUpdate, t }) {
 
         {ICON_FIELDS.map(({ key, label, hint, required }) => (
           <div key={key}>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor={`pwa-icon-${key}`}
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {label}
               {required && (
                 <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-sm">
@@ -256,6 +259,7 @@ function PwaCustomization({ config, onUpdate, t }) {
             </label>
             <div className="flex items-center gap-3">
               <input
+                id={`pwa-icon-${key}`}
                 type="text"
                 value={pwa.icons?.[key] || ''}
                 onChange={e => handleIconChange(key, e.target.value)}
@@ -273,7 +277,7 @@ function PwaCustomization({ config, onUpdate, t }) {
                 />
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{hint}</p>
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{hint}</p>
           </div>
         ))}
       </fieldset>

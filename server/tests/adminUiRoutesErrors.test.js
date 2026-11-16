@@ -133,6 +133,38 @@ describe('UI administration routes: errors', () => {
     expect(state.written).toEqual(VALID_CONFIG);
   });
 
+  it('saves a site title that refers to the product name', async () => {
+    const config = { ...VALID_CONFIG, title: { en: '$t(product.name)', de: '$t(product.name)' } };
+    await request(app).post('/api/admin/ui/config').send({ config }).expect(204);
+    expect(state.written.title.de).toBe('$t(product.name)');
+  });
+
+  it('answers a site title that is not a localized map with BAD_REQUEST', async () => {
+    const res = await request(app)
+      .post('/api/admin/ui/config')
+      .send({ config: { ...VALID_CONFIG, title: ['iHub'] } })
+      .expect(400);
+    expect(res.body.detail).toBe('title must be a localized object');
+  });
+
+  it('saves the disclaimer on its own and keeps the rest of the configuration', async () => {
+    const disclaimer = { enabled: true, text: { en: 'Hello' }, version: '2', link: '/pages/terms' };
+    const res = await request(app).put('/api/admin/ui/disclaimer').send(disclaimer).expect(200);
+    expect(res.body).toEqual(disclaimer);
+    expect(state.written).toEqual({ disclaimer });
+  });
+
+  it.each([
+    [{ enabled: 'yes' }],
+    [{ text: 'plain' }],
+    [{ link: 'javascript:alert(1)' }],
+    [{ link: '//evil.example' }]
+  ])('answers the disclaimer %j with BAD_REQUEST', async disclaimer => {
+    const res = await request(app).put('/api/admin/ui/disclaimer').send(disclaimer).expect(400);
+    expect(res.body.code).toBe('BAD_REQUEST');
+    expect(state.written).toBeNull();
+  });
+
   it('answers a failing write with a 500 that does not leak the cause', async () => {
     state.writeError = new Error('boom at /srv/secret/path');
     const res = await request(app)

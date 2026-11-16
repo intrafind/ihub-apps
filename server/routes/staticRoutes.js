@@ -14,7 +14,8 @@ import {
   getBasePath
 } from '../utils/basePath.js';
 import configCache from '../configCache.js';
-import { buildIndexHtml, resolvePwaConfig } from '../services/pwa/PwaService.js';
+import { pickRequestLanguage } from '../utils/uiTextRefs.js';
+import { buildIndexHtml, localizePwaConfig, resolvePwaConfig } from '../services/pwa/PwaService.js';
 
 /**
  * Whether a file served from the client build is a content-hashed Vite asset
@@ -116,7 +117,9 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       const serverBasePath = getBasePath();
       const uiConfig = configCache.getUI();
       const rawPwaConfig = uiConfig?.data?.pwa;
-      const pwaConfig = rawPwaConfig?.enabled ? resolvePwaConfig(rawPwaConfig) : null;
+      const pwaConfig = rawPwaConfig?.enabled
+        ? localizePwaConfig(resolvePwaConfig(rawPwaConfig), pickRequestLanguage(req))
+        : null;
 
       const html = buildIndexHtml(indexPath, { basePath: serverBasePath, pwaConfig });
       // A shared chat page may be public, and a public page that reaches a
@@ -127,6 +130,7 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       if (html !== null) {
         res.set('Content-Type', 'text/html; charset=utf-8');
         res.set('Cache-Control', 'no-cache');
+        if (pwaConfig) res.set('Vary', 'Accept-Language');
         return res.send(html);
       }
       // buildIndexHtml logged the error; fall through to sendFile

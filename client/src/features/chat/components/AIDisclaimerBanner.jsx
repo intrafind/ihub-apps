@@ -9,15 +9,20 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 /**
  * AI Disclaimer Banner Component
  * Displays a short disclaimer below the chat input that links to full disclaimer
+ *
+ * @param {Object} [props]
+ * @param {Object} [props.disclaimer] - Draws this disclaimer (`{ hint, link }`) instead of the
+ *   configured one, and makes the hint non-interactive: Admin → Disclaimer previews edits with it.
  */
-function AIDisclaimerBanner() {
+function AIDisclaimerBanner({ disclaimer: preview } = {}) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const currentLanguage = i18n.language;
 
   // Get the disclaimer link and hint from ui config
-  const disclaimerLink = uiConfig?.disclaimer?.link;
-  const disclaimerHint = getLocalizedContent(uiConfig?.disclaimer?.hint, currentLanguage);
+  const source = preview || uiConfig?.disclaimer;
+  const disclaimerLink = preview ? null : source?.link;
+  const disclaimerHint = getLocalizedContent(source?.hint, currentLanguage);
 
   const handleClick = () => {
     if (disclaimerLink) {

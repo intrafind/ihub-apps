@@ -2490,7 +2490,8 @@
       "updates": "Updates",
       "advanced": "Advanced",
       "docs": "Documentation",
-      "euAiAct": "EU AI Act"
+      "euAiAct": "EU AI Act",
+      "disclaimer": "Disclaimer"
     },
     "mcp": {
       "common": {
@@ -4385,7 +4386,15 @@
     },
     "ui": {
       "tabs": {
-        "startPage": "Start Page"
+        "startPage": "Start Page",
+        "branding": "Branding",
+        "navigation": "Navigation",
+        "startAndApps": "Start & apps page",
+        "themeAndStyles": "Theme & styles",
+        "errorPages": "Error Pages",
+        "assets": "Assets",
+        "unsaved": "unsaved changes",
+        "label": "UI customization sections"
       },
       "startPage": {
         "title": "Start Page Configuration",
@@ -4433,8 +4442,64 @@
         "removeFeaturedApp": "Remove {{name}}"
       },
       "header": {
-        "colorHint": "Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229)). The colour applies to the classic top header (Teams, Office and Nextcloud embeds, ?sidebar=false); the sidebar layout does not use it."
-      }
+        "colorHint": "Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229)). The colour applies to the classic top header (Teams, Office and Nextcloud embeds, ?sidebar=false); the sidebar layout does not use it.",
+        "title": "Header",
+        "description": "The navigation links and the color of the classic top header."
+      },
+      "saveBar": {
+        "label": "Save changes",
+        "saving": "Saving…",
+        "unsaved": "You have unsaved changes",
+        "discard": "Discard"
+      },
+      "unsaved": {
+        "title": "Unsaved changes",
+        "message": "You have unsaved changes. Leave anyway?",
+        "leave": "Leave",
+        "stay": "Stay"
+      },
+      "saved": "UI configuration saved successfully",
+      "backedUp": "Configuration backed up to: {{path}}",
+      "missingSection": "The configuration lacks the section \"{{section}}\".",
+      "assets": {
+        "savedNotice": "Uploads and deletions here take effect immediately; they are not part of the unsaved changes. Use the path of an uploaded file in the other tabs."
+      },
+      "footer": {
+        "title": "Footer",
+        "description": "The footer text and its links."
+      },
+      "content": {
+        "appsListPage": "Apps List Page",
+        "pagesDescription": "Title, subtitle and logo of the apps browser (/apps), and whether it offers search and categories."
+      },
+      "nameField": {
+        "follow": "Use the product name (default)",
+        "custom": "Custom text per language",
+        "customSingle": "Custom text",
+        "customLabel": "Text",
+        "resolvesTo": "Resolves to",
+        "noName": "(no product name defined)",
+        "changeName": "Rename the product once, for every language, in",
+        "emptyFallback": "Empty text falls back to the product name when you save.",
+        "followAnnounce": "Using the product name",
+        "customAnnounce": "Using custom text"
+      },
+      "branding": {
+        "nameTitle": "Product name",
+        "nameDescription": "What your installation is called: in the browser tab, in exports, on the sign-in screen and as the name of the installed app.",
+        "siteTitle": "Site title",
+        "siteTitleHint": "Shown in the browser tab, in chat exports and on the sign-in screen.",
+        "splitBrand": "Advanced: brand text in the sidebar",
+        "splitBrandHint": "The sidebar shows the name in two weights: a light part and a bold part, joined without a space (put a leading space in the bold part if you need one). Clear both to show the site title instead.",
+        "useSiteTitle": "Show the site title in the sidebar",
+        "logoTitle": "Logo and icon",
+        "logoDescription": "Upload images in the Assets tab, then enter their path here."
+      },
+      "pwa": {
+        "maxChars60": "(max 60 chars)",
+        "colorPicker": "{{name}} (color picker)"
+      },
+      "linkTarget": "Open link in"
     },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",
@@ -6683,6 +6748,39 @@
         "userPseudonymous": "hash of the user id",
         "userAnonymous": "secured hash"
       }
+    },
+    "disclaimer": {
+      "loading": "Loading the disclaimer…",
+      "title": "Disclaimer",
+      "description": "The notice visitors see on their first visit and the hint under the chat input.",
+      "saved": "Disclaimer saved",
+      "euAiActNote": "The AI notice in the empty chat and the AI-use acknowledgement before the first message are set on the",
+      "euAiActNoteEnd": "page.",
+      "popupTitle": "Welcome popup",
+      "popupDescription": "Shown once to each visitor, before anything else. They confirm it with a button.",
+      "textHint": "Plain text. The popup shows it as written; line breaks are not kept.",
+      "preview": "Preview",
+      "previewLanguage": "Language",
+      "popupPreview": "Popup preview",
+      "hintTitle": "Chat hint",
+      "hintDescription": "One line under the chat input, once a conversation has started. It stays even when the popup is off.",
+      "hintLabel": "Hint",
+      "hintEmpty": "Empty uses the built-in text in the visitor’s language.",
+      "hintPreview": "Hint preview",
+      "link": "Link",
+      "linkHint": "Opened in a new tab when a visitor selects the hint: an https:// address or a path such as /pages/terms. Empty makes the hint plain text.",
+      "versionTitle": "Version",
+      "versionDescription": "Visitors who confirmed an older version see the popup again.",
+      "showAgain": "Show again to everyone",
+      "showAgainNote": "Version {{version}} is saved with the next save. Everyone sees the popup again at their next visit.",
+      "never": "not set",
+      "updatedAuto": "(set automatically when the wording or the version changes)",
+      "relatedTitle": "Related settings",
+      "relatedDescription": "These belong to the EU AI Act duties and are set on their own page.",
+      "relatedNotice": "AI notice",
+      "relatedNoticeText": "— the notice in the empty chat and the guardrail wording",
+      "relatedAck": "AI acknowledgement",
+      "relatedAckText": "— the confirmation before the first message, stored with the user"
     }
   },
   "cloudStorage": {

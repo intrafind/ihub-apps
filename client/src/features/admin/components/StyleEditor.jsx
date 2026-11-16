@@ -200,9 +200,9 @@ function StyleEditor({ config, onUpdate, t }) {
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
+      <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
         {t('admin.ui.styles.title', 'Style Configuration')}
-      </h3>
+      </h2>
 
       {/* Section Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700 mb-6">

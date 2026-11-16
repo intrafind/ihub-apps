@@ -262,6 +262,39 @@ export default function registerAdminUIRoutes(app) {
   });
 
   /**
+   * Replace the disclaimer (welcome popup, chat hint, version). It has its own page
+   * (Admin → Disclaimer), so it is saved on its own: a stale UI Customization tab
+   * cannot overwrite it, and saving it cannot overwrite the rest of the config.
+   */
+  app.put(
+    buildServerPath('/api/admin/ui/disclaimer'),
+    authRequired,
+    adminAuth,
+    async (req, res) => {
+      const disclaimer = req.body;
+      validateDisclaimer(disclaimer);
+
+      const current = configCache.getUI()?.data;
+      if (!current || typeof current !== 'object') {
+        throw new ServiceError('INTERNAL_ERROR', 'UI configuration is not loaded');
+      }
+
+      await configStore.writeJson('config/ui.json', { ...current, disclaimer });
+      await configCache.refreshCacheEntry('config/ui.json');
+
+      logAudit({
+        req,
+        action: 'update',
+        resource: 'uiConfig',
+        resourceId: 'disclaimer',
+        summary: 'Updated disclaimer'
+      });
+
+      res.json(disclaimer);
+    }
+  );
+
+  /**
    * Backup UI configuration
    */
   app.post(buildServerPath('/api/admin/ui/backup'), authRequired, adminAuth, async (req, res) => {
@@ -296,6 +329,46 @@ export default function registerAdminUIRoutes(app) {
     return mimeTypes[ext] || 'application/octet-stream';
   }
 
+  function validateLocalizedMap(value, name) {
+    if (value === undefined || value === null) return;
+    if (typeof value !== 'object' || Array.isArray(value)) {
+      throw new ServiceError('BAD_REQUEST', `${name} must be a localized object`);
+    }
+    for (const [language, text] of Object.entries(value)) {
+      if (typeof text !== 'string') {
+        throw new ServiceError('BAD_REQUEST', `${name}.${language} must be a string`);
+      }
+    }
+  }
+
+  function validateDisclaimer(disclaimer) {
+    if (!disclaimer || typeof disclaimer !== 'object' || Array.isArray(disclaimer)) {
+      throw new ServiceError('BAD_REQUEST', 'disclaimer must be an object');
+    }
+    if (disclaimer.enabled !== undefined && typeof disclaimer.enabled !== 'boolean') {
+      throw new ServiceError('BAD_REQUEST', 'disclaimer.enabled must be a boolean');
+    }
+    for (const field of ['title', 'text', 'hint']) {
+      validateLocalizedMap(disclaimer[field], `disclaimer.${field}`);
+    }
+    for (const field of ['version', 'updated']) {
+      const value = disclaimer[field];
+      if (value !== undefined && value !== null && typeof value !== 'string') {
+        throw new ServiceError('BAD_REQUEST', `disclaimer.${field} must be a string`);
+      }
+    }
+    // The link ends up in `window.open` on the chat hint: a web address or a path.
+    const { link } = disclaimer;
+    if (link !== undefined && link !== null && link !== '') {
+      if (typeof link !== 'string' || !/^(https?:\/\/|\/(?!\/))/i.test(link)) {
+        throw new ServiceError(
+          'BAD_REQUEST',
+          'disclaimer.link must be an http(s) address or a path starting with /'
+        );
+      }
+    }
+  }
+
   function validateUIConfig(config) {
     // Basic validation for UI configuration structure
     const requiredSections = ['title', 'header', 'footer'];
@@ -305,6 +378,12 @@ export default function registerAdminUIRoutes(app) {
         throw new ServiceError('BAD_REQUEST', `Missing required section: ${section}`);
       }
     }
+
+    // The site title is a `{ lang: text }` map; each text may be `$t(product.name)`.
+    validateLocalizedMap(config.title, 'title');
+
+    // The disclaimer has its own endpoint, but a full save carries it along.
+    if (config.disclaimer !== undefined) validateDisclaimer(config.disclaimer);
 
     // Validate header section
     if (config.header && typeof config.header !== 'object') {

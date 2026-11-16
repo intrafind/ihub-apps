@@ -318,7 +318,6 @@ const KNOWN_VIOLATIONS = {
   '/admin/oauth/connections': { 'aria-valid-attr-value': 1 },
   '/admin/oauth/server': { 'aria-valid-attr-value': 1 },
   '/admin/browser-extension': { 'button-name': 1, label: 1 },
-  '/admin/ui': { 'select-name': 5 },
   '/admin/feedback': { 'select-name': 1 },
   '/admin/telemetry': { label: 4 },
   '/admin/backup': { label: 1 },
@@ -334,6 +333,9 @@ const KNOWN_VIOLATIONS = {
 const CLEAN_PAGES = [
   '/projects',
   '/admin/projects',
+  // UI Customization opens on the Branding tab; the Disclaimer page has its own route.
+  '/admin/ui',
+  '/admin/disclaimer',
   // A shipped project, so a fresh contents/ has it.
   '/admin/projects/ihub-documentation',
   '/apps',

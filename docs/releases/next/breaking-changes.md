@@ -930,3 +930,13 @@ Integrations →** the installation **→ an action → In the chat**. See
 and its calls should keep showing as one, with its pages as sources and in the citations, declare it
 in its installation: `"actions": { "overrides": { "<tool>": { "activity": { "kind": "search",
 "origin": "web" } } } }`.
+
+## UI Customization Tabs Moved
+
+The tabs **Content**, **PWA** and **Header**'s logo and site-title settings are gone from **Admin → UI
+Customization**; a bookmark such as `/admin/ui?tab=content` opens the first tab, Branding. Where things
+went: site title, logo, favicon, tagline and PWA settings → **Branding**; the apps list page →
+**Start & apps page**; footer → **Navigation**; the disclaimer → **Customization → Disclaimer**.
+
+Nothing changes in `ui.json` or the REST API for existing settings. `PUT /api/admin/ui/disclaimer` is
+new and saves the disclaimer on its own; `POST /api/admin/ui/config` still takes the whole configuration.

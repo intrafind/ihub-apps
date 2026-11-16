@@ -1,7 +1,7 @@
 {
   "title": {
-    "en": "iHub Apps",
-    "de": "iHub Apps"
+    "en": "$t(product.name)",
+    "de": "$t(product.name)"
   },
   "header": {
     "titleLight": {
@@ -372,7 +372,7 @@
   },
   "pwa": {
     "enabled": false,
-    "name": "iHub Apps",
+    "name": "$t(product.name)",
     "shortName": "iHub",
     "description": "AI-powered applications platform",
     "themeColor": "#003557",

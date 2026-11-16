@@ -348,7 +348,7 @@ See [Realtime Voice & Transcription](voice-transcription.md) and [Read Aloud](te
 
 ## UI Customization
 
-**Customization → UI Customization** edits the header, the **Start Page**, the footer, assets (logo, icons), styles, content, error pages and the PWA settings. On **Start Page** you choose what `/` opens, whether users are greeted by name, the heading and subtitle, the default app whose chat input appears on the start page, the featured apps and how many app shortcuts the start page and the sidebar show. See [UI Configuration → Start Page](ui.md#start-page-configuration).
+**Customization → UI Customization** has six tabs: **Branding** (the product name, tagline, logo, favicon and the PWA settings), **Navigation** (header links and color, footer), **Start & apps page**, **Theme & styles**, **Error pages** and **Assets** (uploads). A dot on a tab marks unsaved changes; one Save bar at the bottom saves them all. The first-visit disclaimer has its own page, **Customization → Disclaimer**. On **Start Page** you choose what `/` opens, whether users are greeted by name, the heading and subtitle, the default app whose chat input appears on the start page, the featured apps and how many app shortcuts the start page and the sidebar show. See [UI Configuration → Start Page](ui.md#start-page-configuration).
 
 ![UI customization: start page configuration](assets/screenshots/admin-ui-start-page.png)
 

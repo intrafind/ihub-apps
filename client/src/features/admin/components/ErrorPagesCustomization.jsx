@@ -99,9 +99,9 @@ function ErrorPagesCustomization({ config, onUpdate, t }) {
   return (
     <div className="p-6 space-y-8">
       <div>
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
           {t('admin.ui.errorPages.title', 'Error & Empty-State Messages')}
-        </h3>
+        </h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {t(
             'admin.ui.errorPages.subtitle',

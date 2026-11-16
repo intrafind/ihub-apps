@@ -40,14 +40,21 @@ The UI configuration contains the following top-level sections:
 
 ### Title Configuration
 
-The `title` property defines the localized application title shown in the browser tab and various UI elements:
+The `title` property is the localized site title: the browser tab, chat exports and the sign-in screen.
+The shipped value refers to the product name, so renaming the product once changes every place that
+shows it:
 
 ```json
 "title": {
-  "en": "iHub Apps",
-  "de": "KI-Hub Apps"
+  "en": "$t(product.name)",
+  "de": "$t(product.name)"
 }
 ```
+
+`$t(product.name)` is the translation key `product.name`, which you change under **Admin →
+Localization** (see [Localization](localization.md#the-product-name-and-tagline)). Write plain text per
+language instead (`"de": "KI-Hub Apps"`) to give the site title its own wording. Edit it under **Admin →
+UI Customization → Branding → Product name**. The PWA name (`pwa.name`) works the same way.
 
 ### Header Configuration
 
@@ -95,7 +102,7 @@ The `header` section controls the appearance and content of the application head
 | `titleBold`                | Object  | Localized text for the bold part of the header title (e.g., `" Apps"`) |
 | `tagline`                  | Object  | Localized tagline displayed beneath the title (e.g., `"by IntraFind"`) |
 | `defaultColor`             | String  | Background color of the classic top header (embedded contexts and `?sidebar=false`, see below) |
-| `favicon`                  | String  | Path to the browser tab icon (favicon). Leave empty to use the built-in default. Configurable from the admin **UI Customization > Header** tab |
+| `favicon`                  | String  | Path to the browser tab icon (favicon). Leave empty to use the built-in default. Configurable from the admin **UI Customization > Branding** tab |
 | `logo.url`                 | String  | Path to the logo image                       |
 | `logo.alt`                 | Object  | Localized alt text for the logo              |
 | `logo.containerStyle`      | Object  | Optional inline style for the logo container |
@@ -183,6 +190,10 @@ Setting `enabled` to `false` will completely remove the footer from all pages.
 
 ### Disclaimer Configuration
 
+Edit the disclaimer under **Admin → Customization → Disclaimer**. The page has the welcome popup (title,
+text, preview), the chat hint (text, link, preview) and the version. It saves on its own, so it never
+overwrites the rest of `ui.json`.
+
 The AI notice in the empty chat (`aiDisclosure.firstTurnNotice` in `platform.json`, see
 [EU AI Act](ai-act.md)) is separate from this disclaimer: it is shown before the first message and then
 disappears, while the disclaimer stays under the message box.
@@ -216,6 +227,11 @@ The `disclaimer` section defines the legal disclaimer shown to users:
 | `link`    | String  | (Optional) URL or page path to open when the hint is clicked (e.g., /pages/disclaimer, https://example.com/disclaimer) |
 
 Setting `enabled` to `false` will completely remove the disclaimer from the application.
+
+**Version.** A browser remembers the `version` it confirmed. Raising the version (the **Show again to
+everyone** button on the Disclaimer page) shows the popup to every visitor again at their next visit.
+Browsers that confirmed before versions were remembered count as having seen the version configured
+when they next load a page. `updated` is set when the wording or the version changes in the admin UI.
 
 **Note:** If `link` is not provided, the hint will be displayed as non-clickable text. If `hint` is not provided, a default hint text will be shown.
 
@@ -309,7 +325,7 @@ Icon values accept two formats:
 - **Short name** (e.g., `"apps-svg-logo"`) — resolves to `/icons/{name}.svg` via the `Icon` component. Custom SVGs can be placed under `public/icons/`.
 - **Direct path or URL** (e.g., `"/uploads/assets/my-logo.svg"`) — used as-is. Upload icons via the Assets tab in the admin panel and paste the URL directly.
 
-The `appsListLogo` can also be configured from the admin panel under **UI Customization > Content > Page Content**.
+The `appsListLogo` can also be configured from the admin panel under **UI Customization > Start & apps page > Apps List Page**.
 
 ### Apps List Configuration
 
@@ -702,7 +718,7 @@ config:
 
 #### Custom CSS for diagrams
 
-CSS entered under **Admin → UI Customization → Styles → Custom CSS** (stored as `customStyles.css` in `ui.json`) is loaded on every page, so it recolors diagrams in all apps regardless of what the model writes. Mermaid embeds its own styles in each diagram, so every rule needs `!important`:
+CSS entered under **Admin → UI Customization → Theme & styles → Custom CSS** (stored as `customStyles.css` in `ui.json`) is loaded on every page, so it recolors diagrams in all apps regardless of what the model writes. Mermaid embeds its own styles in each diagram, so every rule needs `!important`:
 
 ```css
 /* Flowcharts: nodes, labels, connections, arrowheads */

@@ -157,9 +157,9 @@ function AssetManager({ t }) {
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
+      <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
         {t('admin.ui.assets.title', 'Asset Management')}
-      </h3>
+      </h2>
 
       {/* Status Messages */}
       {error && (

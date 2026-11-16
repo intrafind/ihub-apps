@@ -56,22 +56,22 @@ function FooterCustomization({ config, onUpdate, t }) {
   };
 
   return (
-    <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
-        {t('admin.ui.footer.title', 'Footer Configuration')}
-      </h3>
-
+    <div>
       <div className="space-y-6">
         {/* Footer Enabled */}
         <div>
           <div className="flex items-center">
             <input
+              id="footer-enabled"
               type="checkbox"
               checked={config.enabled !== false}
               onChange={e => onUpdate({ enabled: e.target.checked })}
               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
             />
-            <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+            <label
+              htmlFor="footer-enabled"
+              className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+            >
               {t('admin.ui.footer.enabled', 'Enable Footer')}
             </label>
           </div>
@@ -179,6 +179,7 @@ function FooterCustomization({ config, onUpdate, t }) {
                             </span>
                           </label>
                           <select
+                            aria-label={t('admin.ui.linkTarget', 'Open link in')}
                             value={link.target || '_self'}
                             onChange={e => updateFooterLink(index, { target: e.target.value })}
                             className="text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"

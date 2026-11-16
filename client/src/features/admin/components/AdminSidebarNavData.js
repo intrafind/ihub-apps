@@ -233,6 +233,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags, badges = {
           visible: showAdminPage('ui')
         },
         {
+          key: 'disclaimer',
+          label: t('admin.nav.disclaimer', 'Disclaimer'),
+          href: '/admin/disclaimer',
+          icon: ExclamationTriangleIcon,
+          visible: showAdminPage('ui')
+        },
+        {
           key: 'localization',
           label: t('admin.nav.localization', 'Localization'),
           href: '/admin/localization',

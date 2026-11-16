@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * A tab chosen with the keyboard, focused once a tab bar shows it as active.
@@ -26,12 +27,14 @@ const PENDING_FOCUS_MS = 5000;
  * `role="tabpanel"` with `id="tabpanel-<id>"` for each tab it wants announced.
  *
  * @param {Object} props
- * @param {Array<{ id: string, label: string, count?: number, icon?: React.ReactNode }>} props.tabs
+ * @param {Array<{ id: string, label: string, count?: number, icon?: React.ReactNode, dirty?: boolean }>} props.tabs
+ *   `dirty` marks a tab holding unsaved edits (a dot, with a text for screen readers).
  * @param {string} props.activeId
  * @param {(id: string) => void} props.onChange
  * @param {string} [props.ariaLabel='Tabs']
  */
 function AdminTabs({ tabs = [], activeId, onChange, ariaLabel = 'Tabs' }) {
+  const { t } = useTranslation();
   useEffect(() => {
     if (!pendingFocus || pendingFocus.id !== activeId) return;
     const { until } = pendingFocus;
@@ -73,7 +76,7 @@ function AdminTabs({ tabs = [], activeId, onChange, ariaLabel = 'Tabs' }) {
               onClick={() => onChange?.(tab.id)}
               onKeyDown={handleKeyDown}
               className={[
-                'inline-flex items-center gap-2 whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors',
+                'inline-flex items-center gap-2 whitespace-nowrap border-b-2 py-3 px-1 text-sm font-medium transition-colors rounded-t-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800',
                 isActive
                   ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
                   : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:border-gray-300 dark:hover:border-gray-600'
@@ -81,6 +84,12 @@ function AdminTabs({ tabs = [], activeId, onChange, ariaLabel = 'Tabs' }) {
             >
               {tab.icon && <span className="shrink-0">{tab.icon}</span>}
               {tab.label}
+              {tab.dirty && (
+                <>
+                  <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden="true" />
+                  <span className="sr-only">{t('admin.ui.tabs.unsaved', 'unsaved changes')}</span>
+                </>
+              )}
               {typeof tab.count === 'number' && (
                 <span
                   className={[

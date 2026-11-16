@@ -8,7 +8,9 @@
  * `$t(footer.legal)`, so an admin changes them under Admin → Translations
  * instead of editing ui.json per language.
  */
-const REFERENCE = /\$t\(([^()\s]+)\)/g;
+import { TRANSLATION_REF_PATTERN } from '../../../shared/translationRefs.js';
+
+const REFERENCE = TRANSLATION_REF_PATTERN;
 
 /**
  * Replace every `$t(key)` in `text` with the translation of `key`. A key that

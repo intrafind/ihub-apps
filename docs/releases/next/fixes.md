@@ -793,3 +793,10 @@ The frames that carry an answer's sources to the chat and to the run log dropped
 display name of the iFinder search profile a document was found in ("Found in Contracts") and where a
 project document came from (uploaded, picked, linked or written). The source cards could not show
 either. Both now arrive with the sources.
+
+## UI Customization Saves Again
+
+Editing the site title under **UI Customization → Content** failed with an error (HTTP 400) and the
+change was lost: the edit replaced the whole configuration in the form, so the save arrived without its
+header and footer. Every tab now changes one section of the form, the form no longer reloads over your
+edits after a save, and the page refuses to send a configuration the server would reject.
