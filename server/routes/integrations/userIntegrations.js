@@ -449,7 +449,7 @@ router.put('/preferences', authRequired, async (req, res) => {
  *         schema: { type: string }
  *     responses:
  *       200:
- *         description: "{ integration: {...} }"
+ *         description: The integration (the same entry as in the listing)
  *       404:
  *         description: |
  *           Not an installation the user may use. Anonymous callers are handed
@@ -482,6 +482,62 @@ router.get('/:id', async (req, res, next) => {
         }
         res.setHeader('Cache-Control', 'no-store');
         return res.json(integration);
+      } catch (error) {
+        return next(error);
+      }
+    })
+  );
+});
+
+/**
+ * @swagger
+ * /api/integrations/{id}/icon:
+ *   get:
+ *     summary: The icon an integration's definition ships
+ *     description: |
+ *       The `icon.svg` / `icon.png` file next to the definition, for an
+ *       installation the user may use (the same rule as the listing). It is
+ *       served as an image only: `nosniff` and a CSP that allows nothing.
+ *     tags:
+ *       - Integrations
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: The image
+ *       404:
+ *         description: Not an installation the user may use, or it ships no icon
+ */
+router.get('/:id/icon', async (req, res, next) => {
+  // Like `GET /:id`: anything that is not an installation is for the routers after this one.
+  if (isAnonymous(req.user)) return next();
+  if (!isInstallationId(req.params.id) || !installedIntegrationService.get(req.params.id)) {
+    return next();
+  }
+  return requireFeature('integrations')(req, res, () =>
+    authRequired(req, res, async () => {
+      try {
+        const integration = await getUserIntegration({
+          user: req.user,
+          installationId: req.params.id
+        });
+        const definitionId = integration?.definition;
+        const icon = definitionId
+          ? await installedIntegrationService.registry.readIcon(definitionId)
+          : null;
+        if (!icon) throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
+        res.setHeader('Content-Type', icon.contentType);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        // An SVG opened on its own must not run anything.
+        res.setHeader(
+          'Content-Security-Policy',
+          "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+        );
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        return res.send(icon.data);
       } catch (error) {
         return next(error);
       }

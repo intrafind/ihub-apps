@@ -41,6 +41,7 @@ import configCache from '../../configCache.js';
 import credentialService from '../CredentialService.js';
 import { sortWebSearchEngines, WEB_SEARCH_TYPE } from '../search/webSearchEngines.js';
 import installedIntegrationService from './InstalledIntegrationService.js';
+import { buildServerPath } from '../../utils/basePath.js';
 import {
   ALL_INTEGRATIONS,
   integrationGrantKeys,
@@ -366,10 +367,17 @@ export function effectsOf(actions) {
   return EFFECT_ORDER.filter(effect => present.has(effect));
 }
 
-/** An http(s) icon URL of the definition, or null (companion icons are not served yet). */
-function iconOf(definition) {
+/**
+ * The icon of an integration: the definition's http(s) URL, or the route that
+ * serves the icon file the definition ships (with the base path), else null.
+ */
+export function iconOf(definition, installationId) {
   const icon = definition?.icon;
-  return typeof icon === 'string' && /^https?:\/\//i.test(icon) ? icon : null;
+  if (typeof icon === 'string' && /^https?:\/\//i.test(icon)) return icon;
+  if (installationId && installedIntegrationService.registry?.iconFile?.(definition?.id)) {
+    return buildServerPath(`/api/integrations/${encodeURIComponent(installationId)}/icon`);
+  }
+  return null;
 }
 
 /** The apps the user may open (enabled ones only); an empty list when they cannot be read. */
@@ -461,7 +469,7 @@ async function entryFor(resolved, user, { actions, apps, live }) {
     name: label,
     description:
       localized(instance.description, language) || localized(definition.description, language),
-    icon: iconOf(definition),
+    icon: iconOf(definition, instance.id),
     categories: Array.isArray(definition.categories) ? [...definition.categories] : [],
     capabilities: Array.isArray(definition.capabilities) ? [...definition.capabilities] : [],
     actions,
