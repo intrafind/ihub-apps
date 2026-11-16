@@ -53,7 +53,7 @@ import {
 import { extractToolSources } from '../services/sources/index.js';
 import { normalizeSource, mergeSources, emptySourceSet } from '../../shared/sources/index.js';
 import { classifyKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
-import { activityKindOf, activityScopeOf } from '../utils/toolDisplay.js';
+import { activityKindOf } from '../utils/toolDisplay.js';
 import {
   content as providerContent,
   metadata as providerMetadata
@@ -1265,7 +1265,6 @@ describe('tools', () => {
     assert.equal(classifyKnowledgeSource('knowledge_search'), 'project');
     assert.equal(activityKindOf('knowledge_search', 'project'), 'search');
     assert.equal(activityKindOf('knowledge_read', 'project'), 'fetch');
-    assert.equal(activityScopeOf('knowledge_search', 'project'), 'documents');
   });
 });
 

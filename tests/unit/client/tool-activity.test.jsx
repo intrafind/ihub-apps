@@ -165,18 +165,18 @@ describe('row kind and scope', () => {
     ).items[0];
 
   test('a call is drawn as the server says', () => {
-    expect(
-      rowOf({ toolId: 'anything', activityKind: 'search', activityScope: 'documents' })
-    ).toMatchObject({ kind: 'search', scope: 'documents', query: 'q' });
-    expect(
-      rowOf({ toolId: 'anything', activityKind: 'fetch', activityScope: 'web' })
-    ).toMatchObject({ kind: 'fetch', scope: 'web' });
+    expect(rowOf({ toolId: 'anything', activityKind: 'search' })).toMatchObject({
+      kind: 'search',
+      query: 'q'
+    });
+    expect(rowOf({ toolId: 'anything', activityKind: 'fetch' })).toMatchObject({ kind: 'fetch' });
+    // The row carries no web/documents scope: where a call looked is its `origin`.
+    expect(rowOf({ toolId: 'anything', activityKind: 'search' })).not.toHaveProperty('scope');
   });
 
   test('a call the server said nothing about is a plain call, whatever its id', () => {
     expect(rowOf({ toolId: 'braveSearch' })).toMatchObject({
       kind: 'tool',
-      scope: null,
       query: null
     });
     expect(rowOf({ toolId: 'jira_searchTickets', activityKind: 'tool' })).toMatchObject({
@@ -441,7 +441,7 @@ describe('ToolActivity', () => {
         ended(5)
       ])
     );
-    expect(activity.items[0]).toMatchObject({ kind: 'search', scope: 'documents' });
+    expect(activity.items[0]).toMatchObject({ kind: 'search' });
     render(<ToolActivity activity={activity} loading={false} />);
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveTextContent(
@@ -490,7 +490,7 @@ describe('ToolActivity', () => {
       ])
     );
     const [search, read] = activity.items;
-    expect(read).toMatchObject({ kind: 'fetch', scope: 'documents', documentId: 'doc-1' });
+    expect(read).toMatchObject({ kind: 'fetch', documentId: 'doc-1' });
     // The hit that found the document is marked read.
     expect(search.sources[0]).toMatchObject({ ref: { id: 'doc-1' }, read: { ok: true } });
     expect(search.sources[1].read).toBeUndefined();
@@ -631,7 +631,7 @@ describe('ToolActivity', () => {
         ended(4)
       ])
     );
-    expect(activity.items[0]).toMatchObject({ kind: 'tool', scope: null, query: null });
+    expect(activity.items[0]).toMatchObject({ kind: 'tool', query: null });
     render(<ToolActivity activity={activity} loading={false} />);
     const toggle = screen.getByRole('button');
     // The system names its own segment; it is not the web.

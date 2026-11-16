@@ -421,7 +421,6 @@ export async function buildEvidence({
         title: call.title,
         integration: call.integration,
         activityKind: call.activityKind,
-        activityScope: call.activityScope,
         activityOrigin: call.activityOrigin ?? result?.activityOrigin,
         execution: call.execution,
         args: 'args' in call ? collector.ref(call.args) : undefined,

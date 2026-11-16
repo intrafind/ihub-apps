@@ -372,7 +372,6 @@ function boundToolItem(item) {
     // names the provider as the live one did.
     integration: text(item.integration, MAX_LABEL_CHARS),
     status: item.status,
-    scope: item.scope,
     // Where the server said the call looked, and what it declared the call
     // came to (hits of a search, 0 included; whether a read delivered text).
     origin: ACTIVITY_ORIGINS.includes(item.origin) ? item.origin : undefined,
@@ -575,7 +574,6 @@ export function shareableActivity(activity) {
               name: item?.name,
               activatedBy: item?.activatedBy,
               status: item?.status,
-              scope: item?.scope,
               // The kind of system and what the call came to are the viewer's
               // to read; the integration's name and a user's project never leave
               // the owner's share (see the public web items above). Only the

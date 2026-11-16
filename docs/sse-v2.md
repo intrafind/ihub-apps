@@ -212,8 +212,8 @@ the client alone.
 ## Where a Tool Call Looked
 
 `activityOrigin`, `resultCount`, `readOutcome` and `places` are optional and additive; a client keeps working when
-one is missing and never works them out from a tool id, a provider or `activityScope` (which stays for
-this release).
+one is missing and never works them out from a tool id or a provider. The old `activityScope`
+(`web` or `documents`) is gone: where a call looked is `activityOrigin`.
 
 - `tool/started`, the `args` progress frames and the ledger `tool/call` carry `activityOrigin`:
   `project | web | ifinder | iassistant | documents | integration`, the kinds of the footer's

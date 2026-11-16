@@ -12,9 +12,9 @@
  *  - `run.tools` (`tool/started` / `tool/completed`): every server-executed
  *    tool call, with the sources it reported (`sources/added` with its
  *    callId, see `shared/sources`). Whether a call is a search, a page or
- *    document read or a plain call, and whether it looked at the web or the
- *    organisation's documents, is the server's decision (`activityKind`,
- *    `activityScope` on `tool/started`, see server `utils/toolDisplay.js`):
+ *    document read or a plain call, and where it looked (the web, a project,
+ *    iFinder, a connected system), is the server's decision (`activityKind`,
+ *    `activityOrigin` on `tool/started`, see server `utils/toolDisplay.js`):
  *    nothing here infers it from the tool id. Clarifications (`ask_user`) and
  *    chat-launched workflows are left out: each has its own UI.
  *  - `tool/progress{skill.activation}` frames: one `skill` row per distinct
@@ -230,7 +230,6 @@ function skillRows(run) {
           ? entry.data.activatedBy
           : null,
         status: 'completed',
-        scope: null,
         details: [],
         sources: [],
         error: null,
@@ -329,7 +328,6 @@ export function withStoredSkills(activity, activeSkills) {
     skillId: typeof skill.id === 'string' ? skill.id : null,
     activatedBy: SKILL_ACTIVATORS.includes(skill.activatedBy) ? skill.activatedBy : null,
     status: 'completed',
-    scope: null,
     details: [],
     sources: [],
     error: null,
@@ -424,12 +422,6 @@ function callsInOrder(run) {
   return calls;
 }
 
-/** Where a search or read looked: the organisation's documents or the web; a plain call says nothing. */
-function scopeOf(kind, tool) {
-  if (kind === 'tool') return null;
-  return tool?.activityScope === 'documents' ? 'documents' : 'web';
-}
-
 /**
  * The row of one call, with the time it first appeared (for placing skill
  * rows among the calls); null for a call with its own UI or one the server
@@ -463,9 +455,8 @@ function callRow(run, { tool, stream }, finished) {
       // The integration, MCP server or agent it ran against ("Munich AD").
       integration: tool?.integration || stream?.integration || null,
       status,
-      scope: scopeOf(kind, tool),
       // Where the server says the call looked (`activityOrigin`): never worked
-      // out here from the tool id, the provider or `scope`. null = not said.
+      // out here from the tool id or the provider. null = not said.
       origin: tool?.activityOrigin || stream?.activityOrigin || null,
       // What the server declared the call came to: the hits of a search (0
       // included), whether a read delivered text (`opened`, `empty`). null =
@@ -499,7 +490,6 @@ function nativeSearchRow(run, finished) {
     id: 'native-web-search',
     kind: 'search',
     native: true,
-    scope: 'web',
     // The provider's own search is the web: the grounding frame says so.
     origin: 'web',
     resultCount: null,

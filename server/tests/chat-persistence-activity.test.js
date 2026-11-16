@@ -91,7 +91,6 @@ function emitSearchingTurn(stream) {
     toolId: 'braveSearch',
     name: 'braveSearch',
     activityKind: 'search',
-    activityScope: 'web',
     args: { query: 'wind power 2026', count: 5 }
   });
   stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
@@ -125,7 +124,6 @@ function emitSearchingTurn(stream) {
     toolId: 'iFinder_search',
     name: 'iFinder_search',
     activityKind: 'search',
-    activityScope: 'documents',
     args: { query: 'Windpark Stellungnahme' }
   });
   stream.emit(SSE_V2_EVENTS.TOOL_COMPLETED, {
@@ -185,7 +183,8 @@ describe('recording what a turn did', () => {
     const activity = takeRunActivity(RUN_ID);
     const [web, docs] = activity.toolActivity.items;
     assert.equal(web.kind, 'search');
-    assert.equal(web.scope, 'web');
+    // The server's `origin`, not an old web/documents scope, says where a call looked.
+    assert.equal('scope' in web, false);
     assert.equal(web.query, 'wind power 2026');
     assert.equal(web.status, 'completed');
     assert.equal(web.durationMs, 420);
@@ -202,7 +201,7 @@ describe('recording what a turn did', () => {
     assert.equal(docs.sources[0].ref.id, 'doc-7');
     // The arguments the row does not show are listed as details.
     assert.deepEqual(web.details, [{ name: 'count', values: [{ text: '5' }], more: 0 }]);
-    assert.equal(docs.scope, 'documents');
+    assert.equal('scope' in docs, false);
     assert.equal(activity.toolActivity.reading, null);
 
     assert.equal(activity.searchSummary.totalHits, 12);
@@ -427,7 +426,6 @@ describe('recording what a turn did', () => {
       toolId: 'read_url',
       name: 'read_url',
       activityKind: 'fetch',
-      activityScope: 'web',
       args: { url: 'https://example.org' }
     });
     // No run/ended: the run was superseded or failed around the call.
@@ -445,7 +443,6 @@ describe('the stored form of the activity', () => {
       toolId: 'braveSearch',
       name: 'braveSearch',
       status: 'completed',
-      scope: 'web',
       query: long,
       details: [{ name: 'filter', values: [{ text: 'short', full: long }], more: 0 }],
       sources: [
@@ -639,7 +636,6 @@ describe('what a share carries of the activity', () => {
         {
           id: 'w',
           kind: 'search',
-          scope: 'web',
           toolId: 'braveSearch',
           query: 'public',
           sources: [{ url: 'https://example.org' }]
@@ -647,14 +643,12 @@ describe('what a share carries of the activity', () => {
         {
           id: 'd',
           kind: 'search',
-          scope: 'documents',
           query: 'Windpark',
           sources: [{ documentId: 'doc-7', title: 'Internal memo' }]
         },
         {
           id: 'r',
           kind: 'fetch',
-          scope: 'documents',
           documentId: 'doc-7',
           title: 'Internal memo',
           url: 'https://ifinder/doc-7',
@@ -705,7 +699,6 @@ describe('what a share carries of the activity', () => {
           {
             id: 'm',
             kind: 'tool',
-            scope: null,
             toolId: 'iFinder_getMetadata',
             name: 'iFinder_getMetadata',
             status: 'completed',
@@ -715,7 +708,6 @@ describe('what a share carries of the activity', () => {
           {
             id: 'c',
             kind: 'search',
-            scope: 'web',
             toolId: 'mcp_confluence_search',
             name: 'Confluence',
             status: 'error',
@@ -727,7 +719,6 @@ describe('what a share carries of the activity', () => {
             id: 'n',
             kind: 'search',
             native: true,
-            scope: 'web',
             toolId: 'webSearch',
             queries: ['wind'],
             sources: []
@@ -948,7 +939,6 @@ const LEDGER = [
       toolId: 'iFinder_search',
       name: 'iFinder_search',
       activityKind: 'search',
-      activityScope: 'documents',
       args: { query: 'q' }
     }
   },

@@ -225,7 +225,6 @@ test('search_tools loads what it finds into the very next request, and runs noth
   const [started] = ofType(frames, TOOL_STARTED);
   assert.equal(started.data.toolId, 'search_tools');
   assert.equal(started.data.activityKind, 'tool', 'not drawn as a web search');
-  assert.equal(started.data.activityScope, undefined);
   assert.equal(ofType(frames, TOOL_COMPLETED).length, 1);
 });
 

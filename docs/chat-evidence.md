@@ -68,7 +68,7 @@ Answers stored before the release, or while the switch was off, have no record. 
     "startedAt": "…", "endedAt": "…" } ],
   "toolCalls": [ {
     "step": 0, "callId": "…", "toolId": "…", "name": "…", "title": "…",
-    "integration": "…", "activityKind": "search", "activityScope": "documents",
+    "integration": "…", "activityKind": "search", "activityOrigin": "project",
     "args": "sha256:…", "result": "sha256:…",
     "resultSource": "spill" | "message" | "preview", "partial": true,
     "resultBytes": 12345, "error": { … }, "durationMs": 120, "startedAt": "…", "endedAt": "…" } ],
@@ -96,8 +96,9 @@ Answers stored before the release, or while the switch was off, have no record. 
   the journal (`"preview"`, `partial: true`), e.g. when the run ended right after the tool.
 - An `error` event belongs to the call of its step; it marks that call failed only if the call had
   no answer.
-- Tool labels (`title`, `integration`, `activityKind`, `activityScope`, `activityOrigin`) are copied
-  from the `tool/call` event; the record never infers them.
+- Tool labels (`title`, `integration`, `activityKind`, `activityOrigin`) are copied from the
+  `tool/call` event; the record never infers them. Records written before the old
+  `activityScope` was removed still carry it.
 - `knowledge` is phase 1: which projects the turn reached and how. The passages themselves are in
   the system prompt.
 - `content` maps every `sha256:` item the record names to the answer whose pack holds it (for a

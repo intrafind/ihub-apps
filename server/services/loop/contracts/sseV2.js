@@ -172,8 +172,6 @@ export const toolStartedData = z.object({
   integration: z.string().optional(),
   /** The row the chat draws (server `utils/toolDisplay`): a search, a page/document read or a plain call. */
   activityKind: z.enum(['search', 'fetch', 'tool']).optional(),
-  /** For a search or fetch: the public web or the organisation's documents. */
-  activityScope: z.enum(['web', 'documents']).optional(),
   /**
    * Where the call looked, in the footer's vocabulary (server `utils/toolDisplay`:
    * `activityOriginOf`); absent when the server cannot place the call. Never

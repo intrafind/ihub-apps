@@ -734,9 +734,8 @@ export function reduceRunEvent(state, envelope) {
         // What the user reads instead of the id (server `utils/toolDisplay`).
         title: data.title || null,
         integration: data.integration || null,
-        // The row the server decided on (search / fetch / tool) and where it looked.
+        // The row the server decided on (search / fetch / tool); where it looked is `activityOrigin`.
         activityKind: data.activityKind || null,
-        activityScope: data.activityScope || null,
         // Where it looked, in the footer's vocabulary (server `activityOriginOf`).
         activityOrigin: originOrNull(data.activityOrigin),
         args: data.args,

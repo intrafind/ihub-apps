@@ -579,7 +579,6 @@ export function projectLedgerEvent(ev) {
           ...(d.title ? { title: String(d.title) } : {}),
           ...(d.integration ? { integration: String(d.integration) } : {}),
           ...(d.activityKind ? { activityKind: d.activityKind } : {}),
-          ...(d.activityScope ? { activityScope: d.activityScope } : {}),
           ...(d.activityOrigin ? { activityOrigin: d.activityOrigin } : {}),
           args: d.args,
           execution: d.execution || 'server'

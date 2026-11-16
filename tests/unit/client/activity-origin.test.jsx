@@ -86,12 +86,11 @@ const hit = (n, extra = {}) => ({
 
 const web = {
   activityKind: 'search',
-  activityScope: 'web',
   activityOrigin: 'web',
   integration: 'Brave Search'
 };
-const project = { activityKind: 'search', activityScope: 'documents', activityOrigin: 'project' };
-const read = { activityKind: 'fetch', activityScope: 'web', activityOrigin: 'web' };
+const project = { activityKind: 'search', activityOrigin: 'project' };
+const read = { activityKind: 'fetch', activityOrigin: 'web' };
 
 /** The run of the issue's screenshot: a web search (5 results, 3 pages opened) and an empty project search. */
 const screenshotRun = () => [
@@ -192,14 +191,12 @@ describe('the headline as segments', () => {
     const items = activityOf([
       started(2, 'a', 'braveSearch', {
         activityKind: 'search',
-        activityScope: 'web',
         args: { query: 'q' }
       }),
       completed(3, 'a', 'braveSearch'),
       sources(4, 'a', 'braveSearch', [hit(1), hit(2)]),
       started(5, 'b', 'knowledge_search', {
         activityKind: 'search',
-        activityScope: 'documents',
         args: { query: 'q2' }
       }),
       completed(6, 'b', 'knowledge_search'),
@@ -597,7 +594,6 @@ describe('instance names on rows (#3668)', () => {
     const run = [
       started(2, 'r1', 'knowledge_read', {
         activityKind: 'fetch',
-        activityScope: 'documents',
         activityOrigin: 'project',
         args: { document: 'd1' }
       }),
@@ -616,7 +612,6 @@ describe('instance names on rows (#3668)', () => {
     const run = [
       started(2, 'i1', 'iFinder_search', {
         activityKind: 'search',
-        activityScope: 'documents',
         activityOrigin: 'ifinder',
         args: { query: 'contract' }
       }),
