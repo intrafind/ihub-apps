@@ -346,6 +346,39 @@ Both are private (never in a shared chat) unless they say otherwise. See
 [Building an Integration](integration-development.md) for a step-by-step guide,
 including how an integration adds preview and download.
 
+### What a Tool Is in the Chat (`activity`)
+
+The chat draws every call as a **search**, a **fetch** (one page or document) or a plain **tool**
+call, and says where a search or fetch looked. The server decides, from what the tool declares —
+never from its id. Declare it in the tool, per function, on an integration definition's action, or
+(to correct an MCP or custom tool without a code change) in the installation's
+`actions.overrides.<tool>`:
+
+```json
+"activity": { "kind": "search", "origin": "web" }
+```
+
+- `kind`: `search`, `fetch` or `tool` (the default).
+- `origin`: where it looks, the footer's vocabulary: `web`, `project`, `ifinder`, `iassistant`,
+  `documents`, `integration`. Without it a connected system (integration, MCP server, remote agent)
+  is `integration`, any other tool has none.
+- `place`: free text such as `"directory"`; reserved for wording, not sent yet.
+
+A tool that declares nothing is a plain call, so a tool that merely has "search" in its name never
+reads as a web search or earns the "web search" badge. The built-ins declare theirs: the web search
+engines (the `search` action of a `web-search` definition), `read_url`, the project knowledge tools,
+iFinder, and directory lookups (`search`, origin `integration`). An invalid declaration is ignored
+and logged.
+
+An MCP server's search of the web:
+
+```json
+"actions": { "overrides": { "tavily_search": { "activity": { "kind": "search", "origin": "web" } } } }
+```
+
+A tool declared `search` or `fetch` has its result URLs cited; one declared `web` also reports its
+hits as web sources (private unless it is one of the shipped engines).
+
 ### External Service Integration
 
 Integrate with external APIs and services:

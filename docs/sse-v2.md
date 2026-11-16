@@ -217,8 +217,10 @@ one is missing and never works them out from a tool id or a provider. The old `a
 
 - `tool/started`, the `args` progress frames and the ledger `tool/call` carry `activityOrigin`:
   `project | web | ifinder | iassistant | documents | integration`, the kinds of the footer's
-  `answerBasis` (`activityOriginOf` in `utils/toolDisplay.js` reads the same classifier). Absent when
-  the server cannot place the call. `read_url` is `web`; an integration is named by `integration`.
+  `answerBasis` (`activityOriginOf` in `utils/toolDisplay.js` reads the tool's declared category,
+  [`activity`](tool-calling.md#what-a-tool-is-in-the-chat-activity)). Absent when the tool declares no
+  origin and is no connected system. `read_url` declares `web`; an integration is named by `integration`.
+  `activityKind` (`search | fetch | tool`) comes from the same declaration, never from the tool id.
 - `tool/completed` and the ledger `tool/result` may carry `resultCount` (hits a search returned, `0`
   included; absent when unknown, so an empty source list is never "no results") and `readOutcome`
   (`opened`: a page or document read delivered text; `empty`: it completed without, for example

@@ -907,3 +907,23 @@ evidence endpoints instead: `GET /api/chats/{chatId}/evidence/{messageId}` for a
 `GET /api/runs/{runId}/evidence` for a run without a chat. Copy any journals you need to keep from
 `contents/data/logs/run/` first — from the first start on, the finished ones are deleted (at most
 2,000 per daily cleanup).
+
+## Tools Declare What They Are: Search-Named Tools Are No Longer Web Searches
+
+The chat no longer guesses from a tool's id whether a call is a web search, a document search or a
+page read. A tool declares it (`activity: { kind, origin }`), and a tool that declares nothing is a
+plain tool call. Admins can set it on a custom tool, an integration action or, to correct an MCP
+tool, in the installation's `actions.overrides.<tool>` — see
+[Tool Calling](../../tool-calling.md#what-a-tool-is-in-the-chat-activity).
+
+- People-directory lookups (Entra, LDAP directory, LDAP browser search) now show as a search of the
+  connected system. They are never shown as web searches and never earn the "web search" badge.
+- Jira, other connected systems and any MCP tool that merely has "search" in its name stay plain
+  tool calls.
+- Brave, Qwant and Staan search, the page reader, project knowledge and iFinder look as before.
+- The activity and sources of chats stored earlier are unchanged.
+
+**Before upgrading:** if a custom tool or an MCP server (for example Tavily) is a real web search
+and its calls should keep showing as one, with its pages as sources and in the citations, declare it
+in its installation: `"actions": { "overrides": { "<tool>": { "activity": { "kind": "search",
+"origin": "web" } } } }`.
