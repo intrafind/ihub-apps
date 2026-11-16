@@ -2739,7 +2739,9 @@ function AppChat({
   useConnectRetry({
     chatId,
     messages,
-    ready: !hydrating,
+    // A turn sent before the chat has resolved its model goes out without a
+    // `modelId` and the server refuses it (400).
+    ready: !hydrating && !modelsLoading && Boolean(selectedModel),
     busy:
       processing ||
       compareIsProcessing ||
