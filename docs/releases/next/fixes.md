@@ -801,6 +801,13 @@ change was lost: the edit replaced the whole configuration in the form, so the s
 header and footer. Every tab now changes one section of the form, the form no longer reloads over your
 edits after a save, and the page refuses to send a configuration the server would reject.
 
+## The Colors on the Theme & Styles Tab Have Names for Screen Readers
+
+Each color of **UI Customization → Theme & styles** has a color picker, a hex field and a row of preset
+swatches. A screen reader announced the picker and the field without a name, and the swatches only by
+a tooltip. They are labelled with the name of the color now (the hex field with its visible label, the
+picker as "<color> (color picker)", each swatch by its value).
+
 ## Mermaid Diagrams Show in Full
 
 Diagrams in chat answers and in the documentation were cut off after 150 pixels, so most of a
