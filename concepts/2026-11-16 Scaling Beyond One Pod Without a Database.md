@@ -100,10 +100,16 @@ process would have to join the mesh itself.
 - One WebSocket between each pair of primaries (`ws` is already a dependency), on a separate
   internal port that the ingress does not expose. With n pods that is n(n−1)/2 links; fine for
   the pod counts in `docs/sizing.md` (up to 4).
-- **Authentication:** a handshake signed with a key derived from the JWT secret, which all pods
-  must share anyway. A link without a valid handshake is closed.
-- **TLS:** optional `wss://`; the client side merges `getWebSocketTlsOptions(url)` so a private CA
-  works (`server/utils/httpConfig.js`).
+- **Authentication:** challenge and response in both directions. Each side sends a random,
+  single-use challenge for this connection; the other side answers with an HMAC over that
+  challenge and both pod ids, keyed with a key derived from the JWT secret, which all pods must
+  share anyway. A captured handshake is therefore useless on another connection. A link without
+  a valid answer is closed, and no bus message is accepted before both sides have answered.
+- **TLS:** `wss://` by default; the client side merges `getWebSocketTlsOptions(url)` so a private
+  CA works (`server/utils/httpConfig.js`). The handshake authenticates the peer but does not
+  encrypt the link, and a reconnect to a running turn can carry chat content. Whether plaintext
+  may be allowed by an explicit setting, for clusters whose network already encrypts pod traffic,
+  is open question 6.
 - **Framing:** the JSON envelopes the IPC channel already carries.
 
 ### 4.3 Finding the other pods
@@ -122,7 +128,9 @@ id dials.
 
 - The owner of an entry becomes `(podId, workerId)`. Each primary keeps its own table as today and
   mirrors the tables of its peers.
-- On connect, both sides exchange a snapshot. Afterwards they send each set and delete.
+- On connect, each side takes its snapshot and starts forwarding changes in the same event-loop
+  turn, so no set or delete can fall between the two. The link carries the snapshot first, then
+  every later change in order.
 - A link that closes retracts everything that pod held, the same way `cluster.on('exit')` does for
   a dead worker.
 - A routed message whose owner is in another pod goes to that pod's primary, which delivers it to
@@ -158,6 +166,11 @@ there are several primaries.
   route `primaryOnly` questions to the leader. When the leader dies, counters restart at zero on
   the next leader; for rate limits and throttling that is acceptable, for login lockout it needs a
   decision.
+- **A pod that cannot reach a live leader** (§4.9) must not silently fall back to its own
+  counters for login lockout, or the limit can be exceeded across the partition. Rate limits and
+  throttling may count locally until the link is back. For login lockout the choice is between
+  refusing logins on that pod and a local limit that is safe on its own (the configured limit
+  divided by the number of pods); see open question 2.
 
 ### 4.7 Storage on a shared volume
 
@@ -165,8 +178,12 @@ No database means the volume carries all shared state. Open points, in order of 
 
 1. **Attribute caching on NFS.** `sharedJsonFile.js` re-validates its cache by inode, mtime and
    size. An NFS client may answer `stat` from its attribute cache for seconds, so a pod could keep
-   a stale copy and write it back. Needs a test on NFSv4, CephFS and Azure Files, and either mount
-   options (`actimeo=0` or similar) or a bus message that tells the other pods a file changed.
+   a stale copy and write it back. Needs a test on NFSv4, CephFS and Azure Files. Mount options
+   that turn attribute caching off (`actimeo=0` or similar) are the control. A bus message that
+   tells the other pods a file changed is not a substitute: it does not clear the attribute cache,
+   and a pod that misses it stays stale. It could only help as an addition, by making the pod
+   re-open and re-read the file without trusting `stat`, which relies on NFS close-to-open
+   consistency and needs the same tests.
 2. **Lease files.** `fileLock.js` builds on exclusive create (`O_EXCL`), which is atomic on NFSv4.
    The takeover of an expired lease and the fencing tokens need a run of the provider conformance
    suite with two hosts on one volume.
@@ -204,6 +221,7 @@ in phase 3 should not be run before it.
 | A bus link breaks, both pods alive | Each pod serves what it holds. Stop and steering for turns on the other pod fail until the link is back; config changes arrive with the TTL refresh. Links reconnect with backoff and exchange a new snapshot. |
 | Rolling update | Pods join and leave the mesh one at a time. The envelope needs a version field from the first release, so two versions can run side by side. |
 | Leader pod dies (phase 2) | The lease expires, another pod takes over, counters restart. |
+| A pod loses its link to a live leader (phase 2) | Rate limits and throttling count locally until the link is back. Login lockout follows the policy chosen in §4.6. |
 
 ## 5. Phases
 
@@ -221,13 +239,18 @@ Until step 4 is done, cookie affinity stays the documented setup for several pod
 
 1. Which volume types do customers use for `contents/`? The answer decides how much of §4.7 is
    testing and how much is new code.
-2. Is "limit × pods" acceptable for login lockout until phase 5?
+2. Is "limit × pods" acceptable for login lockout until phase 5? And from phase 5 on, what does a
+   pod do for login lockout when it cannot reach the leader: refuse logins, or apply a reduced
+   local limit?
 3. Should a pod with `WORKERS=1` be allowed in a mesh, or does a mesh require a primary?
 4. How do clients without cookies (MCP, API keys, Office add-in, browser extension) behave behind
    cookie affinity today? If they already break, phase 2 is more urgent than the sizing numbers
    suggest.
 5. Does the PostgreSQL plan (storage design §10) stay, with the mesh as the transport for
    installations without a database, or does the mesh replace the LISTEN/NOTIFY transport?
+6. Is TLS on the bus links mandatory, or may an installation turn it off when the cluster network
+   already encrypts pod traffic (a service mesh, an encrypting CNI)? Mandatory TLS means every pod
+   needs a certificate the other pods trust.
 
 ## 7. Documentation to fix independently of this proposal
 
