@@ -32,7 +32,7 @@ import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 import { abortCause, abortReason, causeOfSignal, describeCause } from './abortCause.js';
 import defaultAgentLoop from '../loop/AgentLoop.js';
-import { OPTIONAL_COUNTERS } from '../loop/llmUsage.js';
+import { OPTIONAL_COUNTERS, addUsage } from '../loop/llmUsage.js';
 import { createContextTracker } from '../loop/contextTracker.js';
 import runLogSingleton, { newRunId, isValidRunId } from '../loop/RunLog.js';
 import interactionServiceSingleton from '../loop/InteractionService.js';
@@ -427,6 +427,33 @@ class ChatService {
     }
   }
 
+  /**
+   * Continue the paused run a stored turn answers (`RunLog.continueRun`): only
+   * a chat run of this chat and app, started with the same model. Null when it
+   * cannot be continued; the turn then runs as a run of its own.
+   * @private
+   */
+  async _continueLedgerRun({ runId, interactionId, chatId, appId, modelId }) {
+    if (typeof this.runLog.continueRun !== 'function') return null;
+    try {
+      return await this.runLog.continueRun(runId, {
+        interactionId,
+        accept: start =>
+          start.data?.kind === 'chat' &&
+          start.data.refs?.chatId === chatId &&
+          (start.data.refs?.appId || null) === (appId || null) &&
+          (start.data.model || null) === (modelId || null)
+      });
+    } catch (err) {
+      logger.warn('Paused run could not be continued', {
+        component: COMPONENT,
+        runId,
+        error: err.message
+      });
+      return null;
+    }
+  }
+
   // ── the turn ───────────────────────────────────────────────────────────
 
   /**
@@ -453,6 +480,10 @@ class ChatService {
    * @param {string} [params.language='en']
    * @param {Object} [params.user]
    * @param {string} [params.runId] - run id to use (default: minted)
+   * @param {{interactionId?: string}} [params.continueRun] - `runId` names a paused run of this
+   *   chat whose interaction this turn answers: the turn continues that run (same id, one
+   *   journal for the whole turn) when `RunLog.continueRun` allows it, and otherwise runs
+   *   under a new id. Stored turns only.
    * @param {Object} [params.persistence] - stored-chat context. Every chat turn from the chat
    *   route carries one; a caller without one (an app invoked internally, a headless agent)
    *   runs an unstored turn.
@@ -514,6 +545,7 @@ class ChatService {
     language = 'en',
     user,
     runId: givenRunId,
+    continueRun = null,
     persistence = null,
     emitter = null,
     headless = !streaming,
@@ -545,7 +577,7 @@ class ChatService {
     const log = typeof buildLogData === 'function' ? buildLogData : () => ({});
     const loopTools = markInteractiveTools(tools);
     const startedAt = Date.now();
-    const runId = givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat');
+    let runId = givenRunId && isValidRunId(givenRunId) ? givenRunId : newRunId('chat');
     const refs = { chatId, appId: app?.id, ...(messageId ? { messageId } : {}) };
 
     // One in-flight request per chat: a new turn supersedes the previous one
@@ -604,6 +636,23 @@ class ChatService {
       activeRequests.set(chatId, controller);
     }
 
+    // A turn that answers a paused one continues its run, so the journal of
+    // that one run holds the whole turn — what happened before the pause, the
+    // answer, and the rest — and the answer's evidence record covers it all.
+    // When the run cannot be continued this turn runs under a new id, as
+    // every turn did before; the paused run keeps its `run/end` (`paused`).
+    let continued = null;
+    if (continueRun && persistence?.repository && runId === givenRunId) {
+      continued = await this._continueLedgerRun({
+        runId,
+        interactionId: continueRun.interactionId,
+        chatId,
+        appId: app?.id,
+        modelId: model?.id
+      });
+      if (!continued) runId = newRunId('chat');
+    }
+
     // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
     // A caller with its own consumer (the inference API turning frames into
     // OpenAI-shaped events) injects one; the chat UI gets the default one,
@@ -636,7 +685,9 @@ class ChatService {
       hasUserFileData: !!userFileData
     });
 
-    await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language, trigger });
+    if (!continued) {
+      await this._startLedgerRun({ runId, kind: 'chat', user, refs, model, language, trigger });
+    }
 
     // Scheduling tools resolve "tomorrow at nine" against the user's clock, so
     // the model has to be told what that clock says.
@@ -1060,7 +1111,8 @@ class ChatService {
       this._endLedgerRun(runId, {
         status: outcome.status,
         finishReason: outcome.finishReason,
-        usage: outcome.usage,
+        // A continued run's end counts what it used before the pause too.
+        usage: continued ? addUsage(continued.paused.data?.usage, outcome.usage) : outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
         answerBasis: outcome.answerBasis,

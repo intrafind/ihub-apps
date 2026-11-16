@@ -85,9 +85,12 @@ export const JOURNAL_SWEPT_KINDS = new Set(['chat', 'inference']);
 /**
  * Whether a summary describes a run whose journal may go once `cutoffMs` has
  * passed since it ended: a swept kind, ended before the cutoff, journal still
- * there, and not `paused` — a turn paused for an approval or a clarification
- * continues as a new run, and nothing else records what the paused segment
- * did, so its journal follows `runLog.retentionDays`.
+ * there, and not `paused`. A turn paused for an approval or a clarification
+ * keeps its journal because it may be continued under the same run id
+ * (`RunLog.continueRun`): the continuation appends to that journal, puts the
+ * run back to `running` with `endedAt` cleared, and its final `run/end` makes
+ * it sweepable like any finished run. A pause nobody answers keeps its journal
+ * until `runLog.retentionDays`.
  *
  * @param {Object} summary - Stored run summary.
  * @param {number} cutoffMs - Epoch ms; the run must have ended before it.
@@ -526,6 +529,26 @@ export class RunLedgerStore {
       await this._logs().deleteStream(runStreamName(runId));
       await this._summaries().patch(runId, { journalDeletedAt: new Date().toISOString() });
     });
+  }
+
+  /**
+   * Record that a paused run continues (`RunLog.continueRun`): running again,
+   * its end cleared until it ends once more.
+   *
+   * @param {Object} params
+   * @param {string} params.runId - Run id.
+   * @param {string} params.at - ISO timestamp of the `run/resumed` event.
+   * @returns {void}
+   */
+  recordRunResumed({ runId, at }) {
+    void this._queueSummaryWrite(() =>
+      this._summaries().patch(runId, {
+        status: 'running',
+        finishReason: null,
+        endedAt: null,
+        updatedAt: at
+      })
+    );
   }
 
   /**

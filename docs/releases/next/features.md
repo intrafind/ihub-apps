@@ -18,6 +18,8 @@ The chat's owner reads it through `GET /api/chats/{chatId}/evidence/{messageId}`
 against its upload quota (`uploads.quotas.maxChatBytes`); an answer is never refused for it.
 
 The record is written in the background after the answer is stored and is built from the run ledger.
+A turn that stops for a clarification or a tool approval continues the same run once it is answered,
+so the record of its answer covers the whole turn, including what happened before the pause.
 Admins can switch it off on **Admin → Chat History → Evidence record** (`chats.evidence.enabled`,
 default on; `chats.evidence.maxContentBytes` caps one item at 10 MB). Off stops new records; existing records
 stay until their chat is deleted or retention removes them. See [Chat Evidence Record](../../chat-evidence.md).

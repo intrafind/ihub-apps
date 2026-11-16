@@ -544,6 +544,29 @@ function foldToolProgress(run, frame, envelope) {
 }
 
 /**
+ * Whether `envelope` opens the continuation of a run that is not running.
+ *
+ * A chat turn that paused for a clarification or an approval continues under
+ * the same run id once the person answers. Its first frame — `run/started`,
+ * or the refresh of outdated project documents the turn waits for before it
+ * starts — opens the continuation from a clean state: it is projected onto the
+ * new answer, while what came before the pause stays on the message that
+ * showed it. (`run/resumed` is a replay of the ledger and keeps the state.)
+ *
+ * @param {Object|undefined} run - RunState before the envelope
+ * @param {Object} envelope - SSE v2 envelope
+ * @returns {boolean}
+ */
+export function continuesRun(run, envelope) {
+  if (!run || run.status === 'running') return false;
+  return (
+    envelope?.type === SSE_V2_EVENTS.RUN_STARTED ||
+    (envelope?.type === SSE_V2_EVENTS.TOOL_PROGRESS &&
+      envelope.data?.phase === KNOWLEDGE_REFRESH_PHASE)
+  );
+}
+
+/**
  * Fold one envelope into the stream state. Unknown or malformed envelopes are
  * ignored (the state object is returned unchanged).
  *
@@ -587,9 +610,7 @@ export function reduceRunEvent(state, envelope) {
 
   // ── run-scoped events ─────────────────────────────────────────────────
   if (typeof runId !== 'string' || runId === '') return next;
-  const ensured = ensureRun(
-    next,
-    runId,
+  const init =
     type === SSE_V2_EVENTS.RUN_STARTED
       ? {
           kind: data.kind,
@@ -598,10 +619,11 @@ export function reduceRunEvent(state, envelope) {
           parentRunId: data.parentRunId,
           startedAt: ts
         }
-      : {}
-  );
+      : {};
+  const ensured = ensureRun(next, runId, init);
   next = ensured.state;
   let run = ensured.run;
+  if (continuesRun(state.runs[runId], envelope)) run = createRunState(runId, init);
 
   switch (type) {
     case SSE_V2_EVENTS.RUN_STARTED:

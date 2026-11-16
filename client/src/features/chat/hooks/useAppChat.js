@@ -15,7 +15,8 @@ import {
   reduceRunEvent,
   getRun,
   RUN_EVENTS,
-  getRuns
+  getRuns,
+  continuesRun
 } from '../../../../../shared/run/runReducer.js';
 import { projectMessageRuns } from '../runToMessage';
 import { toolApprovalAnswer } from '../toolApprovalAnswer';
@@ -530,6 +531,11 @@ function useAppChat({
       }
       const { type, runId, data } = envelope;
 
+      // A paused run continuing under its id belongs to the answer being
+      // written now, not to the message that showed the pause.
+      if (continuesRun(getRun(streamStateRef.current, runId), envelope)) {
+        runMessageMapRef.current.delete(runId);
+      }
       // Fold into the per-chat stream state. Turn boundaries legitimately skip
       // stream seqs (the server keeps emitting after we abort), so the chat
       // surface never re-syncs on a gap.
@@ -1283,6 +1289,12 @@ function useAppChat({
         return false;
       }
 
+      // The replay may have passed a pause (a turn continued after a
+      // clarification or an approval keeps its run id); the run is live now,
+      // so nothing is waiting for the user.
+      setProcessing(true);
+      setClarificationPending(false);
+      activeClarificationRef.current = null;
       reattachedRunRef.current = { runId, onSettled };
       initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
       return true;

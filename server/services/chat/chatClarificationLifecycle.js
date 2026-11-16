@@ -7,10 +7,15 @@
  * A chat turn whose model asks the user a question (`ask_user`) ends its loop
  * with `run/paused` and leaves the run open on the ledger. The question is
  * settled outside that run: the next chat message answers or supersedes it
- * (`sessionRoutes.settleChatClarifications`), or it expires unanswered. The
- * answer feeds the next turn — a new run — so nothing ever resumes the paused
- * one. This listener writes the `run/end` that closes it, so a paused chat run
- * does not stay open in listings and stop handling forever.
+ * (`sessionRoutes.settleChatClarifications`), or it expires unanswered.
+ *
+ * An answer given in the chat (channel `chat`, a clarification or a tool
+ * approval) feeds the next turn, which continues the paused run under the
+ * same id (`RunLog.continueRun`) and ends it; when the run cannot be
+ * continued the turn runs as a run of its own and the paused run keeps the
+ * `run/end` (status `paused`) it paused with. This listener closes the rest: a
+ * question superseded or expired, or answered anywhere else, so a paused chat
+ * run does not stay open in listings and stop handling forever.
  *
  * Only chat clarifications qualify: `origin: 'tool'` with a `source.chatId`
  * and no `source.checkpointId` (a question raised inside a workflow node
@@ -70,8 +75,10 @@ export async function endPausedChatRun(interaction, { runLog = defaultRunLog } =
  */
 export function registerChatClarificationLifecycle(service = interactionService, deps = {}) {
   const runLog = deps.runLog || defaultRunLog;
-  const onSettled = interaction => {
+  const onSettled = (interaction, { channel } = {}) => {
     if (!isChatClarification(interaction)) return;
+    // The chat turn this answer feeds continues the run (`ChatService.runTurn`).
+    if (interaction.status === 'answered' && channel === 'chat') return;
     endPausedChatRun(interaction, { runLog }).catch(err =>
       logger.warn('Could not end the chat run of a settled clarification', {
         component: COMPONENT,
