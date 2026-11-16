@@ -277,28 +277,30 @@ describe('guest cookie', () => {
   const subject = `guest:${GUEST_ID}`;
 
   test('a signed cookie verifies; tampering, another guest and old versions do not', () => {
-    const value = guest.signAcknowledgement(subject, 1);
-    expect(guest.verifyAcknowledgement(value, subject, settings)).toBe(true);
-    expect(guest.verifyAcknowledgement(value + 'x', subject, settings)).toBe(false);
-    expect(guest.verifyAcknowledgement(value, `guest:${'b'.repeat(64)}`, settings)).toBe(false);
-    expect(guest.verifyAcknowledgement(value, subject, { ...settings, requiredVersion: 2 })).toBe(
-      false
-    );
-    expect(guest.verifyAcknowledgement('garbage', subject, settings)).toBe(false);
-    expect(guest.verifyAcknowledgement(undefined, subject, settings)).toBe(false);
+    const issued = Date.now() - 1000;
+    const value = guest.signAcknowledgement(subject, 1, issued);
+    // A valid cookie answers with its issue time.
+    expect(guest.verifyAcknowledgement(value, subject, settings)).toBe(issued);
+    expect(guest.verifyAcknowledgement(value + 'x', subject, settings)).toBeNull();
+    expect(guest.verifyAcknowledgement(value, `guest:${'b'.repeat(64)}`, settings)).toBeNull();
+    expect(
+      guest.verifyAcknowledgement(value, subject, { ...settings, requiredVersion: 2 })
+    ).toBeNull();
+    expect(guest.verifyAcknowledgement('garbage', subject, settings)).toBeNull();
+    expect(guest.verifyAcknowledgement(undefined, subject, settings)).toBeNull();
   });
 
   test('a cookie issued before resetAt stops counting', () => {
     const issued = Date.now() - 60_000;
     const value = guest.signAcknowledgement(subject, 1, issued);
     const resetAt = new Date(Date.now() - 1000).toISOString();
-    expect(guest.verifyAcknowledgement(value, subject, { ...settings, resetAt })).toBe(false);
+    expect(guest.verifyAcknowledgement(value, subject, { ...settings, resetAt })).toBeNull();
     expect(
       guest.verifyAcknowledgement(value, subject, {
         ...settings,
         resetAt: new Date(issued - 1000).toISOString()
       })
-    ).toBe(true);
+    ).toBe(issued);
   });
 });
 
@@ -365,6 +367,48 @@ describe('428 guard', () => {
     expect(original.users.alice.aiAcknowledgements).toBeUndefined();
     expect((await post(app, asUser('alice'))).status).toBe(200);
     spy.mockRestore();
+  });
+
+  describe('signed cookie of a user whose cached record says "not yet"', () => {
+    const cookieFor = (id, issuedAt, version = 1) =>
+      `${guest.ACK_COOKIE}=${guest.signAcknowledgement(`user:${id}`, version, issuedAt)}`;
+
+    test('passes without re-reading users.json', async () => {
+      const { default: configStore } = await import('../services/config/ConfigStore.js');
+      const spy = jest.spyOn(configStore, 'readJsonStrict');
+      try {
+        const app = buildApp();
+        expect((await post(app, asUser('alice'), cookieFor('alice'))).status).toBe(200);
+        expect(spy).not.toHaveBeenCalled();
+        // Bound to the user: alice's cookie does not let another user through.
+        expect((await post(app, asUser('=evil'), cookieFor('alice'))).status).toBe(428);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    test('a cookie issued before a per-user removal is refused, a newer one passes', async () => {
+      const app = buildApp();
+      const before = cookieFor('bob', Date.now() - 5000);
+      expect((await post(app, asUser('bob'), before)).status).toBe(200);
+      await clearAiAcknowledgements('bob', service.usersFilePath());
+      expect(typeof store.files[USERS].users.bob.aiAcknowledgementsClearedAt).toBe('string');
+      expect((await post(app, asUser('bob'), before)).status).toBe(428);
+      expect((await post(app, asUser('bob'), cookieFor('bob', Date.now() + 1000))).status).toBe(
+        200
+      );
+    });
+
+    test('after a version bump the old cookie is refused', async () => {
+      const app = buildApp();
+      const v1 = cookieFor('alice');
+      expect((await post(app, asUser('alice'), v1)).status).toBe(200);
+      store.files[PLATFORM].aiAcknowledgement.requiredVersion = 2;
+      expect((await post(app, asUser('alice'), v1)).status).toBe(428);
+      expect((await post(app, asUser('alice'), cookieFor('alice', Date.now(), 2))).status).toBe(
+        200
+      );
+    });
   });
 
   test('guests: no cookie refused; valid cookie passes; wrong guest refused', async () => {
@@ -731,9 +775,7 @@ describe('admin routes', () => {
     expect(Object.values(store.files[USERS].users).some(u => u.aiAcknowledgements)).toBe(false);
     const { resetAt } = store.files[PLATFORM].aiAcknowledgement;
     expect(typeof resetAt).toBe('string');
-    expect(guest.verifyAcknowledgement(old, `guest:${GUEST_ID}`, service.getSettings())).toBe(
-      false
-    );
+    expect(guest.verifyAcknowledgement(old, `guest:${GUEST_ID}`, service.getSettings())).toBeNull();
     expect(store.audits.at(-1)).toMatchObject({ action: 'delete', resourceId: '*' });
     expect(store.audits.at(-1).details).toMatchObject({ users: 1, entries: 1 });
   });

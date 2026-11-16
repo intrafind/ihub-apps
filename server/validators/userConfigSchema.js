@@ -35,7 +35,9 @@ export const userConfigSchema = z
           client: z.string().optional()
         })
       )
-      .optional()
+      .optional(),
+    // When an admin last removed them; a signed acknowledgement cookie from before no longer counts.
+    aiAcknowledgementsClearedAt: z.string().optional()
   })
   .passthrough();
 

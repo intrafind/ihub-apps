@@ -301,6 +301,11 @@ export async function recordAiAcknowledgement(userId, entry, usersFilePath) {
 /**
  * Remove the AI-use acknowledgements of one user, or of every user.
  *
+ * Stamps `aiAcknowledgementsClearedAt` on the users it changes: the 428 guard
+ * accepts the signed `ihubAiAck` cookie only when it was issued after that. A
+ * named user is always stamped, entries or not, so a cookie they still hold
+ * stops counting. "Remove all" also moves `resetAt`, which revokes every cookie.
+ *
  * @param {string|null} userId - Key in users.json, or null for every user
  * @param {string} usersFilePath - Path to users.json
  * @returns {Promise<{users: number, entries: number, found: boolean}>} How many
@@ -316,16 +321,19 @@ export async function clearAiAcknowledgements(userId, usersFilePath) {
       result.found = false;
       return false;
     }
+    const clearedAt = new Date().toISOString();
+    if (userId !== null) usersConfig.users[userId].aiAcknowledgementsClearedAt = clearedAt;
     for (const id of ids) {
       const user = usersConfig.users[id];
       if (!user || !Array.isArray(user.aiAcknowledgements)) continue;
       if (user.aiAcknowledgements.length > 0) {
         result.users += 1;
         result.entries += user.aiAcknowledgements.length;
+        user.aiAcknowledgementsClearedAt = clearedAt;
       }
       delete user.aiAcknowledgements;
     }
-    return result.entries > 0 ? true : false;
+    return userId !== null || result.entries > 0;
   });
   return result;
 }
