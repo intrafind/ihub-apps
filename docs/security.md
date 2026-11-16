@@ -287,7 +287,7 @@ export const modelAccessRequired = resourceAccessRequired('model');
 #### Request Concurrency Control
 ```json
 {
-  "requestConcurrency": 5
+  "requestConcurrency": 25
 }
 ```
 

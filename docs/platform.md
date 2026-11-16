@@ -29,8 +29,7 @@ The optional `platform.json` file controls global platform behavior and is locat
   },
   "defaultLanguage": "en",
   "requestBodyLimitMB": 50,
-  "requestConcurrency": 5,
-  "requestConcurrencyLocal": 32,
+  "requestConcurrency": 25,
   "requestDelayMs": 0,
   "telemetry": {
     "enabled": false,
@@ -383,8 +382,7 @@ only.
 
 - **defaultLanguage** (string) – Fallback language code when requested language is unavailable. Default: `"en"`
 - **requestBodyLimitMB** (number) – Maximum size of JSON request bodies in megabytes. Default: `50`
-- **requestConcurrency** (number) – Default concurrency level for outbound requests: how many calls to one model (or tool) run at once, across all workers. If omitted or below `1`, concurrency is unlimited. Default: `5`, sized for hosted APIs that rate-limit per key
-- **requestConcurrencyLocal** (number) – The same for self-hosted models: `provider: "local"`, or an OpenAI- or Mistral-compatible model whose URL is not a known hosted API (OpenAI, Azure, Mistral, OpenRouter, ...). vLLM batches requests, and one GPU served about 30 busy users at once in the load test. Falls back to `requestConcurrency` when unset. A model's own `concurrency` overrides both. Default: `32`. A call that waits 2 seconds or more for a slot is logged (`Request throttle: calls waited for a free slot`, at most once a minute per model) — the sign to raise the model's concurrency
+- **requestConcurrency** (number) – How many calls to one model (or tool) run at once, across all workers, unless the model sets its own `concurrency`. If omitted or below `1`, concurrency is unlimited. Default: `25` (5 before migration `V254`). For a small backend (LM Studio or Ollama on one machine) or a cloud API key with a low rate limit, set `concurrency` on that model. A call that waits 2 seconds or more for a slot is logged (`Request throttle: calls waited for a free slot`, at most once a minute per model) — the sign to raise the model's `concurrency`
 - **requestDelayMs** (number) – Default delay in milliseconds between outbound requests. Default: `0`
 
 ### llm

@@ -191,8 +191,7 @@ requests per minute on the general API. _Measured values with the new defaults: 
 | `…anonymousLimit`                        | 500 per minute                | IP address                         | requests without a sign-in                                                                |
 | `rateLimit.authApi.limit`                | 30 per 15 minutes             | IP address and username            | one person's retries; the account lockout stops guessing after 5 failures                 |
 | `rateLimit.authApi.perIpLimit`           | 5,000 per 15 minutes          | IP address                         | a login wave of 30% of 10,000 employees in 15 minutes is 3,000 sign-ins from one address |
-| `requestConcurrency`                     | 5                             | model (hosted API)                 | hosted APIs rate-limit per key                                                            |
-| `requestConcurrencyLocal`                | 32                            | model (self-hosted, e.g. vLLM)     | one GPU served about 30 busy users at once (see [GPU](#gpu))                              |
+| `requestConcurrency`                     | 25                            | model, unless it sets `concurrency` | one GPU served about 30 busy users at once (see [GPU](#gpu)); a small backend or a rate-limited cloud key needs its own lower `concurrency` |
 
 - **Per-user limits count per worker,** so with `WORKERS=6` a user can make up to 6 × 300 requests
   per minute. The sign-in limits count across all workers.

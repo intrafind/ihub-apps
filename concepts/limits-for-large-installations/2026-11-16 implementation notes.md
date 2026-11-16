@@ -8,11 +8,11 @@ the peak), possibly all behind one corporate NAT address. Background data: load-
 
 | Piece | File |
 | --- | --- |
-| Defaults (the one place for the values) | `server/defaults/config/platform.json` (`rateLimit.*`, `requestConcurrencyLocal`) |
+| Defaults (the one place for the values) | `server/defaults/config/platform.json` (`rateLimit.*`, `requestConcurrency`) |
 | Migration for existing installs | `server/migrations/V254__limits_for_large_installations.js` — reads the new values from the defaults file via `ctx.readDefaultJson`; only the *old* values are constants in the migration |
 | Per-user keys, IP+username sign-in key, per-IP ceiling | `server/middleware/rateLimiting.js` (`userKeyOptions`, `createAuthLimiter`, `USER_KEYED_LIMITERS`) |
 | Mount order | `server/middleware/setup.js` — general limiters now after the auth chain and the anonymous-principal middleware; `authApi` and `oauthApi` stay before auth |
-| Concurrency by model kind, slow-slot log | `server/requestThrottler.js` (`isSelfHostedModel`, `getConcurrency`, `noteSlotWait`, `getSlowSlotWaits`) |
+| Slow-slot log | `server/requestThrottler.js` (`noteSlotWait`, `getSlowSlotWaits`) |
 | Admin UI | `server/routes/admin/rateLimits.js`, `client/src/features/admin/components/RateLimitConfig.jsx`, i18n `admin.security.rateLimits.*` in `shared/i18n/{en,de}.json` |
 | Schema (docs/JSON schema) | `server/validators/platformConfigSchema.js` (`keyBy`, `anonymousLimit`, `perIpLimit`) |
 | Docs | `docs/sizing.md#limits-for-large-installations`, `docs/rate-limiting.md`, `docs/platform.md`, `docs/server-config.md`, release note in `docs/releases/next/breaking-changes.md` |
@@ -38,7 +38,8 @@ defaults file.
 ## Open points
 
 - Final numbers wait for the load-test measurements (i-rl, i-conc).
-- `requestConcurrencyLocal` is a new sibling key instead of turning `requestConcurrency` into an
-  object (that would break readers of the number).
+- Concurrency: decided against a separate default for self-hosted models (`requestConcurrencyLocal`
+  and a list of hosted API domains). `requestConcurrency` rises from 5 to 25 for every model;
+  admins set `concurrency` on a model with a small backend or a rate-limited key.
 - Optional later: per-worker throttle slots with borrowing from the primary (saves ~25 ms per model
   call); not done.

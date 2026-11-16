@@ -941,12 +941,12 @@ went: site title, logo, favicon, tagline and PWA settings → **Branding**; the 
 Nothing changes in `ui.json` or the REST API for existing settings. `PUT /api/admin/ui/disclaimer` is
 new and saves the disclaimer on its own; `POST /api/admin/ui/config` still takes the whole configuration.
 
-## Rate Limits Count per User, and Self-Hosted Models Run 32 Calls at Once
+## Rate Limits Count per User, and Every Model Runs 25 Calls at Once
 
 The shipped limits now fit a company of 10,000 employees, even when everyone reaches iHub through
 one corporate NAT address. Until now, 1,000 busy users behind one address shared one per-address
 budget and got "429 Too Many Requests", a login wave was refused after 30 sign-ins, and every
-self-hosted model ran at most 5 calls at once.
+model ran at most 5 calls at once.
 
 - **Web app, admin and inference API** count per signed-in user: 300 requests per minute each
   (`keyBy: "user"`). Requests without a sign-in count per address: 500 per minute
@@ -954,18 +954,17 @@ self-hosted model ran at most 5 calls at once.
 - **Sign-in** counts per address and username: 30 attempts per 15 minutes, with a ceiling of 5,000
   per address over all usernames (`perIpLimit`). The account lockout after 5 failures is
   unchanged.
-- **Self-hosted models** (`provider: "local"`, or an OpenAI- or Mistral-compatible model whose URL
-  is not a known hosted API) use the new `requestConcurrencyLocal`, 32 calls at once. Hosted APIs
-  keep `requestConcurrency` (5). A model's own `concurrency` still wins.
+- **Every model without its own `concurrency`** now gets 25 calls at once instead of 5
+  (`requestConcurrency`). A model's own `concurrency` still wins.
 - When calls wait 2 seconds or more for a free slot, the server logs
   `Request throttle: calls waited for a free slot`, at most once a minute per model.
 - **Admin → Security → Rate limits** shows the new settings.
 - The update applies the new values only where the old shipped ones were still set (migration
-  V254). Limits you set yourself stay, now per user; requests without a sign-in keep them per
-  address.
+  V254). Limits and a concurrency you set yourself stay; your own rate limits now count per user,
+  and requests without a sign-in keep them per address.
 
-**Before upgrading:** If a self-hosted model runs on a small backend (LM Studio or Ollama on one
-machine, a GPU without batching), set that model's `concurrency` to what it can serve. Otherwise it
-receives up to 32 calls at once instead of 5. A single heavy API client signed in as one user now
-has 300 requests per minute per worker instead of 500 per address; raise
-`rateLimit.publicApi.limit` if it needs more.
+**Before upgrading:** For a model on a small backend (LM Studio or Ollama on one machine, a GPU
+without batching) or on a cloud API key with a low rate limit, set `concurrency` on that model to
+what it can take. Otherwise it receives up to 25 calls at once instead of 5. A single heavy API
+client signed in as one user now has 300 requests per minute per worker instead of 500 per
+address; raise `rateLimit.publicApi.limit` if it needs more.
