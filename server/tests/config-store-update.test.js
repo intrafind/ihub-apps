@@ -58,7 +58,11 @@ for (const [label, relPath] of [
         assert.equal(current, null);
         return { items: ['first'] };
       });
-      assert.deepEqual(outcome, { data: { items: ['first'] }, written: true });
+      const { etag, ...rest } = outcome;
+      assert.deepEqual(rest, { data: { items: ['first'] }, written: true });
+      // Through the provider the write also reports the stored etag.
+      if (relPath.startsWith('config/')) assert.equal(typeof etag, 'string');
+      else assert.equal(etag, undefined);
       assert.deepEqual(await onDisk(relPath), { items: ['first'] });
     });
 

@@ -315,9 +315,11 @@ export async function updateUsersFile(usersFilePath, change) {
     );
   }
 
-  const { data, written } = await configStore.updateJson(relPath, apply);
+  const { data, written, etag } = await configStore.updateJson(relPath, apply);
   if (data && typeof data === 'object' && data.users && typeof data.users === 'object') {
-    configCache.setCacheEntry(cacheKey, data);
+    // With the storage etag, the change event of this very write does not make this
+    // worker reload what it just stored (the other workers still reload on the announcement).
+    configCache.setCacheEntry(cacheKey, data, { storageEtag: written ? etag : null });
     // Only a write pins the cached copy to the file's token: with nothing written,
     // `data` is what updateJson read, and the token must come from a read.
     if (written) await rememberOwnUsersWrite({ fullPath, cacheKey, relPath });

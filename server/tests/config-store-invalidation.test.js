@@ -217,6 +217,47 @@ if (process.env[CHILD_ENV] === '1') {
       );
     });
 
+    it('the writer does not reload a users.json write it stored itself', async () => {
+      const usersPath = path.join(installation.contents, 'config', 'users.json');
+      await fs.writeFile(
+        usersPath,
+        JSON.stringify({ users: { u1: { id: 'u1', username: 'u1' } }, metadata: {} }, null, 2)
+      );
+      await configCache.refreshCacheEntry('config/users.json');
+      const { updateUsersFile } = await import('../utils/userManager.js');
+
+      const reloads = [];
+      const reload = configCache._reloadEntry;
+      configCache._reloadEntry = function (key) {
+        reloads.push(key);
+        return reload.call(this, key);
+      };
+      try {
+        await updateUsersFile(usersPath, usersConfig => {
+          usersConfig.users.u1.name = 'renamed';
+        });
+        // Past the coalescing window the change event of that write is drained.
+        await new Promise(resolve => setTimeout(resolve, 150));
+        assert.deepEqual(reloads, [], 'one write, no read of it on the writer');
+        assert.equal(configCache.get('config/users.json').data.users.u1.name, 'renamed');
+
+        // A write that did not store its own result is still picked up.
+        const current = await configStore.readJson('config/users.json');
+        current.users.u1.name = 'written behind the cache';
+        await configStore.writeJson('config/users.json', current);
+        assert.equal(
+          await waitFor(
+            () =>
+              configCache.get('config/users.json').data.users.u1.name === 'written behind the cache'
+          ),
+          true
+        );
+        assert.deepEqual(reloads, ['config/users.json']);
+      } finally {
+        configCache._reloadEntry = reload;
+      }
+    });
+
     it('refreshCacheEntry announces the change to the other workers and asks each to confirm', async () => {
       const child = makeInstallation('ihub-config-announce-');
       const messages = [];

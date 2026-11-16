@@ -715,8 +715,9 @@ export class ConfigStore {
    *   the body to write, or `undefined` to leave the file as it is
    * @param {Object} [options]
    * @param {number} [options.attempts=16] - Conflicting writes tolerated before giving up
-   * @returns {Promise<{data: any|null, written: boolean}>} The body now stored
-   *   and whether this call wrote it
+   * @returns {Promise<{data: any|null, written: boolean, etag?: string|null}>} The
+   *   body now stored and whether this call wrote it; on a write through the
+   *   provider also the stored etag (see ConfigCache#setCacheEntry)
    * @throws {Error} When the file exists but cannot be read or parsed (a
    *   change computed from nothing would erase it), when `mutate` throws, or
    *   with `code === 'ETAG_MISMATCH'` when every attempt met a conflicting write
@@ -781,10 +782,10 @@ export class ConfigStore {
       const next = await mutate(current);
       if (next === undefined) return { data: current, written: false };
       try {
-        await documents.put(location.ns, location.key, next, {
+        const stored = await documents.put(location.ns, location.key, next, {
           etag: document ? document.etag : null
         });
-        return { data: next, written: true };
+        return { data: next, written: true, etag: stored?.etag ?? null };
       } catch (error) {
         if (error?.code !== 'ETAG_MISMATCH' || attempt >= attempts) throw error;
         // Another process wrote in between. Spread the retries so two workers

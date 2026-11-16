@@ -232,7 +232,8 @@ class ConfigCache {
     // _subscribeToStorageChanges().
     this.storageChangeProvider = null;
     this.storageChangeUnsubscribe = null;
-    this.pendingStorageChanges = new Set();
+    // Cache key -> etag of the latest change event for it (null when the event had none).
+    this.pendingStorageChanges = new Map();
     this.storageChangeTimer = null;
     this.storageChangeDraining = false;
 
@@ -405,10 +406,17 @@ class ConfigCache {
   }
 
   /**
-   * Set a cache entry with automatic refresh timer
+   * Set a cache entry with automatic refresh timer.
+   *
+   * @param {string} key - Cache key
+   * @param {*} data - Data as loaded or written
+   * @param {Object} [options]
+   * @param {string|null} [options.storageEtag] - The storage etag of `data` when
+   *   the caller has just written it. The change event of that write then finds
+   *   the cache current and skips the reload of what this process stored itself.
    */
-  setCacheEntry(key, data) {
-    this._storeEntry(key, this._resolveEntry(key, data));
+  setCacheEntry(key, data, { storageEtag = null } = {}) {
+    this._storeEntry(key, { ...this._resolveEntry(key, data), storageEtag });
   }
 
   /**
@@ -444,10 +452,11 @@ class ConfigCache {
    * @param {{data: *, etag: string}} entry - From {@link ConfigCache#_resolveEntry}
    * @private
    */
-  _storeEntry(key, { data, etag }) {
+  _storeEntry(key, { data, etag, storageEtag = null }) {
     this.cache.set(key, {
       data,
       etag,
+      storageEtag,
       timestamp: Date.now()
     });
 
@@ -693,7 +702,7 @@ class ConfigCache {
     // config file outside `criticalConfigs`, has nothing to invalidate here,
     // and reloading it would put an entry in the cache that boot never chose.
     if (!key || !this.cache.has(key)) return;
-    this.pendingStorageChanges.add(key);
+    this.pendingStorageChanges.set(key, event.etag ?? null);
     this._scheduleStorageChangeDrain();
   }
 
@@ -726,7 +735,11 @@ class ConfigCache {
       return;
     }
 
-    const keys = [...this.pendingStorageChanges];
+    // The writer stored what it wrote (setCacheEntry with its storage etag): reloading
+    // that is a full read and parse of what this process already holds.
+    const keys = [...this.pendingStorageChanges]
+      .filter(([key, etag]) => !etag || this.cache.get(key)?.storageEtag !== etag)
+      .map(([key]) => key);
     this.pendingStorageChanges.clear();
     if (keys.length === 0) return;
 

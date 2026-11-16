@@ -373,8 +373,9 @@ export class RawDocumentStore extends DocumentStore {
     );
 
     // Published outside the critical section: subscribers must not be able to
-    // hold the key's lock while they work.
-    await this._publish({ type: 'document.put', ns, key, ownerId: null });
+    // hold the key's lock while they work. The etag lets the writer's own cache
+    // tell its own write from somebody else's.
+    await this._publish({ type: 'document.put', ns, key, ownerId: null, etag: document.etag });
     return document;
   }
 
