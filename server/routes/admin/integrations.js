@@ -852,6 +852,21 @@ export default function registerAdminIntegrationsRoutes(app) {
    *               dataFlow:
    *                 type: string
    *                 enum: [internal, external]
+   *               activity:
+   *                 type: object
+   *                 description: >
+   *                   What the tool is in the chat and where it looks, for an MCP or
+   *                   custom tool that is mislabelled (`null` removes it).
+   *                 required: [kind]
+   *                 properties:
+   *                   kind:
+   *                     type: string
+   *                     enum: [search, fetch, tool]
+   *                   origin:
+   *                     type: string
+   *                     enum: [project, web, ifinder, iassistant, documents, integration]
+   *                   place:
+   *                     type: string
    *     responses:
    *       200:
    *         description: "`{ success, override, detail }`"

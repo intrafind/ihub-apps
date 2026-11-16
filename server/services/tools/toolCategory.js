@@ -52,7 +52,7 @@ export const activityDeclarationSchema = z
   })
   .strict();
 
-/** Declarations already checked, so an invalid one is reported once. */
+/** Declarations already checked, so one object is validated (and, if invalid, reported) once. */
 const checked = new WeakMap();
 
 /**

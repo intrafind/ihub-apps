@@ -814,7 +814,8 @@ export class InstalledIntegrationService {
   /**
    * Change the admin override of one action (#2974): any of `description`,
    * `guidance`, `examples` (texts, `{ en, de }` or a string), `sideEffect`
-   * and `dataFlow`. A key set to null removes that part of the override; a
+   * `dataFlow` and `activity` (what the tool is in the chat, see
+   * `services/tools/toolCategory`). A key set to null removes that part of the override; a
    * key left out keeps it. Only this action's override changes.
    *
    * @param {string} id
@@ -833,7 +834,14 @@ export class InstalledIntegrationService {
         if (!instance)
           throw new IntegrationError('Integration not found', { status: 404, code: 'NOT_FOUND' });
         const merged = { ...(instance.actions?.overrides?.[actionName] || {}) };
-        for (const key of ['description', 'guidance', 'examples', 'sideEffect', 'dataFlow']) {
+        for (const key of [
+          'description',
+          'guidance',
+          'examples',
+          'sideEffect',
+          'dataFlow',
+          'activity'
+        ]) {
           if (!Object.hasOwn(patch, key)) continue;
           const value =
             key === 'examples' && Array.isArray(patch[key])
