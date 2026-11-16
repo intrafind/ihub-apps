@@ -128,4 +128,36 @@ describe('toRequest', () => {
       limiters: { oauthApi: { windowMs: 30000, limit: 10, counts: 'failed' } }
     });
   });
+
+  test('sends who a general limiter counts for and the extra limits', () => {
+    expect(
+      toRequest({
+        publicApi: {
+          limit: '300',
+          minutes: '1',
+          counts: 'all',
+          keyBy: 'user',
+          anonymousLimit: '500'
+        },
+        authApi: { limit: '30', minutes: '15', counts: 'all', perIpLimit: '5000' }
+      })
+    ).toEqual({
+      limiters: {
+        publicApi: {
+          windowMs: 60000,
+          limit: 300,
+          counts: 'all',
+          keyBy: 'user',
+          anonymousLimit: 500
+        },
+        authApi: { windowMs: 900000, limit: 30, counts: 'all', perIpLimit: 5000 }
+      }
+    });
+  });
+
+  test('refuses an invalid extra limit', () => {
+    expect(
+      toRequest({ authApi: { limit: '30', minutes: '15', counts: 'all', perIpLimit: '0' } })
+    ).toEqual({ invalid: 'authApi' });
+  });
 });

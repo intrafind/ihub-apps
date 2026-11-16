@@ -19,6 +19,11 @@ export const RATE_LIMITERS = [
 
 const COUNT_MODES = ['all', 'failed', 'successful'];
 
+const KEY_BY_MODES = ['user', 'ip'];
+
+/** Limits beyond `limit` that some limiters have (see describeRateLimits on the server). */
+const EXTRA_LIMITS = ['anonymousLimit', 'perIpLimit'];
+
 /** Same bounds as the server: a second to a day, one request to a million. */
 const MAX_WINDOW_MINUTES = 24 * 60;
 const MAX_LIMIT = 1_000_000;
@@ -33,11 +38,20 @@ function toForm(limiters) {
       {
         limit: String(limiters[key].limit),
         minutes: String(toMinutes(limiters[key].windowMs)),
-        counts: limiters[key].counts
+        counts: limiters[key].counts,
+        ...(limiters[key].keyBy ? { keyBy: limiters[key].keyBy } : {}),
+        ...Object.fromEntries(
+          EXTRA_LIMITS.filter(field => limiters[key][field] !== undefined).map(field => [
+            field,
+            String(limiters[key][field])
+          ])
+        )
       }
     ])
   );
 }
+
+const isValidLimit = limit => Number.isInteger(limit) && limit >= 1 && limit <= MAX_LIMIT;
 
 /**
  * Form values → the PUT body, or the key of the first invalid limiter.
@@ -50,17 +64,28 @@ export function toRequest(form) {
     const limit = Number(value.limit);
     const minutes = Number(value.minutes);
     const windowMs = Math.round(minutes * 60000);
+    const extra = Object.fromEntries(
+      EXTRA_LIMITS.filter(field => value[field] !== undefined).map(field => [
+        field,
+        Number(value[field])
+      ])
+    );
     if (
-      !Number.isInteger(limit) ||
-      limit < 1 ||
-      limit > MAX_LIMIT ||
+      !isValidLimit(limit) ||
+      !Object.values(extra).every(isValidLimit) ||
       !Number.isFinite(minutes) ||
       windowMs < 1000 ||
       minutes > MAX_WINDOW_MINUTES
     ) {
       return { invalid: key };
     }
-    limiters[key] = { windowMs, limit, counts: value.counts };
+    limiters[key] = {
+      windowMs,
+      limit,
+      counts: value.counts,
+      ...(value.keyBy ? { keyBy: value.keyBy } : {}),
+      ...extra
+    };
   }
   return { limiters };
 }
@@ -203,9 +228,9 @@ function RateLimitConfig() {
                 restartRequired &&
                 now &&
                 saved[key] &&
-                (now.limit !== saved[key].limit ||
-                  now.windowMs !== saved[key].windowMs ||
-                  now.counts !== saved[key].counts);
+                ['limit', 'windowMs', 'counts', 'keyBy', ...EXTRA_LIMITS].some(
+                  field => now[field] !== saved[key][field]
+                );
               const id = `rate-limit-${key}`;
               return (
                 <fieldset
@@ -280,6 +305,55 @@ function RateLimitConfig() {
                       </select>
                     </div>
                   </div>
+                  {(value.keyBy !== undefined ||
+                    EXTRA_LIMITS.some(f => value[f] !== undefined)) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+                      {value.keyBy !== undefined && (
+                        <div>
+                          <label
+                            htmlFor={`${id}-keyBy`}
+                            className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                          >
+                            {t('admin.security.rateLimits.keyByLabel')}
+                          </label>
+                          <select
+                            id={`${id}-keyBy`}
+                            value={value.keyBy}
+                            onChange={e => update(key, 'keyBy', e.target.value)}
+                            className={inputClass}
+                          >
+                            {KEY_BY_MODES.map(mode => (
+                              <option key={mode} value={mode}>
+                                {t(`admin.security.rateLimits.keyBy.${mode}`)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+                      {EXTRA_LIMITS.filter(field => value[field] !== undefined).map(field => (
+                        <div key={field}>
+                          <label
+                            htmlFor={`${id}-${field}`}
+                            className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1"
+                          >
+                            {t(`admin.security.rateLimits.${field}`)}
+                          </label>
+                          <input
+                            id={`${id}-${field}`}
+                            type="number"
+                            min="1"
+                            max={MAX_LIMIT}
+                            step="1"
+                            value={value[field]}
+                            // Anonymous requests count per user only in "user" mode.
+                            disabled={field === 'anonymousLimit' && value.keyBy === 'ip'}
+                            onChange={e => update(key, field, e.target.value)}
+                            className={`${inputClass} disabled:opacity-50`}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {pending && (
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                       {t('admin.security.rateLimits.runningNow', {
