@@ -11,7 +11,11 @@ import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 
-const store = { files: {}, audits: [] };
+// `versions` stands in for the file's inode/mtime/size: bumped by every write.
+const store = { files: {}, audits: [], versions: {} };
+const bump = p => {
+  store.versions[p] = (store.versions[p] ?? 0) + 1;
+};
 
 const clone = value => (value === undefined ? undefined : structuredClone(value));
 
@@ -21,8 +25,10 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => {
     default: {
       readJson: async p => clone(store.files[p]) ?? null,
       readJsonStrict: async p => clone(store.files[p]) ?? null,
+      probeJson: async p => (store.files[p] ? `v${store.versions[p] ?? 0}` : null),
       writeJson: async (p, data) => {
         store.files[p] = clone(data);
+        bump(p);
       },
       // Sequential compare-and-set: the mutation sees the latest body.
       updateJson: (p, mutate) => {
@@ -31,6 +37,7 @@ jest.unstable_mockModule('../services/config/ConfigStore.js', () => {
           const next = await mutate(current);
           if (next === undefined) return { data: current, written: false };
           store.files[p] = clone(next);
+          bump(p);
           return { data: clone(next), written: true };
         });
         queue = run.catch(() => {});
@@ -77,7 +84,7 @@ const { default: registerUserRoutes } = await import('../routes/aiAcknowledgemen
 const { default: registerAdminRoutes } = await import('../routes/admin/aiAcknowledgements.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { ServiceError } = await import('../utils/ServiceError.js');
-const { recordAiAcknowledgement, clearAiAcknowledgements } =
+const { recordAiAcknowledgement, clearAiAcknowledgements, loadUsersFresh } =
   await import('../utils/userManager.js');
 const { setGuestId, guestOwnerId } = await import('../services/chat/chatOwner.js');
 const { mergeSettingsForSave, describeSettingsChange } = service;
@@ -839,6 +846,31 @@ describe('userManager helpers', () => {
       entries: 0,
       found: true
     });
+  });
+
+  test('a fresh read skips an unchanged users.json and re-reads a changed one', async () => {
+    const { default: configStore } = await import('../services/config/ConfigStore.js');
+    const spy = jest.spyOn(configStore, 'readJsonStrict');
+    const file = service.usersFilePath();
+    try {
+      await loadUsersFresh(file);
+      await loadUsersFresh(file);
+      expect(spy).toHaveBeenCalledTimes(1);
+
+      // Another worker rewrote the file: its token changed.
+      bump(USERS);
+      await loadUsersFresh(file);
+      expect(spy).toHaveBeenCalledTimes(2);
+
+      // This worker's own write leaves the cached copy current: no read after it.
+      const entry = { version: 1, textHash: 'sha256:x', acknowledgedAt: 'now' };
+      await recordAiAcknowledgement('u0', entry, file);
+      const reads = spy.mock.calls.length;
+      expect((await loadUsersFresh(file)).users.u0.aiAcknowledgements).toHaveLength(1);
+      expect(spy).toHaveBeenCalledTimes(reads);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   test('deleting a user removes their acknowledgements with the record', () => {

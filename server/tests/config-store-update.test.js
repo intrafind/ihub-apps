@@ -62,6 +62,19 @@ for (const [label, relPath] of [
       assert.deepEqual(await onDisk(relPath), { items: ['first'] });
     });
 
+    it('probeJson changes with a write and stays without one', async () => {
+      // Its own file: the tests around it build on one shared file's contents.
+      const probed = relPath.replace('.json', '-probe.json');
+      const store = new ConfigStore();
+      await store.updateJson(probed, () => ({ items: ['probe'] }));
+      const first = await store.probeJson(probed);
+      assert.match(first, /^\d+:[\d.]+:\d+$/);
+      assert.equal(await store.probeJson(probed), first);
+      await store.updateJson(probed, () => ({ items: ['probe', 'changed'] }));
+      assert.notEqual(await store.probeJson(probed), first);
+      assert.equal(await store.probeJson(relPath.replace('.json', '-missing.json')), null);
+    });
+
     it('keeps every change when two workers update at once', async () => {
       const workerA = new ConfigStore();
       const workerB = new ConfigStore();

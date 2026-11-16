@@ -122,6 +122,48 @@ export function loadUsers(usersFilePath) {
 /** In-flight re-reads of a users file, by cache key, so a burst shares one. */
 const freshReads = new Map();
 
+/**
+ * Per cache key: the file token (inode, mtime, size) the cached copy was read
+ * at or written as, and that cached object. A fresh read is skipped while both
+ * still match: the file did not change, and nothing else (a config-sync reload,
+ * a TTL refresh) replaced the cached copy since.
+ */
+const knownUsersFiles = new Map();
+
+/**
+ * The change token of a users file, or null when it cannot be told (then the
+ * caller reads). See ConfigStore.probeJson.
+ */
+async function probeUsersFile({ fullPath, relPath }) {
+  try {
+    if (relPath) return await configStore.probeJson(relPath);
+    const stat = await fs.promises.stat(fullPath);
+    return `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Remember which file token the cached copy of `cacheKey` belongs to. */
+function rememberUsersFile(cacheKey, token) {
+  const data = configCache.get(cacheKey)?.data;
+  if (token && data) knownUsersFiles.set(cacheKey, { token, data });
+  else knownUsersFiles.delete(cacheKey);
+}
+
+/**
+ * After this worker wrote a users file: the token of what is on disk now.
+ *
+ * ponytail: stat'ed after the write, outside the store's lock. Another worker
+ * writing in the same instant would get its token paired with this worker's
+ * body; the config-sync reload of that write replaces the cached copy within
+ * milliseconds and ends the mismatch. Exact would need the stat taken under
+ * the lock, returned by the store's write.
+ */
+async function rememberOwnUsersWrite(location) {
+  rememberUsersFile(location.cacheKey, await probeUsersFile(location));
+}
+
 /** Whether a parsed users.json body has the shape `loadUsers` accepts. */
 function isUsersConfig(data) {
   return (
@@ -145,7 +187,8 @@ async function readUsersFileFresh({ fullPath, relPath }) {
 
 /**
  * Load users straight from the store, bypassing (and refreshing) the cached
- * copy.
+ * copy. The file is stat'ed first and not read again while it is unchanged
+ * since this worker's last read or write of it.
  *
  * Cluster workers each cache this file and hear about another worker's write
  * over the config sync bus, which takes a few milliseconds. An external user
@@ -168,11 +211,20 @@ export async function loadUsersFresh(usersFilePath) {
   const { cacheKey } = location;
   let pending = freshReads.get(cacheKey);
   if (!pending) {
-    pending = readUsersFileFresh(location)
-      .then(data => {
-        if (isUsersConfig(data)) configCache.setCacheEntry(cacheKey, data);
-      })
-      .finally(() => freshReads.delete(cacheKey));
+    pending = (async () => {
+      // Stat'ed before the read: a write in between pairs an older token with the
+      // newer body, which only costs one more read next time.
+      const token = await probeUsersFile(location);
+      const known = knownUsersFiles.get(cacheKey);
+      if (token && known?.token === token && configCache.get(cacheKey)?.data === known.data) {
+        return;
+      }
+      const data = await readUsersFileFresh(location);
+      if (isUsersConfig(data)) {
+        configCache.setCacheEntry(cacheKey, data);
+        rememberUsersFile(cacheKey, token);
+      }
+    })().finally(() => freshReads.delete(cacheKey));
     freshReads.set(cacheKey, pending);
   }
   await pending;
@@ -203,6 +255,7 @@ export async function saveUsers(usersConfig, usersFilePath) {
     }
 
     configCache.setCacheEntry(cacheKey, usersConfig);
+    await rememberOwnUsersWrite({ fullPath, cacheKey, relPath });
 
     // Tell the other workers to re-read the file. Without this a user created or
     // updated on one worker stays invisible to the rest until their TTL fires,
@@ -264,6 +317,9 @@ export async function updateUsersFile(usersFilePath, change) {
   const { data, written } = await configStore.updateJson(relPath, apply);
   if (data && typeof data === 'object' && data.users && typeof data.users === 'object') {
     configCache.setCacheEntry(cacheKey, data);
+    // Only a write pins the cached copy to the file's token: with nothing written,
+    // `data` is what updateJson read, and the token must come from a read.
+    if (written) await rememberOwnUsersWrite({ fullPath, cacheKey, relPath });
   }
   if (written) announceConfigChange(cacheKey);
   return written;

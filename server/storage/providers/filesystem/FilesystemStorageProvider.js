@@ -251,6 +251,19 @@ class NamespaceRoutingDocumentStore extends DocumentStore {
   }
 
   /**
+   * A cheap change token of a document, from the store that owns its
+   * namespace (see RawDocumentStore#probe); null when that store has none.
+   *
+   * @param {string} ns - Namespace
+   * @param {string} key - Document key
+   * @returns {Promise<string|null>}
+   */
+  async probe(ns, key) {
+    const store = this.storeFor(ns);
+    return typeof store.probe === 'function' ? store.probe(ns, key) : null;
+  }
+
+  /**
    * Both stores behind this router implement `scan`, so the router does.
    *
    * Worth stating rather than inheriting: the base class answers false, and a

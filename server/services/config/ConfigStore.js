@@ -567,6 +567,31 @@ export class ConfigStore {
   }
 
   /**
+   * A cheap change token of a JSON configuration file (inode, mtime and size),
+   * for a caller that keeps its own parsed copy and wants to skip re-reading an
+   * unchanged file. Equal tokens mean unchanged; null means "cannot tell", so
+   * read. A provider without `probe` (not the local filesystem) always answers
+   * null.
+   *
+   * @param {string} relPath - Path relative to `contents/`
+   * @returns {Promise<string|null>}
+   */
+  async probeJson(relPath) {
+    const location = parseRawRelPath(relPath);
+    const documents = location ? documentsFor(location.ns) : null;
+    if (documents) {
+      if (typeof documents.probe !== 'function') return null;
+      return documents.probe(location.ns, location.key).catch(() => null);
+    }
+    try {
+      const stat = await fs.stat(await resolveConfigPath(relPath));
+      return `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Read a JSON configuration file, refusing to report a corrupt one as absent.
    *
    * Use this wherever the result is merged and written back. `readJson`'s

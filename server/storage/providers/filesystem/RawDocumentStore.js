@@ -527,6 +527,26 @@ export class RawDocumentStore extends DocumentStore {
   }
 
   /**
+   * A cheap change token of a document: its file's inode, modification time
+   * and size, without reading it. Equal tokens mean the file was not replaced
+   * or rewritten in between (an atomic save renames a new inode in).
+   *
+   * @param {string} ns - Raw namespace name
+   * @param {string} key - Document key
+   * @returns {Promise<string|null>} The token, or null when the file cannot be stat'ed
+   */
+  async probe(ns, key) {
+    this._assertNamespace(ns);
+    assertValidKey(key);
+    try {
+      const stat = await fs.stat(this._docPath(ns, key));
+      return `${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
    * Reject a namespace this store does not serve.
    *
    * A plain `InvalidKeyError` would be wrong: the name may be perfectly valid
