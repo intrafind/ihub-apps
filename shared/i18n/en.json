@@ -4287,7 +4287,29 @@
         "dataFlowHelp": "Whether the result stays inside iHub or is sent on to an outside service.",
         "approvalHelp": "Whether a person has to confirm each call to this action in the chat before it runs.",
         "howLead": "Extra help for using this action well, and where it is already in use.",
-        "usageLead": "How often this action was used, and how often approvals were granted or refused."
+        "usageLead": "How often this action was used, and how often approvals were granted or refused.",
+        "activity": {
+          "title": "In the chat",
+          "lead": "How the chat words a call to this action: a search, the opening of a page or document, or a plain tool call, and where it looked. Correct it when a tool from an MCP server or a custom integration is mislabelled, for example a people search shown as a web search.",
+          "shown": "Shown as",
+          "kindLabel": "What the chat shows",
+          "kindHelp": "A search lists its query and what it found, a read shows the page or document it opened, a plain call shows only that the tool ran.",
+          "originLabel": "Where it looks",
+          "originHelp": "The place the answer’s footer names. Only a web search is shown as a search of the web, so leave a directory or ticket system as a connected system.",
+          "kind": {
+            "search": "Search",
+            "fetch": "Page or document read",
+            "tool": "Plain call"
+          },
+          "origin": {
+            "web": "Web",
+            "project": "Project",
+            "ifinder": "iFinder",
+            "iassistant": "iAssistant",
+            "documents": "Documents",
+            "integration": "Connected system"
+          }
+        }
       },
       "instructions": {
         "sourceAdmin": "Your text",

@@ -377,7 +377,11 @@ An MCP server's search of the web:
 "actions": { "overrides": { "tavily_search": { "activity": { "kind": "search", "origin": "web" } } } }
 ```
 
-The same override can be set with `PUT /api/admin/integrations/installed/{id}/actions/{action}` and
+In the admin UI it is the **In the chat** section of an action's detail (Admin → Integrations → the
+installation → the action): it shows what the chat draws for the action and where that comes from
+(admin override, integration definition or default), lets you pick the row (search, page or document
+read, plain call) and where it looks, and resets to the declared value. The same override can be
+set with `PUT /api/admin/integrations/installed/{id}/actions/{action}` and
 a body `{ "activity": { "kind": "search", "origin": "web" } }`; `{ "activity": null }` removes it.
 
 A tool declared `search` or `fetch` has its result URLs cited; one declared `web` also reports its

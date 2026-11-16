@@ -35,11 +35,10 @@
  */
 
 import { z } from 'zod';
-import { ACTIVITY_ORIGINS } from '../../../shared/runEvents.js';
+import { ACTIVITY_KINDS, ACTIVITY_ORIGINS } from '../../../shared/runEvents.js';
 import logger from '../../utils/logger.js';
 
-/** The rows a call can make in the chat. */
-export const ACTIVITY_KINDS = Object.freeze(['search', 'fetch', 'tool']);
+export { ACTIVITY_KINDS };
 
 /** iHub's own tools (scheduling, …) are not a connected system. */
 export const IHUB_DEFINITION = 'com.intrafind/ihub';

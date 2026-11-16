@@ -913,7 +913,8 @@ evidence endpoints instead: `GET /api/chats/{chatId}/evidence/{messageId}` for a
 The chat no longer guesses from a tool's id whether a call is a web search, a document search or a
 page read. A tool declares it (`activity: { kind, origin }`), and a tool that declares nothing is a
 plain tool call. Admins can set it on a custom tool, an integration action or, to correct an MCP
-tool, in the installation's `actions.overrides.<tool>` — see
+tool, in the installation's `actions.overrides.<tool>` — or in the admin UI, under **Admin →
+Integrations →** the installation **→ an action → In the chat**. See
 [Tool Calling](../../tool-calling.md#what-a-tool-is-in-the-chat-activity).
 
 - People-directory lookups (Entra, LDAP directory, LDAP browser search) now show as a search of the

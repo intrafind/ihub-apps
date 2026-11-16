@@ -102,7 +102,8 @@ export const fetchIntegrationAction = async (id, action) =>
 
 /**
  * Change the admin override of one action: `{ description?, guidance?,
- * examples?, sideEffect?, dataFlow? }`; null removes a part. Returns
+ * examples?, sideEffect?, dataFlow?, activity? }`; null removes a part
+ * (`activity: { kind, origin? }` is what the chat shows for the action). Returns
  * `{ override, detail }`.
  */
 export const saveIntegrationActionOverride = async (id, action, patch) => {

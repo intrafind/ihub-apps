@@ -4768,7 +4768,29 @@
         "dataFlowHelp": "Ob das Ergebnis in iHub bleibt oder an einen externen Dienst weitergegeben wird.",
         "approvalHelp": "Ob eine Person jeden Aufruf dieser Aktion im Chat bestätigen muss, bevor er läuft.",
         "howLead": "Zusätzliche Hilfe für den guten Einsatz dieser Aktion und wo sie bereits verwendet wird.",
-        "usageLead": "Wie oft diese Aktion genutzt wurde und wie oft Freigaben erteilt oder abgelehnt wurden."
+        "usageLead": "Wie oft diese Aktion genutzt wurde und wie oft Freigaben erteilt oder abgelehnt wurden.",
+        "activity": {
+          "title": "Im Chat",
+          "lead": "Wie der Chat einen Aufruf dieser Aktion benennt: als Suche, als Öffnen einer Seite oder eines Dokuments oder als einfachen Werkzeugaufruf, und wo er gesucht hat. Korrigieren Sie das, wenn ein Werkzeug eines MCP-Servers oder einer eigenen Integration falsch bezeichnet wird, zum Beispiel eine Personensuche, die als Websuche angezeigt wird.",
+          "shown": "Angezeigt als",
+          "kindLabel": "Was der Chat zeigt",
+          "kindHelp": "Eine Suche zeigt ihre Anfrage und was sie gefunden hat, ein Lesen zeigt die geöffnete Seite oder das Dokument, ein einfacher Aufruf zeigt nur, dass das Werkzeug lief.",
+          "originLabel": "Wo gesucht wird",
+          "originHelp": "Der Ort, den die Fußzeile der Antwort nennt. Nur eine Websuche wird als Suche im Web angezeigt; lassen Sie ein Verzeichnis oder Ticketsystem daher ein angebundenes System bleiben.",
+          "kind": {
+            "search": "Suche",
+            "fetch": "Seite oder Dokument lesen",
+            "tool": "Einfacher Aufruf"
+          },
+          "origin": {
+            "web": "Web",
+            "project": "Projekt",
+            "ifinder": "iFinder",
+            "iassistant": "iAssistant",
+            "documents": "Dokumente",
+            "integration": "Angebundenes System"
+          }
+        }
       },
       "instructions": {
         "sourceAdmin": "Dein Text",

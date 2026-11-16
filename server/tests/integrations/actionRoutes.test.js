@@ -355,6 +355,43 @@ describe('action detail', () => {
     await admin(request(app).put(`${base}/actions/missing`).send({ guidance: 'x' })).expect(404);
   });
 
+  it('reports what the chat shows for the action, where that comes from, and lets an admin correct it', async () => {
+    // Nothing declared: a plain call of a connected system.
+    const plain = (await admin(request(app).get(`${base}/actions/search`)).expect(200)).body;
+    expect(plain.activity).toEqual({
+      kind: 'tool',
+      origin: 'integration',
+      source: 'default',
+      declared: null,
+      override: null
+    });
+
+    const set = await admin(
+      request(app)
+        .put(`${base}/actions/search`)
+        .send({ activity: { kind: 'search', origin: 'documents' } })
+    ).expect(200);
+    expect(set.body.override.activity).toEqual({ kind: 'search', origin: 'documents' });
+    expect(set.body.detail.activity).toEqual({
+      kind: 'search',
+      origin: 'documents',
+      source: 'admin',
+      declared: null,
+      override: { kind: 'search', origin: 'documents' }
+    });
+
+    await admin(
+      request(app)
+        .put(`${base}/actions/search`)
+        .send({ activity: { kind: 'lookup' } })
+    ).expect(400);
+
+    const cleared = await admin(
+      request(app).put(`${base}/actions/search`).send({ activity: null })
+    ).expect(200);
+    expect(cleared.body.detail.activity).toMatchObject({ kind: 'tool', source: 'default' });
+  });
+
   it('keeps the overrides and instructions when the settings form saves without them', async () => {
     await admin(request(app).put(`${base}/actions/search`).send({ guidance: 'Mine.' })).expect(200);
     await admin(
