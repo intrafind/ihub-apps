@@ -30,6 +30,7 @@ The optional `platform.json` file controls global platform behavior and is locat
   "defaultLanguage": "en",
   "requestBodyLimitMB": 50,
   "requestConcurrency": 5,
+  "requestConcurrencyLocal": 32,
   "requestDelayMs": 0,
   "telemetry": {
     "enabled": false,
@@ -382,7 +383,8 @@ only.
 
 - **defaultLanguage** (string) – Fallback language code when requested language is unavailable. Default: `"en"`
 - **requestBodyLimitMB** (number) – Maximum size of JSON request bodies in megabytes. Default: `50`
-- **requestConcurrency** (number) – Default concurrency level for outbound requests. If omitted or below `1`, concurrency is unlimited. Default: `5`
+- **requestConcurrency** (number) – Default concurrency level for outbound requests: how many calls to one model (or tool) run at once, across all workers. If omitted or below `1`, concurrency is unlimited. Default: `5`, sized for hosted APIs that rate-limit per key
+- **requestConcurrencyLocal** (number) – The same for self-hosted models: `provider: "local"`, or an OpenAI- or Mistral-compatible model whose URL is not a known hosted API (OpenAI, Azure, Mistral, OpenRouter, ...). vLLM batches requests, and one GPU served about 30 busy users at once in the load test. Falls back to `requestConcurrency` when unset. A model's own `concurrency` overrides both. Default: `32`. A call that waits 2 seconds or more for a slot is logged (`Request throttle: calls waited for a free slot`, at most once a minute per model) — the sign to raise the model's concurrency
 - **requestDelayMs** (number) – Default delay in milliseconds between outbound requests. Default: `0`
 
 ### llm
@@ -938,7 +940,9 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
   "rateLimit": {
     "default": {
       "windowMs": 60000,
-      "limit": 100,
+      "limit": 300,
+      "keyBy": "user",
+      "anonymousLimit": 500,
       "standardHeaders": true,
       "legacyHeaders": false,
       "skipSuccessfulRequests": false,
@@ -946,17 +950,22 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
     },
     "adminApi": {
       "windowMs": 60000,
-      "limit": 100,
+      "limit": 300,
+      "keyBy": "user",
+      "anonymousLimit": 500,
       "skipFailedRequests": true
     },
     "publicApi": {
       "windowMs": 60000,
-      "limit": 500,
+      "limit": 300,
+      "keyBy": "user",
+      "anonymousLimit": 500,
       "skipFailedRequests": true
     },
     "authApi": {
       "windowMs": 900000,
       "limit": 30,
+      "perIpLimit": 5000,
       "skipFailedRequests": false
     },
     "oauthApi": {
@@ -972,7 +981,9 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
     },
     "inferenceApi": {
       "windowMs": 60000,
-      "limit": 500
+      "limit": 300,
+      "keyBy": "user",
+      "anonymousLimit": 500
     }
   }
 }
@@ -980,15 +991,15 @@ iHub Apps enforces rate limits per route category to protect against abuse and e
 
 ### Rate Limit Categories
 
-| Category       | Applies To                             | Default Window | Default Limit |
-| -------------- | -------------------------------------- | -------------- | ------------- |
-| `default`      | All routes not covered by other groups | 60 s           | 100           |
-| `adminApi`     | `/api/admin/**` admin endpoints        | 60 s           | 100           |
-| `publicApi`    | Public read-only endpoints             | 60 s           | 500           |
-| `authApi`      | `/api/auth/**` login/logout/token      | 900 s (15 min) | 30            |
-| `oauthApi`     | `/api/oauth/**` OAuth server endpoints | 60 s           | 300           |
-| `oauthTokenApi` | `POST /api/oauth/token` and `/introspect`, failed requests only | 900 s (15 min) | 30 |
-| `inferenceApi` | `/api/inference/**` and read aloud     | 60 s           | 500           |
+| Category        | Applies To                                                      | Default Window | Default Limit                                     |
+| --------------- | --------------------------------------------------------------- | -------------- | ------------------------------------------------- |
+| `default`       | Base the other categories inherit from                          | 60 s           | 300 per user, 500 per IP without sign-in          |
+| `adminApi`      | `/api/admin/**` admin endpoints                                 | 60 s           | 300 per user                                      |
+| `publicApi`     | The web app's API                                               | 60 s           | 300 per user, 500 per IP without sign-in          |
+| `authApi`       | `/api/auth/**` endpoints that check credentials                 | 900 s (15 min) | 30 per IP and username, 5,000 per IP              |
+| `oauthApi`      | `/api/oauth/**` OAuth server endpoints                          | 60 s           | 300 per IP                                        |
+| `oauthTokenApi` | `POST /api/oauth/token` and `/introspect`, failed requests only | 900 s (15 min) | 30 per IP                                         |
+| `inferenceApi`  | `/api/inference/**` and read aloud                              | 60 s           | 300 per user, 500 per IP without sign-in          |
 
 ### Rate Limit Configuration Fields
 
@@ -997,7 +1008,10 @@ Each category accepts the following fields. Partial overrides inherit unset valu
 | Field                    | Type    | Default | Description                                                                     |
 | ------------------------ | ------- | ------- | ------------------------------------------------------------------------------- |
 | `windowMs`               | Number  | 900000  | Time window in milliseconds. Minimum: `1000`                                    |
-| `limit`                  | Number  | 100     | Maximum requests allowed per window per IP. Minimum: `1`                        |
+| `limit`                  | Number  | 100     | Maximum requests allowed per window per key (user, IP, or IP and username). Minimum: `1` |
+| `keyBy`                  | String  | `"user"` | `adminApi`, `publicApi`, `inferenceApi`: `"user"` counts a signed-in request per user and an anonymous one per IP; `"ip"` counts every request per IP |
+| `anonymousLimit`         | Number  | `limit` | With `keyBy: "user"`: the limit of a request without a sign-in, per IP           |
+| `perIpLimit`             | Number  | 5000    | `authApi` only: the ceiling per IP over all usernames                           |
 | `message`                | String  | -       | Custom error message returned when the limit is exceeded                        |
 | `standardHeaders`        | Boolean | `true`  | Include `RateLimit-*` headers in responses                                      |
 | `legacyHeaders`          | Boolean | `false` | Include legacy `X-RateLimit-*` headers                                          |
