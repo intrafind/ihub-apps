@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeAdminApiCall, getAdminApiErrorMessage } from '../../../api/adminApi';
 import i18nService from '../../../services/i18nService';
+import { CHECKBOX_CLASS, INPUT_CLASS } from './formStyles';
 
 const PAGE_SIZE = 50;
 
@@ -115,7 +116,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
             setLanguage(e.target.value);
             setLimit(PAGE_SIZE);
           }}
-          className="rounded-lg border-gray-300 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          className={`${INPUT_CLASS} sm:w-auto`}
         >
           {languages.map(code => (
             <option key={code} value={code}>
@@ -135,7 +136,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
             'Search by key or text, e.g. "answerSource" or "email"'
           )}
           aria-label={t('admin.localization.overrides.searchLabel', 'Search translations')}
-          className="block w-full flex-1 rounded-lg border-gray-300 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+          className={`${INPUT_CLASS} block flex-1`}
         />
         <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
           <input
@@ -145,7 +146,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
               setChangedOnly(e.target.checked);
               setLimit(PAGE_SIZE);
             }}
-            className="rounded border-gray-300 text-indigo-600"
+            className={CHECKBOX_CLASS}
           />
           {t('admin.localization.overrides.changedOnly', 'Changed only')} ({data.changedCount})
         </label>
@@ -192,7 +193,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
                 disabled={busy || entry.unknown}
                 onChange={e => setDrafts(prev => ({ ...prev, [entry.key]: e.target.value }))}
                 aria-label={entry.key}
-                className="mt-1 block w-full rounded-lg border-gray-300 text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className={`${INPUT_CLASS} mt-1 block`}
               />
               <div className="mt-2 flex gap-2">
                 <button

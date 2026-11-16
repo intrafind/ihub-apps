@@ -23,6 +23,7 @@ import useIntegrationRequestCount from '../hooks/useIntegrationRequestCount';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 import IHubLogo from '../../../shared/components/IHubLogo';
+import DarkModeToggle from '../../../shared/components/DarkModeToggle';
 
 // Sections visible to content-admin-only users
 const CONTENT_ADMIN_SECTIONS = new Set(['overview', 'aiWorkspace']);
@@ -403,6 +404,13 @@ export default function AdminSidebar({ onMobileToggle }) {
       )}
 
       <SidebarContent sections={sections} />
+
+      {/* Theme switch (Auto, Light, Dark) */}
+      <div
+        className={`${isCollapsed ? 'px-2' : 'px-3'} py-2 border-t border-gray-200 dark:border-gray-700`}
+      >
+        <DarkModeToggle variant="admin" collapsed={isCollapsed} />
+      </div>
     </>
   );
 
@@ -478,6 +486,9 @@ export default function AdminSidebar({ onMobileToggle }) {
             </button>
           </div>
           <SidebarContent sections={sections} />
+          <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700">
+            <DarkModeToggle variant="admin" />
+          </div>
         </nav>
       </aside>
     </>

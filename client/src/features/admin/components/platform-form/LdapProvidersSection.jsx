@@ -8,6 +8,7 @@ import { CredentialRefSelect } from '../OpenApiToolEditor';
 import GroupMultiSelect from '../GroupMultiSelect';
 import LdapLoginTest from './LdapLoginTest';
 import { LDAP_PRESETS, DEFAULT_LDAP_PRESET, deriveLdapDefaults } from '../../utils/ldapPresets';
+import { CHECKBOX_CLASS } from '../formStyles';
 
 /**
  * LdapProvidersSection - LDAP authentication settings card: provider list
@@ -368,7 +369,7 @@ function LdapProvidersSection({
                     onChange={e =>
                       updateLdapProvider(index, 'starttls', e.target.checked || undefined)
                     }
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
+                    className={CHECKBOX_CLASS}
                   />
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.auth.ldap.starttls', 'Use StartTLS (encrypt ldap:// connections)')}
@@ -394,7 +395,7 @@ function LdapProvidersSection({
                         e.target.checked ? { rejectUnauthorized: false } : undefined
                       )
                     }
-                    className="h-4 w-4 text-blue-600 border-gray-300 rounded-sm focus:ring-blue-500"
+                    className={CHECKBOX_CLASS}
                   />
                   <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t(

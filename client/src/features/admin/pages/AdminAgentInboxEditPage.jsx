@@ -173,7 +173,9 @@ export default function AdminAgentInboxEditPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-gray-600">{t('common.loading', 'Loading…')}</div>;
+    return (
+      <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
+    );
   }
 
   const openCount = parsed.items.filter(i => i.status === 'open').length;
@@ -207,7 +209,7 @@ export default function AdminAgentInboxEditPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setView(view === 'form' ? 'raw' : 'form')}
-              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               {view === 'form'
                 ? t('admin.common.viewRaw', 'Raw')
@@ -222,7 +224,7 @@ export default function AdminAgentInboxEditPage() {
             </button>
             <button
               onClick={() => navigate('/admin/agents/inboxes')}
-              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               {t('common.back', 'Back')}
             </button>

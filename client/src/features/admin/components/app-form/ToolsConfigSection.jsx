@@ -20,7 +20,7 @@ function ToolChoiceSelect({ toolChoice, onChange }) {
         id="app-tool-choice"
         value={toolChoice || 'auto'}
         onChange={e => onChange(e.target.value === 'auto' ? undefined : e.target.value)}
-        className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+        className="mt-1 block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-admin-accent focus:ring-admin-accent sm:text-sm"
         aria-describedby="app-tool-choice-help"
       >
         <option value="auto">

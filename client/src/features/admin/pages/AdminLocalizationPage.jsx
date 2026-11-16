@@ -7,6 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import TranslationOverridesEditor from '../components/TranslationOverridesEditor';
+import { INPUT_CLASS } from '../components/formStyles';
 
 /**
  * Admin → Customization → Localization.
@@ -177,7 +178,7 @@ function AdminLocalizationPage() {
                 id="default-language"
                 value={defaultLanguage}
                 onChange={e => setDefaultLanguage(e.target.value)}
-                className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className={`${INPUT_CLASS} mt-1 block`}
               >
                 {availableLanguages.map(language => (
                   <option key={language.code} value={language.code}>

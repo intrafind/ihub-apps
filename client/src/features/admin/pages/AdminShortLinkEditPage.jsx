@@ -11,6 +11,7 @@ import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
 
 function AdminShortLinkEditPage() {
   const { code } = useParams();
@@ -167,7 +168,7 @@ function AdminShortLinkEditPage() {
               value={link.code}
               onChange={e => handleChange('code', e.target.value)}
               disabled={!isNew}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 disabled:bg-gray-100 dark:disabled:bg-gray-600"
+              className={`${INPUT_CLASS} mt-1 block`}
             />
           </div>
           <ResourceSelector
@@ -191,7 +192,7 @@ function AdminShortLinkEditPage() {
                 value={link.ownerId || ''}
                 readOnly
                 disabled
-                className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
+                className="mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
               />
             </div>
           )}
@@ -203,7 +204,7 @@ function AdminShortLinkEditPage() {
               type="text"
               value={link.path || ''}
               onChange={e => handleChange('path', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className={`${INPUT_CLASS} mt-1 block`}
             />
           </div>
           <div>
@@ -215,7 +216,7 @@ function AdminShortLinkEditPage() {
               value={link.url || ''}
               onChange={e => handleChange('url', e.target.value)}
               aria-describedby="shortlink-url-hint"
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className={`${INPUT_CLASS} mt-1 block`}
             />
             <p id="shortlink-url-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
               {t(
@@ -235,7 +236,7 @@ function AdminShortLinkEditPage() {
               type="checkbox"
               checked={link.includeParams}
               onChange={e => handleChange('includeParams', e.target.checked)}
-              className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
+              className={CHECKBOX_CLASS}
             />
             <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
               {t('admin.shortlinks.includeParams', 'Include Params')}
@@ -249,7 +250,7 @@ function AdminShortLinkEditPage() {
               type="datetime-local"
               value={link.expiresAt ? link.expiresAt.substring(0, 16) : ''}
               onChange={e => handleChange('expiresAt', e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              className={`${INPUT_CLASS} mt-1 block`}
             />
           </div>
           <div>
@@ -260,7 +261,7 @@ function AdminShortLinkEditPage() {
               rows="4"
               value={paramsText}
               onChange={e => setParamsText(e.target.value)}
-              className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono"
+              className={`${INPUT_CLASS} mt-1 block font-mono`}
             />
           </div>
           <div className="flex justify-end space-x-4">

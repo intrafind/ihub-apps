@@ -423,7 +423,10 @@ function AdminOAuthClientEditPage() {
                     onChange={handleInputChange}
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                   />
-                  <label htmlFor="active" className="ml-2 block text-sm text-gray-900">
+                  <label
+                    htmlFor="active"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
                     {t('admin.auth.oauth.active', 'Active')}
                   </label>
                 </div>
@@ -553,7 +556,7 @@ function AdminOAuthClientEditPage() {
                           onChange={() => handleGrantTypeToggle(grant)}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                         />
-                        <span className="ml-2 text-sm text-gray-700">
+                        <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                           {grant === 'client_credentials' &&
                             t(
                               'admin.auth.oauth.grantClientCredentials',
@@ -697,7 +700,7 @@ function AdminOAuthClientEditPage() {
                         />
                         <label
                           htmlFor="consentRequired"
-                          className="ml-2 block text-sm text-gray-900"
+                          className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
                         >
                           {t('admin.auth.oauth.consentRequired', 'Require user consent screen')}
                         </label>
@@ -711,7 +714,10 @@ function AdminOAuthClientEditPage() {
                           onChange={handleInputChange}
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
                         />
-                        <label htmlFor="trusted" className="ml-2 block text-sm text-gray-900">
+                        <label
+                          htmlFor="trusted"
+                          className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                        >
                           {t(
                             'admin.auth.oauth.trustedClient',
                             'Trusted client (skip consent screen)'

@@ -126,7 +126,7 @@ function MimeTypeSelector({
                   onChange={e => handleMimeTypeToggle(mimeType, e.target.checked)}
                   className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded-sm"
                 />
-                <label className="ml-2 block text-xs text-gray-700">
+                <label className="ml-2 block text-xs text-gray-700 dark:text-gray-300">
                   {displayName}
                   {extensions && <span className="text-gray-500 ml-1">({extensions})</span>}
                 </label>

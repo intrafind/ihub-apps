@@ -177,7 +177,7 @@ function AdminSecurityPage() {
                   onKeyDown={e => {
                     if (e.key === 'Enter' && !encryptLoading) void handleEncryptValue();
                   }}
-                  className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs focus:ring-admin-accent focus:border-admin-accent sm:text-sm"
                   placeholder={t(
                     'admin.system.encryptInputPlaceholder',
                     'Enter value to encrypt (password, API key, etc.)'
@@ -236,7 +236,7 @@ function AdminSecurityPage() {
                     <textarea
                       readOnly
                       value={encryptedResult}
-                      className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm"
+                      className="block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm"
                       rows={4}
                       onClick={e => e.target.select()}
                     />

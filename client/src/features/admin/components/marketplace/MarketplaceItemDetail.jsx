@@ -207,7 +207,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
     >
       <span
         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-          TYPE_COLORS[item?.type] || 'bg-gray-100 text-gray-800'
+          TYPE_COLORS[item?.type] || 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
         }`}
       >
         {t(`admin.marketplace.types.${item?.type}`, item?.type)}

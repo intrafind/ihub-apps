@@ -824,3 +824,22 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Admin Form Fields Are Visible in Light and Dark Mode
+
+Many admin fields (the app, model, prompt, user and group editors, Authentication, Short links, Pages,
+Localization, Voice input, Updates) had no visible edge: their border had no width, so an empty field
+looked like plain page background. In dark mode, labels on **Authentication** were dark gray on a dark
+card, and the **Save** button under **Security → Cookies** had no fill.
+
+- Every admin text field, select and text area now has a visible border and padding. Field borders are
+  darker than before (gray-500, gray-400 in dark mode) so they meet the 3:1 contrast WCAG asks for.
+- Primary buttons on the admin pages that share the admin's form styles are now **indigo**, the admin's
+  accent colour, instead of blue; focus rings and checkboxes use the same colour.
+- Labels and checkbox texts on **Authentication** are readable in dark mode, and clicking a checkbox's
+  text toggles it.
+- The admin opens in your light/dark choice straight away, also while it checks your sign-in, and the
+  sidebar has a **Theme** button (Auto, Light, Dark). A choice made there is no longer undone when the
+  operating system switches between light and dark.
+- Custom CSS (**UI Customization → Theme & styles**) that targets `input` still applies; the admin's
+  default field border is a layered style that any custom rule overrides.

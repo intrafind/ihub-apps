@@ -8,12 +8,12 @@ import { transcribeAudioBuffer } from '../../../../utils/transcribeAudioBuffer';
 import { getTranscriptionErrorMessage } from '../../../../utils/transcriptionErrors';
 import { getLocalizedContent } from '../../../../utils/localizeContent';
 import { getMicrophoneErrorMessage } from '../../../voice/utils/speechService';
+import { INPUT_CLASS } from '../formStyles';
 
 // A test clip only needs a sentence or two.
 const MAX_TEST_SECONDS = 60;
 
-const selectClass =
-  'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:opacity-60';
+const selectClass = `${INPUT_CLASS} mt-1 block`;
 
 /** The raw code/message of a failure, for admins (e.g. "upstream-unreachable: …"). */
 const errorDetail = err =>

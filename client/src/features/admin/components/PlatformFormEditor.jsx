@@ -11,6 +11,7 @@ import LdapProvidersSection from './platform-form/LdapProvidersSection';
 import LocalAuthSection from './platform-form/LocalAuthSection';
 import NtlmAuthSection from './platform-form/NtlmAuthSection';
 import { CredentialRefSelect } from './OpenApiToolEditor';
+import { CHECKBOX_CLASS, INPUT_CLASS, RADIO_CLASS } from './formStyles';
 
 /** `proxyAuth.trustedProxies` when it is not set, as on the server. */
 const DEFAULT_TRUSTED_PROXIES = ['loopback'];
@@ -45,7 +46,7 @@ function TrustedProxiesInput({ value, onChange }) {
         setText(e.target.value);
         onChange(parseList(e.target.value));
       }}
-      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+      className={INPUT_CLASS}
       placeholder="loopback, 10.0.0.5"
     />
   );
@@ -196,9 +197,13 @@ function PlatformFormEditor({
                     type="radio"
                     checked={config.auth?.mode === modeOption.mode}
                     onChange={() => updateAuthMode(modeOption.mode)}
-                    className="mr-2"
+                    aria-labelledby={`auth-mode-${modeOption.mode}-title`}
+                    className={`${RADIO_CLASS} mr-2`}
                   />
-                  <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                  <h4
+                    id={`auth-mode-${modeOption.mode}-title`}
+                    className="font-medium text-gray-900 dark:text-gray-100"
+                  >
                     {modeOption.title}
                   </h4>
                 </div>
@@ -220,110 +225,94 @@ function PlatformFormEditor({
         </p>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="flex items-start space-x-3">
-              <div className="flex items-center h-5">
+            <div>
+              <label className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                 <input
                   type="checkbox"
                   checked={config.proxyAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('proxyAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-medium text-gray-900">
-                  Proxy/JWT Authentication
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Headers or JWT tokens from reverse proxy
-                </p>
-              </div>
+                Proxy/JWT Authentication
+              </label>
+              <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
+                Headers or JWT tokens from reverse proxy
+              </p>
             </div>
 
-            <div className="flex items-start space-x-3">
-              <div className="flex items-center h-5">
+            <div>
+              <label className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                 <input
                   type="checkbox"
                   checked={config.localAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('localAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-medium text-gray-900">Local Authentication</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('admin.auth.builtInSystem', 'Built-in username/password system')}
-                </p>
-              </div>
+                Local Authentication
+              </label>
+              <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
+                {t('admin.auth.builtInSystem', 'Built-in username/password system')}
+              </p>
             </div>
 
-            <div className="flex items-start space-x-3">
-              <div className="flex items-center h-5">
+            <div>
+              <label className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                 <input
                   type="checkbox"
                   checked={config.oidcAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('oidcAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-medium text-gray-900">OIDC Authentication</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  OpenID Connect providers (Google, etc.)
-                </p>
-              </div>
+                OIDC Authentication
+              </label>
+              <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
+                OpenID Connect providers (Google, etc.)
+              </p>
             </div>
 
-            <div className="flex items-start space-x-3">
-              <div className="flex items-center h-5">
+            <div>
+              <label className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                 <input
                   type="checkbox"
                   checked={config.ldapAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('ldapAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-medium text-gray-900">LDAP Authentication</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  LDAP/Active Directory authentication with multiple providers
-                </p>
-              </div>
+                LDAP Authentication
+              </label>
+              <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
+                LDAP/Active Directory authentication with multiple providers
+              </p>
             </div>
 
-            <div className="flex items-start space-x-3">
-              <div className="flex items-center h-5">
+            <div>
+              <label className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                 <input
                   type="checkbox"
                   checked={config.ntlmAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('ntlmAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-medium text-gray-900">NTLM Authentication</label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Windows Integrated Authentication (NTLM)
-                </p>
-              </div>
+                NTLM Authentication
+              </label>
+              <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
+                Windows Integrated Authentication (NTLM)
+              </p>
             </div>
 
-            <div className="flex items-start space-x-3">
-              <div className="flex items-center h-5">
+            <div>
+              <label className="flex items-center gap-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                 <input
                   type="checkbox"
                   checked={config.anonymousAuth?.enabled || false}
                   onChange={e => toggleAuthMethod('anonymousAuth', e.target.checked)}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded-sm"
+                  className={CHECKBOX_CLASS}
                 />
-              </div>
-              <div className="flex-1">
-                <label className="text-sm font-medium text-gray-900">
-                  {t('admin.auth.anonymousAccess', 'Anonymous Access')}
-                </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Allow users to access without authentication
-                </p>
-              </div>
+                {t('admin.auth.anonymousAccess', 'Anonymous Access')}
+              </label>
+              <p className="ml-7 text-xs text-gray-500 dark:text-gray-400">
+                Allow users to access without authentication
+              </p>
             </div>
           </div>
         </div>
@@ -394,7 +383,7 @@ function PlatformFormEditor({
                   type="text"
                   value={config.proxyAuth?.userHeader || ''}
                   onChange={e => updateNestedConfig('proxyAuth', 'userHeader', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className={INPUT_CLASS}
                   placeholder="X-Forwarded-User"
                 />
               </div>
@@ -406,7 +395,7 @@ function PlatformFormEditor({
                   type="text"
                   value={config.proxyAuth?.groupsHeader || ''}
                   onChange={e => updateNestedConfig('proxyAuth', 'groupsHeader', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className={INPUT_CLASS}
                   placeholder="X-Forwarded-Groups"
                 />
               </div>
@@ -462,7 +451,7 @@ function PlatformFormEditor({
                       e.target.value || undefined
                     )
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className={INPUT_CLASS}
                   placeholder="X-Proxy-Secret"
                 />
               </div>
@@ -488,9 +477,11 @@ function PlatformFormEditor({
                   onChange={e =>
                     updateNestedConfig('proxyAuth', 'allowSelfSignup', e.target.checked)
                   }
-                  className="mr-2"
+                  className={`${CHECKBOX_CLASS} mr-2`}
                 />
-                <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Allow Self-Signup
+                </span>
               </label>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Allow new users to register automatically through proxy authentication. If disabled,
@@ -513,7 +504,7 @@ function PlatformFormEditor({
                       e.target.value || undefined
                     )
                   }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-gray-200"
+                  className={INPUT_CLASS}
                 >
                   <option value="">None (use header/JWT groups only)</option>
                   {(config.ldapAuth?.providers || []).map(p => (
@@ -543,7 +534,7 @@ function PlatformFormEditor({
                       Number(e.target.value)
                     )
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className={INPUT_CLASS}
                   placeholder="600"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">

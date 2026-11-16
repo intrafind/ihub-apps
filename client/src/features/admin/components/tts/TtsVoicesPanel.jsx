@@ -6,6 +6,7 @@ import { makeAdminApiCall } from '../../../../api/adminApi';
 import { AudioBufferRecorder } from '../../../../utils/audioRecorder';
 import { audioBufferToWav } from '../../../../utils/wav';
 import { getMicrophoneErrorMessage } from '../../../voice/utils/speechService';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../formStyles';
 
 /** Languages Voxtral TTS speaks (server/tts/language.js). */
 export const TTS_LANGUAGES = ['en', 'de', 'fr', 'es', 'it', 'nl', 'pt', 'hi', 'ar'];
@@ -253,8 +254,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
   const presets = (voices || []).filter(v => v.type !== 'custom');
   const sectionClass =
     'rounded-md border border-gray-200 dark:border-gray-700 p-4 space-y-3 bg-gray-50 dark:bg-gray-900/30';
-  const inputClass =
-    'block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
+  const inputClass = `${INPUT_CLASS} block`;
 
   return (
     <div className="space-y-4">
@@ -386,7 +386,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
                   type="checkbox"
                   checked={languages.includes(code)}
                   onChange={() => toggleLanguage(code)}
-                  className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  className={CHECKBOX_CLASS}
                 />
                 {languageName(code, uiLanguage)}
               </label>
@@ -446,7 +446,7 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
             type="checkbox"
             checked={consent}
             onChange={e => setConsent(e.target.checked)}
-            className="mt-0.5 rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            className={`${CHECKBOX_CLASS} mt-0.5`}
           />
           {t(
             'admin.models.ttsVoices.consent',

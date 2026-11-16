@@ -20,6 +20,7 @@ import VoiceModeSettings from '../components/voice/VoiceModeSettings';
 import ReadAloudButton from '../../voice/components/ReadAloudButton';
 import useReadAloudPlayback from '../../voice/hooks/useReadAloudPlayback';
 import { stop as stopReadAloud } from '../../voice/utils/readAloud';
+import { CHECKBOX_CLASS, INPUT_CLASS } from '../components/formStyles';
 
 /** Playback id of the read-aloud test, apart from every chat message. */
 const READ_ALOUD_TEST_ID = 'admin-read-aloud-test';
@@ -256,8 +257,7 @@ function AdminVoiceInputPage() {
     );
   }
 
-  const inputClass =
-    'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
+  const inputClass = `${INPUT_CLASS} mt-1 block`;
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
   const dirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
   const dictationModelId = config.defaultService === 'model' ? config.dictation.modelId : '';
@@ -456,7 +456,7 @@ function AdminVoiceInputPage() {
               onChange={e =>
                 setConfig(prev => ({ ...prev, tts: { ...prev.tts, enabled: e.target.checked } }))
               }
-              className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className={CHECKBOX_CLASS}
             />
             {t('admin.voiceInput.tts.enabled', 'Show a read-aloud button on chat messages')}
           </label>
@@ -530,7 +530,7 @@ function AdminVoiceInputPage() {
                 value={ttsSample}
                 onChange={e => setTtsSample(e.target.value)}
                 placeholder={ttsSampleText}
-                className="block w-full flex-1 rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className={`${INPUT_CLASS} block flex-1`}
               />
               {ttsModelId && !ttsModelMissing && (
                 <span className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
@@ -587,7 +587,7 @@ function AdminVoiceInputPage() {
               type="checkbox"
               checked={!!config.azure.enabled}
               onChange={e => setAzure('enabled', e.target.checked)}
-              className="rounded-sm border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              className={CHECKBOX_CLASS}
             />
             {t('admin.voiceInput.azure.enabled', 'Enable Azure Speech')}
           </label>

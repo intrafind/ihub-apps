@@ -320,7 +320,9 @@ export default function AdminAgentEditPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-gray-600">{t('common.loading', 'Loading…')}</div>;
+    return (
+      <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
+    );
   }
 
   const cron =
@@ -346,7 +348,7 @@ export default function AdminAgentEditPage() {
           <div className="flex gap-2">
             <button
               onClick={() => setMode(mode === 'form' ? 'json' : 'form')}
-              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               {mode === 'form'
                 ? t('admin.common.viewJson', 'JSON')
@@ -361,7 +363,7 @@ export default function AdminAgentEditPage() {
             </button>
             <button
               onClick={() => navigate('/admin/agents')}
-              className="px-3 py-2 text-sm border bg-white rounded-sm hover:bg-gray-50"
+              className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-sm hover:bg-gray-50 dark:hover:bg-gray-600"
             >
               {t('common.cancel', 'Cancel')}
             </button>
