@@ -74,6 +74,19 @@ pace while documents are ingested. The result is the same text as before.
 - New metric `ihub.extraction.queue.duration` (wait for a free thread); `ihub.extraction.duration` now
   measures the extraction in the thread. See [Projects](../../projects.md#platform-settings).
 
+## Project Search Runs in Worker Threads, Off the Event Loop
+
+Searching a project — `knowledge_search`, and the excerpts a `relevant` or `auto` project puts into the
+prompt — no longer blocks the server process. Building a project's search index, ranking it and counting
+the excerpt tokens used to hold up every other request of the process for up to several hundred
+milliseconds under load; they now run in worker threads. The results are the same as before.
+
+- Each server process has two search threads (`platform.json` → `projects.search.threads`, 0 to 8; `0`
+  searches on the event loop as before). Each cluster worker has its own threads.
+- A project's index lives on its thread, so a search sends only the question and gets the hits back; the
+  index cache limits (`projects.indexCache`) are shared across the threads.
+  See [Projects](../../projects.md#platform-settings).
+
 ## Workers and Their Memory Follow the Container's Memory Limit
 
 In a container with a memory limit, iHub no longer starts four workers that each size their memory as if they

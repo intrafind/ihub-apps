@@ -1274,7 +1274,8 @@ would go past it.
     "ingest": { "concurrency": 2, "staleAfterMinutes": 30 },
     "indexCache": { "maxEntries": 32, "maxHeapShare": 0.1 },
     "textCache": { "maxHeapShare": 0.06 },
-    "extraction": { "timeoutMs": 60000, "memoryMb": 1024 }
+    "extraction": { "timeoutMs": 60000, "memoryMb": 1024 },
+    "search": { "threads": 2 }
   }
 }
 ```
@@ -1303,11 +1304,12 @@ would go past it.
 | `scan.onError`              | `reject`            | What a scanner error does to the file: `reject` fails it, `allow` lets it through.                       |
 | `ingest.fetchConcurrency`   | `8`                 | Jobs at once per server process, each fetching its source before it waits for the conversion; 1 to 32. **Admin → Projects → Project settings**. |
 | `ingest.staleAfterMinutes`  | `30`                | After how long a waiting or extracting item counts as interrupted.                                       |
-| `indexCache.maxEntries`     | `32`                | Search indexes (one per project and version) a server process keeps; 1 to 10000. A miss rebuilds the index on the event loop (60–90 ms for a 590,000-character project) and reads the texts again. Size it from the working set: `ihub.projects.active` and the index-cache hit rate in [Telemetry](telemetry.md). **Admin → Projects → Project settings**. |
+| `indexCache.maxEntries`     | `32`                | Search indexes (one per project and version) a server process keeps; 1 to 10000. A miss reads the texts again and rebuilds the index on a search thread (60–90 ms for a 590,000-character project). With `search.threads` above 0 the entries and the heap share are split evenly across the threads. Size it from the working set: `ihub.projects.active` and the index-cache hit rate in [Telemetry](telemetry.md). **Admin → Projects → Project settings**. |
 | `indexCache.maxHeapShare`   | built-in (see below) | Share of the process's heap limit the cached indexes may use, 0.01 to 0.5; an index character is counted as 4.5 bytes of heap. Entered as a percentage in **Admin → Projects → Project settings**; empty is the built-in budget. |
 | `textCache.maxHeapShare`    | built-in (see below) | Share of the process's heap limit the decrypted item texts may use, 0.01 to 0.5; at least 16 MB. **Admin → Projects → Project settings** (percentage; empty is the built-in budget). |
 | `extraction.timeoutMs`      | `60000`             | Time one file may take in a thread, 1000 to 600000. The thread is terminated and the file fails with `EXTRACTION_TIMEOUT` (an item shows it as its error; a chat upload answers 400 with that code). The wait for a free thread does not count. |
 | `extraction.memoryMb`       | `1024`, or half the process heap if lower | Heap limit of one extraction thread, 128 to 8192; the thread's heap comes on top of the process's own, so in a memory-limited container (small worker heap) the default is smaller. A process started with `--max-old-space-size` (iHub sets it itself for workers sized to a container memory limit, see [Scaling](scaling.md)) overrides this cap: the thread then gets the worker's heap limit, so plan memory for the worker plus one thread of that size. A file that needs more fails with `EXTRACTION_FAILED` and the thread is replaced. |
+| `search.threads`            | `2`                 | Worker threads per server process (each cluster worker has its own) that build and search the project indexes — `knowledge_search` and the excerpts of `relevant` and `auto` projects — off the event loop; 0 to 8, `0` searches on the event loop. A project always goes to the same thread, which keeps its index, so a search sends only the question and gets the hits back; the texts go to the thread once per index build. A thread that dies fails the searches it held and is replaced with an empty cache. Read on every search; platform.json only. |
 | `tierPolicy`                | `ihub`              | `ihub`: local projects only. `both` and `ifinder`: users add their iFinder smart collections to their projects from the catalog, and create, rename, configure and delete them (see [The iFinder tier](#the-ifinder-tier-smart-collections)). Local projects stay creatable under every value. |
 | `defaultAppId`              | —                   | The app a chat in a project starts in when the project has no default app of its own (or the user cannot use it). Without it, the first app that allows projects. **Admin → Projects → Project settings**. |
 | `encryption.keyProvider`    | `local-file`        | The key provider for document keys; `local-file` is the only one in this version.                        |
