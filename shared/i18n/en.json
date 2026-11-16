@@ -4499,7 +4499,10 @@
         "maxChars60": "(max 60 chars)",
         "colorPicker": "{{name}} (color picker)"
       },
-      "linkTarget": "Open link in"
+      "linkTarget": "Open link in",
+      "styles": {
+        "colorPicker": "{{name}} (color picker)"
+      }
     },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",

@@ -4980,7 +4980,10 @@
         "maxChars60": "(max. 60 Zeichen)",
         "colorPicker": "{{name}} (Farbwähler)"
       },
-      "linkTarget": "Link öffnen in"
+      "linkTarget": "Link öffnen in",
+      "styles": {
+        "colorPicker": "{{name}} (Farbwähler)"
+      }
     },
     "groupSelect": {
       "placeholder": "Gruppen suchen oder Namen eingeben…",
