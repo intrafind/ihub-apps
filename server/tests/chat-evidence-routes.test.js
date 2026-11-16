@@ -225,6 +225,47 @@ describe('chat evidence: the owner', () => {
   });
 });
 
+describe('chat evidence: content shared across answers', () => {
+  it("reads an item of a later answer from an earlier answer's pack, also after that answer went", async () => {
+    await getChatRepository().ensureChat({ chatId: 'chat-ada-2', ownerId: ADA.id, appId: 'chat' });
+    const evidence = getChatEvidenceRepository();
+    const QUESTION = contentItem({ role: 'user', content: 'and then?' });
+    await evidence.writeRecord(
+      'chat',
+      'chat-ada-2',
+      { messageId: 'n1' },
+      new Map([[PROMPT.sha256, PROMPT.text]]),
+      { ownerId: ADA.id, onlyIf: async () => [] }
+    );
+    await evidence.writeRecord(
+      'chat',
+      'chat-ada-2',
+      { messageId: 'n2' },
+      new Map([
+        [PROMPT.sha256, PROMPT.text],
+        [QUESTION.sha256, QUESTION.text]
+      ]),
+      { ownerId: ADA.id, onlyIf: async () => ['n1'] }
+    );
+    const read = () =>
+      get(CHAT_CONTENT, { chatId: 'chat-ada-2', messageId: 'n2', sha256: PROMPT.sha256 }, ADA);
+    const before = await read();
+    assert.equal(before.res.statusCode, 200);
+    assert.equal(before.res.body.toString('utf8'), PROMPT.text);
+
+    assert.equal(await evidence.deleteMessages('chat-ada-2', ['n1']), 1);
+    const after = await read();
+    assert.equal(after.res.statusCode, 200, 'the pack of n1 stays while n2 points into it');
+    assert.equal(after.res.body.toString('utf8'), PROMPT.text);
+    const gone = await get(
+      CHAT_CONTENT,
+      { chatId: 'chat-ada-2', messageId: 'n1', sha256: PROMPT.sha256 },
+      ADA
+    );
+    assertProblem(gone.res, 404, 'EVIDENCE_NOT_RECORDED');
+  });
+});
+
 describe('chat evidence: everybody else', () => {
   it('another user (a share recipient included) gets 404 for record and content', async () => {
     const record = await get(CHAT_RECORD, { chatId: 'chat-ada', messageId: 'm1' }, GRACE);
