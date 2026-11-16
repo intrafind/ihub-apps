@@ -14,9 +14,9 @@ This page lists where to ask for help, what to prepare so a question can be answ
 |---------|-----------|
 | **This documentation** | Start here. Admins can read the same pages inside iHub under **Admin → Documentation** (`/admin/docs`). See also [Troubleshooting](troubleshooting.md) and the [FAQ](ihub-faq-en.md). |
 | **GitHub issues** | Bug reports and feature requests: [github.com/intrafind/ihub-apps/issues](https://github.com/intrafind/ihub-apps/issues). The README points to this channel. |
-| **Your vendor or contract** | Enterprise support, SLAs, warranties, custom features and project-specific consulting. The README names IntraFind as the commercial contact for these. The terms that apply to you, including contact details and response times, are defined in your own contract or license agreement, not in this repository. |
+| **IntraFind support** | Questions about running iHub, enterprise support, SLAs, warranties, custom features and project-specific consulting: [support@intrafind.com](mailto:support@intrafind.com). The terms that apply to you, including response times, are defined in your own contract or license agreement, not in this repository. |
 
-The repository does not document a support e-mail address, a response-time commitment or a hosted status page for iHub. Do not assume any; ask your vendor contact.
+The repository does not document a response-time commitment or a hosted status page for iHub. Do not assume any; ask your IntraFind contact.
 
 Do not post security-sensitive details, secrets or customer data in a public issue.
 

@@ -47,6 +47,8 @@ The feedback feature allows users to rate AI-generated responses and provide opt
 
 ### User Experience Flow
 
+![The rating dialog: five stars and an optional comment](assets/screenshots/chat-feedback.png)
+
 1. **User receives AI response** in any chat application
 2. **User clicks the feedback button** (star icon) on the message
 3. **Rating modal appears** with 5-star rating selector
