@@ -10,7 +10,7 @@ import ResourceSelector from '../components/ResourceSelector';
 import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 function AdminShortLinkEditPage() {
   const { code } = useParams();
@@ -282,16 +282,7 @@ function AdminShortLinkEditPage() {
         </form>
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

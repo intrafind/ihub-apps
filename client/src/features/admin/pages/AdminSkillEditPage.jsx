@@ -9,7 +9,6 @@ import { marked } from 'marked';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ContentAccessSection from '../components/ContentAccessSection';
 import SystemSkillBadge from '../components/SystemSkillBadge';
 import {
@@ -21,6 +20,7 @@ import {
   updateSkill
 } from '../../../api/adminApi';
 import AdminLoadError from '../components/AdminLoadError';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 /**
  * AdminSkillEditPage - Detail / edit page for a single installed skill.
  *
@@ -696,16 +696,7 @@ function AdminSkillEditPage() {
         )}
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

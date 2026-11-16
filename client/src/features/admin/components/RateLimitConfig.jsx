@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
 /** The limiters, in the order the server lists them (`RATE_LIMITER_KEYS`). */
 export const RATE_LIMITERS = [
@@ -69,11 +70,17 @@ export function toRequest(form) {
  * Admin → Security → Rate limits. Edits `rateLimit` in platform.json through
  * `/api/admin/rate-limits`; the limits apply after a restart, so the section
  * also shows what the server is running with until then.
+ *
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
  */
-function RateLimitConfig() {
+function RateLimitConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({});
   const [saved, setSaved] = useState({});
+  // The form as last loaded or saved; null until it loaded.
+  const [savedForm, setSavedForm] = useState(null);
+  useDirtyReport(savedForm, form, onDirtyChange);
   const [running, setRunning] = useState({});
   const [restartRequired, setRestartRequired] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -81,7 +88,9 @@ function RateLimitConfig() {
   const [message, setMessage] = useState(null);
 
   const apply = data => {
-    setForm(toForm(data?.limiters));
+    const loadedForm = toForm(data?.limiters);
+    setForm(loadedForm);
+    setSavedForm(loadedForm);
     setSaved(data?.limiters || {});
     setRunning(data?.running || {});
     setRestartRequired(Boolean(data?.restartRequired));

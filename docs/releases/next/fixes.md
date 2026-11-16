@@ -824,3 +824,17 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Admin Pages Ask Before Unsaved Changes Are Lost
+
+Many admin pages dropped unsaved edits without a word when you clicked a sidebar entry, a link or
+the browser's Back button: the Observability and Platform settings pages, the integration pages,
+the visual workflow editor, translation overrides, the document template editor and the new
+provider form. They now ask **Leave without saving?** first, with **Stay** and **Discard changes**,
+like the other editors. The dialog reads the same on every page.
+
+- Browser Back and Forward ask too, and so does the Back button of the visual workflow editor.
+- Switching a tab or a filter on the same page no longer asks (it did on **UI Customization**).
+- A page that is still loading or failed to load never asks.
+- **Security** marks each section with unsaved changes in its section list, and its save bar now
+  follows the language and the reduced-motion setting.

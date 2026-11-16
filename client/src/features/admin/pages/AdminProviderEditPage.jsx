@@ -20,8 +20,8 @@ import useAdminPageAccess from '../hooks/useAdminPageAccess';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import AdminLoadError from '../components/AdminLoadError';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 function AdminProviderEditPage() {
   const { t, i18n } = useTranslation();
@@ -445,16 +445,7 @@ function AdminProviderEditPage() {
         />
       )}
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

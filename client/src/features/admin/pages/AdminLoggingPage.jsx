@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 // The platform.json value ('off' | 'mask' | 'drop') for the <select>; an
 // unset value reads as 'off'.
@@ -278,6 +281,7 @@ function AdminLoggingPage() {
       });
 
       setMessage('');
+      captureBaseline();
     } catch (error) {
       setMessage({
         type: 'error',
@@ -288,6 +292,15 @@ function AdminLoggingPage() {
     }
   };
 
+  // Unsaved-changes guard over the three independently saved blocks. The
+  // baseline is captured after a successful load and updated per block on save.
+  const editedValues = useMemo(
+    () => ({ logging: loggingConfig, authDebug: authDebugConfig, privacy: privacyConfig }),
+    [loggingConfig, authDebugConfig, privacyConfig]
+  );
+  const { baseline, captureBaseline, setBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
+
   const handleSaveLoggingConfig = async () => {
     try {
       setSaving(true);
@@ -297,6 +310,7 @@ function AdminLoggingPage() {
         method: 'PUT',
         body: loggingConfig
       });
+      setBaseline(prev => (prev ? { ...prev, logging: loggingConfig } : prev));
 
       setMessage({
         type: 'success',
@@ -333,6 +347,7 @@ function AdminLoggingPage() {
         method: 'POST',
         body: platformConfig
       });
+      setBaseline(prev => (prev ? { ...prev, authDebug: authDebugConfig } : prev));
 
       setMessage({
         type: 'success',
@@ -374,6 +389,16 @@ function AdminLoggingPage() {
       // Reflect the saved values in `loggingConfig` so a subsequent
       // "Save Logging Configuration" click doesn't drop them again.
       setLoggingConfig(prev => ({ ...prev, anonymizeIp: privacyConfig.loggingAnonymizeIp }));
+      // The PUT above also stored the rest of the logging block as edited.
+      setBaseline(prev =>
+        prev
+          ? {
+              ...prev,
+              logging: { ...loggingConfig, anonymizeIp: privacyConfig.loggingAnonymizeIp },
+              privacy: privacyConfig
+            }
+          : prev
+      );
 
       setMessage({
         type: 'success',
@@ -1032,6 +1057,7 @@ function AdminLoggingPage() {
           </div>
         </div>
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

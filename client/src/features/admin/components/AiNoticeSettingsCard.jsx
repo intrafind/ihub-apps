@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import EuAiActCard from './euAiAct/EuAiActCard';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
 
 /**
  * Platform side of the AI disclosure (EU AI Act Art. 50(1)): the first-turn
@@ -23,6 +25,10 @@ function AiNoticeSettingsCard({ onSaved }) {
   const { refreshConfig } = usePlatformConfig();
   const [notice, setNotice] = useState(null);
   const [guardrailText, setGuardrailText] = useState('');
+  // The notice and guardrail text as last loaded or saved; null until loaded.
+  const [savedValues, setSavedValues] = useState(null);
+  const editedValues = useMemo(() => ({ notice, guardrailText }), [notice, guardrailText]);
+  const { blocker } = useUnsavedChanges(savedValues, editedValues);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -35,8 +41,11 @@ function AiNoticeSettingsCard({ onSaved }) {
       .then(response => {
         const current = response.data?.aiDisclosure?.firstTurnNotice;
         if (cancelled) return;
-        setNotice({ enabled: current?.enabled !== false, text: current?.text || {} });
-        setGuardrailText(response.data?.aiDisclosure?.guardrail?.text || '');
+        const loadedNotice = { enabled: current?.enabled !== false, text: current?.text || {} };
+        const loadedGuardrail = response.data?.aiDisclosure?.guardrail?.text || '';
+        setNotice(loadedNotice);
+        setGuardrailText(loadedGuardrail);
+        setSavedValues({ notice: loadedNotice, guardrailText: loadedGuardrail });
       })
       .catch(() => {
         // No editable defaults on a failed load: saving them would overwrite the stored values.
@@ -70,6 +79,7 @@ function AiNoticeSettingsCard({ onSaved }) {
         guardrail: { ...platform.aiDisclosure?.guardrail, text: guardrailText.trim() }
       };
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      setSavedValues({ notice, guardrailText });
       setMessage({ type: 'success', text: t('admin.aiDisclosure.saved', 'AI notice saved') });
       refreshConfig();
       onSaved?.();
@@ -94,6 +104,7 @@ function AiNoticeSettingsCard({ onSaved }) {
         'The notice is shown only in an empty chat. It is not saved and not sent to the AI. Separately, a rule in every system prompt makes the assistants tell users they are an AI system when asked; you can reword it below. Only the EU AI Act master switch turns it off.'
       )}
     >
+      <UnsavedChangesDialog blocker={blocker} />
       <EuAiActStateNote className="mb-4" />
       {loadFailed && (
         <div role="alert" className="text-sm text-red-700 dark:text-red-300 mb-4">

@@ -6,13 +6,21 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
-function SSLConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function SSLConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     ignoreInvalidCertificates: false,
     domainWhitelist: []
   });
+  // The configuration as last loaded or saved; null until it loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [newDomain, setNewDomain] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -26,12 +34,14 @@ function SSLConfig() {
           method: 'GET'
         });
         // Ensure domainWhitelist is always an array for backward compatibility
-        setConfig({
+        const loaded = {
           ignoreInvalidCertificates: response.data.ignoreInvalidCertificates || false,
           domainWhitelist: Array.isArray(response.data.domainWhitelist)
             ? response.data.domainWhitelist
             : []
-        });
+        };
+        setConfig(loaded);
+        setSavedConfig(loaded);
         setMessage('');
       } catch (error) {
         setMessage({
@@ -90,6 +100,7 @@ function SSLConfig() {
         method: 'PUT',
         body: config
       });
+      setSavedConfig(config);
 
       setMessage({
         type: 'success',

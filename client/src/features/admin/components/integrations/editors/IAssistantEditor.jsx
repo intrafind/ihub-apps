@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../../../shared/components/Icon';
 import ConfigFieldInput from '../ConfigFieldInput';
 import { HELP_CLASS, LABEL_CLASS, MONO_INPUT_CLASS } from '../../formStyles';
-import useInstallationEditor from './useInstallationEditor';
+import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -61,6 +61,7 @@ function IAssistantEditor({ instance, definition, onSaved, onCancel }) {
       Object.entries(instance.values || {}).filter(([, value]) => value !== null)
     )
   }));
+  useInstallationEditorDirty(editor, values);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const errors = editor.fieldErrors;
 

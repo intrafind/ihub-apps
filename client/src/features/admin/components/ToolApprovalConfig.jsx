@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 import { ApprovalModeSelect } from './ToolApprovalFields';
 
 /**
@@ -28,9 +29,16 @@ export function toolApprovalFromForm(form) {
  * whether a person approves a model's tool call before it runs. Installations,
  * tools, actions and apps can only tighten these.
  */
-function ToolApprovalConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function ToolApprovalConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [form, setForm] = useState({ default: '', internal: '', external: '' });
+  // The form as last loaded or saved; null until it loaded.
+  const [savedForm, setSavedForm] = useState(null);
+  useDirtyReport(savedForm, form, onDirtyChange);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
@@ -40,11 +48,13 @@ function ToolApprovalConfig() {
       try {
         const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
         const defaults = response.data?.toolApproval?.defaults || {};
-        setForm({
+        const loaded = {
           default: defaults.default || '',
           internal: defaults.internal || '',
           external: defaults.external || ''
-        });
+        };
+        setForm(loaded);
+        setSavedForm(loaded);
       } catch (error) {
         setMessage({
           type: 'error',
@@ -71,6 +81,7 @@ function ToolApprovalConfig() {
         method: 'POST',
         body: { toolApproval: toolApprovalFromForm(form) }
       });
+      setSavedForm(form);
       setMessage({
         type: 'success',
         text: t('admin.toolApproval.saved', 'Tool approval settings saved.')

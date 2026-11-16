@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 function AdminNextcloudEmbedPage() {
   const { t } = useTranslation();
@@ -20,6 +23,14 @@ function AdminNextcloudEmbedPage() {
   const [starterPrompts, setStarterPrompts] = useState([]);
   const [allowedHostOrigins, setAllowedHostOrigins] = useState([]);
   const [newOrigin, setNewOrigin] = useState('');
+  // Unsaved-changes guard: the baseline is captured after every successful load
+  // (also the reload after Save), so a just-loaded page is never dirty.
+  const editedValues = useMemo(
+    () => ({ displayName, description, starterPrompts, allowedHostOrigins }),
+    [displayName, description, starterPrompts, allowedHostOrigins]
+  );
+  const { baseline, captureBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -56,6 +67,7 @@ function AdminNextcloudEmbedPage() {
       setAllowedHostOrigins(
         Array.isArray(data.allowedHostOrigins) ? data.allowedHostOrigins.slice() : []
       );
+      captureBaseline();
     } catch (err) {
       console.error('[nextcloud-embed] loadStatus failed', err);
       setMessage({
@@ -567,6 +579,7 @@ function AdminNextcloudEmbedPage() {
           </>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

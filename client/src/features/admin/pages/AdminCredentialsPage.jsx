@@ -11,6 +11,8 @@ import {
   updateCredential,
   deleteCredential
 } from '../../../api/adminApi';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /**
  * Admin page for managing the central credential store.
@@ -360,6 +362,10 @@ function AdminCredentialsPage() {
   const [editing, setEditing] = useState(null); // null | 'new' | profileId
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
+  // The form as it was when the editor opened; null while no editor is open.
+  // Leaving the page with an edited, unsaved credential asks first.
+  const [formBaseline, setFormBaseline] = useState(null);
+  const { blocker } = useUnsavedChanges(formBaseline, form);
 
   const isEdit = editing !== null && editing !== 'new';
 
@@ -389,15 +395,21 @@ function AdminCredentialsPage() {
 
   const startCreate = () => {
     setForm(BLANK_FORM);
+    setFormBaseline(BLANK_FORM);
     setEditing('new');
   };
 
   const startEdit = profile => {
-    setForm(profileToForm(profile));
+    const initial = profileToForm(profile);
+    setForm(initial);
+    setFormBaseline(initial);
     setEditing(profile.id);
   };
 
-  const closeDialog = () => setEditing(null);
+  const closeDialog = () => {
+    setEditing(null);
+    setFormBaseline(null);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -646,6 +658,7 @@ function AdminCredentialsPage() {
           </div>
         </div>
       )}
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

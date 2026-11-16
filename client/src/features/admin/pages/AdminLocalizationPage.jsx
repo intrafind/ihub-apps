@@ -7,6 +7,8 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import TranslationOverridesEditor from '../components/TranslationOverridesEditor';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /**
  * Admin → Customization → Localization.
@@ -32,6 +34,9 @@ function AdminLocalizationPage() {
   // form still holds its initial 'en', and saving would write that over whatever
   // the install had configured.
   const [loaded, setLoaded] = useState(false);
+  // The default language as last loaded or saved; null until it loaded.
+  const [savedDefaultLanguage, setSavedDefaultLanguage] = useState(null);
+  const { blocker } = useUnsavedChanges(savedDefaultLanguage, defaultLanguage);
 
   /**
    * The languages this install actually has, derived the same way the end-user
@@ -61,6 +66,7 @@ function AdminLocalizationPage() {
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const config = response.data || {};
       setDefaultLanguage(config.defaultLanguage || 'en');
+      setSavedDefaultLanguage(config.defaultLanguage || 'en');
       setLoaded(true);
       setMessage('');
     } catch (error) {
@@ -93,6 +99,7 @@ function AdminLocalizationPage() {
         method: 'POST',
         body: { defaultLanguage }
       });
+      setSavedDefaultLanguage(defaultLanguage);
 
       // The UI config carries defaultLanguage to the client and is cached for
       // ~30 minutes; without this the change appears not to take effect.
@@ -244,6 +251,7 @@ function AdminLocalizationPage() {
         languages={availableLanguages.filter(l => !l.untranslated).map(l => l.code)}
         initialLanguage={defaultLanguage}
       />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

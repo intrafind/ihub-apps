@@ -41,6 +41,8 @@ import {
   normalizeTemplate,
   validateTemplate
 } from '../utils/documentTemplates';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 function Section({ title, description, children }) {
   return (
@@ -116,6 +118,10 @@ export default function AdminDocumentTemplateEditPage() {
   const isNew = templateId === 'new';
   const [draft, setDraft] = useState(() => (isNew ? emptyTemplate() : null));
   const [saved, setSaved] = useState(null);
+  // A new template starts from the empty template; an existing one from what
+  // the server returned (null until it loaded, so a failed load is never dirty).
+  const [newTemplateBaseline] = useState(draft);
+  const { blocker, markSaved } = useUnsavedChanges(isNew ? newTemplateBaseline : saved, draft);
   const [files, setFiles] = useState({});
   const [loadError, setLoadError] = useState(null);
   const [message, setMessage] = useState(null);
@@ -204,6 +210,7 @@ export default function AdminDocumentTemplateEditPage() {
     try {
       if (isNew) {
         const response = await createDocumentTemplate(cleanTemplate(draft));
+        markSaved();
         navigate(`/admin/document-templates/${encodeURIComponent(response.id)}`, {
           replace: true
         });
@@ -1040,6 +1047,7 @@ export default function AdminDocumentTemplateEditPage() {
           </>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

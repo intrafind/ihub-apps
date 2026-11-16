@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { CredentialRefSelect } from '../../OpenApiToolEditor';
 import ConfigFieldInput, { pickText } from '../ConfigFieldInput';
 import { CALLOUT_CLASS } from '../../formStyles';
-import useInstallationEditor from './useInstallationEditor';
+import useInstallationEditor, { useInstallationEditorDirty } from './useInstallationEditor';
 import {
   AccessSection,
   ActionsSection,
@@ -65,6 +65,7 @@ function WebSearchEngineEditor({ instance, definition, onSaved, onCancel }) {
   const [values, setValues] = useState(() =>
     Object.fromEntries(Object.entries(instance.values || {}).filter(([, value]) => value !== null))
   );
+  useInstallationEditorDirty(editor, values);
   const errors = editor.fieldErrors;
   const setValue = (key, value) => setValues(prev => ({ ...prev, [key]: value }));
 

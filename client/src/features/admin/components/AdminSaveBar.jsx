@@ -13,7 +13,7 @@ import { PRIMARY_BUTTON_CLASS, SECONDARY_BUTTON_CLASS } from './formStyles';
  * @param {boolean} props.dirty - There are unsaved changes
  * @param {boolean} props.saving - A save is running
  * @param {() => void} props.onSave
- * @param {() => void} props.onDiscard
+ * @param {() => void} [props.onDiscard] - Without it no Discard button is shown.
  */
 export default function AdminSaveBar({ dirty, saving, onSave, onDiscard }) {
   const { t } = useTranslation();
@@ -39,14 +39,16 @@ export default function AdminSaveBar({ dirty, saving, onSave, onDiscard }) {
             : t('admin.ui.saveBar.unsaved', 'You have unsaved changes')}
         </p>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onDiscard}
-            disabled={saving}
-            className={SECONDARY_BUTTON_CLASS}
-          >
-            {t('admin.ui.saveBar.discard', 'Discard')}
-          </button>
+          {onDiscard && (
+            <button
+              type="button"
+              onClick={onDiscard}
+              disabled={saving}
+              className={SECONDARY_BUTTON_CLASS}
+            >
+              {t('admin.ui.saveBar.discard', 'Discard')}
+            </button>
+          )}
           <button type="button" onClick={onSave} disabled={saving} className={PRIMARY_BUTTON_CLASS}>
             {saving ? t('admin.ui.saveBar.saving', 'Saving…') : t('admin.ui.save', 'Save Changes')}
           </button>

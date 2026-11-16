@@ -7,10 +7,10 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 function AdminOAuthClientEditPage() {
   const { t } = useTranslation();
@@ -749,16 +749,7 @@ function AdminOAuthClientEditPage() {
         </div>
       </div>
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Leave anyway?"
-        confirmLabel="Leave"
-        denyLabel="Stay"
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
 
       {/* Secret Modal */}
       {showSecretModal && (

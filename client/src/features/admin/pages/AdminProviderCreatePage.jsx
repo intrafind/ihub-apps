@@ -11,6 +11,20 @@ import { slugify } from '../utils/modelImport';
 import AdminLoadError from '../components/AdminLoadError';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import useAdminPageAccess from '../hooks/useAdminPageAccess';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+
+/** The empty form a new provider starts from; also the unsaved-changes baseline. */
+const INITIAL_FORM = {
+  id: '',
+  name: '',
+  description: '',
+  enabled: true,
+  category: 'llm',
+  apiType: 'openai',
+  baseUrl: '',
+  apiKey: ''
+};
 
 function AdminProviderCreatePage() {
   const { t } = useTranslation();
@@ -21,16 +35,8 @@ function AdminProviderCreatePage() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
 
-  const [formData, setFormData] = useState({
-    id: '',
-    name: '',
-    description: '',
-    enabled: true,
-    category: 'llm',
-    apiType: 'openai',
-    baseUrl: '',
-    apiKey: ''
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM);
+  const { blocker, markSaved } = useUnsavedChanges(INITIAL_FORM, formData);
   // The ID follows the name until the admin types one of their own.
   const [idEdited, setIdEdited] = useState(false);
 
@@ -75,6 +81,7 @@ function AdminProviderCreatePage() {
         body: dataToSend
       });
 
+      markSaved();
       setSuccess(true);
 
       // Redirect after a short delay
@@ -200,6 +207,7 @@ function AdminProviderCreatePage() {
           </div>
         </form>
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

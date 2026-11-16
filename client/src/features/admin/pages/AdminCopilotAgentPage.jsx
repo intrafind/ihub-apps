@@ -1,11 +1,14 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 const TEAMS_DEVELOPER_PORTAL_URL = 'https://dev.teams.microsoft.com/tools';
 
@@ -93,6 +96,14 @@ function AdminCopilotAgentPage() {
   const [description, setDescription] = useState('');
   const [instructions, setInstructions] = useState('');
   const [starters, setStarters] = useState([]);
+  // Unsaved-changes guard: the baseline is captured after every successful load
+  // (also the reload after Save), so a just-loaded page is never dirty.
+  const editedValues = useMemo(
+    () => ({ referenceId, name, description, instructions, starters }),
+    [referenceId, name, description, instructions, starters]
+  );
+  const { baseline, captureBaseline, setBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
 
   const limits = status?.limits || {};
 
@@ -115,6 +126,7 @@ function AdminCopilotAgentPage() {
             }))
           : []
       );
+      captureBaseline();
     } catch {
       setMessage({
         type: 'error',
@@ -231,6 +243,7 @@ function AdminCopilotAgentPage() {
         method: 'PUT',
         body: { oauthReferenceId: referenceId }
       });
+      setBaseline(prev => (prev ? { ...prev, referenceId } : prev));
       const res = await makeAdminApiCall('/admin/copilot-agent/status', { method: 'GET' });
       setStatus(res.data);
       setMessage({ type: 'success', text: t('admin.copilotAgent.saved', 'Settings saved') });
@@ -709,6 +722,7 @@ function AdminCopilotAgentPage() {
         onConfirm={() => confirmDialog?.onConfirm()}
         onDeny={() => setConfirmDialog(null)}
       />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

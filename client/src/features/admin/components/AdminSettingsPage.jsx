@@ -2,27 +2,37 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import AdminBreadcrumb from './AdminBreadcrumb';
+import AdminSaveBar from './AdminSaveBar';
+import UnsavedChangesDialog from './UnsavedChangesDialog';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
 /**
  * Two-pane layout for admin settings pages with a sticky save bar.
  *
  * Left pane: vertical section nav (anchored scroll). Right pane: section
- * content. A sticky save bar pinned to the bottom of the viewport surfaces a
- * dirty indicator and primary Save / Discard actions.
+ * content. While the page is dirty the shared `AdminSaveBar` is pinned to the
+ * bottom of the viewport (when `onSave` is given), and the page guards against
+ * leaving with unsaved changes: it calls `useUnsavedChanges` itself and renders
+ * the "Leave without saving?" dialog, so a page built on this frame only has to
+ * say whether it is dirty.
+ *
+ * Sections that save on their own can pass `dirty` per section: the section nav
+ * then marks them with a dot (and a visually hidden "unsaved" label), and the
+ * leave guard covers them too. A section component may also guard itself; the
+ * guards share one prompt.
  *
  * @param {Object} props
  * @param {Array<{ label: string, href?: string }>} [props.crumbs]
  * @param {string} props.title
  * @param {string} [props.description]
- * @param {Array<{ id: string, label: string, icon?: string, children: React.ReactNode }>} props.sections
- * @param {boolean} [props.dirty=false] Whether form has unsaved changes
+ * @param {Array<{ id: string, label: string, icon?: string, dirty?: boolean, children: React.ReactNode }>} props.sections
+ * @param {boolean} [props.dirty=false] Whether the page-level form has unsaved changes.
+ *   Pass false while the page is loading or after its load failed.
  * @param {boolean} [props.saving=false] Whether save is in-flight
- * @param {() => void} [props.onSave]
+ * @param {() => void} [props.onSave] Page-level save; without it no save bar is shown.
  * @param {() => void} [props.onDiscard]
- * @param {string} [props.saveLabel='Save changes']
- * @param {string} [props.discardLabel='Discard']
- * @param {string} [props.dirtyLabel='You have unsaved changes']
  * @param {React.ReactNode} [props.banner] Optional banner (e.g. validation error summary) above content
  */
 function AdminSettingsPage({
@@ -34,11 +44,12 @@ function AdminSettingsPage({
   saving = false,
   onSave,
   onDiscard,
-  saveLabel = 'Save changes',
-  discardLabel = 'Discard',
-  dirtyLabel = 'You have unsaved changes',
   banner
 }) {
+  const { t } = useTranslation();
+  const anyDirty = Boolean(dirty) || sections.some(s => s.dirty);
+  // The frame only knows "dirty or not", so compare a fixed baseline with it.
+  const { blocker } = useUnsavedChanges(false, anyDirty);
   const [activeId, setActiveId] = useState(sections[0]?.id ?? null);
   const sectionRefs = useRef({});
 
@@ -84,7 +95,10 @@ function AdminSettingsPage({
 
         <div className="flex gap-8">
           <div className="hidden lg:block w-56 shrink-0">
-            <nav className="sticky top-4 space-y-1" aria-label="Settings sections">
+            <nav
+              className="sticky top-4 space-y-1"
+              aria-label={t('admin.settingsPage.sectionsNav', 'Settings sections')}
+            >
               {sections.map(s => {
                 const isActive = activeId === s.id;
                 return (
@@ -100,7 +114,20 @@ function AdminSettingsPage({
                     ].join(' ')}
                     aria-current={isActive ? 'true' : undefined}
                   >
-                    {s.label}
+                    <span className="flex items-center justify-between gap-2">
+                      <span>{s.label}</span>
+                      {s.dirty && (
+                        <>
+                          <span
+                            className="inline-block h-2 w-2 rounded-full bg-amber-500"
+                            aria-hidden="true"
+                          />
+                          <span className="sr-only">
+                            {t('admin.settingsPage.sectionUnsaved', '(unsaved changes)')}
+                          </span>
+                        </>
+                      )}
+                    </span>
                   </button>
                 );
               })}
@@ -131,40 +158,10 @@ function AdminSettingsPage({
         </div>
       </div>
 
-      {(dirty || saving) && onSave && (
-        <div
-          className="sticky bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 shadow-lg"
-          role="region"
-          aria-label="Save bar"
-        >
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between gap-4">
-            <p className="text-sm text-gray-700 dark:text-gray-300 flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              {dirtyLabel}
-            </p>
-            <div className="flex items-center gap-2">
-              {onDiscard && (
-                <button
-                  type="button"
-                  onClick={onDiscard}
-                  disabled={saving}
-                  className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-md transition-colors disabled:opacity-50"
-                >
-                  {discardLabel}
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onSave}
-                disabled={saving}
-                className="px-4 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-md shadow-xs transition-colors active:scale-95"
-              >
-                {saving ? 'Saving…' : saveLabel}
-              </button>
-            </div>
-          </div>
-        </div>
+      {onSave && (
+        <AdminSaveBar dirty={dirty} saving={saving} onSave={onSave} onDiscard={onDiscard} />
       )}
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

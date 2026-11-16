@@ -5,12 +5,20 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
-function CookieSettingsConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function CookieSettingsConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     disableSecure: false
   });
+  // The settings as last loaded or saved; null until they loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -22,9 +30,11 @@ function CookieSettingsConfig() {
         const response = await makeAdminApiCall('/admin/configs/platform', {
           method: 'GET'
         });
-        setConfig({
+        const loaded = {
           disableSecure: response.data?.cookieSettings?.disableSecure || false
-        });
+        };
+        setConfig(loaded);
+        setSavedConfig(loaded);
         setMessage('');
       } catch (error) {
         setMessage({
@@ -59,6 +69,7 @@ function CookieSettingsConfig() {
         method: 'POST',
         body: { cookieSettings: { disableSecure: config.disableSecure } }
       });
+      setSavedConfig(config);
 
       setMessage({
         type: 'success',

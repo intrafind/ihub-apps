@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useCallback, useMemo, useRef } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
@@ -142,11 +142,18 @@ function NodePalette({ onAddNode }) {
  * @param {object[]} props.initialEdges - Initial React Flow edges
  * @param {function} props.onSave - Save callback receiving (nodes, edges)
  * @param {function} [props.onPublish] - Optional publish callback receiving (nodes, edges)
+ * @param {function} [props.onFlowChange] - Called with (nodes, edges) whenever the
+ *   canvas changes, so the page can tell whether it holds unsaved edits
  */
-function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) {
+function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish, onFlowChange }) {
   const { t } = useTranslation();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+  const onFlowChangeRef = useRef(onFlowChange);
+  onFlowChangeRef.current = onFlowChange;
+  useEffect(() => {
+    onFlowChangeRef.current?.(nodes, edges);
+  }, [nodes, edges]);
   const [selectedNode, setSelectedNode] = useState(null);
   const [selectedEdge, setSelectedEdge] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -596,8 +603,9 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
  * @param {object[]} props.initialEdges - Initial React Flow edges
  * @param {function} props.onSave - Save callback receiving (nodes, edges)
  * @param {function} [props.onPublish] - Optional publish callback receiving (nodes, edges)
+ * @param {function} [props.onFlowChange] - Called with (nodes, edges) on every canvas change
  */
-export function WorkflowEditor({ initialNodes, initialEdges, onSave, onPublish }) {
+export function WorkflowEditor({ initialNodes, initialEdges, onSave, onPublish, onFlowChange }) {
   return (
     <ReactFlowProvider>
       <WorkflowEditorInner
@@ -605,6 +613,7 @@ export function WorkflowEditor({ initialNodes, initialEdges, onSave, onPublish }
         initialEdges={initialEdges}
         onSave={onSave}
         onPublish={onPublish}
+        onFlowChange={onFlowChange}
       />
     </ReactFlowProvider>
   );

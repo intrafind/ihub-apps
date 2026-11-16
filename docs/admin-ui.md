@@ -527,9 +527,23 @@ or the close button closes it and returns focus to the **History** button.
 
 ## Unsaved Changes
 
-If you navigate away from an edit page with unsaved changes, a confirmation dialog will appear asking if you want to leave or stay. This prevents accidental data loss.
+When you have changed something on an admin page and not saved it, leaving the page asks first. A **Leave without saving?** dialog offers **Stay**, which keeps you on the page with your changes, and **Discard changes**, which leaves and drops them. It appears when you:
 
-The warning also appears if you try to close or refresh the browser tab while a form is dirty.
+- click a sidebar entry, a breadcrumb or any other link to another page,
+- use a page's own Back button (for example in the visual workflow editor),
+- use the browser's Back or Forward button.
+
+Closing or reloading the browser tab shows the browser's own warning instead.
+
+Some things never ask:
+
+- Switching a tab or a filter that stays on the same page, such as the tabs of **UI Customization**.
+- A page that is still loading, or whose settings could not be loaded: there is nothing of yours to lose.
+- Saving and then leaving.
+
+On pages with several sections that each have their own Save button, such as **Security**, a dot in the section list marks every section with unsaved changes, and one dialog covers them all. On an integration's page and on **Usage Reports**, the edits on the **Settings** and **Limits & quotas** tabs are dropped when you switch to another tab of the same page; save them first.
+
+A few places do not ask yet: the **Authentication** page, the app order on the **Apps** list, the global prompt variables on the **Prompts** list, the OAuth server settings, the CIMD client editor, and forms in dialogs (such as installing an integration).
 
 ---
 

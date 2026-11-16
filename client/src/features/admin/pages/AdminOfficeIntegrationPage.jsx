@@ -11,6 +11,9 @@ import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall, getAdminApiErrorMessage, fetchAdminApps } from '../../../api/adminApi';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { useSavedBaseline } from '../hooks/useSavedBaseline';
 
 /** The values the task pane's landing view accepts; mirrored in server/utils/officeStartPage.js. */
 const START_PAGE_CHOICES = new Set(['start', 'apps']);
@@ -170,6 +173,35 @@ function AdminOfficeIntegrationPage() {
   // Every configured app (admin endpoint), for the two app pickers below.
   const [apps, setApps] = useState([]);
   const [appsLoading, setAppsLoading] = useState(true);
+  // Unsaved-changes guard over the form fields: the baseline is captured after
+  // every successful load (also the reload after Save), so a just-loaded page is
+  // never dirty.
+  const editedValues = useMemo(
+    () => ({
+      displayName,
+      description,
+      starterPrompts,
+      officeJsMode,
+      officeJsCdnUrl,
+      officeJsCustomUrl,
+      startPage,
+      appAccess,
+      defaultMailAction
+    }),
+    [
+      displayName,
+      description,
+      starterPrompts,
+      officeJsMode,
+      officeJsCdnUrl,
+      officeJsCustomUrl,
+      startPage,
+      appAccess,
+      defaultMailAction
+    ]
+  );
+  const { baseline, captureBaseline } = useSavedBaseline(editedValues);
+  const { blocker } = useUnsavedChanges(baseline, editedValues);
 
   // Stable client-side ids are used as React keys while the prompt list is edited.
   // They are stripped before persisting so the server never sees them.
@@ -223,6 +255,7 @@ function AdminOfficeIntegrationPage() {
             }))
           : []
       );
+      captureBaseline();
     } catch (_err) {
       setMessage({
         type: 'error',
@@ -1592,6 +1625,7 @@ function AdminOfficeIntegrationPage() {
           </>
         )}
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

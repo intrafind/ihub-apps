@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** One settings row: label and description on the left, the switch on the right. */
 function Toggle({ checked, onChange, label, description }) {
@@ -40,12 +42,16 @@ function AdminMcpGatewayPage() {
   const [platform, setPlatform] = useState(null);
   const [message, setMessage] = useState(null);
   const [saving, setSaving] = useState(false);
+  // The platform config as last loaded or saved; null until it loaded.
+  const [savedPlatform, setSavedPlatform] = useState(null);
+  const { blocker } = useUnsavedChanges(savedPlatform, platform);
 
   const load = async () => {
     setLoading(true);
     try {
       const { data } = await makeAdminApiCall('/admin/configs/platform');
       setPlatform(data || {});
+      setSavedPlatform(data || {});
     } catch (err) {
       setMessage({
         type: 'error',
@@ -148,6 +154,7 @@ function AdminMcpGatewayPage() {
         headers: { 'Content-Type': 'application/json' },
         body: platform
       });
+      setSavedPlatform(platform);
       setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
     } catch (err) {
       setMessage({
@@ -600,6 +607,7 @@ function AdminMcpGatewayPage() {
           </button>
         </div>
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

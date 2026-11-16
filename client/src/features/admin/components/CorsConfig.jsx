@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import Switch from '../../../shared/components/Switch';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
 const DEFAULT_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'];
 const DEFAULT_HEADERS = [
@@ -20,7 +21,11 @@ const DEFAULT_HEADERS = [
   'X-File-Name'
 ];
 
-function CorsConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function CorsConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     origin: [],
@@ -29,6 +34,9 @@ function CorsConfig() {
     methods: DEFAULT_METHODS,
     allowedHeaders: DEFAULT_HEADERS
   });
+  // The configuration as last loaded or saved; null until it loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  useDirtyReport(savedConfig, config, onDirtyChange);
   const [newOrigin, setNewOrigin] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,7 +46,7 @@ function CorsConfig() {
     const fetchCorsConfig = async () => {
       try {
         const response = await makeAdminApiCall('/admin/cors/config', { method: 'GET' });
-        setConfig({
+        const loaded = {
           origin: Array.isArray(response.data.origin) ? response.data.origin : [],
           credentials:
             typeof response.data.credentials === 'boolean' ? response.data.credentials : true,
@@ -47,7 +55,9 @@ function CorsConfig() {
           allowedHeaders: Array.isArray(response.data.allowedHeaders)
             ? response.data.allowedHeaders
             : DEFAULT_HEADERS
-        });
+        };
+        setConfig(loaded);
+        setSavedConfig(loaded);
         setMessage('');
       } catch (error) {
         setMessage({
@@ -84,6 +94,7 @@ function CorsConfig() {
     setMessage('');
     try {
       await makeAdminApiCall('/admin/cors/config', { method: 'PUT', body: config });
+      setSavedConfig(config);
       setMessage({
         type: 'success',
         text: t('admin.cors.saved', 'CORS configuration saved successfully')

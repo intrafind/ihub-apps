@@ -5,10 +5,18 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useDirtyReport } from '../hooks/useDirtyReport';
 
-function SsrfConfig() {
+/**
+ * @param {Object} props
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - Reports unsaved edits to the page.
+ */
+function SsrfConfig({ onDirtyChange }) {
   const { t } = useTranslation();
   const [allowedHosts, setAllowedHosts] = useState([]);
+  // The allowlist as last loaded or saved; null until it loaded.
+  const [savedHosts, setSavedHosts] = useState(null);
+  useDirtyReport(savedHosts, allowedHosts, onDirtyChange);
   const [newHost, setNewHost] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -18,9 +26,9 @@ function SsrfConfig() {
     const fetchConfig = async () => {
       try {
         const response = await makeAdminApiCall('/admin/ssrf/config', { method: 'GET' });
-        setAllowedHosts(
-          Array.isArray(response.data.allowedHosts) ? response.data.allowedHosts : []
-        );
+        const loaded = Array.isArray(response.data.allowedHosts) ? response.data.allowedHosts : [];
+        setAllowedHosts(loaded);
+        setSavedHosts(loaded);
         setMessage('');
       } catch (error) {
         setMessage({
@@ -61,6 +69,7 @@ function SsrfConfig() {
         method: 'PUT',
         body: { allowedHosts }
       });
+      setSavedHosts(allowedHosts);
       setMessage({
         type: 'success',
         text: t('admin.system.ssrf.configSaved', 'SSRF allowlist saved successfully')

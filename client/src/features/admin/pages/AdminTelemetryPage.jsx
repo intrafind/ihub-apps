@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 const DEFAULT_TELEMETRY = {
   enabled: false,
@@ -66,6 +68,9 @@ function AdminTelemetryPage() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [config, setConfig] = useState(DEFAULT_TELEMETRY);
+  // The configuration as last loaded or saved; null until it loaded.
+  const [savedConfig, setSavedConfig] = useState(null);
+  const { blocker } = useUnsavedChanges(savedConfig, config);
 
   useEffect(() => {
     void loadConfig();
@@ -77,7 +82,9 @@ function AdminTelemetryPage() {
       setLoading(true);
       const response = await makeAdminApiCall('/admin/configs/platform', { method: 'GET' });
       const platform = response.data || {};
-      setConfig(deepMerge(DEFAULT_TELEMETRY, platform.telemetry || {}));
+      const loaded = deepMerge(DEFAULT_TELEMETRY, platform.telemetry || {});
+      setConfig(loaded);
+      setSavedConfig(loaded);
       setMessage('');
     } catch (error) {
       setMessage({
@@ -98,6 +105,7 @@ function AdminTelemetryPage() {
       const platform = response.data || {};
       platform.telemetry = config;
       await makeAdminApiCall('/admin/configs/platform', { method: 'POST', body: platform });
+      setSavedConfig(config);
       setMessage({
         type: 'success',
         text: t(
@@ -582,6 +590,7 @@ function AdminTelemetryPage() {
           </div>
         </div>
       </div>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

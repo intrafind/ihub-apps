@@ -18,11 +18,11 @@ import AdminSaveBar from '../components/AdminSaveBar';
 import AdminLoadError from '../components/AdminLoadError';
 import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { PRODUCT_NAME_REF } from '../../../../../shared/translationRefs.js';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
 
 /** What the server requires of every saved configuration (server/routes/admin/ui.js). */
 const REQUIRED_SECTIONS = ['title', 'header', 'footer'];
@@ -372,16 +372,7 @@ function AdminUICustomization() {
 
       <AdminSaveBar dirty={isDirty} saving={saving} onSave={handleSave} onDiscard={handleDiscard} />
 
-      <ConfirmDialog
-        isOpen={blocker.state === 'blocked'}
-        title={t('admin.ui.unsaved.title', 'Unsaved changes')}
-        message={t('admin.ui.unsaved.message', 'You have unsaved changes. Leave anyway?')}
-        confirmLabel={t('admin.ui.unsaved.leave', 'Leave')}
-        denyLabel={t('admin.ui.unsaved.stay', 'Stay')}
-        danger={false}
-        onConfirm={() => blocker.proceed?.()}
-        onDeny={() => blocker.reset?.()}
-      />
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

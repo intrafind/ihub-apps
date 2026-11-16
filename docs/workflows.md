@@ -412,8 +412,8 @@ output.
 A workflow called from chat always shows its answer as it is: the app's model does not rewrite it.
 
 The visual editor keeps the block as it is when it saves, but has no fields for it: the **Chat
-integration** link in its header opens the workflow page. Unsaved changes on the canvas are lost
-when following it, so save first.
+integration** link in its header opens the workflow page. With unsaved changes on the canvas,
+the editor asks first whether to leave without saving.
 
 ### How a JSON answer travels
 

@@ -68,6 +68,9 @@ import { useOptionalAuth } from '../../../shared/contexts/authContextValue';
 import { fetchAdminApps, fetchAdminGroups, getAdminApiErrorMessage } from '../../../api/adminApi';
 import { groupsGranting } from '../utils/groupIntegrationAccess';
 import { GrantedGroups } from '../components/integrations/editors/InstallationEditorParts';
+import { deepEqual, useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import UnsavedChangesDialog from '../components/UnsavedChangesDialog';
+import { DirtyReportContext } from '../hooks/useDirtyReport';
 
 // The chat test panel brings the whole chat UI; it loads when opened.
 const IntegrationTestPanel = lazy(() => import('../components/integrations/IntegrationTestPanel'));
@@ -255,6 +258,15 @@ function InstallationPageContent({ instanceId }) {
   useEffect(() => {
     setApprovalDraft(normalizeApproval(instance?.approval));
   }, [instance]);
+  // Unsaved edits: the approval draft on the Overview, and whatever the Settings
+  // editor reports through DirtyReportContext. Both are lost when the admin
+  // leaves the page, so one guard covers them.
+  const [settingsDirty, setSettingsDirty] = useState(false);
+  const approvalDirty = useMemo(
+    () => Boolean(instance) && !deepEqual(approvalDraft, normalizeApproval(instance.approval)),
+    [approvalDraft, instance]
+  );
+  const { blocker, markSaved } = useUnsavedChanges(false, settingsDirty || approvalDirty);
   const hasReleases = (definition?.releases?.length || 0) > 0;
   const tabParam = searchParams.get('tab');
   const tab = activeTab(tabParam, hasReleases);
@@ -407,6 +419,8 @@ function InstallationPageContent({ instanceId }) {
     setBusy(true);
     try {
       await deleteInstalledIntegration(instance.id);
+      // The installation is gone: nothing left to lose by leaving.
+      markSaved();
       navigate('/admin/integrations', {
         state: {
           flash: {
@@ -1030,6 +1044,7 @@ function InstallationPageContent({ instanceId }) {
                 editorKey={editorKey}
                 onSaved={onSaved}
                 onCancel={onCancel}
+                onDirtyChange={setSettingsDirty}
               />
             </div>
           )}
@@ -1123,6 +1138,7 @@ function InstallationPageContent({ instanceId }) {
             }}
             onDeny={() => setConfirm(null)}
           />
+          <UnsavedChangesDialog blocker={blocker} />
         </div>
       </div>
 
@@ -1170,6 +1186,7 @@ function InstallationPageContent({ instanceId }) {
  * @param {number} props.editorKey
  * @param {(saved: Object) => void} props.onSaved
  * @param {() => void} props.onCancel
+ * @param {(dirty: boolean) => void} [props.onDirtyChange] - the editor holds unsaved edits
  */
 function InstallationSettings({
   instance,
@@ -1180,7 +1197,8 @@ function InstallationSettings({
   readOnly = false,
   editorKey,
   onSaved,
-  onCancel
+  onCancel,
+  onDirtyChange
 }) {
   const { t } = useTranslation();
   if (unusable || !definition) {
@@ -1213,7 +1231,9 @@ function InstallationSettings({
       onCancel={onCancel}
     />
   );
-  if (!readOnly) return editor;
+  if (!readOnly) {
+    return <DirtyReportContext value={onDirtyChange}>{editor}</DirtyReportContext>;
+  }
   return (
     <div className="space-y-4">
       <div
