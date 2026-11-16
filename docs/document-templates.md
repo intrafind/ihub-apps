@@ -1,4 +1,11 @@
-# Document Templates (Corporate Design)
+---
+description: "Apply your corporate design to the documents iHub creates."
+audience: admin
+type: how-to
+adminPage: /admin/document-templates
+---
+
+# Document Templates
 
 A **document template** is your company's corporate design for the files iHub creates: PDFs, Word documents, PowerPoint presentations and Excel workbooks. Every document a model creates with the [`pdf`, `docx`, `pptx` and `xlsx` system skills](pdf-generation.md) (the `web-artifacts` skill takes the brand colours and font as CSS variables), and every PDF export of a chat or Markdown, uses it — so all documents look the same, whoever asked for them.
 

@@ -1,3 +1,9 @@
+---
+description: "Send one message to two models and compare their answers side by side."
+audience: user
+type: how-to
+---
+
 # Compare Mode
 
 Compare Mode is a powerful feature that enables users to query two different AI models simultaneously and view their responses side-by-side. This is particularly useful for evaluating model performance, comparing response quality, or getting diverse perspectives on the same question.

@@ -1,4 +1,11 @@
-# Logging Configuration Guide
+---
+description: "Configure log levels, formats and files, and read iHub's logs."
+audience: admin
+type: reference
+adminPage: /admin/logging
+---
+
+# Logging
 
 ## Overview
 

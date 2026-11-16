@@ -1,3 +1,10 @@
+---
+description: "The machine-readable record iHub attaches to every AI output that leaves it."
+audience: admin
+type: reference
+adminPage: /admin/eu-ai-act
+---
+
 # Provenance Records
 
 Every AI output that leaves iHub carries a small machine-readable **provenance object**, and a **record** of
@@ -62,6 +69,7 @@ the hash of the final step's text, so a user who copied only the final answer st
 | Channel | Where |
 | --- | --- |
 | Chat | On the stored assistant message (`provenance`) and on the `run/ended` event, live and in a replay of the run ledger. Under each finished answer the chip that says what the answer is based on opens **About this answer**; its **Details** section shows the model (its display name and id), time, marking, a shortened content hash with **Copy hash**, and the output ID. An answer without the object (no text, or stored before this feature) has no **Details**; a stopped answer that had already written text does. An answer stored without `answerBasis` has no chip, and so no way to the details. The generated pictures of the answer are in the same **Details**, one record each (named **Image 1**, **Image 2**… when there is more than one record); the picture itself carries no separate control. |
+> [!IMPORTANT]
 > **Master switch.** While the [EU AI Act features are switched off](ai-act.md#switching-the-features-off) no record is made, no `provenance` member or `X-AI-*` header is sent and `_verify` answers `403 FEATURE_DISABLED`. Existing records are kept, expire on schedule and answer again after switching on.
 
 | Inference API (`/api/inference/v1/chat/completions`, `/responses`) | A top-level `provenance` member, plus the headers `X-AI-Generated: true` and `X-AI-Content-Id: <output_id>`. See [OpenAI-compatible API](openai-compatible-api.md#provenance). |

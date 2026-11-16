@@ -1,4 +1,11 @@
-# Using iHub as an OIDC Identity Provider
+---
+description: "Let other applications sign users in through iHub as their OpenID Connect provider."
+audience: admin
+type: how-to
+adminPage: /admin/oauth/server
+---
+
+# iHub as OIDC Identity Provider
 
 This guide explains how to configure external frameworks and libraries to authenticate users through iHub Apps acting as an OpenID Connect (OIDC) Identity Provider.
 
@@ -112,6 +119,7 @@ Example response:
 
 External services should cache this response and refresh it only when they encounter a `kid` they do not recognise. Most OIDC libraries handle JWKS caching automatically.
 
+> [!NOTE]
 > The JWKS endpoint is only populated when the JWT algorithm is RS256 (the default). If HS256 is configured, the endpoint returns an empty keys array. See [JWT Well-Known Endpoints](jwt-well-known-endpoints.md) for more on key management.
 
 ## Issuer Configuration

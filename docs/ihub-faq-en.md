@@ -1,4 +1,10 @@
-# iHub FAQ - Frequently Asked Questions
+---
+description: "Answers to common questions about iHub."
+audience: user
+type: reference
+---
+
+# FAQ (English)
 
 ## General Questions
 

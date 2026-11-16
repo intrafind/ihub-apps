@@ -1,8 +1,15 @@
-## UI Configuration
+---
+description: "Every setting in ui.json: title, header, footer, start page, disclaimer and more."
+audience: admin
+type: reference
+adminPage: /admin/ui
+---
+
+# UI Configuration
 
 The UI configuration defines the appearance and behavior of the iHub Apps user interface. These settings are managed through the `config/ui.json` file.
 
-### Basic Structure
+## Basic Structure
 
 The UI configuration contains the following top-level sections:
 
@@ -38,7 +45,7 @@ The UI configuration contains the following top-level sections:
 }
 ```
 
-### Title Configuration
+## Title Configuration
 
 The `title` property is the localized site title: the browser tab, chat exports and the sign-in screen.
 The shipped value refers to the product name, so renaming the product once changes every place that
@@ -56,7 +63,7 @@ Localization** (see [Localization](localization.md#the-product-name-and-tagline)
 language instead (`"de": "KI-Hub Apps"`) to give the site title its own wording. Edit it under **Admin →
 UI Customization → Branding → Product name**. The PWA name (`pwa.name`) works the same way.
 
-### Header Configuration
+## Header Configuration
 
 The `header` section controls the appearance and content of the application header:
 
@@ -120,7 +127,7 @@ The `titleLight` and `titleBold` fields split the application name into two typo
 }
 ```
 
-### Navigation Sidebar
+## Navigation Sidebar
 
 On regular pages the top header is replaced by a collapsible left sidebar (284 px wide, or a
 72 px icon rail when collapsed; the collapsed state is remembered per browser). It shows:
@@ -156,7 +163,7 @@ only and are not remembered, so people who open iHub directly are not affected. 
 accepts `mode=light|dark|auto` and `language=en|de`. See
 [Embedding iHub in Another Product](embed-mode.md).
 
-### Footer Configuration
+## Footer Configuration
 
 The `footer` section controls the appearance and content of the application footer:
 
@@ -188,7 +195,7 @@ The `footer` section controls the appearance and content of the application foot
 
 Setting `enabled` to `false` will completely remove the footer from all pages.
 
-### Disclaimer Configuration
+## Disclaimer Configuration
 
 Edit the disclaimer under **Admin → Customization → Disclaimer**. The page has the welcome popup (title,
 text, preview), the chat hint (text, link, preview) and the version. It saves on its own, so it never
@@ -235,7 +242,7 @@ when they next load a page. `updated` is set when the wording or the version cha
 
 **Note:** If `link` is not provided, the hint will be displayed as non-clickable text. If `hint` is not provided, a default hint text will be shown.
 
-### Error & Empty-State Messages
+## Error & Empty-State Messages
 
 The `errorPages` section lets administrators customize the localized text shown on the
 application's error and empty-state screens. This covers the generic error boundary, the HTTP
@@ -294,12 +301,13 @@ auto-translate). Click **Save Changes** to apply — no restart is needed.
 **Action buttons** (e.g. "Return Home", "Retry", "Go Back") are not part of `errorPages`; they
 remain controlled by the application's bundled translations.
 
+> [!NOTE]
 > **Note on the generic error boundary:** because it renders above the UI-config provider (the
 > provider itself may be what failed), the generic screen reads its text from a snapshot cached in
 > the browser after the last successful config load. The first time a user visits after a config
 > change, the generic screen may briefly use the bundled defaults until the new config is cached.
 
-### Icons Configuration
+## Icons Configuration
 
 The `icons` section allows overriding which icon is used for certain UI elements. Icon names can
 be any built-in name from the `Icon` component or a custom SVG placed under `public/icons` (or the
@@ -327,7 +335,7 @@ Icon values accept two formats:
 
 The `appsListLogo` can also be configured from the admin panel under **UI Customization > Start & apps page > Apps List Page**.
 
-### Apps List Configuration
+## Apps List Configuration
 
 The `appsList` section controls the behavior and appearance of the apps browser at `/apps` — the full list with search, categories and sorting. The home page `/` is the [start page](#start-page-configuration), which links to the apps browser.
 
@@ -368,7 +376,7 @@ The `appsList` section controls the behavior and appearance of the apps browser 
 
 Setting `search.enabled` to `false` will completely remove the search functionality from the apps list page.
 
-### App Categories
+## App Categories
 
 The `appsList.categories` section enables a category filter bar on the apps list page. Users can click a category to filter the visible apps. The `category` field in each app's JSON configuration must match one of the `id` values defined here.
 
@@ -429,7 +437,7 @@ The `appsList.categories` section enables a category filter bar on the apps list
 
 The same `categories` structure is also available under `promptsList.categories` for the prompts library. There the categories are offered as a "Category" dropdown in the library's filter bar: it always starts with "All categories" (so `showAll` has no effect), lists only categories that contain a prompt, and shows the selected category's `color` as a dot.
 
-### Start Page Configuration
+## Start Page Configuration
 
 The start page at `/start` is a personalized landing view: a time-based greeting, the chat input
 of a default app so users can start a conversation immediately, a grid of app shortcuts and a
@@ -492,7 +500,7 @@ Start Page**; existing installations receive the defaults through a configuratio
 | `sidebarAppsCount` | Number  | How many apps the sidebar's Apps section shows (0–12, default `5`). `0` hides the list.                                                                                 |
 | `featuredAppIds`   | Array   | Ids of the default apps, shown in this order right after each user's favorites. Empty by default.                                                                       |
 
-#### App shortcuts
+### App shortcuts
 
 The start-page grid and the sidebar's **Apps** section are the same list of shortcuts in two
 places, so they share one ranking and one set of settings. The ranking is always:
@@ -522,7 +530,7 @@ Two related settings live elsewhere:
   the default apps, then `order`. `appsMode` deliberately does not apply here: with `recent`, the
   chat input would change app every time the user opened a different one.
 
-#### The heading
+### The heading
 
 By default the heading is the greeting for the time of day plus the user's name — "Good morning,
 Ada!". The name comes from the identity provider: `user.name`, or the local part of the email
@@ -548,7 +556,7 @@ Leave `title` unset to use the bundled greeting translations, which cover every 
 configured `title` only covers the languages you write into it (other languages fall back to
 `en`, as everywhere else).
 
-#### Choosing the home page
+### Choosing the home page
 
 `/` is a pointer, not a page of its own: it redirects to one of the views below — after signing
 in, and whenever a user clicks the logo. `defaultPage` picks which. Every view keeps its own
@@ -579,7 +587,7 @@ Notes:
 - **A missing target is not a dead end.** When `defaultPage` is `page` or `app` but the matching
   id is unset, `/` falls back to `/start`.
 
-### Prompts List Configuration
+## Prompts List Configuration
 
 The `promptsList` section controls sorting behavior of the prompts library:
 
@@ -597,7 +605,7 @@ The `promptsList` section controls sorting behavior of the prompts library:
 | `sort.enabled` | Boolean | Enable or disable client-side sorting (default: true)       |
 | `sort.default` | String  | Default sorting mode: `relevance`, `nameAsc`, or `nameDesc` |
 
-### Static Pages
+## Static Pages
 
 The `pages` section contains content for static pages that can be accessed through the application:
 
@@ -624,7 +632,7 @@ Each page has:
 - `authRequired` (optional): Require authentication to view the page
 - `allowedGroups` (optional): Array of group IDs allowed to view the page. Use `'*'` to allow all groups (default if omitted). Groups are defined in `contents/config/groups.json`.
 
-### URL Routing
+## URL Routing
 
 Static pages can be accessed through URL routes using the pattern `/pages/{pageId}`, where `{pageId}` corresponds to the key in the `pages` object (e.g., `/pages/privacy` for the privacy policy).
 
@@ -643,7 +651,7 @@ The main user-facing routes are:
 | `/pages/{id}`   | Static pages                                                                                |
 | `/chats`        | Chat history — requires the Chat History feature (`chatPersistence`, off by default); see [Chat Persistence](chat-persistence.md) |
 
-### Theme Configuration
+## Theme Configuration
 
 The `theme` section controls the color palette used throughout the UI. All color values are CSS color strings (hex, rgb, etc.).
 
@@ -679,7 +687,7 @@ The `theme` section controls the color palette used throughout the UI. All color
 
 Theme colors are injected as CSS custom properties at runtime, so they affect the entire application without a page reload when changed through the admin panel.
 
-### Diagram Colors
+## Diagram Colors
 
 Diagrams in chat responses are drawn with [Mermaid](https://mermaid.js.org/) in its default theme. The `theme` colors above do not apply to them. There are two ways to give diagrams your own palette.
 
@@ -688,7 +696,7 @@ Diagrams in chat responses are drawn with [Mermaid](https://mermaid.js.org/) in 
 | [Theme settings in the diagram](#theme-settings-in-the-diagram) | One app | Every diagram type | Yes |
 | [Custom CSS](#custom-css-for-diagrams) | All apps | Flowcharts, sequence diagrams, pie charts | No |
 
-#### Theme settings in the diagram
+### Theme settings in the diagram
 
 Mermaid reads theme settings from a front-matter block at the top of a diagram. Tell the model in the app's system prompt to start every diagram with it, for example:
 
@@ -716,7 +724,7 @@ config:
 - The older directive form, `%%{init: {'theme': 'base', 'themeVariables': {...}}}%%` on the first line, works as well.
 - The palette only appears when the model copies the header, so keep the instruction explicit.
 
-#### Custom CSS for diagrams
+### Custom CSS for diagrams
 
 CSS entered under **Admin → UI Customization → Theme & styles → Custom CSS** (stored as `customStyles.css` in `ui.json`) is loaded on every page, so it recolors diagrams in all apps regardless of what the model writes. Mermaid embeds its own styles in each diagram, so every rule needs `!important`:
 
@@ -775,7 +783,7 @@ CSS entered under **Admin → UI Customization → Theme & styles → Custom CSS
 - The selectors follow Mermaid's generated markup, which can change between Mermaid versions. Check your diagrams after upgrading iHub.
 - Where both approaches are used, the CSS wins for the elements it targets.
 
-### PWA Configuration
+## PWA Configuration
 
 The `pwa` section controls Progressive Web App metadata. When `enabled` is `true`, the application can be installed as a standalone desktop or mobile app through the browser's "Add to Home Screen" / "Install" prompt.
 

@@ -1,4 +1,11 @@
-# Value Encryption Tool - UI Screenshot
+---
+description: "What the value encryption tool looks like and how its screens behave."
+audience: admin
+type: reference
+adminPage: /admin/security
+---
+
+# Value Encryption Tool Screens
 
 ## Location
 

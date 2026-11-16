@@ -1,3 +1,10 @@
+---
+description: "Package know-how for a task as a skill that models load when they need it."
+audience: admin
+type: how-to
+adminPage: /admin/skills
+---
+
 # Skills
 
 A skill packages know-how for a task: instructions the model follows and, optionally, reference

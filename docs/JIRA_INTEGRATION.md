@@ -1,4 +1,11 @@
-# JIRA Connector Integration
+---
+description: "Let models search, read and update Jira issues on behalf of the user."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
+# Jira Integration
 
 The JIRA Connector provides comprehensive integration with Atlassian JIRA, enabling AI assistants to search, read, and manage JIRA tickets on behalf of users.
 

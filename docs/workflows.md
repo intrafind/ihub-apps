@@ -1,3 +1,10 @@
+---
+description: "Build multi-step automations as graphs of prompt, tool, decision and human nodes."
+audience: admin
+type: how-to
+adminPage: /admin/workflows
+---
+
 # Workflows
 
 Workflows are multi-step, graph-based automations: nodes (prompt, tool, decision, loop, human, transform, ...) connected by edges. They are defined as JSON files in `contents/workflows/` and edited visually in the admin area under **Admin → Workflows**, which provides a drag-and-drop canvas with a searchable node palette, labeled decision branches, an edge condition editor, and configuration forms for every node type.
@@ -126,7 +133,8 @@ A loop container may itself be a body node of another container — the inner lo
 
 Loop variables are **scoped to their own loop**. When an inner loop finishes it restores `_loopItem`, `_loopIndex`, `_loopHuman` and `_loopTotal` to the enclosing loop's values, so body steps placed after the inner container still see the outer item. After a top-level loop finishes the variables are removed again, as before.
 
-> **Caution:** while the inner loop is running, `_loopItem` (and its three companions) refer to the **inner** item. A step inside the inner body that also needs the outer item must read it under a name of its own — give each loop an `itemVariable`.
+> [!CAUTION]
+> While the inner loop is running, `_loopItem` (and its three companions) refer to the **inner** item. A step inside the inner body that also needs the outer item must read it under a name of its own — give each loop an `itemVariable`.
 
 The shipped `corpus-analysis-decomposed-v2` does exactly this: the outer container names its item `_subQuestion`, the inner one names its item `_currentDoc`.
 

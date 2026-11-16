@@ -1,11 +1,20 @@
-# iFinder Keyless (OIDC/OAuth) JWT Integration
+---
+description: "Connect iFinder without exchanging keys: iHub signs tokens with its OIDC key."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
 
+# iFinder Keyless JWT
+
+> [!IMPORTANT]
 > **This is the recommended way to connect iHub Apps to iFinder / iAssistant.**
 > It replaces the manual RSA key generation and exchange described in
 > [iFinder JWT Key Generation](ifinder-jwt-key-generation.md). No key pair has
 > to be created, no public key has to be copied into iFinder — the whole trust
 > relationship is established through configuration alone.
 
+> [!TIP]
 > **iHub and iFinder already share an OIDC provider** (Zitadel, Keycloak, Entra
 > ID)? Then iFinder can trust that provider instead of iHub: see
 > [Shared OIDC Provider (Token Exchange)](#shared-oidc-provider-token-exchange).
@@ -357,6 +366,7 @@ this:
 Because iFinder now trusts iHub's OIDC signing key, no future key rotation
 requires touching iFinder — new keys are discovered through JWKS.
 
+> [!IMPORTANT]
 > **Breaking-change note:** the two mechanisms are mutually exclusive per
 > environment. While `useOidcKeyPair` is `true`, the manually configured private
 > key is not used. Plan the cutover so iHub and iFinder are switched together.

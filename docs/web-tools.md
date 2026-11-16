@@ -1,4 +1,11 @@
-# Web Tools Documentation
+---
+description: "Search the web and read web pages from chats, with the supported search engines."
+audience: admin
+type: reference
+adminPage: /admin/integrations
+---
+
+# Web Tools
 
 This document describes the web tools available in the iHub Apps platform for searching the web and extracting web content.
 
@@ -30,7 +37,8 @@ Each search engine is an integration of its own, of type `web-search`, installed
 
 ## Unified Web Search Configuration
 
-> **Changed in v5.2.11**: Web search is now configured through a unified `websearch` object on each app instead of adding individual tool IDs (like `braveSearch` or `enhancedWebSearch`) to the `tools` array. Existing apps are automatically migrated.
+> [!IMPORTANT]
+> **Changed in v5.2.11:** Web search is now configured through a unified `websearch` object on each app instead of adding individual tool IDs (like `braveSearch` or `enhancedWebSearch`) to the `tools` array. Existing apps are automatically migrated.
 
 ### App-Level Configuration
 
@@ -382,6 +390,7 @@ why.
 
 ## Answer Source Attribution
 
+> [!IMPORTANT]
 > **Changed:** the colour-coded badges (AI knowledge, Web Search, Mixed, …) and the separate
 > **AI generated** button are replaced by one chip. See
 > [Answer Sources → What users see](answer-sources.md#what-users-see).
@@ -604,6 +613,7 @@ app's `websearch` config.
 
 **Returns**: Search results with title, URL, description, hostname and an optional `publishedDate`, and optionally extracted page content.
 
+> [!WARNING]
 > **Egress IP matters.** Qwant fronts its API with DataDome, which answers
 > requests from data-centre IP ranges with a captcha instead of results. On a
 > cloud VM or behind a hosting-network egress proxy, `qwantSearch` fails with
@@ -661,6 +671,7 @@ freshness drops the dated results outside the window — keeping undated ones �
 with a `note` in the result telling the model so. The filters applied are echoed
 as `filters` in the result.
 
+> [!NOTE]
 > **Markets.** Staan serves the German, French and English markets
 > (`de-de`, `fr-fr`, `en-us`, `en-gb`, `en-fr`, `en-ca`, `en-au`, `en-in`,
 > `en-ie`, `en-nz`, `en-za`, `en-sg`). An unsupported region falls back to a

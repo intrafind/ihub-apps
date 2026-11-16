@@ -1,3 +1,9 @@
+---
+description: "Run iHub on several hosts behind a load balancer."
+audience: admin
+type: how-to
+---
+
 # Multi-Server Deployment
 
 This page describes how to run iHub Apps across **multiple hosts** behind a
@@ -5,6 +11,7 @@ load balancer (HA, geographic spread, blue/green, rolling upgrades) and which
 features degrade or stop working when the platform is no longer a single
 process.
 
+> [!TIP]
 > If you only need to use multiple CPU cores on **one host**, use the built-in
 > cluster (`WORKERS=N`) — see [Scaling with Multiple Workers](scaling.md). That
 > needs no load-balancer stickiness: workers relay per-chat state to each other
@@ -137,6 +144,7 @@ spec:
 
 For NGINX Ingress, set `nginx.ingress.kubernetes.io/affinity: cookie`.
 
+> [!WARNING]
 > If your load balancer balances by raw round-robin, **chat will appear to
 > hang** for users — the SSE GET succeeds but no tokens arrive after the
 > POST. This is the most common deployment mistake.
@@ -165,6 +173,7 @@ Use a real shared filesystem (NFSv4, EFS, FSx, CIFS). **Do not** copy the
 directory onto each host independently — the runtime files will diverge and
 admin edits on one host will not be visible on the others.
 
+> [!WARNING]
 > Concurrent writes from multiple admins on different hosts are not
 > coordinated beyond filesystem-level atomic writes. Treat the Admin UI in
 > production as read-only (see [Configuration sync](#configuration-sync)).

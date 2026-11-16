@@ -1,3 +1,10 @@
+---
+description: "Read the usage reports: requests, tokens and users per app and model, and how to export them."
+audience: admin
+type: reference
+adminPage: /admin/usage
+---
+
 # Usage Reporting
 
 **Observability → Usage Reports** (`/admin/usage`) shows how the models are used: requests, tokens,

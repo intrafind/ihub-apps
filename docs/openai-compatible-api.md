@@ -1,4 +1,10 @@
-# OpenAI-Compatible API (Inference API)
+---
+description: "Call iHub's models and apps with any OpenAI-compatible client."
+audience: developer
+type: reference
+---
+
+# OpenAI-Compatible API
 
 iHub Apps exposes every configured model — and every iHub app — through an **OpenAI-compatible
 HTTP API**. This lets you point any existing OpenAI client, SDK, or framework (Python `openai`,
@@ -60,6 +66,7 @@ The `base_url` you give an OpenAI client is therefore:
 https://your-ihub-instance.com/api/inference/v1
 ```
 
+> [!NOTE]
 > If iHub is deployed under a subpath (e.g. `/ihub`), the base path is included automatically:
 > `https://your-host/ihub/api/inference/v1`.
 
@@ -407,6 +414,7 @@ Agent](https://github.com/NousResearch/hermes-agent), for example, captures `ext
 off each tool call — including from the OpenAI SDK's unknown-field bag — and replays it when
 the model name looks Gemini-family, so it works against iHub with no changes.
 
+> [!NOTE]
 > **Name your Gemini models with `gemini` (or `gemma`) in the id.** Clients decide whether to
 > replay `extra_content` by pattern-matching the model name, because on a plain OpenAI
 > endpoint that is the only signal they have. A Gemini-backed model published as, say,
@@ -630,6 +638,7 @@ llm = ChatOpenAI(
 print(llm.invoke("Hello from LangChain!").content)
 ```
 
+> [!NOTE]
 > **Token rotation note:** OAuth access tokens expire. For long-running processes, refresh the
 > token (Option B) and recreate the client, or use a static API key (Option C) with an appropriate
 > expiry.

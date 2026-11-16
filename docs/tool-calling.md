@@ -1,4 +1,11 @@
-# Tool Calling Guide
+---
+description: "How models call tools in iHub, which tools exist, and how to bind them to apps."
+audience: admin
+type: reference
+adminPage: /admin/integrations
+---
+
+# Tool Calling
 
 This comprehensive guide covers how to implement and use tool calling in iHub Apps, enabling AI models to extend their capabilities by calling external functions and services.
 
@@ -107,6 +114,7 @@ Every tool a model can call is an action of an installed integration (#3275); no
 id any more, and there are no tool files in `contents/tools/` (the loader was retired: migration V230
 reports leftover files and leaves them in place, nothing reads them).
 
+> [!IMPORTANT]
 > **Custom tools are built as integrations.** Add one under **Admin → Integrations → Add manually**,
 > the integration builder, which takes an OpenAPI document, an HTTP request, a script, an MCP server
 > or an A2A agent as its source (see
@@ -1179,7 +1187,8 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 
 ### Unified Web Search Configuration
 
-> **Changed in v5.2.11**: Web search is no longer configured by adding tool IDs to the `tools` array. Instead, use the `websearch` configuration object on each app. The server automatically resolves the best search tool at runtime based on the model's provider. See [Web Tools](web-tools.md) for full details.
+> [!IMPORTANT]
+> **Changed in v5.2.11:** Web search is no longer configured by adding tool IDs to the `tools` array. Instead, use the `websearch` configuration object on each app. The server automatically resolves the best search tool at runtime based on the model's provider. See [Web Tools](web-tools.md) for full details.
 
 **Example App Configuration**:
 ```json

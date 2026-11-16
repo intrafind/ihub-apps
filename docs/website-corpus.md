@@ -1,3 +1,10 @@
+---
+description: "Measure how much text a website holds before you index it."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
 # Website Corpus
 
 The **Website Corpus** integration (`com.intrafind/website-corpus`) measures how much text a website

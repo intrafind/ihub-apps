@@ -1,4 +1,11 @@
-# iFinder Integration - Quick Reference
+---
+description: "The settings and checks for connecting iFinder at a glance."
+audience: admin
+type: reference
+adminPage: /admin/integrations
+---
+
+# iFinder Quick Reference
 
 ## Recommended: Keyless (OIDC/OAuth) Setup
 

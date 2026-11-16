@@ -1,4 +1,11 @@
-# iFinder Integration Documentation
+---
+description: "Search and read documents from iFinder in chats, with the user's own permissions."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
+# iFinder Integration
 
 This document provides comprehensive information about the iFinder document management system integration in iHub Apps.
 
@@ -34,6 +41,7 @@ later **Edit**), and its settings are stored as the `ifinder` installation in
 `contents/config/integrations.json`, not in `platform.json`. The installation's
 own switch enables or disables the integration; **Test** checks the connection.
 
+> [!NOTE]
 > **Who issues the iFinder token.** By default iHub signs the token itself
 > (**Authentication** = *JWT signed by iHub*, `authMode: "ihubSigned"`, with a
 > private key or the iHub OIDC key pair). When iHub and iFinder share one OIDC provider, iHub can instead exchange
@@ -119,6 +127,7 @@ and rewrites the apps (see [Binding the tools to an app](#binding-the-tools-to-a
 
 ### 3. JWT Configuration
 
+> [!TIP]
 > **Recommended: keyless authentication.** Instead of generating and exchanging
 > an RSA key pair, enable **Sign with iHub's OIDC key pair** (`useOidcKeyPair`). iHub then signs the iFinder
 > JWT with its built-in OIDC signing key and iFinder verifies it by fetching the

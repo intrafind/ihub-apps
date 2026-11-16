@@ -1,4 +1,10 @@
-# API Curl Examples for Office Integrations
+---
+description: "Copy-paste curl commands to authenticate, list apps and chat with iHub."
+audience: developer
+type: reference
+---
+
+# API Curl Examples
 
 A copy-paste cookbook for authenticating, listing apps, and chatting with iHub Apps from the command line or a backend service.
 
@@ -173,7 +179,8 @@ If your server uses OIDC with an external identity provider (e.g., Azure AD, Key
 export TOKEN="the_token_from_url"
 ```
 
-> **Note:** OIDC login requires browser interaction. For automated integrations, prefer OAuth Client Credentials (section 1b).
+> [!NOTE]
+> OIDC login requires browser interaction. For automated integrations, prefer OAuth Client Credentials (section 1b).
 
 ### 1e. Token Introspection
 
@@ -311,6 +318,7 @@ SSE_PID=$!
 echo "SSE connection opened (PID: $SSE_PID)"
 ```
 
+> [!NOTE]
 > The `-N` flag disables buffering so events appear immediately.
 
 ### 3d. Send a Message
@@ -413,6 +421,7 @@ curl -s -X POST "$BASE_URL/api/apps/$APP_ID/chat/$CHAT_ID" \
 
 Follow-up requests reuse the chat id; the server holds the history:
 
+> [!NOTE]
 > **Every chat is stored server-side**, so post **only the new message** and
 > the server reads the rest back out of the store. Sending more than one message
 > is refused with `CLIENT_HISTORY_NOT_ALLOWED`. Add `"ephemeral": true` to the

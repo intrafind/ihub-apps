@@ -1,3 +1,10 @@
+---
+description: "Share a stored chat as a read-only link, and control who may share."
+audience: admin
+type: how-to
+adminPage: /admin/chat-history
+---
+
 # Chat Sharing
 
 A stored chat can be handed to other people as a **read-only link**. The

@@ -1,4 +1,10 @@
-# Core Concepts: Providers, Models, Apps, Skills, Projects & Tools
+---
+description: "The building blocks of iHub (providers, models, apps, skills, projects and tools) and when to use which."
+audience: admin
+type: concept
+---
+
+# Core Concepts
 
 This guide explains the building blocks of iHub Apps and, more importantly, **when to use which**. It is the write-up we use when introducing iHub to a new team: once these boundaries are clear, designing use cases for a department and rolling them out to the right people becomes straightforward.
 

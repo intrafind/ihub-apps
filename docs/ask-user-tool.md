@@ -1,4 +1,10 @@
-# ask_user Tool Documentation
+---
+description: "Let an app ask the user clarifying questions with buttons, choices or forms mid-conversation."
+audience: admin
+type: reference
+---
+
+# Ask User Tool
 
 The `ask_user` tool enables AI apps to ask users clarifying questions mid-conversation through structured UI elements.
 

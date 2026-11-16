@@ -15,6 +15,10 @@ additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js"]
 git-repository-url = "https://github.com/intrafind/ihub-apps"
 edit-url-template = "https://github.com/intrafind/ihub-apps/edit/main/docs/{path}"
 
+# Removes the YAML front-matter of each page (metadata for the admin docs viewer).
+[preprocessor.strip-frontmatter]
+command = "node ../scripts/mdbook-strip-frontmatter.js"
+
 [preprocessor.template]
 command = "mdbook-template"
 optional = true

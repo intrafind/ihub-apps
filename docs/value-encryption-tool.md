@@ -1,3 +1,10 @@
+---
+description: "Encrypt passwords and API keys for use in configuration and environment files."
+audience: admin
+type: how-to
+adminPage: /admin/security
+---
+
 # Value Encryption Tool
 
 The Value Encryption Tool in the Admin System page allows administrators to encrypt sensitive values (like passwords, API keys, secrets) to store them securely in `.env` files or configuration files.

@@ -1,4 +1,11 @@
-# Realtime Voice & Transcription (Voxtral)
+---
+description: "Run self-hosted realtime speech-to-text with Voxtral on vLLM and connect it to iHub."
+audience: admin
+type: how-to
+adminPage: /admin/voice-input
+---
+
+# Realtime Voice and Transcription
 
 This guide covers iHub Apps' realtime speech-to-text stack end to end: what users see, how audio flows through the system, how to deploy and configure a self-hosted Voxtral (vLLM) backend, how to put it behind a reverse proxy such as nginx, and how it behaves under load. It is written for administrators running iHub Apps in production.
 
@@ -414,6 +421,7 @@ There is no per-app transcription switch: a transcription model is picked in the
 }
 ```
 
+> [!IMPORTANT]
 > **Breaking change.** The app block `transcription` (`enabled`, `defaultEnabled`, `modelId`, `inputs`, `streaming`, `maxDurationSeconds`) and the platform setting `speech.transcription.defaultModelId` are gone. Migration V167 removes them and adds the model an app transcribed with to its `allowedModels` when the app restricts models.
 
 `upload.videoUpload.maxFileSizeMB` accepts up to `51200` (50 GB): half an hour of video is 10 GB and more. The video is never uploaded, and an **MP4 or MOV of any size** is not read whole: only its index and its audio are (see [Audio Extraction](audio-extraction.md#large-videos-mp4-and-mov-up-to-50-gb)), so the memory used follows the audio, not the video. Other containers (WebM, MKV, ...) are decoded from the whole file in memory, which a browser can do up to about 2 GB; above that they are refused with a message that asks for MP4 or MOV. What stays attached is only the 16 kHz mono WAV of the audio track (about 1.9 MB per minute; see [Audio Extraction](audio-extraction.md#extracted-audio-format)). An hour of audio is a WAV of 115 MB.

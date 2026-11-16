@@ -1,4 +1,11 @@
-# Structured Output Guide
+---
+description: "Make an app answer with JSON that follows a schema instead of free text."
+audience: admin
+type: how-to
+adminPage: /admin/apps
+---
+
+# Structured Output
 
 This comprehensive guide covers how to implement structured output in iHub Apps, enabling your AI applications to return consistently formatted JSON responses instead of free-form text.
 

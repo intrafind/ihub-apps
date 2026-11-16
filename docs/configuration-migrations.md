@@ -1,3 +1,9 @@
+---
+description: "How versioned migrations update configuration files on server start."
+audience: developer
+type: reference
+---
+
 # Configuration Migrations
 
 iHub Apps uses a versioned migration system (similar to Flyway) to evolve configuration files across releases. Migrations run automatically on server startup before `configCache` initializes.

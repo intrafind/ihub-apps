@@ -1,4 +1,11 @@
-# Agent Factory (V1)
+---
+description: "Define agents that run jobs by themselves, with their own tools, memory, inboxes and approvals."
+audience: admin
+type: how-to
+adminPage: /admin/agents
+---
+
+# Agent Factory
 
 The Agent Factory turns iHub Apps into a control plane for an organization's AI
 workforce. Agents are autonomous Profile-defined entities that wake on their

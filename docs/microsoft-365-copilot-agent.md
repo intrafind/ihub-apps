@@ -1,9 +1,17 @@
+---
+description: "Offer iHub's apps as an agent in Microsoft 365 Copilot."
+audience: admin
+type: how-to
+adminPage: /admin/copilot-agent
+---
+
 # Microsoft 365 Copilot Agent
 
 iHub can be an **agent in Microsoft 365 Copilot**. Users pick it in Copilot Chat or in Copilot's pane in Outlook, Teams, Word and the other Microsoft 365 apps, and Copilot runs iHub's apps for them — signed in with their own iHub account, seeing exactly the apps their iHub groups allow.
 
 It is a *declarative agent* with one action: iHub's [MCP gateway](mcp-integration.md#inbound--exposing-ihub-as-an-mcp-server). The gateway offers every iHub app as a tool (`app__<appId>`), next to iHub's workflows (`workflow__<id>`) and tools. Copilot reads that list when the agent runs, so apps added, changed or removed in iHub show up without a new package.
 
+> [!NOTE]
 > This is not the [Outlook add-in](outlook-add-in.md). The add-in is iHub's own UI in an Outlook task pane, working on the email that is open. The agent lives inside Copilot's UI: Copilot decides when to call which iHub app, and it does not get the open email (Microsoft does not offer that to agents). The two work side by side.
 
 ---

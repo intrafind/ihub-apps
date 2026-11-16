@@ -1,3 +1,10 @@
+---
+description: "Let users attach files from Nextcloud in chats, and chat about Nextcloud files."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
 # Nextcloud Integration
 
 The Nextcloud integration lets users browse and attach files from their Nextcloud instance directly inside iHub Apps chat interfaces. It uses Nextcloud's OAuth 2.0 server for authentication and the standard WebDAV endpoint for file access, so any reasonably recent Nextcloud release (22+) works out of the box.
@@ -22,7 +29,8 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 
 ## Step 1: Register an OAuth 2.0 Client in Nextcloud
 
-> **Tip:** The easiest workflow is to do **Step 2 first** so iHub Apps shows you the exact callback URL to register. Install **Nextcloud** under **Admin → Integrations → Catalog** with the installation id you want (e.g. `nextcloud-hq`), open its **Settings** tab and copy the **Redirect URI to register** straight into the Redirection URI field below. Then come back and finish step 1.
+> [!TIP]
+> The easiest workflow is to do **Step 2 first** so iHub Apps shows you the exact callback URL to register. Install **Nextcloud** under **Admin → Integrations → Catalog** with the installation id you want (e.g. `nextcloud-hq`), open its **Settings** tab and copy the **Redirect URI to register** straight into the Redirection URI field below. Then come back and finish step 1.
 
 1. Sign in to your Nextcloud instance as an administrator.
 2. Go to **Settings → Administration → Security**.
@@ -41,7 +49,8 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 
 6. Click **Add**. Nextcloud will show you a **Client Identifier** and a **Secret**. Copy both — the secret is shown only once.
 
-> **Tip — several Nextcloud servers:** repeat this step on each server and install **Nextcloud** once per server in iHub (each installation with its own id, server URL and OAuth client). End users can be connected to all of them at once — tokens are stored per user and installation (`<userId>__<installationId>.json`), so flows don't overwrite each other.
+> [!TIP]
+> **Several Nextcloud servers:** repeat this step on each server and install **Nextcloud** once per server in iHub (each installation with its own id, server URL and OAuth client). End users can be connected to all of them at once — tokens are stored per user and installation (`<userId>__<installationId>.json`), so flows don't overwrite each other.
 
 ---
 
@@ -82,10 +91,13 @@ Nextcloud is the built-in installed integration **Nextcloud** (`com.intrafind/ne
 }
 ```
 
+> [!NOTE]
 > **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
+> [!NOTE]
 > **Which apps offer it:** an app binds storage providers under **Admin → Apps → Edit → Integrations → Storage providers** (`app.integrations`: the installation id, `com.intrafind/nextcloud` for every Nextcloud installation, or `type:storage`). See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
 
+> [!NOTE]
 > **Secrets at rest:** the client secret lives in the credential store (`contents/config/credentials.json`, AES-256-GCM), referenced by `clientSecretRef`; the installation never holds a value. Migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V206 renamed it to the provider's former id (e.g. `nextcloud-main`) and installed a second Nextcloud provider V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs, the users' connections and the embed plugin's `ihub_provider_id` stay valid.
 
 ---
@@ -140,13 +152,13 @@ The sign-in is kept in the storage provider every worker shares (`integration-oa
 
 ---
 
-# Chat-from-Nextcloud (Embedded UI)
+## Chat-from-Nextcloud (Embedded UI)
 
 The flow described above is the **picker** flow — the user is inside iHub and reaches into Nextcloud to attach files. iHub also ships a second, complementary surface: the **embedded** flow, where the user is inside Nextcloud and starts a chat in iHub with the currently selected document(s). This mirrors the Outlook add-in (chat about the current email) and the browser extension (chat about the active tab).
 
 Internally the embed reuses 100% of the picker's server-side machinery — same `NextcloudService`, same `/api/integrations/nextcloud/download` endpoint, same encrypted per-user OAuth tokens. The only new pieces are a thin admin/runtime config (`nextcloudEmbed` in `platform.json`), a dedicated `/nextcloud/full-embed.html` entry, and a small Nextcloud-side app that wires "Chat with iHub" into Files.
 
-## Architecture in 30 seconds
+### Architecture in 30 seconds
 
 1. The Nextcloud app shell adds a **Chat with iHub** action to the Nextcloud Files UI.
 2. On click, it navigates to the app's host page inside the Nextcloud chrome (`/apps/ihub_chat/`), which iframes `<ihub>/nextcloud/full-embed.html` with the selected file paths encoded in the URL hash.
@@ -155,7 +167,7 @@ Internally the embed reuses 100% of the picker's server-side machinery — same 
 
 The embed does **not** receive any Nextcloud token. The user OAuth-links Nextcloud to iHub once (via the picker flow above) and the same grant powers both surfaces.
 
-## Step 1 — Enable in iHub Apps
+### Step 1 — Enable in iHub Apps
 
 1. Sign in to iHub Apps as an administrator.
 2. Open **Admin → Integrations → Nextcloud Embed**.
@@ -165,7 +177,7 @@ The embed does **not** receive any Nextcloud token. The user OAuth-links Nextclo
 
 Copy the **Embed URL** from the page if you're configuring a custom Nextcloud-side integration; the shipped `nextcloud-app/` skeleton already points at this URL.
 
-## Step 2 — Install the Nextcloud app
+### Step 2 — Install the Nextcloud app
 
 The iHub repo ships a Nextcloud app skeleton at `nextcloud-app/`. It is a minimum-viable shell intended as a starting point, not a polished App Store listing.
 
@@ -178,7 +190,7 @@ sudo -u www-data php /var/www/nextcloud/occ app:enable ihub_chat
 
 See `nextcloud-app/README.md` for the full instructions.
 
-## Step 3 — End-user flow
+### Step 3 — End-user flow
 
 1. The user opens **Files** in Nextcloud, selects one or more documents, and chooses **Chat with iHub** from the action menu.
 2. The Nextcloud app navigates to its own host page, which iframes `<ihub>/nextcloud/full-embed.html#providerId=…&paths=…`.
@@ -186,7 +198,7 @@ See `nextcloud-app/README.md` for the full instructions.
 4. If the user has not yet linked their Nextcloud account to iHub, downloading any selected document fails with a 401 and the auto-attach falls back to the cloud-storage picker for them to OAuth-link.
 5. The embed opens the iHub app picker; once an app is selected, `useNextcloudEmbedAttachments` pre-attaches the selected Nextcloud documents to the chat uploader. Sending a message uses the documents through the regular file-upload chat path.
 
-## How embed auth differs from the picker
+### How embed auth differs from the picker
 
 | Aspect | Picker flow | Embed flow |
 |---|---|---|
@@ -197,7 +209,7 @@ See `nextcloud-app/README.md` for the full instructions.
 | Server-side code path | `/api/integrations/nextcloud/*` | **Same** `/api/integrations/nextcloud/*` |
 | iHub config | a Nextcloud installation (Admin → Integrations) | `nextcloudEmbed` (this section) |
 
-## Security considerations specific to the embed
+### Security considerations specific to the embed
 
 - **CSP frame-ancestors**: the embed page is served with `Content-Security-Policy: frame-ancestors 'self' <allowedHostOrigins>`. A Nextcloud origin not on the admin allowlist cannot iframe iHub.
 - **postMessage origin check**: the in-iframe selection bridge rejects any `message` whose `event.origin` is not on the same allowlist. There is no fallback to `*`.

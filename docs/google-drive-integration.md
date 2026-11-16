@@ -1,3 +1,10 @@
+---
+description: "Let users attach files from Google Drive and shared drives in chats."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
 # Google Drive Integration
 
 The Google Drive integration enables users to browse and upload files from Google Drive, Shared Drives, and files shared with them directly within iHub Apps chat interfaces.
@@ -92,7 +99,8 @@ Before creating credentials, you must configure the OAuth consent screen that us
    - **Development**: `http://localhost:3000/api/integrations/googledrive/{installationId}/callback`
    - These per-installation callbacks are aliases of iHub's one integration callback `…/api/integrations/oauth/callback`; registering that one instead (and entering it as the installation's **Redirect URI**) works as well.
 
-   > **Important**: `{installationId}` is the id of the installation in iHub Apps (e.g., `googledrive` or `google-drive-2`). The redirect URI must match exactly, including the base path. The installation's **Settings** tab shows the URI to register, with a **Copy** button.
+   > [!IMPORTANT]
+   > `{installationId}` is the id of the installation in iHub Apps (e.g., `googledrive` or `google-drive-2`). The redirect URI must match exactly, including the base path. The installation's **Settings** tab shows the URI to register, with a **Copy** button.
 
 6. Click **"Create"**
 7. A dialog will show your credentials. **Copy and save**:
@@ -148,10 +156,13 @@ Google Drive is the built-in installed integration **Google Drive** (`com.intraf
 }
 ```
 
+> [!NOTE]
 > **Who may use it:** the groups decide (`groups.json` → `permissions.integrations`: `*`, the installation id, the definition id or `type:storage`). `/api/auth/status` lists, and the file picker offers, only the providers a user's groups grant; connecting, browsing and importing a provider the groups do not grant is refused. See [Integrations → Who may use an integration](integrations.md#who-may-use-an-integration).
 
+> [!NOTE]
 > **Which apps offer it:** an app binds storage providers under **Admin → Apps → Edit → Integrations → Storage providers** (`app.integrations`: the installation id, `com.intrafind/google-drive` for every Google Drive installation, or `type:storage`). See [Apps → Files from storage providers](apps.md#files-from-storage-providers).
 
+> [!NOTE]
 > The client secret is a credential reference, never a value. Migration V200 moved the former `platform.cloudStorage` provider into an installation; migration V206 renamed it to the provider's former id and installed further providers V200 had parked in `config/cloudStorage.unmigrated.json`, so registered redirect URIs and the users' connections stay valid.
 
 ---
@@ -186,7 +197,8 @@ Once configured, users authorize iHub Apps to access their Google Drive:
 8. iHub Apps exchanges the code for access and refresh tokens (stored encrypted)
 9. The user can now browse and select files from their Google Drive
 
-> **Token Lifetime**: Access tokens expire after 1 hour. iHub Apps automatically refreshes them using the refresh token. If a refresh token is not available, the user will be prompted to reconnect.
+> [!NOTE]
+> **Token Lifetime:** Access tokens expire after 1 hour. iHub Apps automatically refreshes them using the refresh token. If a refresh token is not available, the user will be prompted to reconnect.
 
 ---
 

@@ -1,4 +1,10 @@
-# Configuration Validation System
+---
+description: "How iHub checks configuration files and what its validation errors mean."
+audience: admin
+type: reference
+---
+
+# Configuration Validation
 
 This document provides comprehensive documentation for the Zod schema validation system implemented in iHub Apps. The validation system ensures configuration integrity, provides helpful error messages, and prevents runtime errors caused by malformed configurations.
 

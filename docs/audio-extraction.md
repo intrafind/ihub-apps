@@ -1,4 +1,11 @@
-# Audio Extraction from Video Files
+---
+description: "Extract the audio track from uploaded videos so audio-capable models can process it."
+audience: admin
+type: how-to
+adminPage: /admin/apps
+---
+
+# Audio Extraction
 
 This document describes the audio extraction feature that allows users to upload video files and automatically extract the audio track for processing by AI models.
 

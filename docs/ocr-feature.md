@@ -1,4 +1,11 @@
-# OCR Feature
+---
+description: "Convert PDFs and images into searchable Markdown with the OCR tool."
+audience: admin
+type: how-to
+adminPage: /admin/tools/ocr-ai
+---
+
+# OCR
 
 The OCR (Optical Character Recognition) feature converts PDF documents and images into structured, searchable markdown text. It is part of the **Tools Service**, a preview feature that must be enabled before use.
 
@@ -32,7 +39,8 @@ Choose the mode that matches your quality and cost requirements:
 | **Smart**       | Pages with enough embedded text are extracted directly; only scanned pages go through AI | Mixed documents (reduces cost) |
 | **Text Only**   | Extracts embedded text from PDFs — no AI calls                           | Digital-native PDFs (fastest, free) |
 
-> **Note:** Full VLM and Smart modes require a vision-capable model. Text Only mode works without any AI model.
+> [!NOTE]
+> Full VLM and Smart modes require a vision-capable model. Text Only mode works without any AI model.
 
 ## Using the OCR Page
 

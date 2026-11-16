@@ -1,3 +1,9 @@
+---
+description: "Every setting in platform.json: authentication, CORS, exports, prompt variables and more."
+audience: admin
+type: reference
+---
+
 # Platform Configuration
 
 The optional `platform.json` file controls global platform behavior and is located under `contents/config`. This configuration supports a wide range of features including authentication, CORS settings, PDF export, global prompt variables, and more.
@@ -853,11 +859,13 @@ Authentication Debug Logging** — the single place for all auth tracing.
 - **providers** (object) – Per-provider toggles (`oidc`, `local`, `proxy`,
   `ldap`, `ntlm`). Each defaults to enabled when global debug is on.
 
+> [!IMPORTANT]
 > **Migration note:** earlier releases wrote a top-level `authDebug` key that the
 > server never read, so the toggle silently did nothing. The value is moved to
 > `auth.debug` automatically on upgrade (migration `V079`), and the dead
 > `consoleLogging` flag is dropped (Winston owns the console transport).
 
+> [!NOTE]
 > **NTLM:** the standalone `ntlmAuth.debug` flag still works, and NTLM tracing is
 > now also driven by `auth.debug` (`providers.ntlm`), so a single toggle covers
 > it. When component filtering (`logging.components`) is active, authentication
@@ -881,7 +889,8 @@ export OIDC_CLIENT_ID="your-oidc-client-id"
 export OIDC_CLIENT_SECRET="your-oidc-client-secret"
 ```
 
-> **Note:** iHub Apps stores all configuration and runtime data in JSON files. There is no SQL database. The `CONTENTS_DIR` environment variable controls where configuration files are read from, and `DATA_DIR` controls where runtime data (usage logs, etc.) is written. See [Server Configuration](server-config.md) for the full list of environment variables.
+> [!NOTE]
+> iHub Apps stores all configuration and runtime data in JSON files. There is no SQL database. The `CONTENTS_DIR` environment variable controls where configuration files are read from, and `DATA_DIR` controls where runtime data (usage logs, etc.) is written. See [Server Configuration](server-config.md) for the full list of environment variables.
 
 ### Configuration Examples
 
@@ -1137,6 +1146,7 @@ The field is free text; the wizard suggests `email`, `username`, `id`, `name` an
 - `"domain\\username"` — `user.domain + "\\" + user.username`, for NTLM/AD setups. Requires a domain on the user: NTLM takes it from the handshake, LDAP from the provider's `domain` field or by detecting it from the Active Directory `msDS-PrincipalName` attribute. See [LDAP and NTLM Authentication](ldap-ntlm-authentication.md).
 - **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`. A placeholder with no value is an error too, rather than leaving a hole in the subject.
 
+> [!WARNING]
 > **Security note:** Earlier versions accepted the legacy `${field}` form (no `user.` prefix). That syntax collided with the env var resolver — on Windows `process.env.username` is set to the OS user running the server, so `${username}` silently expanded to the service account name in every JWT subject, breaking per-user identity in iFinder. The configCache skip-list and migration V043 fix this; legacy `${field}` is still accepted with a deprecation warning, but **use `${user.field}` for clarity and forward-compatibility**.
 
 For integration details see [iFinder Integration](iFinder-Integration.md).
@@ -1200,6 +1210,7 @@ It is carried as a prompt instruction, prepended to the conversation's extra con
 
 There is no iAssistant-specific timeout. An iAssistant turn is bounded by the same two transport ceilings as any other model — see [`llm.connectTimeoutMs` and `llm.streamIdleTimeoutMs`](#llm). The shipped `iassistant-conversation` model sets `streamIdleTimeoutMs` to 180 s of its own, because a workspace-profile turn reasons and searches for a long stretch before it writes anything, and the 60 s installation default read that silence as a dead stream.
 
+> [!IMPORTANT]
 > **Removed in V117:** `iAssistant.timeout`. It was documented as the request timeout for iAssistant API calls and nothing ever read it — raising it had no effect on cancelled turns. Set `streamIdleTimeoutMs` on the model instead.
 
 ## OAuth Server Configuration

@@ -1,3 +1,9 @@
+---
+description: "Require a user's confirmation before a model runs a tool with side effects."
+audience: admin
+type: how-to
+---
+
 # Tool Approval
 
 A model can decide on its own to call a tool: search your documents, then ask an external MCP

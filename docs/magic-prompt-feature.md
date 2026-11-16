@@ -1,4 +1,11 @@
-# Magic Prompt Feature Documentation
+---
+description: "Let users improve their input with one click: an LLM rewrites it, and undo restores it."
+audience: admin
+type: how-to
+adminPage: /admin/apps
+---
+
+# Magic Prompt
 
 ## Overview
 

@@ -1,4 +1,10 @@
-# Styles Configuration
+---
+description: "Define the writing styles users can choose for an app's answers."
+audience: admin
+type: reference
+---
+
+# Styles
 
 The `styles.json` file (located at `contents/config/styles.json`) defines the optional writing style presets that users can choose when interacting with an app. Each entry maps a style identifier to the instruction text that is appended to the system prompt at runtime.
 

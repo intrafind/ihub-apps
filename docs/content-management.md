@@ -1,4 +1,11 @@
-## Content Management
+---
+description: "Write the Markdown pages iHub shows, such as the FAQ, and where their files live."
+audience: admin
+type: reference
+adminPage: /admin/pages
+---
+
+# Content Management
 
 iHub Apps uses a content management system based on Markdown files stored in the `contents/` directory. These files serve multiple purposes:
 
@@ -6,7 +13,7 @@ iHub Apps uses a content management system based on Markdown files stored in the
 2. Static page content for the application
 3. Documentation and supplementary information
 
-### Automatic Content Setup
+## Automatic Content Setup
 
 **New Feature**: When starting iHub Apps for the first time, the system automatically creates the `contents/` directory with default content files.
 
@@ -21,7 +28,7 @@ iHub Apps uses a content management system based on Markdown files stored in the
 - Copies from `server/defaults/` to your configured `CONTENTS_DIR`
 - Never overwrites existing content
 
-### Content Directory Structure
+## Content Directory Structure
 
 The `contents/` directory contains Markdown (.md) files that can be referenced by the application:
 
@@ -42,7 +49,7 @@ contents/
   prompts/         - Prompt templates
 ```
 
-### Markdown Content Format
+## Markdown Content Format
 
 Content files use standard Markdown with some specific conventions:
 
@@ -69,7 +76,7 @@ iHub Apps is a platform that provides a collection of specialized AI assistants.
 Simply click on any app tile from the main dashboard...
 ```
 
-### Static Page Integration
+## Static Page Integration
 
 Content can be used as static pages in the UI configuration:
 
@@ -90,7 +97,7 @@ Content can be used as static pages in the UI configuration:
 
 For larger content, it's better to reference files from the contents directory rather than embedding them directly in the configuration.
 
-### Content Guidelines
+## Content Guidelines
 
 For best results with AI-powered applications:
 
@@ -101,7 +108,7 @@ For best results with AI-powered applications:
 5. Update content regularly to ensure accuracy
 6. Include a variety of question forms for FAQ content to improve matching
 
-### Content Updates
+## Content Updates
 
 To update content:
 

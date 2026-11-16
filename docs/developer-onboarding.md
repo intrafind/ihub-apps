@@ -1,4 +1,10 @@
-# Developer Onboarding Guide
+---
+description: "Set up a development environment and learn the project's structure and workflow."
+audience: developer
+type: tutorial
+---
+
+# Developer Onboarding
 
 Welcome to the iHub Apps development team! This guide will help you get up and running quickly and understand the project architecture, development workflow, and best practices.
 

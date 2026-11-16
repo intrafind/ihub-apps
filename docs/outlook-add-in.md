@@ -1,7 +1,15 @@
-# Outlook Add-in Rollout Guide
+---
+description: "Roll out the Outlook add-in so users can chat about the selected email."
+audience: admin
+type: how-to
+adminPage: /admin/office-integration
+---
+
+# Outlook Add-in
 
 This guide walks an administrator through deploying the iHub Apps **Outlook add-in** to an entire organization. The add-in adds a task pane to Outlook (desktop, web, and mobile) that lets users chat with iHub apps using the currently selected email — sender, recipients, date, subject, body and attachments — as context.
 
+> [!NOTE]
 > This page covers the **Outlook task-pane add-in**. For browsing OneDrive / SharePoint / Teams files inside iHub chat, see [Office 365 Integration](office365-integration.md). The two integrations are independent and can be enabled separately.
 
 ---
@@ -65,6 +73,7 @@ This single action does the following automatically — no manual `platform.json
 
 After enabling, the page shows the OAuth client ID with a link to **View OAuth Client** (`/admin/oauth/clients/{id}`) where you can audit or restrict it (see [Step 5](#step-5--optional-restrict-what-the-add-in-can-access)).
 
+> [!NOTE]
 > If you ever rotate or delete this client manually, click **Disable** then **Enable** again to recreate it. The system is idempotent — it only creates a new client when `oauthClientId` is empty.
 
 ---
@@ -353,6 +362,7 @@ The recommended way to roll the add-in out to all users is **Centralized Deploym
 
 **Propagation time.** Microsoft typically rolls deployed add-ins out to user mailboxes within 6 hours; in some tenants it can take up to 24 hours. The add-in then appears under the Outlook **Apps** pane (new Outlook / Outlook on the web) or **Get Add-ins → Admin-managed** (classic Outlook).
 
+> [!NOTE]
 > **Exchange-only tenants.** If you do not use the M365 Admin Center, the equivalent path is **Exchange Admin Center → Organization → Add-ins → +** (`https://admin.exchange.microsoft.com/#/addins`). Same manifest, same outcome.
 
 ---
@@ -413,6 +423,7 @@ Users open the task-pane menu (**☰**) → **Settings** to adjust three persona
 | **Appearance** | **Light** (default), **Dark**, **Automatic** | Applies immediately, no reload. *Automatic* follows the Outlook theme on clients that expose it (Mailbox requirement set 1.14+ — Outlook on the web, the new Outlook for Windows, current Microsoft 365 desktop builds) and switches live when the user changes Outlook's theme; older clients fall back to the operating system's dark-mode setting. |
 | **Default answer action** | **Automatic** (default), Reply all, Reply, Forward, New email, Insert into draft | Overrides the admin's [default action](#answer-actions) for this user on this device. Applies immediately, no reload. Only shown in Outlook. |
 
+> [!NOTE]
 > Because these preferences live in the Outlook client's storage, clearing the add-in's site data or moving to another machine resets them to the defaults.
 
 ---
@@ -556,6 +567,7 @@ attempting an outbound request. An Outlook add-in needs about 600 KB —
 (`outlook-win32-16.01.js` or `outlook-web-16.01.js`) and
 `<locale>/outlook_strings.js` for each language you support.
 
+> [!NOTE]
 > **AppSource:** Microsoft requires add-ins published to AppSource to load
 > Office.js from the official CDN. The other three modes are for internal
 > enterprise deployments — centralized deployment or sideloading — which is how

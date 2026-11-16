@@ -1,4 +1,10 @@
-# iHub Apps - Visual Architecture Diagrams
+---
+description: "Mermaid diagrams of iHub's components, data flows and interactions."
+audience: developer
+type: concept
+---
+
+# Architecture Diagrams
 
 This document provides comprehensive visual representations of the iHub Apps architecture using Mermaid diagrams. These diagrams complement the detailed [Architecture Documentation](./architecture.md) and help visualize system components, data flows, and interactions.
 

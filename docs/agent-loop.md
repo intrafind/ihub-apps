@@ -1,4 +1,10 @@
-# AgentLoop — the one tool loop
+---
+description: "AgentLoop, the one loop that runs every tool-using model turn."
+audience: developer
+type: reference
+---
+
+# Agent Loop
 
 Every tool-using model turn in the server runs through `AgentLoop`
 (`server/services/loop/AgentLoop.js`): workflow prompt/agent nodes, the

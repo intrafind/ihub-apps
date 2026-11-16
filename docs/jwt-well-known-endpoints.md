@@ -1,3 +1,9 @@
+---
+description: "The discovery and JWKS endpoints that external systems use to verify iHub's tokens."
+audience: developer
+type: reference
+---
+
 # JWT Well-Known Endpoints
 
 iHub Apps exposes standard well-known endpoints for JWT validation and OpenID Connect discovery. These endpoints allow external applications to discover JWT configuration and verify tokens issued by iHub Apps.
@@ -58,6 +64,7 @@ curl https://your-ihub-domain.com/.well-known/openid-configuration
 }
 ```
 
+> [!NOTE]
 > **Note on the authorization endpoint:** The authorization endpoint is `GET /api/oauth/authorize` (the OAuth 2.0 Authorization Code Flow endpoint). This is different from the OIDC provider login endpoint (`/api/auth/oidc/...`) used when iHub itself is configured to authenticate users against an external identity provider.
 
 ### JWKS (JSON Web Key Set)

@@ -1,4 +1,11 @@
-# ADFS Authentication Guide
+---
+description: "Sign users in with Active Directory Federation Services over OpenID Connect."
+audience: admin
+type: how-to
+adminPage: /admin/auth
+---
+
+# ADFS Authentication
 
 This guide explains how to configure Active Directory Federation Services (ADFS) as an authentication provider for iHub Apps using the OpenID Connect (OIDC) protocol.
 

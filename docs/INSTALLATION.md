@@ -1,4 +1,10 @@
-# iHub Apps Installation Guide
+---
+description: "Install iHub Apps from a binary, with npm or as a container, and keep it up to date."
+audience: admin
+type: how-to
+---
+
+# Installation
 
 **Complete installation guide for all deployment methods**
 
@@ -712,6 +718,7 @@ and refuses archives that are not signed by one of them. Settings in
   signed, after typing its version. Every such installation is recorded in the
   audit log.
 
+> [!NOTE]
 > **Updating from a release without signature support:** the update *into* the
 > first release that verifies signatures is performed by the old updater,
 > which cannot check them. Verify that one download yourself on a connected
@@ -791,7 +798,8 @@ export NO_VERSION_CHECK=true
 
 ### Docker Installation Updates
 
-> **Note:** In-place updates via the Admin UI or `--update` CLI flag are
+> [!NOTE]
+> In-place updates via the Admin UI or `--update` CLI flag are
 > automatically disabled inside containers. Updates would write to the
 > container's ephemeral filesystem and be lost on restart, while any
 > migrated configuration on mounted volumes would persist — leaving the

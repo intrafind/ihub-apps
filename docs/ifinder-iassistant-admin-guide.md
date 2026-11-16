@@ -1,4 +1,11 @@
-# iFinder & iAssistant Administrator's Integration Guide
+---
+description: "Set up iFinder document search and iAssistant answers step by step, with troubleshooting."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
+# iFinder and iAssistant Setup
 
 **Complete setup and configuration guide for iFinder document search and iAssistant RAG integration**
 
@@ -211,6 +218,7 @@ public key from `/.well-known/jwks.json`.
 }
 ```
 
+> [!IMPORTANT]
 > `oauth.issuer` **must** be set to your iHub public URL — the token issuer is
 > stamped from it and must match what iFinder is configured with. It cannot be
 > auto-detected at token-signing time.
@@ -676,6 +684,7 @@ dev key distinct from production — there is no per-environment env var name;
 
 ## Testing and Validation
 
+> [!TIP]
 > **Use the built-in diagnostics first.** The **Test** button of the iFinder and iAssistant
 > installations under **Admin → Integrations** (also in the install wizard, before
 > anything is saved) performs every check below in one run — DNS, TLS, JWT generation, JWKS

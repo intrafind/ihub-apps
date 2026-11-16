@@ -1,3 +1,10 @@
+---
+description: "Install apps, models, prompts, skills, workflows and integrations from registries."
+audience: admin
+type: how-to
+adminPage: /admin/marketplace
+---
+
 # Marketplace
 
 The marketplace installs apps, models, prompts, skills, workflows and integrations from **registries** — catalogs

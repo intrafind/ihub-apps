@@ -1,4 +1,11 @@
-# Security Guide for iHub Apps
+---
+description: "Secure an installation: authentication, authorization, transport, secrets and hardening."
+audience: admin
+type: reference
+adminPage: /admin/security
+---
+
+# Security
 
 iHub Apps implements a comprehensive security model designed to protect user data, secure API communications, and provide flexible authentication and authorization. This guide covers security best practices for deployment, configuration, and operation.
 

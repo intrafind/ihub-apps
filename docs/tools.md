@@ -1,5 +1,13 @@
+---
+description: "Tool documentation has moved to Tool Calling; this page points there."
+audience: admin
+type: reference
+hidden: true
+---
+
 # Tools
 
+> [!NOTE]
 > **This page has moved.**
 > All tool documentation, including the built-in tools reference, the tool file field reference, and implementation guides, is now consolidated in the **[Tool Calling Guide](tool-calling.md)**.
 

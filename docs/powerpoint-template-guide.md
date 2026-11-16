@@ -1,4 +1,11 @@
-# PowerPoint Template Guide
+---
+description: "Build the PowerPoint template that iHub fills with slides."
+audience: admin
+type: how-to
+adminPage: /admin/document-templates
+---
+
+# PowerPoint Templates
 
 How to build the PowerPoint template (`.potx`) that iHub fills with slides, so decks made in chat look like your own — and what an admin can tell marketing when a deck does not.
 

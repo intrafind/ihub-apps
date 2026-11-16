@@ -1,4 +1,10 @@
-# Run Ledger (RunLog)
+---
+description: "The append-only record of every model run and what it is used for."
+audience: developer
+type: reference
+---
+
+# Run Ledger
 
 The run ledger is an append-only record of every model run — chats, workflow
 executions, agent runs, inference API calls and one-off utility calls. Each run

@@ -1,3 +1,10 @@
+---
+description: "Let users find people, their roles and contact details in LDAP, Active Directory or Entra ID."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
 # People Directory Search
 
 Users can ask iHub's chat for people: who someone is, their function, their unit and how to reach them. iHub searches **people directories** for that: the company's own LDAP or Active Directory, and any number of further directories such as the public directory of the German federal administration, **x500.bund.de**.
@@ -193,6 +200,7 @@ Install it under **Admin → Integrations → Catalog → LDAP browser**: pick t
 - only signed-in users browse; personal API keys, OAuth clients and tokens and agents never do, whatever their groups, so the browser cannot be reached through an app over MCP, A2A or the chat API;
 - the tools are never offered over iHub's MCP gateway.
 
+> [!NOTE]
 > **`*` grants every installation, the browser included.** The shipped `users` and `authenticated` groups hold `"*"` in `permissions.integrations`. Raw directory entries are not for every user: give those groups the installations they need instead of `"*"`, or keep the browser out of their apps (the shipped **LDAP browser** app ships disabled; restrict it to admin groups under **Admin → Groups**).
 
 **Binding.** An app binds a browser like any installation: `"integrations": { "corp-browser": {} }` binds its three browse actions (a browser binding without `actions` binds all three; `{ "actions": ["browse_read"] }` narrows it), `"integrations": { "com.intrafind/ldap-browser": {} }` every browser, including later ones. The shipped **LDAP browser** app (`ldap-browser`) binds the definition. A binding of a directory, of `com.intrafind/ldap-directory` or of `type:people-directory` never includes a browser: the `ldapBrowse` reference is retired.

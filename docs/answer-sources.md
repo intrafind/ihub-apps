@@ -1,4 +1,10 @@
-# Answer Sources: What an Integration Found
+---
+description: "How tools and integrations show users which sources an answer is based on."
+audience: admin
+type: concept
+---
+
+# Answer Sources
 
 Web search, iFinder, iAssistant, and any other tool, MCP server or integration can tell the user
 "I have found this for you" in one way. Whatever finds something reports it as **sources**. The
@@ -6,6 +12,7 @@ chat lists every source in one **Sources** panel under the answer, turns every c
 same numbered badge, and offers each source the actions its data allows. It stores the sources
 with the answer and leaves out of a share whatever was found with the user's own permissions.
 
+> [!NOTE]
 > Not to be confused with [projects](projects.md) (`contents/projects/`), the documents and
 > websites an app can *search*. Answer sources are what a turn *found*.
 

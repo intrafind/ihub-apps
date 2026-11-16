@@ -1,4 +1,10 @@
-# iHub Apps Authentication Architecture Analysis
+---
+description: "How iHub's authentication modes, sessions and group inheritance work inside the server."
+audience: developer
+type: concept
+---
+
+# Authentication Architecture
 
 ## Overview
 

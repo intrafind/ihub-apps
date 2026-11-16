@@ -1,4 +1,11 @@
-# App Configuration Guide
+---
+description: "Create and configure AI apps: prompts, variables, models, tools, uploads, output and access."
+audience: admin
+type: reference
+adminPage: /admin/apps
+---
+
+# Apps
 
 This comprehensive guide covers how to configure and customize AI applications in iHub Apps, from simple chat interfaces to complex enterprise applications with structured output and tool calling.
 
@@ -1244,6 +1251,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 | `iassistant.scope`                | String          | OAuth scope requested in the iFinder JWT for this app                                                                                                                                                                                                       |
 | `iassistant.ephemeral`            | Boolean         | Create the conversation as ephemeral, so iFinder does not retain it. Default: `false`                                                                                                                                                                       |
 
+> [!IMPORTANT]
 > `tools`, `labels`, `scope` and `ephemeral` were read by the adapter but missing from the app schema until now, so setting them on an app had no effect and produced no validation error. They work as documented from this release on — check any app that already carries them, since they now actually apply.
 
 **Restricting answers to your own documents (`groundedOnly`):**
@@ -1650,6 +1658,7 @@ _Iframe Apps:_
 
 ## Web Search Configuration
 
+> [!NOTE]
 > Added in v5.2.11
 
 Web search is configured per-app using the `websearch` object. This replaces the previous approach of adding individual websearch tool IDs to the app's tool list.

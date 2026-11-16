@@ -1,3 +1,9 @@
+---
+description: "Open an app with a prefilled message, and send it at once, from a link."
+audience: admin
+type: reference
+---
+
 # Auto-Send Query Parameter
 
 The auto-send feature allows URLs to automatically submit prefilled messages without requiring users to manually click the send button.
@@ -62,7 +68,8 @@ When sharing links with support users or creating automated workflows, you can u
 | `integration` | No | The installed integration the document comes from | `integration=ifinder` |
 | `searchProfile` | No | iFinder search profile used to resolve the document | `searchProfile=default` |
 
-> **Note:** `prefill` works on its own (without `send=true`) to simply pre-populate
+> [!NOTE]
+> `prefill` works on its own (without `send=true`) to simply pre-populate
 > the input field. Likewise, the `model`, `style`, `outfmt`, `history`,
 > `var_*`, and `documentId` parameters can be used independently of auto-send.
 > All of these parameters are automatically removed from the URL after they are
@@ -226,7 +233,8 @@ to this user and whether the document can be read, and passes `documentId`, `int
 /apps/chat?documentId=doc-12345&searchProfile=default&integration=ifinder
 ```
 
-> **Note:** Only a single `documentId` is supported via the URL. The `prefill`
+> [!NOTE]
+> Only a single `documentId` is supported via the URL. The `prefill`
 > value is also used as the initial display name for the document while it is
 > loading.
 

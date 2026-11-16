@@ -1,4 +1,10 @@
-# Chat and Scheduled-Task Files
+---
+description: "Where iHub stores files attached to chats and scheduled tasks, and how long it keeps them."
+audience: admin
+type: reference
+---
+
+# Chat and Task Files
 
 Files users attach to a chat or to a scheduled task are stored by the server, so the assistant keeps
 reading them on every later turn, after a reload and on other devices. The design is in

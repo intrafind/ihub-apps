@@ -1,8 +1,16 @@
-# Admin UI Guide
+---
+description: "A tour of the admin area: navigation, the main sections, keyboard shortcuts and the command palette."
+audience: admin
+type: reference
+adminPage: /admin
+---
+
+# Admin UI
 
 The iHub Apps admin UI is the primary interface for managing your platform. This guide covers navigation, all major sections, and productivity features like keyboard shortcuts and the command palette.
 
-> **Tip:** You do not need to edit JSON files directly to configure iHub Apps. Everything described in this guide can be done through the admin UI at `/admin`.
+> [!TIP]
+> You do not need to edit JSON files directly to configure iHub Apps. Everything described in this guide can be done through the admin UI at `/admin`.
 
 ## Accessing the Admin UI
 
@@ -60,6 +68,7 @@ Press `g` followed by a letter within 300ms:
 | `Cmd+K` / `Ctrl+K` | Open the command palette |
 | `Cmd+S` / `Ctrl+S` | Save the app you are editing and stay in the editor |
 
+> [!NOTE]
 > Shortcuts do not fire when focus is in a text input or textarea. `Cmd+S` / `Ctrl+S` is the
 > exception: it saves from anywhere in the app editor.
 

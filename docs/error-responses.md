@@ -1,3 +1,9 @@
+---
+description: "The format of the API's error responses and the codes clients can branch on."
+audience: developer
+type: reference
+---
+
 # Error Responses
 
 Every error response of the API is `application/problem+json` (RFC 9457) with the same members,

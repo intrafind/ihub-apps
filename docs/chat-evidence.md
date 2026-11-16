@@ -1,3 +1,10 @@
+---
+description: "The record of what went into and came out of every stored answer."
+audience: admin
+type: reference
+adminPage: /admin/chat-history
+---
+
 # Chat Evidence Record
 
 For every stored answer, iHub keeps a record of **what went in and what came out**: the system

@@ -1,3 +1,9 @@
+---
+description: "Render an app's structured JSON answers with your own React components."
+audience: developer
+type: how-to
+---
+
 # Custom Response Renderers
 
 Custom response renderers allow you to create beautiful, interactive UI components for displaying structured JSON responses from AI applications. Instead of showing raw JSON or plain text, you can build custom React components that render data in user-friendly formats.

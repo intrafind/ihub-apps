@@ -1,3 +1,10 @@
+---
+description: "Add a \"Chat with iHub\" action to Nextcloud Files."
+audience: admin
+type: how-to
+adminPage: /admin/nextcloud-embed
+---
+
 # Nextcloud Embed Plugin
 
 The Nextcloud Embed adds a **"Chat with iHub"** action to the Nextcloud Files
@@ -63,6 +70,7 @@ installations, use the one for the server this plugin runs on.
    `frame-ancestors` Content-Security-Policy header — origins not in the
    list cannot load iHub inside an iframe.
 
+> [!NOTE]
 > **Why two integrations?** The embed integration is the embed gate
 > (CSP + OAuth client). The cloud storage integration is how iHub
 > downloads the user's selected files. They're independent surfaces.
@@ -171,6 +179,7 @@ sudo -u www-data php occ config:app:get ihub_chat ihub_base_url
 sudo -u www-data php occ config:app:get ihub_chat ihub_provider_id
 ```
 
+> [!WARNING]
 > **Use HTTPS in production:** the iHub base URL is loaded inside an iframe
 > from a Nextcloud page that itself runs on HTTPS in any sane production
 > deployment, and the browser blocks mixed content there. The plugin's URL

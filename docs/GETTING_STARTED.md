@@ -1,4 +1,11 @@
-# Getting Started with iHub Apps
+---
+description: "Start iHub for the first time, sign in as admin and connect a first model."
+audience: admin
+type: tutorial
+adminPage: /admin
+---
+
+# Getting Started
 
 iHub Apps runs without a database, without a `.env` file and without manual configuration. Start
 it, open it in the browser and connect a model in the setup wizard.

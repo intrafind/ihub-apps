@@ -1,6 +1,13 @@
+---
+description: "Create API keys that act as yourself, for scripts and tools."
+audience: user
+type: how-to
+---
+
 # Personal API Keys
 
-> **Note:** Personal API keys are user-owned credentials that act as the user who created them.
+> [!NOTE]
+> Personal API keys are user-owned credentials that act as the user who created them.
 > For machine-to-machine service accounts, see the
 > [OAuth Integration Guide](oauth-integration-guide.md). For user login from an external app,
 > see [OAuth Authorization Code Flow](oauth-authorization-code.md).

@@ -1,3 +1,10 @@
+---
+description: "Connect iHub to external systems and give models actions to use them."
+audience: admin
+type: how-to
+adminPage: /admin/integrations
+---
+
 # Integrations
 
 An **integration** connects iHub to an external system and gives the model a set of **actions** (tools) to use it. Integrations are installed from a catalog, configured per installation, and bound to apps. This page covers the installable integrations under **Admin → Integrations**, including the built-in iFinder, iAssistant, web search engines (Brave Search, Staan, Qwant), Jira, Entra ID directory, People directory (LDAP), LDAP browser, iHub and cloud storage (Office 365, Google Drive, Nextcloud) integrations; the MCP servers and A2A agents are installations too (see the [Unified Integrations concept](https://github.com/intrafind/ihub-apps/tree/main/concepts/2026-10-20%20Unified%20Integrations) in the repository).

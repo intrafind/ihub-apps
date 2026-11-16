@@ -1,4 +1,11 @@
-# External Authentication Integration
+---
+description: "Sign users in through a reverse proxy or an external system that passes the user in headers."
+audience: admin
+type: how-to
+adminPage: /admin/auth
+---
+
+# External Authentication
 
 This document explains how to configure and use the External Authentication Integration feature in iHub Apps.
 
