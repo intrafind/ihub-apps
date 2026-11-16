@@ -19,7 +19,7 @@ import {
   integrationInstructionsOf,
   withActionOverrides
 } from './actionGuidance.js';
-import { WEB_SEARCH_ACTION, isWebSearchDefinition } from '../search/webSearchEngines.js';
+import { declaredActivityOfAction } from './actionActivity.js';
 import { recordActionEvent } from './actionUsage.js';
 import {
   registerScopeProvider,
@@ -68,19 +68,10 @@ export function isIntegrationTool(tool) {
   return Boolean(tool && tool._integration);
 }
 
-/**
- * What a generated tool is (`services/tools/toolCategory`): the action's own
- * declaration (the definition's, or the admin's correction), else the engine
- * contract: the `search` action of a web search definition searches the web.
- * Anything else declares nothing and is a plain call.
- * @returns {{activity?: {kind: string, origin?: string, place?: string}}}
- */
+/** The `activity` a tool of this action carries, when it has one. */
 function activityOfAction(definition, action) {
-  if (action.activity) return { activity: action.activity };
-  if (action.name === WEB_SEARCH_ACTION && isWebSearchDefinition(definition.id)) {
-    return { activity: { kind: 'search', origin: 'web' } };
-  }
-  return {};
+  const activity = declaredActivityOfAction(definition, action);
+  return activity ? { activity } : {};
 }
 
 /**

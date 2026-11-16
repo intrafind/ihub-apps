@@ -21,6 +21,8 @@ import { actionReviewState } from '../../utils/actionFingerprint.js';
 import { getProtocolAdapter } from './protocols/index.js';
 import { localized } from './definitions/installedValues.js';
 import { currentActionsOf } from './actionReview.js';
+import { declaredActivityOfAction } from './actionActivity.js';
+import { categoryOf } from '../tools/toolCategory.js';
 import {
   actionOverrideOf,
   integrationInstructionsOf,
@@ -109,6 +111,26 @@ function dataFlowSourceOf(toolDef, instance) {
   if (toolDef._mcp || toolDef._a2a) return 'protocol';
   if (toolDef.dataFlow) return 'definition';
   return 'default';
+}
+
+/**
+ * The `activity` block of an action detail.
+ * @param {Object} toolDef - from `toolDefinitionOf`
+ * @param {Object} definition
+ * @param {Object} action - a `discoverActions` result
+ * @param {Object} override - the installation's override of the action
+ */
+function activityOf(toolDef, definition, action, override) {
+  const declared = declaredActivityOfAction(definition, action);
+  const own = override?.activity || null;
+  const { kind, origin } = categoryOf({ ...toolDef, activity: own || declared || undefined });
+  return {
+    kind,
+    ...(origin ? { origin } : {}),
+    source: own ? 'admin' : declared ? 'definition' : 'default',
+    declared,
+    override: own
+  };
 }
 
 /** An app's name in one language. */
@@ -362,6 +384,13 @@ export async function describeAction(resolved, actionName, options = {}) {
         dataFlow: override.dataFlow || null
       }
     },
+    /**
+     * What the chat shows for the action (`services/tools/toolCategory`): the
+     * effective row and origin, where they come from (`admin` override,
+     * `definition` declaration, else the `default` plain call), the declared
+     * value and the admin's override.
+     */
+    activity: activityOf(toolDef, resolved.definition, found.action, override),
     approval: {
       /** The mode a chat resolves for this action without an app override. */
       mode: policy.approval,

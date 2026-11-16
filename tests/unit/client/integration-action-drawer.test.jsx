@@ -120,6 +120,13 @@ function detailOf(overrides = {}) {
       dataFlowSource: 'definition',
       override: { sideEffect: null, dataFlow: null }
     },
+    activity: {
+      kind: 'tool',
+      origin: 'integration',
+      source: 'default',
+      declared: null,
+      override: null
+    },
     approval: {
       mode: 'writes',
       source: 'installation',
@@ -428,6 +435,61 @@ describe('IntegrationActionDrawer', () => {
       expect(mockApi.setInstalledIntegrationApproval).toHaveBeenCalledWith('jira', {
         default: 'writes',
         actions: { addComment: 'always' }
+      })
+    );
+  });
+
+  it('shows what the chat draws for the action and where that comes from', async () => {
+    mockApi.fetchIntegrationAction.mockResolvedValue(detailOf());
+    renderDrawer();
+    const section = await screen.findByTestId('action-activity');
+    expect(within(section).getByText('Plain call · Connected system')).toBeInTheDocument();
+    expect(within(section).getByText(/from default/)).toBeInTheDocument();
+    // Not an override yet: nothing to reset.
+    expect(within(section).queryByRole('button', { name: 'Reset to default' })).toBeNull();
+  });
+
+  it('saves the kind and the origin the chat shows, and resets to what was declared', async () => {
+    mockApi.fetchIntegrationAction.mockResolvedValue(detailOf());
+    mockApi.saveIntegrationActionOverride.mockResolvedValue({
+      detail: detailOf({
+        activity: {
+          kind: 'search',
+          origin: 'web',
+          source: 'admin',
+          declared: null,
+          override: { kind: 'search', origin: 'web' }
+        }
+      })
+    });
+    renderDrawer();
+    await screen.findByTestId('action-activity');
+
+    // The kind keeps the origin that applies now.
+    fireEvent.change(screen.getByLabelText('What the chat shows'), { target: { value: 'search' } });
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationActionOverride).toHaveBeenCalledWith('jira', 'addComment', {
+        activity: { kind: 'search', origin: 'integration' }
+      })
+    );
+
+    // The save came back as an override: the form shows it and offers the reset.
+    const section = screen.getByTestId('action-activity');
+    await within(section).findByText('Search · Web');
+    expect(within(section).getByText(/from admin override/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Where it looks'), { target: { value: 'documents' } });
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationActionOverride).toHaveBeenLastCalledWith('jira', 'addComment', {
+        activity: { kind: 'search', origin: 'documents' }
+      })
+    );
+
+    const reset = within(section).getByRole('button', { name: 'Reset to default' });
+    await waitFor(() => expect(reset).toBeEnabled());
+    fireEvent.click(reset);
+    await waitFor(() =>
+      expect(mockApi.saveIntegrationActionOverride).toHaveBeenLastCalledWith('jira', 'addComment', {
+        activity: null
       })
     );
   });

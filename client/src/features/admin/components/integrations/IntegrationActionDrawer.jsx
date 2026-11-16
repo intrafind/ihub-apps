@@ -9,6 +9,7 @@ import Badge from '../../../../shared/components/Badge';
 import Icon from '../../../../shared/components/Icon';
 import LoadingSpinner from '../../../../shared/components/LoadingSpinner';
 import { DATA_FLOWS, SIDE_EFFECTS } from '../../../../../../shared/toolApproval.js';
+import { ACTIVITY_KINDS, ACTIVITY_ORIGINS } from '../../../../../../shared/runEvents.js';
 import {
   fetchIntegrationAction,
   markInstalledIntegrationActionsReviewed,
@@ -272,8 +273,8 @@ function ParameterTable({ schema }) {
 }
 
 /**
- * A select for an admin override of a side effect or data flow; the empty
- * option keeps what the vendor declared.
+ * A select for an admin override (side effect, data flow, what the chat
+ * shows); the empty option, when there is one, keeps what the vendor declared.
  */
 function OverrideSelect({
   label,
@@ -300,7 +301,7 @@ function OverrideSelect({
         disabled={disabled}
         onChange={e => onChange(e.target.value || null)}
       >
-        <option value="">{inheritLabel}</option>
+        {inheritLabel && <option value="">{inheritLabel}</option>}
         {options.map(option => (
           <option key={option} value={option}>
             {optionLabel(option)}
@@ -423,6 +424,20 @@ function IntegrationActionDrawer({
 
   const effectLabel = effect => t(`admin.integrationCatalog.sideEffect.${effect}`, effect);
   const flowLabel = flow => t(`admin.integrations.actionDetail.dataFlow.${flow}`, flow);
+  const activityKindLabel = kind =>
+    t(`admin.integrations.actionDetail.activity.kind.${kind}`, kind);
+  const activityOriginLabel = origin =>
+    t(`admin.integrations.actionDetail.activity.origin.${origin}`, origin);
+  // What the chat shows is one declaration: a change of the kind or of the
+  // origin saves both, the other one as it applies now.
+  const saveActivity = patch =>
+    saveOverride({
+      activity: {
+        kind: detail.activity.kind,
+        origin: detail.activity.origin || 'integration',
+        ...patch
+      }
+    });
 
   const title = detail
     ? `${detail.installation.label} › ${detail.action.title}`
@@ -687,6 +702,83 @@ function IntegrationActionDrawer({
               </div>
             )}
           </section>
+
+          {detail.activity && (
+            <section
+              className={SECTION_CLASS}
+              aria-labelledby="action-activity-title"
+              data-testid="action-activity"
+            >
+              <h3 id="action-activity-title" className={SECTION_TITLE_CLASS}>
+                {t('admin.integrations.actionDetail.activity.title', 'In the chat')}
+              </h3>
+              <p className={SECTION_LEAD_CLASS}>
+                {t(
+                  'admin.integrations.actionDetail.activity.lead',
+                  'How the chat words a call to this action: a search, the opening of a page or document, or a plain tool call, and where it looked. Correct it when a tool from an MCP server or a custom integration is mislabelled, for example a people search shown as a web search.'
+                )}
+              </p>
+              <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm dark:border-gray-700 dark:bg-gray-800">
+                <dt className="font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.integrations.actionDetail.activity.shown', 'Shown as')}
+                </dt>
+                <dd className="min-w-0 break-words text-gray-800 dark:text-gray-200">
+                  <span>
+                    {activityKindLabel(detail.activity.kind)} ·{' '}
+                    {activityOriginLabel(detail.activity.origin || 'integration')}
+                  </span>{' '}
+                  ·{' '}
+                  <span>
+                    {t('admin.integrations.actionDetail.from', 'from {{source}}', {
+                      source: sourceLabel(t, detail.activity.source)
+                    })}
+                  </span>
+                </dd>
+              </dl>
+              <div className="mt-4 space-y-4">
+                <OverrideSelect
+                  label={t(
+                    'admin.integrations.actionDetail.activity.kindLabel',
+                    'What the chat shows'
+                  )}
+                  help={t(
+                    'admin.integrations.actionDetail.activity.kindHelp',
+                    'A search lists its query and what it found, a read shows the page or document it opened, a plain call shows only that the tool ran.'
+                  )}
+                  value={detail.activity.kind}
+                  options={ACTIVITY_KINDS}
+                  optionLabel={activityKindLabel}
+                  disabled={busy}
+                  onChange={value => saveActivity({ kind: value })}
+                />
+                <OverrideSelect
+                  label={t(
+                    'admin.integrations.actionDetail.activity.originLabel',
+                    'Where it looks'
+                  )}
+                  help={t(
+                    'admin.integrations.actionDetail.activity.originHelp',
+                    'The place the answer’s footer names. Only a web search is shown as a search of the web, so leave a directory or ticket system as a connected system.'
+                  )}
+                  value={detail.activity.origin || 'integration'}
+                  options={ACTIVITY_ORIGINS}
+                  optionLabel={activityOriginLabel}
+                  disabled={busy}
+                  onChange={value => saveActivity({ origin: value })}
+                />
+              </div>
+              {detail.activity.override && (
+                <button
+                  type="button"
+                  className={`mt-3 ${TEXT_BUTTON_CLASS}`}
+                  onClick={() => saveOverride({ activity: null })}
+                  disabled={busy}
+                >
+                  {t('admin.integrations.actionDetail.reset', 'Reset to default')}
+                </button>
+              )}
+            </section>
+          )}
 
           <section className={SECTION_CLASS} aria-labelledby="action-use-title">
             <h3 id="action-use-title" className={SECTION_TITLE_CLASS}>

@@ -71,6 +71,9 @@ export const ACTIVITY_ORIGINS = Object.freeze([
   'integration'
 ]);
 
+/** The rows a tool call can make in the chat (`tool/started.activityKind`). */
+export const ACTIVITY_KINDS = Object.freeze(['search', 'fetch', 'tool']);
+
 /** Who brought a skill into a turn (`skill.activation` `activatedBy`), strongest first. */
 export const SKILL_ACTIVATORS = Object.freeze(['user', 'app', 'model', 'chat']);
 
