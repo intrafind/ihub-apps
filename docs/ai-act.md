@@ -124,7 +124,7 @@ that people were told, not a legal opinion: the wording is yours.
   once per browser session; nothing is stored for a dismissal.
 - **Upgrade.** The feature is on by default and enforced, so after the upgrade every user and anonymous visitor
   confirms once, and so does every Outlook, extension and Nextcloud user at their next message. Set `aiAcknowledgement.enabled` to `false` first to roll out gradually.
-- **The legacy disclaimer.** The first-visit popup from **UI → disclaimer** is a separate setting and is shown
+- **The legacy disclaimer.** The first-visit popup from **Customization → Disclaimer** (`ui.json → disclaimer`) is a separate setting and is shown
   first; the confirmation dialog waits until it is closed.
 
 ## Switching the features off

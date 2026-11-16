@@ -56,11 +56,7 @@ function FooterCustomization({ config, onUpdate, t }) {
   };
 
   return (
-    <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
-        {t('admin.ui.footer.title', 'Footer Configuration')}
-      </h3>
-
+    <div>
       <div className="space-y-6">
         {/* Footer Enabled */}
         <div>

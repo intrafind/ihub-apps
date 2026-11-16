@@ -122,9 +122,9 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
+      <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
         {t('admin.ui.startPage.title', 'Start Page Configuration')}
-      </h3>
+      </h2>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
         {t(
           'admin.ui.startPage.description',

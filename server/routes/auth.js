@@ -26,6 +26,7 @@ import { appendQueryParams } from '../utils/appendQueryParams.js';
 import { buildPublicBaseUrl } from '../utils/publicBaseUrl.js';
 import { clearOidcLogoutHint, readOidcLogoutHint } from '../utils/oidcLogoutHint.js';
 import { LoginLockedError } from '../utils/loginLockout.js';
+import { pickRequestLanguage, resolveUiText } from '../utils/uiTextRefs.js';
 
 /**
  * Sanitize and validate authentication input
@@ -745,9 +746,8 @@ export default function registerAuthRoutes(app) {
       // UI hints for the pre-auth gate (no sensitive data)
       gateUI: (() => {
         const uiConfig = configCache.getUI()?.data || {};
-        const lang = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
-        const title = uiConfig.title || {};
-        const appName = title[lang] || title.en || 'iHub Apps';
+        // The title is usually `$t(product.name)`: resolved in the reader's language.
+        const appName = resolveUiText(uiConfig.title, pickRequestLanguage(req), 'iHub Apps');
         const logoUrl = uiConfig.header?.logo?.url || null;
         const headerColor = uiConfig.header?.defaultColor || null;
         return { appName, logoUrl, primaryColor: headerColor };

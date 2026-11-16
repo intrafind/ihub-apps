@@ -16,19 +16,6 @@ function HeaderCustomization({ config, onUpdate, t }) {
     onUpdate({ defaultColor: color });
   };
 
-  const handleLogoUrlChange = url => {
-    onUpdate({
-      logo: {
-        ...config.logo,
-        url
-      }
-    });
-  };
-
-  const handleFaviconChange = favicon => {
-    onUpdate({ favicon });
-  };
-
   const addNavigationLink = () => {
     const newLink = {
       text: { en: 'New Link' },
@@ -74,11 +61,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
   };
 
   return (
-    <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
-        {t('admin.ui.header.title', 'Header Configuration')}
-      </h3>
-
+    <div>
       <div className="space-y-6">
         {/* Header Color */}
         <div>
@@ -135,120 +118,6 @@ function HeaderCustomization({ config, onUpdate, t }) {
             )}
           </p>
         </div>
-
-        {/* Logo Configuration */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('admin.ui.header.logoUrl', 'Logo URL')}
-          </label>
-          <input
-            type="text"
-            value={config.logo?.url || ''}
-            onChange={e => handleLogoUrlChange(e.target.value)}
-            placeholder="/header_company_logo.svg"
-            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-          />
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t(
-              'admin.ui.header.logoUrlHint',
-              'Enter the path to your logo file (e.g., /header_company_logo.svg)'
-            )}
-          </p>
-        </div>
-
-        {/* Favicon Configuration */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {t('admin.ui.header.favicon', 'Favicon URL')}
-          </label>
-          <input
-            type="text"
-            value={config.favicon || ''}
-            onChange={e => handleFaviconChange(e.target.value)}
-            placeholder="/favicon.ico"
-            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-          />
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t(
-              'admin.ui.header.faviconHint',
-              'Path to the browser tab icon (e.g., /favicon.ico or an uploaded asset). Leave empty to use the default.'
-            )}
-          </p>
-        </div>
-
-        {/* Logo Alt Text */}
-        <DynamicLanguageEditor
-          label={t('admin.ui.header.logoAlt', 'Logo Alt Text')}
-          value={config.logo?.alt || {}}
-          onChange={alt =>
-            onUpdate({
-              logo: {
-                ...config.logo,
-                alt
-              }
-            })
-          }
-          type="text"
-          placeholder={{
-            en: 'Logo alt text (en)',
-            de: 'Logo alt text (de)',
-            es: 'Logo alt text (es)',
-            fr: 'Logo alt text (fr)'
-          }}
-        />
-
-        {/* Site Title — light + bold parts concatenated without space */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('admin.ui.header.siteTitle', 'Site Title')}
-          </label>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-            {t(
-              'admin.ui.header.siteTitleHint',
-              'Two parts rendered side-by-side: the first in light weight, the second in bold. Concatenated without a space — include leading spaces in the bold part if needed.'
-            )}
-          </p>
-          <div className="space-y-3">
-            <DynamicLanguageEditor
-              label={t('admin.ui.header.titleLight', 'Light part (e.g. "iHub")')}
-              value={config.titleLight || {}}
-              onChange={titleLight => onUpdate({ titleLight })}
-              type="text"
-              placeholder={{
-                en: 'e.g. iHub',
-                de: 'z.B. iHub',
-                es: 'p.ej. iHub',
-                fr: 'ex. iHub'
-              }}
-            />
-            <DynamicLanguageEditor
-              label={t('admin.ui.header.titleBold', 'Bold part (e.g. " Apps")')}
-              value={config.titleBold || {}}
-              onChange={titleBold => onUpdate({ titleBold })}
-              type="text"
-              placeholder={{
-                en: 'e.g.  Apps',
-                de: 'z.B.  Apps',
-                es: 'p.ej.  Apps',
-                fr: 'ex.  Apps'
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Tagline */}
-        <DynamicLanguageEditor
-          label={t('admin.ui.header.tagline', 'Tagline')}
-          value={config.tagline || {}}
-          onChange={tagline => onUpdate({ tagline })}
-          type="text"
-          placeholder={{
-            en: 'e.g. by YourCompany',
-            de: 'z.B. von IhresFirma',
-            es: 'p.ej. por TuEmpresa',
-            fr: 'ex. par VotreEntreprise'
-          }}
-        />
 
         {/* Navigation Links */}
         <div>

@@ -9,8 +9,8 @@ import { openExternalUrl } from '../../utils/externalNavigation';
 import AiAcknowledgementContext from './aiAcknowledgementContextValue';
 import { useOptionalAuth } from './authContextValue';
 import { useUIConfig } from './UIConfigContext';
+import { isDisclaimerAcknowledged } from '../../utils/disclaimerAcknowledgement';
 
-const DISCLAIMER_STORAGE_KEY = 'ihub-disclaimer-acknowledged';
 const DISCLAIMER_CLOSED_EVENT = 'ihub-disclaimer-closed';
 const DISMISSED_KEY = 'ihub-ai-ack-dismissed';
 const CHANNEL_NAME = 'ihub-ai-ack';
@@ -33,11 +33,7 @@ function writeSession(key, value) {
 
 function disclaimerPending(uiConfig) {
   if (!uiConfig?.disclaimer || uiConfig.disclaimer.enabled === false) return false;
-  try {
-    return !window.localStorage.getItem(DISCLAIMER_STORAGE_KEY);
-  } catch {
-    return false;
-  }
+  return !isDisclaimerAcknowledged(uiConfig.disclaimer);
 }
 
 /** Whether the viewer has to see the dialog for this state of `GET /me`. */

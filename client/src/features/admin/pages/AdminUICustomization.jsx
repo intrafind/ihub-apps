@@ -1,55 +1,130 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
+import BrandingCustomization from '../components/BrandingCustomization';
 import HeaderCustomization from '../components/HeaderCustomization';
 import FooterCustomization from '../components/FooterCustomization';
+import AppsListCustomization from '../components/AppsListCustomization';
 import AssetManager from '../components/AssetManager';
 import StyleEditor from '../components/StyleEditor';
-import ContentEditor from '../components/ContentEditor';
-import PwaCustomization from '../components/PwaCustomization';
 import StartPageCustomization from '../components/StartPageCustomization';
 import ErrorPagesCustomization from '../components/ErrorPagesCustomization';
+import EuAiActCard from '../components/euAiAct/EuAiActCard';
+import AdminTabs from '../components/AdminTabs';
+import AdminSaveBar from '../components/AdminSaveBar';
+import AdminLoadError from '../components/AdminLoadError';
+import { CALLOUT_CLASS, SECONDARY_BUTTON_CLASS } from '../components/formStyles';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
-import AdminLoadError from '../components/AdminLoadError';
+import { PRODUCT_NAME_REF } from '../../../../../shared/translationRefs.js';
+
+/** What the server requires of every saved configuration (server/routes/admin/ui.js). */
+const REQUIRED_SECTIONS = ['title', 'header', 'footer'];
+
+const pick = (object, keys) => Object.fromEntries(keys.map(key => [key, object?.[key]]));
+const without = (object, keys) =>
+  Object.fromEntries(Object.entries(object || {}).filter(([key]) => !keys.includes(key)));
+
+/**
+ * The part of the configuration each tab edits. A tab with unsaved changes shows
+ * a dot; a field has exactly one tab.
+ */
+const TAB_SLICES = {
+  branding: config => [config.title, without(config.header, ['links', 'defaultColor']), config.pwa],
+  navigation: config => [pick(config.header, ['links', 'defaultColor']), config.footer],
+  startPage: config => [config.startPage, config.appsList, config.icons],
+  styles: config => [config.theme, config.customStyles],
+  errorPages: config => [config.errorPages],
+  assets: () => []
+};
+
+/**
+ * The configuration as it is stored: a site title or PWA name left empty follows
+ * the product name instead of saving as nothing, so a save never blanks them.
+ */
+export function normalizeUIConfig(config) {
+  const next = { ...config };
+  if (!next.title || Object.values(next.title).every(text => !String(text || '').trim())) {
+    next.title = { en: PRODUCT_NAME_REF };
+  }
+  if (next.pwa && !String(next.pwa.name || '').trim()) {
+    next.pwa = { ...next.pwa, name: PRODUCT_NAME_REF };
+  }
+  return next;
+}
+
+const TAB_ICONS = {
+  branding: 'sparkles',
+  navigation: 'menu',
+  startPage: 'home',
+  styles: 'sun',
+  errorPages: 'exclamationTriangle',
+  assets: 'photograph'
+};
 
 function AdminUICustomization() {
   const { t } = useTranslation();
-  const { uiConfig, refreshUIConfig } = useUIConfig();
+  const { refreshUIConfig } = useUIConfig();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [savedConfig, setSavedConfig] = useState(null);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
-  const [activeTab, setActiveTab] = useState('header');
+  const { isDirty, blocker, markSaved } = useUnsavedChanges(savedConfig, config);
 
-  // Load UI configuration on mount
+  // The tab is part of the address, so a reload or a shared link keeps it.
+  // Unknown values (the removed `content`, `pwa` tabs) land on the first tab.
+  const requestedTab = searchParams.get('tab');
+  const activeTab = Object.hasOwn(TAB_SLICES, requestedTab) ? requestedTab : 'branding';
+  const setActiveTab = useCallback(
+    id => setSearchParams(id === 'branding' ? {} : { tab: id }, { replace: true }),
+    [setSearchParams]
+  );
+
+  // Load the configuration once. A save replaces the form with what was saved;
+  // reloading after `refreshUIConfig()` would overwrite edits made meanwhile.
   useEffect(() => {
+    let cancelled = false;
     const loadConfig = async () => {
       try {
-        setLoading(true);
-        setError(null);
-
         const response = await makeAdminApiCall('/admin/ui/config');
+        if (cancelled) return;
+        setSavedConfig(response.data);
         setConfig(response.data);
       } catch (err) {
         console.error('Failed to load UI config:', err);
-        setError(err.message || 'Failed to load configuration');
-        // Fallback to the cached UI config if available
-        if (uiConfig) {
-          setConfig(uiConfig);
-        }
+        if (!cancelled) setError(err.message || 'Failed to load configuration');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
-
     void loadConfig();
-  }, [uiConfig]);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleSave = async () => {
+    const toSave = normalizeUIConfig(config);
+    const missing = REQUIRED_SECTIONS.find(section => !Object.hasOwn(toSave, section));
+    if (missing) {
+      // Never send a configuration the server must reject: the edit that lost a
+      // section is a bug of the page, not something to report as "400".
+      setError(
+        t('admin.ui.missingSection', 'The configuration lacks the section "{{section}}".', {
+          section: missing
+        })
+      );
+      return;
+    }
     try {
       setSaving(true);
       setError(null);
@@ -57,17 +132,16 @@ function AdminUICustomization() {
 
       await makeAdminApiCall('/admin/ui/config', {
         method: 'POST',
-        body: { config },
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        body: { config: toSave },
+        headers: { 'Content-Type': 'application/json' }
       });
-      setSuccessMessage('UI configuration saved successfully');
-      // Refresh the UI config context to apply changes immediately
+      markSaved();
+      setSavedConfig(toSave);
+      setConfig(toSave);
+      setSuccessMessage(t('admin.ui.saved', 'UI configuration saved successfully'));
+      // Apply the change in this browser right away.
       await refreshUIConfig();
-
-      // Clear success message after 3 seconds
-      setTimeout(() => setSuccessMessage(''), 3000);
+      setTimeout(() => setSuccessMessage(''), 4000);
     } catch (err) {
       console.error('Failed to save UI config:', err);
       setError(err.message || 'Failed to save configuration');
@@ -76,12 +150,19 @@ function AdminUICustomization() {
     }
   };
 
+  const handleDiscard = () => {
+    setConfig(savedConfig);
+    setError(null);
+  };
+
   const handleBackup = async () => {
     try {
-      const response = await makeAdminApiCall('/admin/ui/backup', {
-        method: 'POST'
-      });
-      setSuccessMessage(`Configuration backed up to: ${response.data?.backupPath}`);
+      const response = await makeAdminApiCall('/admin/ui/backup', { method: 'POST' });
+      setSuccessMessage(
+        t('admin.ui.backedUp', 'Configuration backed up to: {{path}}', {
+          path: response.data?.backupPath
+        })
+      );
       setTimeout(() => setSuccessMessage(''), 5000);
     } catch (err) {
       console.error('Failed to backup config:', err);
@@ -89,26 +170,37 @@ function AdminUICustomization() {
     }
   };
 
-  const updateConfig = (section, updates) => {
-    setConfig(prevConfig => ({
-      ...prevConfig,
-      [section]: {
-        ...prevConfig[section],
-        ...updates
-      }
-    }));
-  };
+  // Every editor changes the configuration through one of these two, so no edit
+  // can replace the whole configuration by accident.
+  const updateConfig = useCallback((section, updates) => {
+    setConfig(prev => ({ ...prev, [section]: { ...prev?.[section], ...updates } }));
+  }, []);
+  const setConfigValue = useCallback((key, value) => {
+    setConfig(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const dirtyTabs = useMemo(() => {
+    if (!savedConfig || !config) return {};
+    return Object.fromEntries(
+      Object.entries(TAB_SLICES).map(([id, slice]) => [
+        id,
+        JSON.stringify(slice(config)) !== JSON.stringify(slice(savedConfig))
+      ])
+    );
+  }, [savedConfig, config]);
 
   const tabs = [
-    { id: 'header', label: t('admin.ui.tabs.header', 'Header'), icon: '🎨' },
-    { id: 'startPage', label: t('admin.ui.tabs.startPage', 'Start Page'), icon: '🏠' },
-    { id: 'footer', label: t('admin.ui.tabs.footer', 'Footer'), icon: '📄' },
-    { id: 'assets', label: t('admin.ui.tabs.assets', 'Assets'), icon: '🖼️' },
-    { id: 'styles', label: t('admin.ui.tabs.styles', 'Styles'), icon: '🎯' },
-    { id: 'content', label: t('admin.ui.tabs.content', 'Content'), icon: '📝' },
-    { id: 'errorPages', label: t('admin.ui.tabs.errorPages', 'Error Pages'), icon: '⚠️' },
-    { id: 'pwa', label: t('admin.ui.tabs.pwa', 'PWA'), icon: '📱' }
-  ];
+    { id: 'branding', label: t('admin.ui.tabs.branding', 'Branding') },
+    { id: 'navigation', label: t('admin.ui.tabs.navigation', 'Navigation') },
+    { id: 'startPage', label: t('admin.ui.tabs.startAndApps', 'Start & apps page') },
+    { id: 'styles', label: t('admin.ui.tabs.themeAndStyles', 'Theme & styles') },
+    { id: 'errorPages', label: t('admin.ui.tabs.errorPages', 'Error Pages') },
+    { id: 'assets', label: t('admin.ui.tabs.assets', 'Assets') }
+  ].map(tab => ({
+    ...tab,
+    dirty: Boolean(dirtyTabs[tab.id]),
+    icon: <Icon name={TAB_ICONS[tab.id]} size="sm" aria-hidden="true" />
+  }));
 
   if (loading) {
     return (
@@ -127,7 +219,7 @@ function AdminUICustomization() {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 dark:text-red-400">
+          <p className="text-red-600 dark:text-red-400" role="alert">
             {error || t('admin.ui.error', 'Failed to load configuration')}
           </p>
         </div>
@@ -135,153 +227,161 @@ function AdminUICustomization() {
     );
   }
 
+  const legacyCard = children => (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xs border border-gray-200 dark:border-gray-700">
+      {children}
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-xs border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="sm:flex sm:items-center sm:justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                 {t('admin.ui.title', 'UI Customization')}
               </h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.ui.description',
                   'Customize the appearance and branding of your iHub Apps'
                 )}
               </p>
             </div>
-            <div className="mt-4 sm:mt-0 sm:flex sm:space-x-3">
-              <button
-                onClick={handleBackup}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-xs text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-              >
+            <div className="mt-4 sm:mt-0">
+              <button type="button" onClick={handleBackup} className={SECONDARY_BUTTON_CLASS}>
                 {t('admin.ui.backup', 'Backup Config')}
               </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white ${
-                  saving ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
-                } focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
-              >
-                {saving ? t('admin.ui.saving', 'Saving...') : t('admin.ui.save', 'Save Changes')}
-              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Status Messages */}
-      {error && (
-        <AdminLoadError
-          message={error}
-          framed={false}
-          className="mx-4 mt-4"
-          action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
-        />
-      )}
-
-      {successMessage && (
-        <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4 mx-4 mt-4">
-          <div className="flex">
-            <div className="shrink-0">
-              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-green-800 dark:text-green-200">{successMessage}</p>
-            </div>
-            <div className="ml-auto pl-3">
-              <button
-                onClick={() => setSuccessMessage('')}
-                className="inline-flex text-green-400 hover:text-green-600 dark:hover:text-green-300"
-              >
-                <span className="sr-only">Dismiss</span>
-                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </button>
-            </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {error && (
+          <div role="alert">
+            <AdminLoadError
+              message={error}
+              framed={false}
+              action={{ label: t('common.dismiss', 'Dismiss'), onClick: () => setError(null) }}
+            />
           </div>
-        </div>
-      )}
+        )}
+        {successMessage && (
+          <p role="status" className={CALLOUT_CLASS.success}>
+            {successMessage}
+          </p>
+        )}
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tab Navigation */}
-        <div className="border-b border-gray-200 dark:border-gray-700 mb-8">
-          <nav className="flex space-x-8" aria-label="Tabs">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                  activeTab === tab.id
-                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                }`}
-              >
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
-          </nav>
-        </div>
+        <AdminTabs
+          tabs={tabs}
+          activeId={activeTab}
+          onChange={setActiveTab}
+          ariaLabel={t('admin.ui.tabs.label', 'UI customization sections')}
+        />
 
-        {/* Tab Content */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
-          {activeTab === 'header' && (
-            <HeaderCustomization
-              config={config.header || {}}
-              onUpdate={updates => updateConfig('header', updates)}
+        <div
+          role="tabpanel"
+          id={`tabpanel-${activeTab}`}
+          aria-labelledby={`tab-${activeTab}`}
+          className="space-y-6"
+        >
+          {activeTab === 'branding' && (
+            <BrandingCustomization
+              config={config}
+              onUpdate={updateConfig}
+              onSet={setConfigValue}
               t={t}
             />
+          )}
+          {activeTab === 'navigation' && (
+            <>
+              <EuAiActCard
+                id="header-navigation"
+                title={t('admin.ui.header.title', 'Header')}
+                description={t(
+                  'admin.ui.header.description',
+                  'The navigation links and the color of the classic top header.'
+                )}
+              >
+                <HeaderCustomization
+                  config={config.header || {}}
+                  onUpdate={updates => updateConfig('header', updates)}
+                  t={t}
+                />
+              </EuAiActCard>
+              <EuAiActCard
+                id="footer-navigation"
+                title={t('admin.ui.footer.title', 'Footer')}
+                description={t('admin.ui.footer.description', 'The footer text and its links.')}
+              >
+                <FooterCustomization
+                  config={config.footer || {}}
+                  onUpdate={updates => updateConfig('footer', updates)}
+                  t={t}
+                />
+              </EuAiActCard>
+            </>
           )}
           {activeTab === 'startPage' && (
-            <StartPageCustomization
-              config={config.startPage || {}}
-              pages={config.pages || {}}
-              onUpdate={updates => updateConfig('startPage', updates)}
-              t={t}
-            />
+            <>
+              {legacyCard(
+                <StartPageCustomization
+                  config={config.startPage || {}}
+                  pages={config.pages || {}}
+                  onUpdate={updates => updateConfig('startPage', updates)}
+                  t={t}
+                />
+              )}
+              <EuAiActCard
+                id="apps-page"
+                title={t('admin.ui.content.appsListPage', 'Apps List Page')}
+                description={t(
+                  'admin.ui.content.pagesDescription',
+                  'Title, subtitle and logo of the apps browser (/apps), and whether it offers search and categories.'
+                )}
+              >
+                <AppsListCustomization config={config} onUpdate={updateConfig} t={t} />
+              </EuAiActCard>
+            </>
           )}
-          {activeTab === 'footer' && (
-            <FooterCustomization
-              config={config.footer || {}}
-              onUpdate={updates => updateConfig('footer', updates)}
-              t={t}
-            />
-          )}
-          {activeTab === 'assets' && <AssetManager t={t} />}
-          {activeTab === 'styles' && <StyleEditor config={config} onUpdate={setConfig} t={t} />}
-          {activeTab === 'content' && <ContentEditor config={config} onUpdate={setConfig} t={t} />}
-          {activeTab === 'errorPages' && (
-            <ErrorPagesCustomization
-              config={config.errorPages || {}}
-              onUpdate={updates => updateConfig('errorPages', updates)}
-              t={t}
-            />
-          )}
-          {activeTab === 'pwa' && (
-            <PwaCustomization
-              config={config.pwa || {}}
-              onUpdate={updates => updateConfig('pwa', updates)}
-              t={t}
-            />
+          {activeTab === 'styles' &&
+            legacyCard(<StyleEditor config={config} onUpdate={setConfig} t={t} />)}
+          {activeTab === 'errorPages' &&
+            legacyCard(
+              <ErrorPagesCustomization
+                config={config.errorPages || {}}
+                onUpdate={updates => updateConfig('errorPages', updates)}
+                t={t}
+              />
+            )}
+          {activeTab === 'assets' && (
+            <>
+              <p className={CALLOUT_CLASS.info}>
+                {t(
+                  'admin.ui.assets.savedNotice',
+                  'Uploads and deletions here take effect immediately; they are not part of the unsaved changes. Use the path of an uploaded file in the other tabs.'
+                )}
+              </p>
+              {legacyCard(<AssetManager t={t} />)}
+            </>
           )}
         </div>
       </div>
+
+      <AdminSaveBar dirty={isDirty} saving={saving} onSave={handleSave} onDiscard={handleDiscard} />
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title={t('admin.ui.unsaved.title', 'Unsaved changes')}
+        message={t('admin.ui.unsaved.message', 'You have unsaved changes. Leave anyway?')}
+        confirmLabel={t('admin.ui.unsaved.leave', 'Leave')}
+        denyLabel={t('admin.ui.unsaved.stay', 'Stay')}
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

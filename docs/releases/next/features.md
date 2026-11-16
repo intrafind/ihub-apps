@@ -2202,3 +2202,33 @@ whether projects, the web or connected systems carry the load and where searches
 
 The labels come from small fixed sets, so the metrics add a handful of series, never one per chat or
 tool. See [Telemetry](../../telemetry.md).
+
+## A Renamed Product Shows Up Everywhere, Including the Installed App
+
+The site title (browser tab, chat exports, sign-in screen) and the name of the installed app (PWA)
+follow the product name now. A new installation refers to the translation key `product.name`, so you
+rename the product once under **Admin → Localization** and the browser tab, the exports, the sign-in
+screen and the PWA manifest follow, in every language. Existing installations keep the shipped
+"iHub Apps" as a reference after the upgrade (a migration changes only the untouched shipped values);
+a title or app name you wrote yourself is left as it is.
+
+- **Admin → UI Customization → Branding → Product name** offers "Use the product name (default)" or your
+  own text, and shows what the name resolves to.
+- Text that resolves to nothing falls back to "iHub Apps", never to the translation key.
+- An already installed PWA keeps its name until it is installed again.
+
+See [Localization](../../localization.md#the-product-name-and-tagline).
+
+## UI Customization Is Reorganized, and the Disclaimer Has Its Own Page
+
+**Admin → UI Customization** had grown to eight tabs that mixed the same concerns. It now has six, and
+every setting has one home: **Branding** (product name, tagline, logo, favicon and the PWA settings),
+**Navigation** (header links and color, footer), **Start & apps page** (including the apps list page that
+was under "Content"), **Theme & styles**, **Error pages** and **Assets**. A dot on a tab marks unsaved
+changes, one Save bar saves everything, and leaving the page with unsaved changes asks first.
+
+The first-visit disclaimer moved out to **Admin → Customization → Disclaimer**, with a preview of the
+popup and of the hint under the chat input, the hint text and link (previously only editable in
+`ui.json`) and a **Show again to everyone** button. The popup now remembers the version a visitor
+confirmed, so raising the version shows it again, as the setting always promised; visitors who confirmed
+earlier are not asked again until the next change. See [UI Configuration](../../ui.md#disclaimer-configuration).

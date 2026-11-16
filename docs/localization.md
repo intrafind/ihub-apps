@@ -47,7 +47,15 @@ The header tagline ("by IntraFind") is `product.tagline`, and the footer line ("
 Software AG. All rights reserved.") is `footer.legal`, which takes the current year as `{{year}}`.
 The shipped `header.tagline` and `footer.text` in `contents/config/ui.json` point at them as
 `$t(product.tagline)` and `$t(footer.legal)`; text you type into those fields instead, or an empty
-value, takes their place. The client resolves `$t(key)` in these two fields only.
+value, takes their place.
+
+The shipped site title (`title`) and PWA name (`pwa.name`) refer to `product.name` the same way
+(`$t(product.name)`). The client resolves `$t(key)` in the tagline, the footer text, the site title and
+the sidebar's brand fallback. The server resolves it for the PWA manifest (`name`, `short_name`,
+`description` and the `apple-mobile-web-app-title` tag) and for the sign-in screen, in the language of the
+request (`Accept-Language`, then the platform default language, then English), from the built-in texts
+plus your overrides. A text that resolves to nothing falls back to "iHub Apps", never to the key. An
+installed PWA keeps the name it had when it was installed until it is installed again.
 
 Every text the end-user frontend asks for by key exists in the built-in English and German files, so
 it can be overridden. A unit test (`tests/unit/client/translation-keys-exist.test.jsx`) fails when

@@ -2971,7 +2971,8 @@
       "updates": "Updates",
       "advanced": "Erweitert",
       "docs": "Dokumentation",
-      "euAiAct": "EU-KI-Verordnung"
+      "euAiAct": "EU-KI-Verordnung",
+      "disclaimer": "Haftungsausschluss"
     },
     "mcp": {
       "common": {
@@ -4866,7 +4867,15 @@
     },
     "ui": {
       "tabs": {
-        "startPage": "Startseite"
+        "startPage": "Startseite",
+        "branding": "Marke",
+        "navigation": "Navigation",
+        "startAndApps": "Start- & Apps-Seite",
+        "themeAndStyles": "Design & Stile",
+        "errorPages": "Fehlerseiten",
+        "assets": "Dateien",
+        "unsaved": "ungespeicherte Änderungen",
+        "label": "Bereiche der UI-Anpassung"
       },
       "startPage": {
         "title": "Startseiten-Konfiguration",
@@ -4914,7 +4923,61 @@
         "removeFeaturedApp": "{{name}} entfernen"
       },
       "header": {
-        "colorHint": "Verwenden Sie Hex-Farben (#4f46e5) oder RGB-Werte (rgb(79, 70, 229)). Die Farbe gilt für die klassische Kopfzeile (Teams-, Office- und Nextcloud-Einbettungen, ?sidebar=false); das Seitenleisten-Layout verwendet sie nicht."
+        "colorHint": "Verwenden Sie Hex-Farben (#4f46e5) oder RGB-Werte (rgb(79, 70, 229)). Die Farbe gilt für die klassische Kopfzeile (Teams-, Office- und Nextcloud-Einbettungen, ?sidebar=false); das Seitenleisten-Layout verwendet sie nicht.",
+        "title": "Kopfzeile",
+        "description": "Die Navigationslinks und die Farbe der klassischen Kopfzeile."
+      },
+      "saveBar": {
+        "label": "Änderungen speichern",
+        "saving": "Speichern …",
+        "unsaved": "Es gibt ungespeicherte Änderungen",
+        "discard": "Verwerfen"
+      },
+      "unsaved": {
+        "title": "Ungespeicherte Änderungen",
+        "message": "Es gibt ungespeicherte Änderungen. Trotzdem verlassen?",
+        "leave": "Verlassen",
+        "stay": "Bleiben"
+      },
+      "saved": "UI-Konfiguration gespeichert",
+      "backedUp": "Konfiguration gesichert unter: {{path}}",
+      "missingSection": "Der Konfiguration fehlt der Abschnitt „{{section}}“.",
+      "assets": {
+        "savedNotice": "Uploads und Löschungen wirken sofort und gehören nicht zu den ungespeicherten Änderungen. Den Pfad einer hochgeladenen Datei tragen Sie in den anderen Tabs ein."
+      },
+      "footer": {
+        "title": "Fußzeile",
+        "description": "Der Text der Fußzeile und ihre Links."
+      },
+      "content": {
+        "appsListPage": "Apps-Übersicht",
+        "pagesDescription": "Titel, Untertitel und Logo der Apps-Übersicht (/apps) und ob sie Suche und Kategorien anbietet."
+      },
+      "nameField": {
+        "follow": "Produktnamen verwenden (Standard)",
+        "custom": "Eigener Text je Sprache",
+        "customSingle": "Eigener Text",
+        "customLabel": "Text",
+        "resolvesTo": "Ergibt",
+        "noName": "(kein Produktname definiert)",
+        "changeName": "Den Produktnamen ändern Sie einmal für alle Sprachen unter",
+        "emptyFallback": "Ein leerer Text wird beim Speichern durch den Produktnamen ersetzt.",
+        "followAnnounce": "Der Produktname wird verwendet",
+        "customAnnounce": "Ein eigener Text wird verwendet"
+      },
+      "branding": {
+        "nameTitle": "Produktname",
+        "nameDescription": "Wie Ihre Installation heißt: im Browser-Tab, in Exporten, auf der Anmeldeseite und als Name der installierten App.",
+        "siteTitle": "Seitentitel",
+        "siteTitleHint": "Erscheint im Browser-Tab, in Chat-Exporten und auf der Anmeldeseite.",
+        "splitBrand": "Erweitert: Markentext in der Seitenleiste",
+        "splitBrandHint": "Die Seitenleiste zeigt den Namen in zwei Schriftstärken: ein heller und ein fetter Teil, ohne Leerzeichen verbunden (ein Leerzeichen gehört an den Anfang des fetten Teils). Leeren Sie beide Felder, zeigt die Seitenleiste stattdessen den Seitentitel.",
+        "useSiteTitle": "Seitentitel in der Seitenleiste anzeigen",
+        "logoTitle": "Logo und Symbol",
+        "logoDescription": "Laden Sie Bilder im Tab „Dateien“ hoch und tragen Sie hier ihren Pfad ein."
+      },
+      "pwa": {
+        "maxChars60": "(max. 60 Zeichen)"
       }
     },
     "groupSelect": {
@@ -7164,6 +7227,39 @@
         "userPseudonymous": "Hash der Benutzer-ID",
         "userAnonymous": "gesicherter Hash"
       }
+    },
+    "disclaimer": {
+      "loading": "Haftungsausschluss wird geladen …",
+      "title": "Haftungsausschluss",
+      "description": "Der Hinweis, den Besucher bei ihrem ersten Besuch sehen, und der Hinweis unter dem Chat-Eingabefeld.",
+      "saved": "Haftungsausschluss gespeichert",
+      "euAiActNote": "Der KI-Hinweis im leeren Chat und die Bestätigung der KI-Nutzung vor der ersten Nachricht werden auf der Seite",
+      "euAiActNoteEnd": "eingestellt.",
+      "popupTitle": "Willkommens-Popup",
+      "popupDescription": "Wird jedem Besucher einmal vor allem anderen gezeigt. Er bestätigt es mit einer Schaltfläche.",
+      "textHint": "Reiner Text. Das Popup zeigt ihn wie geschrieben; Zeilenumbrüche bleiben nicht erhalten.",
+      "preview": "Vorschau",
+      "previewLanguage": "Sprache",
+      "popupPreview": "Vorschau des Popups",
+      "hintTitle": "Chat-Hinweis",
+      "hintDescription": "Eine Zeile unter dem Chat-Eingabefeld, sobald ein Gespräch begonnen hat. Sie bleibt auch bei ausgeschaltetem Popup.",
+      "hintLabel": "Hinweis",
+      "hintEmpty": "Leer verwendet den eingebauten Text in der Sprache des Besuchers.",
+      "hintPreview": "Vorschau des Hinweises",
+      "link": "Link",
+      "linkHint": "Wird in einem neuen Tab geöffnet, wenn ein Besucher den Hinweis wählt: eine https://-Adresse oder ein Pfad wie /pages/terms. Leer macht den Hinweis zu einfachem Text.",
+      "versionTitle": "Version",
+      "versionDescription": "Besucher, die eine ältere Version bestätigt haben, sehen das Popup erneut.",
+      "showAgain": "Allen erneut anzeigen",
+      "showAgainNote": "Version {{version}} wird beim nächsten Speichern gesichert. Alle sehen das Popup bei ihrem nächsten Besuch erneut.",
+      "never": "nicht gesetzt",
+      "updatedAuto": "(wird automatisch gesetzt, wenn sich Text oder Version ändern)",
+      "relatedTitle": "Verwandte Einstellungen",
+      "relatedDescription": "Diese gehören zu den Pflichten des EU AI Act und werden auf einer eigenen Seite eingestellt.",
+      "relatedNotice": "KI-Hinweis",
+      "relatedNoticeText": "– der Hinweis im leeren Chat und der Wortlaut der Leitplanke",
+      "relatedAck": "KI-Bestätigung",
+      "relatedAckText": "– die Bestätigung vor der ersten Nachricht, beim Benutzer gespeichert"
     }
   },
   "cloudStorage": {

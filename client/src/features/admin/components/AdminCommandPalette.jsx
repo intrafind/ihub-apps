@@ -23,6 +23,7 @@ const ADMIN_PAGES = [
   { label: 'OAuth', href: '/admin/oauth' },
   { label: 'Integrations', href: '/admin/integrations' },
   { label: 'UI Customization', href: '/admin/ui' },
+  { label: 'Disclaimer', href: '/admin/disclaimer' },
   { label: 'Localization', href: '/admin/localization' },
   { label: 'Pages', href: '/admin/pages' },
   { label: 'Document Templates', href: '/admin/document-templates' },

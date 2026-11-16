@@ -12,6 +12,7 @@ import {
   getExportErrorMessage
 } from '../utils/chatExport';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { resolveTranslationRefs } from '../../../utils/translationRefs';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { fetchDocumentTemplateChoices } from '../../../api/endpoints/exports';
@@ -116,9 +117,10 @@ function ExportDialog({
   });
 
   const getAppName = () => {
-    return uiConfig?.title
-      ? getLocalizedContent(uiConfig.title, currentLanguage)
-      : t('product.name', 'iHub Apps');
+    const title = uiConfig?.title
+      ? resolveTranslationRefs(getLocalizedContent(uiConfig.title, currentLanguage), t).trim()
+      : '';
+    return title || t('product.name', 'iHub Apps');
   };
 
   // Helper functions to generate content for copying

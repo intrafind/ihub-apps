@@ -5,10 +5,15 @@ import { createHash } from 'node:crypto';
 import { statSync, readFileSync } from 'node:fs';
 import { getBasePath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
+import { PRODUCT_NAME_REF } from '../../../shared/translationRefs.js';
+import { resolveUiText } from '../../utils/uiTextRefs.js';
+
+/** What the manifest shows when a name resolves to nothing. */
+const FALLBACK_PWA_NAME = 'iHub Apps';
 
 export const DEFAULT_PWA_CONFIG = {
   enabled: false,
-  name: 'iHub Apps',
+  name: PRODUCT_NAME_REF,
   shortName: 'iHub',
   description: 'AI-powered applications platform',
   themeColor: '#003557',
@@ -33,6 +38,27 @@ export function resolvePwaConfig(rawPwaConfig) {
       ...DEFAULT_PWA_CONFIG.icons,
       ...rawPwaConfig?.icons
     }
+  };
+}
+
+/**
+ * Resolve the `$t(key)` references in the user-visible texts of a RESOLVED pwa
+ * config (`name`, `shortName`, `description`) for the language of the request.
+ * The shipped name is `$t(product.name)`, so renaming the product under
+ * Admin → Localization renames the installed app too. An empty result falls back
+ * to the built-in text; the manifest limits (60 / 15 characters) apply to the
+ * resolved value, not to the reference.
+ *
+ * @param {Object} resolvedConfig - Output of resolvePwaConfig
+ * @param {string} [language]
+ */
+export function localizePwaConfig(resolvedConfig, language = 'en') {
+  const name = resolveUiText(resolvedConfig.name, language, FALLBACK_PWA_NAME);
+  return {
+    ...resolvedConfig,
+    name: name.slice(0, 60),
+    shortName: resolveUiText(resolvedConfig.shortName, language, name).slice(0, 15),
+    description: resolveUiText(resolvedConfig.description, language, DEFAULT_PWA_CONFIG.description)
   };
 }
 

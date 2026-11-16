@@ -8,13 +8,16 @@ import {
   buildManifest,
   buildServiceWorkerScript,
   computePwaETag,
+  localizePwaConfig,
   resolvePwaConfig
 } from '../services/pwa/PwaService.js';
 import logger from '../utils/logger.js';
+import { pickRequestLanguage } from '../utils/uiTextRefs.js';
 
 export default function registerPwaRoutes(app) {
   /**
-   * Web App Manifest — dynamically built from ui.pwa config.
+   * Web App Manifest — dynamically built from ui.pwa config. Texts that refer to a
+   * translation (`$t(product.name)`) are resolved in the language of the request.
    * ETag-based cache: the browser always revalidates but gets a 304 if nothing changed.
    * When the admin changes PWA config, the ETag changes and the browser fetches a fresh manifest.
    */
@@ -26,7 +29,7 @@ export default function registerPwaRoutes(app) {
       throw new ServiceError('NOT_FOUND', 'PWA not found');
     }
 
-    const pwaConfig = resolvePwaConfig(rawPwaConfig);
+    const pwaConfig = localizePwaConfig(resolvePwaConfig(rawPwaConfig), pickRequestLanguage(req));
     const etag = `"${computePwaETag(pwaConfig)}"`;
 
     if (req.headers['if-none-match'] === etag) {
@@ -36,6 +39,8 @@ export default function registerPwaRoutes(app) {
     res.set({
       'Content-Type': 'application/manifest+json',
       'Cache-Control': 'no-cache',
+      // The name follows the product name in the reader's language.
+      Vary: 'Accept-Language',
       ETag: etag
     });
 
