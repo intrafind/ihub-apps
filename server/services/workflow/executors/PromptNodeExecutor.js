@@ -159,6 +159,58 @@ export function resolveNodeSkillIds(config, profile) {
  *   }
  * }
  */
+/**
+ * The citations a search or fetch result offers, in order: the hits of a
+ * `results`, `items` or `sources` list (or of a result that is itself a list),
+ * then a single fetched page (`{ url, content, ... }`). Only entries with a URL.
+ *
+ * @param {{toolId: string, args?: Object, result: unknown, taskId?: string|null}} call
+ * @returns {Array<Object>}
+ */
+function citationCandidatesOf({ toolId, args, result, taskId }) {
+  const entry = (url, fields, query) => ({
+    url,
+    ...fields,
+    toolId,
+    taskId: taskId || undefined,
+    query: typeof query === 'string' ? query : undefined,
+    capturedAt: new Date().toISOString()
+  });
+  const hitsOf = list =>
+    (Array.isArray(list) ? list : [])
+      .filter(item => item && typeof item === 'object')
+      .map(item => ({ item, url: item.url || item.link || item.source || item.href }))
+      .filter(({ url }) => url && typeof url === 'string')
+      .map(({ item, url }) =>
+        entry(
+          url,
+          {
+            title: item.title || item.name || item.heading || undefined,
+            snippet: citationSnippet(item.snippet, item.summary, item.text)
+          },
+          args?.query
+        )
+      );
+
+  if (Array.isArray(result)) return hitsOf(result);
+  if (!result || typeof result !== 'object') return [];
+  const entries = [...hitsOf(result.results), ...hitsOf(result.items), ...hitsOf(result.sources)];
+  // Single-doc results like read_url: { url, content, ... }
+  if (typeof result.url === 'string') {
+    entries.push(
+      entry(
+        result.url,
+        {
+          title: result.title || result.name || undefined,
+          snippet: citationSnippet(result.content, result.snippet)
+        },
+        args?.url
+      )
+    );
+  }
+  return entries;
+}
+
 /** The first of these values that is a string, cut to the length a citation keeps. */
 function citationSnippet(...candidates) {
   const text = candidates.find(value => typeof value === 'string');
@@ -3102,49 +3154,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
     const newEntries = [];
     const seen = new Set((state.data._citations || []).map(s => s.url).filter(Boolean));
-    const push = entry => {
-      if (!entry || !entry.url || typeof entry.url !== 'string') return;
-      if (seen.has(entry.url)) return;
+    for (const entry of citationCandidatesOf({ toolId, args, result, taskId })) {
+      if (seen.has(entry.url)) continue;
       seen.add(entry.url);
       newEntries.push(entry);
-    };
-
-    const harvest = items => {
-      if (!Array.isArray(items)) return;
-      for (const item of items) {
-        if (!item || typeof item !== 'object') continue;
-        const url = item.url || item.link || item.source || item.href;
-        if (!url || typeof url !== 'string') continue;
-        push({
-          url,
-          title: item.title || item.name || item.heading || undefined,
-          snippet: citationSnippet(item.snippet, item.summary, item.text),
-          toolId,
-          taskId: taskId || undefined,
-          query: typeof args?.query === 'string' ? args.query : undefined,
-          capturedAt: new Date().toISOString()
-        });
-      }
-    };
-
-    if (Array.isArray(result)) {
-      harvest(result);
-    } else if (result && typeof result === 'object') {
-      if (Array.isArray(result.results)) harvest(result.results);
-      if (Array.isArray(result.items)) harvest(result.items);
-      if (Array.isArray(result.sources)) harvest(result.sources);
-      // Single-doc results like read_url: { url, content, ... }
-      if (typeof result.url === 'string') {
-        push({
-          url: result.url,
-          title: result.title || result.name || undefined,
-          snippet: citationSnippet(result.content, result.snippet),
-          toolId,
-          taskId: taskId || undefined,
-          query: typeof args?.url === 'string' ? args.url : undefined,
-          capturedAt: new Date().toISOString()
-        });
-      }
     }
 
     if (newEntries.length > 0) {
