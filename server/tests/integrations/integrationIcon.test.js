@@ -4,7 +4,7 @@
 /**
  * The icon file a definition ships (`"icon": "icon.svg"`):
  *
- * - the registry reports and reads it only for a plain `.svg` / `.png` file name
+ * - the registry reports and reads it only for a plain `.svg` file name
  *   that exists in the definition's folder (no folders, no `..`, no other type);
  * - the listing names `GET /api/integrations/:id/icon` for it, with the base path;
  * - the route answers it as an image (`nosniff`, a CSP that allows nothing) for
@@ -133,13 +133,13 @@ describe('what the registry accepts as an icon name', () => {
   });
   after(() => rmSync(root, { recursive: true, force: true }));
 
-  it('takes a plain svg or png file that exists and is small', async () => {
+  it('takes a plain svg file that exists and is small', async () => {
     assert.equal(registry.iconFile('com.example/svg'), 'logo.svg');
-    assert.equal((await registry.readIcon('com.example/png')).contentType, 'image/png');
+    assert.equal((await registry.readIcon('com.example/svg')).contentType, 'image/svg+xml');
   });
 
-  it('refuses a missing file, another type, a folder path and a large file', async () => {
-    for (const id of ['missing', 'html', 'folder', 'big']) {
+  it('refuses a missing file, another type (PNG too: marketplace installs fetch text), a folder path and a large file', async () => {
+    for (const id of ['missing', 'html', 'png', 'folder', 'big']) {
       assert.equal(registry.iconFile(`com.example/${id}`), null, id);
       assert.equal(await registry.readIcon(`com.example/${id}`), null, id);
     }
@@ -166,6 +166,20 @@ describe('the listing and the route', () => {
     assert.equal(res.headers['x-content-type-options'], 'nosniff');
     assert.match(res.headers['content-security-policy'], /default-src 'none'/);
     assert.match(res.headers['content-security-policy'], /sandbox/);
+  });
+
+  it('stops at the feature gate: no lookup when integrations are switched off', async () => {
+    const before = configCache.getFeatures;
+    configCache.getFeatures = () => ({ integrations: false });
+    try {
+      for (const url of ['/api/integrations/ifinder/icon', '/api/integrations/ifinder']) {
+        const res = await request(app).get(url).set('x-test-user', 'member');
+        assert.notEqual(res.status, 200, url);
+        assert.equal(res.body?.code, 'FEATURE_DISABLED', url);
+      }
+    } finally {
+      configCache.getFeatures = before;
+    }
   });
 
   it('answers 404 to a user whose groups do not allow it, and for an installation without an icon', async () => {

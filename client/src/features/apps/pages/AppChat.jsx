@@ -492,7 +492,8 @@ function AppChat({
     setImageQuality,
     setIntegrationScopes,
     modelsLoading,
-    settingsInitializedFor
+    settingsInitializedFor,
+    chatSettingsApplied
   } = useAppSettings(appId, app, { chatSettings, isolated: embedded, withTranscription: true });
 
   // Where the chat's integrations search and whom they ask (#3050): the "+"
@@ -2740,8 +2741,16 @@ function AppChat({
     chatId,
     messages,
     // A turn sent before the chat has resolved its model goes out without a
-    // `modelId` and the server refuses it (400).
-    ready: !hydrating && !modelsLoading && Boolean(selectedModel),
+    // `modelId` and the server refuses it (400). It also waits for the checked
+    // scopes (a stored one the server no longer accepts would refuse it, and
+    // the retry is not repeated) and for the reopened chat's own settings (its
+    // model and enabled integrations) to be applied.
+    ready:
+      !hydrating &&
+      !modelsLoading &&
+      Boolean(selectedModel) &&
+      !integrationScopesLoading &&
+      Boolean(chatSettings) === chatSettingsApplied,
     busy:
       processing ||
       compareIsProcessing ||

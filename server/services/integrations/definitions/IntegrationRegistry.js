@@ -58,9 +58,12 @@ const MAX_COMPANION_BYTES = 512 * 1024;
 const SERVED_COMPANION_PATTERN =
   /^(?!\.)(?!.*(^|\/)\.\.?(\/|$))[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)*\.md$/i;
 
-/** The icon a definition ships next to `integration.json`: one file, no folders. */
-const ICON_FILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.(svg|png)$/i;
-const ICON_CONTENT_TYPES = { svg: 'image/svg+xml', png: 'image/png' };
+/**
+ * The icon a definition ships next to `integration.json`: one SVG file, no
+ * folders. (Not PNG: a marketplace install fetches companion files as text,
+ * which would corrupt the bytes of a binary file.)
+ */
+const ICON_FILE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*\.svg$/i;
 const MAX_ICON_BYTES = 128 * 1024;
 
 const defaultShippedDir = fileURLToPath(
@@ -170,8 +173,8 @@ export class IntegrationRegistry {
 
   /**
    * The name of the icon file a definition ships (`"icon": "icon.svg"`), or
-   * null: none declared, an http(s) URL, a name that is not a plain `.svg` /
-   * `.png` file name, or no such file (checked once, when the definition was
+   * null: none declared, an http(s) URL, a name that is not a plain `.svg`
+   * file name, or no such file (checked once, when the definition was
    * loaded).
    *
    * @param {string} id - definition id
@@ -197,8 +200,7 @@ export class IntegrationRegistry {
     try {
       const stat = await fs.stat(target);
       if (!stat.isFile() || stat.size > MAX_ICON_BYTES) return null;
-      const extension = name.split('.').pop().toLowerCase();
-      return { data: await fs.readFile(target), contentType: ICON_CONTENT_TYPES[extension] };
+      return { data: await fs.readFile(target), contentType: 'image/svg+xml' };
     } catch {
       return null;
     }

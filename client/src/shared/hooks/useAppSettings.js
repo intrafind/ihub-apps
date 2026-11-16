@@ -147,6 +147,9 @@ function useAppSettings(
   // loaded and this effect has not run yet. A consumer that depends on the selected model waits
   // until this names its app.
   const [settingsInitializedFor, setSettingsInitializedFor] = useState(null);
+  // Whether the settings applied last included the opened chat's own: the turn
+  // of a reopened chat has to wait for them (its model, its tools).
+  const [chatSettingsApplied, setChatSettingsApplied] = useState(false);
 
   // Initialize settings from app data when app loads
   useEffect(() => {
@@ -298,6 +301,7 @@ function useAppSettings(
 
     // Batched with the setters above: the render that shows this app's model shows this too.
     setSettingsInitializedFor(settingsAppId);
+    setChatSettingsApplied(Boolean(chatSettings));
   }, [
     app,
     settingsAppId,
@@ -402,6 +406,7 @@ function useAppSettings(
 
     // The app the settings above were last initialized for (null before the first)
     settingsInitializedFor,
+    chatSettingsApplied,
 
     // Convenience objects
     settings,

@@ -465,27 +465,29 @@ router.get('/:id', async (req, res, next) => {
   if (!isInstallationId(req.params.id) || !installedIntegrationService.get(req.params.id)) {
     return next();
   }
-  return requireFeature('integrations')(req, res, () =>
-    authRequired(req, res, async () => {
-      // A callback cannot throw into Express: hand any error to `next`.
-      try {
-        if (isAnonymous(req.user)) {
-          throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
-        }
-        const integration = await getUserIntegration({
-          user: req.user,
-          installationId: req.params.id,
-          language: languageOf(req)
-        });
-        if (!integration) {
-          throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
-        }
-        res.setHeader('Cache-Control', 'no-store');
-        return res.json(integration);
-      } catch (error) {
-        return next(error);
-      }
-    })
+  return requireFeature('integrations')(req, res, featureError =>
+    featureError
+      ? next(featureError)
+      : authRequired(req, res, async () => {
+          // A callback cannot throw into Express: hand any error to `next`.
+          try {
+            if (isAnonymous(req.user)) {
+              throw new ServiceError('AUTH_REQUIRED', 'Authentication required');
+            }
+            const integration = await getUserIntegration({
+              user: req.user,
+              installationId: req.params.id,
+              language: languageOf(req)
+            });
+            if (!integration) {
+              throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
+            }
+            res.setHeader('Cache-Control', 'no-store');
+            return res.json(integration);
+          } catch (error) {
+            return next(error);
+          }
+        })
   );
 });
 
@@ -495,7 +497,7 @@ router.get('/:id', async (req, res, next) => {
  *   get:
  *     summary: The icon an integration's definition ships
  *     description: |
- *       The `icon.svg` / `icon.png` file next to the definition, for an
+ *       The `icon.svg` file next to the definition, for an
  *       installation the user may use (the same rule as the listing). It is
  *       served as an image only: `nosniff` and a CSP that allows nothing.
  *     tags:
@@ -517,31 +519,33 @@ router.get('/:id/icon', async (req, res, next) => {
   if (!isInstallationId(req.params.id) || !installedIntegrationService.get(req.params.id)) {
     return next();
   }
-  return requireFeature('integrations')(req, res, () =>
-    authRequired(req, res, async () => {
-      try {
-        const integration = await getUserIntegration({
-          user: req.user,
-          installationId: req.params.id
-        });
-        const definitionId = integration?.definition;
-        const icon = definitionId
-          ? await installedIntegrationService.registry.readIcon(definitionId)
-          : null;
-        if (!icon) throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
-        res.setHeader('Content-Type', icon.contentType);
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        // An SVG opened on its own must not run anything.
-        res.setHeader(
-          'Content-Security-Policy',
-          "default-src 'none'; style-src 'unsafe-inline'; sandbox"
-        );
-        res.setHeader('Cache-Control', 'private, max-age=3600');
-        return res.send(icon.data);
-      } catch (error) {
-        return next(error);
-      }
-    })
+  return requireFeature('integrations')(req, res, featureError =>
+    featureError
+      ? next(featureError)
+      : authRequired(req, res, async () => {
+          try {
+            const integration = await getUserIntegration({
+              user: req.user,
+              installationId: req.params.id
+            });
+            const definitionId = integration?.definition;
+            const icon = definitionId
+              ? await installedIntegrationService.registry.readIcon(definitionId)
+              : null;
+            if (!icon) throw new ServiceError('INTEGRATION_NOT_FOUND', 'Integration not found');
+            res.setHeader('Content-Type', icon.contentType);
+            res.setHeader('X-Content-Type-Options', 'nosniff');
+            // An SVG opened on its own must not run anything.
+            res.setHeader(
+              'Content-Security-Policy',
+              "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+            );
+            res.setHeader('Cache-Control', 'private, max-age=3600');
+            return res.send(icon.data);
+          } catch (error) {
+            return next(error);
+          }
+        })
   );
 });
 

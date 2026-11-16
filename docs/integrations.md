@@ -780,7 +780,7 @@ The marketplace's update dialog shows the same plan per installation before the 
 | `GET /api/integrations/requests/:requestId` | read one of your own requests (the `Location` of the create), as the requester sees it; `404 REQUEST_NOT_FOUND` for an unknown id or someone else's request |
 | `GET /api/integrations` | the signed-in user's integrations: every enabled installation their groups allow (never another one), with capabilities, enabled actions and their side effects, and the connection status (see below); `?lang=` |
 | `GET /api/integrations/:id` | one of them (the entry itself, not wrapped); `404` for an installation the user may not use |
-| `GET /api/integrations/:id/icon` | the `icon.svg` / `icon.png` the integration's definition ships, for an installation the user may use (the same rule as the listing); served as an image only (`nosniff`, a CSP that allows nothing); `404` when there is none |
+| `GET /api/integrations/:id/icon` | the `icon.svg` the integration's definition ships, for an installation the user may use (the same rule as the listing); served as an image only (`nosniff`, a CSP that allows nothing); `404` when there is none |
 | `POST /api/integrations/:id/_connect` `{ returnUrl? }` | start the sign-in → `{ url }` (the vendor's authorization URL); see [The connect flow for users](#the-connect-flow-for-users) |
 | `POST /api/integrations/:id/_reconnect` `{ returnUrl?, scopes? }` | sign in again; `scopes` are added to the granted ones (step-up), the connection keeps its id |
 | `POST /api/integrations/:id/_disconnect` | revoke at the vendor where supported and delete the caller's tokens → `{ removed, revoked }` |
