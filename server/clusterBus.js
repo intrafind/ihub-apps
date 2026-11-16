@@ -70,7 +70,9 @@
  * owner) and are JSON-serialised each way. Chat chunks are small and the
  * primary has no other work in round-robin mode, but this does put token
  * traffic through a single process. `getBusStats()` exposes the relay counters
- * so a deployment can see how much of its traffic is crossing workers.
+ * so a deployment can see how much of its traffic is crossing workers. Most of
+ * it is model text, so `RunStream` merges a stream's text deltas into one frame
+ * per `DELTA_COALESCE_MS` window before they get here.
  *
  * Going cross-*pod* (Kubernetes replicas) needs the same interface backed by
  * Redis pub/sub instead of `process.send`. Keeping the transport behind
