@@ -23,9 +23,10 @@ endpoints. The run ledger is unchanged.
 }
 ```
 
-- `enabled` (default `true`): off means no record is written, and the read endpoints answer
-  `404 EVIDENCE_NOT_RECORDED`, also for records stored before. Turning it on applies to answers
-  stored from then on. Migration `V251` writes the defaults.
+- `enabled` (default `true`): off stops new records, and the read endpoints answer
+  `404 EVIDENCE_NOT_RECORDED`. Records stored before stay until their chat is deleted or retention
+  removes them (turning it on again makes them readable); the run ledger is unchanged. Turning it
+  on applies to answers stored from then on. Migration `V251` writes the defaults.
 - `maxContentBytes` (default 10 MB): the cap of one item (one message, tool result, tool
   definition). A larger item is not stored; the record lists it under `truncated` with its hash and
   size. Uploaded documents and pictures are not items: the record refers to their chat file.
@@ -110,9 +111,14 @@ run that was not recorded (the ledger off, which stored chats never allow) has n
   path every chat answer takes: the normal end, crash recovery (`chatRecovery.js`; `journalEnded`
   says whether `run/end` was there), transcription turns, workflow results, and Responses API turns
   with a conversation. A guest's chat or the anonymous principal's gets no record.
-- **Runs without a chat:** `recordRunEvidence` runs in the background after the run ended, for
-  `/v1/chat/completions` (model and app, once per run) and the Responses API without a conversation.
-  Anonymous callers get no record.
+- **Runs without a chat:** `recordRunEvidence` runs in the background after the run ended (after
+  the structured-output check; a rejected answer is recorded with status `error`, an accepted one
+  with its provenance), for `/v1/chat/completions` (model and app, once per run) and the Responses
+  API without a conversation. Anonymous callers get no record. The record is written only while
+  the run's summary still exists, so a run deleted meanwhile gets none. These responses carry the
+  run id in an **`X-Run-Id`** header, which is what `GET`/`DELETE /api/runs/{runId}…` take.
+- **Chat answers** are written only while the chat and the answer are still stored (checked under
+  the evidence lock).
 - **Off the answer path.** An answer is never refused, delayed or lost because of its evidence. A
   failed write is logged at error level; a process that dies between storing the answer and writing
   the record leaves that answer without one. A write that finds the chat gone writes nothing.
@@ -145,15 +151,21 @@ hashed but never kept. Record writes, content sweeps and the chat's evidence del
   record with it, in the background; then the chat's blobs that no remaining record names are
   removed (mark and sweep).
 - Run evidence goes with `DELETE /api/runs/{runId}`, the deleted user's cleanup (step
-  `runEvidence`) and `chats.retentionDays` in the hourly retention sweep — also while the chat
-  history is off, since these runs are no chat history.
+  `runEvidence`, which also removes chat evidence filed under the user that a failed chat delete
+  left behind) and `chats.retentionDays` in a daily sweep — also while the chat history is off,
+  since these runs are no chat history.
+- Deletes wait at most 5 seconds for the evidence lock; a delete that cannot get it is logged and
+  a later delete or sweep finishes it.
 - `runLog.retentionDays` does not limit evidence.
 
 ## Quota
 
 A chat's evidence counts against its storage limit (`uploads.quotas.maxChatBytes`) together with its
-files. The limit is checked before an upload, never before an answer: when it is reached, new
-uploads to the chat are refused (`QUOTA_CHAT_BYTES`), and a chat can go over it by its last answers.
+files, for a user's upload (`POST /api/chats/{chatId}/files`) only — files stored during an answer
+(tool output, MCP, A2A) are not checked against it. The limit is checked before an upload, never
+before an answer: when it is reached, new uploads to the chat are refused (`QUOTA_CHAT_BYTES`), and
+a chat can go over it by its last answers. When the evidence usage cannot be read, the upload is
+refused rather than let through.
 
 ## Reading it
 
