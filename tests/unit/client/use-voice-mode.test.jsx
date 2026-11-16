@@ -323,7 +323,7 @@ describe('a spoken turn', () => {
       messages: [
         USER,
         assistant({
-          toolActivity: { items: [{ kind: 'search', scope: 'web', status: 'running' }] }
+          toolActivity: { items: [{ kind: 'search', origin: 'web', status: 'running' }] }
         })
       ],
       processing: true
@@ -337,11 +337,38 @@ describe('a spoken turn', () => {
         USER,
         assistant({
           content: 'Found it.',
-          toolActivity: { items: [{ kind: 'search', scope: 'web', status: 'completed' }] }
+          toolActivity: { items: [{ kind: 'search', origin: 'web', status: 'completed' }] }
         })
       ]
     });
     expect(hook.result.current.state.toolStatus).toBeNull();
+  });
+
+  test('the status says where the tool looks, and follows it from one place to the next', async () => {
+    const hook = setup();
+    await startAndReady(hook);
+    await speakTurn();
+    const searching = origin =>
+      hook.setProps({
+        messages: [
+          USER,
+          assistant({
+            toolActivity: { items: [{ kind: 'search', origin, status: 'running' }] }
+          })
+        ],
+        processing: true
+      });
+    searching('project');
+    expect(hook.result.current.state.toolStatus).toEqual({
+      kind: 'search',
+      label: 'Searching the project…'
+    });
+    // Two searches the old web/documents scope could not tell apart.
+    searching('ifinder');
+    expect(hook.result.current.state.toolStatus).toEqual({
+      kind: 'search',
+      label: 'Searching iFinder…'
+    });
   });
 
   test('marks nothing the chat did not accept: a turn the chat turns away is not waited for', async () => {

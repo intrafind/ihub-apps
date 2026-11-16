@@ -7,6 +7,7 @@ import {
   activeToolOf,
   answerForClarification,
   toSpokenText,
+  toolKeyOf,
   toolStatusLabel
 } from '../../../client/src/features/voice/utils/voiceText';
 
@@ -33,23 +34,46 @@ describe('toSpokenText', () => {
 });
 
 describe('activeToolOf', () => {
-  test('reports the newest running tool of a streaming message', () => {
+  test('reports the newest running tool of a streaming message, with where the server says it looks', () => {
     const message = {
       loading: true,
       toolActivity: {
         items: [
-          { kind: 'search', scope: 'web', status: 'completed' },
-          { kind: 'search', scope: 'documents', status: 'running' }
+          { kind: 'search', origin: 'web', status: 'completed' },
+          { kind: 'search', origin: 'project', integration: null, status: 'running' }
         ]
       }
     };
-    expect(activeToolOf(message)).toEqual({ kind: 'search', scope: 'documents' });
+    expect(activeToolOf(message)).toEqual({ kind: 'search', origin: 'project', integration: null });
   });
 
-  test('falls back to the provider search status, and is null once the message is done', () => {
+  test('a connected system is named by the integration the server sent', () => {
+    const message = {
+      loading: true,
+      toolActivity: {
+        items: [{ kind: 'search', origin: 'integration', integration: 'Jira', status: 'running' }]
+      }
+    };
+    expect(activeToolOf(message)).toEqual({
+      kind: 'search',
+      origin: 'integration',
+      integration: 'Jira'
+    });
+  });
+
+  test('a tool the server did not place has no origin, and the old scope is not read', () => {
+    const message = {
+      loading: true,
+      toolActivity: { items: [{ kind: 'search', scope: 'documents', status: 'running' }] }
+    };
+    expect(activeToolOf(message)).toEqual({ kind: 'search', origin: null, integration: null });
+  });
+
+  test('falls back to the provider search status (the web), and is null once the message is done', () => {
     expect(activeToolOf({ loading: true, searchStatus: { phase: 'x' } })).toEqual({
       kind: 'search',
-      scope: 'web'
+      origin: 'web',
+      integration: null
     });
     expect(
       activeToolOf({
@@ -62,14 +86,63 @@ describe('activeToolOf', () => {
   });
 });
 
-describe('toolStatusLabel', () => {
-  test('words each kind of work', () => {
-    expect(toolStatusLabel({ kind: 'search', scope: 'web' }, t)).toBe('Searching the web…');
-    expect(toolStatusLabel({ kind: 'search', scope: 'documents' }, t)).toBe(
-      'Looking in the documents…'
+describe('toolKeyOf', () => {
+  test('two searches of one kind that look in different places are different tools', () => {
+    const project = { kind: 'search', origin: 'project', integration: null };
+    const ifinder = { kind: 'search', origin: 'ifinder', integration: null };
+    expect(toolKeyOf(project)).not.toBe(toolKeyOf(ifinder));
+    expect(toolKeyOf(project)).toBe(toolKeyOf({ ...project }));
+    // Two connected systems are two tools too.
+    expect(toolKeyOf({ kind: 'search', origin: 'integration', integration: 'Jira' })).not.toBe(
+      toolKeyOf({ kind: 'search', origin: 'integration', integration: 'Munich AD' })
     );
-    expect(toolStatusLabel({ kind: 'fetch', scope: 'web' }, t)).toBe('Reading a page…');
-    expect(toolStatusLabel({ kind: 'tool', scope: null }, t)).toBe('Working on it…');
+    expect(toolKeyOf(null)).toBeNull();
+  });
+});
+
+describe('toolStatusLabel', () => {
+  // A `t` that fills the default's `{{name}}`, like i18next does.
+  const filled = (key, fallback, options = {}) =>
+    String(fallback).replace('{{name}}', options.name ?? '');
+  const label = tool => toolStatusLabel(tool, filled);
+
+  test('a search says where it looks, as the activity line does', () => {
+    const search = origin => ({ kind: 'search', origin, integration: null });
+    expect(label(search('web'))).toBe('Searching the web…');
+    expect(label(search('project'))).toBe('Searching the project…');
+    expect(label(search('ifinder'))).toBe('Searching iFinder…');
+    expect(label(search('iassistant'))).toBe('Searching iAssistant…');
+    expect(label(search('documents'))).toBe('Looking in the documents…');
+  });
+
+  test('a connected system is named, or called one when the server sent no name', () => {
+    expect(label({ kind: 'search', origin: 'integration', integration: 'Jira' })).toBe(
+      'Searching Jira…'
+    );
+    expect(label({ kind: 'search', origin: 'integration', integration: null })).toBe(
+      'Searching a connected system…'
+    );
+  });
+
+  test('a search the server did not place does not claim the web or the documents', () => {
+    expect(label({ kind: 'search', origin: null, integration: null })).toBe('Searching…');
+  });
+
+  test('a read says page for the web and document for the rest', () => {
+    expect(label({ kind: 'fetch', origin: 'web', integration: null })).toBe('Reading a page…');
+    expect(label({ kind: 'fetch', origin: 'project', integration: null })).toBe(
+      'Reading a document…'
+    );
+    expect(label({ kind: 'fetch', origin: 'ifinder', integration: null })).toBe(
+      'Reading a document…'
+    );
+    expect(label({ kind: 'fetch', origin: null, integration: null })).toBe('Reading…');
+  });
+
+  test('any other tool is work in progress', () => {
+    expect(label({ kind: 'tool', origin: null, integration: null })).toBe('Working on it…');
+    // A tool that has an origin but is not a search or a read stays generic.
+    expect(label({ kind: 'tool', origin: 'project', integration: null })).toBe('Working on it…');
   });
 });
 

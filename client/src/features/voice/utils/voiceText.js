@@ -22,12 +22,14 @@ export function toSpokenText(text) {
 
 /**
  * What the app is doing while it works on an answer, from the assistant
- * message the chat projects the run onto: `{ kind, scope }` of the tool
- * that is running now, or null. `kind` is `search`, `fetch` or `tool`; `scope`
- * tells a web search from a look in the organisation's documents.
+ * message the chat projects the run onto: `{ kind, origin, integration }` of the
+ * tool that is running now, or null. `kind` is `search`, `fetch` or `tool`;
+ * `origin` is where the server says the call looks (`web`, `project`, `ifinder`,
+ * `iassistant`, `documents`, `integration`; null when it did not say, and it is
+ * never worked out here), and `integration` names a connected system.
  *
  * @param {Object|null} message
- * @returns {{ kind: 'search'|'fetch'|'tool', scope: 'web'|'documents'|null }|null}
+ * @returns {{ kind: 'search'|'fetch'|'tool', origin: string|null, integration: string|null }|null}
  */
 export function activeToolOf(message) {
   if (!message || message.loading === false) return null;
@@ -35,20 +37,61 @@ export function activeToolOf(message) {
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const item = items[i];
     if (item?.status === 'running') {
-      return { kind: item.kind || 'tool', scope: item.scope || null };
+      return {
+        kind: item.kind || 'tool',
+        origin: item.origin || null,
+        integration: item.integration || null
+      };
     }
   }
-  if (message.searchStatus) return { kind: 'search', scope: 'web' };
+  // The provider's own search is the web.
+  if (message.searchStatus) return { kind: 'search', origin: 'web', integration: null };
   return null;
+}
+
+/**
+ * What identifies the tool that is running, so a status is announced once per
+ * tool: a project search and an iFinder search are two tools, and so are two
+ * connected systems.
+ *
+ * @param {{ kind: string, origin?: string|null, integration?: string|null }|null} tool
+ * @returns {string|null}
+ */
+export function toolKeyOf(tool) {
+  return tool ? `${tool.kind}:${tool.origin || ''}:${tool.integration || ''}` : null;
+}
+
+/** The status label of a search: where it looks, in the words the activity line uses. */
+function searchLabel(tool, t) {
+  switch (tool.origin) {
+    case 'web':
+      return t('voiceMode.tools.searchWeb', 'Searching the web…');
+    case 'project':
+      return t('voiceMode.tools.searchProject', 'Searching the project…');
+    case 'ifinder':
+      return t('voiceMode.tools.searchIfinder', 'Searching iFinder…');
+    case 'iassistant':
+      return t('voiceMode.tools.searchIassistant', 'Searching iAssistant…');
+    case 'documents':
+      return t('voiceMode.tools.searchDocuments', 'Looking in the documents…');
+    case 'integration':
+      return tool.integration
+        ? t('voiceMode.tools.searchIntegration', 'Searching {{name}}…', { name: tool.integration })
+        : t('voiceMode.tools.searchIntegrationGeneric', 'Searching a connected system…');
+    default:
+      // The server did not say where: nothing is claimed.
+      return t('voiceMode.tools.search', 'Searching…');
+  }
 }
 
 /** The i18n key and default of the status label for a running tool. */
 export function toolStatusLabel(tool, t) {
-  if (tool.kind === 'search' && tool.scope === 'documents') {
-    return t('voiceMode.tools.searchDocuments', 'Looking in the documents…');
+  if (tool.kind === 'search') return searchLabel(tool, t);
+  if (tool.kind === 'fetch') {
+    if (tool.origin === 'web') return t('voiceMode.tools.readPage', 'Reading a page…');
+    if (tool.origin) return t('voiceMode.tools.readDocument', 'Reading a document…');
+    return t('voiceMode.tools.read', 'Reading…');
   }
-  if (tool.kind === 'search') return t('voiceMode.tools.searchWeb', 'Searching the web…');
-  if (tool.kind === 'fetch') return t('voiceMode.tools.readPage', 'Reading a page…');
   return t('voiceMode.tools.working', 'Working on it…');
 }
 
