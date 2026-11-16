@@ -130,7 +130,8 @@ export async function ingestChatFile({
   extractOptions = null,
   repository = null,
   store = null,
-  scanner = null
+  scanner = null,
+  countEvidence = false
 } = {}) {
   const activeRepo = store || repository || getChatFileRepository();
   if (!activeRepo || !activeRepo.isAvailable()) {
@@ -259,7 +260,8 @@ export async function ingestChatFile({
       ...(id ? { id } : {}),
       storageMode: settings.storageMode,
       appConfig,
-      policy: settings
+      policy: settings,
+      countEvidence
     });
 
     if (!descriptor) {
@@ -312,7 +314,8 @@ export async function ingestChatFile({
     storageMode:
       settings.storageMode === 'original_and_text' ? 'server_text_only' : settings.storageMode,
     appConfig,
-    policy: settings
+    policy: settings,
+    countEvidence
   });
 
   if (!descriptor) {

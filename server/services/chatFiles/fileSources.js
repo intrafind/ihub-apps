@@ -298,7 +298,8 @@ export async function ingestFromSource({
   store = null,
   id = null,
   prefetched = null,
-  signal
+  signal,
+  countEvidence = false
 }) {
   const settings = policy || chatFilePolicy(appConfig);
   const fetched =
@@ -327,6 +328,7 @@ export async function ingestFromSource({
       ...(fetched.lastModified ? { sourceModified: fetched.lastModified } : {})
     },
     ...(id ? { id } : {}),
+    countEvidence,
     appConfig,
     policy: { ...settings, storageMode: mode },
     store

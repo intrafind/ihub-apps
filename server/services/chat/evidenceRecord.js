@@ -30,7 +30,6 @@
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import configCache from '../../configCache.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
-import logger from '../../utils/logger.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { isAnonymousUser } from '../loop/runIdentity.js';
 import { chatEvidenceSettings } from './chatPersistence.js';
@@ -541,7 +540,11 @@ export function recordChatEvidence({
       if (!built) return null;
       return store.writeRecord('chat', chatId, built.record, built.items, {
         ownerId: chat.ownerId,
-        onlyIf: async () => Boolean(await repository.getChat(chatId))
+        // Under the evidence lock: the chat and the answer must both still be
+        // stored, or the record would name something deleted meanwhile.
+        onlyIf: async () =>
+          Boolean(await repository.getChat(chatId)) &&
+          (await repository.getMessages(chatId)).messages.some(message => message.id === messageId)
       });
     },
     { component: 'evidenceRecord', operation: 'chat record', chatId, runId }
@@ -581,7 +584,14 @@ export function recordRunEvidence({ runId, user, summary = {}, runLog }) {
         maxContentBytes: settings.maxContentBytes
       });
       if (!built) return null;
-      return store.writeRecord('run', runId, built.record, built.items, { ownerId: user.id });
+      return store.writeRecord('run', runId, built.record, built.items, {
+        ownerId: user.id,
+        // Under the evidence lock: a run deleted meanwhile (`DELETE
+        // /api/runs/{runId}` removes its journal) gets no record. The journal,
+        // not the summary: the summary is written from a queue and may still
+        // be on its way.
+        onlyIf: async () => (await journal.readEvents(runId, { limit: 1 })).length > 0
+      });
     },
     { component: 'evidenceRecord', operation: 'run record', runId }
   );

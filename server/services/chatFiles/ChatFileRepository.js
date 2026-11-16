@@ -412,6 +412,8 @@ export class ChatFileRepository {
    * @param {'original_and_text'|'server_text_only'|'client_text_only'} [file.storageMode]
    * @param {Object} [file.appConfig] - Optional app config for policy resolution.
    * @param {string} [file.createdAt] - Optional timestamp override (for tests).
+   * @param {boolean} [file.countEvidence=false] - A user's upload: the chat's
+   *   evidence records count against its byte quota (#3687).
    * @returns {Promise<Object|null>} File descriptor.
    */
   async put(
@@ -435,7 +437,8 @@ export class ChatFileRepository {
       appConfig = null,
       policy: explicitPolicy = null,
       createdAt = null,
-      now = null
+      now = null,
+      countEvidence = false
     } = {}
   ) {
     // Allow either `put(scope, file)` or `put({ scope, ...file })`
@@ -518,7 +521,8 @@ export class ChatFileRepository {
       totalBytes,
       settings,
       replaces,
-      origin: fileOrigin
+      origin: fileOrigin,
+      countEvidence
     });
 
     const cleanName =
@@ -617,10 +621,18 @@ export class ChatFileRepository {
     totalBytes,
     settings,
     replaces = null,
-    origin = 'upload'
+    origin = 'upload',
+    countEvidence = false
   }) {
     assertFileSize(settings.quotas, singleFileSize);
-    await this._enforceScopeQuota({ scope, totalBytes, quotas: settings.quotas, replaces, origin });
+    await this._enforceScopeQuota({
+      scope,
+      totalBytes,
+      quotas: settings.quotas,
+      replaces,
+      origin,
+      countEvidence
+    });
     await this._enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces, origin });
     await this._enforceServerQuota({ scope, totalBytes, settings, replaces, origin });
   }
@@ -631,7 +643,7 @@ export class ChatFileRepository {
    *
    * @private
    */
-  async _enforceScopeQuota({ scope, totalBytes, quotas, replaces, origin }) {
+  async _enforceScopeQuota({ scope, totalBytes, quotas, replaces, origin, countEvidence }) {
     const limits = scopeLimits(scope, quotas);
     if (!(limits.maxFiles > 0 || limits.maxBytes > 0)) return;
     const existing = (await this.list(scope)).filter(
@@ -643,18 +655,26 @@ export class ChatFileRepository {
       assertScopeSlots(scope, limits, existing.filter(item => item.origin !== 'image').length);
     }
     let scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
-    // A chat's evidence records take its storage too. Checked here, before an
-    // upload, never before an answer: an answer is not refused for it.
+    // A chat's evidence records take its storage too — for a user's upload
+    // only, never for a file stored during an answer, and never before an
+    // answer: an answer is not refused for it. Unknown usage refuses the upload.
     // ponytail: lists the chat's evidence per upload — O(records + blobs of the
     // chat); keep a byte counter if long chats make uploads slow.
-    if (scope.type === 'chat' && limits.maxBytes > 0) {
-      scopeBytes += await this._evidence.chatBytes(scope.id).catch(error => {
-        this.logger.error('Evidence bytes of a chat not counted', {
+    if (countEvidence && scope.type === 'chat' && limits.maxBytes > 0) {
+      try {
+        scopeBytes += await this._evidence.chatBytes(scope.id);
+      } catch (error) {
+        this.logger.error('Evidence bytes of a chat not counted; refusing the upload', {
           component: COMPONENT,
           error: error.message
         });
-        return 0;
-      });
+        throw new ChatFileQuotaError(
+          'QUOTA_CHAT_BYTES',
+          `This ${scope.type}'s storage use could not be determined`,
+          { limit: limits.maxBytes },
+          413
+        );
+      }
     }
     assertScopeBytes(scope, limits, scopeBytes, totalBytes);
   }

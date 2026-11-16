@@ -552,6 +552,8 @@ export default function registerResponsesRoutes(
     });
 
     const runId = newRunId('chat');
+    // The run's id, so the caller can read or delete its evidence record (#3687).
+    res.setHeader('X-Run-Id', runId);
     const outputId = newOutputId();
     const assembler = new ResponseAssembler({
       res: stream ? res : null,
@@ -736,6 +738,8 @@ export default function registerResponsesRoutes(
       }
     });
     const runId = run.runId || newRunId('chat');
+    // The run's id, so the caller can read or delete its evidence record (#3687).
+    res.setHeader('X-Run-Id', runId);
     const outputId = newOutputId();
     const assembler = new ResponseAssembler({
       res: stream ? res : null,

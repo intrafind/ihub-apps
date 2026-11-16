@@ -672,6 +672,35 @@ describe('startChatRetentionSweep', () => {
     });
   });
 
+  it('sweeps run evidence at most once a day, however often it ticks', async () => {
+    await withRepository(async ({ repository }) => {
+      const cutoffs = [];
+      repository.evidenceStore = () => ({
+        sweepRuns: async cutoff => {
+          cutoffs.push(cutoff);
+          return 0;
+        }
+      });
+      let reads = 0;
+      const stop = startChatRetentionSweep({
+        repository,
+        getFeatures: () => ({ chatPersistence: false }),
+        storageReady: () => true,
+        getPlatformConfig: () => {
+          reads += 1;
+          return { chats: { retentionDays: 30 } };
+        },
+        intervalMs: 10
+      });
+      try {
+        await waitFor(() => reads >= 5, 'five ticks');
+        assert.equal(cutoffs.length, 1, 'one sweep in the first day');
+      } finally {
+        await stop();
+      }
+    });
+  });
+
   it('turning the Durable Chats feature off does not purge the store either', async () => {
     // The switch an admin actually sees is `features.chatPersistence`; it does
     // not touch `platform.chats.enabled`. Gating the sweep on the platform key

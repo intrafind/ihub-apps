@@ -10,6 +10,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { startTestStorage } from './helpers/testStorage.js';
 import {
+  ChatEvidenceRepository,
   contentItem,
   getChatEvidenceRepository,
   sha256Hex
@@ -125,5 +126,56 @@ describe('ChatEvidenceRepository', () => {
     assert.equal(await repo.sweepRuns(Date.now() + 60_000), 1);
     assert.equal(await repo.getRecord('run', 'run-c'), null);
     assert.equal(await repo.deleteRun('run-c'), false);
+  });
+
+  it('a failed write leaves no content behind: a failing blob put or record put', async () => {
+    const { provider } = storage;
+    const failingBlobs = Object.create(provider.blobs);
+    let puts = 0;
+    failingBlobs.put = async (...args) => {
+      puts += 1;
+      if (puts === 3) throw new Error('disk full');
+      return provider.blobs.put(...args);
+    };
+    const broken = new ChatEvidenceRepository({
+      documents: provider.documents,
+      blobs: failingBlobs,
+      locks: provider.locks
+    });
+    const values = Array.from({ length: 12 }, (_, index) => `blob ${index}`);
+    await assert.rejects(
+      broken.writeRecord('chat', 'chat-fail-1', recordOf('m', ...values), itemsOf(...values)),
+      /disk full/
+    );
+    assert.equal(await repo.chatBytes('chat-fail-1'), 0, 'the blobs it wrote are taken back');
+
+    const failingDocs = Object.create(provider.documents);
+    failingDocs.put = async () => {
+      throw new Error('document store down');
+    };
+    const brokenDoc = new ChatEvidenceRepository({
+      documents: failingDocs,
+      blobs: provider.blobs,
+      locks: provider.locks
+    });
+    await assert.rejects(
+      brokenDoc.writeRecord('run', 'run-fail-1', { runId: 'run-fail-1' }, itemsOf('lost'), {
+        ownerId: 'dan'
+      }),
+      /document store down/
+    );
+    assert.equal(await repo.getContent('run', 'run-fail-1', contentItem('lost').sha256), null);
+  });
+
+  it("removes chat evidence filed under an owner, with its chats' content", async () => {
+    await repo.writeRecord('chat', 'chat-left', recordOf('m', 'left'), itemsOf('left'), {
+      ownerId: 'erin'
+    });
+    await repo.writeRecord('chat', 'chat-kept', recordOf('m', 'kept'), itemsOf('kept'), {
+      ownerId: 'frank'
+    });
+    assert.equal(await repo.deleteChatEvidenceOfOwner('erin'), 1);
+    assert.equal(await repo.chatBytes('chat-left'), 0);
+    assert.ok(await repo.getRecord('chat', 'chat-kept', 'm'));
   });
 });

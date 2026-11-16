@@ -92,7 +92,8 @@ export async function ingestRequestFile({
   policy,
   store,
   user = null,
-  origin = 'upload'
+  origin = 'upload',
+  countEvidence = false
 }) {
   // A file in a connected system (`{ source: { kind, ref, refreshOnRun? } }`):
   // the server fetches the original itself.
@@ -108,7 +109,8 @@ export async function ingestRequestFile({
       ownerId,
       appConfig,
       policy,
-      store
+      store,
+      countEvidence
     });
   }
 
@@ -123,7 +125,8 @@ export async function ingestRequestFile({
       origin,
       appConfig,
       policy,
-      store
+      store,
+      countEvidence
     });
   }
 
@@ -151,6 +154,7 @@ export async function ingestRequestFile({
     origin,
     appConfig,
     policy,
-    store
+    store,
+    countEvidence
   });
 }

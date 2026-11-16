@@ -22,6 +22,7 @@ import { contentItem, getChatEvidenceRepository } from '../services/chat/ChatEvi
 import registerChatRoutes from '../routes/chats.js';
 import registerRunRoutes from '../routes/runs.js';
 import registerAdminEvidenceRoutes from '../routes/admin/evidence.js';
+import { adminAuth } from '../middleware/adminAuth.js';
 import errorHandler from '../middleware/errorHandler.js';
 import { guestOwnerId, setGuestId } from '../services/chat/chatOwner.js';
 
@@ -248,5 +249,21 @@ describe('run evidence', () => {
       404,
       'EVIDENCE_NOT_RECORDED'
     );
+  });
+});
+
+describe('the admin evidence routes', () => {
+  it('are all behind adminAuth, which refuses a non-admin', () => {
+    const admin = routes.filter(
+      route => route.routePath.includes('/api/admin/') && route.routePath.includes('evidence')
+    );
+    assert.equal(admin.length, 4);
+    for (const route of admin) {
+      assert.equal(route.handlers[0], adminAuth, `${route.routePath} is guarded`);
+      assert.throws(
+        () => route.handlers[0]({ user: GRACE }, {}, () => {}),
+        error => error.code === 'FORBIDDEN'
+      );
+    }
   });
 });

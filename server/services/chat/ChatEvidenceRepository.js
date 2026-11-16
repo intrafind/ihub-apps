@@ -51,6 +51,9 @@ const PUT_CONCURRENCY = 8;
  */
 const LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 30_000 };
 
+/** The same lease for a delete, which must not keep a request waiting long. */
+const DELETE_LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 5_000 };
+
 /** A content reference inside a record. */
 const CONTENT_REF = /sha256:([a-f0-9]{64})/g;
 
@@ -148,12 +151,13 @@ export class ChatEvidenceRepository {
    *
    * @param {string} id - Chat id or run id.
    * @param {() => Promise<any>} fn
+   * @param {Object} [options] - Lease and wait; a delete waits briefly.
    * @returns {Promise<any>}
    * @private
    */
-  _withLock(id, fn) {
+  _withLock(id, fn, options = LOCK_OPTIONS) {
     if (!this.locks) return fn();
-    return this.locks.withLock(`evidence:${evidenceScope(id)}`, fn, LOCK_OPTIONS);
+    return this.locks.withLock(`evidence:${evidenceScope(id)}`, fn, options);
   }
 
   /** Whether this repository can store anything. @returns {boolean} */
@@ -210,17 +214,29 @@ export class ChatEvidenceRepository {
         stored.add(item.key);
       }
       const missing = [...items].filter(([sha256]) => !stored.has(`${prefix}${sha256}`));
-      for (let at = 0; at < missing.length; at += PUT_CONCURRENCY) {
-        await Promise.all(
-          missing.slice(at, at + PUT_CONCURRENCY).map(([sha256, text]) =>
-            this.blobs.put(ns.content, `${prefix}${sha256}`, text, {
-              contentType: 'application/json'
+      // The blobs this call wrote, so a failed write takes them back: nothing
+      // else would ever reach them.
+      const written = [];
+      try {
+        for (let at = 0; at < missing.length; at += PUT_CONCURRENCY) {
+          // Every started put settles before a failure propagates and the
+          // lock is released, so no put lands after the cleanup below.
+          const results = await Promise.allSettled(
+            missing.slice(at, at + PUT_CONCURRENCY).map(async ([sha256, text]) => {
+              const key = `${prefix}${sha256}`;
+              await this.blobs.put(ns.content, key, text, { contentType: 'application/json' });
+              written.push(key);
             })
-          )
-        );
+          );
+          const failed = results.find(result => result.status === 'rejected');
+          if (failed) throw failed.reason;
+        }
+        const doc = await this.documents.put(ns.doc, docKey, record, { ownerId });
+        return { id: recordId, sha256: doc.etag };
+      } catch (error) {
+        for (const key of written) await this.blobs.delete(ns.content, key).catch(() => {});
+        throw error;
       }
-      const doc = await this.documents.put(ns.doc, docKey, record, { ownerId });
-      return { id: recordId, sha256: doc.etag };
     });
   }
 
@@ -265,16 +281,20 @@ export class ChatEvidenceRepository {
    */
   async deleteMessages(chatId, messageIds) {
     if (!this.isAvailable() || !chatId) return 0;
-    return this._withLock(chatId, async () => {
-      let removed = 0;
-      for (const messageId of messageIds || []) {
-        if (typeof messageId !== 'string' || !messageId) continue;
-        const { docKey } = this._keys('chat', chatId, messageId);
-        if (await this.documents.delete(NAMESPACES.chat.doc, docKey)) removed += 1;
-      }
-      if (removed > 0) await this._sweepChatContent(chatId);
-      return removed;
-    });
+    return this._withLock(
+      chatId,
+      async () => {
+        let removed = 0;
+        for (const messageId of messageIds || []) {
+          if (typeof messageId !== 'string' || !messageId) continue;
+          const { docKey } = this._keys('chat', chatId, messageId);
+          if (await this.documents.delete(NAMESPACES.chat.doc, docKey)) removed += 1;
+        }
+        if (removed > 0) await this._sweepChatContent(chatId);
+        return removed;
+      },
+      DELETE_LOCK_OPTIONS
+    );
   }
 
   /**
@@ -314,7 +334,8 @@ export class ChatEvidenceRepository {
       chatId,
       async () =>
         (await this.documents.deletePrefix(NAMESPACES.chat.doc, prefix)) +
-        (await this.blobs.deletePrefix(NAMESPACES.chat.content, prefix))
+        (await this.blobs.deletePrefix(NAMESPACES.chat.content, prefix)),
+      DELETE_LOCK_OPTIONS
     );
   }
 
@@ -326,8 +347,41 @@ export class ChatEvidenceRepository {
    */
   async deleteRun(runId) {
     if (!this.isAvailable() || !isValidId(runId)) return false;
-    const removed = await this.documents.delete(NAMESPACES.run.doc, runId);
-    await this.blobs.deletePrefix(NAMESPACES.run.content, `${evidenceScope(runId)}__`);
+    return this._withLock(
+      runId,
+      async () => {
+        // Content first: a record whose blobs went is still found and deleted
+        // again; blobs whose record went are found by nothing.
+        await this.blobs.deletePrefix(NAMESPACES.run.content, `${evidenceScope(runId)}__`);
+        return this.documents.delete(NAMESPACES.run.doc, runId);
+      },
+      DELETE_LOCK_OPTIONS
+    );
+  }
+
+  /**
+   * Remove the chat evidence records filed under an owner, with the content
+   * of their chats — what a failed chat delete may have left behind (a
+   * deleted user's cleanup).
+   *
+   * @param {string} ownerId
+   * @returns {Promise<number>} Records removed.
+   */
+  async deleteChatEvidenceOfOwner(ownerId) {
+    if (!this.isAvailable() || !ownerId) return 0;
+    const scopes = new Set();
+    for await (const doc of walkDocuments(this.documents, NAMESPACES.chat.doc, {
+      ownerId,
+      includeData: false
+    })) {
+      scopes.add(doc.key.slice(0, doc.key.indexOf('__')));
+    }
+    let removed = 0;
+    for (const scope of scopes) {
+      const prefix = `${scope}__`;
+      removed += await this.documents.deletePrefix(NAMESPACES.chat.doc, prefix);
+      await this.blobs.deletePrefix(NAMESPACES.chat.content, prefix);
+    }
     return removed;
   }
 
