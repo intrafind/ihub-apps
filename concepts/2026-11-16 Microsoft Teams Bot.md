@@ -97,6 +97,14 @@ Whatever is chosen, every outbound call (`serviceUrl`, `login.microsoftonline.co
 - The activity carries `from.aadObjectId` and the tenant id. Map them to an iHub external user the way
   `teamsAuth.js` does for the tab (`validateAndPersistExternalUser`, auth mode `teams`, subject = `oid`),
   so the tab and the bot are one user. Align with #2662 (link external sign-ins by provider and subject).
+- **Groups.** The tab gets the user's groups from the Teams SSO token; an activity carries none, so the
+  same user could have different permissions in the bot. The bot must obtain authoritative group
+  memberships before every turn, from a source decided in the first issue. Candidate: a Graph lookup of
+  the user's groups with the app registration's own credentials (needs a group-read permission with
+  admin consent), cached for a short time and refreshed on every turn after it expires, then mapped
+  with the same group mapping as the tab. Alternative: a one-time sign-in card (OAuth) that yields a
+  token with the groups claim. Until a source works the bot refuses, it does not fall back to the
+  default groups.
 - Unknown user: apply the platform's user-creation rule (auto-create or refuse), same as the tab.
   A disabled account is refused (cf. #1692, #1736).
 - **AI-use acknowledgement.** The tab asks each user to confirm the notice before the first message.
@@ -111,8 +119,11 @@ The bot is another chat client of the existing pipeline (`server/services/chat/C
 
 - **Which app answers.** The admin sets a default app for the bot. A user can switch with a command or
   card (`/app`, `/new`, `/help`). Only apps the user's groups allow are offered.
-- **Conversation mapping.** Teams conversation id (plus thread id in channels) maps to an iHub chat id;
-  `/new` starts a fresh chat. History lives in iHub, so the user can open the same chat in the web app.
+- **Conversation mapping.** The key is Teams conversation id, thread id in channels, **and the user**,
+  so every person gets their own iHub chat, even in a shared thread. A chat is readable and continuable
+  by its owner only (unless the owner shares it with the existing chat-share feature). A mention from
+  another participant starts that person's own chat and never shows the starter's history. `/new` starts
+  a fresh chat. History lives in iHub, so the user can open the same chat in the web app.
 - **Reply.** Typing indicator while the run goes, then one message (Teams limits message size, so long
   answers are split or sent as a card with a "Open in iHub" link). Streaming and editing the message are
   later improvements.
@@ -125,9 +136,18 @@ This is the main security decision. In a 1:1 chat the answer goes to the asker. 
 everyone, but iHub built it with the asker's permissions (their personal sources, projects, connected
 integrations).
 
-Default for channels and group chats: **the bot answers with the admin-chosen shared app only, with
-personal sources and per-user integrations switched off**, and says so in the first reply. An admin
-setting can allow more per group. Mentions are the only trigger; the bot ignores other messages.
+Checking the asker's permissions is not enough here: every member sees the reply, including its
+citation card, and a shared app can still use sources restricted to a group the other members lack.
+The boundary is therefore the **audience**, not the asker.
+
+Default for channels and group chats: **the bot answers only with an app the admin marked as
+channel-safe, and only from sources that the `authenticated` group may read**, with personal sources,
+projects and per-user integrations switched off. It says so in the first reply. **If the bot cannot
+establish that boundary for a request, it refuses** and offers a 1:1 chat. Guests and external members
+of a channel are outside `authenticated`, so a channel with them gets no answers unless the admin
+allows it. A later option is to intersect the groups of all members (roster lookup), which needs a
+members permission and is out of scope for v1. Mentions are the only trigger; the bot ignores other
+messages.
 
 ### Approvals
 
@@ -143,8 +163,10 @@ action, target and payload and Approve and Reject buttons. Rules:
 
 ### Proactive messages
 
-When a user installs the bot or writes first, store the conversation reference (service URL,
-conversation id, user id) per user. Then iHub can message first: a scheduled task finished, an approval
+When a user installs the bot or writes to it in a **personal (1:1) chat**, store the conversation
+reference (service URL, conversation id, user id) per user. References from channels and group chats are
+never stored for notifications, and a notification is sent only through a personal conversation whose
+scope was verified from the activity (otherwise it would show to every member of a channel). Then iHub can message first: a scheduled task finished, an approval
 waits, a workflow asks a question.
 
 - Only users who started a conversation with the bot are reachable; no bulk messaging.
@@ -173,7 +195,10 @@ hosts and `login.microsoftonline.com` outbound. The admin documentation lists bo
 ## Security
 
 - Verify every activity; reject unknown tenants; rate-limit the endpoint (`middleware/rateLimiting.js`).
-- Replay: reject activities with a timestamp outside a small window.
+- Replay: reject activities with a timestamp outside a small window, and deduplicate by activity id
+  inside it. The id is recorded before the turn starts, with an atomic check-and-set, so two concurrent
+  deliveries of the same activity cannot both start a turn or a tool action (Teams retries deliveries).
+  On several pods the record lives in the shared store, not in process memory.
 - Message content is untrusted input, as everywhere.
 - No chat content in logs; conversation references are personal data and deleted with the user
   (`services/userDeletion.js`).

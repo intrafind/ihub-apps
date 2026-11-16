@@ -80,17 +80,20 @@ Install values switch capabilities on. The OAuth strategy builds the scope list 
 
 | Capability | Delegated scopes (verify against the Graph docs in the first issue) | Admin consent |
 | --- | --- | --- |
-| Teams and channel directory | `Team.ReadBasic.All`, `Channel.ReadBasic.All` | yes |
+| Teams and channel directory | `Team.ReadBasic.All`, `Channel.ReadBasic.All` | no |
 | Read channel messages | `ChannelMessage.Read.All` | yes |
 | Read chats | `Chat.Read` | no |
 | Search messages | Microsoft Search, `entityTypes: ["chatMessage"]` | follows the read scopes |
-| Meeting transcripts | `OnlineMeetingTranscript.Read.All` | yes |
-| Post to channels | `ChannelMessage.Send` | yes |
+| Meeting transcripts | `OnlineMeetingTranscript.Read.All`, and `OnlineMeetings.Read` for the meeting lookup | yes (transcripts) |
+| Post to channels | `ChannelMessage.Send` | no |
 | Send in chats | `ChatMessage.Send` | no |
 
 The admin page lists, per capability, which scope it needs and whether a tenant admin must consent.
-Refresh requests send the same scope list, so a refreshed token never carries more than the admin
-enabled (the Office 365 behavior).
+Refresh requests send the scope list of the enabled capabilities, but Entra can also return scopes the
+user consented to earlier, so a refreshed token can still carry the scope of a capability the admin has
+since switched off. The token is therefore not the boundary: **each action checks its capability switch
+before it calls Graph.** (The Office 365 connector's comment on this point should be re-checked with the
+same test.)
 
 ### Actions
 
@@ -100,6 +103,7 @@ enabled (the Office 365 behavior).
 | `getChannelMessages` | read | channel messages and replies inside a time window |
 | `listChats`, `getChatMessages` | read | the user's 1:1 and group chats |
 | `searchMessages` | read | Search API |
+| `findOnlineMeeting` | read | `/me/onlineMeetings?$filter=JoinWebUrl eq '{joinWebUrl}'`, returns the online meeting id; the join URL comes from the calendar tools or the user |
 | `getMeetingTranscript` | read | `/me/onlineMeetings/{id}/transcripts/{id}/content`, VTT turned into speaker-attributed text |
 | `postChannelMessage` | write, leaves the house | `POST /teams/{id}/channels/{id}/messages`, replies under `/messages/{id}/replies` |
 | `sendChatMessage` | write, leaves the house | `POST /chats/{id}/messages` |
@@ -110,8 +114,11 @@ integrations). The approval card shows the target team, channel or chat and the 
 ### Safety
 
 - **Message and transcript content is untrusted input.** A message can contain instructions aimed at
-  the model. The action results are marked as external content, and no read result can trigger a write
-  without the approval card.
+  the model. The action results are marked as external content. A read result cannot trigger a write
+  without the approval card, with one exception: **Approve & allow for this chat** (`docs/tool-approval.md`)
+  lets the same tool run without a card for the rest of that chat. The approval docs describe no per-tool
+  switch to exclude it, so the first write issue must either add one for these two actions (preferred:
+  every post shows its card) or state the exception to admins.
 - **No approval, no post.** Where nobody can approve (inference API, MCP gateway, workflow nodes
   without approver groups) the call is refused with `APPROVAL_REQUIRED_NO_USER`, as for every gated
   action. Delivery from tasks and workflows uses the parked-approval path or the bot (see below).
@@ -128,6 +135,13 @@ integrations). The approval card shows the target team, channel or chat and the 
 
 - a **scheduled task** notification channel, built on #2521;
 - a **workflow** tool node.
+
+A tool node is a call the workflow author chose, and calls nobody's model decided on are not gated by
+the approval mechanism (`docs/tool-approval.md`). The promised approval therefore does not exist there
+by itself. Design: a Teams post from a tool node needs an explicit gate, either a preceding `human` node
+that shows the rendered message and approves it, or an admin setting that allows unattended posting
+for named workflows to a target the author fixed at build time (never chosen by a model from content).
+Without one of the two the node fails at validation, not at run time.
 
 Two identities are possible. As the user (this connector) the post carries their name and needs their
 token; for tasks that run unattended the user's refresh token may have expired. As the bot (companion
