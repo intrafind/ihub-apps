@@ -195,7 +195,7 @@ export default function registerRunRoutes(app) {
    *     description: >-
    *       For `/v1/chat/completions` and Responses API runs without a conversation: what went
    *       into and came out of every model call and tool call. Content is referenced as
-   *       `sha256:<hex>` and read through `/api/runs/{runId}/evidence-content/{sha256}`. The
+   *       `sha256:<hex>` and read through `/api/runs/{runId}/evidence/content/{sha256}`. The
    *       run's caller only. See docs/chat-evidence.md.
    *     tags: [Runs]
    *     parameters:
@@ -217,7 +217,7 @@ export default function registerRunRoutes(app) {
 
   /**
    * @swagger
-   * /api/runs/{runId}/evidence-content/{sha256}:
+   * /api/runs/{runId}/evidence/content/{sha256}:
    *   get:
    *     summary: One piece of content a run's evidence record refers to
    *     description: The canonical JSON of the item named `sha256:<hex>`. The run's caller only.
@@ -231,7 +231,7 @@ export default function registerRunRoutes(app) {
    *       404: { description: No such content, not the caller's, or switched off (EVIDENCE_NOT_RECORDED) }
    */
   app.get(
-    buildServerPath('/api/runs/:runId/evidence-content/:sha256'),
+    buildServerPath('/api/runs/:runId/evidence/content/:sha256'),
     authRequired,
     async (req, res) => {
       const { runId, sha256 } = req.params;

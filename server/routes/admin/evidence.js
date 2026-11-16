@@ -65,12 +65,13 @@ export default function registerAdminEvidenceRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/chats/{chatId}/evidence-content/{sha256}:
+   * /api/admin/chats/{chatId}/evidence/{messageId}/content/{sha256}:
    *   get:
-   *     summary: One piece of a chat's evidence content (admin)
+   *     summary: One piece of content an answer's evidence record names (admin)
    *     tags: [Admin]
    *     parameters:
    *       - { in: path, name: chatId, required: true, schema: { type: string } }
+   *       - { in: path, name: messageId, required: true, schema: { type: string } }
    *       - { in: path, name: sha256, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
    *     responses:
    *       200: { description: The content, application/json }
@@ -78,13 +79,19 @@ export default function registerAdminEvidenceRoutes(app) {
    *       404: { description: No such content, or switched off (EVIDENCE_NOT_RECORDED) }
    */
   app.get(
-    buildServerPath('/api/admin/chats/:chatId/evidence-content/:sha256'),
+    buildServerPath('/api/admin/chats/:chatId/evidence/:messageId/content/:sha256'),
     adminAuth,
     async (req, res) => {
-      const { chatId, sha256 } = req.params;
+      const { chatId, messageId, sha256 } = req.params;
       assertValidId(chatId, 'chat');
-      const content = await readEvidenceContent({ kind: 'chat', id: chatId, sha256 });
-      audit(req, 'chatEvidence', `${chatId}/${sha256}`, `Read evidence content of chat ${chatId}`);
+      assertValidId(messageId, 'message');
+      const content = await readEvidenceContent({ kind: 'chat', id: chatId, messageId, sha256 });
+      audit(
+        req,
+        'chatEvidence',
+        `${chatId}/${messageId}/${sha256}`,
+        `Read evidence content of an answer in chat ${chatId}`
+      );
       sendEvidence(res, content);
     }
   );
@@ -111,7 +118,7 @@ export default function registerAdminEvidenceRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/runs/{runId}/evidence-content/{sha256}:
+   * /api/admin/runs/{runId}/evidence/content/{sha256}:
    *   get:
    *     summary: One piece of a run's evidence content (admin)
    *     tags: [Admin]
@@ -124,7 +131,7 @@ export default function registerAdminEvidenceRoutes(app) {
    *       404: { description: No such content, or switched off (EVIDENCE_NOT_RECORDED) }
    */
   app.get(
-    buildServerPath('/api/admin/runs/:runId/evidence-content/:sha256'),
+    buildServerPath('/api/admin/runs/:runId/evidence/content/:sha256'),
     adminAuth,
     async (req, res) => {
       const { runId, sha256 } = req.params;

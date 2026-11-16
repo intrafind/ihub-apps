@@ -365,11 +365,11 @@ export const BLOB_NAMESPACES = Object.freeze({
   chatFiles: 'chat-files',
   /**
    * Content an evidence record refers to (system prompts, messages, tool
-   * definitions, tool arguments and results), stored once per chat under
-   * `<scope(chatId)>__<sha256>`.
+   * definitions, tool arguments and results): one pack per answer under
+   * `<scope(chatId)>__<scope(messageId)>`, a JSON object `{ sha256: item }`.
    */
   chatEvidenceContent: 'chat-evidence-content',
-  /** The same for runs without a chat, under `<scope(runId)>__<sha256>`. */
+  /** The same for runs without a chat: one pack under `<scope(runId)>__<scope(runId)>`. */
   runEvidenceContent: 'run-evidence-content'
 });
 
@@ -402,9 +402,9 @@ export const KEY_PREFIX_SEGMENTS = Object.freeze({
   'project-files': 1,
   /** `<scope(chatId)>__<scope(messageId)>`: the evidence documents of one chat. */
   'chat-evidence': 1,
-  /** `<scope(chatId)>__<sha256>`: the evidence content of one chat. */
+  /** `<scope(chatId)>__<scope(messageId)>`: the evidence packs of one chat. */
   'chat-evidence-content': 1,
-  /** `<scope(runId)>__<sha256>`: the evidence content of one run. */
+  /** `<scope(runId)>__<scope(runId)>`: the evidence pack of one run. */
   'run-evidence-content': 1
 });
 

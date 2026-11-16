@@ -520,8 +520,8 @@ export default function registerChatRoutes(app) {
    *     description: >-
    *       What went into and came out of every model call and tool call of the turn that
    *       produced the answer. Content is referenced as `sha256:<hex>` and read through
-   *       `/api/chats/{chatId}/evidence-content/{sha256}`. The chat's owner only; the `ETag`
-   *       is the `evidence.sha256` the stored answer names. See docs/chat-evidence.md.
+   *       `/api/chats/{chatId}/evidence/{messageId}/content/{sha256}`. The chat's owner only;
+   *       the `ETag` is the etag of the stored record. See docs/chat-evidence.md.
    *     tags: [Chats]
    *     parameters:
    *       - { in: path, name: chatId, required: true, schema: { type: string } }
@@ -551,33 +551,36 @@ export default function registerChatRoutes(app) {
 
   /**
    * @swagger
-   * /api/chats/{chatId}/evidence-content/{sha256}:
+   * /api/chats/{chatId}/evidence/{messageId}/content/{sha256}:
    *   get:
    *     summary: One piece of content an evidence record refers to
    *     description: >-
    *       The canonical JSON of a system prompt, message, tool definition, tool argument or
-   *       tool result, as named `sha256:<hex>` in the chat's evidence records. Its SHA-256 is
-   *       the name. The chat's owner only.
+   *       tool result, as named `sha256:<hex>` in the answer's evidence record. Its SHA-256 is
+   *       the name and the `ETag`. The chat's owner only.
    *     tags: [Chats]
    *     parameters:
    *       - { in: path, name: chatId, required: true, schema: { type: string } }
+   *       - { in: path, name: messageId, required: true, schema: { type: string } }
    *       - { in: path, name: sha256, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
    *     responses:
    *       200: { description: The content, application/json }
    *       400: { description: Not a lower-case hex SHA-256 (BAD_REQUEST) }
    *       404:
    *         description: >-
-   *           No such chat, or not the caller's (NOT_FOUND); no such content, or the record is
-   *           switched off (EVIDENCE_NOT_RECORDED)
+   *           No such chat, or not the caller's (NOT_FOUND); no record for the answer, the record
+   *           does not name the content, or the record is switched off (EVIDENCE_NOT_RECORDED)
    */
   app.get(
-    buildServerPath('/api/chats/:chatId/evidence-content/:sha256'),
+    buildServerPath('/api/chats/:chatId/evidence/:messageId/content/:sha256'),
     authRequired,
     async (req, res) => {
       const chatId = await ownEvidenceChat(req);
+      assertValidId(req.params.messageId, 'message');
       const content = await readEvidenceContent({
         kind: 'chat',
         id: chatId,
+        messageId: req.params.messageId,
         sha256: req.params.sha256
       });
       sendEvidence(res, content);
