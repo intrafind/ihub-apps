@@ -169,7 +169,8 @@ whole pack.
 - An answer that leaves the transcript (edit, resend, message delete, the message cap) takes its
   record with it, in the background; then the chat's packs that no remaining record's `content`
   map points into are removed (mark and sweep per pack). The pack of a removed answer stays while a
-  later record still refers to it.
+  later record still refers to it. The first such delete in a chat also removes the chat's leftover
+  per-item content blobs of `v: 1` records, which no `content` map names.
 - Run evidence goes with `DELETE /api/runs/{runId}`, the deleted user's cleanup (step
   `runEvidence`, which also removes chat evidence filed under the user that a failed chat delete
   left behind) and `chats.retentionDays` in a daily sweep — also while the chat history is off,

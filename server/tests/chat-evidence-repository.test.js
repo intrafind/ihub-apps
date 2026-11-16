@@ -224,6 +224,72 @@ describe('ChatEvidenceRepository', () => {
     assert.equal(await contentOf('chat', 'chat-3', 'b', 'only b'), contentItem('only b').text);
   });
 
+  it('writes a record once: a second write for the same answer changes nothing', async () => {
+    const first = await repo.writeRecord(
+      'chat',
+      'chat-i',
+      recordOf('m', 'a', 'b'),
+      itemsOf('a', 'b'),
+      {
+        onlyIf: answersBefore()
+      }
+    );
+    await repo.writeRecord('chat', 'chat-i', recordOf('n', 'a', 'b', 'c'), itemsOf('a', 'b', 'c'), {
+      onlyIf: answersBefore('m')
+    });
+    const again = await repo.writeRecord('chat', 'chat-i', recordOf('m', 'z'), itemsOf('z'), {
+      onlyIf: answersBefore()
+    });
+    assert.deepEqual(again, first, 'the stored record comes back');
+    assert.equal(await contentOf('chat', 'chat-i', 'n', 'a'), contentItem('a').text);
+    assert.equal(await contentOf('chat', 'chat-i', 'n', 'b'), contentItem('b').text);
+    assert.equal(await contentOf('chat', 'chat-i', 'm', 'z'), null, 'not rewritten');
+  });
+
+  it('skips an earlier answer without a record when looking for the previous one', async () => {
+    await repo.writeRecord('chat', 'chat-s', recordOf('a1', 'x'), itemsOf('x'), {
+      onlyIf: answersBefore()
+    });
+    await repo.writeRecord('chat', 'chat-s', recordOf('a2', 'x', 'y'), itemsOf('x', 'y'), {
+      onlyIf: async () => ['missing', 'a1']
+    });
+    const doc = await repo.getRecord('chat', 'chat-s', 'a2');
+    assert.equal(doc.data.content[contentItem('x').sha256], 'a1');
+    assert.deepEqual(await packsOf('chat-s'), ['a1', 'a2'].map(evidenceScope).sort());
+  });
+
+  it('a write racing a message delete leaves every item of the new record readable', async () => {
+    await repo.writeRecord('chat', 'chat-r', recordOf('a1', 'one'), itemsOf('one'), {
+      onlyIf: answersBefore()
+    });
+    await repo.writeRecord('chat', 'chat-r', recordOf('a2', 'one', 'two'), itemsOf('one', 'two'), {
+      onlyIf: answersBefore('a1')
+    });
+    await Promise.all([
+      repo.writeRecord(
+        'chat',
+        'chat-r',
+        recordOf('a3', 'one', 'two', 'three'),
+        itemsOf('one', 'two', 'three'),
+        { onlyIf: answersBefore('a1', 'a2') }
+      ),
+      repo.deleteMessages('chat-r', ['a2'])
+    ]);
+    for (const value of ['one', 'two', 'three']) {
+      assert.equal(await contentOf('chat', 'chat-r', 'a3', value), contentItem(value).text, value);
+    }
+  });
+
+  it('a corrupt or missing pack reads as nothing, not as an error', async () => {
+    await repo.writeRecord('chat', 'chat-c', recordOf('m', 'x'), itemsOf('x'));
+    const doc = await repo.getRecord('chat', 'chat-c', 'm');
+    const packKey = `${evidenceScope('chat-c')}__${evidenceScope('m')}`;
+    await storage.provider.blobs.put('chat-evidence-content', packKey, '{not json');
+    assert.equal(await repo.getContent('chat', 'chat-c', doc.data, contentItem('x').sha256), null);
+    await storage.provider.blobs.delete('chat-evidence-content', packKey);
+    assert.equal(await repo.getContent('chat', 'chat-c', doc.data, contentItem('x').sha256), null);
+  });
+
   it('writes nothing when onlyIf says no (the chat is gone)', async () => {
     const ref = await repo.writeRecord('chat', 'chat-gone', recordOf('m', 'x'), itemsOf('x'), {
       onlyIf: async () => false
@@ -310,6 +376,49 @@ describe('ChatEvidenceRepository', () => {
       0,
       'the pack is taken back'
     );
+  });
+
+  it('a failed record write with dedup leaves the previous pack intact', async () => {
+    const { provider } = storage;
+    await repo.writeRecord('chat', 'chat-rb', recordOf('a1', 'old'), itemsOf('old'), {
+      onlyIf: answersBefore()
+    });
+    const failingDocs = Object.create(provider.documents);
+    failingDocs.put = async () => {
+      throw new Error('document store down');
+    };
+    const broken = new ChatEvidenceRepository({
+      documents: failingDocs,
+      blobs: provider.blobs,
+      locks: provider.locks
+    });
+    await assert.rejects(
+      broken.writeRecord('chat', 'chat-rb', recordOf('a2', 'old', 'new'), itemsOf('old', 'new'), {
+        onlyIf: answersBefore('a1')
+      }),
+      /document store down/
+    );
+    assert.deepEqual(await packsOf('chat-rb'), [evidenceScope('a1')], "only a2's pack goes");
+    assert.equal(await contentOf('chat', 'chat-rb', 'a1', 'old'), contentItem('old').text);
+  });
+
+  it('keeps the pack when the record put rejects after the record was committed', async () => {
+    const { provider } = storage;
+    const lateFailure = Object.create(provider.documents);
+    lateFailure.put = async (...args) => {
+      await provider.documents.put(...args);
+      throw new Error('cleanup after the write failed');
+    };
+    const broken = new ChatEvidenceRepository({
+      documents: lateFailure,
+      blobs: provider.blobs,
+      locks: provider.locks
+    });
+    await assert.rejects(
+      broken.writeRecord('chat', 'chat-late', recordOf('m', 'kept'), itemsOf('kept')),
+      /cleanup after the write failed/
+    );
+    assert.equal(await contentOf('chat', 'chat-late', 'm', 'kept'), contentItem('kept').text);
   });
 
   it("removes chat evidence filed under an owner, with its chats' content", async () => {

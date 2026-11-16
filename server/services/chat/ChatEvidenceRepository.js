@@ -239,7 +239,9 @@ export class ChatEvidenceRepository {
    *   earlier answers, newest first, to dedup against the previous record.
    * @returns {Promise<{id: string, sha256: string}|null>} The record's id
    *   (message id or run id) and the etag of the stored document; null when
-   *   nothing was written.
+   *   nothing was written. Once per record id: when the record is already
+   *   stored, nothing is written and its id and etag come back — a second
+   *   write would replace the pack later records point into.
    */
   async writeRecord(kind, id, record, items, { ownerId = null, onlyIf } = {}) {
     if (!this.isAvailable()) return null;
@@ -248,6 +250,8 @@ export class ChatEvidenceRepository {
     if (!ns || !id || !recordId || (kind === 'run' && !isValidId(id))) return null;
     const { docKey } = this._keys(kind, id, record.messageId);
     return this._withLock(id, async () => {
+      const existing = await this.documents.get(ns.doc, docKey);
+      if (existing) return { id: recordId, sha256: existing.etag };
       const allowed = onlyIf ? await onlyIf() : true;
       if (!allowed) return null;
       const previous =
@@ -276,8 +280,13 @@ export class ChatEvidenceRepository {
         );
         return { id: recordId, sha256: doc.etag };
       } catch (error) {
-        // A pack without its record is reached by nothing: take it back.
-        if (fresh.length > 0) await this.blobs.delete(ns.content, packKey).catch(() => {});
+        // A pack without its record is reached by nothing: take it back. Only
+        // then — a put can reject after the document was committed (a cleanup
+        // after the write), and that record names this pack.
+        if (fresh.length > 0) {
+          const committed = await this.documents.get(ns.doc, docKey).catch(() => null);
+          if (!committed) await this.blobs.delete(ns.content, packKey).catch(() => {});
+        }
         throw error;
       }
     });
@@ -319,9 +328,20 @@ export class ChatEvidenceRepository {
     const packId = record.content?.[sha256];
     if (typeof packId !== 'string' || !packId) return null;
     const blob = await this.blobs.get(NAMESPACES[kind].content, this._packKey(id, packId));
-    if (!blob?.data) return null;
-    const pack = JSON.parse(blob.data.toString('utf8'));
-    if (!Object.hasOwn(pack, sha256)) return null;
+    let pack = null;
+    if (blob?.data) {
+      try {
+        pack = JSON.parse(blob.data.toString('utf8'));
+      } catch {
+        this.logger.error('Evidence pack is not valid JSON', { kind, id, packId });
+        return null;
+      }
+    }
+    // The record maps it, so it should be there: a hole in the evidence.
+    if (!pack || typeof pack !== 'object' || !Object.hasOwn(pack, sha256)) {
+      this.logger.warn('Evidence item missing from its pack', { kind, id, packId, sha256 });
+      return null;
+    }
     return Buffer.from(canonicalJson(pack[sha256]), 'utf8');
   }
 
