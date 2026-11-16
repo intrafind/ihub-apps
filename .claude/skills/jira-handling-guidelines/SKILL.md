@@ -1,6 +1,6 @@
 ---
 name: jira-handling-guidelines
-description: Conventions for creating and commenting on Jira issues (originally the RAG team's). Always use when creating a Jira issue or adding/editing a description or comment. Covers the mandatory AI-disclosure preamble and footer, issue-type selection (Bug/Task/Epic), tone and formatting, and the draft-before-writing workflow.
+description: Conventions for creating and commenting on Jira issues. Always use when creating a Jira issue or adding/editing a description or comment. Covers the mandatory AI-disclosure preamble and footer, issue-type selection (Bug/Task/Epic), tone and formatting, and the draft-before-writing workflow.
 ---
 
 # Jira Guidelines
