@@ -1318,8 +1318,10 @@
     "shape": {
       "toc": [
         {
-          "children": "array",
-          "path": "string",
+          "children": "[]|array",
+          "description?": "string",
+          "part?": "boolean",
+          "path": "null|string",
           "title": "string"
         }
       ],
