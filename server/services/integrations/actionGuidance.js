@@ -29,7 +29,7 @@ export const MAX_GUIDANCE_BLOCK_CHARS = 12_000;
  * The admin override of one action, or an empty object.
  * @param {Object|null} instance
  * @param {string} actionName
- * @returns {{description?: Object|string, guidance?: Object|string, examples?: Array, sideEffect?: string, dataFlow?: string}}
+ * @returns {{description?: Object|string, guidance?: Object|string, examples?: Array, sideEffect?: string, dataFlow?: string, activity?: {kind: string, origin?: string, place?: string}}}
  */
 export function actionOverrideOf(instance, actionName) {
   const override = instance?.actions?.overrides?.[actionName];
@@ -75,6 +75,10 @@ export function withActionOverrides(action, instance, language = 'en') {
     : null;
   return {
     ...action,
+    // What the tool is and where it looks: the admin's correction wins.
+    ...(override.activity || action?.activity
+      ? { activity: override.activity || action.activity }
+      : {}),
     description: description || defaults.description,
     guidance: guidance || defaults.guidance,
     examples: examples || defaults.examples,

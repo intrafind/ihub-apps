@@ -37,6 +37,8 @@ export const KIND_OF_SOURCE = Object.freeze({
   // `source_*` tools are gone): named like one, never as "Documents". Chats stored
   // before this say `documents` and keep saying it.
   sources: 'project',
+  // A tool that declares `activity.origin: "documents"` (an MCP document store).
+  documents: 'documents',
   integration: 'integration',
   email: 'email',
   file: 'file',

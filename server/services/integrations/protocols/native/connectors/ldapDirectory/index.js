@@ -117,6 +117,8 @@ async function test({ instance, values, testInput }) {
 const connector = {
   id: 'ldapDirectory',
   actions: Object.fromEntries(DIRECTORY_SEARCH_ACTIONS.map(name => [name, action(name)])),
+  /** A directory lookup is a search of the connected system, never of the web. */
+  activity: { search_people: { kind: 'search', origin: 'integration' } },
   test,
   /**
    * For the installed list: whether the configuration resolves, the transport

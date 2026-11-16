@@ -9,6 +9,7 @@
  * and describes them through.
  */
 import test from 'node:test';
+import { toolDefOf } from './helpers/builtInTools.js';
 import assert from 'node:assert/strict';
 import {
   iAssistantSourceFrame,
@@ -38,7 +39,7 @@ const searchResult = {
 };
 
 const extract = (toolId, result, args = {}) =>
-  extractToolSources({ toolId, toolDef: { id: toolId }, args, result });
+  extractToolSources({ toolId, toolDef: toolDefOf(toolId), args, result });
 
 test('isIFinderDocumentTool: only the tools whose result describes documents', () => {
   assert.equal(isIFinderDocumentTool('iFinder_search'), true);

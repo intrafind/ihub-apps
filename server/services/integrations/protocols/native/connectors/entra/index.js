@@ -143,6 +143,8 @@ const connector = {
     getTeamMembers: action('getTeamMembers'),
     getUserPhotoBase64: action('getUserPhotoBase64')
   },
+  /** A directory lookup is a search of the connected system, never of the web. */
+  activity: { findUser: { kind: 'search', origin: 'integration' } },
   test,
   invalidate() {
     entraService.resetConfig();

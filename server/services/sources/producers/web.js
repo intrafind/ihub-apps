@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Source producer for web search tools and the page reader.
+ * Source producer for web search tools and the page reader: the tools whose
+ * category (`services/tools/toolCategory`) is a search or a fetch of the web.
  *
  * The client only ever sees a bounded preview of a tool result, and a web
  * search that extracted page content blows past that bound on its first
@@ -18,9 +19,9 @@
  * What the platform's own web search returned is public — it is on the open
  * web. "Own" is the shipped Brave, Qwant and Staan engines, decided by the
  * definition or script a tool runs. A third-party web search engine (an
- * integration of type `web-search`) and any other tool named after a search
- * engine (an MCP server, a custom or OpenAPI tool) may search anything,
- * intranet included:
+ * integration of type `web-search`) and any other tool that declares itself a
+ * web search (`activity: { kind: 'search', origin: 'web' }`: an MCP server, a
+ * custom or OpenAPI tool) may search anything, intranet included:
  * its hits are listed the same way but stay private, unless its definition declares them public (`"sources": {
  * …, "public": true }`, `producers/declared.js`). What the page reader read is
  * private unless a public search returned it too: hosts on the SSL whitelist
@@ -30,46 +31,8 @@
  * @module services/sources/producers/web
  */
 
-import {
-  isBuiltInWebSearchEngineTool,
-  isWebSearchEngineTool
-} from '../../search/webSearchEngines.js';
-
-/** Tool id of the page reader. */
-export const PAGE_READER_TOOL_ID = 'read_url';
-
-/**
- * Web search tools: the shipped engines' search tools (`braveSearch`,
- * `staanSearch`, `qwantSearch`), the generic `webSearch` id, and MCP or custom
- * tools named after a web search engine. (The search tool of a third-party
- * engine is recognised by its definition's type instead, see `matches`.) Other tools that search something (Jira, people,
- * documents) are not web search, even though their results carry URLs; they
- * report sources through the envelope or a declaration.
- */
-const WEB_SEARCH_TOOL =
-  /web_?search|internet_?search|brave|qwant|staan|tavily|serp|bing|duckduckgo/i;
-
-/**
- * Tools whose results are never web search results: the organisation's
- * documents, and apps invoked as tools (they report their own sources).
- */
-function isOtherTool(toolId) {
-  const id = String(toolId || '').toLowerCase();
-  return (
-    id.startsWith('ifinder') ||
-    id.startsWith('source_') ||
-    id.startsWith('knowledge_') ||
-    id.startsWith('app__')
-  );
-}
-
-/**
- * @param {string} toolId
- * @returns {boolean}
- */
-export function isWebSearchTool(toolId) {
-  return !isOtherTool(toolId) && WEB_SEARCH_TOOL.test(String(toolId || ''));
-}
+import { isBuiltInWebSearchEngineTool } from '../../search/webSearchEngines.js';
+import { categoryOf } from '../../tools/toolCategory.js';
 
 /**
  * The platform's own web search scripts (`server/tools/`, shipped with the
@@ -78,8 +41,7 @@ export function isWebSearchTool(toolId) {
 const BUILT_IN_WEB_SEARCH_SCRIPTS = new Set(['braveSearch.js', 'qwantSearch.js', 'staanSearch.js']);
 
 /** Tool ids `runTool` dispatches by id, before it looks at a script. */
-const DISPATCHED_BY_ID =
-  /^(app__|workflow_|source_)|^(activate_skill|read_skill_resource|find_skill)$/;
+const DISPATCHED_BY_ID = /^(app__|workflow_)|^(activate_skill|read_skill_resource|find_skill)$/;
 
 /**
  * Whether the call ran one of the platform's own web search scripts: the
@@ -102,9 +64,19 @@ function isBuiltInWebSearch(toolId, toolDef) {
   return BUILT_IN_WEB_SEARCH_SCRIPTS.has(toolDef.script);
 }
 
-/** Whether the tool is the page reader, which reads one page rather than searching. */
-function isPageReader(toolId) {
-  return String(toolId || '').toLowerCase() === PAGE_READER_TOOL_ID;
+/**
+ * Whether the tool reads one page of the web rather than searching it: a
+ * fetch whose origin is the web (the page reader declares it).
+ */
+function isPageReader(toolDef) {
+  const { kind, origin } = categoryOf(toolDef);
+  return kind === 'fetch' && origin === 'web';
+}
+
+/** Whether the tool searches the web: a search whose origin is the web. */
+function isWebSearch(toolDef) {
+  const { kind, origin } = categoryOf(toolDef);
+  return kind === 'search' && origin === 'web';
 }
 
 /**
@@ -188,7 +160,7 @@ export const webSourceProducer = {
    * @param {{toolId: string, toolDef?: Object, result: unknown, failed?: boolean}} call
    * @returns {{resultCount?: number, readOutcome?: 'opened'|'empty'}}
    */
-  outcomeOf({ toolId, toolDef, result, failed }) {
+  outcomeOf({ toolDef, result, failed }) {
     if (failed || !result || typeof result !== 'object' || result.error) return {};
     // A connected server's array of content blocks (text, images) is not a hit
     // list: counting them would declare "N results" for one block. An array of
@@ -201,7 +173,7 @@ export const webSourceProducer = {
     ) {
       return {};
     }
-    if (isPageReader(toolId)) {
+    if (isPageReader(toolDef)) {
       return typeof result.content === 'string'
         ? { readOutcome: result.content.trim() ? 'opened' : 'empty' }
         : {};
@@ -210,9 +182,9 @@ export const webSourceProducer = {
     return hits ? { resultCount: hits.length } : {};
   },
 
-  /** @param {{toolId: string, toolDef?: Object}} call */
-  matches({ toolId, toolDef }) {
-    return isPageReader(toolId) || isWebSearchTool(toolId) || isWebSearchEngineTool(toolDef);
+  /** @param {{toolDef?: Object}} call */
+  matches({ toolDef }) {
+    return isPageReader(toolDef) || isWebSearch(toolDef);
   },
 
   /**
@@ -221,7 +193,7 @@ export const webSourceProducer = {
    * @returns {{items: Array, queries: string[]}}
    */
   fromToolResult({ toolId, toolDef, args, result, reported = [], failed }) {
-    const reader = isPageReader(toolId);
+    const reader = isPageReader(toolDef);
     const hitPrivacy = { private: !isBuiltInWebSearch(toolId, toolDef) };
     const queries = reader ? [] : [queryOf(args)].filter(Boolean);
     if (failed || !result || typeof result !== 'object' || result.error) {

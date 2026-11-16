@@ -33,7 +33,8 @@ import { LLMError, LLM_ERROR_CODES, isLLMError, isAbortError } from './contracts
 import { RUN_LOG_EVENTS } from '../../../shared/runEvents.js';
 import { addUsage, normalizeUsage } from './llmUsage.js';
 import { repairToolArguments, applyParameterDefaults, matchTool } from './toolArgs.js';
-import { classifyToolResult, isCitationProducingTool } from './toolClassify.js';
+import { classifyToolResult } from './toolClassify.js';
+import { isCitationProducing } from '../tools/toolCategory.js';
 import { startedDisplayOf } from '../../utils/toolDisplay.js';
 import { extractToolOutcome, extractToolSources, finalizeSourceFrame } from '../sources/index.js';
 import { runToolCallScope } from '../sources/toolCallScope.js';
@@ -1288,7 +1289,7 @@ export class AgentLoop {
             reason,
             count,
             message: verdict.message,
-            isSearch: !toolDef?.isInternalTool && isCitationProducingTool(key)
+            isSearch: isCitationProducing(toolDef)
           })
         )
       );

@@ -36,7 +36,7 @@ export {
   noUserPayload as approvalNoUserPayload
 } from './approvalSeam.js';
 export { imageLiftSeam, extractImageData } from './imageLiftSeam.js';
-export { knowledgeSourceSeam, classifyKnowledgeSource } from './knowledgeSourceSeam.js';
+export { knowledgeSourceSeam } from './knowledgeSourceSeam.js';
 export { passthroughSeam } from './passthroughSeam.js';
 export { questionSeam, markInteractiveTools } from './questionSeam.js';
 export { structuredOutputSeam, structuredOutputRetryPrompt } from './structuredOutputSeam.js';

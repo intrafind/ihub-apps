@@ -233,6 +233,8 @@ export async function discoverActions({ definition, instance, language = 'en' })
       guidance: localized(action.guidance, language, ''),
       examples: (action.examples || []).map(example => localized(example, language, '')),
       sources: action.sources,
+      // The definition's declaration, else the connector's own for the action.
+      activity: action.activity ?? connector.activity?.[action.name],
       extras: perInstance(impl, 'extras')
     };
   });

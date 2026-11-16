@@ -454,7 +454,7 @@ describe('what the loop and the chat show for the search tool', () => {
   const searchTool = toolSearchToolDefinition('en');
 
   it('shows search_tools as a plain tool call, not as a web search', () => {
-    assert.equal(classifyToolKnowledgeSource(searchTool.id, searchTool), null);
+    assert.equal(classifyToolKnowledgeSource(searchTool), null);
     const display = toolDisplayOf(searchTool);
     assert.equal(display.activityKind, 'tool');
     assert.equal(display.title, 'Search tools');

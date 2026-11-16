@@ -22,49 +22,28 @@
  * @module utils/toolDisplay
  */
 
-import { classifyToolKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
+import { categoryOf } from '../services/tools/toolCategory.js';
 import { boundedText, integrationLabelOf } from './toolIntegrationLabel.js';
 import { activityOriginOfSource } from '../services/chat/answerBasis.js';
 import { ACTIVITY_ORIGINS } from '../../shared/runEvents.js';
 
 export { ACTIVITY_ORIGINS };
 
-/** Built-in tools that read one page or document. */
-const FETCH_TOOL_IDS = new Set(['read_url', 'ifinder_getcontent', 'knowledge_read']);
-
 const text = boundedText;
 
 /**
- * The row a call is. A connected system — an integration, MCP server or
- * remote agent — is a plain call even when its id says "search"
- * (`jira_searchTickets`): it finds records, not pages or documents. So is a
- * people-directory search. The built-in search, page reader and source
- * lookups are searches and fetches.
- * @param {string} toolId
- * @param {string|null} source - see `classifyToolKnowledgeSource`
- * @returns {'search'|'fetch'|'tool'}
- */
-export function activityKindOf(toolId, source) {
-  if (source === 'integration') return 'tool';
-  const id = String(toolId || '').toLowerCase();
-  if (FETCH_TOOL_IDS.has(id)) return 'fetch';
-  if (id.includes('people')) return 'tool';
-  if (id.includes('search') || id.startsWith('source_') || id === 'knowledge_list') return 'search';
-  return 'tool';
-}
-
-/**
- * Where a call looked, decided by the server: the footer's kind for the tool's
- * knowledge source (the page reader is the web). `undefined` for a call the server cannot place (loop-internal
- * tools, creators, a search it cannot classify): the chat then says nothing
- * about where it looked and never guesses.
+ * Where a call looked, decided by the server from the tool's category
+ * (`services/tools/toolCategory`): a connected system is `integration`, the
+ * built-in search and readers say `web`, `ifinder` or `project`. `undefined`
+ * for a call the server cannot place (loop-internal tools, creators, a tool
+ * that declares nothing): the chat then says nothing about where it looked and
+ * never guesses.
  *
  * @param {Object|null|undefined} toolDef - the resolved tool definition
  * @returns {'project'|'web'|'ifinder'|'iassistant'|'documents'|'integration'|undefined}
  */
 export function activityOriginOf(toolDef) {
-  if (!toolDef || typeof toolDef !== 'object' || toolDef.isInternalTool) return undefined;
-  return activityOriginOfSource(classifyToolKnowledgeSource(toolDef.id, toolDef));
+  return categoryOf(toolDef).origin;
 }
 
 export { activityOriginOfSource };
@@ -122,12 +101,10 @@ export function toolDisplayOf(toolDef) {
     if (name && name !== toolDef.id) title = name;
   }
 
-  const source = classifyToolKnowledgeSource(toolDef.id, toolDef);
-  // The loop's own tools (skills, tool search) are plain calls, whatever their id says.
-  const activityKind = toolDef.isInternalTool ? 'tool' : activityKindOf(toolDef.id, source);
+  // What the call is and where it looked: the tool's own category.
+  const { kind: activityKind, origin: activityOrigin } = categoryOf(toolDef);
 
   const outputKind = outputKindOf(toolDef);
-  const activityOrigin = activityOriginOf(toolDef);
 
   return {
     ...(title ? { title } : {}),

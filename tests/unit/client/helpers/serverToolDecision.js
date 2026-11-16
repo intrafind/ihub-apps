@@ -6,14 +6,33 @@
  * from the server's own decision (server/utils/toolDisplay.js), so fixtures
  * never teach the client to infer them from a tool id.
  */
-import { activityKindOf, activityOriginOfSource } from '../../../../server/utils/toolDisplay.js';
-import { classifyKnowledgeSource } from '../../../../server/services/loop/seams/knowledgeSourceSeam.js';
+import { toolDisplayOf } from '../../../../server/utils/toolDisplay.js';
+
+const WEB = { kind: 'search', origin: 'web' };
+
+/**
+ * What the built-in tools declare (`activity`; the server's own tests check the
+ * real definitions). A tool id that is not here declares nothing: the server
+ * sends a plain call, whatever the id says.
+ */
+const DECLARED = {
+  braveSearch: WEB,
+  qwantSearch: WEB,
+  staanSearch: WEB,
+  read_url: { kind: 'fetch', origin: 'web' },
+  knowledge_search: { kind: 'search', origin: 'project' },
+  knowledge_list: { kind: 'search', origin: 'project' },
+  knowledge_read: { kind: 'fetch', origin: 'project' },
+  iFinder_search: { kind: 'search', origin: 'ifinder' },
+  iFinder_getContent: { kind: 'fetch', origin: 'ifinder' }
+};
 
 export function withServerDecision(type, data = {}) {
   if (type !== 'tool/started' || !data.toolId || data.activityKind) return data;
-  const source = classifyKnowledgeSource(data.toolId);
-  const activityKind = activityKindOf(data.toolId, source);
-  const activityOrigin = activityOriginOfSource(source);
+  const { activityKind, activityOrigin } = toolDisplayOf({
+    id: data.toolId,
+    ...(DECLARED[data.toolId] ? { activity: DECLARED[data.toolId] } : {})
+  });
   return {
     ...data,
     activityKind,

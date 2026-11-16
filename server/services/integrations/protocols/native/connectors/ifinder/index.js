@@ -218,6 +218,16 @@ const connector = {
     getFacetValues: action('getFacetValues'),
     listProfiles: action('listProfiles')
   },
+  /** What each action is in the chat; every one of them looks in iFinder's documents. */
+  activity: {
+    search: { kind: 'search', origin: 'ifinder' },
+    getContent: { kind: 'fetch', origin: 'ifinder' },
+    getMetadata: { kind: 'tool', origin: 'ifinder' },
+    discover: { kind: 'tool', origin: 'ifinder' },
+    getFields: { kind: 'tool', origin: 'ifinder' },
+    getFacetValues: { kind: 'tool', origin: 'ifinder' },
+    listProfiles: { kind: 'tool', origin: 'ifinder' }
+  },
   test,
   /** Documents by reference: `GET /api/integrations/ifinder/files/*` (routes/integrations/files.js). */
   files,

@@ -19,6 +19,7 @@ import {
 import { scopeSummary } from '../services/knowledge/KnowledgeScopePlanner.js';
 import { knowledgeSourceSeam } from '../services/loop/seams/knowledgeSourceSeam.js';
 import { toolDisplayOf } from '../utils/toolDisplay.js';
+import { toolDefOf } from './helpers/builtInTools.js';
 import { integrationLabelOf } from '../utils/toolIntegrationLabel.js';
 
 test('a project alone is the kind Project, never "configured sources"', () => {
@@ -192,7 +193,8 @@ function runSeam(toolId, toolDef, outcome) {
       addKnowledgeSource: source => added.push(source),
       addIntegration: label => integrations.push(label)
     },
-    { toolId, toolDef },
+    // A built-in tool brings the declaration its generator sets; others, only what the test gives.
+    { toolId, toolDef: toolDef ?? toolDefOf(toolId) },
     outcome
   );
   return { added, integrations };

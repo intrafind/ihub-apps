@@ -441,6 +441,7 @@ const SEARCH = {
   id: 'webSearch',
   name: 'webSearch',
   script: 'braveSearch.js',
+  activity: { kind: 'search', origin: 'web' },
   description: 'search the web',
   parameters: { type: 'object', properties: { query: { type: 'string' } } }
 };
