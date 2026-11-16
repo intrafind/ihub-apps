@@ -876,3 +876,20 @@ To roll it out gradually, set `aiAcknowledgement.enabled` to `false` (Admin → 
 chat endpoint themselves with a user session must handle the `428` (confirm through
 `POST /api/eu-ai-act/acknowledgements/me`, then retry).
 
+## The Chat Stream No Longer Sends `activityScope`
+
+A tool call used to say whether it looked at the `web` or at the organisation's `documents`
+(`activityScope` on `tool/started` and in the run ledger). It is removed: where a call looked is
+`activityOrigin` (`web`, `project`, `ifinder`, `iassistant`, `integration`), which tells a project from
+iFinder from a connected system, and `places` names the project or search profile.
+
+- The chat's own screens read `activityOrigin` and are not affected.
+- Chats stored earlier keep working. Their activity rows lose the old `scope` the next time they are
+  saved, and nothing is shown differently.
+- New evidence records (`chat-evidence`) carry `activityOrigin` and no `activityScope`; records written
+  earlier keep the field.
+
+**Before upgrading:** if a script or custom client reads the chat stream (`tool/started`), the run ledger
+or the evidence records, read `activityOrigin` instead of `activityScope`. `documents` becomes `project`,
+`ifinder` or `integration` depending on the tool; `web` stays `web`.
+

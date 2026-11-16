@@ -50,7 +50,6 @@ test('V1: a reopened chat keeps the provider name of a web search', () => {
       name: 'braveSearch',
       integration: 'Brave Search',
       activityKind: 'search',
-      activityScope: 'web',
       args: { query: 'iFinder6' }
     }),
     env(3, 'tool/completed', { step: 0, callId: 'c1', toolId: 'braveSearch', name: 'braveSearch' }),
@@ -309,7 +308,6 @@ test('the origin rides on tool/started, the args frames and tool/completed', () 
       toolId: 'knowledge_search',
       name: 'knowledge_search',
       activityKind: 'search',
-      activityScope: 'documents',
       activityOrigin: 'project',
       args: { query: 'iFinder6' }
     }),
@@ -376,7 +374,6 @@ test('a call from an older server has no origin, count or outcome, and nothing i
       toolId: 'braveSearch',
       name: 'braveSearch',
       activityKind: 'search',
-      activityScope: 'web',
       args: { query: 'q' }
     }),
     env(3, 'tool/completed', { step: 0, callId: 'a', toolId: 'braveSearch', name: 'braveSearch' }),
@@ -449,7 +446,6 @@ const item = extra => ({
   toolId: 'braveSearch',
   name: 'braveSearch',
   status: 'completed',
-  scope: 'web',
   query: 'q',
   details: [],
   sources: [],
@@ -518,7 +514,6 @@ test('a share carries the origin type, never the name of what was searched', () 
             toolId: 'knowledge_search',
             origin: 'project',
             resultCount: 0,
-            scope: 'documents',
             integration: 'Project Alpha'
           }),
           item({

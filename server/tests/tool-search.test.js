@@ -457,7 +457,6 @@ describe('what the loop and the chat show for the search tool', () => {
     assert.equal(classifyToolKnowledgeSource(searchTool.id, searchTool), null);
     const display = toolDisplayOf(searchTool);
     assert.equal(display.activityKind, 'tool');
-    assert.equal(display.activityScope, undefined);
     assert.equal(display.title, 'Search tools');
   });
 
