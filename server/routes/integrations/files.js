@@ -34,6 +34,7 @@ import { API_ERROR_CODES, GENERIC_ERROR_CODES } from '../../../shared/apiErrors.
 import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 import { sendProviderContent } from '../../utils/sendProviderContent.js';
 import logger from '../../utils/logger.js';
+import { recordSourceAction } from '../../telemetry/metrics.js';
 import {
   describeDocumentProvider,
   resolveDocumentProvider
@@ -148,6 +149,7 @@ router.get(
     } catch (error) {
       throw failureOf(error, 'content');
     }
+    recordSourceAction(req.params.integration, 'content');
     return sendProviderContent(res, namedBy(filename, content));
   }
 );
@@ -159,7 +161,9 @@ router.get('/:integration/files/:id', authRequired, async (req, res) => {
     throw new ServiceError('DOCUMENT_DETAILS_UNAVAILABLE', 'This integration has no details');
   }
   try {
-    return res.json(await provider.metadata({ ref, user: req.user }));
+    const details = await provider.metadata({ ref, user: req.user });
+    recordSourceAction(req.params.integration, 'details');
+    return res.json(details);
   } catch (error) {
     throw failureOf(error, 'metadata');
   }
