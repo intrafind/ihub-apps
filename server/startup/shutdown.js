@@ -51,6 +51,12 @@ export async function shutdown() {
   } catch {
     // The pool may never have been loaded
   }
+  try {
+    const { shutdownSearchPool } = await import('../services/knowledge/searchPool.js');
+    await shutdownSearchPool();
+  } catch {
+    // The pool may never have been loaded
+  }
   // Conversation state coalesces its writes on a timer to keep document I/O
   // off the streaming path; drain what is still buffered, or a chat resumes
   // after the restart threaded onto a stale parent message.

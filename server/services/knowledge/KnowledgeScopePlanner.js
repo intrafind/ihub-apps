@@ -65,6 +65,7 @@ import projectActivityTracker from '../../telemetry/ProjectActivityTracker.js';
 import { isRefreshExpired } from '../projects/refreshTtl.js';
 import { projectSettings } from '../projects/projectSettings.js';
 import { docOf } from './types.js';
+import { renderExcerptSection } from './corpusSearch.js';
 import { DEFAULT_KNOWLEDGE_MODE, KNOWLEDGE_MODES } from '../../../shared/knowledgeModes.js';
 
 export const CONTEXT_SHARE = 0.4;
@@ -218,21 +219,6 @@ function pinnedFirst(docs) {
   return [...docs.filter(({ doc }) => doc.pinned), ...docs.filter(({ doc }) => !doc.pinned)];
 }
 
-function escapeXmlAttribute(value) {
-  return String(value).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
-}
-
-/** One hit as the text of an excerpt: its section, with the id the model reads it by. */
-function renderExcerptSection(hit) {
-  const attributes = [
-    `id="${escapeXmlAttribute(hit.sectionId)}"`,
-    `path="${escapeXmlAttribute(hit.path.join(' › '))}"`
-  ];
-  const [part, partCount] = String(hit.part).split('/');
-  if (Number(partCount) > 1) attributes.push(`part="${part}/${partCount}"`);
-  return `<section ${attributes.join(' ')}>\n${hit.text}\n</section>`;
-}
-
 /**
  * The sections of a project's unpinned documents that best match the question,
  * verbatim, one excerpt per document (the best document first), within
@@ -259,7 +245,7 @@ async function excerptsFor(provider, project, ctx, { question, roomTokens, loade
     found = await provider.search(
       project,
       { ...ctx, query: question },
-      { query: question, limit: EXCERPT_HITS, docIds, budgetChars: roomTokens * 4 }
+      { query: question, limit: EXCERPT_HITS, docIds, budgetChars: roomTokens * 4, sections: true }
     );
   } catch (error) {
     logger.warn('Project excerpts could not be searched', {
@@ -272,8 +258,9 @@ async function excerptsFor(provider, project, ctx, { question, roomTokens, loade
   const byDoc = new Map();
   let used = 0;
   for (const hit of found.hits || []) {
-    const section = renderExcerptSection(hit);
-    const tokens = estimateTokens(section);
+    // The local provider renders and counts the sections on its search thread.
+    const section = hit.section ?? renderExcerptSection(hit);
+    const tokens = hit.sectionTokens ?? estimateTokens(section);
     if (used + tokens > roomTokens) continue;
     used += tokens;
     if (!byDoc.has(hit.docId)) byDoc.set(hit.docId, []);
