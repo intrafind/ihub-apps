@@ -250,6 +250,8 @@ Until step 4 is done, cookie affinity stays the documented setup for several pod
    storage available there? See §8.
 7. Is a broker (NATS, Redis or Valkey) acceptable as a required component for installations with
    several pods? Do customers already run one? See §9.
+8. Without a shared volume and with configuration replicated from the leader pod (§8): how long
+   may a pod keep serving after it loses the link to the leader, before it reports not ready?
 
 ## 7. Documentation to fix independently of this proposal
 
@@ -309,9 +311,20 @@ read is higher than on a local volume, so the load test of phase 4 has to be rep
   conditional write in the object store, or the Kubernetes Lease API.
 - Keys and secrets come from environment variables on every pod, as `docs/scaling.md` already
   requires for several replicas.
-- Configuration is small and has few writers, so it is the one kind of state where option C is
-  realistic on its own: the leader pod is the only writer and the others receive each change over
-  the bus. With option B it is simply another namespace in the object store.
+- Configuration is small and has few writers, so it is the one state where option C is realistic
+  on its own: the leader pod is the only writer and the others receive each change over the bus.
+  With option B it is simply another namespace in the object store. Option C for configuration
+  needs these rules, because without a shared volume there is no file to re-read and the TTL
+  refresh of §4.9 has nothing to fall back on:
+  - Every change carries a version number that only grows. A pod that receives a version it does
+    not expect next knows it missed one.
+  - The snapshot of §4.4 does not include configuration. A pod that starts, reconnects or detects
+    a gap asks the leader for the whole configuration and its version, and applies it before it
+    takes requests again.
+  - A pod that is not current reports itself as not ready, so the ingress stops sending it
+    requests. That covers a pod that has no link to the leader: it cannot know whether groups or
+    permissions changed, so it does not keep serving with the copy it has. How long a pod may
+    keep serving after it loses the link, before it reports not ready, is open question 8.
 
 ### Recommendation
 
@@ -359,7 +372,8 @@ the version that would be shipped.
 | Presence maps (who holds what) | mostly unnecessary; a request to a subject nobody listens on is answered at once with "no responders" | keys with an expiry |
 | Request/reply and gather | built in | built on Pub/Sub with reply channels, as the bus does today |
 | Counters held by the primary (§4.6) | key-value store with compare-and-set | atomic increment with expiry; the simplest fit |
-| Locks, leases, scheduler owner | key-value entry created only if absent, with a time-to-live | `SET` with "only if absent" and an expiry |
+| Scheduler owner and other "only one pod does this" leases | key-value entry created only if absent, with a time-to-live | `SET` with "only if absent" and an expiry |
+| Locks that guard writes to stored data | stay with the storage provider, see §9.5 | stay with the storage provider, see §9.5 |
 | Config invalidation | subject, or a watch on a key-value bucket | channel |
 | Live events of a run, and replay after a reconnect | JetStream stream, read from a sequence number | Redis Stream, read from an entry id |
 | Links between pods: discovery, handshake, snapshot (§4.2–4.4) | not needed | not needed |
@@ -406,14 +420,29 @@ and a non-whitelisted host. TLS to the broker is mandatory, as for the links of 
 ### 9.5 What a broker does not solve
 
 - **Storage.** Chats, uploads, project documents and configuration still need a home all pods
-  reach: the shared volume (§4.7), object storage, or a database (§8). With locks on the broker,
-  items 2 and 3 of §4.7 (lease files, scheduler lock) go away; item 1 (attribute caching) stays.
-  Putting documents and files into NATS as well removes the shared volume, but makes NATS the
-  system of record for about 50 GB per month, with listing by owner built on key names.
+  reach: the shared volume (§4.7), object storage, or a database (§8). Putting documents and
+  files into NATS as well removes the shared volume, but makes NATS the system of record for
+  about 50 GB per month, with listing by owner built on key names.
+- **Locks on stored data.** A lock that guards a read-modify-write of stored data belongs to the
+  storage provider's `LockManager`, not to the broker: lease files on a shared volume, conditional
+  writes on object storage. There is one lock system per installation, never two side by side,
+  because a file lease and a broker lock do not exclude each other. On a shared volume this means
+  item 2 of §4.7 (lease files) stays and must pass its tests; item 3 (the scheduler lock) can
+  move to the broker; item 1 (attribute caching) stays.
 - **Availability of the broker.** It becomes the one thing every pod depends on. When it is
-  unreachable, each pod behaves like a single pod: turns it runs and streams itself keep working,
-  stop and steering from another pod fail, config changes arrive with the TTL refresh, and, by
-  the decision of §4.6, new logins are refused.
+  unreachable:
+  - Writes to stored data stay safe, because their locks are not on the broker. Turns a pod runs
+    and streams itself keep working and are stored.
+  - Stop and steering from another pod fail, and a reconnect on another pod cannot follow a
+    running turn until the broker is back.
+  - Config changes arrive with the TTL refresh from the shared storage.
+  - Nothing that needs a broker lease runs: no scheduled tasks until the broker is back.
+  - By the decision of §4.6, new logins are refused.
+
+  If an installation has no storage with usable locks, locks would have to live on the broker.
+  Then every write that needs a lock waits for the broker and fails when the wait times out, as
+  `withLock` does today (`LockTimeoutError`; the guarded code never runs without the lock), and
+  turns that need such a write fail during an outage.
 - **POST-response streaming** is still worth doing first: it takes the token traffic of ordinary
   turns off the broker's critical path.
 
@@ -422,7 +451,7 @@ and a non-whitelisted host. TLS to the broker is mandatory, as for the links of 
 | | Mesh of primaries (§4) | Broker |
 | --- | --- | --- |
 | New component at the customer | none | one, three nodes for availability |
-| Code in iHub | transport, discovery, handshake, replicated presence, leader pod | a transport behind the bus interface; counters and locks on the broker |
+| Code in iHub | transport, discovery, handshake, replicated presence, leader pod | a transport behind the bus interface; counters and leases on the broker |
 | Primary as relay | stays, also between pods | gone |
 | Counters across pods | leader pod, with the partition cases of §4.6 | one shared counter |
 | Mid-run reconnect on another pod | relay from the pod that runs the turn, or the ledger on the volume | read the run's stream from a sequence |
@@ -439,5 +468,5 @@ Recommendation:
 4. If no new component is acceptable, the mesh of §4 remains the proposal.
 
 Phases with a broker, replacing rows 2 and 5 of §5: a transport interface in `clusterBus.js` with
-the IPC and the broker implementation and the ids of §4.5; then counters and locks on the broker;
+the IPC and the broker implementation and the ids of §4.5; then counters and leases on the broker;
 then the load test with 2 and 4 pods; optionally the run ledger on JetStream.
