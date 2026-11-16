@@ -26,6 +26,17 @@ describe('providerMarkingOffer', () => {
     expect(providerMarkingOffer(anthropic())).toEqual(['text']);
   });
 
+  test('Nano Banana 2.1 (an id without "image") is an image model too', () => {
+    expect(
+      providerMarkingOffer({
+        id: 'nb',
+        provider: 'google',
+        modelId: 'gemini-nano-banana-2.1',
+        supportsImageGeneration: true
+      })
+    ).toEqual(['text', 'image']);
+  });
+
   test('a Gemini image model is offered text and image', () => {
     expect(
       providerMarkingOffer({

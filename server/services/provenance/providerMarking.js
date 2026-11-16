@@ -55,11 +55,12 @@ function googleSynthId() {
 
 /**
  * Whether a Gemini model returns images (Nano Banana: `gemini-2.5-flash-image`,
- * `gemini-3-pro-image-preview`, …). The Gemini API listing does not say what a
- * model outputs, so the id decides, like the type guesses of the import.
+ * `gemini-3-pro-image-preview`, and the ids without "image" such as
+ * `gemini-nano-banana-2.1`). The Gemini API listing does not say what a model
+ * outputs, so the id decides, like the type guesses of the import.
  */
 function isGeminiImageModel(id) {
-  return /^gemini-(.*-)?image(-|$)/i.test(id);
+  return /^gemini-(.*-)?image(-|$)/i.test(id) || /^gemini-nano-banana(-|$)/i.test(id);
 }
 
 /**

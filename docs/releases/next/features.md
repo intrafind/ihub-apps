@@ -232,7 +232,7 @@ longer start as "Not marked". They are imported with the output marking their pr
 EU AI Act records name the mark without anyone entering it model by model:
 
 - **Google, text:** `contentMarking.text` is `provider` with the scheme `synthid`.
-- **Google, images:** a Gemini image model (Nano Banana) also gets `contentMarking.image` the same way, and is
+- **Google, images:** a Gemini image model (Nano Banana, including ids without "image" such as `gemini-nano-banana-2.1`) also gets `contentMarking.image` the same way, and is
   imported with **Supports Image Generation** switched on.
 - **Anthropic, text:** the Claude models Anthropic's page marks for text (Fable 5.2, 5.1 and 5; Mythos 5.2, 5.1
   and 5; Opus 5.5, 5, 4.8, 4.7, 4.6 and 4.5; Sonnet 5.5, 5, 4.6 and 4.5; Haiku 5.5 and 4.5) get

@@ -45,6 +45,13 @@ const LISTING = {
       supportedGenerationMethods: ['generateContent', 'countTokens']
     },
     {
+      name: 'models/gemini-nano-banana-2.1',
+      displayName: 'Nano Banana 2.1',
+      inputTokenLimit: 131072,
+      outputTokenLimit: 32768,
+      supportedGenerationMethods: ['generateContent', 'countTokens']
+    },
+    {
       name: 'models/gemini-3.8-flash-tts',
       displayName: 'Gemini 3.8 Flash TTS',
       supportedGenerationMethods: ['generateContent', 'countTokens']
@@ -117,6 +124,19 @@ test('an import of a Gemini image model also declares image marking and generati
   const image = entries.find(e => e.id === 'gemini-3-pro-image-preview');
   const config = buildImportedModelConfig(image, {
     id: 'google-nano-banana-pro',
+    apiType: 'google',
+    providerId: 'google',
+    modelsUrl: MODELS_URL
+  });
+  assert.deepEqual(config.contentMarking, { text: SYNTHID, image: SYNTHID });
+  assert.equal(config.supportsImageGeneration, true);
+});
+
+test('Nano Banana 2.1, whose id has no "image" in it, is imported as an image generator', async () => {
+  const entries = await listing();
+  const banana = entries.find(e => e.id === 'gemini-nano-banana-2.1');
+  const config = buildImportedModelConfig(banana, {
+    id: 'google-nano-banana-2-1',
     apiType: 'google',
     providerId: 'google',
     modelsUrl: MODELS_URL
