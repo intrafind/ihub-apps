@@ -145,7 +145,13 @@ channel-safe, and only from sources that the `authenticated` group may read**, w
 projects and per-user integrations switched off. It says so in the first reply. **If the bot cannot
 establish that boundary for a request, it refuses** and offers a 1:1 chat. Guests and external members
 of a channel are outside `authenticated`, so a channel with them gets no answers unless the admin
-allows it. A later option is to intersect the groups of all members (roster lookup), which needs a
+allows it.
+
+The boundary covers **history** too, because earlier turns are context for the next answer. A chat
+created in a channel or group chat is *audience-bound*: it holds only turns that were visible to that
+audience, the owner can open it in the web app read-only or fork it, and no personal source, project or
+per-user integration is ever added to it. A 1:1 chat is never used as context for a channel reply. If the
+bot cannot tell that a chat is audience-bound, it starts a new one or refuses. A later option is to intersect the groups of all members (roster lookup), which needs a
 members permission and is out of scope for v1. Mentions are the only trigger; the bot ignores other
 messages.
 
