@@ -546,7 +546,13 @@ test('a share carries the origin type, never the name of what was searched', () 
             resultCount: 3
           }),
           item({ id: 'r', kind: 'fetch', toolId: 'read_url', origin: 'web', readOutcome: 'empty' }),
-          item({ id: 'w', origin: 'web', integration: 'Brave Search', resultCount: 5 })
+          item({
+            id: 'w',
+            origin: 'web',
+            integration: 'Brave Search',
+            resultCount: 5,
+            publicHits: true
+          })
         ]
       }
     })
