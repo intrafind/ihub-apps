@@ -2274,3 +2274,14 @@ again. It sends only the lines that change, so a fix or a small request ("make t
   load or a file that was cut off is fixed before the answer. A dead link, a remote image or a
   missing `viewBox` is now a note the model mentions or fixes in passing, never a reason to
   rewrite the file.
+
+## Proxy and NTLM Sign-In No Longer Rewrite `users.json` on Every Request
+
+With proxy authentication, or NTLM without a session token, every request signed the user in
+again and rewrote `users.json`, which every worker then reloaded. A sign-in that changes nothing
+now writes nothing: the file is written when a user's name, email or login name changes, and once
+a day for the "last active" date. This takes most of the disk and CPU load off busy proxy and NTLM
+installations.
+
+- A user's `updatedAt` in `users.json` now moves only when their record changed, no longer on
+  every sign-in.

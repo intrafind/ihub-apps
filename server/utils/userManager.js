@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import fs from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { atomicWriteJSON } from './atomicWrite.js';
@@ -478,122 +479,183 @@ export function findLocalUserById(userId, usersFilePath) {
  * @returns {Object} Created/updated user object
  */
 export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
+  // Proxy auth and NTLM without a JWT land here on every request, and nearly all of
+  // them change nothing: judged on the cached copy, they cost no read and no write.
+  const unchanged = unchangedExternalUser(loadUsers(usersFilePath), externalUser);
+  if (unchanged) return unchanged;
+
   // Read, change and write under the store's lock: two first logins at once, or a
   // login next to an admin edit, must not overwrite each other. The change runs
   // again on a newer body when another worker wrote first, so it keeps no state
   // from an earlier run.
   let result = null;
   await updateUsersFile(usersFilePath, usersConfig => {
-    result = provisionExternalUser(usersConfig, externalUser);
-    return true;
+    const { user, changed } = provisionExternalUser(usersConfig, externalUser);
+    result = user;
+    return changed;
   });
   return result;
+}
+
+/** Today as `YYYY-MM-DD` (UTC), the granularity of `lastActiveDate`. */
+function today() {
+  return new Date().toISOString().split('T')[0];
+}
+
+/** A record as JSON would store it: no `undefined` members, so comparisons see what a write would. */
+function asStored(user) {
+  return JSON.parse(JSON.stringify(user));
+}
+
+/** The auth method an external login is persisted under. */
+function externalAuthMethod(externalUser) {
+  return externalUser.authMethod === 'ldap'
+    ? 'ldap'
+    : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
+      ? 'ntlm'
+      : externalUser.provider === 'proxy'
+        ? 'proxy'
+        : externalUser.provider === 'teams'
+          ? 'teams'
+          : 'oidc';
+}
+
+/** The record an external login belongs to, by email or external subject. */
+function findExternalUser(usersConfig, externalUser, authMethod) {
+  return (
+    findUserByIdentifier(usersConfig, externalUser.email, authMethod) ||
+    findUserByIdentifier(usersConfig, externalUser.id, authMethod)
+  );
+}
+
+/**
+ * The cached record of an external login when the login would not change it:
+ * same data, and already active today. Null when it has to be written (or the
+ * user is new).
+ *
+ * @param {Object} usersConfig - Cached users configuration (not changed)
+ * @param {Object} externalUser - External user data
+ * @returns {Object|null} The user with its id, or null
+ */
+function unchangedExternalUser(usersConfig, externalUser) {
+  const authMethod = externalAuthMethod(externalUser);
+  const existing = findExternalUser(usersConfig, externalUser, authMethod);
+  if (!existing) return null;
+  const record = usersConfig.users[existing.id];
+  if (!record || record.lastActiveDate !== today()) return null;
+  if (applyExternalLogin(asStored(record), externalUser, authMethod)) return null;
+  return { ...record, id: existing.id };
+}
+
+/**
+ * Apply what an external login says about a user to their record, in place:
+ * the auth method, the provider data, name, email and login name. Not the
+ * activity fields.
+ *
+ * @param {Object} user - users.json record to change
+ * @param {Object} externalUser - External user data
+ * @param {string} authMethod - See externalAuthMethod
+ * @returns {boolean} Whether the record changed
+ */
+function applyExternalLogin(user, externalUser, authMethod) {
+  const before = asStored(user);
+
+  // Ensure authMethods includes the current auth method
+  if (!user.authMethods) {
+    user.authMethods = [authMethod];
+  } else if (!user.authMethods.includes(authMethod)) {
+    user.authMethods.push(authMethod);
+  }
+
+  // Update external auth data based on auth method
+  if (authMethod === 'oidc') {
+    user.oidcData = {
+      subject: externalUser.id,
+      provider: externalUser.provider,
+      lastProvider: externalUser.provider,
+      ...user.oidcData
+    };
+  } else if (authMethod === 'proxy') {
+    user.proxyData = {
+      subject: externalUser.id,
+      provider: externalUser.provider,
+      lastProvider: externalUser.provider,
+      ...user.proxyData
+    };
+  } else if (authMethod === 'teams') {
+    user.teamsData = {
+      subject: externalUser.id,
+      provider: externalUser.provider,
+      lastProvider: externalUser.provider,
+      tenantId: externalUser.teamsData?.tenantId,
+      upn: externalUser.teamsData?.upn,
+      ...user.teamsData
+    };
+  } else if (authMethod === 'ntlm') {
+    user.ntlmData = {
+      subject: externalUser.id,
+      provider: externalUser.provider,
+      lastProvider: externalUser.provider,
+      domain: externalUser.domain,
+      workstation: externalUser.workstation,
+      ...user.ntlmData
+    };
+  } else if (authMethod === 'ldap') {
+    user.ldapData = {
+      subject: externalUser.id,
+      provider: externalUser.provider,
+      lastProvider: externalUser.provider,
+      username: externalUser.ldapData?.username,
+      ...user.ldapData
+    };
+  }
+
+  // Update basic info from external provider
+  user.name = externalUser.name || user.name;
+  user.email = externalUser.email || user.email;
+  // Heal the login name. Records created before the directory login name was
+  // persisted carry the email here (see the create branch below), and nothing
+  // used to write it again, so the wrong value survived every later login.
+  // The directory owns this field for an external user, so take its value
+  // whenever the provider supplies one.
+  user.username = externalUser.username || user.username;
+
+  // Store internal groups - groups manually assigned to users in the admin interface
+  // External groups from auth providers are handled at runtime, not persisted
+  if (!user.internalGroups) {
+    user.internalGroups = [];
+  }
+
+  return !isDeepStrictEqual(before, asStored(user));
 }
 
 /**
  * Apply an external login to a users configuration, in place.
  *
+ * `updatedAt` moves only when the record's data changed; `lastActiveDate` once
+ * a day.
+ *
  * @param {Object} usersConfig - Users configuration to change
  * @param {Object} externalUser - External user data
- * @returns {Object} Created/updated user object
+ * @returns {{user: Object, changed: boolean}} Created/updated user object, and
+ *   whether `usersConfig` changed (false: nothing to write)
  */
 function provisionExternalUser(usersConfig, externalUser) {
-  // Determine auth method based on provider
-  const authMethod =
-    externalUser.authMethod === 'ldap'
-      ? 'ldap'
-      : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
-        ? 'ntlm'
-        : externalUser.provider === 'proxy'
-          ? 'proxy'
-          : externalUser.provider === 'teams'
-            ? 'teams'
-            : 'oidc';
-
-  // Try to find existing user by email or external subject
-  let existingUser =
-    findUserByIdentifier(usersConfig, externalUser.email, authMethod) ||
-    findUserByIdentifier(usersConfig, externalUser.id, authMethod);
+  const authMethod = externalAuthMethod(externalUser);
+  const existingUser = findExternalUser(usersConfig, externalUser, authMethod);
 
   const now = new Date().toISOString();
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  const day = today();
 
   if (existingUser) {
     // Update existing user
     const userId = existingUser.id;
     const user = usersConfig.users[userId];
-
-    // Ensure authMethods includes the current auth method
-    if (!user.authMethods) {
-      user.authMethods = [authMethod];
-    } else if (!user.authMethods.includes(authMethod)) {
-      user.authMethods.push(authMethod);
-    }
-
-    // Update external auth data based on auth method
-    if (authMethod === 'oidc') {
-      user.oidcData = {
-        subject: externalUser.id,
-        provider: externalUser.provider,
-        lastProvider: externalUser.provider,
-        ...user.oidcData
-      };
-    } else if (authMethod === 'proxy') {
-      user.proxyData = {
-        subject: externalUser.id,
-        provider: externalUser.provider,
-        lastProvider: externalUser.provider,
-        ...user.proxyData
-      };
-    } else if (authMethod === 'teams') {
-      user.teamsData = {
-        subject: externalUser.id,
-        provider: externalUser.provider,
-        lastProvider: externalUser.provider,
-        tenantId: externalUser.teamsData?.tenantId,
-        upn: externalUser.teamsData?.upn,
-        ...user.teamsData
-      };
-    } else if (authMethod === 'ntlm') {
-      user.ntlmData = {
-        subject: externalUser.id,
-        provider: externalUser.provider,
-        lastProvider: externalUser.provider,
-        domain: externalUser.domain,
-        workstation: externalUser.workstation,
-        ...user.ntlmData
-      };
-    } else if (authMethod === 'ldap') {
-      user.ldapData = {
-        subject: externalUser.id,
-        provider: externalUser.provider,
-        lastProvider: externalUser.provider,
-        username: externalUser.ldapData?.username,
-        ...user.ldapData
-      };
-    }
-
-    // Update basic info from external provider
-    user.name = externalUser.name || user.name;
-    user.email = externalUser.email || user.email;
-    // Heal the login name. Records created before the directory login name was
-    // persisted carry the email here (see the create branch below), and nothing
-    // used to write it again, so the wrong value survived every later login.
-    // The directory owns this field for an external user, so take its value
-    // whenever the provider supplies one.
-    user.username = externalUser.username || user.username;
-
-    // Store internal groups - groups manually assigned to users in the admin interface
-    // External groups from auth providers are handled at runtime, not persisted
-    if (!user.internalGroups) {
-      user.internalGroups = [];
-    }
-
-    // Update activity tracking
-    user.lastActiveDate = today;
-    user.updatedAt = now;
-
-    return { ...user, id: userId };
+    const changed = applyExternalLogin(user, externalUser, authMethod);
+    if (changed) user.updatedAt = now;
+    const activeToday = user.lastActiveDate === day;
+    user.lastActiveDate = day;
+    return { user: { ...user, id: userId }, changed: changed || !activeToday };
   } else {
     // Create new user
     const userId = `user_${uuidv4().replaceAll('-', '_')}`;
@@ -610,7 +672,7 @@ function provisionExternalUser(usersConfig, externalUser) {
       internalGroups: [], // Only store internal/manual groups, not external groups
       active: true,
       authMethods: [authMethod],
-      lastActiveDate: today,
+      lastActiveDate: day,
       createdAt: now,
       updatedAt: now
     };
@@ -654,7 +716,7 @@ function provisionExternalUser(usersConfig, externalUser) {
     }
 
     usersConfig.users[userId] = newUser;
-    return newUser;
+    return { user: newUser, changed: true };
   }
 }
 
@@ -790,11 +852,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       throw new AccountDisabledError(existingUser);
     }
 
-    // Update existing user and merge groups
+    // Update existing user (and its lastActiveDate) and merge groups
     const persistedUser = await createOrUpdateExternalUser(externalUser, usersFilePath);
-
-    // Update activity tracking
-    await updateUserActivity(persistedUser.id, usersFilePath);
 
     // Merge groups: external groups (from auth provider) + internal groups (from users.json)
     // Only call mapExternalGroups when raw external groups were actually supplied. Some
