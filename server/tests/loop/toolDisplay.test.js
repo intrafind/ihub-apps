@@ -10,7 +10,6 @@ import assert from 'node:assert/strict';
 import {
   OUTPUT_KINDS,
   activityKindOf,
-  activityScopeOf,
   outputKindOf,
   activityOriginOfSource,
   startedDisplayOf,
@@ -60,7 +59,6 @@ test('a connected system says so, so the chat does not draw its search as a web 
   assert.deepEqual(toolDisplayOf({ id: 'webSearch', name: 'Web search' }), {
     title: 'Web search',
     activityKind: 'search',
-    activityScope: 'web',
     activityOrigin: 'web'
   });
 });
@@ -112,7 +110,6 @@ test('any other tool reads as its name when that says more than its id', () => {
   assert.deepEqual(toolDisplayOf({ id: 'read_url', name: 'Read web page' }), {
     title: 'Read web page',
     activityKind: 'fetch',
-    activityScope: 'web',
     activityOrigin: 'web'
   });
   assert.deepEqual(toolDisplayOf({ id: 'evidence', name: 'evidence' }), { activityKind: 'tool' });
@@ -182,12 +179,20 @@ test('the row kind: searches, page and document reads, plain calls', () => {
   assert.equal(activityKindOf('x500bund__search_people', 'integration'), 'tool');
 });
 
-test('the scope: the documents of the organisation or the web', () => {
-  assert.equal(activityScopeOf('iFinder_search', 'ifinder'), 'documents');
-  assert.equal(activityScopeOf('source_handbook', 'sources'), 'documents');
-  assert.equal(activityScopeOf('companySearch', 'ifinder'), 'documents');
-  assert.equal(activityScopeOf('braveSearch', 'websearch'), 'web');
-  assert.equal(activityScopeOf('read_url', null), 'web');
+test('where a call looked is its `activityOrigin`: no web/documents scope is sent any more', () => {
+  for (const id of [
+    'iFinder_search',
+    'source_handbook',
+    'companySearch',
+    'braveSearch',
+    'read_url',
+    'knowledge_search'
+  ]) {
+    for (const display of [toolDisplayOf({ id }), startedDisplayOf({ id })]) {
+      assert.equal('activityScope' in display, false, id);
+      assert.ok(display.activityKind, `${id} is still drawn by its kind`);
+    }
+  }
 });
 
 // ── what a creator tool produces ────────────────────────────────────────────

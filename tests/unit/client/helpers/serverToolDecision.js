@@ -6,11 +6,7 @@
  * from the server's own decision (server/utils/toolDisplay.js), so fixtures
  * never teach the client to infer them from a tool id.
  */
-import {
-  activityKindOf,
-  activityOriginOfSource,
-  activityScopeOf
-} from '../../../../server/utils/toolDisplay.js';
+import { activityKindOf, activityOriginOfSource } from '../../../../server/utils/toolDisplay.js';
 import { classifyKnowledgeSource } from '../../../../server/services/loop/seams/knowledgeSourceSeam.js';
 
 export function withServerDecision(type, data = {}) {
@@ -21,7 +17,6 @@ export function withServerDecision(type, data = {}) {
   return {
     ...data,
     activityKind,
-    ...(activityKind === 'tool' ? {} : { activityScope: activityScopeOf(data.toolId, source) }),
     ...(activityOrigin ? { activityOrigin } : {})
   };
 }

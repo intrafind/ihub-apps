@@ -10,9 +10,6 @@
  *  - `integration`: the system it ran against ("Munich AD")
  *  - `activityKind`: the row it is — a `search` (query and the sources it
  *    found), a `fetch` (the page or document it read) or a plain `tool` call
- *  - `activityScope`: for a search or fetch, whether it looked at the public
- *    `web` or the organisation's `documents` (kept for older clients; the
- *    chat reads `activityOrigin`)
  *  - `activityOrigin`: where the call looked, in the footer's vocabulary of
  *    answer-basis kinds (`project`, `web`, `ifinder`, `documents`,
  *    `integration`); absent when the server does not know
@@ -54,22 +51,6 @@ export function activityKindOf(toolId, source) {
   if (id.includes('people')) return 'tool';
   if (id.includes('search') || id.startsWith('source_') || id === 'knowledge_list') return 'search';
   return 'tool';
-}
-
-/**
- * Where a search or fetch looks: the organisation's own documents (iFinder,
- * project knowledge, a configured source) or the public web.
- * @param {string} toolId
- * @param {string|null} source - see `classifyToolKnowledgeSource`
- * @returns {'web'|'documents'}
- */
-export function activityScopeOf(toolId, source) {
-  if (source === 'websearch') return 'web';
-  if (source === 'ifinder' || source === 'sources' || source === 'project') return 'documents';
-  const id = String(toolId || '').toLowerCase();
-  return id.startsWith('ifinder') || id.startsWith('source_') || id.startsWith('knowledge_')
-    ? 'documents'
-    : 'web';
 }
 
 /**
@@ -119,7 +100,7 @@ export function outputKindOf(toolDef) {
 
 /**
  * @param {Object|null|undefined} toolDef - the resolved (localized) tool definition
- * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string, activityOrigin?: string, outputKind?: string}}
+ * @returns {{title?: string, integration?: string, activityKind?: string, activityOrigin?: string, outputKind?: string}}
  *   the fields that are known; nothing for an unknown tool (a plain call)
  */
 export function toolDisplayOf(toolDef) {
@@ -152,7 +133,6 @@ export function toolDisplayOf(toolDef) {
     ...(title ? { title } : {}),
     ...(integration ? { integration } : {}),
     activityKind,
-    ...(activityKind === 'tool' ? {} : { activityScope: activityScopeOf(toolDef.id, source) }),
     ...(activityOrigin ? { activityOrigin } : {}),
     ...(outputKind ? { outputKind } : {})
   };
@@ -165,7 +145,7 @@ export function toolDisplayOf(toolDef) {
  * existed; the kind rides on the `args` progress frames only.
  *
  * @param {Object|null|undefined} toolDef
- * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string, activityOrigin?: string}}
+ * @returns {{title?: string, integration?: string, activityKind?: string, activityOrigin?: string}}
  */
 export function startedDisplayOf(toolDef) {
   const display = toolDisplayOf(toolDef);
