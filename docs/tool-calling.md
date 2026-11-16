@@ -376,6 +376,9 @@ An MCP server's search of the web:
 "actions": { "overrides": { "tavily_search": { "activity": { "kind": "search", "origin": "web" } } } }
 ```
 
+The same override can be set with `PUT /api/admin/integrations/installed/{id}/actions/{action}` and
+a body `{ "activity": { "kind": "search", "origin": "web" } }`; `{ "activity": null }` removes it.
+
 A tool declared `search` or `fetch` has its result URLs cited; one declared `web` also reports its
 hits as web sources (private unless it is one of the shipped engines).
 
