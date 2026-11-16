@@ -7,24 +7,29 @@
  * An evidence record says what went into every model call and tool call of
  * one answer. The record is a small document; everything it refers to by
  * SHA-256 (system prompts, messages, tool definitions, tool arguments and
- * results) is a blob, stored once per chat however often it was sent:
+ * results) is an item. The items an answer stores go into ONE blob, the
+ * answer's pack — two durable writes per answer (pack, record):
  *
  * | Namespace               | Key                                     | Kind     |
  * | ----------------------- | --------------------------------------- | -------- |
  * | `chat-evidence`         | `<scope(chatId)>__<scope(messageId)>`   | document |
- * | `chat-evidence-content` | `<scope(chatId)>__<sha256>`             | blob     |
+ * | `chat-evidence-content` | `<scope(chatId)>__<scope(messageId)>`   | pack     |
  * | `run-evidence`          | `<runId>` (owned by the caller)          | document |
- * | `run-evidence-content`  | `<scope(runId)>__<sha256>`              | blob     |
+ * | `run-evidence-content`  | `<scope(runId)>__<scope(runId)>`        | pack     |
  *
  * `scope(id)` is the first 32 hex characters of sha256(id): chat ids are
  * external strings and may contain characters a key cannot. Deleting a chat's
- * evidence is two prefix deletes; nothing is reference-counted.
+ * evidence is two prefix deletes.
  *
- * Every content blob is the canonical JSON of its item (`canonicalJson`), and
- * its SHA-256 is the hash the record names. An item larger than
- * `maxContentBytes` is not collected at all; the record lists it under
- * `truncated` (see `evidenceRecord.js`). Removing a message's record sweeps
- * the chat's content no remaining record refers to.
+ * A pack is the canonical JSON object `{ "<sha256>": <item>, ... }`; an item's
+ * SHA-256 is that of its own canonical JSON (`contentItem`). A record (v2)
+ * maps every item it names to the answer whose pack holds it
+ * (`content: { "<sha256>": "<messageId>" }`; the run id for a run record). An
+ * item the chat's previous record already maps is not stored again: the new
+ * record points into the older pack. An item larger than `maxContentBytes` is
+ * not collected at all; the record lists it under `truncated` (see
+ * `evidenceRecord.js`). Removing a message's record sweeps the packs no
+ * remaining record of the chat points into.
  *
  * @module services/chat/ChatEvidenceRepository
  */
@@ -42,8 +47,8 @@ const NAMESPACES = Object.freeze({
   run: { doc: RUNTIME_NAMESPACES.runEvidence, content: BLOB_NAMESPACES.runEvidenceContent }
 });
 
-/** Blob writes of one record in flight at a time. */
-const PUT_CONCURRENCY = 8;
+/** Version of the record shape: v2 maps its items to packs (`content`). */
+export const EVIDENCE_VERSION = 2;
 
 /**
  * Lease of the evidence lock. Generous: the holder writes a record's blobs,
@@ -53,9 +58,6 @@ const LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 30_000 };
 
 /** The same lease for a delete, which must not keep a request waiting long. */
 const DELETE_LOCK_OPTIONS = { ttlMs: 60_000, waitMs: 5_000 };
-
-/** A content reference inside a record. */
-const CONTENT_REF = /sha256:([a-f0-9]{64})/g;
 
 /** A content hash as the endpoints accept it. */
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/;
@@ -82,7 +84,7 @@ export function evidenceScope(id) {
 
 /**
  * Serialize one content item and hash it — what the record refers to and
- * the blob holds.
+ * a pack holds under that hash.
  *
  * @param {any} value - JSON-serializable item.
  * @returns {{sha256: string, text: string}}
@@ -181,22 +183,60 @@ export class ChatEvidenceRepository {
   }
 
   /**
-   * Store a record and the content it refers to, under the evidence lock.
+   * Key of the pack an answer (chat) or a run wrote.
    *
-   * Lists the scope's blobs once and writes only those not stored yet (at
-   * most {@link PUT_CONCURRENCY} at a time), then the record.
+   * @param {string} id - Chat id or run id.
+   * @param {string} packId - The answer's message id; the run id for a run.
+   * @returns {string}
+   * @private
+   */
+  _packKey(id, packId) {
+    return `${evidenceScope(id)}__${evidenceScope(packId)}`;
+  }
+
+  /**
+   * The `content` map of the chat's previous record: that of the newest
+   * earlier answer that has a record at all. A record of another version
+   * (v1, no map) means no previous record — older ones are not newer.
    *
-   * ponytail: one listing of the scope per write — O(blobs of the chat). Keep
-   * a per-chat index document if long chats make it show up in a profile.
+   * @param {string} chatId
+   * @param {string[]} earlierMessageIds - Earlier answers, newest first.
+   * @returns {Promise<Object<string, string>>} sha256 → message id of its pack.
+   * @private
+   */
+  async _previousContent(chatId, earlierMessageIds) {
+    for (const messageId of earlierMessageIds) {
+      const doc = await this.documents.get(
+        NAMESPACES.chat.doc,
+        this._keys('chat', chatId, messageId).docKey
+      );
+      if (doc) return doc.data?.v === EVIDENCE_VERSION ? doc.data.content || {} : {};
+    }
+    return {};
+  }
+
+  /**
+   * Store a record and the content it refers to, under the evidence lock:
+   * the answer's pack (the items not stored yet), then the record — two
+   * durable writes, one when there is nothing new.
+   *
+   * Dedup without listing: `onlyIf` of a chat record returns the chat's
+   * earlier answers; items the previous record maps are referenced to the pack
+   * named there and not stored again. The history every answer's first call
+   * lists is covered by the previous record, so an answer mostly stores what
+   * it added. An item last used two answers ago is stored again — accepted.
    *
    * @param {'chat'|'run'} kind
    * @param {string} id - Chat id (chat) or run id (run).
    * @param {Object} record - The record; a chat record carries `messageId`.
+   *   Stored as v2 with the `content` map added.
    * @param {Map<string, string>} items - sha256 → canonical JSON text.
    * @param {Object} [options]
    * @param {string|null} [options.ownerId] - Owning principal.
-   * @param {() => Promise<boolean>} [options.onlyIf] - Judged under the lock
-   *   before anything is written: false writes nothing (the chat is gone).
+   * @param {() => Promise<boolean|string[]>} [options.onlyIf] - Judged under
+   *   the lock before anything is written: false writes nothing (the chat is
+   *   gone). For a chat record it may return the message ids of the chat's
+   *   earlier answers, newest first, to dedup against the previous record.
    * @returns {Promise<{id: string, sha256: string}|null>} The record's id
    *   (message id or run id) and the etag of the stored document; null when
    *   nothing was written.
@@ -206,35 +246,38 @@ export class ChatEvidenceRepository {
     const ns = NAMESPACES[kind];
     const recordId = kind === 'chat' ? record.messageId : id;
     if (!ns || !id || !recordId || (kind === 'run' && !isValidId(id))) return null;
-    const { docKey, prefix } = this._keys(kind, id, record.messageId);
+    const { docKey } = this._keys(kind, id, record.messageId);
     return this._withLock(id, async () => {
-      if (onlyIf && !(await onlyIf())) return null;
-      const stored = new Set();
-      for await (const item of walkBlobs(this.blobs, ns.content, { prefix })) {
-        stored.add(item.key);
+      const allowed = onlyIf ? await onlyIf() : true;
+      if (!allowed) return null;
+      const previous =
+        kind === 'chat' && Array.isArray(allowed) ? await this._previousContent(id, allowed) : {};
+      const content = {};
+      const fresh = [];
+      for (const [sha256, text] of items) {
+        const packId = typeof previous[sha256] === 'string' ? previous[sha256] : null;
+        content[sha256] = packId || recordId;
+        if (!packId) fresh.push([sha256, text]);
       }
-      const missing = [...items].filter(([sha256]) => !stored.has(`${prefix}${sha256}`));
-      // The blobs this call wrote, so a failed write takes them back: nothing
-      // else would ever reach them.
-      const written = [];
+      const packKey = this._packKey(id, recordId);
       try {
-        for (let at = 0; at < missing.length; at += PUT_CONCURRENCY) {
-          // Every started put settles before a failure propagates and the
-          // lock is released, so no put lands after the cleanup below.
-          const results = await Promise.allSettled(
-            missing.slice(at, at + PUT_CONCURRENCY).map(async ([sha256, text]) => {
-              const key = `${prefix}${sha256}`;
-              await this.blobs.put(ns.content, key, text, { contentType: 'application/json' });
-              written.push(key);
-            })
-          );
-          const failed = results.find(result => result.status === 'rejected');
-          if (failed) throw failed.reason;
+        if (fresh.length > 0) {
+          // Canonical JSON of `{ sha256: item }` without re-serializing the
+          // items: their text already is canonical, the keys go in sorted.
+          fresh.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+          const pack = `{${fresh.map(([sha256, text]) => `"${sha256}":${text}`).join(',')}}`;
+          await this.blobs.put(ns.content, packKey, pack, { contentType: 'application/json' });
         }
-        const doc = await this.documents.put(ns.doc, docKey, record, { ownerId });
+        const doc = await this.documents.put(
+          ns.doc,
+          docKey,
+          { ...record, v: EVIDENCE_VERSION, content },
+          { ownerId }
+        );
         return { id: recordId, sha256: doc.etag };
       } catch (error) {
-        for (const key of written) await this.blobs.delete(ns.content, key).catch(() => {});
+        // A pack without its record is reached by nothing: take it back.
+        if (fresh.length > 0) await this.blobs.delete(ns.content, packKey).catch(() => {});
         throw error;
       }
     });
@@ -256,24 +299,35 @@ export class ChatEvidenceRepository {
   }
 
   /**
-   * One content blob.
+   * One item a record names: record → `content[sha256]` → pack → item.
+   *
+   * ponytail: reads and parses the whole pack for one item (a first answer's
+   * pack holds the history). Index the pack if item reads show up in a profile.
    *
    * @param {'chat'|'run'} kind
    * @param {string} id - Chat id or run id.
+   * @param {Object} record - The record's data, as `getRecord` returned it.
    * @param {string} sha256 - Content hash.
-   * @returns {Promise<Buffer|null>}
+   * @returns {Promise<Buffer|null>} The item's canonical JSON; null when the
+   *   record does not map it (a v1 record maps nothing) or its pack is gone.
    */
-  async getContent(kind, id, sha256) {
+  async getContent(kind, id, record, sha256) {
     if (!this.isAvailable() || !NAMESPACES[kind] || !id || !SHA256_PATTERN.test(sha256)) {
       return null;
     }
-    const blob = await this.blobs.get(NAMESPACES[kind].content, `${evidenceScope(id)}__${sha256}`);
-    return blob?.data || null;
+    if (record?.v !== EVIDENCE_VERSION) return null;
+    const packId = record.content?.[sha256];
+    if (typeof packId !== 'string' || !packId) return null;
+    const blob = await this.blobs.get(NAMESPACES[kind].content, this._packKey(id, packId));
+    if (!blob?.data) return null;
+    const pack = JSON.parse(blob.data.toString('utf8'));
+    if (!Object.hasOwn(pack, sha256)) return null;
+    return Buffer.from(canonicalJson(pack[sha256]), 'utf8');
   }
 
   /**
    * Remove the records of some answers of a chat (an edit or resend dropped
-   * them), then the content no remaining record of the chat refers to.
+   * them), then the packs no remaining record of the chat points into.
    *
    * @param {string} chatId
    * @param {string[]} messageIds
@@ -290,7 +344,7 @@ export class ChatEvidenceRepository {
           const { docKey } = this._keys('chat', chatId, messageId);
           if (await this.documents.delete(NAMESPACES.chat.doc, docKey)) removed += 1;
         }
-        if (removed > 0) await this._sweepChatContent(chatId);
+        if (removed > 0) await this._sweepChatPacks(chatId);
         return removed;
       },
       DELETE_LOCK_OPTIONS
@@ -298,24 +352,26 @@ export class ChatEvidenceRepository {
   }
 
   /**
-   * Mark and sweep one chat's content: delete every blob none of its records
-   * names. Runs under the evidence lock, so no write is half done.
+   * Mark and sweep one chat's packs: delete every blob no record's `content`
+   * map points into. A pack whose answer was removed stays while a later
+   * record still refers to it. Runs under the evidence lock, so no write is
+   * half done.
    *
    * @param {string} chatId
    * @returns {Promise<number>} Blobs removed.
    * @private
    */
-  async _sweepChatContent(chatId) {
+  async _sweepChatPacks(chatId) {
     const prefix = `${evidenceScope(chatId)}__`;
     const referenced = new Set();
     for await (const doc of walkDocuments(this.documents, NAMESPACES.chat.doc, { prefix })) {
-      for (const match of JSON.stringify(doc.data ?? null).matchAll(CONTENT_REF)) {
-        referenced.add(match[1]);
+      for (const packId of Object.values(doc.data?.content || {})) {
+        if (typeof packId === 'string') referenced.add(this._packKey(chatId, packId));
       }
     }
     const unreferenced = [];
     for await (const item of walkBlobs(this.blobs, NAMESPACES.chat.content, { prefix })) {
-      if (!referenced.has(item.key.slice(prefix.length))) unreferenced.push(item.key);
+      if (!referenced.has(item.key)) unreferenced.push(item.key);
     }
     for (const key of unreferenced) await this.blobs.delete(NAMESPACES.chat.content, key);
     return unreferenced.length;
@@ -350,8 +406,8 @@ export class ChatEvidenceRepository {
     return this._withLock(
       runId,
       async () => {
-        // Content first: a record whose blobs went is still found and deleted
-        // again; blobs whose record went are found by nothing.
+        // Content first: a record whose pack went is still found and deleted
+        // again; a pack whose record went is found by nothing.
         await this.blobs.deletePrefix(NAMESPACES.run.content, `${evidenceScope(runId)}__`);
         return this.documents.delete(NAMESPACES.run.doc, runId);
       },
@@ -427,7 +483,7 @@ export class ChatEvidenceRepository {
   }
 
   /**
-   * Bytes the evidence of one chat takes: its records and its content.
+   * Bytes the evidence of one chat takes: its records and its packs.
    *
    * @param {string} chatId
    * @returns {Promise<number>}

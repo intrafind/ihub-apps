@@ -202,7 +202,7 @@ describe('buildEvidence', () => {
       artifacts: [{ id: 'art-1', sha256: 'a'.repeat(64) }]
     });
 
-    assert.equal(record.v, 1);
+    assert.equal(record.v, 2);
     assert.equal(record.chatId, 'chat-1');
     assert.equal(record.messageId, 'msg-1');
     assert.equal(record.journalEnded, false, 'no run/end yet (recovery case)');

@@ -12,7 +12,7 @@ a conversation get the same record, owned by the caller and removed after `chats
 responses carry the run id in an `X-Run-Id` header.
 
 The chat's owner reads it through `GET /api/chats/{chatId}/evidence/{messageId}` and
-`GET /api/chats/{chatId}/evidence-content/{sha256}`, a run's caller through
+`GET /api/chats/{chatId}/evidence/{messageId}/content/{sha256}`, a run's caller through
 `GET /api/runs/{runId}/evidence`, and admins through the audited `/api/admin/chats/…` and
 `/api/admin/runs/…` mirrors. Shared chats and project members never see it. A chat's evidence counts
 against its upload quota (`uploads.quotas.maxChatBytes`); an answer is never refused for it.

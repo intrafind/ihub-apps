@@ -18,7 +18,11 @@ import assert from 'node:assert/strict';
 import configCache from '../configCache.js';
 import { bootstrapStorage, shutdownStorageBootstrap } from '../storage/bootstrap.js';
 import { getChatRepository } from '../services/chat/ChatRepository.js';
-import { contentItem, getChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
+import {
+  contentItem,
+  evidenceScope,
+  getChatEvidenceRepository
+} from '../services/chat/ChatEvidenceRepository.js';
 import registerChatRoutes from '../routes/chats.js';
 import registerRunRoutes from '../routes/runs.js';
 import registerAdminEvidenceRoutes from '../routes/admin/evidence.js';
@@ -95,11 +99,13 @@ async function get(suffix, params, user) {
 }
 
 const CHAT_RECORD = '/api/chats/:chatId/evidence/:messageId';
-const CHAT_CONTENT = '/api/chats/:chatId/evidence-content/:sha256';
+const CHAT_CONTENT = '/api/chats/:chatId/evidence/:messageId/content/:sha256';
 const RUN_RECORD = '/api/runs/:runId/evidence';
-const RUN_CONTENT = '/api/runs/:runId/evidence-content/:sha256';
+const RUN_CONTENT = '/api/runs/:runId/evidence/content/:sha256';
 const ADMIN_CHAT_RECORD = '/api/admin/chats/:chatId/evidence/:messageId';
+const ADMIN_CHAT_CONTENT = '/api/admin/chats/:chatId/evidence/:messageId/content/:sha256';
 const ADMIN_RUN_RECORD = '/api/admin/runs/:runId/evidence';
+const ADMIN_RUN_CONTENT = '/api/admin/runs/:runId/evidence/content/:sha256';
 
 const PROMPT = contentItem('You are helpful.');
 let baseDir;
@@ -118,14 +124,14 @@ before(async () => {
   stored = await evidence.writeRecord(
     'chat',
     'chat-ada',
-    { v: 1, messageId: 'm1', calls: [{ system: [`sha256:${PROMPT.sha256}`] }] },
+    { messageId: 'm1', calls: [{ system: [`sha256:${PROMPT.sha256}`] }] },
     new Map([[PROMPT.sha256, PROMPT.text]]),
     { ownerId: ADA.id, maxContentBytes: 1e6 }
   );
   await evidence.writeRecord(
     'run',
     'run-ada',
-    { v: 1, runId: 'run-ada' },
+    { runId: 'run-ada' },
     new Map([[PROMPT.sha256, PROMPT.text]]),
     { ownerId: ADA.id, maxContentBytes: 1e6 }
   );
@@ -150,7 +156,11 @@ describe('chat evidence: the owner', () => {
     assert.equal(res.headers.etag, `"${stored.sha256}"`);
     assert.equal(res.headers['cache-control'], 'private, no-cache');
 
-    const content = await get(CHAT_CONTENT, { chatId: 'chat-ada', sha256: PROMPT.sha256 }, ADA);
+    const content = await get(
+      CHAT_CONTENT,
+      { chatId: 'chat-ada', messageId: 'm1', sha256: PROMPT.sha256 },
+      ADA
+    );
     assert.equal(content.res.statusCode, 200);
     assert.equal(content.res.body.toString('utf8'), PROMPT.text);
     assert.equal(content.res.headers.etag, `"${PROMPT.sha256}"`);
@@ -160,10 +170,44 @@ describe('chat evidence: the owner', () => {
   it('gets EVIDENCE_NOT_RECORDED for an answer without one, and 400 for a bad hash', async () => {
     const missing = await get(CHAT_RECORD, { chatId: 'chat-ada', messageId: 'm2' }, ADA);
     assertProblem(missing.res, 404, 'EVIDENCE_NOT_RECORDED');
-    const bad = await get(CHAT_CONTENT, { chatId: 'chat-ada', sha256: 'ABC' }, ADA);
+    const bad = await get(
+      CHAT_CONTENT,
+      { chatId: 'chat-ada', messageId: 'm1', sha256: 'ABC' },
+      ADA
+    );
     assertProblem(bad.res, 400, 'BAD_REQUEST');
-    const absent = await get(CHAT_CONTENT, { chatId: 'chat-ada', sha256: 'f'.repeat(64) }, ADA);
+    const absent = await get(
+      CHAT_CONTENT,
+      { chatId: 'chat-ada', messageId: 'm1', sha256: 'f'.repeat(64) },
+      ADA
+    );
     assertProblem(absent.res, 404, 'EVIDENCE_NOT_RECORDED');
+    const otherAnswer = await get(
+      CHAT_CONTENT,
+      { chatId: 'chat-ada', messageId: 'm2', sha256: PROMPT.sha256 },
+      ADA
+    );
+    assertProblem(otherAnswer.res, 404, 'EVIDENCE_NOT_RECORDED');
+  });
+
+  it('gets EVIDENCE_NOT_RECORDED for a v1 record, its content included', async () => {
+    const { documents, blobs } = (await import('../storage/bootstrap.js')).getStorage();
+    const prefix = `${evidenceScope('chat-ada')}__`;
+    await documents.put(
+      'chat-evidence',
+      `${prefix}${evidenceScope('m-v1')}`,
+      { v: 1, messageId: 'm-v1', calls: [{ system: [`sha256:${PROMPT.sha256}`] }] },
+      { ownerId: ADA.id }
+    );
+    await blobs.put('chat-evidence-content', `${prefix}${PROMPT.sha256}`, PROMPT.text);
+    const record = await get(CHAT_RECORD, { chatId: 'chat-ada', messageId: 'm-v1' }, ADA);
+    assertProblem(record.res, 404, 'EVIDENCE_NOT_RECORDED');
+    const content = await get(
+      CHAT_CONTENT,
+      { chatId: 'chat-ada', messageId: 'm-v1', sha256: PROMPT.sha256 },
+      ADA
+    );
+    assertProblem(content.res, 404, 'EVIDENCE_NOT_RECORDED');
   });
 
   it('gets EVIDENCE_NOT_RECORDED while the switch is off', async () => {
@@ -185,7 +229,11 @@ describe('chat evidence: everybody else', () => {
   it('another user (a share recipient included) gets 404 for record and content', async () => {
     const record = await get(CHAT_RECORD, { chatId: 'chat-ada', messageId: 'm1' }, GRACE);
     assertProblem(record.res, 404, 'NOT_FOUND');
-    const content = await get(CHAT_CONTENT, { chatId: 'chat-ada', sha256: PROMPT.sha256 }, GRACE);
+    const content = await get(
+      CHAT_CONTENT,
+      { chatId: 'chat-ada', messageId: 'm1', sha256: PROMPT.sha256 },
+      GRACE
+    );
     assertProblem(content.res, 404, 'NOT_FOUND');
   });
 
@@ -201,7 +249,7 @@ describe('chat evidence: everybody else', () => {
     await getChatEvidenceRepository().writeRecord(
       'chat',
       'chat-guest',
-      { v: 1, messageId: 'm1' },
+      { messageId: 'm1' },
       new Map(),
       { ownerId: guestOwnerId(guestSecret) }
     );
@@ -225,9 +273,27 @@ describe('chat evidence: everybody else', () => {
     assert.equal(res.body.messageId, 'm1');
     assert.equal(req._auditLogged, true);
 
+    const content = await get(
+      ADMIN_CHAT_CONTENT,
+      { chatId: 'chat-ada', messageId: 'm1', sha256: PROMPT.sha256 },
+      ROOT
+    );
+    assert.equal(content.res.statusCode, 200);
+    assert.equal(content.res.body.toString('utf8'), PROMPT.text);
+    assert.equal(content.req._auditLogged, true);
+
     const run = await get(ADMIN_RUN_RECORD, { runId: 'run-ada' }, ROOT);
     assert.equal(run.res.statusCode, 200);
     assert.equal(run.req._auditLogged, true);
+
+    const runContent = await get(
+      ADMIN_RUN_CONTENT,
+      { runId: 'run-ada', sha256: PROMPT.sha256 },
+      ROOT
+    );
+    assert.equal(runContent.res.statusCode, 200);
+    assert.equal(runContent.res.headers.etag, `"${PROMPT.sha256}"`);
+    assert.equal(runContent.req._auditLogged, true);
   });
 });
 

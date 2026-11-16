@@ -1116,6 +1116,14 @@ describe('chatMaterializer: the evidence record', () => {
       });
       await evidenceWritesSettled();
       const both = (await stored(provider)).blobs;
+      // The second record points the history into the first answer's pack and
+      // stores only what it added.
+      const secondRecord = (await evidence.getRecord('chat', CHAT_ID, second.id)).data;
+      const firstQuestion = secondRecord.calls[0].messages.append[0].message.slice(7);
+      const added = secondRecord.calls[1].messages.append[0].message.slice(7);
+      assert.equal(secondRecord.content[firstQuestion], first.id);
+      assert.equal(secondRecord.content[added], second.id);
+      assert.equal(both, 2, 'one pack per answer');
 
       // Resend from the second question: its answer goes, the first stays,
       // and so does the content the first still names.

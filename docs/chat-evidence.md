@@ -37,7 +37,7 @@ Answers stored before the release, or while the switch was off, have no record. 
 
 ```jsonc
 {
-  "v": 1,
+  "v": 2,
   "chatId": "…", "messageId": "…", "runId": "…", "userId": "…",   // userId as the ledger records it
   "startedAt": "…", "endedAt": "…",
   "journalEnded": true,            // false when the answer was rebuilt after a crash (no run/end)
@@ -70,7 +70,8 @@ Answers stored before the release, or while the switch was off, have no record. 
     "resultBytes": 12345, "error": { … }, "durationMs": 120, "startedAt": "…", "endedAt": "…" } ],
   "errors": [ { "step": 2, "code": "…", "message": "…" } ],
   "knowledge": [ { "projectId": "…", "mode": "loaded", "documents": 3 } ],
-  "truncated": [ { "sha256": "…", "bytes": 20000000, "truncated": true } ]
+  "truncated": [ { "sha256": "…", "bytes": 20000000, "truncated": true } ],
+  "content": { "<sha256>": "<messageId>" }   // which answer's pack holds each item (run records: the runId)
 }
 ```
 
@@ -95,6 +96,10 @@ Answers stored before the release, or while the switch was off, have no record. 
   from the `tool/call` event; the record never infers them.
 - `knowledge` is phase 1: which projects the turn reached and how. The passages themselves are in
   the system prompt.
+- `content` maps every `sha256:` item the record names to the answer whose pack holds it (for a
+  run record, the run id). Truncated items are not in it. Only `v: 2` records are read; a record
+  stored as `v: 1` (release candidates before the pack layout) answers `404 EVIDENCE_NOT_RECORDED`
+  and is deleted with its chat. It is not migrated.
 
 ## How it is built
 
@@ -130,15 +135,29 @@ run that was not recorded (the ledger off, which stored chats never allow) has n
 | Namespace               | Kind     | Key                                   | Owner           |
 | ----------------------- | -------- | ------------------------------------- | --------------- |
 | `chat-evidence`         | document | `<scope(chatId)>__<scope(messageId)>` | the chat owner  |
-| `chat-evidence-content` | blob     | `<scope(chatId)>__<sha256>`           | –               |
+| `chat-evidence-content` | pack     | `<scope(chatId)>__<scope(messageId)>` | –               |
 | `run-evidence`          | document | `<runId>`                             | the caller      |
-| `run-evidence-content`  | blob     | `<scope(runId)>__<sha256>`            | –               |
+| `run-evidence-content`  | pack     | `<scope(runId)>__<scope(runId)>`      | –               |
 
-`scope(id)` is the first 32 hex characters of sha256(id). Content is stored **once per chat**: a
-system prompt or history message sent in many calls is one blob. Writing a record lists the chat's
-blobs once and writes only the missing ones, eight at a time. An item above `maxContentBytes` is
-hashed but never kept. Record writes, content sweeps and the chat's evidence delete take the lock
-`evidence:<scope(chatId)>`, so they never interleave.
+`scope(id)` is the first 32 hex characters of sha256(id). The items an answer stores go into **one
+pack** — a blob holding the canonical JSON object `{ "<sha256>": <item>, … }` — keyed like the
+answer's record. An item's SHA-256 is that of its own canonical JSON, so references stay content
+hashes.
+
+Writing a record takes the lock `evidence:<scope(chatId)>`, checks that the chat and the answer are
+still stored (one read of the chat's messages), and finds in the same read the **previous record**:
+that of the newest earlier answer that has one. Items the previous record's `content` maps are
+referenced to the pack named there and not stored again; everything else goes into this answer's
+pack. Every answer's first call lists the whole history, so the previous record covers it and an
+answer mostly stores only what it added. An item last used two answers ago is stored again — an
+accepted duplicate. Without a previous record (first answer, or older answers have none or a `v: 1`
+one) everything goes into this pack. Then the pack is written (skipped when nothing is new) and the
+record: **two durable writes per answer**, no listing and no per-item existence check. A failed
+record write deletes the pack again.
+
+An item above `maxContentBytes` is hashed but never kept. Record writes, pack sweeps and the chat's
+evidence delete take the same lock, so they never interleave. Reading one item reads and parses its
+whole pack.
 
 ## Deletion
 
@@ -148,8 +167,9 @@ hashed but never kept. Record writes, content sweeps and the chat's evidence del
   count, temporary chats), the deleted user's cleanup and the workflow execution chat. A failure
   there is logged; a re-delete sweeps what is left.
 - An answer that leaves the transcript (edit, resend, message delete, the message cap) takes its
-  record with it, in the background; then the chat's blobs that no remaining record names are
-  removed (mark and sweep).
+  record with it, in the background; then the chat's packs that no remaining record's `content`
+  map points into are removed (mark and sweep per pack). The pack of a removed answer stays while a
+  later record still refers to it.
 - Run evidence goes with `DELETE /api/runs/{runId}`, the deleted user's cleanup (step
   `runEvidence`, which also removes chat evidence filed under the user that a failed chat delete
   left behind) and `chats.retentionDays` in a daily sweep — also while the chat history is off,
@@ -175,17 +195,19 @@ project members cannot read it.
 | Endpoint | Who |
 | -------- | --- |
 | `GET /api/chats/{chatId}/evidence/{messageId}` | the chat owner |
-| `GET /api/chats/{chatId}/evidence-content/{sha256}` | the chat owner |
+| `GET /api/chats/{chatId}/evidence/{messageId}/content/{sha256}` | the chat owner |
 | `GET /api/runs/{runId}/evidence` | the run's caller |
-| `GET /api/runs/{runId}/evidence-content/{sha256}` | the run's caller |
-| `GET /api/admin/chats/{chatId}/evidence/{messageId}` (and `…/evidence-content/{sha256}`) | admins, audited (`chatEvidence`) |
-| `GET /api/admin/runs/{runId}/evidence` (and `…/evidence-content/{sha256}`) | admins, audited (`runEvidence`) |
+| `GET /api/runs/{runId}/evidence/content/{sha256}` | the run's caller |
+| `GET /api/admin/chats/{chatId}/evidence/{messageId}` (and `…/content/{sha256}`) | admins, audited (`chatEvidence`) |
+| `GET /api/admin/runs/{runId}/evidence` (and `…/content/{sha256}`) | admins, audited (`runEvidence`) |
 
-The record answers with its document etag as `ETag`; content answers are the item's canonical
-JSON with its SHA-256 as `ETag`. Both are `Cache-Control: private, no-cache`: a record or blob can
-be deleted, so a cache revalidates. A guest or the anonymous principal reads no evidence. Errors: `404
-EVIDENCE_NOT_RECORDED` (no record, not yours on the run routes, or the switch is off), `404
-NOT_FOUND` (not your chat), `400 BAD_REQUEST` (not a lower-case hex SHA-256).
+Content is read **through a record**: the record's `content` map names the pack, the pack holds the
+item. An item is readable through any record that names it. The record answers with its document
+etag as `ETag`; content answers are the item's canonical JSON with its SHA-256 as `ETag`. Both are
+`Cache-Control: private, no-cache`: a record or item can be deleted, so a cache revalidates. A guest
+or the anonymous principal reads no evidence. Errors: `404 EVIDENCE_NOT_RECORDED` (no record, a
+`v: 1` record, the record does not name the hash, not yours on the run routes, or the switch is
+off), `404 NOT_FOUND` (not your chat), `400 BAD_REQUEST` (not a lower-case hex SHA-256).
 
 ## Not in phase 1
 
@@ -193,5 +215,6 @@ Legal hold, the `knowledge/passages` event, content-addressed writes at request 
 journals after materialization, and workflow/agent evidence (`children`, `workflow-evidence`) are
 later phases of the design.
 
-> ponytail: a record write and an upload's quota check list the chat's evidence (O(records and
-> blobs of the chat)). Keep a per-chat counter or index if long chats make it show up.
+> ponytail: an upload's quota check and a message delete's sweep list the chat's evidence
+> (O(records and packs of the chat)); a record write lists nothing. Keep a per-chat counter or
+> index if long chats make it show up.

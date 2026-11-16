@@ -13,8 +13,9 @@
  * calls and their results into one record. A call's messages mirror the
  * journal: `{ from, append }`, the call whose list it continues plus what it
  * added. Every piece of content becomes an item (its canonical JSON, keyed by
- * SHA-256) that `ChatEvidenceRepository` stores once per chat; the record
- * names items as `sha256:<hex>`.
+ * SHA-256); the record names items as `sha256:<hex>`. `ChatEvidenceRepository`
+ * writes the items into one pack per answer and adds the record's `content`
+ * map (which pack holds which item).
  *
  * Documents and pictures stored as chat files are already references in the
  * journal (`ledgerMessages.js`); they are listed on the message as `files`
@@ -35,6 +36,7 @@ import { isAnonymousUser } from '../loop/runIdentity.js';
 import { chatEvidenceSettings } from './chatPersistence.js';
 import { GUEST_OWNER_PREFIX } from './chatOwner.js';
 import {
+  EVIDENCE_VERSION,
   SHA256_PATTERN,
   contentItem,
   getChatEvidenceRepository,
@@ -42,10 +44,7 @@ import {
   sha256Hex
 } from './ChatEvidenceRepository.js';
 
-export { evidenceWritesSettled } from './ChatEvidenceRepository.js';
-
-/** Version of the record shape. */
-export const EVIDENCE_VERSION = 1;
+export { EVIDENCE_VERSION, evidenceWritesSettled } from './ChatEvidenceRepository.js';
 
 /** A document reference tag as `ledgerMessages.js` writes it. */
 const DOCUMENT_REF_TAG = /<content\b[^>]*\btext_sha256="[a-f0-9]{64}"[^>]*\/>/g;
@@ -134,8 +133,6 @@ export function filesOfMessage(message) {
   }
   return files;
 }
-
-/** Drop undefined and null members. */
 
 /** Drop undefined and null members. */
 function compact(object) {
@@ -541,10 +538,20 @@ export function recordChatEvidence({
       return store.writeRecord('chat', chatId, built.record, built.items, {
         ownerId: chat.ownerId,
         // Under the evidence lock: the chat and the answer must both still be
-        // stored, or the record would name something deleted meanwhile.
-        onlyIf: async () =>
-          Boolean(await repository.getChat(chatId)) &&
-          (await repository.getMessages(chatId)).messages.some(message => message.id === messageId)
+        // stored, or the record would name something deleted meanwhile. The
+        // same read names the earlier answers, newest first, whose records
+        // the write dedups against.
+        onlyIf: async () => {
+          if (!(await repository.getChat(chatId))) return false;
+          const { messages } = await repository.getMessages(chatId);
+          const at = messages.findIndex(message => message.id === messageId);
+          if (at < 0) return false;
+          return messages
+            .slice(0, at)
+            .filter(message => message.role === 'assistant' && message.id)
+            .map(message => message.id)
+            .reverse();
+        }
       });
     },
     { component: 'evidenceRecord', operation: 'chat record', chatId, runId }
@@ -597,7 +604,10 @@ export function recordRunEvidence({ runId, user, summary = {}, runLog }) {
   );
 }
 
-/** The 404 of a record that was not kept (switched off, stored before the release, not ours). */
+/**
+ * The 404 of a record that was not kept (switched off, stored before the
+ * release, not ours, or of an earlier record version).
+ */
 function notRecorded() {
   return new ServiceError('EVIDENCE_NOT_RECORDED', 'No evidence record was kept for this answer');
 }
@@ -618,37 +628,43 @@ function notRecorded() {
 export async function readEvidenceRecord({ kind, id, messageId, ownerId }) {
   if (!chatEvidenceSettings(configCache.getPlatform?.() || {}).enabled) throw notRecorded();
   const doc = await getChatEvidenceRepository().getRecord(kind, id, messageId);
-  if (!doc || (ownerId !== undefined && (!ownerId || doc.ownerId !== ownerId))) {
+  // Only v2 is read: a v1 record (per-item blobs, no `content` map) is gone
+  // with its chat, never migrated.
+  if (
+    doc?.data?.v !== EVIDENCE_VERSION ||
+    (ownerId !== undefined && (!ownerId || doc.ownerId !== ownerId))
+  ) {
     throw notRecorded();
   }
   return doc;
 }
 
 /**
- * Read one content blob of a chat or run for an endpoint.
+ * Read one item an evidence record names, for an endpoint: the record, then
+ * the pack its `content` map names for the hash.
  *
  * @param {Object} params
  * @param {'chat'|'run'} params.kind
  * @param {string} params.id - Chat id or run id.
+ * @param {string} [params.messageId] - The answer whose record names it (chat).
  * @param {string} params.sha256 - Content hash.
  * @param {string} [params.ownerId] - Required owner of the run record.
  * @returns {Promise<{content: Buffer, sha256: string}>} The canonical JSON of the item.
  * @throws {ServiceError} `BAD_REQUEST` for a malformed hash, `EVIDENCE_NOT_RECORDED` otherwise.
  */
-export async function readEvidenceContent({ kind, id, sha256, ownerId }) {
+export async function readEvidenceContent({ kind, id, messageId, sha256, ownerId }) {
   if (!SHA256_PATTERN.test(String(sha256))) {
     throw new ServiceError('BAD_REQUEST', 'Expected a lower-case hex SHA-256');
   }
-  if (!chatEvidenceSettings(configCache.getPlatform?.() || {}).enabled) throw notRecorded();
-  if (ownerId !== undefined) await readEvidenceRecord({ kind, id, ownerId });
-  const content = await getChatEvidenceRepository().getContent(kind, id, sha256);
+  const doc = await readEvidenceRecord({ kind, id, messageId, ownerId });
+  const content = await getChatEvidenceRepository().getContent(kind, id, doc.data, sha256);
   if (!content) throw notRecorded();
   return { content, sha256 };
 }
 
 /**
- * Send a record or a content blob with its ETag. `no-cache`: a record or a
- * blob can be deleted (a removed message, a deleted chat), so a cache must
+ * Send a record or one of its items with its ETag. `no-cache`: a record or
+ * an item can be deleted (a removed message, a deleted chat), so a cache must
  * revalidate rather than keep serving it.
  *
  * @param {import('express').Response} res
