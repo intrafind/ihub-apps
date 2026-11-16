@@ -187,3 +187,30 @@ test('only the shipped web search engines say their hits are public', () => {
     undefined
   );
 });
+
+test('the admin override endpoint sets and removes `activity`', async () => {
+  const { InstalledIntegrationService } =
+    await import('../services/integrations/InstalledIntegrationService.js');
+  const config = { installed: [{ id: 'tavily', definition: 'mcp/tavily', actions: {} }] };
+  const service = new InstalledIntegrationService({
+    registry: { list: () => [], get: () => null }
+  });
+  service._updateConfig = async mutate => mutate(config);
+  service._afterChange = async () => {};
+
+  const set = await service.setActionOverride('tavily', 'tavily_search', {
+    activity: { kind: 'search', origin: 'web' }
+  });
+  assert.deepEqual(set.override, { activity: { kind: 'search', origin: 'web' } });
+  assert.deepEqual(config.installed[0].actions.overrides.tavily_search.activity, {
+    kind: 'search',
+    origin: 'web'
+  });
+  // An invalid declaration is refused, and null removes the override.
+  await assert.rejects(
+    service.setActionOverride('tavily', 'tavily_search', { activity: { kind: 'lookup' } }),
+    error => error.code === 'INVALID_OVERRIDE'
+  );
+  const cleared = await service.setActionOverride('tavily', 'tavily_search', { activity: null });
+  assert.equal(cleared.override, null);
+});
