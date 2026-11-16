@@ -70,6 +70,9 @@ import {
   nudgeMessage
 } from './nudges.js';
 
+import { recordToolCall } from '../../telemetry/metrics.js';
+import { toolCallOutcomeOf } from '../chat/answerOriginMetrics.js';
+
 const COMPONENT = 'AgentLoop';
 const PREVIEW_CHARS = 1024;
 /** Longest preview kept in the transcript for a tool result that was spilled. */
@@ -1196,6 +1199,14 @@ export class AgentLoop {
     messages.push(outcome.message);
 
     const verdict = classifyToolResult(outcome.message);
+    // Where a search or fetch looked, and what it came to: the server's own
+    // decision, counted so a call it cannot place shows up.
+    if (display.activityKind === 'search' || display.activityKind === 'fetch') {
+      recordToolCall(
+        outcome.activityOrigin || display.activityOrigin,
+        toolCallOutcomeOf(outcome, verdict)
+      );
+    }
     this._ledger(ledgerId, RUN_LOG_EVENTS.TOOL_RESULT, {
       step: iteration,
       callId: call.id || `${call.index}`,

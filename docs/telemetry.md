@@ -198,6 +198,21 @@ iHub product counters & gauges:
 - `ihub.magicprompt.usage` - magic-prompt invocation counter
 - `ihub.feedback` + `ihub.feedback.rating` - user feedback counter (per rating)
   and 1-5 rating histogram
+- `ihub.tool.calls` - search and fetch calls, labelled by `tool.origin` (`web`, `project`,
+  `ifinder`, `iassistant`, `documents`, `integration`, or `none` for a call the server could
+  not place) and `tool.outcome` (`results`, `empty`, `error`, `unknown`). `none` on a built-in
+  tool is a classifier gap. `empty` needs the server to have declared a count of zero (or a
+  page read that delivered no text); a result that does not say is `unknown`, never `empty`.
+  The share of `empty` per origin shows which origin does not match how people ask
+- `ihub.answer.basis` - answers, labelled by `answer.kinds_bucket` (`0` for the model's own
+  knowledge, `1`, `2`, `3+`): how many kinds of source the answer's basis names. Everything
+  but `0` is an answer that used a source, which is the denominator for mixed-origin shares
+- `ihub.answer.origin.mismatch` - answers whose sources name an origin that the footer's basis
+  leaves out, so the footer and the Sources panel would disagree. Expected to stay at 0
+- `ihub.source.actions` - opens of a source document through its integration, labelled by
+  `source.provider` and `source.action` (`content`, `details`). The server sees the document
+  request, not the button, so a preview and a download are both `content`; opens of an
+  external link are not visible to the server
 - `ihub.structured_output.validation` - server-side structured-output checks of
   the inference API, labelled by `structured_output.outcome` (`valid`,
   `valid_after_retry`, `invalid`, `skipped`, `not_reached`) and

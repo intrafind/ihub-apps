@@ -57,7 +57,13 @@ const ALLOWED_METRIC_LABELS = new Set([
   'config.file',
   'feedback.rating',
   'structured_output.outcome',
-  'structured_output.source'
+  'structured_output.source',
+  // where an answer came from (#3668): small closed sets, never tool ids
+  'tool.origin',
+  'tool.outcome',
+  'answer.kinds_bucket',
+  'source.provider',
+  'source.action'
 ]);
 
 function filterMetricLabels(attrs) {
@@ -104,6 +110,12 @@ let magicPromptUsageCounter = null;
 let feedbackCounter = null;
 let feedbackRatingHistogram = null;
 let structuredOutputCounter = null;
+
+// Where an answer came from (#3668)
+let toolCallsCounter = null;
+let originMismatchCounter = null;
+let answerBasisCounter = null;
+let sourceActionsCounter = null;
 
 // Project working set, knowledge index cache and extraction (#3652)
 let projectsActiveGauge = null;
@@ -187,6 +199,26 @@ export function initializeMetrics(meterSource) {
   rateLimitHitsCounter = meter.createCounter('ihub.ratelimit.hits', {
     description: 'Number of times a request was rate-limited / throttled',
     unit: '{hit}'
+  });
+
+  toolCallsCounter = meter.createCounter('ihub.tool.calls', {
+    description: 'Search and fetch calls by where they looked and what they came to',
+    unit: '{call}'
+  });
+
+  originMismatchCounter = meter.createCounter('ihub.answer.origin.mismatch', {
+    description: 'Answers whose sources name an origin that the answer basis leaves out',
+    unit: '{answer}'
+  });
+
+  answerBasisCounter = meter.createCounter('ihub.answer.basis', {
+    description: 'Answers by how many kinds of source their basis names',
+    unit: '{answer}'
+  });
+
+  sourceActionsCounter = meter.createCounter('ihub.source.actions', {
+    description: 'Opens of a source document or its details through its integration',
+    unit: '{action}'
   });
 
   structuredOutputCounter = meter.createCounter('ihub.structured_output.validation', {
@@ -739,5 +771,93 @@ export function recordFeedbackEvent(appId, rating) {
     }
   } catch (error) {
     console.warn('Failed to record feedback event:', error.message);
+  }
+}
+
+// ---- Where an answer came from (#3668) -------------------------------------
+// Every label is a member of a closed set; a value outside it is recorded as
+// the neutral one, so the series count stays bounded whatever a caller passes.
+
+const TOOL_ORIGINS = new Set([
+  'project',
+  'web',
+  'ifinder',
+  'iassistant',
+  'documents',
+  'integration',
+  'none'
+]);
+const TOOL_OUTCOMES = new Set(['results', 'empty', 'error', 'unknown']);
+const SOURCE_ACTIONS = new Set(['content', 'details']);
+const MAX_PROVIDER_LABEL = 64;
+
+/**
+ * Record one search or fetch call: where it looked (the server's own
+ * `activityOrigin`; `none` for a call it could not place, which on a built-in
+ * tool is a classifier gap) and what it came to.
+ * @param {string|undefined} origin - an activity origin
+ * @param {'results'|'empty'|'error'|'unknown'} outcome
+ */
+export function recordToolCall(origin, outcome) {
+  if (!toolCallsCounter) return;
+  try {
+    toolCallsCounter.add(
+      1,
+      filterMetricLabels({
+        'tool.origin': TOOL_ORIGINS.has(origin) ? origin : 'none',
+        'tool.outcome': TOOL_OUTCOMES.has(outcome) ? outcome : 'unknown'
+      })
+    );
+  } catch (error) {
+    console.warn('Failed to record tool call:', error.message);
+  }
+}
+
+/** Record an answer whose sources name an origin its basis leaves out (the footer and the timeline disagree). */
+export function recordAnswerOriginMismatch() {
+  if (!originMismatchCounter) return;
+  try {
+    originMismatchCounter.add(1);
+  } catch (error) {
+    console.warn('Failed to record origin mismatch:', error.message);
+  }
+}
+
+/**
+ * Record an answer by how many kinds of source its basis names.
+ * @param {number} kinds - non-model kinds in the basis (0 for the model's own knowledge)
+ */
+export function recordAnswerBasis(kinds) {
+  if (!answerBasisCounter) return;
+  try {
+    const bucket = !Number.isInteger(kinds) || kinds <= 0 ? '0' : kinds >= 3 ? '3+' : String(kinds);
+    answerBasisCounter.add(1, filterMetricLabels({ 'answer.kinds_bucket': bucket }));
+  } catch (error) {
+    console.warn('Failed to record answer basis:', error.message);
+  }
+}
+
+/**
+ * Record that a user opened a source's content or details through its integration.
+ * The server sees the document request, not which button caused it, so a
+ * preview and a download are both `content`.
+ * @param {string} provider - the integration (or built-in provider) that answered
+ * @param {'content'|'details'} action
+ */
+export function recordSourceAction(provider, action) {
+  if (!sourceActionsCounter) return;
+  try {
+    sourceActionsCounter.add(
+      1,
+      filterMetricLabels({
+        'source.provider':
+          typeof provider === 'string' && provider
+            ? provider.slice(0, MAX_PROVIDER_LABEL)
+            : 'unknown',
+        'source.action': SOURCE_ACTIONS.has(action) ? action : 'content'
+      })
+    );
+  } catch (error) {
+    console.warn('Failed to record source action:', error.message);
   }
 }

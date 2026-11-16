@@ -35,6 +35,7 @@ import { activeRequests, routeEnvelope } from '../../sse.js';
 import PromptService from '../../services/PromptService.js';
 import { startTestStorage } from '../helpers/testStorage.js';
 import { hashText } from '../../services/provenance/records.js';
+import { initializeMetrics } from '../../telemetry/metrics.js';
 import { getProvenanceStore } from '../../services/provenance/ProvenanceStore.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import {
@@ -2167,4 +2168,32 @@ test('answer basis: a plain answer is the model’s own knowledge, an aborted on
   assertWellFormed(frames, { runId: summary.runId });
   assert.deepEqual(frame(frames, RUN_ENDED).data.answerBasis, [{ kind: 'model' }]);
   assert.deepEqual(frame(frames, RUN_ENDED).data.knowledgeSources, ['llm']);
+});
+
+// ── where the answer came from, counted (#3668) ─────────────────────────────
+
+test('a tool round counts the search by origin and outcome, and the answer by its basis', async t => {
+  const adds = {};
+  const meter = {
+    createHistogram: () => ({ record() {} }),
+    createCounter: name => ({
+      add: (value, labels) => (adds[name] ||= []).push(labels ?? {})
+    }),
+    createObservableGauge: () => ({ addCallback() {} })
+  };
+  initializeMetrics({ getMeter: () => meter });
+
+  const chatId = newChatId('metrics');
+  captureFrames(t, chatId);
+  const { service } = makeService(
+    [toolTurn([{ name: 'webSearch', args: { query: 'berlin' } }]), textTurn('Sunny.')],
+    { runTool: async () => ({ results: [{ url: 'https://a.example/', title: 'A' }] }) }
+  );
+  await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
+
+  // The search looked on the web and came back with a hit.
+  assert.deepEqual(adds['ihub.tool.calls'], [{ 'tool.origin': 'web', 'tool.outcome': 'results' }]);
+  // The answer rests on one kind of source, and its sources name no other origin.
+  assert.deepEqual(adds['ihub.answer.basis'], [{ 'answer.kinds_bucket': '1' }]);
+  assert.equal(adds['ihub.answer.origin.mismatch'], undefined);
 });

@@ -2162,3 +2162,19 @@ much less time reading the data directory.
 
 Downgrading to an earlier release and upgrading again leaves the files written in between out of
 the new index; [Storage](../../storage.md#the-key-prefix-index) describes how to rebuild it.
+
+## Metrics for Where Answers Come From
+
+When telemetry is on, the server now counts where answers get their information, so admins can see
+whether projects, the web or connected systems carry the load and where searches come back empty.
+
+- `ihub.tool.calls` counts searches and page or document reads by where they looked (web, project,
+  iFinder, iAssistant, a connected system) and what they came to: results, empty or error. A search
+  counts as empty only when the server knows it found nothing.
+- `ihub.answer.basis` counts answers by how many kinds of source they rest on.
+- `ihub.answer.origin.mismatch` counts answers whose footer and Sources panel would disagree; it is
+  expected to stay at 0.
+- `ihub.source.actions` counts opens of a source document and its details through an integration.
+
+The labels come from small fixed sets, so the metrics add a handful of series, never one per chat or
+tool. See [Telemetry](../../telemetry.md).
