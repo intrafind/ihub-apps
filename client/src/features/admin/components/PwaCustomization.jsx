@@ -84,13 +84,17 @@ function PwaCustomization({ config, onUpdate, t }) {
           />
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="pwa-short-name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {t('admin.ui.pwa.shortName', 'Short Name')}
               <span className="ml-1 text-xs font-normal text-gray-600 dark:text-gray-400">
                 (max 15 chars)
               </span>
             </label>
             <input
+              id="pwa-short-name"
               type="text"
               maxLength={15}
               value={pwa.shortName || ''}
@@ -105,10 +109,14 @@ function PwaCustomization({ config, onUpdate, t }) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          <label
+            htmlFor="pwa-description"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
             {t('admin.ui.pwa.description', 'Description')}
           </label>
           <input
+            id="pwa-description"
             type="text"
             maxLength={300}
             value={pwa.description || ''}
@@ -127,17 +135,24 @@ function PwaCustomization({ config, onUpdate, t }) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="pwa-theme-color"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {t('admin.ui.pwa.themeColor', 'Theme Color')}
             </label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
+                aria-label={t('admin.ui.pwa.colorPicker', '{{name}} (color picker)', {
+                  name: t('admin.ui.pwa.themeColor', 'Theme Color')
+                })}
                 value={pwa.themeColor || '#003557'}
                 onChange={e => handleChange('themeColor', e.target.value)}
                 className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
+                id="pwa-theme-color"
                 type="text"
                 value={pwa.themeColor || '#003557'}
                 onChange={e => handleChange('themeColor', e.target.value)}
@@ -152,17 +167,24 @@ function PwaCustomization({ config, onUpdate, t }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor="pwa-background-color"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {t('admin.ui.pwa.backgroundColor', 'Background Color')}
             </label>
             <div className="flex items-center gap-2">
               <input
                 type="color"
+                aria-label={t('admin.ui.pwa.colorPicker', '{{name}} (color picker)', {
+                  name: t('admin.ui.pwa.backgroundColor', 'Background Color')
+                })}
                 value={pwa.backgroundColor || '#ffffff'}
                 onChange={e => handleChange('backgroundColor', e.target.value)}
                 className="h-9 w-12 rounded-sm border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
+                id="pwa-background-color"
                 type="text"
                 value={pwa.backgroundColor || '#ffffff'}
                 onChange={e => handleChange('backgroundColor', e.target.value)}
@@ -224,7 +246,10 @@ function PwaCustomization({ config, onUpdate, t }) {
 
         {ICON_FIELDS.map(({ key, label, hint, required }) => (
           <div key={key}>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            <label
+              htmlFor={`pwa-icon-${key}`}
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
               {label}
               {required && (
                 <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-sm">
@@ -234,6 +259,7 @@ function PwaCustomization({ config, onUpdate, t }) {
             </label>
             <div className="flex items-center gap-3">
               <input
+                id={`pwa-icon-${key}`}
                 type="text"
                 value={pwa.icons?.[key] || ''}
                 onChange={e => handleIconChange(key, e.target.value)}

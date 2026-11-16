@@ -4496,8 +4496,10 @@
         "logoDescription": "Upload images in the Assets tab, then enter their path here."
       },
       "pwa": {
-        "maxChars60": "(max 60 chars)"
-      }
+        "maxChars60": "(max 60 chars)",
+        "colorPicker": "{{name}} (color picker)"
+      },
+      "linkTarget": "Open link in"
     },
     "groupSelect": {
       "placeholder": "Search groups or type a name…",

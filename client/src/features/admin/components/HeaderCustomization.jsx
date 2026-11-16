@@ -194,6 +194,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
                         </span>
                       </label>
                       <select
+                        aria-label={t('admin.ui.linkTarget', 'Open link in')}
                         value={link.target || '_self'}
                         onChange={e => updateNavigationLink(index, { target: e.target.value })}
                         className="text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"

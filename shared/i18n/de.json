@@ -4977,8 +4977,10 @@
         "logoDescription": "Laden Sie Bilder im Tab „Dateien“ hoch und tragen Sie hier ihren Pfad ein."
       },
       "pwa": {
-        "maxChars60": "(max. 60 Zeichen)"
-      }
+        "maxChars60": "(max. 60 Zeichen)",
+        "colorPicker": "{{name}} (Farbwähler)"
+      },
+      "linkTarget": "Link öffnen in"
     },
     "groupSelect": {
       "placeholder": "Gruppen suchen oder Namen eingeben…",
