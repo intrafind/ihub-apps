@@ -22,7 +22,7 @@ import fsCallbacks from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { after, before, describe, it } from 'node:test';
+import { after, before, describe, it, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PREFIX_LISTING_NAMESPACES,
@@ -923,5 +923,31 @@ describe('filesystem append log: a crashed write (filesystem-specific)', () => {
       await second.provider.shutdown();
       await second.cleanup();
     }
+  });
+});
+
+describe('filesystem document store: concurrent writes in one process', () => {
+  it('two concurrent puts to one key create the lease file once', async () => {
+    const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-put-line-'));
+    const provider = new FilesystemStorageProvider({ baseDir, flushIntervalMs: 1000 });
+    await provider.initialize();
+    const realOpen = fs.open;
+    const leaseCreates = [];
+    try {
+      await provider.documents.put('chats', 'k', { n: 0 });
+      mock.method(fs, 'open', (file, flags, ...rest) => {
+        if (flags === 'wx' && String(file).endsWith('.lock')) leaseCreates.push(file);
+        return realOpen(file, flags, ...rest);
+      });
+      await Promise.all([
+        provider.documents.put('chats', 'k', { n: 1 }),
+        provider.documents.put('chats', 'k', { n: 2 })
+      ]);
+    } finally {
+      mock.restoreAll();
+      await provider.shutdown?.();
+      await fs.rm(baseDir, { recursive: true, force: true });
+    }
+    assert.equal(leaseCreates.length, 1, 'the second put inherited the lease in memory');
   });
 });
