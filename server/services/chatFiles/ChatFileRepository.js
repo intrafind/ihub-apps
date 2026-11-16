@@ -30,6 +30,8 @@ import { isValidId } from '../../utils/pathSecurity.js';
 import { sniffRasterImage } from './rasterImage.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { BLOB_NAMESPACES, RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkBlobs, walkDocuments } from '../../storage/walk.js';
+import { ChatEvidenceRepository } from '../chat/ChatEvidenceRepository.js';
 import {
   canUseFileAsTemplate,
   chatFilePolicy,
@@ -152,7 +154,6 @@ export function sanitizeFileSource(source) {
 
 const KEY_SEPARATOR = '__';
 const DAY_MS = 24 * 60 * 60 * 1000;
-const SCAN_PAGE_SIZE = 200;
 
 /**
  * Key of the counter document that holds the server-wide byte total. It lives in
@@ -363,6 +364,8 @@ export class ChatFileRepository {
     this.blobs = blobs || null;
     this.logger = log || logger;
     this.policy = policy;
+    /** A chat's evidence counts against its byte quota (#3687); same provider as the files. */
+    this._evidence = new ChatEvidenceRepository({ documents, blobs, logger: this.logger });
   }
 
   /** Whether both document and blob facets are available. @returns {boolean} */
@@ -409,6 +412,8 @@ export class ChatFileRepository {
    * @param {'original_and_text'|'server_text_only'|'client_text_only'} [file.storageMode]
    * @param {Object} [file.appConfig] - Optional app config for policy resolution.
    * @param {string} [file.createdAt] - Optional timestamp override (for tests).
+   * @param {boolean} [file.countEvidence=false] - A user's upload: the chat's
+   *   evidence records count against its byte quota (#3687).
    * @returns {Promise<Object|null>} File descriptor.
    */
   async put(
@@ -432,7 +437,8 @@ export class ChatFileRepository {
       appConfig = null,
       policy: explicitPolicy = null,
       createdAt = null,
-      now = null
+      now = null,
+      countEvidence = false
     } = {}
   ) {
     // Allow either `put(scope, file)` or `put({ scope, ...file })`
@@ -515,7 +521,8 @@ export class ChatFileRepository {
       totalBytes,
       settings,
       replaces,
-      origin: fileOrigin
+      origin: fileOrigin,
+      countEvidence
     });
 
     const cleanName =
@@ -614,10 +621,18 @@ export class ChatFileRepository {
     totalBytes,
     settings,
     replaces = null,
-    origin = 'upload'
+    origin = 'upload',
+    countEvidence = false
   }) {
     assertFileSize(settings.quotas, singleFileSize);
-    await this._enforceScopeQuota({ scope, totalBytes, quotas: settings.quotas, replaces, origin });
+    await this._enforceScopeQuota({
+      scope,
+      totalBytes,
+      quotas: settings.quotas,
+      replaces,
+      origin,
+      countEvidence
+    });
     await this._enforceUserQuota({ scope, ownerId, totalBytes, settings, replaces, origin });
     await this._enforceServerQuota({ scope, totalBytes, settings, replaces, origin });
   }
@@ -628,7 +643,7 @@ export class ChatFileRepository {
    *
    * @private
    */
-  async _enforceScopeQuota({ scope, totalBytes, quotas, replaces, origin }) {
+  async _enforceScopeQuota({ scope, totalBytes, quotas, replaces, origin, countEvidence }) {
     const limits = scopeLimits(scope, quotas);
     if (!(limits.maxFiles > 0 || limits.maxBytes > 0)) return;
     const existing = (await this.list(scope)).filter(
@@ -639,7 +654,28 @@ export class ChatFileRepository {
     if (origin !== 'image') {
       assertScopeSlots(scope, limits, existing.filter(item => item.origin !== 'image').length);
     }
-    const scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
+    let scopeBytes = existing.reduce((sum, item) => sum + (item.bytes || 0), 0);
+    // A chat's evidence records take its storage too — for a user's upload
+    // only, never for a file stored during an answer, and never before an
+    // answer: an answer is not refused for it. Unknown usage refuses the upload.
+    // ponytail: lists the chat's evidence per upload — O(records + blobs of the
+    // chat); keep a byte counter if long chats make uploads slow.
+    if (countEvidence && scope.type === 'chat' && limits.maxBytes > 0) {
+      try {
+        scopeBytes += await this._evidence.chatBytes(scope.id);
+      } catch (error) {
+        this.logger.error('Evidence bytes of a chat not counted; refusing the upload', {
+          component: COMPONENT,
+          error: error.message
+        });
+        throw new ChatFileQuotaError(
+          'QUOTA_CHAT_BYTES',
+          `This ${scope.type}'s storage use could not be determined`,
+          { limit: limits.maxBytes },
+          413
+        );
+      }
+    }
     assertScopeBytes(scope, limits, scopeBytes, totalBytes);
   }
 
@@ -1222,24 +1258,11 @@ export class ChatFileRepository {
     const prefix = scopePrefix(scope);
     const docs = [];
     try {
-      if (this.documents.supportsScan) {
-        for await (const doc of this.documents.scan(CHAT_FILES_NAMESPACE, {
-          prefix,
-          includeData
-        })) {
-          docs.push(doc);
-        }
-      } else {
-        let cursor = null;
-        do {
-          const page = await this.documents.list(CHAT_FILES_NAMESPACE, {
-            prefix,
-            includeData,
-            cursor
-          });
-          for (const doc of page.items || []) docs.push(doc);
-          cursor = page.nextCursor || null;
-        } while (cursor);
+      for await (const doc of walkDocuments(this.documents, CHAT_FILES_NAMESPACE, {
+        prefix,
+        includeData
+      })) {
+        docs.push(doc);
       }
     } catch (error) {
       this.logger.error("Failed to enumerate a scope's chat files", {
@@ -1257,12 +1280,9 @@ export class ChatFileRepository {
     const prefix = scopePrefix(scope);
     const keys = [];
     try {
-      let cursor = null;
-      do {
-        const page = await this.blobs.list(CHAT_FILE_BLOBS_NAMESPACE, { prefix, cursor });
-        for (const item of page.items || []) keys.push(item.key);
-        cursor = page.nextCursor || null;
-      } while (cursor);
+      for await (const item of walkBlobs(this.blobs, CHAT_FILE_BLOBS_NAMESPACE, { prefix })) {
+        keys.push(item.key);
+      }
     } catch (error) {
       this.logger.error("Failed to enumerate a scope's chat file blobs", {
         component: COMPONENT,
@@ -1294,19 +1314,12 @@ export class ChatFileRepository {
   async _listOwnerDocs(ownerId) {
     const docs = [];
     try {
-      let cursor = null;
-      do {
-        const page = await this.documents.list(CHAT_FILES_NAMESPACE, {
-          ownerId: String(ownerId),
-          limit: SCAN_PAGE_SIZE,
-          includeData: true,
-          ...(cursor ? { cursor } : {})
-        });
-        for (const doc of page.items || []) {
-          if (doc?.data) docs.push(doc);
-        }
-        cursor = page.nextCursor || null;
-      } while (cursor);
+      for await (const doc of walkDocuments(this.documents, CHAT_FILES_NAMESPACE, {
+        ownerId: String(ownerId),
+        includeData: true
+      })) {
+        if (doc?.data) docs.push(doc);
+      }
     } catch (error) {
       this.logger.error('Failed to list owner chat files for quota check', {
         component: COMPONENT,
@@ -1319,18 +1332,11 @@ export class ChatFileRepository {
   async _listAllDocs() {
     const docs = [];
     try {
-      let cursor = null;
-      do {
-        const page = await this.documents.list(CHAT_FILES_NAMESPACE, {
-          limit: SCAN_PAGE_SIZE,
-          includeData: true,
-          ...(cursor ? { cursor } : {})
-        });
-        for (const doc of page.items || []) {
-          if (doc?.data && doc.key !== SERVER_COUNTER_KEY) docs.push(doc);
-        }
-        cursor = page.nextCursor || null;
-      } while (cursor);
+      for await (const doc of walkDocuments(this.documents, CHAT_FILES_NAMESPACE, {
+        includeData: true
+      })) {
+        if (doc?.data && doc.key !== SERVER_COUNTER_KEY) docs.push(doc);
+      }
     } catch (error) {
       this.logger.error('Failed to list server chat files', {
         component: COMPONENT,

@@ -74,6 +74,38 @@ function nextId(prefix) {
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 /**
+ * Namespaces the key-prefix listing cases write to, with the number of `__`
+ * segments a provider that keeps a prefix index (see `KEY_PREFIX_SEGMENTS` in
+ * `storage/namespaces.js`) should index them by. A runner for such a provider
+ * adds these to its index configuration so the cases exercise the index; for
+ * every other provider they are ordinary namespaces, and the results must be
+ * the same either way.
+ */
+export const PREFIX_LISTING_NAMESPACES = Object.freeze({
+  'conformance-prefix-one': 1,
+  'conformance-prefix-two': 2
+});
+
+/** Keys whose `__` runs make the partition boundary easy to get wrong. */
+const PREFIX_KEYS = Object.freeze([
+  'chat__A__1',
+  'chat__A__2',
+  'chat__AB__1',
+  'chat__A',
+  'chat__A__x__y',
+  'a___b',
+  'a____b'
+]);
+
+/** Prefixes asked for: inside, at, and short of a partition boundary. */
+const PREFIX_QUERIES = Object.freeze(['chat__A__', 'chat__A', 'chat__', 'a___', 'a__']);
+
+/** What a prefix listing must return: every key starting with the prefix, in order. */
+function expectedKeys(keys, prefix) {
+  return keys.filter(key => key.startsWith(prefix)).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
+/**
  * A promise together with its settle functions.
  *
  * This is how the suite orders two concurrent operations without sleeping: the
@@ -243,9 +275,17 @@ async function startProvider(createProvider, options) {
  *   `entries(provider, ns) => Promise<string[]>` lists everything the backing
  *   location holds — which is how the suite proves no sidecar was written
  *   beside a configuration file. Omitted, those cases are skipped.
+ * @param {string[]} [options.sections] - Run only the sections with these
+ *   titles (e.g. `'listing and paging'`); all of them when omitted.
  * @returns {void}
  */
-export function runProviderConformance({ name, createProvider, capabilities, rawFiles }) {
+export function runProviderConformance({
+  name,
+  createProvider,
+  capabilities,
+  rawFiles,
+  sections = null
+}) {
   assert.equal(typeof name, 'string', 'runProviderConformance needs a provider name');
   assert.equal(typeof createProvider, 'function', 'runProviderConformance needs a factory');
   assert.ok(capabilities && typeof capabilities === 'object', 'expected capabilities are required');
@@ -273,6 +313,15 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
   const skipWithoutRawFiles =
     skipWithoutRaw || (rawFiles ? false : 'runner supplies no rawFiles access');
 
+  /**
+   * Options of one section: skipped for the reason given, or because the
+   * runner asked for other `sections` only (a second run of a provider in
+   * another configuration that only matters to some of them).
+   */
+  const section = (title, skip = false) => ({
+    skip: skip || (Array.isArray(sections) && !sections.includes(title) ? 'not selected' : false)
+  });
+
   describe(`storage conformance: ${name}`, () => {
     /**
      * One initialized provider serves every case that does not need an instance
@@ -294,7 +343,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       if (dispose) await dispose();
     });
 
-    describe('lifecycle', () => {
+    describe('lifecycle', section('lifecycle'), () => {
       it('initialize() is idempotent', async () => {
         const { provider, dispose } = await startProvider(createProvider);
         try {
@@ -391,7 +440,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       });
     });
 
-    describe('documents', () => {
+    describe('documents', section('documents'), () => {
       it('get() of a missing key resolves null', async () => {
         assert.equal(await shared.documents.get(nextId('docs'), 'absent'), null);
       });
@@ -640,7 +689,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       });
     });
 
-    describe('listing and paging', () => {
+    describe('listing and paging', section('listing and paging'), () => {
       /**
        * Seed a namespace with `key -> { data, ownerId }` entries.
        *
@@ -974,7 +1023,163 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
      * the cases below assert that asking for an owner is refused outright, so
      * a provider that started storing owners here would fail rather than drift.
      */
-    describe('raw namespaces', { skip: skipWithoutRaw }, () => {
+    describe('key-prefix listings', section('key-prefix listings'), () => {
+      // A provider may index keys by their leading `__` segments to serve a
+      // scoped listing without reading the namespace. Whatever it does, a
+      // listing still answers with exactly the keys that start with the
+      // prefix — including prefixes that end inside, at, or short of the
+      // indexed part, and keys whose `__` runs overlap (`a___b`).
+      for (const ns of Object.keys(PREFIX_LISTING_NAMESPACES)) {
+        it(`documents: list and scan return every key under a prefix (${ns})`, async () => {
+          for (const key of PREFIX_KEYS) await shared.documents.put(ns, key, { key });
+          try {
+            for (const prefix of PREFIX_QUERIES) {
+              const expected = expectedKeys(PREFIX_KEYS, prefix);
+              const page = await shared.documents.list(ns, { prefix, limit: 1000 });
+              assert.deepEqual(
+                page.items.map(doc => doc.key),
+                expected,
+                `list ${prefix}`
+              );
+              if (shared.documents.supportsScan) {
+                const seen = [];
+                for await (const doc of shared.documents.scan(ns, { prefix })) seen.push(doc.key);
+                assert.deepEqual(seen, expected, `scan ${prefix}`);
+              }
+            }
+
+            // Cursor paging inside one partition: no gaps, no repeats.
+            const paged = [];
+            let cursor = null;
+            do {
+              const page = await shared.documents.list(ns, {
+                prefix: 'chat__A__',
+                limit: 1,
+                ...(cursor ? { cursor } : {})
+              });
+              paged.push(...page.items.map(doc => doc.key));
+              cursor = page.nextCursor;
+            } while (cursor);
+            assert.deepEqual(paged, expectedKeys(PREFIX_KEYS, 'chat__A__'));
+
+            assert.equal(await shared.documents.delete(ns, 'chat__A__1'), true);
+            const after = await shared.documents.list(ns, { prefix: 'chat__A__' });
+            assert.deepEqual(
+              after.items.map(doc => doc.key),
+              ['chat__A__2', 'chat__A__x__y'],
+              'a deleted key leaves the listing'
+            );
+          } finally {
+            for (const key of PREFIX_KEYS) await shared.documents.delete(ns, key);
+          }
+        });
+
+        it(
+          `blobs: list and scan return every key under a prefix (${ns})`,
+          { skip: skipWithoutBlobStore },
+          async () => {
+            for (const key of PREFIX_KEYS) await shared.blobs.put(ns, key, Buffer.from(key));
+            try {
+              for (const prefix of PREFIX_QUERIES) {
+                const expected = expectedKeys(PREFIX_KEYS, prefix);
+                const page = await shared.blobs.list(ns, { prefix, limit: 1000 });
+                assert.deepEqual(
+                  page.items.map(item => item.key),
+                  expected,
+                  `list ${prefix}`
+                );
+                const seen = [];
+                for await (const item of shared.blobs.scan(ns, { prefix })) seen.push(item.key);
+                assert.deepEqual(seen, expected, `scan ${prefix}`);
+              }
+
+              const paged = [];
+              let cursor = null;
+              do {
+                const page = await shared.blobs.list(ns, {
+                  prefix: 'chat__A__',
+                  limit: 1,
+                  ...(cursor ? { cursor } : {})
+                });
+                paged.push(...page.items.map(item => item.key));
+                cursor = page.nextCursor;
+              } while (cursor);
+              assert.deepEqual(paged, expectedKeys(PREFIX_KEYS, 'chat__A__'));
+
+              assert.equal(await shared.blobs.delete(ns, 'chat__A__1'), true);
+              const after = await shared.blobs.list(ns, { prefix: 'chat__A__' });
+              assert.deepEqual(
+                after.items.map(item => item.key),
+                ['chat__A__2', 'chat__A__x__y'],
+                'a deleted key leaves the listing'
+              );
+            } finally {
+              for (const key of PREFIX_KEYS) await shared.blobs.delete(ns, key);
+            }
+          }
+        );
+      }
+    });
+
+    describe('prefix deletes', section('prefix deletes'), () => {
+      // The scope delete of a repository keyed `<scope>__<id>`: everything
+      // under `a__` goes, `ab__` and the bare `a` stay, and nothing is left
+      // that a later listing of the prefix could still see.
+      const KEYS = ['a__x', 'a__y', 'a__x__z', 'ab__x', 'a'];
+      for (const ns of Object.keys(PREFIX_LISTING_NAMESPACES)) {
+        it(`documents: deletePrefix removes exactly the prefix (${ns})`, async () => {
+          for (const key of KEYS) await shared.documents.put(ns, key, { key });
+          try {
+            assert.equal(await shared.documents.deletePrefix(ns, 'a__'), 3);
+            const left = await shared.documents.list(ns, { limit: 1000 });
+            assert.deepEqual(
+              left.items.map(doc => doc.key).filter(k => KEYS.includes(k)),
+              ['a', 'ab__x']
+            );
+            const under = await shared.documents.list(ns, { prefix: 'a__' });
+            assert.deepEqual(under.items, [], 'no entry left under the prefix');
+            assert.equal(await shared.documents.deletePrefix(ns, 'a__'), 0, 'idempotent');
+            // A key written again under the prefix lists alone: no stale index entry.
+            await shared.documents.put(ns, 'a__new', { key: 'a__new' });
+            const again = await shared.documents.list(ns, { prefix: 'a__' });
+            assert.deepEqual(
+              again.items.map(doc => doc.key),
+              ['a__new']
+            );
+            await assert.rejects(() => shared.documents.deletePrefix(ns, ''), {
+              code: 'INVALID_KEY'
+            });
+          } finally {
+            for (const key of [...KEYS, 'a__new']) await shared.documents.delete(ns, key);
+          }
+        });
+
+        it(
+          `blobs: deletePrefix removes exactly the prefix (${ns})`,
+          { skip: skipWithoutBlobStore },
+          async () => {
+            for (const key of KEYS) await shared.blobs.put(ns, key, Buffer.from(key));
+            try {
+              assert.equal(await shared.blobs.deletePrefix(ns, 'a__'), 3);
+              const left = await shared.blobs.list(ns, { limit: 1000 });
+              assert.deepEqual(
+                left.items.map(item => item.key).filter(k => KEYS.includes(k)),
+                ['a', 'ab__x']
+              );
+              assert.deepEqual((await shared.blobs.list(ns, { prefix: 'a__' })).items, []);
+              assert.equal(await shared.blobs.deletePrefix(ns, 'a__'), 0, 'idempotent');
+              await assert.rejects(() => shared.blobs.deletePrefix(ns, ''), {
+                code: 'INVALID_KEY'
+              });
+            } finally {
+              for (const key of KEYS) await shared.blobs.delete(ns, key);
+            }
+          }
+        );
+      }
+    });
+
+    describe('raw namespaces', section('raw namespaces', skipWithoutRaw), () => {
       const ns = rawNamespace;
 
       /** Entries the backing location gained between two listings. */
@@ -1229,7 +1434,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       });
     });
 
-    describe('append logs', () => {
+    describe('append logs', section('append logs'), () => {
       it('an empty stream reads [] and reports lastSeq 0', async () => {
         const stream = nextId('log');
         assert.deepEqual(await shared.logs.read(stream), []);
@@ -1572,7 +1777,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       });
     });
 
-    describe('blobs', { skip: skipWithoutBlobs }, () => {
+    describe('blobs', section('blobs', skipWithoutBlobs), () => {
       it('putBlob then getBlob round-trips the bytes', async () => {
         const stream = nextId('blob');
         const bytes = Buffer.from('conformance blob payload', 'utf8');
@@ -1654,7 +1859,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       });
     });
 
-    describe('the blob facet', { skip: skipWithoutBlobStore }, () => {
+    describe('the blob facet', section('the blob facet', skipWithoutBlobStore), () => {
       // The seam an S3-compatible or database-backed store slots into
       // (issue #2318). Everything asserted here is something all of them can
       // do natively — anything more would be a filesystem assumption that
@@ -1752,6 +1957,36 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
         const page = await shared.blobs.list('conformance-blobs-empty', {});
         assert.deepEqual(page.items, []);
         assert.equal(page.nextCursor, null);
+        const scanned = [];
+        for await (const item of shared.blobs.scan('conformance-blobs-empty')) scanned.push(item);
+        assert.deepEqual(scanned, [], 'scan of an empty namespace yields nothing');
+      });
+
+      it('scan yields what paging list returns, in the same order', async () => {
+        const ns = nextId('blob-scan');
+        const prefix = 'scope__';
+        const keys = ['scope__b', 'scope__a', 'other', 'scope__c-1', 'scope__c.1', 'zz'];
+        for (const key of keys) await shared.blobs.put(ns, key, Buffer.from(key));
+
+        for (const filter of [{}, { prefix }]) {
+          const listed = [];
+          let cursor = null;
+          do {
+            const page = await shared.blobs.list(ns, {
+              ...filter,
+              limit: 2,
+              ...(cursor ? { cursor } : {})
+            });
+            listed.push(...page.items);
+            cursor = page.nextCursor;
+          } while (cursor);
+          const scanned = [];
+          for await (const item of shared.blobs.scan(ns, filter)) scanned.push(item);
+          assert.deepEqual(scanned, listed, `scan ${JSON.stringify(filter)}`);
+        }
+        const scoped = [];
+        for await (const item of shared.blobs.scan(ns, { prefix })) scoped.push(item.key);
+        assert.deepEqual(scoped, ['scope__a', 'scope__b', 'scope__c-1', 'scope__c.1']);
       });
 
       it('refuses a key that could address a path', async () => {
@@ -1760,7 +1995,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       });
     });
 
-    describe('locks', { skip: skipWithoutLocks }, () => {
+    describe('locks', section('locks', skipWithoutLocks), () => {
       it('withLock returns the value fn resolved with', async () => {
         const value = await shared.locks.withLock(nextId('lock'), async () => ({ ok: 42 }));
         assert.deepEqual(value, { ok: 42 });
@@ -2208,7 +2443,7 @@ export function runProviderConformance({ name, createProvider, capabilities, raw
       });
     });
 
-    describe('notifications', { skip: skipWithoutEvents }, () => {
+    describe('notifications', section('notifications', skipWithoutEvents), () => {
       it('a subscriber receives published events, with at stamped when omitted', async () => {
         const seen = [];
         const unsubscribe = shared.notifier.subscribe(event => seen.push(event));

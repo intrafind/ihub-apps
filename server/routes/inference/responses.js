@@ -83,6 +83,7 @@ import {
 import { apiUser, numberField, platformLanguage, requestLanguage } from './shared.js';
 import { newOutputId } from '../../services/provenance/records.js';
 import { recordTextOutput } from '../../services/provenance/turnProvenance.js';
+import { recordRunEvidence } from '../../services/chat/evidenceRecord.js';
 import { applyProvenanceHeaders } from '../../services/provenance/httpProvenance.js';
 
 const COMPONENT = 'ResponsesApi';
@@ -551,6 +552,8 @@ export default function registerResponsesRoutes(
     });
 
     const runId = newRunId('chat');
+    // The run's id, so the caller can read or delete its evidence record (#3687).
+    res.setHeader('X-Run-Id', runId);
     const outputId = newOutputId();
     const assembler = new ResponseAssembler({
       res: stream ? res : null,
@@ -643,6 +646,10 @@ export default function registerResponsesRoutes(
         getLocalizedError,
         outputId
       });
+      // Without a conversation the turn keeps its own evidence record (#3687).
+      if (!chat) {
+        void recordRunEvidence({ runId, user, summary: outcome, runLog: chatService.runLog });
+      }
       if (disconnected && !stream) return;
 
       if (outcome.status === 'error' || outcome.status === 'aborted') {
@@ -731,6 +738,8 @@ export default function registerResponsesRoutes(
       }
     });
     const runId = run.runId || newRunId('chat');
+    // The run's id, so the caller can read or delete its evidence record (#3687).
+    res.setHeader('X-Run-Id', runId);
     const outputId = newOutputId();
     const assembler = new ResponseAssembler({
       res: stream ? res : null,
@@ -753,7 +762,14 @@ export default function registerResponsesRoutes(
     let currentFiles = null;
     let userTurnStored = false;
     let answerStored = false;
+    let evidenceRecorded = false;
     const storeAnswer = async summary => {
+      // Without a conversation the run keeps its own evidence record (#3687),
+      // after the run ended; never awaited.
+      if (!chat && !evidenceRecorded) {
+        evidenceRecorded = true;
+        void recordRunEvidence({ runId: run.runId, user, summary, runLog: llmClient.runLog });
+      }
       if (!userTurnStored || answerStored) return;
       answerStored = true;
       await materializeAssistantTurn({

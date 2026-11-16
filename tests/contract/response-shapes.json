@@ -617,6 +617,10 @@
           "retentionDays": "number",
           "temporaryRetentionHours": "number"
         },
+        "evidence": {
+          "enabled": "boolean",
+          "maxContentBytes": "number"
+        },
         "runLog": {
           "cleanupEnabled": "boolean",
           "enabled": "boolean",
@@ -725,6 +729,12 @@
       "truncated": "boolean"
     }
   },
+  "GET /api/admin/chats/:chatId/evidence-content/:sha256": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/chats/:chatId/evidence/:messageId": {
+    "skipped": "its parent path is not a readable list"
+  },
   "GET /api/admin/configs/platform": {
     "status": 200,
     "shape": {
@@ -795,6 +805,10 @@
       },
       "chats": {
         "enabled": "boolean",
+        "evidence": {
+          "enabled": "boolean",
+          "maxContentBytes": "number"
+        },
         "maxChatsPerUser": "number",
         "maxMessagesPerChat": "number",
         "retentionDays": "number",
@@ -2892,6 +2906,12 @@
       }
     }
   },
+  "GET /api/admin/runs/:runId/evidence": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/admin/runs/:runId/evidence-content/:sha256": {
+    "skipped": "its parent path is not a readable list"
+  },
   "GET /api/admin/scheduled-tasks": {
     "status": 200,
     "shape": {
@@ -4481,6 +4501,12 @@
   },
   "GET /api/chats/:chatId/artifacts/:artifactId/provenance": {
     "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/chats/:chatId/evidence-content/:sha256": {
+    "skipped": "its parent path is not a readable list"
+  },
+  "GET /api/chats/:chatId/evidence/:messageId": {
+    "skipped": "its parent path is not a readable list"
   },
   "GET /api/chats/:chatId/files": {
     "status": 200,
@@ -6165,6 +6191,12 @@
   },
   "GET /api/runs/:runId/events": {
     "skipped": "streams"
+  },
+  "GET /api/runs/:runId/evidence": {
+    "skipped": "its parent list has no entry in the seed"
+  },
+  "GET /api/runs/:runId/evidence-content/:sha256": {
+    "skipped": "its parent list has no entry in the seed"
   },
   "GET /api/runs/:runId/interactions": {
     "skipped": "its parent list has no entry in the seed"

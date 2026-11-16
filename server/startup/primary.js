@@ -6,6 +6,7 @@ import { loadJson } from '../configLoader.js';
 import logger from '../utils/logger.js';
 import { startStickyPrimary, logStickyRoutingCaveat } from '../clusterSticky.js';
 import { initPrimaryBus } from '../clusterBus.js';
+import { getQuotaLedger } from '../services/quota/QuotaLedger.js';
 import {
   RESTART_MESSAGE_KEY,
   getShutdownExitCode,
@@ -109,8 +110,18 @@ export async function startPrimary({ workerCount, stickyRouting }) {
         });
         // 75 when an update or rollback asked for a restart: the launcher
         // restarts the server only when the process it started — this
-        // primary — exits with that code.
-        process.exit(getShutdownExitCode());
+        // primary — exits with that code. The primary holds the usage-limit
+        // counters the workers sent last; they are written first.
+        void getQuotaLedger()
+          .flush()
+          .catch(error =>
+            logger.error({
+              component: 'Server',
+              message: 'Could not save usage-limit counters on shutdown',
+              error: error?.message
+            })
+          )
+          .finally(() => process.exit(getShutdownExitCode()));
       }
       return;
     }
@@ -215,8 +226,14 @@ export async function startPrimary({ workerCount, stickyRouting }) {
         // worker may already be dead
       }
     }
-    // Give workers a moment to exit cleanly, then force-exit the primary.
-    setTimeout(() => process.exit(getShutdownExitCode()), 5000).unref();
+    // Give workers a moment to exit cleanly, then force-exit the primary —
+    // after writing the usage-limit counters it holds, for at most 2 s.
+    setTimeout(() => {
+      const cap = new Promise(resolve => setTimeout(resolve, 2000).unref());
+      void Promise.race([getQuotaLedger().flush(), cap])
+        .catch(() => {})
+        .finally(() => process.exit(getShutdownExitCode()));
+    }, 5000).unref();
   };
   process.on('SIGTERM', () => handlePrimaryShutdown('SIGTERM'));
   process.on('SIGINT', () => handlePrimaryShutdown('SIGINT'));

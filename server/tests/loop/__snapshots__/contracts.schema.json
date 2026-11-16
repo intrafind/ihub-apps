@@ -1006,6 +1006,10 @@
                 "type": "string",
                 "enum": ["web", "documents"]
               },
+              "activityOrigin": {
+                "type": "string",
+                "enum": ["project", "web", "ifinder", "iassistant", "documents", "integration"]
+              },
               "args": {},
               "argsRepaired": {
                 "type": "boolean"
@@ -1118,6 +1122,19 @@
               },
               "knowledgeSource": {
                 "type": "string"
+              },
+              "activityOrigin": {
+                "type": "string",
+                "enum": ["project", "web", "ifinder", "iassistant", "documents", "integration"]
+              },
+              "resultCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "readOutcome": {
+                "type": "string",
+                "enum": ["opened", "empty"]
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview", "durationMs"],
@@ -2207,6 +2224,26 @@
                       "required": ["ok"],
                       "additionalProperties": false
                     },
+                    "scopeName": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "origin": {
+                          "type": "string",
+                          "enum": ["uploaded", "picked", "linked", "written"]
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["origin"],
+                      "additionalProperties": false
+                    },
                     "cited": {
                       "type": "boolean"
                     },
@@ -2215,6 +2252,27 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "project",
+                            "web",
+                            "ifinder",
+                            "iassistant",
+                            "documents",
+                            "integration"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
                     },
                     "private": {
                       "type": "boolean"
@@ -3437,6 +3495,26 @@
                   "required": ["ok"],
                   "additionalProperties": false
                 },
+                "scopeName": {
+                  "type": "string"
+                },
+                "provenance": {
+                  "type": "object",
+                  "properties": {
+                    "origin": {
+                      "type": "string",
+                      "enum": ["uploaded", "picked", "linked", "written"]
+                    },
+                    "kind": {
+                      "type": "string"
+                    },
+                    "at": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["origin"],
+                  "additionalProperties": false
+                },
                 "cited": {
                   "type": "boolean"
                 },
@@ -3445,6 +3523,27 @@
                   "items": {
                     "type": "string"
                   }
+                },
+                "origin": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "project",
+                        "web",
+                        "ifinder",
+                        "iassistant",
+                        "documents",
+                        "integration"
+                      ]
+                    },
+                    "label": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["kind"],
+                  "additionalProperties": false
                 },
                 "private": {
                   "type": "boolean"
@@ -4900,6 +4999,10 @@
                 "type": "string",
                 "enum": ["web", "documents"]
               },
+              "activityOrigin": {
+                "type": "string",
+                "enum": ["project", "web", "ifinder", "iassistant", "documents", "integration"]
+              },
               "args": {},
               "execution": {
                 "type": "string",
@@ -5045,6 +5148,19 @@
               },
               "knowledgeSource": {
                 "type": "string"
+              },
+              "activityOrigin": {
+                "type": "string",
+                "enum": ["project", "web", "ifinder", "iassistant", "documents", "integration"]
+              },
+              "resultCount": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "readOutcome": {
+                "type": "string",
+                "enum": ["opened", "empty"]
               },
               "mcpApp": {
                 "type": "object",
@@ -5318,6 +5434,26 @@
                       "required": ["ok"],
                       "additionalProperties": false
                     },
+                    "scopeName": {
+                      "type": "string"
+                    },
+                    "provenance": {
+                      "type": "object",
+                      "properties": {
+                        "origin": {
+                          "type": "string",
+                          "enum": ["uploaded", "picked", "linked", "written"]
+                        },
+                        "kind": {
+                          "type": "string"
+                        },
+                        "at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["origin"],
+                      "additionalProperties": false
+                    },
                     "cited": {
                       "type": "boolean"
                     },
@@ -5326,6 +5462,27 @@
                       "items": {
                         "type": "string"
                       }
+                    },
+                    "origin": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "project",
+                            "web",
+                            "ifinder",
+                            "iassistant",
+                            "documents",
+                            "integration"
+                          ]
+                        },
+                        "label": {
+                          "type": "string"
+                        }
+                      },
+                      "required": ["kind"],
+                      "additionalProperties": false
                     },
                     "private": {
                       "type": "boolean"

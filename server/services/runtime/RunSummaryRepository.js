@@ -36,6 +36,7 @@ import logger from '../../utils/logger.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import { requireStorage } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { walkDocuments } from '../../storage/walk.js';
 
 const COMPONENT = 'RunSummaryRepository';
 
@@ -78,9 +79,6 @@ export const RUN_SUMMARY_FIELDS = Object.freeze([
   'archived'
 ]);
 
-/** Documents fetched per `list()` call while walking the namespace. */
-const SCAN_PAGE_SIZE = 200;
-
 /**
  * Hard bound on how many of one owner's runs are loaded for the in-memory
  * sort. Past it the owner's oldest-keyed runs are invisible to the listing —
@@ -88,6 +86,21 @@ const SCAN_PAGE_SIZE = 200;
  * the truncation is logged rather than left to be inferred from a short page.
  */
 const MAX_OWNER_RUNS = 1000;
+
+/**
+ * How long one owner's filtered run listing is reused. The agent and workflow
+ * run pages poll it, and every poll otherwise re-read up to
+ * {@link MAX_OWNER_RUNS} run documents. Short for the same reason as the chat
+ * list memo (`OWNER_CHATS_TTL_MS` in ChatRepository): it only has to cover a
+ * burst, and this process's own writes drop it at once.
+ */
+const OWNER_RUNS_TTL_MS = 5000;
+
+/**
+ * Owners whose listings are memoized at once; the oldest is dropped first.
+ * Each may hold several filters of up to {@link MAX_OWNER_RUNS} summaries.
+ */
+const MAX_MEMO_OWNERS = 100;
 
 /**
  * Hard bound on an admin scan of the whole namespace. A scan that tried to
@@ -310,6 +323,82 @@ export class RunSummaryRepository {
     this.documents = documents;
     this.locks = locks || null;
     this.logger = log || logger;
+    /**
+     * Owner → filter signature → `{ at, result }`, `result` the promise of
+     * one listing load (shared by concurrent callers). See
+     * {@link OWNER_RUNS_TTL_MS}.
+     * @type {Map<string, Map<string, {at: number, result: Promise<{matched: Object[], truncated: boolean}>}>>}
+     */
+    this._ownerRuns = new Map();
+    /** A number per `match` predicate, so the signature can name it. */
+    this._matchIds = new WeakMap();
+    this._nextMatchId = 0;
+  }
+
+  /**
+   * Drop the memoized listings of one owner (every owner when `ownerId` is
+   * null) because this process just changed a run of theirs.
+   *
+   * @param {string|null} [ownerId] - Owner whose runs changed.
+   * @returns {void}
+   * @private
+   */
+  _forgetOwnerRuns(ownerId = null) {
+    if (ownerId === null) this._ownerRuns.clear();
+    else this._ownerRuns.delete(String(ownerId));
+  }
+
+  /**
+   * One owner's filtered listing, from the memo when it is young enough.
+   *
+   * The memo key is the filter, including the identity of the `match`
+   * predicate: callers pass module-level predicates, which hit; a predicate
+   * built per call never does, and is simply loaded every time.
+   *
+   * @param {string} ownerId - Owner.
+   * @param {Object} filter - `status`, `kind`, `archived`, `match`.
+   * @param {() => Promise<{matched: Object[], truncated: boolean}>} load - Uncached load.
+   * @returns {Promise<{matched: Object[], truncated: boolean}>}
+   * @private
+   */
+  _ownerRunsMemo(ownerId, { status, kind, archived, match }, load) {
+    let matchId = 0;
+    if (typeof match === 'function') {
+      if (!this._matchIds.has(match)) this._matchIds.set(match, (this._nextMatchId += 1));
+      matchId = this._matchIds.get(match);
+    }
+    const signature = JSON.stringify([status ?? null, kind ?? null, String(archived), matchId]);
+    const now = Date.now();
+    let entries = this._ownerRuns.get(ownerId);
+    const hit = entries?.get(signature);
+    if (hit && now - hit.at < OWNER_RUNS_TTL_MS) return hit.result;
+
+    if (!entries) {
+      // A new owner: let go of every listing that has expired, so an owner
+      // nobody asks for again does not keep a thousand summaries alive.
+      for (const [owner, ownerEntries] of this._ownerRuns) {
+        for (const [key, entry] of ownerEntries) {
+          if (now - entry.at >= OWNER_RUNS_TTL_MS) ownerEntries.delete(key);
+        }
+        if (ownerEntries.size === 0) this._ownerRuns.delete(owner);
+      }
+      if (this._ownerRuns.size >= MAX_MEMO_OWNERS) {
+        this._ownerRuns.delete(this._ownerRuns.keys().next().value);
+      }
+      entries = new Map();
+      this._ownerRuns.set(ownerId, entries);
+    }
+    for (const [key, entry] of entries) {
+      if (now - entry.at >= OWNER_RUNS_TTL_MS) entries.delete(key);
+    }
+    const result = load();
+    const entry = { at: now, result };
+    entries.set(signature, entry);
+    // A failed load is not remembered.
+    result.catch(() => {
+      if (entries.get(signature) === entry) entries.delete(signature);
+    });
+    return result;
   }
 
   /**
@@ -387,41 +476,19 @@ export class RunSummaryRepository {
     // O(N) per page — and `GET /api/agents/runs` reaches here from a plain
     // authenticated request, which made a namespace-sized scan something any
     // signed-in user could ask for repeatedly.
-    if (this.documents.supportsScan) {
-      let exhausted = true;
-      for await (const doc of this.documents.scan(RUNS_NAMESPACE, {
-        ...(ownerId ? { ownerId } : {})
-      })) {
-        examined += 1;
-        const record = toSummary(doc);
-        if (record && (!match || match(record))) records.push(record);
-        if (records.length >= max || examined >= maxExamined) {
-          exhausted = false;
-          break;
-        }
+    let exhausted = true;
+    for await (const doc of walkDocuments(this.documents, RUNS_NAMESPACE, {
+      ...(ownerId ? { ownerId } : {})
+    })) {
+      examined += 1;
+      const record = toSummary(doc);
+      if (record && (!match || match(record))) records.push(record);
+      if (records.length >= max || examined >= maxExamined) {
+        exhausted = false;
+        break;
       }
-      return { records, truncated: !exhausted };
     }
-
-    // A provider that does not implement `scan` keeps the paged walk.
-    let cursor = null;
-    do {
-      const page = await this.documents.list(RUNS_NAMESPACE, {
-        limit: SCAN_PAGE_SIZE,
-        ...(ownerId ? { ownerId } : {}),
-        ...(cursor ? { cursor } : {})
-      });
-      for (const doc of page.items) {
-        examined += 1;
-        const record = toSummary(doc);
-        if (!record) continue;
-        if (match && !match(record)) continue;
-        records.push(record);
-        if (records.length >= max) break;
-      }
-      cursor = page.nextCursor;
-    } while (cursor && records.length < max && examined < maxExamined);
-    return { records, truncated: Boolean(cursor) };
+    return { records, truncated: !exhausted };
   }
 
   /**
@@ -476,6 +543,7 @@ export class RunSummaryRepository {
       const doc = await this.documents.put(RUNS_NAMESPACE, record.runId, record, {
         ownerId: record.anonymous ? null : record.ownerId
       });
+      this._forgetOwnerRuns(record.ownerId);
       return toSummary(doc);
     });
   }
@@ -510,6 +578,7 @@ export class RunSummaryRepository {
       const doc = await this.documents.put(RUNS_NAMESPACE, record.runId, record, {
         ownerId: record.anonymous ? null : record.ownerId
       });
+      this._forgetOwnerRuns(record.ownerId);
       return toSummary(doc);
     });
   }
@@ -536,6 +605,8 @@ export class RunSummaryRepository {
       const doc = await this.documents.put(RUNS_NAMESPACE, runId, record, {
         ownerId: record.anonymous ? null : record.ownerId
       });
+      this._forgetOwnerRuns(record.ownerId);
+      if (existing.ownerId !== record.ownerId) this._forgetOwnerRuns(existing.ownerId);
       return toSummary(doc);
     });
   }
@@ -550,7 +621,13 @@ export class RunSummaryRepository {
     if (!this._usable(runId, 'remove')) return false;
     // Under the lock so a concurrent patch cannot read the record, lose the
     // race to the delete and write it back afterwards.
-    return this._withRunLock(runId, () => this.documents.delete(RUNS_NAMESPACE, runId));
+    // The owner is not known without a read; a delete is rare enough (the
+    // retention sweep, a user removing a run) to drop every memo instead.
+    return this._withRunLock(runId, async () => {
+      const removed = await this.documents.delete(RUNS_NAMESPACE, runId);
+      this._forgetOwnerRuns();
+      return removed;
+    });
   }
 
   /**
@@ -559,6 +636,11 @@ export class RunSummaryRepository {
    * Anonymous runs are never returned, whatever the filters: their principal
    * is a per-run random id, and a listing keyed by it would be a listing of
    * one run the caller already has the id of.
+   *
+   * The filtered, sorted set is reused for {@link OWNER_RUNS_TTL_MS} per
+   * owner and filter, so a polling run page reads the owner's runs once per
+   * window rather than once per request. Writes made by this process drop it;
+   * a run another worker changed shows its new state within the window.
    *
    * @param {string} ownerId - Owning principal id.
    * @param {Object} [filters]
@@ -573,7 +655,8 @@ export class RunSummaryRepository {
    *   instead of thinning an already-truncated page.
    * @returns {Promise<{items: Object[], total: number, truncated: boolean}>}
    *   The page, how many matched before paging, and whether the owner has more
-   *   runs than the scan bound could load.
+   *   runs than the scan bound could load. The summaries are shared with the
+   *   memo: read them, never mutate them.
    */
   async listByOwner(ownerId, { status, kind, archived, limit, offset, match } = {}) {
     if (!ownerId) return { ...EMPTY_PAGE };
@@ -583,15 +666,21 @@ export class RunSummaryRepository {
       (kind ? record.kind === kind : true) &&
       matchesArchived(record, archived) &&
       (match ? match(record) : true);
-    const { records, truncated } = await this._load({
-      ownerId: String(ownerId),
-      max: MAX_OWNER_RUNS,
-      match: accept
-    });
-    if (truncated) {
-      this._logTruncation('listByOwner', { ownerId: String(ownerId), loaded: records.length });
-    }
-    const matched = records.sort(compareByStartedAtDesc);
+    const owner = String(ownerId);
+    const { matched, truncated } = await this._ownerRunsMemo(
+      owner,
+      { status, kind, archived, match },
+      async () => {
+        const loaded = await this._load({ ownerId: owner, max: MAX_OWNER_RUNS, match: accept });
+        if (loaded.truncated) {
+          this._logTruncation('listByOwner', { ownerId: owner, loaded: loaded.records.length });
+        }
+        return {
+          matched: loaded.records.sort(compareByStartedAtDesc),
+          truncated: loaded.truncated
+        };
+      }
+    );
     return { items: paginate(matched, limit, offset), total: matched.length, truncated };
   }
 

@@ -19,11 +19,11 @@ const BADGE = 'inline-flex items-center px-2 py-0.5 rounded-full text-xs font-me
 const KINDS = ['changed', 'added', 'removed'];
 
 /**
- * "Sync with gateway": compare the models of an iFinder Model Gateway with the
- * models imported from it, and apply the ones the admin picks.
+ * "Sync models": compare the models a provider lists now (an iFinder Model Gateway or
+ * Google) with the models imported from it, and apply the ones the admin picks.
  *
  * The comparison (`GET /admin/providers/:id/_model-drift`) changes nothing. The
- * admin sees what is new on the gateway, what changed, and what is gone. Changes and gone
+ * admin sees what is new at the provider, what changed, and what is gone. Changes and gone
  * models start ticked so a plain "Apply" brings the models in line; new models start
  * unticked, because importing one makes it available. A gone model is disabled,
  * never deleted. The server applies the pick and answers one outcome per item, so
@@ -32,7 +32,7 @@ const KINDS = ['changed', 'added', 'removed'];
  * Mount it only while it is open: its state is not reset between openings.
  *
  * @param {Object} props
- * @param {string} props.providerId - The gateway provider
+ * @param {string} props.providerId - The provider (a model gateway or Google)
  * @param {() => void} props.onClose
  * @param {() => void} [props.onSynced] - Called once after changes were applied, so the page reloads its models
  */
@@ -94,14 +94,14 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
 
   const sectionTitle = kind =>
     ({
-      changed: t('admin.providers.sync.changed', 'Changed on the gateway'),
-      added: t('admin.providers.sync.added', 'New on the gateway'),
+      changed: t('admin.providers.sync.changed', 'Changed at the provider'),
+      added: t('admin.providers.sync.added', 'New at the provider'),
       removed: t('admin.providers.sync.removed', 'No longer available')
     })[kind];
 
   const sectionHint = kind =>
     ({
-      changed: t('admin.providers.sync.changedHint', 'The model is updated to match the gateway.'),
+      changed: t('admin.providers.sync.changedHint', 'The model is updated to match the provider.'),
       added: t('admin.providers.sync.addedHint', 'The model is imported.'),
       removed: t(
         'admin.providers.sync.removedHint',
@@ -114,20 +114,23 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
       url: t('admin.providers.sync.fields.url', 'URL'),
       provider: t('admin.providers.sync.fields.provider', 'Adapter'),
       contextWindow: t('admin.providers.sync.fields.contextWindow', 'Context window'),
-      supportsVision: t('admin.providers.sync.fields.supportsVision', 'Image input')
+      supportsVision: t('admin.providers.sync.fields.supportsVision', 'Image input'),
+      contentMarking: t('admin.providers.sync.fields.contentMarking', 'EU AI Act marking')
     })[field] || field;
 
   const reasonText = reason =>
     reason === 'unsupported'
       ? t(
           'admin.providers.sync.reasonUnsupported',
-          'The gateway now lists this model as something iHub cannot run.'
+          'The provider now lists this model as something iHub cannot run.'
         )
-      : t('admin.providers.sync.reasonMissing', 'The gateway no longer lists this model.');
+      : t('admin.providers.sync.reasonMissing', 'The provider no longer lists this model.');
 
   const yesNo = {
     yes: t('common.yes', 'Yes'),
-    no: t('common.no', 'No')
+    no: t('common.no', 'No'),
+    text: t('admin.providers.sync.markingText', 'Text'),
+    image: t('admin.providers.sync.markingImage', 'Image')
   };
 
   const renderItem = item => {
@@ -197,7 +200,7 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
     if (items.length === 0) {
       return (
         <p role="status" className="text-sm text-gray-700 dark:text-gray-300">
-          {t('admin.providers.sync.inSync', 'The models are in sync with the gateway.')}
+          {t('admin.providers.sync.inSync', 'The models are in sync with the provider.')}
         </p>
       );
     }
@@ -227,7 +230,7 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
       result.status === 'skipped'
         ? t(
             'admin.providers.sync.skipped',
-            'The gateway changed since you looked. Run the sync again.'
+            'The provider changed since you looked. Run the sync again.'
           )
         : result.detail;
     return (
@@ -263,12 +266,12 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
       <div className="flex items-start justify-between border-b border-gray-200 dark:border-gray-700 px-6 py-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-            {t('admin.providers.sync.title', 'Sync with gateway')}
+            {t('admin.providers.sync.title', 'Sync models')}
           </h2>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             {t(
               'admin.providers.sync.subtitle',
-              'Compare the gateway’s models with the models imported from it. Nothing changes until you apply your choice.'
+              'Compare the provider’s models with the models imported from it. Nothing changes until you apply your choice.'
             )}
           </p>
         </div>
@@ -286,7 +289,7 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
         {(step === 'loading' || step === 'applying') && (
           <p role="status" className="text-sm text-gray-600 dark:text-gray-400">
             {step === 'loading'
-              ? t('admin.providers.sync.loading', 'Asking the gateway…')
+              ? t('admin.providers.sync.loading', 'Asking the provider…')
               : t('admin.providers.sync.applying', 'Applying…')}
           </p>
         )}

@@ -1,5 +1,27 @@
 # Features — Unreleased
 
+## Evidence Record for Every Stored Answer
+
+Every answer stored in a chat now keeps an evidence record: the system prompt, the messages and tool
+definitions sent in every model call of the turn, every tool call with its arguments and full result,
+retries and errors, the model and its settings, and what the model answered. Content is stored once per
+chat by its SHA-256, and documents and pictures uploaded to the chat are referenced, not copied. The
+record lives and is deleted with its chat (user delete, retention, a deleted user's cleanup); editing or
+resending a message removes that answer's record and the content only it referred to. `/v1/chat/completions` and Responses API calls without
+a conversation get the same record, owned by the caller and removed after `chats.retentionDays`; their
+responses carry the run id in an `X-Run-Id` header.
+
+The chat's owner reads it through `GET /api/chats/{chatId}/evidence/{messageId}` and
+`GET /api/chats/{chatId}/evidence-content/{sha256}`, a run's caller through
+`GET /api/runs/{runId}/evidence`, and admins through the audited `/api/admin/chats/…` and
+`/api/admin/runs/…` mirrors. Shared chats and project members never see it. A chat's evidence counts
+against its upload quota (`uploads.quotas.maxChatBytes`); an answer is never refused for it.
+
+The record is written in the background after the answer is stored and is built from the run ledger.
+Admins can switch it off on **Admin → Chat History → Evidence record** (`chats.evidence.enabled`,
+default on; `chats.evidence.maxContentBytes` caps one item at 10 MB). Off stops new records; existing records
+stay until their chat is deleted or retention removes them, and the run ledger is unchanged. See [Chat Evidence Record](../../chat-evidence.md).
+
 ## Metrics for the Project Working Set, the Index Cache and Extraction
 
 Operators can now see how many projects are in use at the same time and how the search-index cache copes.
@@ -187,12 +209,42 @@ project API key, and iHub lists the models the project may use.
 - **Tool calling:** the gateway does not support it yet, so imported models have tool support off.
 - **Existing providers:** **Admin → Providers** has a new **Model gateway** setting for turning a
   provider into a gateway provider.
-- **Sync with gateway:** on a gateway provider's page, **Sync with gateway** compares what the
-  gateway lists now with the models imported from it: new models, changed context window, image
-  input, URL or adapter, and models that are gone. Changes and gone models start ticked, new
+- **Sync models:** on the provider's page, **Sync models** compares what the provider lists now
+  with the models imported from it: new models, changed context window, image input, URL or
+  adapter, and models that are gone. It works for a gateway, for Google, where
+  retired Gemini versions show up as gone, and for Anthropic. Changes and gone models start ticked, new
   models start unticked (importing one makes it available), and nothing happens until you apply. A model that is gone is disabled, never deleted.
 
 See [Models](../../models.md#importing-models-from-an-endpoint).
+
+## Models Imported From Google and Anthropic Come With Their EU AI Act Marking
+
+A Gemini model imported from a Google provider, and a Claude model Anthropic's page names as watermarked, no
+longer start as "Not marked". They are imported with the output marking their provider declares, so the
+EU AI Act records name the mark without anyone entering it model by model:
+
+- **Google, text:** `contentMarking.text` is `provider` with the scheme `synthid`.
+- **Google, images:** a Gemini image model (Nano Banana) also gets `contentMarking.image` the same way, and is
+  imported with **Supports Image Generation** switched on.
+- **Anthropic, text:** the Claude models Anthropic's page marks for text (Fable 5.2, 5.1 and 5; Mythos 5.2, 5.1
+  and 5; Opus 5.5, 5, 4.8, 4.7, 4.6 and 4.5; Sonnet 5.5, 5, 4.6 and 4.5; Haiku 5.5 and 4.5) get
+  `contentMarking.text` with the scheme `synthid-text`, Anthropic's text watermark. Opus 4.6, Opus 4.5,
+  Sonnet 4.5 and Haiku 4.5 only when the provider points at `api.anthropic.com`, because the page lists them
+  for Anthropic's own API but not for cloud partners. Every other Claude model gets none.
+  Sonnet 4.6 may not carry the watermark when `temperature`, `top_p` or `top_k` is set to a non-default value,
+  so **Sync models** does not offer the declaration to a Sonnet 4.6 that sets one.
+- **Mistral:** nothing. Mistral publishes no technical description of a mark for its API, so no declaration is
+  made.
+- **Not marked by their provider:** Gemma and other open models, embeddings, speech and Imagen get no declaration.
+- **Models you already have:** **Sync models** on the Google or Anthropic provider's page offers the
+  declaration to models that do not declare one yet, shown as "EU AI Act marking" with the old and the new
+  value. A marking you entered is never replaced. It starts ticked like any change, so read the list before
+  you apply. On Anthropic a config that uses the alias (`claude-haiku-4-5`) is matched to the dated snapshot the
+  listing names, and a model missing from the listing is never reported as gone.
+
+iHub cannot detect either mark, so the records say the provider declared it. Each declaration points at the
+provider's own page and can be changed under **Admin → Models → Output marking**. The Gemini models of the
+iHub marketplace carry it too. See [Models](../../models.md#filled-in-on-import).
 
 ## Integrations: Install from a Catalog, Configure, Bind to Apps
 
@@ -2031,3 +2083,82 @@ longer re-read the whole site on each server process, which could exhaust the se
 - New installations no longer ship the **IntraFind Website** project and the **IntraFind Website
   Bot** app: their pages need internet access, which many installations do not have. Existing
   installations keep both.
+
+## Chat: The Activity Line Says Where the Answer Looked
+
+The line above an answer now says where the assistant looked, one segment per place, instead of one
+run-on string: for example **Web 5 results · 3 opened · via Brave Search** and **Project no results**.
+The same words are in the live line ("Searching the project for …"), in every row of the expanded list,
+and in what a screen reader hears.
+
+- **Every row names its origin** (the web, the project, iFinder, document sources, or a connected
+  system such as Jira) in words and with an icon; colour never tells them apart. A page opening is
+  **Opened web page**, so it no longer reads as a child of the search before it. "Read" is retired in
+  favour of "Opened"; **N opened** counts only pages that delivered text.
+- **A search that found nothing says so** (**no results**), when the server knows it. Nothing is
+  claimed when the number is not known.
+- **A skill is shown once**, in the activity block, always with the reason: started manually, chosen
+  by the model, set by the app, or kept from an earlier message. The purple chip above the answer is
+  gone.
+- **Technical details** (tool, arguments, duration) are behind a switch on a finished answer, off by
+  default and remembered.
+- **Thinking process** replaces "Show thinking analysis" and looks like the activity line.
+- German strings use the formal register.
+
+Chats stored before this release show their activity without origin words (for example "2 searches ·
+5 results"): nothing is inferred for them.
+
+## Chat: Sources Name Their Origin
+
+Every card in the Sources panel now starts with where the source comes from, as a word: **Web**,
+**Project**, **iFinder**, **Document sources**, or the connected system's own name (**Jira**). When
+an answer used more than one origin, the panel header adds a summary such as **Web 5 · Project 3**.
+The words are the ones the answer's footer and the activity line use, so the three always agree. An
+iFinder search profile now has its own glyph instead of the Project folder, and the filter buttons
+in the panel have a visible border.
+
+Sources of chats stored before this release show no origin word: nothing is guessed for them.
+
+## Usage-Limit Checks Cost Less With Many Users
+
+On servers with several workers (`WORKERS` > 1), the usage-limit counters are now held by the
+primary process, which alone writes `contents/data/quota-usage.json`. Workers no longer take turns
+writing the file every few seconds, and a limit check no longer re-reads and copies the whole file
+each time another worker wrote it — with a few thousand users this cost noticeable CPU on every chat
+request.
+
+## The Run Ledger Stores Uploads Once
+
+The run ledger (`data/logs/run`) no longer copies uploaded documents, pictures and scanned pages into
+every model call it records. What is stored as a chat file is recorded as a reference to it — the
+chat file's id and the SHA-256 hash of the text or picture the model was sent. In load tests this
+made the ledger about a third of its size, and chats with large uploads or scans far smaller.
+
+- While the chat file exists, the reference leads to it. Once it is deleted, the ledger no longer
+  holds the content, only its hash: that confirms a copy kept elsewhere, but cannot show what the
+  model was sent. Keep chat files as long as you need that proof.
+- Content with no chat file behind it stays in the ledger in full: audio, pictures sent through the
+  OpenAI-compatible API, pages rendered by a workflow, and files the store refused.
+- Ledgers written before the update keep their full copies until retention removes them.
+
+## Less CPU on Installations With a Long History
+
+On installations that have accumulated many chats, runs and uploaded files, the server now spends
+much less time reading the data directory.
+
+- Listing one chat's files, one run's artifacts or one project's stored text reads only that
+  chat's, run's or project's entries instead of every file of the installation. A one-time
+  migration indexes the data already stored when the server starts after the upgrade.
+- Sweeps and scans over a whole data area read its directory once instead of once per page.
+- Lock bookkeeping files (`contents/data/locks/*.fence`) of locks nobody has used for a day are
+  removed every night at 03:00 local time (`storage.filesystem.fenceSweepHour`); they used to
+  accumulate forever. On an installation with a long history the first night's cleanup takes an
+  hour or two.
+- A user's own changes to a chat (a new message, a rename, a delete) no longer make the chat list
+  reload all their chats.
+- The agent and workflow run lists reuse what they loaded for 5 seconds instead of re-reading all
+  of a user's runs on every poll. On installations with several workers, a run changed by another
+  worker can show its previous state in these lists for up to 5 seconds.
+
+Downgrading to an earlier release and upgrading again leaves the files written in between out of
+the new index; [Storage](../../storage.md#the-key-prefix-index) describes how to rebuild it.

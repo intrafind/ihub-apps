@@ -131,6 +131,8 @@ export class ChatSession {
     let ended = null;
     let streamError = null;
     let postDone = false;
+    // Whether the stream carried anything of this turn.
+    let streamed = false;
 
     const deadline = tSend + turnTimeoutMs;
     while (!ended && !streamError) {
@@ -147,7 +149,14 @@ export class ChatSession {
           ? this.puller.next(waitMs)
           : Promise.race([this.puller.next(waitMs), postSettled]));
       } catch (err) {
-        streamError = { code: err.code || 'STREAM_TIMEOUT' };
+        if (postDone && !streamed) {
+          // The server ran the turn, but nothing of it reached this stream: the
+          // worker that took the message did not find the stream (#3674).
+          metrics.count(`${label}.streamMiss`);
+          streamError = { code: 'STREAM_MISS' };
+        } else {
+          streamError = { code: err.code || 'STREAM_TIMEOUT' };
+        }
         break;
       }
       if (ev && ev.postSettled) {
@@ -165,20 +174,13 @@ export class ChatSession {
           streamError = { code: b.code || 'RUN_ERROR' };
           break;
         }
-        if (b && b.status !== 'streaming' && typeof b.content === 'string') {
-          // The server found no stream for this chat (GET and POST hit different
-          // pods without session affinity) and answered without streaming.
-          metrics.count(`${label}.streamMiss`);
-          chars = b.content.length;
-          ended = { status: 'completed', usage: b.usage };
-          break;
-        }
         continue;
       }
       if (!ev) {
         streamError = { code: 'SSE_CLOSED' };
         break;
       }
+      streamed = true;
       const data = ev.data?.data ?? {};
       switch (ev.event) {
         case 'step/delta':

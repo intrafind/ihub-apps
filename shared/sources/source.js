@@ -42,6 +42,11 @@
  *   where a project document came from: uploaded by a user, picked from an
  *   integration (snapshotted at `at`), linked at its source, or written by a
  *   run. The citation panel shows it as the "uploaded" or "picked" marker.
+ * @property {{kind: string, label?: string}} [origin] - the system the source
+ *   was found in, in the footer's vocabulary (`ACTIVITY_ORIGINS` of
+ *   `shared/runEvents.js`): `web`, `project`, `ifinder`, `documents`,
+ *   `integration` (with the integration's own `label`). Set by the producer;
+ *   never inferred from `provider`
  * @property {boolean} [private] - found with the user's own permissions or
  *   network; never included in a share
  *
@@ -55,6 +60,7 @@
  * @module shared/sources/source
  */
 import { httpUrl, urlKey } from './url.js';
+import { ACTIVITY_ORIGINS } from '../runEvents.js';
 
 export const SOURCE_KINDS = Object.freeze(['page', 'document', 'item']);
 
@@ -147,6 +153,13 @@ function provenanceOf(value) {
   const at = dateOf(value.at);
   if (at) provenance.at = at;
   return provenance;
+}
+
+/** `{ kind, label? }` of a known origin kind; only an integration carries a label. */
+function originOf(value) {
+  if (!value || typeof value !== 'object' || !ACTIVITY_ORIGINS.includes(value.kind)) return null;
+  const label = value.kind === 'integration' ? text(value.label, MAX_FIELD_CHARS) : null;
+  return label ? { kind: value.kind, label } : { kind: value.kind };
 }
 
 function readOf(value) {
@@ -272,6 +285,8 @@ export function normalizeSource(input, defaults = {}) {
   if (scopeName) source.scopeName = scopeName;
   const provenance = provenanceOf(input.provenance);
   if (provenance) source.provenance = provenance;
+  const origin = originOf(input.origin) || originOf(defaults.origin);
+  if (origin) source.origin = origin;
   const read = readOf(input.read);
   if (read) source.read = read;
   if (input.cited === true) source.cited = true;

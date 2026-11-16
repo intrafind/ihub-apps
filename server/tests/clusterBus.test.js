@@ -19,11 +19,13 @@ import {
   initWorkerBus,
   createPresenceMap,
   hasRemote,
+  lookupRemote,
   publish,
   subscribe,
   gather,
   respond,
-  respondInPrimary
+  respondInPrimary,
+  request
 } from '../clusterBus.js';
 
 const WORKER_COUNT = 3;
@@ -46,6 +48,7 @@ async function runPrimary() {
   // The primary answers gathers about itself, as it does for the System
   // resources page's per-process snapshot.
   respondInPrimary('test:whoami', () => ({ pid: process.pid, role: 'primary' }));
+  respondInPrimary('test:counter', payload => ({ seen: payload.n }));
 
   for (let i = 0; i < WORKER_COUNT; i++) {
     workers.push(cluster.fork({ TEST_WORKER_INDEX: String(i) }));
@@ -151,6 +154,17 @@ async function runPrimary() {
     check('directed publish to an unknown owner falls back to broadcast', () => {
       assert.deepStrictEqual(inboxes[0].inbox, ['orphan']);
       assert.deepStrictEqual(inboxes[2].inbox, ['orphan']);
+    });
+
+    // ---- a primary-only question is answered by the primary and never reaches a worker ----
+    await askAll(() => ({ step: 'clear-inbox' }));
+    const answered = await ask(workers[1], { step: 'ask-primary', n: 7 });
+    await settle();
+    inboxes = await askAll(() => ({ step: 'inbox' }));
+    check('a primary-only request is answered by the primary alone', () => {
+      assert.deepStrictEqual(answered.reply, { seen: 7 });
+      assert.deepStrictEqual(inboxes[0].inbox, []);
+      assert.deepStrictEqual(inboxes[2].inbox, []);
     });
 
     // ---- a shared key survives one holder letting go ----
@@ -260,6 +274,30 @@ async function runPrimary() {
       assert.strictEqual(survivors[1].hasRemote, false);
     });
 
+    // ---- a lookup finds a stream the mirror has not heard of yet ----
+    // A browser opens its stream on one worker and sends the message to another
+    // as soon as the stream is connected; the lookup must not depend on the
+    // announcement having reached the second worker yet (#3674). Look up right
+    // after the registration, without waiting for presence to settle.
+    await ask(workers[0], { step: 'register', key: 'chat-new' });
+    const found = await ask(workers[1], { step: 'lookup', key: 'chat-new' });
+    check('a lookup right after the registration finds the stream', () =>
+      assert.strictEqual(found.held, true)
+    );
+    check('a found stream is mirrored, so relaying sees it', () =>
+      assert.strictEqual(found.hasRemote, true)
+    );
+    const [missing, own] = await Promise.all([
+      ask(workers[1], { step: 'lookup', key: 'chat-nowhere' }),
+      ask(workers[0], { step: 'lookup', key: 'chat-new' })
+    ]);
+    check('a lookup for a stream nobody holds says no', () =>
+      assert.strictEqual(missing.held, false)
+    );
+    check("the owner's lookup of its own stream says no (not remote)", () =>
+      assert.strictEqual(own.held, false)
+    );
+
     // ---- a silent process does not hang a gather ----
     // The dead worker cannot answer; the gather waits out its timeout and
     // returns what it has, so the caller can show the worker as missing.
@@ -273,6 +311,30 @@ async function runPrimary() {
       assert.deepStrictEqual(pids, [process.pid, workerPids[1]].sort());
       assert.ok(partial.elapsedMs >= 250, `resolved early after ${partial.elapsedMs}ms`);
     });
+
+    // ---- a worker whose channel closed does not take the primary down ----
+    // A crashing worker's IPC channel closes before it counts as dead, and a
+    // send on a closed channel does not throw: without a callback Node emits
+    // the error asynchronously, as an uncaught exception in the primary. An
+    // out-of-memory worker took a whole pod down this way.
+    const uncaught = [];
+    const onUncaught = error => uncaught.push(error.code || error.message);
+    process.on('uncaughtException', onUncaught);
+    await ask(workers[1], { step: 'register', key: 'chat-closing' });
+    await settle();
+    const closing = workers[1];
+    const closed = new Promise(resolve => closing.once('disconnect', resolve));
+    closing.send({ step: 'disconnect' });
+    await closed;
+    // Routed to its key, broadcast past it, and a presence sync fanned out to it.
+    await ask(workers[0], { step: 'send', key: 'chat-closing', text: 'late', directed: true });
+    await ask(workers[0], { step: 'send', text: 'late broadcast', directed: false });
+    await ask(workers[0], { step: 'register', key: 'chat-after' });
+    await settle();
+    process.off('uncaughtException', onUncaught);
+    check('sending to a worker with a closed channel is logged, not fatal', () =>
+      assert.deepStrictEqual(uncaught, [])
+    );
   } catch (error) {
     failed = true;
     console.error(`❌ test driver failed: ${error.message}`);
@@ -308,6 +370,10 @@ function runWorker() {
   const inbox = [];
   subscribe('test:channel', payload => inbox.push(payload.text));
   respond('test:whoami', () => ({ pid: process.pid, role: 'worker' }));
+  // Records the question without answering, so a broadcast would show up here.
+  respond('test:counter', () => {
+    inbox.push('counter-question');
+  });
 
   process.on('message', msg => {
     if (!msg || typeof msg.step !== 'string') return;
@@ -327,6 +393,11 @@ function runWorker() {
         break;
       case 'probe':
         reply({ hasRemote: hasRemote('sse', msg.key) });
+        break;
+      case 'lookup':
+        lookupRemote('sse', msg.key).then(held =>
+          reply({ held, hasRemote: hasRemote('sse', msg.key) })
+        );
         break;
       case 'share':
         sharedPresence.set(msg.key, { marker: true });
@@ -362,6 +433,17 @@ function runWorker() {
         );
         break;
       }
+      case 'disconnect':
+        // Close the channel but stay alive for a while, like a worker that is
+        // crashing: not dead yet, unreachable already.
+        setTimeout(() => process.exit(0), 3000);
+        process.disconnect();
+        break;
+      case 'ask-primary':
+        request('test:counter', { n: msg.n }, { primaryOnly: true, timeoutMs: 2000 }).then(r =>
+          reply({ reply: r })
+        );
+        break;
       case 'clear-inbox':
         inbox.length = 0;
         reply({ ok: true });

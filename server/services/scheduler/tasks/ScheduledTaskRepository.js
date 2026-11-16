@@ -29,6 +29,7 @@
 import { randomUUID } from 'node:crypto';
 import { getStorage, readFacet } from '../../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../../storage/namespaces.js';
+import { walkDocuments } from '../../../storage/walk.js';
 import { EtagMismatchError } from '../../../storage/errors.js';
 import { isValidId } from '../../../utils/pathSecurity.js';
 import logger from '../../../utils/logger.js';
@@ -396,20 +397,7 @@ export class ScheduledTaskRepository {
    */
   async *_walk(ns, { ownerId, prefix } = {}) {
     const filter = { ...(ownerId ? { ownerId } : {}), ...(prefix ? { prefix } : {}) };
-    if (this.documents.supportsScan) {
-      yield* this.documents.scan(ns, filter);
-      return;
-    }
-    let cursor = null;
-    do {
-      const page = await this.documents.list(ns, {
-        ...filter,
-        limit: 500,
-        ...(cursor ? { cursor } : {})
-      });
-      for (const doc of page.items) yield doc;
-      cursor = page.nextCursor;
-    } while (cursor);
+    yield* walkDocuments(this.documents, ns, filter);
   }
 }
 

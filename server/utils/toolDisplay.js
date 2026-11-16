@@ -11,7 +11,11 @@
  *  - `activityKind`: the row it is — a `search` (query and the sources it
  *    found), a `fetch` (the page or document it read) or a plain `tool` call
  *  - `activityScope`: for a search or fetch, whether it looked at the public
- *    `web` or the organisation's `documents`
+ *    `web` or the organisation's `documents` (kept for older clients; the
+ *    chat reads `activityOrigin`)
+ *  - `activityOrigin`: where the call looked, in the footer's vocabulary of
+ *    answer-basis kinds (`project`, `web`, `ifinder`, `documents`,
+ *    `integration`); absent when the server does not know
  *  - `outputKind`: for the built-in creators of a file or a document (a web
  *    artifact, a PDF, a workbook …), what they produce. It is sent on the
  *    `args` progress frames while the arguments still stream, where the chat
@@ -23,6 +27,10 @@
 
 import { classifyToolKnowledgeSource } from '../services/loop/seams/knowledgeSourceSeam.js';
 import { boundedText, integrationLabelOf } from './toolIntegrationLabel.js';
+import { activityOriginOfSource } from '../services/chat/answerBasis.js';
+import { ACTIVITY_ORIGINS } from '../../shared/runEvents.js';
+
+export { ACTIVITY_ORIGINS };
 
 /** Built-in tools that read one page or document. */
 const FETCH_TOOL_IDS = new Set(['read_url', 'ifinder_getcontent', 'knowledge_read']);
@@ -64,6 +72,22 @@ export function activityScopeOf(toolId, source) {
     : 'web';
 }
 
+/**
+ * Where a call looked, decided by the server: the footer's kind for the tool's
+ * knowledge source (the page reader is the web). `undefined` for a call the server cannot place (loop-internal
+ * tools, creators, a search it cannot classify): the chat then says nothing
+ * about where it looked and never guesses.
+ *
+ * @param {Object|null|undefined} toolDef - the resolved tool definition
+ * @returns {'project'|'web'|'ifinder'|'iassistant'|'documents'|'integration'|undefined}
+ */
+export function activityOriginOf(toolDef) {
+  if (!toolDef || typeof toolDef !== 'object' || toolDef.isInternalTool) return undefined;
+  return activityOriginOfSource(classifyToolKnowledgeSource(toolDef.id, toolDef));
+}
+
+export { activityOriginOfSource };
+
 /** What the built-in creator tools produce; the chat words each one. */
 export const OUTPUT_KINDS = Object.freeze([
   'webArtifact',
@@ -95,7 +119,7 @@ export function outputKindOf(toolDef) {
 
 /**
  * @param {Object|null|undefined} toolDef - the resolved (localized) tool definition
- * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string, outputKind?: string}}
+ * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string, activityOrigin?: string, outputKind?: string}}
  *   the fields that are known; nothing for an unknown tool (a plain call)
  */
 export function toolDisplayOf(toolDef) {
@@ -122,12 +146,14 @@ export function toolDisplayOf(toolDef) {
   const activityKind = toolDef.isInternalTool ? 'tool' : activityKindOf(toolDef.id, source);
 
   const outputKind = outputKindOf(toolDef);
+  const activityOrigin = activityOriginOf(toolDef);
 
   return {
     ...(title ? { title } : {}),
     ...(integration ? { integration } : {}),
     activityKind,
     ...(activityKind === 'tool' ? {} : { activityScope: activityScopeOf(toolDef.id, source) }),
+    ...(activityOrigin ? { activityOrigin } : {}),
     ...(outputKind ? { outputKind } : {})
   };
 }
@@ -139,7 +165,7 @@ export function toolDisplayOf(toolDef) {
  * existed; the kind rides on the `args` progress frames only.
  *
  * @param {Object|null|undefined} toolDef
- * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string}}
+ * @returns {{title?: string, integration?: string, activityKind?: string, activityScope?: string, activityOrigin?: string}}
  */
 export function startedDisplayOf(toolDef) {
   const display = toolDisplayOf(toolDef);

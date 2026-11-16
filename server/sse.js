@@ -16,7 +16,7 @@
  * builds them): `event: <type>` and `data: { v: 2, seq, runId, ts, type, data }`.
  */
 
-import { createPresenceMap, hasRemote, publish, subscribe } from './clusterBus.js';
+import { createPresenceMap, hasRemote, lookupRemote, publish, subscribe } from './clusterBus.js';
 import { setEnvelopeDelivery, resetStream, stampSeq } from './services/loop/RunStream.js';
 import logger from './utils/logger.js';
 import {
@@ -182,6 +182,21 @@ export function hasChatClient(chatId) {
     return true;
   }
   return hasRemote('sse', chatId);
+}
+
+/**
+ * Whether an SSE stream for this chat is open anywhere in the cluster, asking
+ * the primary when this worker has not heard of one.
+ *
+ * For the start of a chat turn. The browser opens the stream and sends its
+ * message right after; under load the message can reach a worker that has not
+ * yet learnt of a stream another worker opened a moment ago. `hasChatClient`
+ * would then say no and every frame of the turn would be dropped, leaving the
+ * browser without an answer (#3674). A yes from the primary is mirrored
+ * locally, so the turn's frames are relayed from the first one on.
+ */
+export async function locateChatClient(chatId) {
+  return hasChatClient(chatId) || (await lookupRemote('sse', chatId));
 }
 
 /** Whether a model turn for this chat is in flight anywhere in the cluster. */

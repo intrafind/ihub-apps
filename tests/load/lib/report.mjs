@@ -193,7 +193,7 @@ function bottleneckHint(stat) {
   if (stat.server.primaryCpuAvg > 80)
     return 'Primary process near a full core: it relays the tokens of every chat whose stream sits on another worker, so more workers in this pod add no capacity. Beyond this point only a second replica helps (needs a shared RWX contents volume and cookie affinity).';
   if (stat.streamMiss > 0)
-    return 'Stream misses: GET and POST reached different replicas — enable cookie session affinity on the ingress.';
+    return 'Stream misses: the turn ran but its stream got nothing — GET and POST reached different replicas (enable cookie session affinity on the ingress), or the worker that took the message did not find the stream.';
   if (stat.ttftOverheadP95 !== null && stat.ttftOverheadP95 > 0)
     return 'TTFT rises while CPU is fine: queueing in the LLM throttle (requestConcurrency / model.concurrency) or upstream.';
   return null;

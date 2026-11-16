@@ -44,10 +44,20 @@ change anything on a running installation.
 | --------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------- |
 | `enabled`             | `true`    | Second switch under the feature flag; `false` keeps the in-memory event stream (live views) but writes nothing to disk — ignored while a storage provider is up |
 | `identityMode`        | `default` | What is recorded about the acting user — see below                                                                     |
-| `retentionDays`       | `90`      | Runs older than this are deleted by the daily sweep                                                                    |
+| `retentionDays`       | `90`      | Runs older than this are deleted by the daily sweep. Keep it at or above `chats.retentionDays` — see below             |
 | `cleanupEnabled`      | `true`    | Turn the sweep off to keep runs forever (or to run your own)                                                           |
 | `flushIntervalMs`     | `2000`    | Buffered appends are flushed to disk at this interval (and on run end / shutdown)                                      |
 | `spillThresholdBytes` | `65536`   | Tool results and assistant content above this size are stored as separate spill files and referenced from the event    |
+
+**`retentionDays` and chat retention.** Deleting a chat (by a user or by the
+chat retention sweep) deletes its runs, so runs never outlive their chat by
+much. The reverse is not true: the run sweep removes runs by their own age,
+also those of a chat that is still kept. Set `runLog.retentionDays` at least
+as high as `chats.retentionDays` (both 90 by default) so a kept chat does not
+refer to runs that are gone; a higher value only keeps the runs of
+non-chat work (workflows, agents, scheduled tasks) longer, and costs disk —
+on a busy installation the run history can be the largest part of
+`contents/data`.
 
 ## Identity modes
 
@@ -121,10 +131,11 @@ the same name.
 was rewritten (`reason: change`, e.g. after a compaction); an identical repeat
 carries just the hash. It also records the tool schemas and the model / option
 snapshot when they change, the call configuration and a hash of the provider
-request body. The `server/services/loop/replay/reconstruct.js` check replays
-the deltas, rebuilds every request from these fields and verifies the hashes —
-the ledger is complete enough to replay, and a tampered context is reported as
-a mismatch.
+request body. Replaying the deltas rebuilds every request's messages; the
+[Chat Evidence Record](chat-evidence.md) does exactly that when an answer is
+stored, and keeps the result with the chat. `messagesHash` is copied into the
+record as computed at the call, not re-verified, and the record's `app.config`
+is the app configuration in force when the answer was stored.
 
 ### Upgrading an installation that already has a ledger
 

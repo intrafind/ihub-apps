@@ -298,6 +298,9 @@ function overflowingChats(chats, maxChatsPerUser) {
  * @param {number|null} [options.temporaryRetentionHours=null] - Age in hours
  *   past which a temporary chat goes; null (or zero or less) leaves temporary
  *   chats alone this time.
+ * @param {number} [options.runEvidenceRetentionDays=retentionDays] - Age in
+ *   days past which the evidence of runs without a chat goes; zero or less
+ *   keeps it.
  * @param {(runId: string) => Promise<unknown>} [options.deleteRun] - Ledger
  *   cascade for a removed chat's runs. Injectable so a test can observe it
  *   without a ledger on disk.
@@ -315,6 +318,7 @@ export async function sweepChats({
   maxChatsPerUser,
   temporaryRetentionHours = null,
   originalRetentionDays = 0,
+  runEvidenceRetentionDays = retentionDays,
   deleteRun = runId => runLog.deleteRun(runId),
   removeWorkflowState = runId => getWorkflowStateRepository().remove(runId),
   pageSize = SCAN_PAGE_SIZE,
@@ -325,6 +329,18 @@ export async function sweepChats({
       await repository.fileStore().discardExpiredOriginals({ originalRetentionDays, now });
     } catch (error) {
       logger.error('Chat retention failed to discard expired original files', {
+        component: COMPONENT,
+        error: error.message
+      });
+    }
+  }
+  // Evidence of runs without a chat follows the chats' age rule (#3687), also
+  // while the chat history is off: those runs are no chat history.
+  if (runEvidenceRetentionDays > 0 && typeof repository?.evidenceStore === 'function') {
+    try {
+      await repository.evidenceStore().sweepRuns(now() - runEvidenceRetentionDays * DAY_MS);
+    } catch (error) {
+      logger.error('Chat retention failed to sweep run evidence', {
         component: COMPONENT,
         error: error.message
       });
@@ -460,6 +476,7 @@ export function startChatRetentionSweep({
 } = {}) {
   if (sweepTimer) return stopChatRetentionSweep;
   let lastHistorySweepAt = null;
+  let lastRunEvidenceSweepAt = null;
 
   const tick = () => {
     if (sweeping) return inFlight;
@@ -493,12 +510,18 @@ export function startChatRetentionSweep({
         isChatHistoryConfigured(getFeatures() || {}, platform, storageReady) &&
         (lastHistorySweepAt === null || now() - lastHistorySweepAt >= historyIntervalMs);
       if (historyDue) lastHistorySweepAt = now();
+      // Evidence of runs without a chat is no history: its daily sweep runs
+      // whether or not the history is on.
+      const runEvidenceDue =
+        lastRunEvidenceSweepAt === null || now() - lastRunEvidenceSweepAt >= historyIntervalMs;
+      if (runEvidenceDue) lastRunEvidenceSweepAt = now();
       await sweepChats({
         repository: repository || getChatRepository(),
         retentionDays: historyDue ? retentionDays : 0,
         maxChatsPerUser: historyDue ? maxChatsPerUser : 0,
         temporaryRetentionHours,
         originalRetentionDays: historyDue ? chatFileSettings(platform).originalRetentionDays : 0,
+        runEvidenceRetentionDays: runEvidenceDue ? retentionDays : 0,
         now
       });
     } catch (error) {

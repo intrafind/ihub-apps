@@ -69,6 +69,7 @@ import { mergeToolCallDeltas } from './toolCallMerge.js';
 import { resolveSurface, outcomeOf, errorCodeOf } from '../usage/callRecord.js';
 import { dumpRequest, summarizeRequestShape, isDumpAllEnabled } from './llmDebug.js';
 import { raceAbort, abortError } from './abortRace.js';
+import { ledgerMessages } from './ledgerMessages.js';
 import { guardMessagesForModel, resolveGuardrailRule } from '../provenance/guardrail.js';
 
 /** Upper bound on runs whose last request hash is kept for request/header dedupe. */
@@ -1691,8 +1692,10 @@ export class LLMClient {
       messagesHash,
       messageCount: messages.length,
       reason,
-      ...(reason === 'initial' || reason === 'change' ? { messages } : {}),
-      ...(reason === 'append' ? { messagesDelta } : {}),
+      ...(reason === 'initial' || reason === 'change'
+        ? { messages: ledgerMessages(messages) }
+        : {}),
+      ...(reason === 'append' ? { messagesDelta: ledgerMessages(messagesDelta) } : {}),
       toolSchemasHash,
       ...(tools && (reason === 'initial' || toolsChanged) ? { toolSchemas: tools } : {}),
       toolExecution: telemetry.toolExecution || (tools ? 'caller' : 'none'),

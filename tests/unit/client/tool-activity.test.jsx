@@ -36,6 +36,10 @@ import {
 import { buildRunActivity } from '../../../shared/run/runActivity.js';
 import { withServerDecision } from './helpers/serverToolDecision.js';
 
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key, defaultOrOptions, maybeOptions) => {
@@ -233,7 +237,8 @@ describe('toolDetails', () => {
         activity={{ items: [{ ...item, details: [detail], sources: [] }], reading: null }}
       />
     );
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    fireEvent.click(screen.getByRole('switch'));
     expect(screen.getByText('toolActivity.moreValues:18')).toBeInTheDocument();
   });
 
@@ -367,7 +372,7 @@ describe('ToolActivity', () => {
     render(<ToolActivity activity={running} loading />);
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
-    expect(toggle).toHaveTextContent('Searching for “berlin weather”');
+    expect(toggle).toHaveTextContent('toolActivity.origin.web.searchingFor');
     expect(screen.getByText('berlin weather')).toBeInTheDocument();
   });
 
@@ -375,9 +380,11 @@ describe('ToolActivity', () => {
     render(<ToolActivity activity={finished()} loading={false} />);
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // One segment for the web, with its own count; one search is not counted.
     expect(toggle).toHaveTextContent(
-      'Searched the web · toolActivity.searches:1 · toolActivity.results:3 · toolActivity.pagesRead:1'
+      /chatMessage\.answerBasis\.kind\.web.*toolActivity\.results:3/
     );
+    expect(toggle).not.toHaveTextContent('toolActivity.searches');
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
 
     fireEvent.click(toggle);
@@ -389,9 +396,10 @@ describe('ToolActivity', () => {
     expect(screen.getByText('Berlin weather')).toBeInTheDocument();
     // A source without a title is shown by its host.
     expect(screen.getByText('other.example')).toBeInTheDocument();
-    // Which pages were read, and which could not be.
-    expect(screen.getByText('Read')).toBeInTheDocument();
-    expect(screen.getByText('Not readable')).toBeInTheDocument();
+    // No hit-level "Read" / "Not readable" marker: what was opened is a row of its own.
+    expect(screen.queryByText('Read')).not.toBeInTheDocument();
+    expect(screen.queryByText('Not readable')).not.toBeInTheDocument();
+    expect(screen.queryByText('toolActivity.read')).not.toBeInTheDocument();
   });
 
   test('an iFinder search is a document search, not a web search', () => {
@@ -437,9 +445,9 @@ describe('ToolActivity', () => {
     render(<ToolActivity activity={activity} loading={false} />);
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveTextContent(
-      'Searched documents · toolActivity.searches:1 · toolActivity.results:1'
+      /chatMessage\.answerBasis\.kind\.ifinder.*toolActivity\.results:1/
     );
-    expect(toggle).not.toHaveTextContent('Searched the web');
+    expect(toggle).not.toHaveTextContent('chatMessage.answerBasis.kind.web');
     expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'document-text');
   });
 
@@ -490,7 +498,7 @@ describe('ToolActivity', () => {
     render(<ToolActivity activity={activity} loading={false} />);
     const toggle = screen.getByRole('button');
     expect(toggle).toHaveTextContent(
-      'Searched documents · toolActivity.searches:1 · toolActivity.results:2 · toolActivity.documentsRead:1'
+      /chatMessage\.answerBasis\.kind\.ifinder.*toolActivity\.results:2.*toolActivity\.openedCount:1/
     );
     fireEvent.click(toggle);
     // The read links to the document via the search hit's deep link.
@@ -532,7 +540,10 @@ describe('ToolActivity', () => {
       'maxResults'
     ]);
     render(<ToolActivity activity={activity} loading={false} />);
-    fireEvent.click(screen.getByRole('button'));
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    // The arguments are behind the Technical details switch, off by default.
+    expect(screen.queryByText('modificationDate:desc')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
     expect(screen.getByText('creators.keyword:"Daniel Manzke"')).toBeInTheDocument();
     expect(screen.getByText('modificationDate:desc')).toBeInTheDocument();
     expect(screen.getByText('20')).toBeInTheDocument();
@@ -574,6 +585,7 @@ describe('ToolActivity', () => {
         call(2, 'tool/started', 'c1', 'muc-ad__search_people', {
           title: 'Search people',
           integration: 'Munich AD',
+          activityOrigin: 'integration',
           args: { query: 'Daniel Manzke' },
           execution: 'server'
         }),
@@ -591,11 +603,14 @@ describe('ToolActivity', () => {
     render(<ToolActivity activity={activity} loading={false} />);
     // The summary names the system the answer came from.
     expect(screen.getByRole('button')).toHaveTextContent('Munich AD');
-    fireEvent.click(screen.getByRole('button'));
-    const action = screen.getByText('Search people');
-    expect(action).toHaveAttribute('title', 'muc-ad__search_people');
-    expect(screen.getByTitle('Data from Munich AD')).toHaveTextContent('Munich AD');
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByText('Search people')).not.toHaveAttribute('title');
+    // The system is visible text on the row, not a tooltip.
+    expect(screen.getAllByText('toolActivity.via').length).toBeGreaterThan(0);
+    // The tool id is plumbing: it shows behind the Technical details switch.
     expect(screen.queryByText('muc-ad__search_people')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('switch'));
+    expect(screen.getByText('muc-ad__search_people')).toBeInTheDocument();
     // A tool without a title still reads by its name.
     expect(screen.getByText('Ran legacy_tool')).toBeInTheDocument();
   });
@@ -608,6 +623,7 @@ describe('ToolActivity', () => {
           title: 'Search tickets',
           integration: 'Jira',
           activityKind: 'tool',
+          activityOrigin: 'integration',
           args: { query: 'login bug' },
           execution: 'server'
         }),
@@ -618,12 +634,16 @@ describe('ToolActivity', () => {
     expect(activity.items[0]).toMatchObject({ kind: 'tool', scope: null, query: null });
     render(<ToolActivity activity={activity} loading={false} />);
     const toggle = screen.getByRole('button');
-    expect(toggle).not.toHaveTextContent('Searched the web');
-    expect(screen.getAllByTestId('icon').map(icon => icon.dataset.name)).toContain('wrench');
-    expect(screen.getAllByTestId('icon').map(icon => icon.dataset.name)).not.toContain('globe-alt');
+    // The system names its own segment; it is not the web.
+    expect(toggle).toHaveTextContent('Jira');
+    expect(toggle).not.toHaveTextContent('chatMessage.answerBasis.kind.web');
+    const icons = () => screen.getAllByTestId('icon').map(icon => icon.dataset.name);
+    expect(icons()).toContain('link');
+    expect(icons()).not.toContain('globe-alt');
     fireEvent.click(toggle);
     expect(screen.getByText('Search tickets')).toBeInTheDocument();
-    // The query is an argument of the call, listed like any other.
+    // The query is an argument of the call, listed behind the Technical details switch.
+    fireEvent.click(screen.getByRole('switch'));
     expect(screen.getByText('login bug')).toBeInTheDocument();
   });
 
@@ -676,8 +696,14 @@ describe('page reader rows (issue #2520)', () => {
     render(<ToolActivity activity={buildToolActivity(run)} loading />);
     expect(screen.getByText('The guide')).toBeInTheDocument();
     expect(screen.getByText('docs.example.com')).toBeInTheDocument();
+    // "partly read" is plain text, with no tooltip; the word count is plumbing.
+    expect(screen.getByText('toolActivity.partlyRead')).not.toHaveAttribute('title');
+    expect(screen.queryByText('toolActivity.wordsRead:812')).not.toBeInTheDocument();
+    cleanup();
+    render(<ToolActivity activity={buildToolActivity(run)} loading={false} />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    fireEvent.click(screen.getByRole('switch'));
     expect(screen.getByText('toolActivity.wordsRead:812')).toBeInTheDocument();
-    expect(screen.getByText('truncated')).toBeInTheDocument();
   });
 
   test('say when the per-turn page read cap refused a read', () => {
@@ -696,7 +722,7 @@ describe('page reader rows (issue #2520)', () => {
     const activity = buildToolActivity(run);
     expect(activity.items[0].limitReached).toBe(true);
     render(<ToolActivity activity={activity} loading />);
-    expect(screen.getByText('Not read')).toBeInTheDocument();
+    expect(screen.getByText('toolActivity.notOpened')).toBeInTheDocument();
     expect(screen.getByText(/Page read limit reached for this answer/)).toBeInTheDocument();
   });
 });
@@ -756,13 +782,12 @@ describe('skill rows — each activation once in the chain, each skill once in t
     expect(run.skills.map(skill => skill.id)).toEqual(['global-notes', 'user-notes']);
   });
 
-  test('every activation is a row of the chain, in time order, saying who activated it', () => {
+  test('each skill is one row of the chain, in time order, saying who brought it in', () => {
     const { items } = buildToolActivity(activatedThrice());
+    // One row per distinct skill, at its first activation, saying the most explicit route.
     expect(items.map(item => [item.kind, item.activatedBy ?? item.toolId])).toEqual([
       ['skill', 'user'],
-      ['skill', 'model'],
-      ['search', 'braveSearch'],
-      ['skill', 'model']
+      ['search', 'braveSearch']
     ]);
     expect(items[0]).toMatchObject({ name: 'Research', skillId: 'research', status: 'completed' });
     // The activate_skill calls themselves add no rows.
@@ -779,21 +804,23 @@ describe('skill rows — each activation once in the chain, each skill once in t
     expect(buildToolActivity(runFrom([started, loadSkill(2, 'a1'), ended(3)]))).toBeNull();
   });
 
-  test('the component lists each activation and counts the skill once', () => {
+  test('the component shows each skill once in the activity block', () => {
     render(<ToolActivity activity={buildToolActivity(activatedThrice())} loading={false} />);
     const toggle = screen.getByRole('button');
-    expect(toggle).toHaveTextContent('toolActivity.skills:1');
+    // The skill leads the headline, with its reason; it is not a header chip.
+    expect(toggle).toHaveTextContent('toolActivity.skillLabel Research');
+    expect(toggle).toHaveTextContent('toolActivity.skillByUser');
     fireEvent.click(toggle);
-    expect(screen.getAllByText('Used skill')).toHaveLength(3);
-    expect(screen.getAllByText('Research')).toHaveLength(3);
-    expect(screen.getByText('started by you')).toBeInTheDocument();
-    expect(screen.getAllByText('loaded by the model')).toHaveLength(2);
+    // Once in the headline, once as its row.
+    expect(screen.getAllByText('Research')).toHaveLength(2);
+    expect(screen.getAllByText('toolActivity.skillByUser')).toHaveLength(2);
+    expect(screen.queryByText('toolActivity.skillByModel')).not.toBeInTheDocument();
   });
 
-  test('a chain of skills alone gets the skill icon, not a globe', () => {
+  test('a turn of a skill alone gets the skill glyph, not a globe', () => {
     const run = runFrom([started, activate(2, { ...research, activatedBy: 'user' }), ended(3)]);
     render(<ToolActivity activity={buildToolActivity(run)} loading={false} />);
-    expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'sparkles');
+    expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'academic-cap');
   });
 });
 
@@ -1362,7 +1389,7 @@ describe('ToolActivity — a call that is being written', () => {
     );
     const row = screen.getByRole('listitem');
     expect(within(row).getByText('Preparing Search people')).toBeInTheDocument();
-    expect(within(row).getByTitle('Data from Munich AD')).toBeInTheDocument();
+    expect(within(row).getByText('toolActivity.via')).toBeInTheDocument();
   });
 
   test('a search being written has no query yet and reads as a plain call', () => {
@@ -1500,10 +1527,9 @@ describe('ToolActivity — a call that is being written', () => {
     ];
     render(<ToolActivity activity={activityOf(frames)} loading={false} />);
     const toggle = screen.getByRole('button');
-    expect(toggle).toHaveTextContent(
-      'Searched the web · toolActivity.searches:1 · Created web artifact'
-    );
-    expect(toggle).not.toHaveTextContent('toolCalls');
+    expect(toggle).toHaveTextContent(/chatMessage\.answerBasis\.kind\.web/);
+    expect(toggle).toHaveTextContent('Created web artifact');
+    expect(toggle).not.toHaveTextContent('toolActivity.calls');
     fireEvent.click(toggle);
     expect(screen.getByText('Created web artifact', { selector: 'li span' })).toBeInTheDocument();
     // The row wears the glyph of what it made.
@@ -1613,7 +1639,7 @@ describe('ToolActivity — the model is silent', () => {
     const activity = buildToolActivity(runFrom([started, searchStarted(2), searchCompleted(3)]));
     render(<ToolActivity activity={activity} loading />);
     expect(screen.getAllByTestId('icon')[0]).toHaveAttribute('data-name', 'spinner');
-    expect(screen.getByRole('button')).toHaveTextContent('Searched the web');
+    expect(screen.getByRole('button')).toHaveTextContent('chatMessage.answerBasis.kind.web');
     // Once the answer streams the spinner goes and the summary stays.
     cleanup();
     render(<ToolActivity activity={{ ...activity, answering: true }} loading />);

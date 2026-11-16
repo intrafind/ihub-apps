@@ -28,6 +28,13 @@ import {
   materializeUserTurn,
   settleUserTurn
 } from '../services/chat/chatMaterializer.js';
+import {
+  ChatEvidenceRepository,
+  evidenceWritesSettled
+} from '../services/chat/ChatEvidenceRepository.js';
+import { recordChatEvidence } from '../services/chat/evidenceRecord.js';
+import configCache from '../configCache.js';
+import { RUN_LOG_EVENTS } from '../../shared/runEvents.js';
 
 const OWNER = 'user-1';
 const CHAT_ID = 'chat-1';
@@ -944,5 +951,249 @@ describe('boundStoredAuthPrompts', () => {
   it('keeps at most ten', () => {
     const many = Array.from({ length: 12 }, (_, i) => ({ integration: `i${i}` }));
     assert.equal(boundStoredAuthPrompts(many).length, 10);
+  });
+});
+
+describe('chatMaterializer: the evidence record', () => {
+  /** A journal with one model call. */
+  const journal = {
+    readEvents: async () => [
+      { seq: 1, ts: 't1', type: RUN_LOG_EVENTS.RUN_START, data: { kind: 'chat' } },
+      {
+        seq: 2,
+        ts: 't2',
+        type: RUN_LOG_EVENTS.REQUEST_HEADER,
+        data: {
+          step: 0,
+          requestId: 'req-1',
+          model: 'gpt-4o',
+          provider: 'openai',
+          messagesHash: 'h',
+          messageCount: 1,
+          reason: 'initial',
+          messages: [{ role: 'user', content: 'How do I rotate the signing key?' }],
+          toolSchemasHash: null,
+          callConfig: {}
+        }
+      }
+    ]
+  };
+
+  /** Run `fn` with a repository whose evidence store is on the same provider. */
+  async function withEvidence(fn) {
+    await withRepository(async ({ provider }) => {
+      const evidence = new ChatEvidenceRepository({
+        documents: provider.documents,
+        blobs: provider.blobs,
+        locks: provider.locks
+      });
+      const repository = new ChatRepository({
+        documents: provider.documents,
+        locks: provider.locks,
+        logger: quietLogger(),
+        evidence
+      });
+      try {
+        await fn({ repository, evidence, provider });
+      } finally {
+        await evidenceWritesSettled();
+      }
+    });
+  }
+
+  async function answer(repository, runLog = journal, chatId = CHAT_ID) {
+    const stored = await materializeAssistantTurn({
+      repository,
+      chatId,
+      runId: RUN_ID,
+      summary: { status: 'success', content: 'Run the rotate script.' },
+      clientConnected: true,
+      runLog
+    });
+    await evidenceWritesSettled();
+    return stored;
+  }
+
+  async function stored(provider) {
+    const docs = await provider.documents.list('chat-evidence', { limit: 100 });
+    const blobs = await provider.blobs.list('chat-evidence-content', { limit: 100 });
+    return { docs: docs.items.length, blobs: blobs.items.length };
+  }
+
+  it('stores the record after the answer, keyed by its message id; the answer names nothing', async () => {
+    await withEvidence(async ({ repository, evidence }) => {
+      await userTurn(repository);
+      const message = await answer(repository);
+      assert.equal('evidence' in message, false, 'no pointer on the message');
+      const doc = await evidence.getRecord('chat', CHAT_ID, message.id);
+      assert.equal(doc.ownerId, OWNER);
+      assert.equal(doc.data.messageId, message.id);
+      assert.equal(doc.data.calls.length, 1);
+    });
+  });
+
+  it('stores no record while the switch is off', async () => {
+    const original = configCache.getPlatform;
+    configCache.getPlatform = () => ({ chats: { evidence: { enabled: false } } });
+    try {
+      await withEvidence(async ({ repository, evidence }) => {
+        await userTurn(repository);
+        const message = await answer(repository);
+        assert.equal(await evidence.getRecord('chat', CHAT_ID, message.id), null);
+      });
+    } finally {
+      configCache.getPlatform = original;
+    }
+  });
+
+  it('stores the answer without a record when building it fails', async () => {
+    await withEvidence(async ({ repository, evidence }) => {
+      await userTurn(repository);
+      const broken = {
+        readEvents: async () => {
+          throw new Error('journal unreadable');
+        }
+      };
+      const message = await answer(repository, broken);
+      assert.equal(message.content, 'Run the rotate script.');
+      assert.equal(await evidence.getRecord('chat', CHAT_ID, message.id), null);
+      assert.equal((await repository.getChat(CHAT_ID)).activeRunId, null);
+    });
+  });
+
+  it('leaves nothing behind when the chat is gone', async () => {
+    await withEvidence(async ({ repository, provider }) => {
+      const message = await answer(repository, journal, 'chat-gone');
+      assert.equal(message, null);
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 });
+    });
+  });
+
+  it("keeps no evidence for a guest's chat", async () => {
+    await withEvidence(async ({ repository, provider }) => {
+      await userTurn(repository, { ownerId: 'guest-abc' });
+      await answer(repository);
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 });
+    });
+  });
+
+  it('an edit removes the dropped answer record and its own content; a chat delete removes all', async () => {
+    await withEvidence(async ({ repository, evidence, provider }) => {
+      await userTurn(repository);
+      const first = await answer(repository);
+      await repository.claimRun(CHAT_ID, 'chat-run-2', { isBusy: () => false });
+      const question = await repository.appendMessage(CHAT_ID, {
+        role: 'user',
+        content: 'And then?',
+        runId: 'chat-run-2'
+      });
+      const secondJournal = {
+        readEvents: async () => [
+          ...(await journal.readEvents()),
+          {
+            seq: 3,
+            ts: 't3',
+            type: RUN_LOG_EVENTS.REQUEST_HEADER,
+            data: {
+              step: 1,
+              requestId: 'req-2',
+              reason: 'append',
+              messageCount: 2,
+              messagesDelta: [{ role: 'user', content: 'And then?' }],
+              toolSchemasHash: null,
+              callConfig: {}
+            }
+          }
+        ]
+      };
+      const second = await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: 'chat-run-2',
+        summary: { status: 'success', content: 'Then restart.' },
+        clientConnected: true,
+        runLog: secondJournal
+      });
+      await evidenceWritesSettled();
+      const both = (await stored(provider)).blobs;
+
+      // Resend from the second question: its answer goes, the first stays,
+      // and so does the content the first still names.
+      await repository.appendMessage(
+        CHAT_ID,
+        { role: 'user', content: 'Edited', runId: 'chat-run-3' },
+        { replaceFromMessageId: question.message.id }
+      );
+      await evidenceWritesSettled();
+      assert.equal(await evidence.getRecord('chat', CHAT_ID, second.id), null);
+      assert.ok(await evidence.getRecord('chat', CHAT_ID, first.id));
+      const left = (await stored(provider)).blobs;
+      assert.ok(
+        left > 0 && left < both,
+        `only the second answer's own content goes (${both} → ${left})`
+      );
+
+      await repository.deleteMessage(CHAT_ID, first.id);
+      await evidenceWritesSettled();
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 }, 'swept with the last record');
+
+      await answer(repository);
+      await repository.deleteChat(CHAT_ID);
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 }, 'the chat takes all of it');
+    });
+  });
+
+  it('writes no record for an answer that left the transcript before the write', async () => {
+    await withEvidence(async ({ repository, provider }) => {
+      await userTurn(repository);
+      const ref = await recordChatEvidence({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        messageId: 'gone-already',
+        summary: { status: 'success', content: 'x' },
+        runLog: journal
+      });
+      assert.equal(ref, null);
+      assert.deepEqual(await stored(provider), { docs: 0, blobs: 0 });
+    });
+  });
+
+  it('a message delete removes the record even when the artifact cleanup after it fails', async () => {
+    await withEvidence(async ({ repository, evidence, provider }) => {
+      await userTurn(repository);
+      const message = await answer(repository);
+      // The answer names an artifact whose cleanup throws.
+      const transcript = await provider.documents.get('chat-messages', CHAT_ID);
+      transcript.data.messages[1].artifacts = [{ id: 'art-1', kind: 'image' }];
+      await provider.documents.put('chat-messages', CHAT_ID, transcript.data);
+      repository.artifactStore = () => ({
+        deleteMany: async () => {
+          throw new Error('artifact store down');
+        }
+      });
+      await assert.rejects(repository.deleteMessage(CHAT_ID, message.id), /artifact store down/);
+      await evidenceWritesSettled();
+      assert.equal(await evidence.getRecord('chat', CHAT_ID, message.id), null);
+    });
+  });
+
+  it('keeps no record for an answer another writer already stored', async () => {
+    await withEvidence(async ({ repository, provider }) => {
+      await userTurn(repository);
+      await answer(repository);
+      await repository.claimRun(CHAT_ID, RUN_ID, { isBusy: () => false });
+      await materializeAssistantTurn({
+        repository,
+        chatId: CHAT_ID,
+        runId: RUN_ID,
+        summary: { status: 'success', content: 'Second writer' },
+        clientConnected: true,
+        onlyIfUnanswered: true,
+        runLog: journal
+      });
+      await evidenceWritesSettled();
+      assert.equal((await stored(provider)).docs, 1, 'only the stored answer keeps a record');
+    });
   });
 });

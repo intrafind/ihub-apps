@@ -296,6 +296,38 @@ describe('chats of an owner', () => {
   });
 });
 
+describe('run evidence', () => {
+  it('removes the evidence of the user runs without a chat and leftover chat evidence, and only theirs', async () => {
+    const { startTestStorage } = await import('./helpers/testStorage.js');
+    const { getChatEvidenceRepository } =
+      await import('../services/chat/ChatEvidenceRepository.js');
+    const storage = await startTestStorage({ prefix: 'ihub-user-deletion-evidence-' });
+    try {
+      const evidence = getChatEvidenceRepository();
+      const write = (runId, ownerId) =>
+        evidence.writeRecord('run', runId, { runId }, new Map([['a'.repeat(64), '"x"']]), {
+          ownerId,
+          maxContentBytes: 1000
+        });
+      await write('run-alice-1', 'alice');
+      await write('run-bob-1', 'bob');
+      // Chat evidence a failed chat delete left behind.
+      await evidence.writeRecord('chat', 'chat-alice-left', { messageId: 'm' }, new Map(), {
+        ownerId: 'alice'
+      });
+
+      const step = USER_CLEANUP_STEPS.find(entry => entry.name === 'runEvidence');
+      expect(await step.run('alice', {})).toEqual({ removed: 2 });
+      expect(await evidence.getRecord('chat', 'chat-alice-left', 'm')).toBeNull();
+      expect(await evidence.getRecord('run', 'run-alice-1')).toBeNull();
+      expect(await evidence.getContent('run', 'run-alice-1', 'a'.repeat(64))).toBeNull();
+      expect(await evidence.getRecord('run', 'run-bob-1')).not.toBeNull();
+    } finally {
+      await storage.stop();
+    }
+  });
+});
+
 describe('the cleanup', () => {
   const step = (name, run) => ({ name, run: jest.fn(run) });
 
@@ -310,6 +342,7 @@ describe('the cleanup', () => {
       'mcpConnections',
       'scheduledTasks',
       'chats',
+      'runEvidence',
       'userPrompts',
       'integrationPreferences',
       'userProjects',
@@ -335,6 +368,7 @@ describe('the cleanup', () => {
     }
     for (const name of [
       'chats',
+      'runEvidence',
       'userPrompts',
       'userSkills',
       'integrationRequests',

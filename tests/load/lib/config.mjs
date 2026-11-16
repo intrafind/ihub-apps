@@ -45,7 +45,7 @@ export const DEFAULTS = {
   scenarios: {
     chat: { turns: [2, 5], ephemeral: false },
     chatFile: { turns: [2, 4], maxFileBytes: 10_000_000, ephemeral: false },
-    projectChat: { turns: [3, 6], preferShared: 0.5, ephemeral: false },
+    projectChat: { turns: [3, 6], preferShared: 0.5, hotShare: 0, ephemeral: false },
     projectBuild: {
       files: [3, 8],
       uploadParallel: 2,
@@ -239,6 +239,8 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env) {
   set(['setup', 'gpu', 'supportsTools'], env.LT_LLM_SUPPORTS_TOOLS);
   set(['setup', 'gpu', 'concurrency'], num(env.LT_LLM_CONCURRENCY));
   set(['setup', 'gpu', 'contextWindow'], num(env.LT_LLM_CONTEXT_WINDOW));
+  set(['scenarios', 'projectChat', 'preferShared'], num(env.LT_PREFER_SHARED));
+  set(['scenarios', 'projectChat', 'hotShare'], num(env.LT_HOT_SHARE));
   set(['setup', 'docsPerProject'], num(env.LT_DOCS_PER_PROJECT));
   set(['setup', 'sharedProjects'], num(env.LT_SHARED_PROJECTS));
   set(['setup', 'ownProjectsMax'], num(env.LT_OWN_PROJECTS_MAX));

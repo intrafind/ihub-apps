@@ -471,6 +471,10 @@
       "enabled": false,
       "modelId": ""
     },
+    "evidence": {
+      "enabled": true,
+      "maxContentBytes": 10485760
+    },
     "sharing": {
       "enabled": true,
       "allowUsers": true,

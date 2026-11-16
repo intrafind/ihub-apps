@@ -34,6 +34,9 @@ const MAX_BLOB_NAME_LENGTH = 120;
  */
 const OWNER_SEGMENT_LENGTH = 40;
 
+/** Separator whose occurrences {@link prefixPartition} counts. */
+const PARTITION_SEPARATOR = '__';
+
 /** Truncate an offending value for an error message so logs stay bounded. */
 function describe(value) {
   return String(value).slice(0, 64);
@@ -212,4 +215,40 @@ export function sanitizeBlobName(name) {
     throw new InvalidKeyError(`Invalid blob name: ${describe(name)}`);
   }
   return sanitized;
+}
+
+/**
+ * The index partition of a key (or of a listing prefix): everything before the
+ * `n`-th `__`, counted left to right.
+ *
+ * Occurrences are found with `indexOf` from just past the previous one, so
+ * `a___b` has one at index 1 and its partition for `n = 1` is `a`. Because the
+ * scan only ever looks at text up to the `n`-th occurrence, a prefix that
+ * holds `n` complete occurrences has the same partition as every key starting
+ * with it — which is what lets a listing of that prefix read one partition
+ * instead of the whole namespace.
+ *
+ * @param {string} key - Key or listing prefix.
+ * @param {number} n - Occurrences to count (`KEY_PREFIX_SEGMENTS` of the namespace).
+ * @returns {string|null} The partition; null when there are fewer than `n`
+ *   occurrences, or when the partition is not a usable path segment (empty,
+ *   `.`, a reserved name), in which case the key is simply not indexed and a
+ *   listing falls back to reading the namespace.
+ *
+ * @example
+ * prefixPartition('chat__abc__file1', 2); // 'chat__abc'
+ * prefixPartition('chat__abc__', 2);      // 'chat__abc'
+ * prefixPartition('chat__ab', 2);         // null
+ */
+export function prefixPartition(key, n) {
+  if (typeof key !== 'string' || !Number.isInteger(n) || n < 1) return null;
+  let pos = 0;
+  let hit = -1;
+  for (let i = 0; i < n; i += 1) {
+    hit = key.indexOf(PARTITION_SEPARATOR, pos);
+    if (hit < 0) return null;
+    pos = hit + PARTITION_SEPARATOR.length;
+  }
+  const partition = key.slice(0, hit);
+  return isValidId(partition) ? partition : null;
 }

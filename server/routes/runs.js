@@ -50,6 +50,12 @@ import { abortChatRequest } from '../sse.js';
 import { userAbortCause } from '../services/chat/abortCause.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import logger from '../utils/logger.js';
+import { getChatEvidenceRepository } from '../services/chat/ChatEvidenceRepository.js';
+import {
+  readEvidenceContent,
+  readEvidenceRecord,
+  sendEvidence
+} from '../services/chat/evidenceRecord.js';
 
 /**
  * `stop` is the one human event with a side effect: abort the run. A chat run
@@ -168,8 +174,74 @@ export default function registerRunRoutes(app) {
         : new ServiceError('FORBIDDEN', 'Insufficient permissions: delete run required');
     }
     const result = await runLog.deleteRun(runId);
+    // A run without a chat keeps its evidence record beside the ledger (#3687).
+    try {
+      await getChatEvidenceRepository().deleteRun(runId);
+    } catch (error) {
+      logger.error('Run evidence not deleted', {
+        component: 'RunRoutes',
+        runId,
+        error: error.message
+      });
+    }
     res.json(result);
   });
+
+  /**
+   * @swagger
+   * /api/runs/{runId}/evidence:
+   *   get:
+   *     summary: The evidence record of a run without a chat
+   *     description: >-
+   *       For `/v1/chat/completions` and Responses API runs without a conversation: what went
+   *       into and came out of every model call and tool call. Content is referenced as
+   *       `sha256:<hex>` and read through `/api/runs/{runId}/evidence-content/{sha256}`. The
+   *       run's caller only. See docs/chat-evidence.md.
+   *     tags: [Runs]
+   *     parameters:
+   *       - { in: path, name: runId, required: true, schema: { type: string } }
+   *     responses:
+   *       200: { description: The evidence record }
+   *       404:
+   *         description: >-
+   *           No record, not the caller's, or the record is switched off (EVIDENCE_NOT_RECORDED)
+   */
+  app.get(buildServerPath('/api/runs/:runId/evidence'), authRequired, async (req, res) => {
+    const { runId } = req.params;
+    assertValidId(runId, 'run');
+    sendEvidence(
+      res,
+      await readEvidenceRecord({ kind: 'run', id: runId, ownerId: req.user?.id ?? null })
+    );
+  });
+
+  /**
+   * @swagger
+   * /api/runs/{runId}/evidence-content/{sha256}:
+   *   get:
+   *     summary: One piece of content a run's evidence record refers to
+   *     description: The canonical JSON of the item named `sha256:<hex>`. The run's caller only.
+   *     tags: [Runs]
+   *     parameters:
+   *       - { in: path, name: runId, required: true, schema: { type: string } }
+   *       - { in: path, name: sha256, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+   *     responses:
+   *       200: { description: The content, application/json }
+   *       400: { description: Not a lower-case hex SHA-256 (BAD_REQUEST) }
+   *       404: { description: No such content, not the caller's, or switched off (EVIDENCE_NOT_RECORDED) }
+   */
+  app.get(
+    buildServerPath('/api/runs/:runId/evidence-content/:sha256'),
+    authRequired,
+    async (req, res) => {
+      const { runId, sha256 } = req.params;
+      assertValidId(runId, 'run');
+      sendEvidence(
+        res,
+        await readEvidenceContent({ kind: 'run', id: runId, sha256, ownerId: req.user?.id ?? null })
+      );
+    }
+  );
 
   app.get(buildServerPath('/api/runs/:runId/interactions'), authRequired, async (req, res) => {
     const { runId } = req.params;

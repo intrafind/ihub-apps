@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Migration V250 — no setting for how many files are read at once
+ * Migration V252 — no setting for how many files are read at once
  *
  * Every server process now reads one file at a time on its own extraction
  * thread; more files at once come from more `WORKERS`. Removed:
@@ -13,7 +13,7 @@
  * reading faster, so there is nothing to carry over.
  */
 
-export const version = '250';
+export const version = '252';
 export const description = 'remove_file_concurrency_settings';
 
 const KEYS = ['projects.ingest.concurrency', 'projects.extraction.threads'];

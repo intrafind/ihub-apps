@@ -5,7 +5,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 /**
- * "Sync with gateway": the admin sees what is new on the gateway, what changed
+ * "Sync models": the admin sees what is new at the provider, what changed
  * and what is gone, picks, and only the pick is applied. Nothing is written by
  * opening the dialog.
  */
@@ -99,18 +99,49 @@ test('shows what changed, what is new and what is gone, with the old and new val
   setup();
   await open();
 
-  expect(screen.getByRole('heading', { name: /Changed on the gateway \(1\)/ })).toBeInTheDocument();
-  expect(screen.getByRole('heading', { name: /New on the gateway \(1\)/ })).toBeInTheDocument();
+  expect(
+    screen.getByRole('heading', { name: /Changed at the provider \(1\)/ })
+  ).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /New at the provider \(1\)/ })).toBeInTheDocument();
   expect(screen.getByRole('heading', { name: /No longer available \(2\)/ })).toBeInTheDocument();
 
   expect(screen.getByText(/4096/)).toBeInTheDocument();
   expect(screen.getByText(/32768/)).toBeInTheDocument();
   expect(screen.getByText('mistral-large-3 → imported as gw-mistral-large-3')).toBeInTheDocument();
-  expect(screen.getByText('The gateway no longer lists this model.')).toBeInTheDocument();
+  expect(screen.getByText('The provider no longer lists this model.')).toBeInTheDocument();
   expect(
-    screen.getByText('The gateway now lists this model as something iHub cannot run.')
+    screen.getByText('The provider now lists this model as something iHub cannot run.')
   ).toBeInTheDocument();
   expect(screen.getByText(/disabled, not deleted/)).toBeInTheDocument();
+});
+
+test('shows the EU AI Act marking a model would take over, before and after', async () => {
+  const synthid = { by: 'provider', scheme: 'synthid', statementRef: 'ref' };
+  setup({
+    modelsUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
+    items: [
+      {
+        kind: 'changed',
+        remoteId: 'gemini-3-pro-image-preview',
+        modelId: 'google-nano-banana-pro',
+        changes: [
+          {
+            field: 'contentMarking',
+            from: { text: { by: 'none' } },
+            to: { text: synthid, image: synthid }
+          }
+        ]
+      }
+    ]
+  });
+  await open({ providerId: 'google' });
+
+  expect(screen.getByText('EU AI Act marking:')).toBeInTheDocument();
+  expect(
+    screen.getByText(/— → Text: synthid \(provider\), Image: synthid \(provider\)/)
+  ).toBeInTheDocument();
+  // A change of the declaration is ticked like any other: the admin sees it and can untick it.
+  expect(screen.getByRole('checkbox', { name: /google-nano-banana-pro/ }).checked).toBe(true);
 });
 
 test('changes and gone models start ticked; new models start unticked', async () => {
@@ -193,7 +224,7 @@ test('cannot apply with nothing ticked', async () => {
 test('says so when the models are in sync, and offers only Close', async () => {
   setup({ modelsUrl: 'x', items: [] });
   const { onClose } = await open();
-  expect(screen.getByText('The models are in sync with the gateway.')).toBeInTheDocument();
+  expect(screen.getByText('The models are in sync with the provider.')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /Apply/ })).not.toBeInTheDocument();
   fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).pop());
   expect(onClose).toHaveBeenCalled();
@@ -233,7 +264,7 @@ test('a pick the gateway changed since the admin looked is explained, not hidden
     fireEvent.click(screen.getByRole('button', { name: 'Apply 4' }));
   });
   expect(screen.getByText('0 applied, 4 not applied.')).toBeInTheDocument();
-  expect(screen.getAllByText(/The gateway changed since you looked/)).toHaveLength(4);
+  expect(screen.getAllByText(/The provider changed since you looked/)).toHaveLength(4);
   expect(onSynced).not.toHaveBeenCalled();
 });
 
@@ -274,7 +305,7 @@ test('when the gateway cannot be asked, shows why and lets the admin try again',
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
   });
-  expect(screen.getByRole('heading', { name: /Changed on the gateway/ })).toBeInTheDocument();
+  expect(screen.getByRole('heading', { name: /Changed at the provider/ })).toBeInTheDocument();
 });
 
 test('two models of one remote model are separate rows, ticked and sent one by one', async () => {

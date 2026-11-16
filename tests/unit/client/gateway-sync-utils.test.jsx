@@ -63,6 +63,33 @@ describe('small helpers', () => {
   });
 });
 
+describe('formatChangeValue for the EU AI Act marking', () => {
+  const synthid = { by: 'provider', scheme: 'synthid', statementRef: 'ref' };
+
+  it('lists the members that mark something, with the labels it is given', () => {
+    expect(formatChangeValue('contentMarking', { text: synthid })).toBe('text: synthid (provider)');
+    expect(
+      formatChangeValue(
+        'contentMarking',
+        { text: synthid, image: synthid },
+        { text: 'Text', image: 'Bild' }
+      )
+    ).toBe('Text: synthid (provider), Bild: synthid (provider)');
+  });
+
+  it('shows no marking, an unset one and "none" as a dash', () => {
+    expect(formatChangeValue('contentMarking', null)).toBe('—');
+    expect(formatChangeValue('contentMarking', {})).toBe('—');
+    expect(formatChangeValue('contentMarking', { text: { by: 'none' } })).toBe('—');
+  });
+
+  it('names the provider when no scheme is given', () => {
+    expect(formatChangeValue('contentMarking', { image: { by: 'provider' } })).toBe(
+      'image: provider'
+    );
+  });
+});
+
 describe('applyGatewaySync', () => {
   it('sends only the kind, the remote id and the iHub model of each pick, never a model config', async () => {
     const call = jest.fn(async () => ({ data: { items: [] } }));

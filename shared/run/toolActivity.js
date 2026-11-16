@@ -17,11 +17,11 @@
  *    `activityScope` on `tool/started`, see server `utils/toolDisplay.js`):
  *    nothing here infers it from the tool id. Clarifications (`ask_user`) and
  *    chat-launched workflows are left out: each has its own UI.
- *  - `tool/progress{skill.activation}` frames: one `skill` row per activation,
- *    placed among the tool calls by time, saying who activated the skill (the
- *    user with `/name`, or the model). The `activate_skill` call itself is not a
- *    row, so a skill the model loads twice shows twice here but only once in
- *    `run.skills`, the set the message header lists.
+ *  - `tool/progress{skill.activation}` frames: one `skill` row per distinct
+ *    skill (`foldSkillItems`), placed among the tool calls by time at its first
+ *    activation, saying who brought it in (the user with `/name`, the app, the
+ *    model, or an earlier message of the chat; the earliest and most explicit
+ *    route wins). The `activate_skill` call itself is not a row.
  *  - provider-run web search (Google Search grounding, Anthropic web search):
  *    the queries the provider reports on the grounding metadata
  *    (`webSearchQueries`). Its sources are listed in the sources panel.
@@ -47,6 +47,7 @@
  * @module shared/run/toolActivity
  */
 
+import { SKILL_ACTIVATORS } from '../runEvents.js';
 import { ARGS_OUTCOMES, FAILED_ARGS_OUTCOMES } from './argProgress.js';
 
 /**
@@ -224,10 +225,9 @@ function skillRows(run) {
         toolId: 'activate_skill',
         name,
         skillId: typeof entry.data?.skillId === 'string' ? entry.data.skillId : null,
-        activatedBy:
-          entry.data?.activatedBy === 'user' || entry.data?.activatedBy === 'model'
-            ? entry.data.activatedBy
-            : null,
+        activatedBy: SKILL_ACTIVATORS.includes(entry.data?.activatedBy)
+          ? entry.data.activatedBy
+          : null,
         status: 'completed',
         scope: null,
         details: [],
@@ -248,14 +248,93 @@ function skillRows(run) {
  */
 function mergeSkillRows(toolRows, skills) {
   const rows = [...toolRows];
+  // Skills arrive in order, so each goes after the one before it: skills
+  // announced together (every skill in force when the turn starts) keep their order.
+  let from = 0;
   for (const skill of skills) {
-    const index = Number.isNaN(skill.at)
-      ? -1
-      : rows.findIndex(row => !Number.isNaN(row.at) && row.at >= skill.at);
-    if (index < 0) rows.push(skill);
-    else rows.splice(index, 0, skill);
+    let index = -1;
+    if (!Number.isNaN(skill.at)) {
+      for (let i = from; i < rows.length; i++) {
+        if (!Number.isNaN(rows[i].at) && rows[i].at >= skill.at) {
+          index = i;
+          break;
+        }
+      }
+    }
+    if (index < 0) {
+      rows.push(skill);
+      from = rows.length;
+    } else {
+      rows.splice(index, 0, skill);
+      from = index + 1;
+    }
   }
   return rows;
+}
+
+/**
+ * One row per distinct skill, at its first position: a skill the model loads
+ * twice, or one that came in by two routes (`/name`, then the model), is one
+ * row saying the earliest and most explicit route (`SKILL_ACTIVATORS`: user,
+ * app, model, chat). Rows of stored chats may repeat a skill; this folds those
+ * too. Every other row is kept as it is.
+ *
+ * @param {Array<Object>} items - rows of `buildToolActivity`
+ * @returns {Array<Object>}
+ */
+export function foldSkillItems(items) {
+  const first = new Map();
+  const out = [];
+  for (const item of items) {
+    if (item.kind !== 'skill') {
+      out.push(item);
+      continue;
+    }
+    const key = item.skillId || item.name;
+    const known = first.get(key);
+    if (!known) {
+      const copy = { ...item };
+      first.set(key, copy);
+      out.push(copy);
+      continue;
+    }
+    const rank = by => (SKILL_ACTIVATORS.includes(by) ? SKILL_ACTIVATORS.indexOf(by) : Infinity);
+    if (rank(item.activatedBy) < rank(known.activatedBy)) known.activatedBy = item.activatedBy;
+  }
+  return out;
+}
+
+/**
+ * The activity of an answer saved before skills were rows of it: its
+ * `activeSkills` (the set the header chip used to show) become name-only skill
+ * rows, first in the list, so the skill is still shown once, in the activity
+ * block, with the reason when the record names who brought it in. An activity
+ * that has skill rows already is left as it is.
+ *
+ * @param {{items?: Object[], reading?: string|null}|null|undefined} activity
+ * @param {Array<{name?: string, id?: string, activatedBy?: string}>|undefined} activeSkills
+ * @returns {Object|null|undefined} the activity, with skill rows added when it had none
+ */
+export function withStoredSkills(activity, activeSkills) {
+  const skills = Array.isArray(activeSkills) ? activeSkills.filter(skill => skill?.name) : [];
+  if (!skills.length) return activity;
+  const items = activity?.items || [];
+  if (items.some(item => item.kind === 'skill')) return activity;
+  const rows = skills.map((skill, index) => ({
+    id: `skill-stored-${index}`,
+    kind: 'skill',
+    toolId: 'activate_skill',
+    name: skill.name,
+    skillId: typeof skill.id === 'string' ? skill.id : null,
+    activatedBy: SKILL_ACTIVATORS.includes(skill.activatedBy) ? skill.activatedBy : null,
+    status: 'completed',
+    scope: null,
+    details: [],
+    sources: [],
+    error: null,
+    durationMs: null
+  }));
+  return { reading: null, ...activity, items: foldSkillItems([...rows, ...items]) };
 }
 
 /** Whether an interaction of the run waits for the user to decide about this call. */
@@ -384,6 +463,14 @@ function callRow(run, { tool, stream }, finished) {
       integration: tool?.integration || stream?.integration || null,
       status,
       scope: scopeOf(kind, tool),
+      // Where the server says the call looked (`activityOrigin`): never worked
+      // out here from the tool id, the provider or `scope`. null = not said.
+      origin: tool?.activityOrigin || stream?.activityOrigin || null,
+      // What the server declared the call came to: the hits of a search (0
+      // included), whether a read delivered text (`opened`, `empty`). null =
+      // not declared, never worked out from `sources`.
+      resultCount: kind === 'search' ? (tool?.resultCount ?? null) : null,
+      readOutcome: kind === 'fetch' ? (tool?.readOutcome ?? null) : null,
       query,
       url,
       documentId,
@@ -409,6 +496,10 @@ function nativeSearchRow(run, finished) {
     kind: 'search',
     native: true,
     scope: 'web',
+    // The provider's own search is the web: the grounding frame says so.
+    origin: 'web',
+    resultCount: null,
+    readOutcome: null,
     toolId: 'webSearch',
     name: 'webSearch',
     // The provider reports no end of its search; once the answer streams,
@@ -482,7 +573,7 @@ export function buildToolActivity(run) {
   const toolRows = callsInOrder(run)
     .map(call => callRow(run, call, finished))
     .filter(Boolean);
-  const items = mergeSkillRows(toolRows, skillRows(run)).map(row => row.item);
+  const items = foldSkillItems(mergeSkillRows(toolRows, skillRows(run)).map(row => row.item));
   const native = nativeSearchRow(run, finished);
   if (native) items.push(native);
 

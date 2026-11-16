@@ -86,6 +86,7 @@ import {
 import { messagesFromChatCompletions, withReadFiles } from '../services/inference/inputContent.js';
 import { createFileContext } from '../services/inference/files.js';
 import { appTurnError, executeAppTurn, prepareAppTurn } from '../services/inference/appTurn.js';
+import { recordRunEvidence } from '../services/chat/evidenceRecord.js';
 import { apiUser, numberField, platformLanguage, requestLanguage } from './inference/shared.js';
 import registerResponsesRoutes from './inference/responses.js';
 import { newOutputId } from '../services/provenance/records.js';
@@ -476,6 +477,9 @@ export default function registerOpenAIProxyRoutes(
       }
     });
 
+    // The run's id, so the caller can read or delete its evidence record
+    // (`/api/runs/{runId}/evidence`, #3687).
+    if (run.runId) res.setHeader('X-Run-Id', run.runId);
     const telemetry = {
       runId: run.runId,
       purpose: APP_ID,
@@ -504,8 +508,24 @@ export default function registerOpenAIProxyRoutes(
       );
     };
 
+    // The evidence record of this run (#3687), after it ended; never awaited.
+    // Once per run: the stream path can reach both its finish and its catch.
+    let evidenceRecorded = false;
+    const recordEvidence = summary => {
+      if (evidenceRecorded) return;
+      evidenceRecorded = true;
+      void recordRunEvidence({ runId: run.runId, user, summary, runLog: llmClient.runLog });
+    };
+    const evidenceOf = result => ({
+      status: 'completed',
+      content: result.content,
+      finishReason: result.finishReason,
+      usage: result.usage
+    });
+
     const failUpstream = async error => {
       run.fail(error, model);
+      recordEvidence({ status: 'error' });
       if (clientDisconnected || error?.code === LLM_ERROR_CODES.ABORTED) return undefined;
       if (isLLMError(error) && typeof error.status === 'number') {
         logger.error('[OpenAI Proxy] Error response from provider', {
@@ -570,6 +590,7 @@ export default function registerOpenAIProxyRoutes(
       run.finish(result);
       recordValidation(result.structuredOutput);
       if (result.structuredOutput && !result.structuredOutput.valid) {
+        recordEvidence({ ...evidenceOf(result), status: 'error' });
         return sendFlatError(res, outputValidationError(result.structuredOutput));
       }
       const response = {
@@ -604,6 +625,7 @@ export default function registerOpenAIProxyRoutes(
         marking: result.marking?.text,
         user
       });
+      recordEvidence({ ...evidenceOf(result), ...(provenance ? { provenance } : {}) });
       if (provenance) applyProvenanceHeaders(res, outputId);
       return res.json(withProvenance(response, provenance));
     }
@@ -719,10 +741,15 @@ export default function registerOpenAIProxyRoutes(
         const verdict = { ...createOutputValidator(format)(result.content), attempts: 1 };
         recordValidation(verdict);
         if (!verdict.valid) {
+          recordEvidence({ ...evidenceOf(result), status: 'error' });
           write(inBandError(outputValidationError(verdict)));
           return finish();
         }
       }
+      recordEvidence({
+        ...evidenceOf(result),
+        ...(streamProvenance ? { provenance: streamProvenance } : {})
+      });
       if (streamOptions?.include_usage === true && !clientDisconnected) {
         write({
           id: completionId,
@@ -736,6 +763,7 @@ export default function registerOpenAIProxyRoutes(
       finish();
     } catch (error) {
       run.fail(error, model);
+      recordEvidence({ status: 'error' });
       if (clientDisconnected || error?.code === LLM_ERROR_CODES.ABORTED) {
         if (!res.writableEnded) res.end();
         return undefined;
@@ -841,6 +869,8 @@ export default function registerOpenAIProxyRoutes(
     const outputId = newOutputId();
     const created = Math.floor(Date.now() / 1000);
     const runId = newRunId('chat');
+    // The run's id, so the caller can read or delete its evidence record (#3687).
+    res.setHeader('X-Run-Id', runId);
     let clientDisconnected = false;
     let sentRole = false;
     let streamed = '';
@@ -922,6 +952,8 @@ export default function registerOpenAIProxyRoutes(
       }
       return sendFlatError(res, failure);
     }
+    // The evidence record of this turn (#3687); never awaited.
+    void recordRunEvidence({ runId, user, summary: outcome, runLog: chatService.runLog });
     if (clientDisconnected) return undefined;
 
     if (outcome.status === 'error' || outcome.status === 'aborted') {

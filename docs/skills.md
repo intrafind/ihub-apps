@@ -30,9 +30,11 @@ There are two kinds:
   instructions, or in a message sent to the chat API, and the skill is loaded for that run. The
   chat API also accepts `requestedSkills`, a list of global skill names or user skill ids.
 
-Under an answer, each skill used shows once, however often it was activated. Open the answer's
-thought chain to see every activation as a **Used skill** row, in order with the searches and tool
-calls, with who started it (you, or the model).
+A skill that shaped an answer shows once, in the answer's activity block (never as a chip above it):
+as the first segment of the collapsed line and as a row in the list, always with why it is there:
+**started manually** (picked in the composer or typed as `/name`), **chosen by the model**, **set
+by the app** (`skillSettings.autoActivate`) or **kept from an earlier message** of the chat. A skill
+the model loads twice is one row. A turn that used only a skill still has the activity block.
 
 Skills are opt-in per app: an app offers none until it sets `skillSettings.enabled: true`
 (**Admin → Apps → Skills → Enable skills in this app**). Without it, the app sends no skill list

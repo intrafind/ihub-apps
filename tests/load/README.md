@@ -19,7 +19,7 @@ The harness is plain Node 20+ with no dependencies. It runs the same way on a la
 | `teardown.mjs`              | Deletes test chats and projects (with `--delete-users`, also the users)                                                                                                        |
 | `stub/server.mjs`           | Paced fake LLM (OpenAI-compatible, with vLLM-style `/metrics`) and a synthetic website for crawls                                                                              |
 | `tools/generate-corpus.mjs` | Generates 42 realistic Word, PowerPoint, Excel and PDF files (`npm run loadtest:corpus`)                                                                                       |
-| `profiles/*.json`           | One per experiment: `smoke`, `capacity-stub`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                                          |
+| `profiles/*.json`           | One per experiment: `smoke`, `capacity-stub`, `company`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                               |
 | `docker-compose.yml`        | Local sizing lab: iHub with a fixed CPU/RAM budget, plus the stubs                                                                                                             |
 | `k8s/`                      | Stubs Deployment, setup Job, Indexed runner Job, `collect.sh`                                                                                                                  |
 
@@ -36,6 +36,15 @@ A VU is one **concurrently active** user. It loops over sessions, picked by the 
 | `browse`       | app list, chat history, project list                                                                                        | non-LLM API latency                                                     |
 | page load      | before 30% of sessions: auth status, configs, translations, styles, apps, models, prompts, AI notice                        | the per-user request rate a browser produces (rate limits)              |
 | `inference`    | `/api/inference/v1/chat/completions`, streamed                                                                              | pure LLM path (off by default)                                          |
+
+### Workload mixes
+
+| Profile         | chat | projectChat | chatFile | projectBuild | browse | Project chats                                                       |
+| --------------- | ---: | ----------: | -------: | -----------: | -----: | ------------------------------------------------------------------- |
+| `capacity-stub` |  45% |         30% |      15% |           5% |     5% | half in the user's own project, half spread over 20 shared projects |
+| `company`       |  55% |         25% |      10% |           2% |     8% | 80% shared, and 60% of those in one project (`shared-1`)            |
+
+`capacity-stub` is a heavy, project-centric workload: every third session reads a project and one in twenty builds one. `company` is closer to a typical installation: most people chat, a few upload a document, very few build projects, and most project questions go to one popular project such as a website chatbot or the company handbook. The mix is per session, not per user, so 10% `chatFile` means one session in ten uploads a file.
 
 Measured per turn:
 
@@ -246,6 +255,7 @@ The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU l
 | `LT_THINKING`                                                              | model default                       | `on` / `off`: sends `thinkingEnabled` (Qwen3 on gpu-01)                 |
 | `LT_LLM_CONTEXT_WINDOW`                                                    | discovered (173184)                 | Context window registered for the test models                           |
 | `LT_OWN_PROJECTS_MAX`, `LT_SHARED_PROJECTS`, `LT_DOCS_PER_PROJECT`         | 200, profile, 6                     | Projects setup prepares for `projectChat`                               |
+| `LT_PREFER_SHARED`, `LT_HOT_SHARE`                                         | 0.5, 0 (`company`: 0.8, 0.6)        | Share of project chats in shared projects; share of those in `shared-1` |
 | `LT_USERS_PER_IP`                                                          | target or capacity                  | Users assumed behind one IP for the rate-limit recommendation           |
 | `LT_VLLM_METRICS_URL`                                                      | auto                                | vLLM `/metrics`; `none` disables it                                     |
 | `LT_PROM_URL`, `LT_PROM_TOKEN`                                             | –                                   | Prometheus or Grafana datasource proxy, bearer token                    |
@@ -260,7 +270,7 @@ Stub tuning (`stub/server.mjs`): `STUB_TTFT_MS` (700), `STUB_TOKENS` (250), `STU
 - **Per-IP rate limits.** All VUs of one runner share an IP; the limits are per worker. `HTTP_429` in the report means the run measured the limiter, not iHub.
 - **The LLM throttle.** `requestConcurrency` (default 5) applies per model unless the model sets `concurrency`. Setup gives both test models 100.
 - **`userProjects` off.** A `projectId` on the chat is then ignored without an error. Setup turns the flag on.
-- **No session affinity across replicas** (only if you ever run more than one). The report shows "stream misses" (the POST was answered without streaming).
+- **No session affinity across replicas** (only if you ever run more than one). The report shows "stream misses" (the turn ran, but nothing of it reached the open stream).
 - **The stub model's context window.** iHub injects up to 40% of it as project context. Setup copies gpu-01's discovered window (173k) to the stub, so stub runs send the same 50–60k-token project prompts.
 - **The crawl target.** intrafind.com is our production website: one Apache/Drupal server, about 0.6 s per page. Keep `LT_CRAWL_MAX_CONCURRENT` low, run outside business hours, and use the stub site (`LT_CRAWL_URL=http://loadtest-stubs…:8980/docs/`) for repeated or ingestion-heavy runs.
 - **The GPU is shared.** Tell the people using gpu-01 before a `capacity-gpu` run. Its numbers are the GPU's limit, not iHub's.

@@ -47,7 +47,7 @@ import configCache from '../configCache.js';
 import { appAllowsUserProjects } from '../../shared/appProjects.js';
 import { findByIdCaseInsensitive } from '../utils/resourceLookup.js';
 import runLog from '../services/loop/RunLog.js';
-import { resolvePrincipal } from '../services/loop/runIdentity.js';
+import { isAnonymousUser, resolvePrincipal } from '../services/loop/runIdentity.js';
 import { authorizeChat } from '../services/chat/chatAccess.js';
 import { resolveChatOwner } from '../services/chat/chatOwner.js';
 import { getChatRepository, MAX_TITLE_LENGTH } from '../services/chat/ChatRepository.js';
@@ -76,6 +76,11 @@ import { userAbortCause } from '../services/chat/abortCause.js';
 import { cancelChatWorkflow } from '../tools/workflowRunner.js';
 import { getWorkflowStateRepository } from '../services/workflow/WorkflowStateRepository.js';
 import { deleteChatWithCascade } from '../services/chat/chatDeletion.js';
+import {
+  readEvidenceContent,
+  readEvidenceRecord,
+  sendEvidence
+} from '../services/chat/evidenceRecord.js';
 import {
   deliverResumedWorkflows,
   settleInterruptedChat,
@@ -488,6 +493,97 @@ export default function registerChatRoutes(app) {
     }
   );
 
+  /**
+   * Authorize an evidence read: the chat's owner only. An admin reads through
+   * `/api/admin/chats/...` (audited), a project member and a share recipient
+   * never (#3687).
+   *
+   * @param {import('express').Request} req
+   * @returns {Promise<string>} The chat id.
+   */
+  async function ownEvidenceChat(req) {
+    const { chatId } = req.params;
+    assertValidId(chatId, 'chat');
+    const repository = requireRepository();
+    // A guest's chat keeps no evidence; the anonymous principal reads none.
+    if (isAnonymousUser(req.user)) throw notFound('Chat');
+    const access = await loadOwnedChat(chatId, req.user, repository, 'read');
+    if (!access || access.nonOwner) throw notFound('Chat');
+    return chatId;
+  }
+
+  /**
+   * @swagger
+   * /api/chats/{chatId}/evidence/{messageId}:
+   *   get:
+   *     summary: The evidence record of an answer
+   *     description: >-
+   *       What went into and came out of every model call and tool call of the turn that
+   *       produced the answer. Content is referenced as `sha256:<hex>` and read through
+   *       `/api/chats/{chatId}/evidence-content/{sha256}`. The chat's owner only; the `ETag`
+   *       is the `evidence.sha256` the stored answer names. See docs/chat-evidence.md.
+   *     tags: [Chats]
+   *     parameters:
+   *       - { in: path, name: chatId, required: true, schema: { type: string } }
+   *       - { in: path, name: messageId, required: true, schema: { type: string } }
+   *     responses:
+   *       200: { description: The evidence record }
+   *       404:
+   *         description: >-
+   *           No such chat, or not the caller's (NOT_FOUND); no record was kept for the answer,
+   *           or the record is switched off (EVIDENCE_NOT_RECORDED)
+   *       503: { description: Chat storage is unavailable (CHAT_PERSISTENCE_UNAVAILABLE) }
+   */
+  app.get(
+    buildServerPath('/api/chats/:chatId/evidence/:messageId'),
+    authRequired,
+    async (req, res) => {
+      const chatId = await ownEvidenceChat(req);
+      assertValidId(req.params.messageId, 'message');
+      const doc = await readEvidenceRecord({
+        kind: 'chat',
+        id: chatId,
+        messageId: req.params.messageId
+      });
+      sendEvidence(res, doc);
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/chats/{chatId}/evidence-content/{sha256}:
+   *   get:
+   *     summary: One piece of content an evidence record refers to
+   *     description: >-
+   *       The canonical JSON of a system prompt, message, tool definition, tool argument or
+   *       tool result, as named `sha256:<hex>` in the chat's evidence records. Its SHA-256 is
+   *       the name. The chat's owner only.
+   *     tags: [Chats]
+   *     parameters:
+   *       - { in: path, name: chatId, required: true, schema: { type: string } }
+   *       - { in: path, name: sha256, required: true, schema: { type: string, pattern: '^[a-f0-9]{64}$' } }
+   *     responses:
+   *       200: { description: The content, application/json }
+   *       400: { description: Not a lower-case hex SHA-256 (BAD_REQUEST) }
+   *       404:
+   *         description: >-
+   *           No such chat, or not the caller's (NOT_FOUND); no such content, or the record is
+   *           switched off (EVIDENCE_NOT_RECORDED)
+   */
+  app.get(
+    buildServerPath('/api/chats/:chatId/evidence-content/:sha256'),
+    authRequired,
+    async (req, res) => {
+      const chatId = await ownEvidenceChat(req);
+      const content = await readEvidenceContent({
+        kind: 'chat',
+        id: chatId,
+        sha256: req.params.sha256
+      });
+      sendEvidence(res, content);
+    }
+  );
+
   app.post(buildServerPath('/api/chats/:chatId/files'), authRequired, async (req, res) => {
     const { chatId } = req.params;
     assertValidId(chatId, 'chat');
@@ -555,7 +651,9 @@ export default function registerChatRoutes(app) {
       appConfig: chatApp,
       policy,
       store: fileStore,
-      user: req.user
+      user: req.user,
+      // A user's upload is what the chat's evidence counts against (#3687).
+      countEvidence: true
     });
     return sendCreated(
       res,

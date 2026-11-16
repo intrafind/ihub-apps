@@ -57,6 +57,23 @@ export const ANSWER_BASIS_KINDS = Object.freeze([
   'model'
 ]);
 
+/**
+ * Where a tool call looked (`tool/started.activityOrigin`, `Source.origin.kind`):
+ * the answer-basis kinds a call to a tool can have. `email`, `file`, `audio`
+ * and `model` are inputs or the fallback of a turn, never a call.
+ */
+export const ACTIVITY_ORIGINS = Object.freeze([
+  'project',
+  'web',
+  'ifinder',
+  'iassistant',
+  'documents',
+  'integration'
+]);
+
+/** Who brought a skill into a turn (`skill.activation` `activatedBy`), strongest first. */
+export const SKILL_ACTIVATORS = Object.freeze(['user', 'app', 'model', 'chat']);
+
 /** RunLog (ledger) event types — one append-only JSONL stream per run. */
 export const RUN_LOG_EVENTS = Object.freeze({
   RUN_START: 'run/start',

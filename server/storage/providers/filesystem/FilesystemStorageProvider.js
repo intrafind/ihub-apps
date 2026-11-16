@@ -40,7 +40,7 @@ import serverConfig from '../../../config.js';
 import logger from '../../../utils/logger.js';
 import { StorageProvider } from '../../StorageProvider.js';
 import { DocumentStore } from '../../DocumentStore.js';
-import { StorageError } from '../../errors.js';
+import { LockTimeoutError, StorageError } from '../../errors.js';
 import { CONFIG_LOCK_DIR, RAW_NAMESPACE_NAMES } from '../../namespaces.js';
 import { FilesystemChangeNotifier } from './FilesystemChangeNotifier.js';
 import { FilesystemDocumentStore } from './FilesystemDocumentStore.js';
@@ -50,7 +50,29 @@ import { FilesystemBlobStore } from './FilesystemBlobStore.js';
 import { FilesystemLockManager } from './FilesystemLockManager.js';
 import { getContentsPath } from '../../../utils/contentsPath.js';
 
+/** Lock name that lets one process at a time sweep idle fencing counters. */
+const FENCE_SWEEP_LOCK = 'storage:fence-sweep';
+/** Local hour of the nightly fence sweep. */
+const FENCE_SWEEP_HOUR = 3;
+
+/**
+ * Milliseconds from `now` to the next time the local clock shows `hour`:00.
+ *
+ * @param {number} hour - 0–23
+ * @param {Date} [now]
+ * @returns {number}
+ */
+export function msUntilHour(hour, now = new Date()) {
+  const next = new Date(now);
+  next.setHours(hour, 0, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  return next - now;
+}
+
 const COMPONENT = 'FilesystemStorageProvider';
+
+/** How often idle lock fencing counters are swept: daily, and once at start. */
+const FENCE_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 /** Registry name; also reported by `healthCheck()`. */
 const PROVIDER_NAME = 'filesystem';
@@ -229,6 +251,14 @@ export class FilesystemStorageProvider extends StorageProvider {
    * @param {string} [config.contentsDir] - Absolute `contents/` directory the
    *   raw config namespaces are views over (tests)
    * @param {number} [config.flushIntervalMs=2000] - Append-log flush debounce
+   * @param {Record<string, number>} [config.keyPrefixSegments] - Namespaces kept in the
+   *   key-prefix index (`KEY_PREFIX_SEGMENTS` by default). For tests, which pass `{}`
+   *   to run without it; not an operator setting — the index of data written with
+   *   a different map would be incomplete
+   * @param {number} [config.fenceSweepIntervalMs=86400000] - How often idle lock
+   *   fencing counters are swept; 0 disables the sweep (tests)
+   * @param {number} [config.fenceSweepHour=3] - Local hour (0–23) of the first
+   *   sweep after start; later sweeps follow every `fenceSweepIntervalMs`
    */
   constructor(config = {}) {
     super(config);
@@ -243,9 +273,11 @@ export class FilesystemStorageProvider extends StorageProvider {
     // through it: one notifier per provider, so every facet's events reach the
     // same subscribers.
     this._notifier = new FilesystemChangeNotifier();
+    const { keyPrefixSegments } = config;
     this._envelopeDocuments = new FilesystemDocumentStore({
       baseDir: this._baseDir,
-      notifier: this._notifier
+      notifier: this._notifier,
+      keyPrefixSegments
     });
     // Config locks sit in the provider's own base directory, never inside a
     // namespace directory: a `.locks` sidecar in `contents/apps` would be
@@ -260,8 +292,21 @@ export class FilesystemStorageProvider extends StorageProvider {
       raw: this._rawDocuments
     });
     this._logs = new FilesystemAppendLog({ baseDir: this._baseDir, flushIntervalMs });
-    this._blobs = new FilesystemBlobStore(this._baseDir);
+    this._blobs = new FilesystemBlobStore(this._baseDir, { keyPrefixSegments });
     this._locks = new FilesystemLockManager({ baseDir: this._baseDir });
+    this._fenceSweepIntervalMs =
+      typeof config.fenceSweepIntervalMs === 'number' && config.fenceSweepIntervalMs >= 0
+        ? config.fenceSweepIntervalMs
+        : FENCE_SWEEP_INTERVAL_MS;
+    this._fenceSweepHour =
+      Number.isInteger(config.fenceSweepHour) &&
+      config.fenceSweepHour >= 0 &&
+      config.fenceSweepHour <= 23
+        ? config.fenceSweepHour
+        : FENCE_SWEEP_HOUR;
+    /** The fence sweep in flight, if any, so shutdown can wait for it to stop. */
+    this._fenceSweep = null;
+    this._fenceSweepTimer = null;
 
     this._initialized = false;
     this._shutdownStarted = false;
@@ -371,6 +416,22 @@ export class FilesystemStorageProvider extends StorageProvider {
         error: error.message
       });
     }
+    if (this._fenceSweepIntervalMs > 0) {
+      // At night, not at start: the sweep touches every idle counter, hundreds
+      // of thousands on an installation that never swept, and on a server whose
+      // data does not fit in memory that pushed chats and projects out of the
+      // file cache — requests were measurably slower for as long as it ran and
+      // a while after. The first sweep runs at the next `fenceSweepHour`.
+      this._fenceSweepTimer = setTimeout(() => {
+        void this._sweepFences();
+        this._fenceSweepTimer = setInterval(
+          () => void this._sweepFences(),
+          this._fenceSweepIntervalMs
+        );
+        this._fenceSweepTimer.unref?.();
+      }, msUntilHour(this._fenceSweepHour));
+      this._fenceSweepTimer.unref?.();
+    }
     this._initialized = true;
     logger.debug('Filesystem storage provider initialized', {
       component: COMPONENT,
@@ -392,6 +453,14 @@ export class FilesystemStorageProvider extends StorageProvider {
   async shutdown() {
     if (this._shutdownStarted) return;
     this._shutdownStarted = true;
+    if (this._fenceSweepTimer) {
+      clearTimeout(this._fenceSweepTimer);
+      clearInterval(this._fenceSweepTimer);
+    }
+    this._fenceSweepTimer = null;
+    // Stops at the next file (`shouldStop`); waited for so it does not touch
+    // the lock directory after the provider is gone.
+    await this._fenceSweep;
     try {
       await this._logs.flush();
     } catch (error) {
@@ -422,6 +491,49 @@ export class FilesystemStorageProvider extends StorageProvider {
       });
     }
     await this._notifier.close();
+  }
+
+  /**
+   * Run one idle-fence sweep in the background (see
+   * `FilesystemLockManager.sweepIdleFences`), unless one is still running.
+   * Never rejects: a counter left in place costs a file, not correctness.
+   *
+   * @returns {Promise<void>|null} The sweep, for tests
+   * @private
+   */
+  _sweepFences() {
+    if (this._fenceSweep || this._shutdownStarted) return this._fenceSweep;
+    const startedAt = Date.now();
+    // One sweeper at a time across every worker and server sharing this
+    // directory: each process runs the timer, and eight workers sweeping the
+    // same directory at once multiplied the disk load by eight. Whoever finds
+    // the lock taken skips this round.
+    this._fenceSweep = this._locks
+      .withLock(
+        FENCE_SWEEP_LOCK,
+        () => this._locks.sweepIdleFences({ shouldStop: () => this._shutdownStarted }),
+        { waitMs: 1 }
+      )
+      .then(outcome => {
+        if (outcome.removed > 0 || outcome.scratch > 0) {
+          logger.info('Removed idle lock fencing counters', {
+            component: COMPONENT,
+            ...outcome,
+            durationMs: Date.now() - startedAt
+          });
+        }
+      })
+      .catch(error => {
+        if (error instanceof LockTimeoutError) return; // another process is sweeping
+        logger.warn('Could not sweep idle lock fencing counters', {
+          component: COMPONENT,
+          error: error.message
+        });
+      })
+      .finally(() => {
+        this._fenceSweep = null;
+      });
+    return this._fenceSweep;
   }
 
   /**

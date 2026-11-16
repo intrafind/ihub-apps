@@ -208,6 +208,6 @@ export function ActivityHint({ kind }) {
   const { t } = useTranslation();
   if (kind !== 'stalled') return null;
   return (
-    <p className="mt-1 ms-5 break-words text-gray-600 dark:text-gray-400">{stalledLabel(t)}</p>
+    <p className="mt-1 ms-5.5 break-words text-gray-600 dark:text-gray-400">{stalledLabel(t)}</p>
   );
 }

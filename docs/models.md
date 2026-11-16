@@ -89,12 +89,57 @@ Image-generating models declare what the provider embeds under `image`, the same
 `image` applies to a model with `supportsImageGeneration`; **Admin → Models** shows an *Image marking* section
 for such a model, and choosing *Not marked* removes the member. The value appears as
 `provider_marking.declared` in the record of each generated image; see
-[Provenance Records](provenance.md#images-provider-marks-3328). No model is preset: a Google image model counts
-as `none` until you declare it. Read aloud (text-to-speech) has no marking and no record.
+[Provenance Records](provenance.md#images-provider-marks-3328). A model you create by hand counts as `none` until
+you declare it; models imported from Google and Anthropic are filled in, see [below](#filled-in-on-import). Read aloud
+(text-to-speech) has no marking and no record.
 
 A model without the block counts as `none`. **Admin → Models** shows "Not marked" in the *Output marking*
 column as a hint and has an *Output marking* section in the editor. There is no gate: a model that is not
 marked still works.
+
+#### Filled in on import
+
+A model imported from a provider that says how it marks its output (**Import from URL**, or **Sync models** on the
+provider's page) takes over that declaration, so it does not have to be entered model by model. iHub never infers it
+from a provider's name: only the providers and models below get one.
+
+| Provider | Model | Declared |
+| --- | --- | --- |
+| Google | Gemini chat model (`gemini-…`) | `contentMarking.text`: `{ "by": "provider", "scheme": "synthid", "statementRef": … }` |
+| Google | Gemini image model (`gemini-…-image…`, Nano Banana) | The same under `text` and `image`, and `supportsImageGeneration: true` |
+| Google | Gemma and other open models, embeddings, speech, Imagen | Nothing |
+| Anthropic | The Claude models Anthropic's page marks for text: Fable 5.2, 5.1 and 5; Mythos 5.2, 5.1 and 5; Opus 5.5, 5, 4.8, 4.7, 4.6 and 4.5; Sonnet 5.5, 5, 4.6 and 4.5; Haiku 5.5 and 4.5 | `contentMarking.text`: `{ "by": "provider", "scheme": "synthid-text", "statementRef": … }` |
+| Anthropic | Opus 4.6, Opus 4.5, Sonnet 4.5 and Haiku 4.5 | The same, but only when the provider's base URL is `api.anthropic.com`: the page lists these four for Anthropic's own API only, not for the cloud partners (AWS, Google Cloud, Microsoft Foundry) |
+| Anthropic | Every other Claude model (for example Opus 4.1, Sonnet 4) | Nothing |
+| Mistral | All | Nothing: Mistral signed Section 1 of the Code of Practice (marking and detection), but publishes no technical description of a mark for its API or Le Chat |
+| Any other provider | All | Nothing |
+
+`statementRef` is the provider's own page: Google's SynthID page (`Google DeepMind, SynthID: https://deepmind.google/technologies/synthid/`)
+and Anthropic's "How Claude marks AI-generated content" (`https://support.claude.com/en/articles/16266773-how-claude-marks-ai-generated-content`).
+You can change or remove a declaration under **Admin → Models → Output marking**. The import dialog shows a note
+when a selected model carries one.
+
+What iHub can and cannot do with it:
+
+- **Text:** only the provider's statement is recorded. There is no public detector for SynthID-Text on Google's API
+  output, and Anthropic's detection API is in private preview, so `_verify` reports the declared scheme and nothing it
+  measured.
+- **Anthropic's watermark** is always on (there is no setting to switch it off) and a version of the SynthID-Text
+  approach. It is statistical: it is not applied where an exact output is required (code syntax, arithmetic), and
+  heavily edited, paraphrased or translated text may lose it. Only the models named above are declared, which is the
+  list of Anthropic's page; a Claude model Anthropic does not name there (for example Opus 4.1) is left without one,
+  and you can declare it by hand once Anthropic names it. New models are added to the list as the page names them.
+- **Claude Sonnet 4.6** may not carry the watermark when `temperature`, `top_p` or `top_k` is set to a non-default
+  value. The import sets none of them, and **Sync models** does not offer the declaration to a Sonnet 4.6 that sets
+  one under [Sampling Parameters](#sampling-parameters). If you set one later on a model that declares the
+  watermark, remove the declaration or the sampling setting.
+- **Images:** SynthID cannot be detected by iHub either, so the record says `declared`. If an image also carries a
+  C2PA manifest (some Google and OpenAI image models), iHub reads it from the stored bytes and records issuer,
+  `digitalSourceType` and whether one is present, see [Provenance Records](provenance.md#images-provider-marks-3328).
+  The image bytes are never decoded or re-encoded between Google's answer and the download, so the marks survive.
+- **Sync only fills in what is missing.** A member that is absent or `none` is offered the declaration; a marking you
+  entered stays. A "Not marked" you chose on purpose looks the same as the default `none` and is offered again:
+  untick it in the dialog.
 
 ### Sampling Parameters
 
@@ -291,7 +336,8 @@ you pick, so they need not be typed in one by one.
    `max_model_len`, LLM Hub `meta_data`, Mistral `max_context_length`, Google token limits),
    image input, tool support and end-of-life date. Embedding, transcription, audio, image and
    moderation models are marked and not selected by **Select all**. Models already configured for
-   the same endpoint show as **Already added**.
+   the same endpoint show as **Already added**. Gemini models and the Claude models Anthropic names come with the output marking their provider declares
+   for them ([EU AI Act](#filled-in-on-import)), shown in a note under the list.
 
    Speech models are imported for the backend that runs them, ready for voice input, recording
    and read aloud. With the provider they keep the provider's key.
@@ -374,28 +420,34 @@ support tool calling yet, so imported chat models have **Tool support** set to n
 a model once the gateway supports it. Realtime transcription needs `wss://` when a key is sent to the
 Mistral backend.
 
-**Keeping the models in line with the gateway.** A gateway's models change over time: deployments
-are added and retired, a context window is corrected, a model moves to another dialect. On the
-provider's page (**Admin → Providers →** the gateway **→ Linked models**), **Sync with gateway**
-asks the gateway what it lists now and compares that with the models imported from it. Nothing
-changes until you apply your choice. The dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
+**Keeping the models in line with the provider.** A provider's models change over time: on an iFinder
+Model Gateway deployments are added and retired, a context window is corrected, a model moves to another
+dialect; on Google, Gemini versions are retired and new ones appear; on Anthropic, new Claude models appear. On the provider's page
+(**Admin → Providers →** the gateway, **Google** or **Anthropic → Linked models**), **Sync models** asks the provider what it
+lists now and compares that with the models imported from it. Nothing changes until you apply your choice. The
+dialog shows three groups. Changes and gone models start ticked, so a plain **Apply** brings the imported models in line. **New models start unticked**: importing one makes it available to users, so a model you left out on purpose is never imported by accident. Tick the ones you want.
 
 | Group                       | What it means                                                                                     | When applied                                                                     |
 | --------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Changed on the gateway**  | An imported model differs from the gateway: URL, adapter, context window or image input           | The model is updated to match; the old and new values are shown                  |
-| **New on the gateway**      | The gateway lists a model nobody imported                                                         | The model is imported, as in **Import from URL**                                 |
-| **No longer available**     | An enabled imported model the gateway no longer lists, or now lists as something iHub cannot run  | The model is **disabled**, not deleted: apps may still use it                    |
+| **Changed at the provider** | An imported model differs from the provider: URL, adapter, context window, image input (gateway only) or, for Google and Anthropic, the EU AI Act marking it does not declare yet | The model is updated to match; the old and new values are shown                  |
+| **New at the provider**     | The provider lists a model nobody imported                                                        | The model is imported, as in **Import from URL**                                 |
+| **No longer available**     | An enabled imported model the provider no longer lists, or now lists as something iHub cannot run | The model is **disabled**, not deleted: apps may still use it                    |
 
 Models iHub cannot run (embedding, NER) are never offered, a model you disabled yourself is not
 reported as gone, and a model you configured by hand for the same endpoint counts as imported. Using
 the vLLM adapter instead of the OpenAI one for an OpenAI-dialect model is your choice and is not
-reported. A context window the gateway does not report is left as you set it. Each applied item has
-its own result, so one failure does not stop the others.
+reported. A context window the provider does not report is left as you set it, and so is image input: Google's
+listing does not report it, so a Google model is never changed on that account. The marking is only ever
+added to a member that does not declare one (see [Filled in on import](#filled-in-on-import)). Anthropic's listing names
+the dated snapshot of a model before the 4.6 generation (`claude-haiku-4-5-20251001`), while a config often uses the
+alias (`claude-haiku-4-5`): an alias is matched to its snapshot, so that model is compared like any other and the
+snapshot is not offered again as a new model. A model that is missing from an Anthropic listing is never reported as
+gone. Each applied item has its own result, so one failure does not stop the others.
 
 Two iHub models can point at one gateway model (**Clone** keeps the model ID and the provider). Each is its own item and its own pick: a changed or gone model is named by its iHub model, in `modelId`, which a `changed` or `removed` pick must carry.
 
-Applying is done by the server, not by chaining model calls from the browser: it asks the gateway
-again, applies only the picks that still match what the gateway reports (anything else comes back
+Applying is done by the server, not by chaining model calls from the browser: it asks the provider
+again, applies only the picks that still match what the provider reports (anything else comes back
 `skipped`: run the sync again), and reads and writes each model's stored file. Each item has its own
 result and one failure does not stop the others. Every changed model is written to the audit log
 and the model's change history.
@@ -405,9 +457,9 @@ and the model's change history.
 | `GET /api/admin/providers/{providerId}/_model-drift`      | The comparison: `{ modelsUrl, items }`. Writes nothing                        |
 | `POST /api/admin/providers/{providerId}/_sync-models`     | Apply a pick: body `{ items: [{ kind, remoteId, modelId? }] }`, answer `{ items: [{ kind, remoteId, modelId, status, detail }] }` with `status` one of `applied`, `skipped`, `failed` |
 
-Both need an admin and answer `404` for an unknown provider, `400` for one that is no gateway or has
-no base URL, and `502` (`UPSTREAM_ERROR`, with `details.reason`) when the gateway cannot be asked, in
-which case nothing is changed.
+Both need an admin and answer `404` for an unknown provider, `400` for one that is not a gateway, Google or
+Anthropic provider or has no base URL, and `502` (`UPSTREAM_ERROR`, with `details.reason`) when the provider
+cannot be asked, in which case nothing is changed.
 
 The import uses `POST /api/admin/models/_discover` (with `gateway: "ifinder-model-gateway"` for a gateway), which
 returns the normalized list without storing anything, and then the regular `POST /api/admin/providers` and `POST /api/admin/models`.

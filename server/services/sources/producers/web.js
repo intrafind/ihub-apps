@@ -154,8 +154,61 @@ function reportedWebItems(reader, reported, hitPrivacy) {
     .map(item => (reader ? item : { ...item, ...hitPrivacy }));
 }
 
+/** The list of hits a search result carries, whatever the provider calls it; null when it has none. */
+function hitListOf(result) {
+  if (Array.isArray(result)) return result;
+  if (!result || typeof result !== 'object') return null;
+  return [result.results, result.items, result.sources].find(Array.isArray) ?? null;
+}
+
+const CONTENT_BLOCK_TYPES = new Set(['text', 'image', 'audio', 'resource', 'resource_link']);
+
+/** A connected server's content block (`{type: 'text', text}`), not a hit: it has a block type and no link. */
+function isContentBlock(item) {
+  return (
+    !!item &&
+    typeof item === 'object' &&
+    CONTENT_BLOCK_TYPES.has(item.type) &&
+    !item.url &&
+    !item.link &&
+    !item.href
+  );
+}
+
 export const webSourceProducer = {
   id: 'web',
+
+  /**
+   * What the server says the call came to, from the full result: how many
+   * hits a search returned, and whether a page read delivered any text. Left
+   * out when the result does not say (an unknown shape, a failed call): an
+   * empty source list is not "no results", a provider-run search has none by
+   * construction.
+   *
+   * @param {{toolId: string, toolDef?: Object, result: unknown, failed?: boolean}} call
+   * @returns {{resultCount?: number, readOutcome?: 'opened'|'empty'}}
+   */
+  outcomeOf({ toolId, toolDef, result, failed }) {
+    if (failed || !result || typeof result !== 'object' || result.error) return {};
+    // A connected server's array of content blocks (text, images) is not a hit
+    // list: counting them would declare "N results" for one block. An array of
+    // hit objects (a text block that held a JSON hit list) is still counted.
+    if (
+      Array.isArray(result) &&
+      (toolDef?._mcp || toolDef?._a2a) &&
+      result.length > 0 &&
+      result.every(isContentBlock)
+    ) {
+      return {};
+    }
+    if (isPageReader(toolId)) {
+      return typeof result.content === 'string'
+        ? { readOutcome: result.content.trim() ? 'opened' : 'empty' }
+        : {};
+    }
+    const hits = hitListOf(result);
+    return hits ? { resultCount: hits.length } : {};
+  },
 
   /** @param {{toolId: string, toolDef?: Object}} call */
   matches({ toolId, toolDef }) {

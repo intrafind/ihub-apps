@@ -324,6 +324,18 @@ export const RUNTIME_NAMESPACES = Object.freeze({
    * the first requester (or the admin who added it).
    */
   websiteCorpusDomains: 'website-corpus-domains',
+  /**
+   * Evidence records of chat answers (#3687): one document per stored answer,
+   * keyed `<scope(chatId)>__<scope(messageId)>` so all evidence of a chat is
+   * one prefix. The content it refers to is in `chat-evidence-content`.
+   */
+  chatEvidence: 'chat-evidence',
+  /**
+   * Evidence records of runs without a chat (`/v1` completions, the
+   * Responses API without a stored conversation), keyed by run id and owned
+   * by the caller. The content is in `run-evidence-content`.
+   */
+  runEvidence: 'run-evidence',
   /** One-time import markers, shared by every runtime store that has one. */
   runtimeImports: 'runtime-imports'
 });
@@ -344,12 +356,56 @@ export const BLOB_NAMESPACES = Object.freeze({
   projectFiles: 'project-files',
   /**
    * Payloads of uploaded chat and scheduled-task files: extracted text
-   * (`<key>__text`) and optional original binary (`<key>__original`), kept as
+   * (`<key>.txt`), page texts (`<key>.pages`) and optional original binary
+   * (`<key>.bin`), kept as
    * separate blobs so original binaries can expire or be evicted under quota
    * pressure without losing the extracted text needed for multi-turn chat and
    * replay.
    */
-  chatFiles: 'chat-files'
+  chatFiles: 'chat-files',
+  /**
+   * Content an evidence record refers to (system prompts, messages, tool
+   * definitions, tool arguments and results), stored once per chat under
+   * `<scope(chatId)>__<sha256>`.
+   */
+  chatEvidenceContent: 'chat-evidence-content',
+  /** The same for runs without a chat, under `<scope(runId)>__<sha256>`. */
+  runEvidenceContent: 'run-evidence-content'
+});
+
+/**
+ * Namespaces whose listings are by the first N `__`-separated segments of the
+ * key, and N for each. Applies to the documents and the blobs of a namespace
+ * of that name alike.
+ *
+ * A listing in these namespaces asks for one scope at a time — the files of
+ * one chat (`<scopeType>__<scopeId>__`), the artifacts of one run, the blobs of
+ * one project (`<projectId>__`) — and a provider may keep an index by that
+ * leading part of the key so such a listing does not have to look at every
+ * key of the namespace. Results are the same with or without it: a listing
+ * still returns exactly the keys starting with the prefix.
+ *
+ * The filesystem provider keeps that index (`.prefixes/<partition>/<key>`
+ * marker files, migration V250 built them for existing data). Changing a
+ * number here, or adding a namespace that already holds data, needs a new
+ * migration that builds the markers for what is stored, or scoped listings
+ * miss it.
+ *
+ * @type {Readonly<Record<string, number>>}
+ */
+export const KEY_PREFIX_SEGMENTS = Object.freeze({
+  /** `<scopeType>__<scopeId>__<fileId>`, blobs `<…>.txt` / `.pages` / `.bin`. */
+  'chat-files': 2,
+  /** `<scopeType>__<scopeId>__<artifactId>`, documents and blobs. */
+  artifacts: 2,
+  /** Blobs `<projectId>__<itemId>__<versionId>`, listed per project and per item. */
+  'project-files': 1,
+  /** `<scope(chatId)>__<scope(messageId)>`: the evidence documents of one chat. */
+  'chat-evidence': 1,
+  /** `<scope(chatId)>__<sha256>`: the evidence content of one chat. */
+  'chat-evidence-content': 1,
+  /** `<scope(runId)>__<sha256>`: the evidence content of one run. */
+  'run-evidence-content': 1
 });
 
 /**

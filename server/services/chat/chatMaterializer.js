@@ -23,6 +23,8 @@ import { boundStoredProposals } from '../scheduler/tasks/proposals.js';
 import { generatedFileKind, generatedFilesOf } from '../../../shared/generatedFiles.js';
 import { boundStoredActivity, takeRunActivity } from './runActivity.js';
 import { insertSupportMarkers } from '../../../shared/sources/index.js';
+import { recordChatEvidence } from './evidenceRecord.js';
+import { inBackground } from './ChatEvidenceRepository.js';
 
 /** Connect cards kept per stored answer. */
 const MAX_STORED_AUTH_PROMPTS = 10;
@@ -583,6 +585,8 @@ export async function admitTurnProjects({ repository, chatId, projects = null, p
  * @param {string} [params.supersedeMessageId] - store the answer in place of this
  *   stored message of the run rather than after the run's question; nothing is
  *   stored when it is gone (`chatRecovery.js`, a resumed workflow's result)
+ * @param {Object} [params.runLog] - the run journal the evidence record is built
+ *   from, in the background after the answer is stored; the shared RunLog by default
  * @returns {Promise<Object|null>} the stored message, or null when nothing was written
  */
 export async function materializeAssistantTurn(params) {
@@ -607,7 +611,8 @@ export async function settleAssistantTurn({
   clientConnected,
   message = null,
   onlyIfUnanswered = false,
-  supersedeMessageId = null
+  supersedeMessageId = null,
+  runLog = null
 }) {
   const outcome = { message: null, skipped: false, released: false };
   if (!repository) return outcome;
@@ -738,6 +743,14 @@ export async function settleAssistantTurn({
             ? { supersedeMessageId }
             : { insertAfterRunId: runId, unlessAnswered: onlyIfUnanswered }
         );
+        // The chat is gone: whatever evidence a racing write left goes too.
+        if (appended === null && typeof repository.evidenceStore === 'function') {
+          void inBackground(() => repository.evidenceStore().deleteChat(chatId), {
+            component: COMPONENT,
+            operation: 'delete evidence of a deleted chat',
+            chatId
+          });
+        }
         // Somebody else answered the run first; theirs is the answer.
         if (appended?.skipped) {
           outcome.skipped = true;
@@ -761,6 +774,19 @@ export async function settleAssistantTurn({
       hasUnseenActivity: !clientConnected
     });
     outcome.released = released === true;
+    // The evidence record, off the answer path: after the answer is stored and
+    // the run released, never awaited (#3687).
+    if (appended?.message?.id) {
+      void recordChatEvidence({
+        repository,
+        chatId,
+        runId,
+        messageId: appended.message.id,
+        summary,
+        artifacts,
+        runLog
+      });
+    }
     if (!chat) {
       logger.error('Chat assistant turn not materialized: no chat document', {
         component: COMPONENT,

@@ -19,7 +19,7 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   **N results** entry with the sources' icons, in one row with the chip saying what the answer is
   based on (**Web**, **Project · Web**). *Results*, not *sources*: it counts everything found,
   cited or not. It opens the **Sources** panel, a side panel on desktop and a bottom sheet on phones.
-  How the answer searched stays above it (**Searched the web · 1 search · 10 results**). The
+  How the answer searched stays above it, one segment per place it looked (**Web 10 results · 3 opened · via Brave Search**, **Project no results**); each source card names its origin. The
   entry appears once the answer is complete; while it streams, the badges in the text open the
   panel, and closing the panel returns focus to whatever opened it.
 - **The basis chip** is one outlined button with a chevron, in two segments. The first says
@@ -49,8 +49,12 @@ Design and background: `concepts/unified-sources/2026-09-30 Answer Sources.md`, 
   [Web Tools → Sources and Citations](web-tools.md#sources-and-citations).
 - The panel lists what the answer cites under **Cited in this answer**, numbered like its inline
   badges, and everything else it found under **Also considered**. Web pages, documents and records
-  share one card design: the site or system they come from, the title, an excerpt or cited passage,
-  the date, and whether the page or document was read.
+  share one card design: the **origin** as a word (**Web**, **Project**, **iFinder**, **Document
+  sources**, or the connected system's own name such as **Jira**) followed by the site or system,
+  the title, an excerpt or cited passage, the date, and whether the page or document was read. The
+  origin is decided by the server (`Source.origin`); a source stored without one shows no origin
+  word. With two or more origins the panel header adds a summary of card counts (**Web 5 ·
+  Project 3**).
 - An answer that cites none of its sources (a model that writes no links) lists what was read for
   it instead, at its end and at the top of the panel: **Read for this answer**, the pages and
   documents whose content went to the model (`read.ok`, which the producer sets on the server).
@@ -93,6 +97,7 @@ A source (`shared/sources/source.js`):
 | `read` | `{ ok, words?, truncated? }`: a read of the page or document |
 | `cited` | the provider reports that the answer relies on it |
 | `markers[]` | provider inline markers pointing at it (iAssistant `r:3`; passages carry `s:7`) |
+| `origin` | `{ kind, label? }`: the system it was found in, in the footer's vocabulary (`web`, `project`, `ifinder`, `integration` with the integration's `label`), decided by the server from the call that found it, never from `provider`; the first sighting wins |
 | `private` | found with the user's own permissions or network; a share never carries it |
 
 An answer's sources are `{ items, queries, scopes? }`: the sources, merged by `id`, in the order
