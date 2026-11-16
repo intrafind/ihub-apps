@@ -1,6 +1,6 @@
 ---
 name: pr-handling-guidelines
-description: Conventions for authoring GitHub pull requests and review comments (originally the RAG team's). Use it before `gh pr create` or any other tool that opens a PR, when editing a PR body, and before posting a review comment, for any PR you author. Covers title/body conventions, code-anchored comments (pulls/comments API), the AI-disclosure preamble and footer, tone, and draft-before-post.
+description: Conventions for authoring GitHub pull requests and review comments. Use it before `gh pr create` or any other tool that opens a PR, when editing a PR body, and before posting a review comment, for any PR you author. Covers title/body conventions, code-anchored comments (pulls/comments API), the AI-disclosure preamble and footer, tone, and draft-before-post.
 ---
 
 # PR Guidelines
