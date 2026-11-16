@@ -205,6 +205,14 @@ export default function DocsSearch() {
                   aria-selected={index === activeIndex}
                   onMouseDown={event => event.preventDefault()}
                   onClick={() => pick(result)}
+                  // The combobox input drives the list with the arrow keys; an option that does
+                  // get focus (assistive technology) opens on Enter or Space like a click.
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      pick(result);
+                    }
+                  }}
                   onMouseMove={() => setActiveIndex(index)}
                   className={`cursor-pointer px-4 py-2.5 ${
                     index === activeIndex ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''
