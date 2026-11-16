@@ -608,8 +608,8 @@
       "ledger": {
         "advanced": "Advanced",
         "cleanupEnabled": "Delete old runs daily",
-        "cleanupEnabledHelp": "When off, ledger runs are kept regardless of the retention below.",
-        "description": "An append-only event log per run (chats, workflows, agents). Chats are rebuilt from it, so it records whenever chat storage is available.",
+        "cleanupEnabledHelp": "When off, run summaries are kept regardless of the retention below. The events of finished chat and API runs are deleted 15 minutes after the run either way.",
+        "description": "An append-only event log per run (chats, workflows, agents). Chats are rebuilt from it, so it records whenever chat storage is available. It is the journal of active runs: the events of a finished chat or API run are deleted 15 minutes after it ended, once its answer is stored; what the run did stays in the evidence record. Workflow and agent runs keep their events.",
         "enabled": "Record the run ledger",
         "enabledHelp": "Also requires the Run Ledger feature.",
         "flushIntervalMs": "Flush interval (ms)",
@@ -621,7 +621,7 @@
         "identityModeWarning": "Switching to or from pseudonymized changes the id chats are listed under: chats stored before the switch no longer appear in their owners' history lists.",
         "identityPseudonymized": "Pseudonymized — a stable hash instead of the user id",
         "retentionDays": "Retention (days)",
-        "retentionDaysHelp": "Runs older than this are deleted by the daily cleanup. 0 keeps runs forever.",
+        "retentionDaysHelp": "Run summaries (and the events of workflow and agent runs) older than this are deleted by the daily cleanup. 0 keeps them forever.",
         "spillThresholdBytes": "Spill threshold (bytes)",
         "spillThresholdBytesHelp": "Event payloads larger than this are stored as a separate file instead of inline.",
         "title": "Run ledger"
@@ -709,7 +709,7 @@
         "title": "Evidence record",
         "description": "For every stored answer, a record of what went in and what came out: the system prompt, the messages and tool definitions of every model call, every tool call with its arguments and result, and the model settings. It lives and is deleted with the chat. The owner and admins can read it; a shared chat does not share it.",
         "enabled": "Keep an evidence record",
-        "enabledHelp": "Off stops new records; records already stored stay until their chat is deleted or retention removes them, and the run ledger is unchanged. Records are built from the run ledger, which stored chats keep on. Turning it on applies to answers stored from then on."
+        "enabledHelp": "Off stops new records; records already stored stay until their chat is deleted or retention removes them. Records are built from the run ledger, which stored chats keep on. The ledger deletes the events of a finished chat or API run 15 minutes after it ended whether this is on or not, so with it off nothing of what went into an answer is kept. Turning it on applies to answers stored from then on."
       },
       "sharing": {
         "title": "Chat sharing",
@@ -10500,6 +10500,7 @@
     "SOURCE_INVALID": "The file reference is not valid.",
     "SOURCE_FAILED": "The file could not be fetched from the connected system.",
     "EVIDENCE_NOT_RECORDED": "No evidence record was kept for this answer.",
+    "JOURNAL_NOT_KEPT": "The events of this run are no longer kept. Read its evidence record instead.",
     "MCP_AUTH_REFRESH_FAILED": "The sign-in to the MCP server could not be refreshed. Try again in a moment.",
     "APPROVAL_REQUIRED_NO_USER": "This call needs a person's approval, and this client cannot ask for it.",
     "APPROVAL_ALREADY_ANSWERED": "This approval was already answered.",

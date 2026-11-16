@@ -876,3 +876,15 @@ To roll it out gradually, set `aiAcknowledgement.enabled` to `false` (Admin → 
 chat endpoint themselves with a user session must handle the `428` (confirm through
 `POST /api/eu-ai-act/acknowledgements/me`, then retry).
 
+## Run Events of Finished Chat and API Runs Are No Longer Kept
+
+`GET /api/runs/{runId}/events` now answers `404` with code `JOURNAL_NOT_KEPT` for a chat turn or
+a `/v1/chat/completions` / Responses run that ended more than 15 minutes ago: the run's event
+journal is deleted then, where it used to be kept for `runLog.retentionDays` (90 days). The run
+summary (`GET /api/runs/{runId}`, the admin run list) stays. Reloading a chat during a running
+answer still reattaches, and workflow and agent runs keep their events as before.
+
+**Before upgrading:** scripts or integrations that read the events of finished runs use the
+evidence endpoints instead: `GET /api/chats/{chatId}/evidence/{messageId}` for a chat answer and
+`GET /api/runs/{runId}/evidence` for a run without a chat. Copy any journals you need to keep from
+`contents/data/logs/run/` first — the first start deletes the finished ones.

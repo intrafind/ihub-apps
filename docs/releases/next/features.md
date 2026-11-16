@@ -20,7 +20,14 @@ against its upload quota (`uploads.quotas.maxChatBytes`); an answer is never ref
 The record is written in the background after the answer is stored and is built from the run ledger.
 Admins can switch it off on **Admin → Chat History → Evidence record** (`chats.evidence.enabled`,
 default on; `chats.evidence.maxContentBytes` caps one item at 10 MB). Off stops new records; existing records
-stay until their chat is deleted or retention removes them, and the run ledger is unchanged. See [Chat Evidence Record](../../chat-evidence.md).
+stay until their chat is deleted or retention removes them. See [Chat Evidence Record](../../chat-evidence.md).
+
+- **Less disk for the run ledger:** the journal of a finished chat turn or `/v1` / Responses run
+  (`contents/data/logs/run/`) is deleted 15 minutes after the run ended; its run summary stays for
+  `runLog.retentionDays`. The first start after the upgrade removes the backlog of such journals.
+  Workflow and agent runs keep theirs. This happens also with the evidence record switched off,
+  in which case nothing of what went into an answer is kept. See
+  [Run Ledger](../../run-ledger.md#journals-of-finished-runs).
 
 ## Metrics for the Project Working Set, the Index Cache and Extraction
 

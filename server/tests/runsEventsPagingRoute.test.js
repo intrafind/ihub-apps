@@ -34,6 +34,8 @@ jest.spyOn(runLog, 'readEvents').mockImplementation(async (runId, { afterSeq, li
   readCalls.push({ afterSeq, limit });
   return ledger.filter(e => e.seq > afterSeq).slice(0, limit);
 });
+// No storage provider here: no run's journal was deleted.
+const journalDeleted = jest.spyOn(runLog, 'isJournalDeleted').mockResolvedValue(false);
 jest.unstable_mockModule('../utils/logger.js', () => ({
   default: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }
 }));
@@ -75,6 +77,14 @@ describe('run ledger events: cursor paging', () => {
     readCalls.length = 0;
     await request(app).get('/api/runs/run1/events?limit=99999').expect(200);
     expect(readCalls[0].limit).toBe(5000);
+  });
+
+  it('answers 404 JOURNAL_NOT_KEPT for a run whose journal was deleted', async () => {
+    journalDeleted.mockResolvedValueOnce(true);
+    jest.spyOn(runLog, 'readEvents').mockResolvedValueOnce([]);
+    const res = await request(app).get('/api/runs/run1/events?view=sse').expect(404);
+    expect(res.body.code).toBe('JOURNAL_NOT_KEPT');
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
   });
 
   it('refuses a cursor it did not issue with INVALID_CURSOR', async () => {
