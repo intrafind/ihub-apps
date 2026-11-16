@@ -116,6 +116,33 @@ const showMermaidButtonFeedback = (btn, message, colorClass, iconType) => {
   }, 2000);
 };
 
+/** Tallest a diagram gets inline, as a share of the viewport; "Full" shows it all. */
+const MAX_DIAGRAM_VIEWPORT_SHARE = 0.7;
+const MIN_DIAGRAM_HEIGHT = 120;
+
+/**
+ * The inline height of a rendered diagram: its viewBox scaled to the width of the host, capped
+ * so a tall flowchart does not take the whole page (pan-zoom and "Full" show the rest).
+ *
+ * @param {SVGSVGElement} svg - before its width/height attributes are removed
+ * @param {HTMLElement} host
+ * @returns {number} pixels
+ */
+export function diagramHeight(svg, host) {
+  const box = svg.viewBox?.baseVal;
+  const naturalWidth = box?.width || parseFloat(svg.getAttribute('width')) || 0;
+  const naturalHeight = box?.height || parseFloat(svg.getAttribute('height')) || 0;
+  const hostWidth = host?.clientWidth || naturalWidth;
+  const viewport = typeof window !== 'undefined' ? window.innerHeight : 800;
+  const scaled =
+    naturalWidth > 0 && naturalHeight > 0
+      ? (naturalHeight * Math.min(hostWidth, naturalWidth)) / naturalWidth
+      : 400;
+  return Math.round(
+    Math.max(MIN_DIAGRAM_HEIGHT, Math.min(scaled, viewport * MAX_DIAGRAM_VIEWPORT_SHARE))
+  );
+}
+
 export const useMermaidRenderer = ({ t }) => {
   useEffect(() => {
     let mermaid;
@@ -346,10 +373,13 @@ export const useMermaidRenderer = ({ t }) => {
           // Make SVG responsive and initialize pan-zoom
           const svgElement = svgHost.querySelector('svg');
           if (svgElement) {
-            // Simple, reliable width handling
+            // Full width, and a height from the diagram's own aspect ratio. Without the
+            // width/height attributes `height: auto` falls back to the 150px default of a
+            // replaced element once svg-pan-zoom takes over the viewBox, which cut every
+            // diagram off at 150px.
             svgElement.style.width = '100%';
-            svgElement.style.height = 'auto';
             svgElement.style.maxWidth = 'none';
+            svgElement.style.height = `${diagramHeight(svgElement, svgHost)}px`;
 
             // Remove width/height attributes to prevent conflicts
             svgElement.removeAttribute('width');

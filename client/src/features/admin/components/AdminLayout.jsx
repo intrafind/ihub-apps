@@ -5,6 +5,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminKeyboardShortcuts } from '../hooks/useAdminKeyboardShortcuts';
+import useDarkMode from '../../../hooks/useDarkMode';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -49,6 +50,8 @@ function AdminLayoutInner() {
   const location = useLocation();
   const { user } = useAuth();
   const mainRef = useRef(null);
+  // Applies the saved light/dark preference; the admin area has no theme toggle that would.
+  useDarkMode();
   const { showCheatsheet, setShowCheatsheet } = useAdminKeyboardShortcuts();
 
   const adminPages = platformConfig?.admin?.pages || {};

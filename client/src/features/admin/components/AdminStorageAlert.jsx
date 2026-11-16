@@ -101,7 +101,7 @@ export default function AdminStorageAlert({ enabled = true, linkVisible = true, 
         }`}
       >
         <ExclamationTriangleIcon className="w-5 h-5 shrink-0" aria-hidden="true" />
-        <p className="text-sm flex-1 min-w-0">
+        <p className="text-sm min-w-0 flex-[1_1_16rem]">
           {critical
             ? t(
                 'admin.storageAlert.critical',

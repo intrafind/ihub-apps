@@ -6774,7 +6774,20 @@
       "loadingPage": "Seite wird geladen...",
       "notFound": "Diese Dokumentationsseite gibt es in dieser Version nicht.",
       "loadError": "Die Dokumentationsseite konnte nicht geladen werden",
-      "backHome": "Zur Startseite der Dokumentation"
+      "backHome": "Zur Startseite der Dokumentation",
+      "contentsShort": "Inhalt",
+      "breadcrumb": "Brotkrumen-Navigation",
+      "onThisPage": "Auf dieser Seite",
+      "previous": "Zurück",
+      "next": "Weiter",
+      "pagination": "Vorherige und nächste Seite",
+      "browse": "Alle Themen",
+      "morePages": "+{{count}} weitere",
+      "openSettings": "In der Administration öffnen",
+      "linkToSection": "Link zu diesem Abschnitt",
+      "resultCount": "{{count}} Treffer",
+      "collapseAll": "Alle zuklappen",
+      "expandAll": "Alle aufklappen"
     },
     "aiDisclosure": {
       "title": "KI-Hinweis",

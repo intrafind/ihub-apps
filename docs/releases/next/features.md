@@ -791,8 +791,17 @@ Admins can now read the iHub Apps documentation inside the admin UI under **Admi
 (`/admin/docs`). It is the documentation that ships with the installed version, so it matches what
 is running — also in the Docker image, which did not include the documentation before.
 
+- **Reads like a documentation site.** The contents are grouped by task (Get started, Models and
+  providers, Connect your systems, Deploy and operate, …) with developer documentation in its own
+  section. They fill the height of the window, collapse per section and keep the open page in
+  view; on a phone they open as a drawer. Each page has a breadcrumb, a short description,
+  "On this page" on wide screens, previous and next links, and a link to its admin page where there
+  is one. Notes and warnings show as callouts, tables in a frame, code with syntax highlighting.
 - **Search** finds every section that contains all the words you type and opens the page at that
-  section.
+  section. It stays at the top of the page while you read: press `/` to search, the arrow keys to
+  pick a result.
+- **Back and Forward return to where you were reading**, links to a heading on the same page stay
+  in the documentation, and a page always opens at its title.
 - **Links in What's New work.** Links in the release notes pointed to addresses such as
   `/integrations.md#…` and ended on an error page; they now open the documentation page at the
   linked heading, and links to another release's notes open that release in What's New.
