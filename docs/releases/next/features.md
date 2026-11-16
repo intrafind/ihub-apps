@@ -2112,12 +2112,15 @@ Chats stored before this release show their activity without origin words (for e
 
 Every card in the Sources panel now starts with where the source comes from, as a word: **Web**,
 **Project**, **iFinder**, **Document sources**, or the connected system's own name (**Jira**). When
-an answer used more than one origin, the panel header adds a summary such as **Web 5 · Project 3**.
-The words are the ones the answer's footer and the activity line use, so the three always agree. An
-iFinder search profile now has its own glyph instead of the Project folder, and the filter buttons
-in the panel have a visible border.
+an answer used more than one origin, a row of filter pills (**All 8**, **Web 5**, **Project 3**)
+narrows every list in the panel to one origin; **All** shows everything again. With several iFinder
+search profiles, the profiles are a second row under the origin row. The words are the ones the
+answer's footer and the activity line use, so the three always agree. An iFinder search profile now
+has its own glyph instead of the Project folder, and the filter buttons in the panel have a visible
+border.
 
-Sources of chats stored before this release show no origin word: nothing is guessed for them.
+Sources of chats stored before this release show no origin word and appear under **All** only:
+nothing is guessed for them.
 
 ## Usage-Limit Checks Cost Less With Many Users
 
@@ -2162,3 +2165,19 @@ much less time reading the data directory.
 
 Downgrading to an earlier release and upgrading again leaves the files written in between out of
 the new index; [Storage](../../storage.md#the-key-prefix-index) describes how to rebuild it.
+
+## Metrics for Where Answers Come From
+
+When telemetry is on, the server now counts where answers get their information, so admins can see
+whether projects, the web or connected systems carry the load and where searches come back empty.
+
+- `ihub.tool.calls` counts searches and page or document reads by where they looked (web, project,
+  iFinder, iAssistant, a connected system) and what they came to: results, empty or error. A search
+  counts as empty only when the server knows it found nothing.
+- `ihub.answer.basis` counts answers by how many kinds of source they rest on.
+- `ihub.answer.origin.mismatch` counts answers whose footer and Sources panel would disagree; it is
+  expected to stay at 0.
+- `ihub.source.actions` counts opens of a source document and its details through an integration.
+
+The labels come from small fixed sets, so the metrics add a handful of series, never one per chat or
+tool. See [Telemetry](../../telemetry.md).

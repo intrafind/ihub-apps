@@ -974,25 +974,92 @@ describe('where each source comes from (#3668)', () => {
     expect(card(dialog, web.title).querySelector('.truncate')).toBeNull();
   });
 
-  test('two or more origins get a summary list of card counts; one origin gets none', () => {
+  const hrDoc = {
+    ...ifinderDoc,
+    id: 'ifinder:d2',
+    title: 'Policy B',
+    ref: { id: 'd2', scope: 'hr' },
+    scopeName: 'HR policies'
+  };
+  const originFilter = dialog => within(dialog).getByRole('group', { name: 'Filter by origin' });
+
+  test('two or more origins get filter pills with their card counts; one origin gets none', () => {
     const dialog = open([web, webTwo, projectDoc, ifinderDoc]);
-    const summary = within(dialog).getByRole('list', { name: 'sources.originSummary' });
-    expect(
-      within(summary)
-        .getAllByRole('listitem')
-        .map(item => item.textContent)
-    ).toEqual([
-      'chatMessage.answerBasis.kind.web 2',
-      '·chatMessage.answerBasis.kind.project 1',
-      '·chatMessage.answerBasis.kind.ifinder 1'
+    const pills = within(originFilter(dialog)).getAllByRole('button');
+    expect(pills.map(pill => pill.textContent)).toEqual([
+      'All4',
+      'chatMessage.answerBasis.kind.web2',
+      'chatMessage.answerBasis.kind.project1',
+      'chatMessage.answerBasis.kind.ifinder1'
     ]);
-    // The dots are decoration; the list items are text, not buttons.
-    expect(within(summary).queryByRole('button')).toBeNull();
+    expect(pills.map(pill => pill.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'false',
+      'false',
+      'false'
+    ]);
+    // The header no longer carries a plain-text copy of the same counts.
+    expect(within(dialog).queryByRole('list', { name: 'sources.originSummary' })).toBeNull();
   });
 
-  test('one origin gets no summary: the cards say it already', () => {
+  test('one origin gets no filter: the cards say it already', () => {
     const dialog = open([web, webTwo]);
-    expect(within(dialog).queryByRole('list', { name: 'sources.originSummary' })).toBeNull();
+    expect(within(dialog).queryByRole('group', { name: 'Filter by origin' })).toBeNull();
+  });
+
+  test('a pill narrows every list to that origin, and All brings the rest back', () => {
+    const dialog = open([web, webTwo, projectDoc, ifinderDoc]);
+    const filter = originFilter(dialog);
+    fireEvent.click(within(filter).getByRole('button', { name: /answerBasis.kind.project/ }));
+    expect(
+      within(filter).getByRole('button', { name: /answerBasis.kind.project/ })
+    ).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dialog).getByText('Project brief')).toBeVisible();
+    expect(within(dialog).queryByText(web.title)).toBeNull();
+    expect(within(dialog).queryByText('Contract A')).toBeNull();
+    // The other origins stay reachable in the same row.
+    expect(within(filter).getAllByRole('button')).toHaveLength(4);
+
+    fireEvent.click(within(filter).getByRole('button', { name: /All/ }));
+    expect(within(dialog).getByText(web.title)).toBeVisible();
+    expect(within(dialog).getByText('Contract A')).toBeVisible();
+  });
+
+  test('a source without an origin shows under All only: nothing is guessed from its provider', () => {
+    const dialog = open([web, projectDoc, noOrigin]);
+    expect(within(dialog).getByText('Old page')).toBeVisible();
+    fireEvent.click(
+      within(originFilter(dialog)).getByRole('button', { name: /answerBasis.kind.web/ })
+    );
+    expect(within(dialog).queryByText('Old page')).toBeNull();
+  });
+
+  test('the search-profile pills appear under the iFinder pill, not beside the origins', () => {
+    const dialog = open([web, ifinderDoc, hrDoc]);
+    // All origins: one row. The profiles are a second level.
+    expect(
+      within(dialog).queryByRole('group', { name: 'Filter by where the sources were found' })
+    ).toBeNull();
+    fireEvent.click(
+      within(originFilter(dialog)).getByRole('button', { name: /answerBasis.kind.ifinder/ })
+    );
+    const profiles = within(dialog).getByRole('group', {
+      name: 'Filter by where the sources were found'
+    });
+    expect(within(profiles).getByRole('button', { name: /Contracts/ })).toBeVisible();
+    // The origin row stays, so there is a way back to the web.
+    expect(within(originFilter(dialog)).getAllByRole('button')).toHaveLength(3);
+    fireEvent.click(within(profiles).getByRole('button', { name: /HR policies/ }));
+    expect(within(dialog).getByText('Policy B')).toBeVisible();
+    expect(within(dialog).queryByText('Contract A')).toBeNull();
+  });
+
+  test('an answer of one origin with several profiles keeps the profile pills as before', () => {
+    const dialog = open([ifinderDoc, hrDoc]);
+    expect(within(dialog).queryByRole('group', { name: 'Filter by origin' })).toBeNull();
+    expect(
+      within(dialog).getByRole('group', { name: 'Filter by where the sources were found' })
+    ).toBeVisible();
   });
 
   test('connected systems count by their own label, sources without origin are not counted', () => {

@@ -110,6 +110,25 @@ export function originNounOf(t, origin) {
 }
 
 /**
+ * The key an origin is filtered by: its kind, and for a connected system its
+ * own label too, so two systems are two pills. Empty for a source that names
+ * no origin.
+ *
+ * @param {Object} source
+ * @returns {string}
+ */
+export function originKeyOf(source) {
+  const origin = source?.origin;
+  if (!origin?.kind) return '';
+  return origin.kind === 'integration' ? `integration:${origin.label || ''}` : origin.kind;
+}
+
+/** Whether a source belongs to the origin the lists are narrowed to (null: all of them). */
+export function matchesOrigin(source, originKey) {
+  return !originKey || originKeyOf(source) === originKey;
+}
+
+/**
  * How many cards each origin holds, in the order the origins first appear:
  * `Web 5 · Project 3`. Connected systems count by their own label. Sources
  * without an origin are not counted.
@@ -123,7 +142,7 @@ export function originSummaryOf(t, sources) {
   for (const source of sources || []) {
     const origin = source?.origin;
     if (!origin?.kind) continue;
-    const key = origin.kind === 'integration' ? `integration:${origin.label || ''}` : origin.kind;
+    const key = originKeyOf(source);
     const known = groups.get(key);
     if (known) known.count += 1;
     else groups.set(key, { key, noun: originNounOf(t, origin), count: 1 });

@@ -49,6 +49,7 @@ import {
   carriedBasis,
   settleKnowledgeScope
 } from './answerBasis.js';
+import { recordAnswerOriginMetrics } from './answerOriginMetrics.js';
 import {
   approvalSeam,
   imageLiftSeam,
@@ -1311,8 +1312,13 @@ class ChatService {
     const provenanceOf = () => (summary.provenance ? { provenance: summary.provenance } : {});
     // What the answer is based on, from the sources the turn used and the
     // connected systems that informed it: the kinds the footer's chip shows.
-    const answerBasisFor = (sources, { byModel = true } = {}) =>
-      answerBasisOf({ knowledgeSources: sources, integrations, byModel });
+    const answerBasisFor = (sources, { byModel = true } = {}) => {
+      const basis = answerBasisOf({ knowledgeSources: sources, integrations, byModel });
+      // Counted once per answer: how many kinds it names, and whether the sources
+      // name an origin the basis leaves out.
+      recordAnswerOriginMetrics(basis, result?.sources);
+      return basis;
+    };
     // The knowledge scope is reported when the turn starts, with what went into
     // the prompt. A project a search of the turn then returned contributed too:
     // said again, with that settled, just before the turn ends.
