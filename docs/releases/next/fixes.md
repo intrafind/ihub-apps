@@ -800,3 +800,13 @@ Editing the site title under **UI Customization → Content** failed with an err
 change was lost: the edit replaced the whole configuration in the form, so the save arrived without its
 header and footer. Every tab now changes one section of the form, the form no longer reloads over your
 edits after a save, and the page refuses to send a configuration the server would reject.
+
+## Placeholders in User Names and Other User Data Are Kept as Written
+
+Placeholders such as `${…}` in user names, emails, OAuth client names, user prompts and skills promoted
+to global ones, and other user-provided data are now kept as written instead of being replaced by server
+configuration values. Placeholders are resolved only in configuration admins write (platform, UI, models,
+providers, apps, groups and the like).
+
+- Check `users.json` for names or emails whose placeholders were replaced before the upgrade; the upgrade
+  does not restore those records.
