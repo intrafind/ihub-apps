@@ -15,6 +15,7 @@
  * @module services/sources/toolCallScope
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { normalizePlace, MAX_PLACES } from '../../../shared/run/places.js';
 
 /** Most source inputs one call reports this way; the frame keeps fewer still. */
 const MAX_REPORTED = 100;
@@ -29,10 +30,12 @@ const scope = new AsyncLocalStorage();
  * @param {Object|null} [turn] - state shared by every tool call of one answer
  *   (`services/loop/AgentLoop.js` keeps one per run), for numbering what the
  *   answer cites ({@link allocatePassageMarkers})
+ * @param {Array|null} [places] - receives the places the call reports
+ *   ({@link reportToolCallPlaces})
  * @returns {*} what `fn` returns
  */
-export function runToolCallScope(reported, fn, turn = null) {
-  return scope.run({ reported, turn }, fn);
+export function runToolCallScope(reported, fn, turn = null, places = null) {
+  return scope.run({ reported, turn, places }, fn);
 }
 
 /**
@@ -45,6 +48,28 @@ export function reportToolCallSources(sources) {
   if (!reported || !Array.isArray(sources)) return;
   const room = MAX_REPORTED - reported.length;
   if (room > 0) reported.push(...sources.slice(0, room));
+}
+
+/**
+ * Report where the tool call in progress looked: the projects or the search
+ * profile, by name, with who owns them (`user` or `admin`, which decides
+ * whether a share may carry the name). Beside the result, so the model reads
+ * nothing more; outside a call, nothing. Bounded as `shared/run/places.js` says.
+ *
+ * @param {unknown} places - `[{ name, ownership? }]`
+ */
+export function reportToolCallPlaces(places) {
+  const reported = scope.getStore()?.places;
+  if (!reported || !Array.isArray(places)) return;
+  for (const raw of places) {
+    if (reported.length >= MAX_PLACES) return;
+    const place = normalizePlace(raw);
+    if (!place) continue;
+    if (reported.some(known => known.name === place.name && known.ownership === place.ownership)) {
+      continue;
+    }
+    reported.push(place);
+  }
 }
 
 /**

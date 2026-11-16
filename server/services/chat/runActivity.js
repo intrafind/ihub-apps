@@ -38,6 +38,7 @@ import {
   reduceRunEvents
 } from '../../../shared/run/runReducer.js';
 import { buildRunActivity } from '../../../shared/run/runActivity.js';
+import { normalizePlaces, sharablePlaces } from '../../../shared/run/places.js';
 import { observeEmittedEnvelopes, projectLedgerEvent } from '../loop/RunStream.js';
 import logger from '../../utils/logger.js';
 
@@ -379,6 +380,8 @@ function boundToolItem(item) {
       Number.isInteger(item.resultCount) && item.resultCount >= 0 ? item.resultCount : undefined,
     readOutcome:
       item.readOutcome === 'opened' || item.readOutcome === 'empty' ? item.readOutcome : undefined,
+    // Where the call looked (a project, a search profile), by name, with who owns it.
+    places: normalizePlaces(item.places).length ? normalizePlaces(item.places) : undefined,
     query: text(item.query),
     queries: item.queries ? strings(item.queries) : undefined,
     url: text(item.url),
@@ -574,11 +577,16 @@ export function shareableActivity(activity) {
               status: item?.status,
               scope: item?.scope,
               // The kind of system and what the call came to are the viewer's
-              // to read; the integration's name, a project's or a profile's
-              // never leave the owner's share (see the public web items above).
+              // to read; the integration's name and a user's project never leave
+              // the owner's share (see the public web items above). Only the
+              // names of what an admin owns (`places`) do.
               origin: item?.origin,
               resultCount: item?.resultCount,
               readOutcome: item?.readOutcome,
+              // What an admin owns may be named; a user's project is the owner's.
+              places: sharablePlaces(item?.places).length
+                ? sharablePlaces(item?.places)
+                : undefined,
               query: item?.query,
               queries: item?.queries,
               details: [],

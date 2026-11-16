@@ -36,6 +36,7 @@ import PromptService from '../../services/PromptService.js';
 import { startTestStorage } from '../helpers/testStorage.js';
 import { hashText } from '../../services/provenance/records.js';
 import { initializeMetrics } from '../../telemetry/metrics.js';
+import { reportToolCallPlaces } from '../../services/sources/toolCallScope.js';
 import { getProvenanceStore } from '../../services/provenance/ProvenanceStore.js';
 import { LLM_ERROR_CODES } from '../../services/loop/contracts/errors.js';
 import {
@@ -2222,4 +2223,25 @@ test('a search that returns an error too large to keep is still counted as an er
   await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
 
   assert.deepEqual(adds['ihub.tool.calls'], [{ 'tool.origin': 'web', 'tool.outcome': 'error' }]);
+});
+
+test('a search that reports the places it looked in sends them on tool/completed', async t => {
+  const chatId = newChatId('places');
+  const frames = captureFrames(t, chatId);
+  const { service } = makeService(
+    [toolTurn([{ name: 'webSearch', args: { query: 'berlin' } }]), textTurn('Sunny.')],
+    {
+      runTool: async () => {
+        reportToolCallPlaces([{ name: 'Project Alpha', ownership: 'user' }]);
+        return { results: [] };
+      }
+    }
+  );
+  await runTurn(service, { chatId, prep: makePrep({ tools: [webSearchTool] }) });
+
+  assert.deepEqual(frame(frames, TOOL_COMPLETED).data.places, [
+    { name: 'Project Alpha', ownership: 'user' }
+  ]);
+  // A call that reports none sends none.
+  assert.equal(frame(frames, TOOL_STARTED).data.places, undefined);
 });

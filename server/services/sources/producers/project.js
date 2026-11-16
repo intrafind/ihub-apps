@@ -61,6 +61,21 @@ export function projectSource(project, item, fields = {}) {
   };
 }
 
+/**
+ * A project as a place a call looked in: its name (the default language, else
+ * its id) and who owns it.
+ *
+ * @param {Object|null|undefined} project
+ * @returns {{name: string, ownership?: 'user'|'admin'}|null}
+ */
+export function projectPlace(project) {
+  if (!project?.id) return null;
+  const name = typeof project.name === 'string' ? project.name : project.name?.en || project.id;
+  const ownership =
+    project.ownership === 'user' || project.ownership === 'admin' ? project.ownership : undefined;
+  return ownership ? { name, ownership } : { name };
+}
+
 /** A tool result as an object: JSON text parsed, else null. */
 function parseResult(result) {
   if (typeof result !== 'string') return result;

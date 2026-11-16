@@ -23,8 +23,10 @@ import {
   sourcesAddedData,
   knowledgeScopeData,
   answerBasisSchema,
-  abortCauseSchema
+  abortCauseSchema,
+  placeSchema
 } from './runLogEvents.js';
+import { MAX_PLACES } from '../../../../shared/run/places.js';
 import { interactionSchema, interactionAnswerSchema } from './interaction.js';
 import { provenanceContractSchema } from '../../provenance/provenanceSchema.js';
 
@@ -208,6 +210,8 @@ export const toolCompletedData = z.object({
   resultCount: z.number().int().nonnegative().optional(),
   /** What a page or document read delivered: `opened` (text) or `empty` (completed, no text). */
   readOutcome: z.enum(['opened', 'empty']).optional(),
+  /** Where the call looked: the projects or the search profile, by name (`shared/run/places.js`). */
+  places: z.array(placeSchema).max(MAX_PLACES).optional(),
   /** MCP App view drawn from this call's full result. */
   mcpApp: mcpAppViewSchema.optional(),
   /**

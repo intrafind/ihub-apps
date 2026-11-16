@@ -1135,6 +1135,26 @@
               "readOutcome": {
                 "type": "string",
                 "enum": ["opened", "empty"]
+              },
+              "places": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "ownership": {
+                      "type": "string",
+                      "enum": ["user", "admin"]
+                    }
+                  },
+                  "required": ["name"],
+                  "additionalProperties": false
+                }
               }
             },
             "required": ["step", "callId", "toolId", "name", "resultPreview", "durationMs"],
@@ -5161,6 +5181,26 @@
               "readOutcome": {
                 "type": "string",
                 "enum": ["opened", "empty"]
+              },
+              "places": {
+                "maxItems": 10,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "ownership": {
+                      "type": "string",
+                      "enum": ["user", "admin"]
+                    }
+                  },
+                  "required": ["name"],
+                  "additionalProperties": false
+                }
               },
               "mcpApp": {
                 "type": "object",

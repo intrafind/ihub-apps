@@ -30,6 +30,7 @@ import iAssistantScopes, {
   scopeToConversationConfig
 } from '../services/integrations/scopes/iAssistantScopes.js';
 import iFinderTool, { zeroHitHint } from '../tools/iFinder.js';
+import { runToolCallScope } from '../services/sources/toolCallScope.js';
 import { applyIntegrationScopes } from '../services/chat/RequestBuilder.js';
 import { normalizeChatSettings } from '../services/chat/ChatRepository.js';
 import { stripReservedToolContext } from '../utils/toolCallContext.js';
@@ -387,6 +388,42 @@ describe('iFinder tools bound to the chat scope', () => {
       searchProfileName: 'Contracts',
       results: []
     });
+  });
+
+  it('reports the searched profile as a place of the call: an admin’s, by its name', async () => {
+    iFinderService.search = async params => ({ searchProfile: params.searchProfile, results: [] });
+    const placed = [];
+    const result = await runToolCallScope(
+      [],
+      () =>
+        iFinderTool.search({
+          query: 'x',
+          integrationScopes: { ifinder: 'contracts' },
+          user: USER,
+          chatId: 'chat-1',
+          appConfig: SEARCH_APP
+        }),
+      null,
+      placed
+    );
+    assert.deepEqual(placed, [{ name: 'Contracts', ownership: 'admin' }]);
+    // Beside the result: the model reads no more than before.
+    assert.equal(JSON.stringify(result).includes('ownership'), false);
+  });
+
+  it('names no place when the profile names cannot be read', async () => {
+    profilesAnswer = async () => {
+      throw Object.assign(new Error('forbidden'), { status: 403 });
+    };
+    iFinderService.search = async params => ({ searchProfile: params.searchProfile, results: [] });
+    const placed = [];
+    await runToolCallScope(
+      [],
+      () => iFinderTool.search({ query: 'x', user: USER, appConfig: SEARCH_APP }),
+      null,
+      placed
+    );
+    assert.deepEqual(placed, []);
   });
 
   it('leaves the result as it is when the profile names cannot be read', async () => {

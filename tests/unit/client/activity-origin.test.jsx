@@ -16,7 +16,10 @@ import ToolActivity from '../../../client/src/features/chat/components/ToolActiv
 import {
   headlineSegments,
   isOpened,
-  activeLabel
+  activeLabel,
+  searchRowPhrase,
+  openRowPhrase,
+  placeNamesOf
 } from '../../../client/src/features/chat/activityHeadline.js';
 import {
   createAnnouncerState,
@@ -547,5 +550,134 @@ describe('review findings', () => {
     // A write that works again makes storage the truth once more.
     fireEvent.click(screen.getByRole('switch'));
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', before);
+  });
+});
+
+describe('instance names on rows (#3668)', () => {
+  // A `t` that shows what it was asked for, parameters included.
+  const asked = (key, options) => `${key}|${JSON.stringify(options ?? {})}`;
+  const places = (...names) => names.map(name => ({ name, ownership: 'admin' }));
+
+  const projectSearch = placesOf => [
+    started(2, 'p1', 'knowledge_search', { ...project, args: { query: 'iFinder6' } }),
+    completed(3, 'p1', 'knowledge_search', {
+      resultCount: 2,
+      ...(placesOf ? { places: placesOf } : {})
+    })
+  ];
+
+  test('the reducer keeps the places the server sent with the call, bounded', () => {
+    const [row] = activityOf(projectSearch(places('Project Alpha'))).items;
+    expect(row.places).toEqual(places('Project Alpha'));
+    const [none] = activityOf(projectSearch(null)).items;
+    expect(none.places).toEqual([]);
+  });
+
+  test('a search row names the project it looked in, one or several', () => {
+    const [one] = activityOf(projectSearch(places('Project Alpha'))).items;
+    expect(searchRowPhrase(asked, one)).toBe(
+      'toolActivity.origin.project.rowSearchedNamed|{"name":"Project Alpha","count":1}'
+    );
+    const [two] = activityOf(projectSearch(places('Alpha', 'Beta'))).items;
+    expect(searchRowPhrase(asked, two)).toBe(
+      'toolActivity.origin.project.rowSearchedNamed|{"name":"Alpha, Beta","count":2}'
+    );
+  });
+
+  test('more than two names are cut to two and a count of the rest', () => {
+    const [many] = activityOf(projectSearch(places('A', 'B', 'C', 'D'))).items;
+    expect(placeNamesOf(asked, many)).toBe('toolActivity.placesMore|{"names":"A, B","count":2}');
+    const [two] = activityOf(projectSearch(places('A', 'B'))).items;
+    expect(placeNamesOf(asked, two)).toBe('A, B');
+    const [none] = activityOf(projectSearch(null)).items;
+    expect(placeNamesOf(asked, none)).toBe('');
+  });
+
+  test('a read row names the project of its document', () => {
+    const run = [
+      started(2, 'r1', 'knowledge_read', {
+        activityKind: 'fetch',
+        activityScope: 'documents',
+        activityOrigin: 'project',
+        args: { document: 'd1' }
+      }),
+      completed(3, 'r1', 'knowledge_read', {
+        readOutcome: 'opened',
+        places: places('Project Alpha')
+      })
+    ];
+    const [row] = activityOf(run).items;
+    expect(openRowPhrase(asked, row)).toBe(
+      'toolActivity.origin.project.rowOpenedNamed|{"name":"Project Alpha","count":1}'
+    );
+  });
+
+  test('an iFinder search names its profile', () => {
+    const run = [
+      started(2, 'i1', 'iFinder_search', {
+        activityKind: 'search',
+        activityScope: 'documents',
+        activityOrigin: 'ifinder',
+        args: { query: 'contract' }
+      }),
+      completed(3, 'i1', 'iFinder_search', { resultCount: 4, places: places('Contracts') })
+    ];
+    const [row] = activityOf(run).items;
+    expect(searchRowPhrase(asked, row)).toBe(
+      'toolActivity.origin.ifinder.rowSearchedNamed|{"name":"Contracts","count":1}'
+    );
+  });
+
+  test('a row without places, and an origin that has no named wording, read as before', () => {
+    const [plain] = activityOf(projectSearch(null)).items;
+    expect(searchRowPhrase(asked, plain)).toBe('toolActivity.origin.project.rowSearched|{}');
+    // A connected system is named by its integration, not by a place.
+    const run = [
+      started(2, 'j1', 'jira_find', {
+        activityKind: 'search',
+        activityOrigin: 'integration',
+        integration: 'Jira',
+        args: { query: 'login' }
+      }),
+      completed(3, 'j1', 'jira_find', { places: places('Whatever') })
+    ];
+    const [jira] = activityOf(run).items;
+    expect(searchRowPhrase(asked, jira)).not.toContain('Named');
+  });
+
+  test('a running row says nothing a name could not have been known for', () => {
+    const [running] = activityOf([
+      started(2, 'p1', 'knowledge_search', { ...project, args: { query: 'q' } })
+    ]).items;
+    expect(searchRowPhrase(asked, running)).toBe('toolActivity.origin.project.rowSearching|{}');
+  });
+
+  test('a long wording stays on the icon’s line: the phrase is capped at the row’s width', () => {
+    render(
+      <ToolActivity
+        activity={activityOf(projectSearch(places('Project Alpha', 'Beta', 'Gamma')))}
+        loading={false}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    const [row] = screen
+      .getAllByRole('listitem')
+      .filter(item => item.parentElement.tagName === 'OL');
+    const phrase = within(row).getByText(/rowSearchedNamed/);
+    // Without the cap a phrase wider than the line drops under the icon (320 px).
+    expect(phrase).toHaveClass('max-w-full');
+  });
+
+  test('the rendered row carries the named wording; the headline stays a type', () => {
+    render(
+      <ToolActivity activity={activityOf(projectSearch(places('Project Alpha')))} loading={false} />
+    );
+    // Collapsed: the origin noun and the count, no name.
+    expect(screen.getByRole('button', { expanded: false }).textContent).not.toContain('Alpha');
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+    const [row] = screen
+      .getAllByRole('listitem')
+      .filter(item => item.parentElement.tagName === 'OL');
+    expect(row.textContent).toContain('toolActivity.origin.project.rowSearchedNamed');
   });
 });

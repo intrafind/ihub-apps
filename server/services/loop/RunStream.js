@@ -598,7 +598,8 @@ export function projectLedgerEvent(ev) {
           ...(d.knowledgeSource ? { knowledgeSource: d.knowledgeSource } : {}),
           ...(d.activityOrigin ? { activityOrigin: d.activityOrigin } : {}),
           ...(Number.isInteger(d.resultCount) ? { resultCount: d.resultCount } : {}),
-          ...(d.readOutcome ? { readOutcome: d.readOutcome } : {})
+          ...(d.readOutcome ? { readOutcome: d.readOutcome } : {}),
+          ...(Array.isArray(d.places) && d.places.length ? { places: d.places } : {})
         })
       ];
     case RUN_LOG_EVENTS.SOURCES_ADDED:

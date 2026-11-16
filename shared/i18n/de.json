@@ -8495,6 +8495,7 @@
     "openingGeneric": "Öffnet…",
     "openingHost": "Öffnet {{host}}",
     "openedGeneric": "Geöffnet",
+    "placesMore": "{{names}} +{{count}} weitere",
     "originDocuments": "Dokumentquellen",
     "noResults": "keine Ergebnisse",
     "via": "über {{name}}",
@@ -8533,7 +8534,13 @@
         "opening": "Öffnet „{{title}}“",
         "rowOpening": "Öffnet Dokument im Projekt",
         "rowOpened": "Dokument im Projekt geöffnet",
-        "rowOpenedEmpty": "Dokument im Projekt lieferte keinen Text"
+        "rowOpenedEmpty": "Dokument im Projekt lieferte keinen Text",
+        "rowSearchedNamed_one": "Im Projekt {{name}} gesucht nach",
+        "rowSearchedNamed_other": "In den Projekten {{name}} gesucht nach",
+        "rowOpenedNamed_one": "Dokument im Projekt {{name}} geöffnet",
+        "rowOpenedNamed_other": "Dokument in den Projekten {{name}} geöffnet",
+        "rowOpenedEmptyNamed_one": "Dokument im Projekt {{name}} lieferte keinen Text",
+        "rowOpenedEmptyNamed_other": "Dokument in den Projekten {{name}} lieferte keinen Text"
       },
       "ifinder": {
         "searchingFor": "Durchsucht iFinder nach „{{query}}“",
@@ -8543,7 +8550,10 @@
         "opening": "Öffnet „{{title}}“",
         "rowOpening": "Öffnet Dokument in iFinder",
         "rowOpened": "Dokument in iFinder geöffnet",
-        "rowOpenedEmpty": "Dokument in iFinder lieferte keinen Text"
+        "rowOpenedEmpty": "Dokument in iFinder lieferte keinen Text",
+        "rowSearchedNamed": "In iFinder ({{name}}) gesucht nach",
+        "rowOpenedNamed": "Dokument in iFinder ({{name}}) geöffnet",
+        "rowOpenedEmptyNamed": "Dokument in iFinder ({{name}}) lieferte keinen Text"
       },
       "iassistant": {
         "searchingFor": "Durchsucht iAssistant nach „{{query}}“",
