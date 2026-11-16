@@ -250,6 +250,10 @@ EU AI Act records name the mark without anyone entering it model by model:
   you apply. On Anthropic a config that uses the alias (`claude-haiku-4-5`) is matched to the dated snapshot the
   listing names, and a model missing from the listing is never reported as gone.
 
+Models you added earlier do not change by themselves. The **EU AI Act** page flags a model whose provider declares a
+mark that the model does not carry, and links to **Sync with provider**, a new button in each model's editor (gateway,
+Google and Anthropic models). It opens the provider's sync dialog for that model only; nothing changes until you apply.
+
 iHub cannot detect either mark, so the records say the provider declared it. Each declaration points at the
 provider's own page and can be changed under **Admin → Models → Output marking**. The Gemini models of the
 iHub marketplace carry it too. See [Models](../../models.md#filled-in-on-import).

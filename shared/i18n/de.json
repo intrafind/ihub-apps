@@ -1585,6 +1585,7 @@
         "retry": "Erneut versuchen",
         "apply": "{{count}} übernehmen",
         "inSync": "Die Modelle stimmen mit dem Provider überein.",
+        "modelInSync": "Dieses Modell stimmt mit dem Provider überein.",
         "changed": "Beim Provider geändert",
         "changedHint": "Das Modell wird an den Provider angepasst.",
         "added": "Neu beim Provider",
@@ -1611,6 +1612,11 @@
       "ownTimeouts": "Setzt eigene Timeouts"
     },
     "models": {
+      "sync": {
+        "button": "Mit Provider abgleichen",
+        "hint": "Vergleicht dieses Modell mit dem, was der Provider jetzt listet (Kontextfenster, Bildeingabe, EU-KI-VO-Kennzeichnung) und bietet die Unterschiede an. Nichts ändert sich, bevor Sie übernehmen.",
+        "saveFirst": "Speichern Sie zuerst Ihre Änderungen: Der Abgleich ändert das gespeicherte Modell."
+      },
       "timeoutsHelp": "Leer lassen, um den Wert des Providers bzw. der Installation (Admin → Modelle → Provider) zu verwenden. 0 schaltet eine Grenze ab.",
       "title": "Modellverwaltung",
       "subtitle": "KI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
@@ -6820,6 +6826,7 @@
       "fix": {
         "openAdvanced": "Einstellungen öffnen",
         "openModel": "Modell öffnen",
+        "syncModel": "Mit Provider abgleichen",
         "openKeys": "Zu den Schlüsseln",
         "runSelfTest": "Selbsttest ausführen"
       },
@@ -6893,6 +6900,7 @@
       "check": {
         "title": "Konfigurationsprüfung",
         "description": "Grün bedeutet „wie vorgesehen konfiguriert“, nicht „rechtlich konform“. Es zeigt, was eingerichtet ist, nicht ob Ihre Nutzung rechtmäßig ist.",
+        "syncNote": "Früher angelegte Modelle folgen den Angaben ihres Providers nicht von selbst. Google und Anthropic geben an, welche Modelle ihre Ausgabe kennzeichnen: Nutzen Sie „Mit Provider abgleichen“ an einem Modell (Admin → Modelle) oder „Modelle abgleichen“ auf der Seite des Providers, um die Angabe zu prüfen und zu übernehmen. Mistral und andere erklären nichts.",
         "loadError": "Die Prüfungen konnten nicht geladen werden",
         "loading": "Prüfungen werden geladen",
         "checking": "Prüfe…",
@@ -6925,6 +6933,7 @@
           "markedByIhub": "{{model}}: von iHub gekennzeichnet.",
           "markedByProvider": "{{model}} ({{kind}}): Der Anbieter kennzeichnet die Ausgabe; Erklärung hinterlegt.",
           "statementMissing": "{{model}} ({{kind}}): vom Anbieter gekennzeichnet, aber keine Erklärung verknüpft.",
+          "markingAvailable": "{{model}} ({{kind}}): Der Provider erklärt eine Kennzeichnung für dieses Modell, das Modell gibt sie aber nicht an. Gleichen Sie mit dem Provider ab, um sie zu prüfen.",
           "notMarked": "{{model}} ({{kind}}): Die Ausgabe ist nicht gekennzeichnet. Das ist ein Hinweis, nichts wird blockiert."
         },
         "watermark": {

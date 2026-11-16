@@ -39,6 +39,7 @@ const NEW_RESOURCE_ID = 'new';
  * @returns {{
  *   data: any,
  *   setData: (updater: any) => void,
+ *   reload: () => Promise<void>,
  *   initialData: any,
  *   isDirty: boolean,
  *   loading: boolean,
@@ -171,9 +172,19 @@ export function useAdminResourceEditor({ resourceId, loadResource, makeDefault, 
     return result;
   }, [data, resourceId, markSaved]);
 
+  // Re-read the saved resource and make it the new baseline, dropping unsaved edits. For
+  // pages whose server side changed the stored resource behind the form's back (a model sync).
+  const reload = useCallback(async () => {
+    if (resourceId === NEW_RESOURCE_ID) return;
+    const loaded = await loadResourceRef.current(resourceId);
+    setData(loaded);
+    setInitialData(loaded);
+  }, [resourceId]);
+
   return {
     data,
     setData,
+    reload,
     initialData,
     isDirty,
     loading,

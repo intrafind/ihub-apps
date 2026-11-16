@@ -22,10 +22,16 @@ import {
   supportsPromptCaching
 } from '../../../../../shared/promptCaching.js';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../../../../shared/outputTokens.js';
-import { isCustomLlmProvider, providerEnvKeyName } from '../../../../../shared/llmProviders.js';
+import {
+  findModelProvider,
+  isCustomLlmProvider,
+  providerEnvKeyName,
+  supportsModelSync
+} from '../../../../../shared/llmProviders.js';
 import { apiTypeLabel } from '../utils/modelImport';
 import { TOOL_SUPPORT, TOOL_SUPPORT_VALUES } from '../../../../../shared/modelCapabilities.js';
 import EuAiActStateNote from './euAiAct/EuAiActStateNote';
+import GatewaySyncDialog from './GatewaySyncDialog';
 
 /** English fallbacks for the tool calling dropdown (`admin.models.toolSupport.*`). */
 const TOOL_SUPPORT_LABELS = {
@@ -249,6 +255,9 @@ function SamplingField({ id, label, value, error, placeholder, onChange, bounds 
  * @param {Function} props.onChange - Callback when data changes
  * @param {Object} props.errors - Validation errors object
  * @param {boolean} props.isNewModel - Whether this is a new model
+ * @param {boolean} [props.isDirty] - Unsaved edits: the model Sync (which writes the saved model) waits for a save
+ * @param {() => Promise<void>} [props.onSynced] - Reloads the saved model after a sync
+ * @param {boolean} [props.autoOpenSync] - Open the model Sync when the page opens (link from the EU AI Act page)
  */
 function ModelFormEditor({
   value: data,
@@ -256,7 +265,10 @@ function ModelFormEditor({
   onValidationChange,
   errors = {},
   isNewModel = false,
-  jsonSchema
+  jsonSchema,
+  isDirty = false,
+  onSynced,
+  autoOpenSync = false
 }) {
   const { t, i18n } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
@@ -341,6 +353,8 @@ function ModelFormEditor({
   // Custom LLM providers (e.g. a T-Systems LLM Hub entry) are offered next to
   // the API types: picking one links the model to it and takes its API type.
   const [customProviders, setCustomProviders] = useState([]);
+  const [allProviders, setAllProviders] = useState([]);
+  const [syncOpen, setSyncOpen] = useState(false);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -348,9 +362,13 @@ function ModelFormEditor({
         const response = await makeAdminApiCall('/admin/providers');
         if (cancelled) return;
         const list = Array.isArray(response?.data?.items) ? response.data.items : [];
+        setAllProviders(list);
         setCustomProviders(list.filter(isCustomLlmProvider));
       } catch {
-        if (!cancelled) setCustomProviders([]);
+        if (!cancelled) {
+          setAllProviders([]);
+          setCustomProviders([]);
+        }
       }
     })();
     return () => {
@@ -360,6 +378,13 @@ function ModelFormEditor({
   const linkedProvider = data.providerId
     ? customProviders.find(p => p.id === data.providerId)
     : null;
+  // "Sync with provider": the provider's own sync (a gateway, Google, Anthropic) scoped to this
+  // model. It reads and writes the saved model, so a new model has nothing to sync.
+  const syncProvider = isNewModel ? undefined : findModelProvider(data, allProviders);
+  const canSync = Boolean(syncProvider) && supportsModelSync(syncProvider);
+  // Opened by the button, or on arrival from the EU AI Act page (`?sync=1`) until closed once.
+  const [syncDismissed, setSyncDismissed] = useState(false);
+  const syncVisible = canSync && (syncOpen || (autoOpenSync && !syncDismissed && !isDirty));
 
   const handleProviderSelect = e => {
     const value = e.target.value;
@@ -739,6 +764,31 @@ function ModelFormEditor({
                         }
                       )}
                     </p>
+                  )}
+                  {canSync && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        data-testid="model-sync-button"
+                        onClick={() => setSyncOpen(true)}
+                        disabled={isDirty}
+                        className="inline-flex items-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-xs hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Icon name="refresh" className="mr-2 h-4 w-4" />
+                        {t('admin.models.sync.button', 'Sync with provider')}
+                      </button>
+                      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                        {isDirty
+                          ? t(
+                              'admin.models.sync.saveFirst',
+                              'Save your changes first: the sync updates the saved model.'
+                            )
+                          : t(
+                              'admin.models.sync.hint',
+                              'Compares this model with what the provider lists now (context window, image input, EU AI Act marking) and offers the differences. Nothing changes until you apply.'
+                            )}
+                      </p>
+                    </div>
                   )}
                 </div>
 
@@ -2160,6 +2210,17 @@ function ModelFormEditor({
           </div>
         </div>
       </div>
+      {syncVisible && (
+        <GatewaySyncDialog
+          providerId={syncProvider.id}
+          modelId={data.id}
+          onClose={() => {
+            setSyncOpen(false);
+            setSyncDismissed(true);
+          }}
+          onSynced={onSynced}
+        />
+      )}
     </FormValidationProvider>
   );
 }

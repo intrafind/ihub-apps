@@ -1130,6 +1130,7 @@
         "retry": "Try again",
         "apply": "Apply {{count}}",
         "inSync": "The models are in sync with the provider.",
+        "modelInSync": "This model is in sync with the provider.",
         "changed": "Changed at the provider",
         "changedHint": "The model is updated to match the provider.",
         "added": "New at the provider",
@@ -1156,6 +1157,11 @@
       "ownTimeouts": "Sets its own timeouts"
     },
     "models": {
+      "sync": {
+        "button": "Sync with provider",
+        "hint": "Compares this model with what the provider lists now (context window, image input, EU AI Act marking) and offers the differences. Nothing changes until you apply.",
+        "saveFirst": "Save your changes first: the sync updates the saved model."
+      },
       "timeoutsHelp": "Leave empty to use the provider’s value, else the installation’s (Admin → Models → Providers). 0 turns a ceiling off.",
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
@@ -6339,6 +6345,7 @@
       "fix": {
         "openAdvanced": "Open settings",
         "openModel": "Open model",
+        "syncModel": "Sync with provider",
         "openKeys": "Go to keys",
         "runSelfTest": "Run self-test"
       },
@@ -6413,6 +6420,7 @@
         "title": "Configuration check",
         "description": "Green means \"configured as designed\", not \"legally compliant\". It shows what is set up, not whether your use is lawful.",
         "loadError": "Could not load the checks",
+        "syncNote": "Models you added earlier do not follow what their provider declares by themselves. Google and Anthropic say which models mark their output: use \"Sync with provider\" on a model (Admin → Models) or \"Sync models\" on the provider's page to review and take it over. Mistral and others declare nothing.",
         "loading": "Loading checks",
         "checking": "Checking…",
         "recheck": "Check again",
@@ -6444,6 +6452,7 @@
           "markedByIhub": "{{model}}: marked by iHub.",
           "markedByProvider": "{{model}} ({{kind}}): the provider marks the output; statement on file.",
           "statementMissing": "{{model}} ({{kind}}): marked by the provider, but no statement is referenced.",
+          "markingAvailable": "{{model}} ({{kind}}): the provider declares a mark for this model, but the model does not say so. Sync with the provider to review it.",
           "notMarked": "{{model}} ({{kind}}): output is not marked. This is a hint, nothing is blocked."
         },
         "watermark": {

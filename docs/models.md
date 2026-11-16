@@ -444,6 +444,19 @@ alias (`claude-haiku-4-5`): an alias is matched to its snapshot, so that model i
 snapshot is not offered again as a new model. A model that is missing from an Anthropic listing is never reported as
 gone. Each applied item has its own result, so one failure does not stop the others.
 
+#### Syncing a single model
+
+Every model that belongs to a gateway, **Google** or **Anthropic** provider has a **Sync with provider** button in its
+editor (**Admin → Models →** the model, under *Provider*). It opens the same dialog, limited to that model: what
+changed at the provider (URL, adapter, context window, image input, the EU AI Act marking it does not declare yet) and,
+if the provider dropped it, the offer to disable it. New models at the provider are not shown there; they belong to the
+provider's **Sync models**. The sync writes the saved model, so the button waits while the form has unsaved changes;
+after you apply, the form shows the updated model.
+
+The **EU AI Act** page links to it: a model whose provider declares an output mark that the model does not carry shows
+a hint with **Sync with provider**, which opens the model with this dialog already open. A provider that declares
+nothing (Mistral, OpenAI, local servers) keeps the plain "not marked" hint.
+
 Two iHub models can point at one gateway model (**Clone** keeps the model ID and the provider). Each is its own item and its own pick: a changed or gone model is named by its iHub model, in `modelId`, which a `changed` or `removed` pick must carry.
 
 Applying is done by the server, not by chaining model calls from the browser: it asks the provider
