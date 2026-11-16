@@ -70,7 +70,7 @@ const ORPHAN_SWEEP_BATCH = 200;
 
 /**
  * Most expired files one reconciler tick queues for a refresh; the rest wait
- * for the next tick. The queue's the conversion slot (`CONVERSIONS_PER_PROCESS`) bounds how many run.
+ * for the next tick. The queue's conversion slot (`CONVERSIONS_PER_PROCESS`) bounds how many run.
  */
 export const MAX_SCHEDULED_REFRESHES = 50;
 
@@ -326,8 +326,8 @@ export class ProjectIngestService {
     this.runningBackground = 0;
     /**
      * Jobs waiting for a conversion slot (#3622): a job holds one of the
-     * `ingest.fetchConcurrency` job slots from its start, and one of the
-     * the conversion slot (`CONVERSIONS_PER_PROCESS`) conversion slots only while it scans and extracts.
+     * `ingest.fetchConcurrency` job slots from its start, and the conversion
+     * slot (`CONVERSIONS_PER_PROCESS`) only while it scans and extracts.
      * Checking a source is cheap; converting it is what costs memory.
      */
     this.convertQueue = [];
@@ -440,8 +440,8 @@ export class ProjectIngestService {
   }
 
   /**
-   * Wait for a conversion slot (the conversion slot (`CONVERSIONS_PER_PROCESS`)): jobs someone waits for
-   * first, background jobs never in the last slot when there is more than one.
+   * Wait for the conversion slot (`CONVERSIONS_PER_PROCESS`): jobs someone waits
+   * for first, background jobs never in the last slot when there is more than one.
    *
    * @param {Object} job
    * @returns {Promise<() => void>} Gives the slot back; call it exactly once.
@@ -654,7 +654,7 @@ export class ProjectIngestService {
       if (!project) return null;
       this.service._checkItemQuota(withoutItem(project, itemId), { bytes: size });
 
-      // 3–4 hold a conversion slot (the conversion slot (`CONVERSIONS_PER_PROCESS`)): the fetch above
+      // 3–4 hold the conversion slot (`CONVERSIONS_PER_PROCESS`): the fetch above
       //    ran under the job's slot only, so many sources are checked at once
       //    while few are converted.
       const maxChars = input.purpose === 'import' ? MAX_IMPORT_TEXT_CHARS : MAX_TEXT_CHARS;
