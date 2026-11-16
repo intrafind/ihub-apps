@@ -1226,7 +1226,7 @@ function AdminChatHistoryPage() {
               label={t('admin.chatHistory.evidence.enabled', 'Keep an evidence record')}
               help={t(
                 'admin.chatHistory.evidence.enabledHelp',
-                'Off means no record of what went in is kept. It is built from the run ledger, which stored chats keep on; a run with no ledger gets no record. Turning it on applies to answers stored from then on.'
+                'Off stops new records; records already stored stay until their chat is deleted or retention removes them, and the run ledger is unchanged. Records are built from the run ledger, which stored chats keep on. Turning it on applies to answers stored from then on.'
               )}
               checked={settings.evidence.enabled}
               onChange={value => updateSetting('evidence', 'enabled', value)}

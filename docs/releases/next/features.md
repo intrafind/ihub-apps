@@ -8,7 +8,8 @@ retries and errors, the model and its settings, and what the model answered. Con
 chat by its SHA-256, and documents and pictures uploaded to the chat are referenced, not copied. The
 record lives and is deleted with its chat (user delete, retention, a deleted user's cleanup); editing or
 resending a message removes that answer's record and the content only it referred to. `/v1/chat/completions` and Responses API calls without
-a conversation get the same record, owned by the caller and removed after `chats.retentionDays`.
+a conversation get the same record, owned by the caller and removed after `chats.retentionDays`; their
+responses carry the run id in an `X-Run-Id` header.
 
 The chat's owner reads it through `GET /api/chats/{chatId}/evidence/{messageId}` and
 `GET /api/chats/{chatId}/evidence-content/{sha256}`, a run's caller through
@@ -18,8 +19,8 @@ against its upload quota (`uploads.quotas.maxChatBytes`); an answer is never ref
 
 The record is written in the background after the answer is stored and is built from the run ledger.
 Admins can switch it off on **Admin → Chat History → Evidence record** (`chats.evidence.enabled`,
-default on; `chats.evidence.maxContentBytes` caps one item at 10 MB). Off means no record of what went
-in is kept. See [Chat Evidence Record](../../chat-evidence.md).
+default on; `chats.evidence.maxContentBytes` caps one item at 10 MB). Off stops new records; existing records
+stay until their chat is deleted or retention removes them, and the run ledger is unchanged. See [Chat Evidence Record](../../chat-evidence.md).
 
 ## Metrics for the Project Working Set, the Index Cache and Extraction
 
