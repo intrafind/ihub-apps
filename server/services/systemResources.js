@@ -43,6 +43,7 @@ import { gather, respond, respondInPrimary } from '../clusterBus.js';
 import logger from '../utils/logger.js';
 import projectActivityTracker from '../telemetry/ProjectActivityTracker.js';
 import { getIndexCacheStats } from './knowledge/indexCacheStats.js';
+import { getWaitDiagnostics } from '../telemetry/waitDiagnostics.js';
 
 /** Cluster-bus channel on which each process reports its own snapshot. */
 export const SYSTEM_RESOURCES_CHANNEL = 'system:resources';
@@ -203,6 +204,9 @@ export function getProcessSnapshot() {
     },
     eventLoopDelayMs: latestSample.eventLoopDelayMs,
     indexCache: getIndexCacheStats(),
+    // Additive: where this process waits (cluster bus, locks, request
+    // throttle, storage), cumulative since start. See telemetry/waitDiagnostics.js.
+    diagnostics: getWaitDiagnostics(),
     sampledAt: latestSample.sampledAt
   };
 }

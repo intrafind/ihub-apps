@@ -49,6 +49,7 @@ import { FilesystemAppendLog } from './FilesystemAppendLog.js';
 import { FilesystemBlobStore } from './FilesystemBlobStore.js';
 import { FilesystemLockManager } from './FilesystemLockManager.js';
 import { getContentsPath } from '../../../utils/contentsPath.js';
+import { timeAsync } from '../../../telemetry/waitDiagnostics.js';
 
 /** Lock name that lets one process at a time sweep idle fencing counters. */
 const FENCE_SWEEP_LOCK = 'storage:fence-sweep';
@@ -151,6 +152,31 @@ export function resolveFilesystemContentsDir(config = {}) {
  *
  * @augments DocumentStore
  */
+const DOCUMENT_OPS = ['get', 'put', 'delete', 'list', 'listMetadata', 'deletePrefix'];
+const BLOB_OPS = ['get', 'put', 'delete', 'list', 'deletePrefix'];
+// `append`/`appendBatch` only queue in memory (and run per run event); the
+// flush that writes them is timed in `utils/jsonlAppender.js`.
+const LOG_OPS = ['read', 'lastSeq', 'lastRecord', 'deleteStream', 'putBlob', 'getBlob'];
+
+/**
+ * Time a facet's async methods into the `storage` diagnostics
+ * (`GET /api/admin/system/resources`), as `<facet>.<op>` or, per namespace,
+ * `<facet>.<op>:<ns>`. Latency here includes the wait for a libuv thread
+ * (`UV_THREADPOOL_SIZE`, default 4), which is what makes it worth watching.
+ * A method that calls another timed method through `this` counts under both.
+ */
+function timeFacetMethods(facet, name, methods, perNamespace) {
+  for (const method of methods) {
+    const original = facet[method];
+    if (typeof original !== 'function') continue;
+    const key = `${name}.${method}`;
+    facet[method] = function timedStorageOp(...args) {
+      const label = perNamespace && typeof args[0] === 'string' ? `${key}:${args[0]}` : key;
+      return timeAsync('storage', label, () => original.apply(this, args));
+    };
+  }
+}
+
 class NamespaceRoutingDocumentStore extends DocumentStore {
   /**
    * @param {Object} options
@@ -294,6 +320,9 @@ export class FilesystemStorageProvider extends StorageProvider {
     this._logs = new FilesystemAppendLog({ baseDir: this._baseDir, flushIntervalMs });
     this._blobs = new FilesystemBlobStore(this._baseDir, { keyPrefixSegments });
     this._locks = new FilesystemLockManager({ baseDir: this._baseDir });
+    timeFacetMethods(this._documents, 'documents', DOCUMENT_OPS, true);
+    timeFacetMethods(this._blobs, 'blobs', BLOB_OPS, true);
+    timeFacetMethods(this._logs, 'appendLog', LOG_OPS, false);
     this._fenceSweepIntervalMs =
       typeof config.fenceSweepIntervalMs === 'number' && config.fenceSweepIntervalMs >= 0
         ? config.fenceSweepIntervalMs

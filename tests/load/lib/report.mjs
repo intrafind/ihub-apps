@@ -8,6 +8,7 @@
  */
 
 import { summarize, round } from './metrics.mjs';
+import { renderWaits } from './waits.mjs';
 
 const CHAT_LABELS = ['chat', 'chatFile', 'projectChat', 'projectBuildChat', 'inference'];
 const TTFT_LABELS = ['chat', 'chatFile', 'projectChat', 'projectBuildChat'];
@@ -358,6 +359,7 @@ export function renderMarkdown(result) {
   L.push('');
   L.push(...renderLlmAndPod(a));
   L.push(...renderRateLimits(result, a));
+  L.push(...renderWaits(result));
   L.push('## Errors by stage');
   L.push('');
   for (const s of a.stats) {

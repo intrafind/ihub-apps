@@ -55,6 +55,7 @@ import {
 } from '../../../utils/fileLock.js';
 import logger from '../../../utils/logger.js';
 import { LockManager } from '../../LockManager.js';
+import { lockPrefix, recordLockHold } from '../../../telemetry/waitDiagnostics.js';
 import { InvalidKeyError, LockTimeoutError, StorageError } from '../../errors.js';
 import { containedPath } from './paths.js';
 
@@ -215,6 +216,7 @@ export class FilesystemLockManager extends LockManager {
     // expired and was taken over cannot delete the new holder's lease.
     const owner = crypto.randomUUID();
     await this._acquire(lockPath, owner, ttl, wait, name);
+    const acquiredAt = performance.now();
     this._held.set(lockPath, { owner, name });
     let token;
     try {
@@ -246,6 +248,7 @@ export class FilesystemLockManager extends LockManager {
       stopRenewal?.();
       this._held.delete(lockPath);
       await this._release(lockPath, owner, name);
+      recordLockHold(lockPrefix(name, COMPONENT), acquiredAt);
     }
   }
 

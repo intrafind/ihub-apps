@@ -78,6 +78,7 @@
 
 import cluster from 'node:cluster';
 import logger from './utils/logger.js';
+import { Histogram, registerGauge, statRecord } from './telemetry/waitDiagnostics.js';
 
 /** Envelope marker so bus traffic never collides with other IPC messages. */
 const ENVELOPE = '__ihubBus';
@@ -136,6 +137,35 @@ const sharedKinds = new Set();
 const primaryResponders = new Map();
 
 const stats = { published: 0, received: 0, presenceAnnounced: 0 };
+
+// Per-type counters for `GET /api/admin/system/resources` (`diagnostics`).
+// A type is a publish channel (`sse:event`, `quota:delta`, `x:reply`, …) or,
+// for presence traffic, the message kind (`presence:sync`); a worker's own
+// presence announcements are counted per presence kind (`presence:sse`).
+// One Map lookup and an increment per message; nothing is allocated.
+const busTypeRecord = () => ({ published: 0, received: 0, relayed: 0, broadcasts: 0 });
+const busType = type => statRecord('busTypes', type, busTypeRecord);
+const requestRecord = () => ({
+  count: 0,
+  nullReplies: 0,
+  timeouts: 0,
+  unsent: 0,
+  latency: new Histogram()
+});
+const gatherRecord = () => ({
+  count: 0,
+  replies: 0,
+  fullTimeouts: 0,
+  latency: new Histogram()
+});
+const lookupRecord = () => ({
+  count: 0,
+  mirrorHits: 0,
+  hits: 0,
+  misses: 0,
+  timeouts: 0,
+  latency: new Histogram()
+});
 
 function remoteBucket(kind) {
   let bucket = remoteOwnership.get(kind);
@@ -316,6 +346,8 @@ export function initPrimaryBus({ getWorkers }) {
 
   cluster.on('message', (worker, message) => {
     if (!message || message[ENVELOPE] !== true) return;
+    const relayStats = busType(message.type ?? message.kind);
+    relayStats.relayed += 1;
 
     switch (message.kind) {
       case MSG_PUBLISH: {
@@ -352,6 +384,7 @@ export function initPrimaryBus({ getWorkers }) {
           // dropping the message. The sender's view of presence may simply be
           // newer than the primary's, and a wasted fan-out beats a lost event.
         }
+        relayStats.broadcasts += 1;
         broadcast(message, worker.id);
         break;
       }
@@ -523,6 +556,7 @@ export function initWorkerBus() {
 
   process.on('message', message => {
     if (!message || message[ENVELOPE] !== true) return;
+    busType(message.type ?? message.kind).received += 1;
 
     switch (message.kind) {
       case MSG_PUBLISH: {
@@ -625,7 +659,10 @@ export function publish(type, payload, route, { primaryOnly = false } = {}) {
   const message = { kind: MSG_PUBLISH, type, payload, route };
   if (primaryOnly) message.primaryOnly = true;
   const sent = sendToPrimary(message);
-  if (sent) stats.published += 1;
+  if (sent) {
+    stats.published += 1;
+    busType(type).published += 1;
+  }
   return sent;
 }
 
@@ -716,10 +753,14 @@ export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = 
 
   ensureReplyChannel(type);
   const requestId = newRequestId();
+  const diag = statRecord('busRequests', type, requestRecord);
+  diag.count += 1;
+  const startedAt = performance.now();
 
   return new Promise(resolve => {
     const timer = setTimeout(() => {
       pendingRequests.delete(requestId);
+      diag.timeouts += 1;
       logger.warn({
         component: 'ClusterBus',
         message: 'Cross-worker request timed out',
@@ -733,12 +774,15 @@ export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = 
 
     pendingRequests.set(requestId, reply => {
       clearTimeout(timer);
+      diag.latency.record(performance.now() - startedAt);
+      if (reply === undefined || reply === null) diag.nullReplies += 1;
       resolve(reply === undefined ? null : reply);
     });
 
     if (!publish(type, { requestId, payload }, route, { primaryOnly })) {
       clearTimeout(timer);
       pendingRequests.delete(requestId);
+      diag.unsent += 1;
       resolve(null);
     }
   });
@@ -768,14 +812,22 @@ export function gather(type, payload, { expected, timeoutMs = 1000 } = {}) {
   ensureReplyChannel(type);
   const requestId = newRequestId();
   const replies = [];
+  const diag = statRecord('busGathers', type, gatherRecord);
+  diag.count += 1;
+  const startedAt = performance.now();
 
   return new Promise(resolve => {
     const finish = () => {
       clearTimeout(timer);
       pendingGathers.delete(requestId);
+      diag.replies += replies.length;
+      diag.latency.record(performance.now() - startedAt);
       resolve(replies);
     };
-    const timer = setTimeout(finish, timeoutMs);
+    const timer = setTimeout(() => {
+      diag.fullTimeouts += 1;
+      finish();
+    }, timeoutMs);
     timer.unref?.();
 
     pendingGathers.set(requestId, reply => {
@@ -859,12 +911,14 @@ export function respond(type, handler) {
  */
 export function createPresenceMap(kind, { shared = false } = {}) {
   if (shared) sharedKinds.add(kind);
+  const announceStats = busType(`presence:${kind}`);
   class PresenceMap extends Map {
     set(key, value) {
       const isNew = !super.has(key);
       const result = super.set(key, value);
       if (isNew && busActive) {
         stats.presenceAnnounced += 1;
+        announceStats.published += 1;
         sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: true, shared });
       }
       return result;
@@ -873,6 +927,7 @@ export function createPresenceMap(kind, { shared = false } = {}) {
     delete(key) {
       const existed = super.delete(key);
       if (existed && busActive) {
+        announceStats.published += 1;
         sendToPrimary({ kind: MSG_PRESENCE_SET, ownKind: kind, key, owned: false, shared });
       }
       return existed;
@@ -926,11 +981,18 @@ let nextLookupId = 1;
  */
 export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
   if (!busActive) return Promise.resolve(false);
-  if (hasRemote(kind, key)) return Promise.resolve(true);
+  const diag = statRecord('busLookups', kind, lookupRecord);
+  diag.count += 1;
+  if (hasRemote(kind, key)) {
+    diag.mirrorHits += 1;
+    return Promise.resolve(true);
+  }
   const lookupId = nextLookupId++;
+  const startedAt = performance.now();
   return new Promise(resolve => {
     const timer = setTimeout(() => {
       pendingLookups.delete(lookupId);
+      diag.timeouts += 1;
       logger.warn({
         component: 'ClusterBus',
         message: 'Presence lookup timed out',
@@ -942,6 +1004,9 @@ export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
     timer.unref?.();
     pendingLookups.set(lookupId, held => {
       clearTimeout(timer);
+      diag.latency.record(performance.now() - startedAt);
+      if (held) diag.hits += 1;
+      else diag.misses += 1;
       resolve(held);
     });
     if (!sendToPrimary({ kind: MSG_PRESENCE_LOOKUP, ownKind: kind, key, lookupId })) {
@@ -961,6 +1026,10 @@ export function lookupRemote(kind, key, { timeoutMs = 1000 } = {}) {
 export function getBusStats() {
   return { ...stats, active: busActive, sharedKinds: [...sharedKinds].sort() };
 }
+
+registerGauge('busPendingRequests', () => pendingRequests.size);
+registerGauge('busPendingGathers', () => pendingGathers.size);
+registerGauge('busPendingLookups', () => pendingLookups.size);
 
 /** Test seam: drop all bus state so a suite can rebuild it. */
 export function resetClusterBusForTests() {

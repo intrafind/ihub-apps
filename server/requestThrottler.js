@@ -17,6 +17,16 @@ import { httpFetch } from './utils/httpConfig.js';
 import { recordRateLimitHit } from './telemetry/metrics.js';
 import { isClusterBusActive, request, respondInPrimary } from './clusterBus.js';
 import logger from './utils/logger.js';
+import { Histogram, registerGauge, statRecord } from './telemetry/waitDiagnostics.js';
+
+/**
+ * Per-id slot counters for the `diagnostics` of
+ * `GET /api/admin/system/resources`: `requests` that needed a slot, how many
+ * `queued` behind others, `fallbacks` to this worker's own limits when the
+ * primary gave no slot, and `wait` from asking to running (incl. the delay).
+ */
+const throttleRecord = () => ({ requests: 0, queued: 0, fallbacks: 0, wait: new Histogram() });
+const throttleStats = id => statRecord('throttle', id, throttleRecord);
 
 /**
  * Throttle settings of ids that have no tool file any more (the built-in web
@@ -97,13 +107,21 @@ export function throttledRun(id = 'default', fn, limits = null) {
   return localThrottledRun(id, fn, concurrencyOf, delayOf);
 }
 
-function localThrottledRun(id, fn, concurrencyOf = getConcurrency, delayOf = getDelay) {
+function localThrottledRun(
+  id,
+  fn,
+  concurrencyOf = getConcurrency,
+  delayOf = getDelay,
+  diag = throttleStats(id),
+  startedAt = performance.now()
+) {
   if (!queues.has(id)) {
     queues.set(id, []);
     actives.set(id, 0);
   }
 
   const queue = queues.get(id);
+  diag.requests += 1;
 
   return new Promise((resolve, reject) => {
     const execute = async () => {
@@ -115,6 +133,7 @@ function localThrottledRun(id, fn, concurrencyOf = getConcurrency, delayOf = get
         if (wait > 0) {
           await new Promise(r => setTimeout(r, wait));
         }
+        diag.wait.record(performance.now() - startedAt);
 
         const res = await fn();
         resolve(res);
@@ -137,6 +156,7 @@ function localThrottledRun(id, fn, concurrencyOf = getConcurrency, delayOf = get
       // the "llm" scope because all current callers are LLM/tool calls.
       // Pass id as the "route" so dashboards can group by model id.
       recordRateLimitHit('llm', id);
+      diag.queued += 1;
       queue.push(execute);
     }
   });
@@ -161,6 +181,8 @@ let nextTicket = 1;
 
 async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayOf) {
   const ticket = `${process.pid}:${nextTicket++}`;
+  const diag = throttleStats(id);
+  const startedAt = performance.now();
   const grant = await request(
     ACQUIRE_CHANNEL,
     { id, limit, delayMs, ticket, pid: process.pid },
@@ -174,11 +196,18 @@ async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayO
       component: 'RequestThrottler',
       id
     });
-    return localThrottledRun(id, fn, concurrencyOf, delayOf);
+    diag.fallbacks += 1;
+    // Counted as a local request; its wait includes the unanswered ask.
+    return localThrottledRun(id, fn, concurrencyOf, delayOf, diag, startedAt);
   }
-  if (grant.queued) recordRateLimitHit('llm', id);
+  diag.requests += 1;
+  if (grant.queued) {
+    recordRateLimitHit('llm', id);
+    diag.queued += 1;
+  }
   try {
     if (grant.waitMs > 0) await new Promise(r => setTimeout(r, grant.waitMs));
+    diag.wait.record(performance.now() - startedAt);
     return await fn();
   } finally {
     void request(RELEASE_CHANNEL, { id, ticket }, { timeoutMs: RELEASE_TIMEOUT_MS });
@@ -187,6 +216,18 @@ async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayO
 
 /** Primary-side state: id → { active: Map<ticket, pid>, queue, lastCompleted }. */
 const slots = new Map();
+
+function sumOverIds(map, size) {
+  let total = 0;
+  for (const value of map.values()) total += size(value);
+  return total;
+}
+
+// Queue lengths right now: the primary's cluster-wide queue and slots in use,
+// and a worker's (or standalone process's) own queue.
+registerGauge('throttlePrimaryQueued', () => sumOverIds(slots, entry => entry.queue.length));
+registerGauge('throttlePrimaryActive', () => sumOverIds(slots, entry => entry.active.size));
+registerGauge('throttleLocalQueued', () => sumOverIds(queues, queue => queue.length));
 
 function slotsFor(id) {
   let entry = slots.get(id);

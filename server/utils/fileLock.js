@@ -25,6 +25,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import logger from './logger.js';
 import { LockTimeoutError } from '../storage/errors.js';
+import { lockPrefix, lockStats, recordLockHold } from '../telemetry/waitDiagnostics.js';
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -302,7 +303,25 @@ async function claimRemoval(lockPath, identity) {
  * @param {string} [opts.component]
  * @throws {LockTimeoutError} When the budget ran out
  */
-export async function acquireLease(
+export async function acquireLease(lockPath, owner, opts) {
+  // Wait time, timeouts and current waiters per lock prefix, for the
+  // `diagnostics` of `GET /api/admin/system/resources`.
+  const diag = lockStats(lockPrefix(opts.name, opts.component ?? COMPONENT));
+  const startedAt = performance.now();
+  diag.waiters += 1;
+  try {
+    await acquireLeaseUntimed(lockPath, owner, opts);
+    diag.acquisitions += 1;
+    diag.wait.record(performance.now() - startedAt);
+  } catch (error) {
+    if (error instanceof LockTimeoutError) diag.timeouts += 1;
+    throw error;
+  } finally {
+    diag.waiters -= 1;
+  }
+}
+
+async function acquireLeaseUntimed(
   lockPath,
   owner,
   { ttlMs, waitMs, pollMs, name, component = COMPONENT }
@@ -503,6 +522,7 @@ export async function withFileLock(
     name,
     component
   });
+  const acquiredAt = performance.now();
   const renew = renewMs ?? Math.max(1, Math.floor(staleMs / 3));
   const stopRenewal =
     renew > 0
@@ -513,6 +533,7 @@ export async function withFileLock(
   } finally {
     stopRenewal?.();
     await releaseLease(lockPath, owner, name, component);
+    recordLockHold(lockPrefix(name, component), acquiredAt);
   }
 }
 

@@ -180,6 +180,12 @@ test('outside cluster mode the collector reports one standalone process', async 
   assert.equal(snapshot.processes.length, 1);
   assert.equal(snapshot.processes[0].pid, process.pid);
   assert.equal(snapshot.processes[0].current, true);
+  // What GET /api/admin/system/resources returns per process (additive field).
+  const { diagnostics } = snapshot.processes[0];
+  assert.ok(diagnostics, 'every process reports its wait diagnostics');
+  assert.ok(Array.isArray(diagnostics.bucketBoundsMs));
+  assert.ok(diagnostics.uvThreadpoolSize >= 1);
+  assert.equal(typeof diagnostics.gauges.busPendingRequests, 'number');
   assert.ok(Array.isArray(snapshot.storage.volumes));
   assert.ok(snapshot.host.memory.total > 0);
 });

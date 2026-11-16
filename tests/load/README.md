@@ -87,6 +87,8 @@ iHub extracts these files in 50 ms to 1.6 s each, on the event loop. That is the
 
   The queries are in `lib/observers.mjs`; override them per profile under `sampling.prometheus.queries`. Throttling above about 20% means the pod's CPU limit is below what `WORKERS` uses.
 
+- **Waits inside iHub (always on):** every process in `GET /api/admin/system/resources` carries `diagnostics`, cumulative counters of cluster-bus traffic per message type, cross-worker requests / gathers / presence lookups (latency, timeouts), lock waits per lock-name prefix, request-throttle slots and storage operations (`server/telemetry/waitDiagnostics.js`). Shard 0 keeps the first and last snapshot per stage; the report's "Waits and cluster bus" section shows the per-stage difference (`lib/waits.mjs`). Use it when event-loop delay climbs but CPU does not explain it.
+
 ## On your machine
 
 ### 1. Start a target
