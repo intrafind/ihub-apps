@@ -367,8 +367,9 @@ never from its id. Declare it in the tool, per function, on an integration defin
 A tool that declares nothing is a plain call, so a tool that merely has "search" in its name never
 reads as a web search or earns the "web search" badge. The built-ins declare theirs: the web search
 engines (the `search` action of a `web-search` definition), `read_url`, the project knowledge tools,
-iFinder, and directory lookups (`search`, origin `integration`). An invalid declaration is ignored
-and logged.
+iFinder, and directory lookups (`search`, origin `integration`). An invalid declaration in
+a tool file is ignored and logged; an invalid override of an installation is refused
+(`INVALID_OVERRIDE`) when it is saved.
 
 An MCP server's search of the web:
 
@@ -380,7 +381,10 @@ The same override can be set with `PUT /api/admin/integrations/installed/{id}/ac
 a body `{ "activity": { "kind": "search", "origin": "web" } }`; `{ "activity": null }` removes it.
 
 A tool declared `search` or `fetch` has its result URLs cited; one declared `web` also reports its
-hits as web sources (private unless it is one of the shipped engines).
+hits as web sources (private unless it is one of the shipped engines). The declaration only says
+what the call is: the URLs are read from the result's top level (a list, or `results`, `items`,
+`sources`, or a single `{ url, content }` page). A tool that nests its hits deeper (`data.results`)
+needs the source mapping described above as well.
 
 ### External Service Integration
 
