@@ -6304,7 +6304,8 @@
       "morePages": "+{{count}} more",
       "openSettings": "Open in admin",
       "linkToSection": "Link to this section",
-      "resultCount": "{{count}} results",
+      "resultCount_one": "{{count}} result",
+      "resultCount_other": "{{count}} results",
       "collapseAll": "Collapse all",
       "expandAll": "Expand all"
     },

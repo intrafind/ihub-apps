@@ -2,7 +2,7 @@
 description: "Convert PDFs and images into searchable Markdown with the OCR tool."
 audience: admin
 type: how-to
-adminPage: /admin/tools/ocr-ai
+adminPage: /admin/features
 ---
 
 # OCR

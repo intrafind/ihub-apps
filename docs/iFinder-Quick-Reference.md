@@ -179,5 +179,5 @@ console.log(jwt.generateIFinderJWT({id: 'test', email: 'test@example.com'}));
 
 - [iFinder Keyless (OIDC/OAuth) JWT Integration](ifinder-oidc-jwt.md)
 - [Full iFinder Integration Documentation](iFinder-Integration.md)
-- [Tools Documentation](tools.md)
+- [Tool Calling](tool-calling.md)
 - [Authentication Configuration](jwt-authentication.md)

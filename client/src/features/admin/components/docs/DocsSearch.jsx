@@ -43,7 +43,7 @@ export default function DocsSearch() {
     return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
-  // Close when focus or a click leaves the search.
+  // Close when a click leaves the search (focus leaving it is handled by `onBlur` on the root).
   useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = event => {
@@ -105,7 +105,16 @@ export default function DocsSearch() {
       }
       return;
     }
-    if (!results.length) return;
+    // Only act on results that are on screen and belong to the query as typed: while a search is
+    // pending the list still holds the previous query's hits, and a closed list shows nothing.
+    if (!showPanel || search.loading || !results.length) {
+      if (event.key === 'Enter') event.preventDefault();
+      if (event.key === 'ArrowDown' && !showPanel && !search.loading && results.length) {
+        event.preventDefault();
+        setOpen(true);
+      }
+      return;
+    }
     if (event.key === 'ArrowDown') {
       event.preventDefault();
       setOpen(true);
@@ -137,7 +146,13 @@ export default function DocsSearch() {
   }
 
   return (
-    <div ref={rootRef} className="relative w-full">
+    <div
+      ref={rootRef}
+      className="relative w-full"
+      onBlur={event => {
+        if (!rootRef.current?.contains(event.relatedTarget)) setOpen(false);
+      }}
+    >
       <label htmlFor={`${listId}-input`} className="sr-only">
         {t('admin.docs.searchLabel', 'Search the documentation')}
       </label>
@@ -158,6 +173,8 @@ export default function DocsSearch() {
         value={query}
         onChange={event => {
           setQuery(event.target.value);
+          // A new query starts with nothing highlighted, so Enter cannot pick a hit for the old one.
+          setActiveIndex(-1);
           setOpen(true);
         }}
         onFocus={() => setOpen(true)}
@@ -194,6 +211,9 @@ export default function DocsSearch() {
             <ul
               id={listId}
               role="listbox"
+              // The input drives the list; keep the scrollable list itself out of the tab order,
+              // so Tab leaves the search instead of stopping on the list.
+              tabIndex={-1}
               aria-label={t('admin.docs.searchResults', 'Search results')}
               className="max-h-[min(28rem,70vh)] overflow-y-auto py-1"
             >

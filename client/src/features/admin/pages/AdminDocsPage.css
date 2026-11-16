@@ -321,8 +321,82 @@
   margin-bottom: 0.25rem;
 }
 
-/* highlight.js (github-dark) sets its own padding and background; the block already has both. */
+/* --- Syntax highlighting: highlight.js tokens in GitHub Dark colours ------------------------------
+   Colours from highlight.js's github-dark theme (BSD-3-Clause), scoped to the docs on purpose: its own theme files style every `.hljs` on the page,
+   theme files style every `.hljs`, which would restyle code elsewhere in the app (chat artifacts) once the docs had been opened. */
 .docs-prose pre code.hljs {
-  padding: 0;
-  background: transparent;
+  color: #c9d1d9;
+}
+.docs-prose .hljs-doctag,
+.docs-prose .hljs-keyword,
+.docs-prose .hljs-meta .hljs-keyword,
+.docs-prose .hljs-template-tag,
+.docs-prose .hljs-template-variable,
+.docs-prose .hljs-type,
+.docs-prose .hljs-variable.language_ {
+  color: #ff7b72;
+}
+.docs-prose .hljs-title,
+.docs-prose .hljs-title.class_,
+.docs-prose .hljs-title.class_.inherited__,
+.docs-prose .hljs-title.function_ {
+  color: #d2a8ff;
+}
+.docs-prose .hljs-attr,
+.docs-prose .hljs-attribute,
+.docs-prose .hljs-literal,
+.docs-prose .hljs-meta,
+.docs-prose .hljs-number,
+.docs-prose .hljs-operator,
+.docs-prose .hljs-variable,
+.docs-prose .hljs-selector-attr,
+.docs-prose .hljs-selector-class,
+.docs-prose .hljs-selector-id {
+  color: #79c0ff;
+}
+.docs-prose .hljs-regexp,
+.docs-prose .hljs-string,
+.docs-prose .hljs-meta .hljs-string {
+  color: #a5d6ff;
+}
+.docs-prose .hljs-built_in,
+.docs-prose .hljs-symbol {
+  color: #ffa657;
+}
+.docs-prose .hljs-comment,
+.docs-prose .hljs-code,
+.docs-prose .hljs-formula {
+  color: #8b949e;
+}
+.docs-prose .hljs-name,
+.docs-prose .hljs-quote,
+.docs-prose .hljs-selector-tag,
+.docs-prose .hljs-selector-pseudo {
+  color: #7ee787;
+}
+.docs-prose .hljs-subst {
+  color: #c9d1d9;
+}
+.docs-prose .hljs-section {
+  color: #1f6feb;
+  font-weight: bold;
+}
+.docs-prose .hljs-bullet {
+  color: #f2cc60;
+}
+.docs-prose .hljs-emphasis {
+  color: #c9d1d9;
+  font-style: italic;
+}
+.docs-prose .hljs-strong {
+  color: #c9d1d9;
+  font-weight: bold;
+}
+.docs-prose .hljs-addition {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+.docs-prose .hljs-deletion {
+  color: #ffdcd7;
+  background-color: #67060c;
 }

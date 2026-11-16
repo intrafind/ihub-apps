@@ -123,6 +123,30 @@ describe('docs pages', () => {
     }
     expect(broken).toEqual([]);
   });
+
+  // mdBook builds only the pages in SUMMARY.md, so a link to a hidden page 404s on the published
+  // site even though the file exists and the admin viewer opens it.
+  test('pages do not link to hidden pages', async () => {
+    const pages = await listDocPages(docsDir);
+    const hidden = new Set(pages.filter(page => splitFrontMatter(read(page)).meta.hidden));
+    const offending = [];
+    for (const page of pages) {
+      if (hidden.has(page)) continue;
+      for (const line of proseLines(read(page))) {
+        const text = line.replace(/`[^`]*`/g, '');
+        for (const match of text.matchAll(/\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\)/g)) {
+          const href = match[1];
+          if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('#') || href.startsWith('/')) {
+            continue;
+          }
+          const target = decodeURI(href.split('#')[0]);
+          const resolved = path.posix.normalize(path.posix.join(path.posix.dirname(page), target));
+          if (hidden.has(resolved)) offending.push(`${page} -> ${href}`);
+        }
+      }
+    }
+    expect(offending).toEqual([]);
+  });
 });
 
 describe('mdBook front-matter preprocessor', () => {

@@ -11,7 +11,6 @@ import {
   XMarkIcon
 } from '@heroicons/react/24/outline';
 import { ChevronRightIcon } from '@heroicons/react/20/solid';
-import 'highlight.js/styles/github-dark.css';
 import './AdminDocsPage.css';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { renderMarkdown } from '../../../config/marked.config';

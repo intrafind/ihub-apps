@@ -135,10 +135,12 @@ Links in an entry go where the reader can follow them: a link to a documentation
 
 **Documentation** (`/admin/docs`) shows the iHub Apps documentation that ships with the version you are running — the same Markdown pages as in `docs/` of the repository, so what you read matches what is installed. It is available to admins only.
 
-- **Contents** (left): the chapters and pages in the order of the published documentation.
-- **Search** (top right): finds every section whose title or text contains all the words you type, best match first; a result opens the page at that section.
-- **Pages** render with tables, code blocks, diagrams and screenshots. Links to other pages stay inside the admin UI; links to release notes open [What's New](#whats-new); links to files outside the documentation open on GitHub.
-- Every page has its own address (`/admin/docs/integrations.md#migrations`), so a link, bookmark or reload lands on the same heading.
+- **Contents** (left): the documentation grouped into sections by task, such as getting started, apps, models, integrations and operations. The section of the page you are reading is open; **Expand all** opens every section. On a phone, **Contents** in the header opens the list as a drawer.
+- **Search** (header): finds sections whose title or text match the words you type, best match first. Press `/` to jump to it, the arrow keys to move through the results and Enter to open one at that section.
+- **Pages** open with their title and a one-line summary, a breadcrumb back to their section, and **Open in admin** where the page describes an admin screen. Tables, code with syntax highlighting, diagrams, screenshots and highlighted notes and warnings render as on the published site. Every heading has a link icon you can copy.
+- **On this page** (right, on wide screens) lists the page's headings and marks the one you are reading; **Previous** and **Next** at the bottom follow the order of the contents.
+- Links to other pages stay inside the admin UI; links to release notes open [What's New](#whats-new); links to files outside the documentation open on GitHub.
+- Every page has its own address (`/admin/docs/integrations.md#migrations`), so a link, bookmark or reload lands on the same heading, and Back returns to where you were on the previous page.
 
 The old documentation site at `/docs` redirects here. The documentation is also published as a website on GitHub Pages from the `main` branch.
 

@@ -80,6 +80,18 @@ function NavSection({ section, current, open, onToggle }) {
   );
 }
 
+/** The nearest scrolling ancestor of the contents (the sidebar column or the drawer). */
+function navScroller(element) {
+  for (let node = element?.parentElement; node; node = node.parentElement) {
+    if (node.id === 'admin-main-content') return null;
+    const { overflowY } = window.getComputedStyle(node);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && node.scrollHeight > node.clientHeight) {
+      return node;
+    }
+  }
+  return null;
+}
+
 /**
  * @param {{ sections: Array, current: string, scrollActiveIntoView?: boolean }} props
  */
@@ -99,13 +111,21 @@ export default function DocsNav({ sections, current, scrollActiveIntoView = true
     );
   }, [currentSectionId]);
 
-  // Keep the current page visible in a long list.
+  // Keep the current page visible in a long list: once per page, when its link is first shown (its
+  // section may open a render later), and never again on the admin's own toggles. Only the
+  // contents' own scroller moves; `scrollIntoView` would also move the article.
+  const scrolledToRef = useRef(null);
   useEffect(() => {
-    if (!scrollActiveIntoView) return;
+    if (!scrollActiveIntoView || scrolledToRef.current === current) return;
     const active = containerRef.current?.querySelector('[data-docs-nav-active]');
-    if (active && typeof active.scrollIntoView === 'function') {
-      active.scrollIntoView({ block: 'nearest' });
-    }
+    if (!active || active.getClientRects().length === 0) return;
+    scrolledToRef.current = current;
+    const scroller = navScroller(containerRef.current);
+    if (!scroller) return;
+    const box = scroller.getBoundingClientRect();
+    const link = active.getBoundingClientRect();
+    if (link.top < box.top) scroller.scrollTop -= box.top - link.top;
+    else if (link.bottom > box.bottom) scroller.scrollTop += link.bottom - box.bottom;
   }, [current, openIds, scrollActiveIntoView]);
 
   const toggle = id =>
