@@ -44,4 +44,23 @@ export async function fetchAllLedgerEvents(
   return { events, complete: false };
 }
 
+const LIFECYCLE_TYPES = new Set(['run/started', 'run/paused', 'run/resumed', 'run/ended']);
+
+/**
+ * The type of the last lifecycle frame of a replay (`run/started`, `run/paused`,
+ * `run/resumed` or `run/ended`), or null. A chat turn continued after a pause
+ * keeps its run id, so a replay can pass a pause and still end running — or
+ * pause again.
+ *
+ * @param {Array<Object>} envelopes - Projected ledger envelopes.
+ * @returns {string|null}
+ */
+export function lastLifecycleType(envelopes) {
+  let last = null;
+  for (const envelope of envelopes || []) {
+    if (LIFECYCLE_TYPES.has(envelope?.type)) last = envelope.type;
+  }
+  return last;
+}
+
 export default fetchAllLedgerEvents;

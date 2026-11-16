@@ -642,16 +642,21 @@ class ChatService {
     // When the run cannot be continued this turn runs under a new id, as
     // every turn did before; the paused run keeps its `run/end` (`paused`).
     let continued = null;
-    if (continueRun && persistence?.repository && runId === givenRunId) {
-      continued = await this._continueLedgerRun({
-        runId,
-        interactionId: continueRun.interactionId,
-        chatId,
-        appId: app?.id,
-        modelId: model?.id
-      });
+    if (continueRun && runId === givenRunId) {
+      if (persistence?.repository) {
+        continued = await this._continueLedgerRun({
+          runId,
+          interactionId: continueRun.interactionId,
+          chatId,
+          appId: app?.id,
+          modelId: model?.id
+        });
+      }
+      // Never a second `run/start` in the paused run's journal.
       if (!continued) runId = newRunId('chat');
     }
+    // What the run used before the pause: its end counts the whole turn.
+    const carriedUsage = continued?.paused?.data?.usage || null;
 
     // The turn's SSE v2 emitter (chat stream id = chatId, run id = this turn).
     // A caller with its own consumer (the inference API turning frames into
@@ -742,6 +747,7 @@ class ChatService {
           status: 'error',
           finishReason: 'error',
           error: refusal,
+          usage: carriedUsage,
           startedAt
         });
         if (stream !== NO_STREAM) unbindStreamRun(chatId, runId);
@@ -942,6 +948,11 @@ class ChatService {
     // From here the answered approval is used: a caller must not put it back.
     if (toolApproval && typeof toolApproval === 'object') toolApproval.started = true;
 
+    // Until this turn's wrap-up is done (answer stored, chat released, stream
+    // unbound — the `finally` below), a continuation of its run waits: a
+    // pause shows its card before that, and a quick answer must not race it.
+    const releaseRunHold =
+      typeof this.runLog.hold === 'function' ? this.runLog.hold(runId) : () => {};
     let outcome;
     try {
       const result = await this.agentLoop.run({
@@ -1112,7 +1123,7 @@ class ChatService {
         status: outcome.status,
         finishReason: outcome.finishReason,
         // A continued run's end counts what it used before the pause too.
-        usage: continued ? addUsage(continued.paused.data?.usage, outcome.usage) : outcome.usage,
+        usage: carriedUsage ? addUsage(carriedUsage, outcome.usage) : outcome.usage,
         error: outcome.error || (outcome.errorInfo ? outcome.errorInfo : undefined),
         knowledgeSources: outcome.knowledgeSources,
         answerBasis: outcome.answerBasis,
@@ -1162,7 +1173,13 @@ class ChatService {
         error: { code: 'INTERNAL_ERROR', message: error.message || 'Internal error' }
       });
       // Ledger first here too, for the reason above.
-      this._endLedgerRun(runId, { status: 'error', finishReason: 'error', error, startedAt });
+      this._endLedgerRun(runId, {
+        status: 'error',
+        finishReason: 'error',
+        error,
+        usage: carriedUsage,
+        startedAt
+      });
       // `_finishTurn` never ran, so nothing else releases the chat: without
       // this it stays `running` with a live `activeRunId` forever.
       if (persist) {
@@ -1186,6 +1203,7 @@ class ChatService {
       if (trackRequest && activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
       }
+      releaseRunHold();
     }
   }
 

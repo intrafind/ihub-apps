@@ -1081,6 +1081,56 @@ describe('a chat whose run died with its process', () => {
     });
   });
 
+  it('does not take the text a paused turn stored for the answer of its continuation', async () => {
+    await withRepository(async repository => {
+      // An approval pause stored text under the run; the continuation (same
+      // run id) stored its question and then the process died.
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'change it'
+      });
+      await repository.appendMessage(CHAT_ID, {
+        role: 'assistant',
+        content: 'I will update the ticket.',
+        finishReason: 'approval',
+        runId: RUN_ID
+      });
+      await repository.releaseRun(CHAT_ID, RUN_ID, { activeRunId: null, status: 'active' });
+      await materializeUserTurn({
+        repository,
+        chatId: CHAT_ID,
+        ownerId: 'user-1',
+        identityMode: 'default',
+        appId: 'chat',
+        runId: RUN_ID,
+        content: 'Approved'
+      });
+      await repository.updateChat(CHAT_ID, { lastMessageAt: longAgo });
+      const chat = await repository.getChat(CHAT_ID);
+      assert.equal(chat.activeRunId, RUN_ID);
+      const runLog = fakeRunLog({ events: LEDGER });
+
+      await settleInterruptedChat(chat, { repository, runLog });
+      const { messages } = await repository.getMessages(CHAT_ID);
+      assert.deepEqual(
+        messages.map(m => [m.role, m.content]),
+        [
+          ['user', 'change it'],
+          ['assistant', 'I will update the ticket.'],
+          ['user', 'Approved'],
+          ['assistant', messages[3]?.content]
+        ]
+      );
+      assert.equal(messages[3].error.code, RUN_INTERRUPTED, 'the continuation is interrupted');
+      assert.equal(runLog.appended[0].data.status, 'error', 'not ended as the partial answer');
+    });
+  });
+
   it('only releases a chat whose answer was stored before the process died', async () => {
     await withRepository(async repository => {
       await materializeUserTurn({

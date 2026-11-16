@@ -347,7 +347,10 @@ file (`locks/`), so two recovering workers never allocate the same number.
     the run's sequence (it paused the run less than a minute ago) to hand it
     over (`runlog:release`: it flushes and lets go); otherwise the sequence
     continues from the persisted journal under the per-run lock, which is
-    also what happens after a restart.
+    also what happens after a restart. A continuation waits (at most 1.5 s)
+    until the turn that paused has stored its part and released the chat —
+    the card appears before that — and gets a run of its own if it has not,
+    or if the worker that owns the run does not answer.
   - **When the turn gets a run of its own instead** (as every turn did
     before): the journal is gone (deleted, `journalDeletedAt`) or has no `run/start`, the run is not paused
     any more (continued or ended already), or it is not a chat run of the

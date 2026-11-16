@@ -104,6 +104,12 @@ export const RUNLOG_RELEASE_CHANNEL = 'runlog:release';
 /** Presence kind announcing which worker owns (allocates the sequence of) a run. */
 export const RUN_PRESENCE_KIND = 'run';
 const REMOTE_APPEND_TIMEOUT_MS = 2000;
+/**
+ * How long a continuation waits for the turn that paused the run to finish
+ * its wrap-up (`RunLog#hold`). Below the remote timeout, so a worker asked to
+ * hand a held run over still answers in time.
+ */
+const HOLD_WAIT_MS = 1500;
 
 /**
  * Whether `runId` is acceptable as a ledger run id: the same rule as every
@@ -205,6 +211,12 @@ export class RunLog {
      * @type {Set<string>}
      */
     this._deleted = new Set();
+    /**
+     * Runs a turn on this worker is still writing (`hold`), by id: a
+     * continuation waits for them. See `continueRun`.
+     * @type {Map<string, Promise<void>>}
+     */
+    this._holds = new Map();
     this._unrespond = this._bus.respond(RUNLOG_APPEND_CHANNEL, payload =>
       this._appendForRemote(payload)
     );
@@ -402,6 +414,10 @@ export class RunLog {
    */
   async continueRun(runId, { interactionId, accept } = {}) {
     if (!isValidRunId(runId) || !this.isEnabled()) return null;
+    // The turn that paused the run shows the question before it has stored
+    // what it produced and released the chat; continuing meanwhile would let
+    // that wrap-up act on the continuation. Wait for it, briefly.
+    if (!(await this._settled(runId))) return null;
     const local = this._runs.get(runId);
     if (local && !local.ended) return null;
     if (!local?.owned && this._bus.hasRemote(RUN_PRESENCE_KIND, runId)) {
@@ -410,8 +426,9 @@ export class RunLog {
         { runId },
         { route: { kind: RUN_PRESENCE_KIND, key: runId }, timeoutMs: REMOTE_APPEND_TIMEOUT_MS }
       );
-      // Still producing there. No reply: the owner is gone, recover below.
-      if (reply?.released === false) return null;
+      // Still producing or wrapping up there, or no answer from a worker
+      // that still announces the run: not ours to take.
+      if (reply?.released !== true) return null;
     }
     return this._store.withRunLock(runId, async () => {
       await this.flush();
@@ -455,6 +472,42 @@ export class RunLog {
   }
 
   /**
+   * Mark a run as still being written by a turn on this worker — from before
+   * its loop runs until its wrap-up (answer stored, chat released, stream
+   * unbound) is done. A continuation of the run (`continueRun`, here or asked
+   * from another worker) waits for the returned release, at most
+   * {@link HOLD_WAIT_MS}, and refuses after that.
+   *
+   * @param {string} runId
+   * @returns {() => void} release
+   */
+  hold(runId) {
+    let release;
+    const promise = new Promise(resolve => {
+      release = resolve;
+    });
+    this._holds.set(runId, promise);
+    return () => {
+      if (this._holds.get(runId) === promise) this._holds.delete(runId);
+      release();
+    };
+  }
+
+  /** Whether no turn on this worker holds `runId` (waiting up to HOLD_WAIT_MS). @private */
+  async _settled(runId) {
+    const held = this._holds.get(runId);
+    if (!held) return true;
+    let timer;
+    const timedOut = new Promise(resolve => {
+      timer = setTimeout(() => resolve(false), HOLD_WAIT_MS);
+      timer.unref?.();
+    });
+    const settled = await Promise.race([held.then(() => true), timedOut]);
+    clearTimeout(timer);
+    return settled;
+  }
+
+  /**
    * Hand a paused run this worker owns over to the worker that continues it
    * (`continueRun` there): flush, then stop owning its sequence. Silent for a
    * run not owned here; `{ released: false }` for one still producing.
@@ -464,7 +517,7 @@ export class RunLog {
     const runId = payload?.runId;
     const entry = typeof runId === 'string' ? this._runs.get(runId) : null;
     if (!entry?.owned) return undefined;
-    if (!entry.ended) return { released: false };
+    if (!(await this._settled(runId)) || !entry.ended) return { released: false };
     await this.flush();
     entry.owned = false;
     this._owned.delete(runId);

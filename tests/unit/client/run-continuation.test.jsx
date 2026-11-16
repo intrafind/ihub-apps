@@ -15,6 +15,7 @@ import {
   continuesRun
 } from '../../../shared/run/runReducer.js';
 import { KNOWLEDGE_REFRESH_PHASE } from '../../../shared/run/knowledgeRefresh.js';
+import { lastLifecycleType } from '../../../client/src/shared/run/ledgerPages.js';
 
 const env = (seq, type, data = {}) => ({
   v: 2,
@@ -85,5 +86,15 @@ describe('a paused run continued under its own id', () => {
     const live = runOf([started(1, 'msg-1')]);
     expect(continuesRun(live, started(2, 'msg-1'))).toBe(false);
     expect(continuesRun(undefined, started(1, 'msg-1'))).toBe(false);
+  });
+});
+
+describe('a reattach replay of a continued run', () => {
+  test('ends where its last lifecycle frame is', () => {
+    const resumed = env(5, 'run/resumed', { interactionId: 'i1' });
+    expect(lastLifecycleType([...pausedTurn, resumed])).toBe('run/resumed');
+    expect(lastLifecycleType(pausedTurn)).toBe('run/paused');
+    expect(lastLifecycleType([...pausedTurn, resumed, env(6, 'run/ended', {})])).toBe('run/ended');
+    expect(lastLifecycleType([])).toBeNull();
   });
 });

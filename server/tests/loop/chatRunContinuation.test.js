@@ -374,6 +374,94 @@ test('a clarification: the answer continues the run that asked', async t => {
   assert.ok(built.record.toolCalls.some(call => call.toolId === 'ask_user'));
 });
 
+test('a quick answer waits for the paused turn to finish its wrap-up before continuing', async t => {
+  const { runLog, interactionService, repository } = await setup(t);
+  const chatId = newChatId('race');
+  const order = [];
+  // The paused turn's wrap-up is slow: the card is out before the chat is released.
+  const releaseRun = repository.releaseRun.bind(repository);
+  let slow = true;
+  repository.releaseRun = async (...args) => {
+    if (slow) {
+      slow = false;
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const result = await releaseRun(...args);
+      order.push('paused turn released the chat');
+      return result;
+    }
+    return releaseRun(...args);
+  };
+  const service = serviceOn(runLog, interactionService, [
+    toolTurn('dangerous', { target: 'ACME-12' }),
+    textTurn('The ticket was updated.')
+  ]);
+  const pausing = turn(service, {
+    chatId,
+    repository,
+    content: 'Please change ACME-12',
+    tools: [GATED]
+  });
+  // Answer as soon as the approval can be answered.
+  let pending = null;
+  while (!pending) {
+    await new Promise(resolve => setTimeout(resolve, 5));
+    pending = (await repository.getChat(chatId))?.toolApproval?.pending || null;
+  }
+  const { pausedTurn, toolApproval } = await approve({
+    chatId,
+    repository,
+    interactionService,
+    interactionId: pending.interactionId
+  });
+  const unsubscribe = runLog.subscribe(pending.runId, event => {
+    if (event.type === RUN_LOG_EVENTS.RUN_RESUMED) order.push('continuation resumed the run');
+  });
+  t.after(unsubscribe);
+  const answer = await turn(service, {
+    chatId,
+    repository,
+    content: 'Approved: dangerous',
+    tools: [GATED],
+    runId: pausedTurn.runId,
+    continueRun: { interactionId: pausedTurn.interactionId },
+    toolApproval
+  });
+  const paused = await pausing;
+  assert.equal(paused.status, 'paused');
+  assert.equal(answer.runId, paused.runId);
+  assert.deepEqual(order, ['paused turn released the chat', 'continuation resumed the run']);
+  const chat = await repository.getChat(chatId);
+  assert.equal(chat.activeRunId, null, 'released by the continuation, after its answer');
+  const { messages } = await repository.getMessages(chatId);
+  assert.deepEqual(
+    messages.map(m => m.role),
+    ['user', 'user', 'assistant'],
+    'the answer follows the continuation question'
+  );
+});
+
+test('a run still held by its turn beyond the wait is not continued', async t => {
+  const { runLog } = await setup(t);
+  const { runId } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' } });
+  runLog.endRun(runId, { status: 'paused', finishReason: 'approval' });
+  const release = runLog.hold(runId);
+  t.after(release);
+  assert.equal(await runLog.continueRun(runId), null);
+  release();
+  assert.ok(await runLog.continueRun(runId), 'continued once the wrap-up is done');
+});
+
+test('a paused run whose journal was deleted anyway is not continued', async t => {
+  const { runLog } = await setup(t);
+  const { runId } = await runLog.startRun({ kind: 'chat', user: { id: 'u1' } });
+  runLog.endRun(runId, { status: 'paused', finishReason: 'approval' });
+  await runLog.flush();
+  await runLog._store.deleteJournal(runId);
+  assert.equal(await runLog.isJournalDeleted(runId), true);
+  assert.equal(await runLog.continueRun(runId), null, 'the turn gets a run of its own');
+  assert.deepEqual(await runLog.readEvents(runId), [], 'nothing re-created');
+});
+
 test('after a restart the continuation recovers the sequence from the journal', async t => {
   const { runLog, worker, interactionService, repository } = await setup(t);
   const chatId = newChatId('restart');

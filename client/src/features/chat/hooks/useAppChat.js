@@ -20,7 +20,7 @@ import {
 } from '../../../../../shared/run/runReducer.js';
 import { projectMessageRuns } from '../runToMessage';
 import { toolApprovalAnswer } from '../toolApprovalAnswer';
-import { fetchAllLedgerEvents } from '../../../shared/run/ledgerPages';
+import { fetchAllLedgerEvents, lastLifecycleType } from '../../../shared/run/ledgerPages';
 import { fetchWithAuthRetry } from '../../../shared/utils/openSseStream';
 import { takeMcpAppModelContext } from '../mcpApps/modelContextStore';
 import { splitFilesForWire } from '../utils/chatFileUpload';
@@ -1253,6 +1253,7 @@ function useAppChat({
       const stillCurrent = () => currentChatIdRef.current === chatId;
 
       let ended = false;
+      let pausedAgain = false;
       try {
         const { events } = await fetchAllLedgerEvents(async (cursor, limit) => {
           const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
@@ -1272,9 +1273,13 @@ function useAppChat({
           // chat's. Folding a ledger seq would poison gap detection with a
           // counter from the wrong space.
           const { seq: _ledgerSeq, ...live } = envelope;
-          if (live.type === RUN_EVENTS.RUN_ENDED) ended = true;
           await handleEvent({ envelope: live });
         }
+        // The last lifecycle frame says where the run is: a turn continued
+        // after a pause keeps its id, so the replay may pass a pause.
+        const last = lastLifecycleType(events);
+        ended = last === RUN_EVENTS.RUN_ENDED;
+        pausedAgain = last === RUN_EVENTS.RUN_PAUSED;
       } catch (err) {
         console.warn('Could not replay the running turn:', err.message);
       }
@@ -1290,11 +1295,14 @@ function useAppChat({
       }
 
       // The replay may have passed a pause (a turn continued after a
-      // clarification or an approval keeps its run id); the run is live now,
-      // so nothing is waiting for the user.
-      setProcessing(true);
-      setClarificationPending(false);
-      activeClarificationRef.current = null;
+      // clarification or an approval keeps its run id). A run that is live
+      // again is processing and waits for nobody; one that paused again
+      // keeps what the replay of its pause set.
+      if (!pausedAgain) {
+        setProcessing(true);
+        setClarificationPending(false);
+        activeClarificationRef.current = null;
+      }
       reattachedRunRef.current = { runId, onSettled };
       initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
       return true;

@@ -1413,7 +1413,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
             messageId,
             code: prep.error.code,
             message: errMsg,
-            runId: turnRunId
+            // Not the paused run's id: a second request answering the same
+            // pause must not end the run the first one may be continuing.
+            runId: continuesRun ? null : turnRunId
           });
           return res.json({ status: 'error', message: errMsg, code: prep.error.code });
         }
