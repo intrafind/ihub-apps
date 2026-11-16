@@ -181,6 +181,8 @@ hosts and `login.microsoftonline.com` outbound. The admin documentation lists bo
 
 ## Plan
 
+Issues: #3729 (parent), #3733 bot core, #3734 approval cards, #3735 proactive messages.
+
 1. **Bot core**: registration values, endpoint and verification, identity mapping, acknowledgement card,
    1:1 chat through the chat pipeline with a default app, channel policy, admin status card, docs,
    manifest and package script.

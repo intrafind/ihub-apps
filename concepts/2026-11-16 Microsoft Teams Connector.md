@@ -139,6 +139,8 @@ Teams card renderer.
 
 ## Plan
 
+Issues: #3728 (parent), #3730 read actions and sign-in, #3731 write actions, #3732 delivery target.
+
 1. **Read tools and per-user OAuth** (the connector skeleton: definition, `parameters.json`, scope
    builder, connect flow, tests with mocked Graph, docs, migration if an existing installation is
    re-linked).
