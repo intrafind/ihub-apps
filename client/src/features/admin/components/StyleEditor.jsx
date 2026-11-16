@@ -250,7 +250,10 @@ function StyleEditor({ config, onUpdate, t }) {
 
                 return (
                   <div key={key} className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label
+                      htmlFor={`theme-color-${key}`}
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
                       {label}
                     </label>
                     {hint && <p className="text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
@@ -258,11 +261,15 @@ function StyleEditor({ config, onUpdate, t }) {
                     <div className="flex items-center space-x-3">
                       <input
                         type="color"
+                        aria-label={t('admin.ui.styles.colorPicker', '{{name}} (color picker)', {
+                          name: label
+                        })}
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
                         className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs cursor-pointer"
                       />
                       <input
+                        id={`theme-color-${key}`}
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
@@ -285,6 +292,8 @@ function StyleEditor({ config, onUpdate, t }) {
                       {colorPresets.map(color => (
                         <button
                           key={color}
+                          type="button"
+                          aria-label={color}
                           onClick={() => handleThemeColorChange(key, color)}
                           className="w-6 h-6 rounded-sm border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                           style={{ backgroundColor: color }}
@@ -316,18 +325,25 @@ function StyleEditor({ config, onUpdate, t }) {
 
                 return (
                   <div key={`dark-${key}`} className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    <label
+                      htmlFor={`theme-color-dark-${key}`}
+                      className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
                       {label}
                     </label>
 
                     <div className="flex items-center space-x-3">
                       <input
                         type="color"
+                        aria-label={t('admin.ui.styles.colorPicker', '{{name}} (color picker)', {
+                          name: label
+                        })}
                         value={currentColor || defaultColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
                         className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-xs cursor-pointer"
                       />
                       <input
+                        id={`theme-color-dark-${key}`}
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
@@ -350,6 +366,8 @@ function StyleEditor({ config, onUpdate, t }) {
                       {colorPresets.map(color => (
                         <button
                           key={color}
+                          type="button"
+                          aria-label={color}
                           onClick={() => handleThemeColorChange(key, color, true)}
                           className="w-6 h-6 rounded-sm border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                           style={{ backgroundColor: color }}
