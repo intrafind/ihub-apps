@@ -39,6 +39,11 @@ const fixModel = modelId => ({
   href: `/admin/models/${encodeURIComponent(modelId)}`,
   labelKey: `${FIX}.openModel`
 });
+// The model's page opens its "Sync with provider" dialog for a link with `?sync=1`.
+const fixModelSync = modelId => ({
+  href: `/admin/models/${encodeURIComponent(modelId)}?sync=1`,
+  labelKey: `${FIX}.syncModel`
+});
 // The AI notice and the acknowledgement settings are cards of the EU AI Act page.
 const FIX_NOTICE = { href: '/admin/eu-ai-act#ai-notice', labelKey: `${FIX}.openAdvanced` };
 const FIX_ACK = { href: '/admin/eu-ai-act#ai-acknowledgement', labelKey: `${FIX}.openAdvanced` };
@@ -176,8 +181,14 @@ function nameOf(model) {
  * @param {Object|undefined} ctx.probe - Result of the detector probe
  * @param {{ok: boolean, reason?: string}|undefined} ctx.urlPolicy
  * @param {{state: string}} ctx.selfTest - See `selfTestSummary`
+ * @param {string[]} [ctx.providerDeclares] - Kinds the model's provider declares a mark for
+ *   that the model does not carry (see `providerMarkingOffer`): the hint then points at the
+ *   model's Sync button instead of at a manual entry
  */
-export function modelChecks(model, { activeKeyId, probe, urlPolicy, selfTest }) {
+export function modelChecks(
+  model,
+  { activeKeyId, probe, urlPolicy, selfTest, providerDeclares = [] }
+) {
   const out = [];
   const modelId = model.id;
   const params = { model: nameOf(model), modelId };
@@ -211,6 +222,18 @@ export function modelChecks(model, { activeKeyId, probe, urlPolicy, selfTest }) 
               '{{model}} ({{kind}}): marked by the provider, but no statement is referenced.',
               { ...base, params: p }
             )
+      );
+    } else if (providerDeclares.includes(kind)) {
+      // The provider marks this model's output and the model does not say so yet:
+      // "Sync with provider" on the model's page offers the declaration for review.
+      out.push(
+        check(
+          id,
+          LEVEL.WARN,
+          'model.markingAvailable',
+          '{{model}} ({{kind}}): the provider declares a mark for this model, but the model does not say so. Sync with the provider to review it.',
+          { ...base, params: p, fix: fixModelSync(modelId) }
+        )
       );
     } else {
       out.push(

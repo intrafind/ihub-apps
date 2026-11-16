@@ -257,6 +257,8 @@ function AdminModelEditPage() {
     error,
     setError,
     save,
+    reload,
+    isDirty,
     blocker
   } = useAdminResourceEditor({ resourceId: modelId, loadResource, makeDefault, saveResource });
   // A failed load leaves `data` null; fall back to the blank form so the page still
@@ -449,7 +451,11 @@ function AdminModelEditPage() {
               isNewModel,
               apps,
               usage,
-              jsonSchema
+              jsonSchema,
+              isDirty,
+              onSynced: reload,
+              // The EU AI Act page links here with ?sync=1 for a model the provider marks.
+              autoOpenSync: new URLSearchParams(location.search).get('sync') === '1'
             }}
             jsonSchema={jsonSchema}
             title={isNewModel ? t('admin.models.edit.titleNew') : t('admin.models.edit.title')}

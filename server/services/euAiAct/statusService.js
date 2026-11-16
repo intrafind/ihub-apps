@@ -28,6 +28,7 @@ import { detectorConfigOf } from '../provenance/watermark/detect.js';
 import { checkDetectorUrl } from '../provenance/watermark/detectorUrlPolicy.js';
 import { LEVEL, kindsOf, markingOf, modelChecks, platformChecks, worstLevel } from './checks.js';
 import { probeDetectors } from './detectorProbe.js';
+import { providerMarkingOffer } from '../gatewayDrift.js';
 import { readSelfTests, selfTestSummary } from './selfTestStore.js';
 
 function localizedName(model) {
@@ -111,7 +112,13 @@ export async function buildStatus({ refresh = false, deps = {} } = {}) {
     const selfTest = selfTestSummary(selfTests[model.id], activeKeyId);
     const probe = probes.get(model.id);
     checks.push(
-      ...modelChecks(model, { activeKeyId, probe, urlPolicy: urlPolicy.get(model.id), selfTest })
+      ...modelChecks(model, {
+        activeKeyId,
+        probe,
+        urlPolicy: urlPolicy.get(model.id),
+        selfTest,
+        providerDeclares: providerMarkingOffer(model)
+      })
     );
     const kinds = kindsOf(model);
     if (kinds.length === 0) continue;

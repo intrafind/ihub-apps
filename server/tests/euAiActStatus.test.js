@@ -181,6 +181,22 @@ describe('model checks', () => {
     expect(worstLevel(none.map(c => c.level))).toBe('warn');
   });
 
+  test('a model whose provider declares a mark points at the Sync button of the model', () => {
+    const model = { id: 'g', provider: 'google', modelId: 'gemini-3.1-pro' };
+    const offered = modelChecks(model, context({ providerDeclares: ['text'] }));
+    expect(find(offered, 'model.marking.text').messageKey).toBe(
+      'admin.euAiAct.checks.model.markingAvailable'
+    );
+    expect(level(offered, 'model.marking.text')).toBe('warn');
+    expect(find(offered, 'model.marking.text').fix.href).toBe('/admin/models/g?sync=1');
+    // Nothing declared (Mistral): the plain hint, no Sync link.
+    const plain = modelChecks({ id: 'm', provider: 'mistral' }, context({ providerDeclares: [] }));
+    expect(find(plain, 'model.marking.text').messageKey).toBe(
+      'admin.euAiAct.checks.model.notMarked'
+    );
+    expect(find(plain, 'model.marking.text').fix.href).toBe('/admin/models/m');
+  });
+
   test('image marking is checked where the model produces it; read-aloud audio is not marked', () => {
     const image = modelChecks({ id: 'i', supportsImageGeneration: true }, context());
     expect(level(image, 'model.marking.image')).toBe('warn');

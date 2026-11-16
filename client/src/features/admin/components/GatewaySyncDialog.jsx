@@ -33,10 +33,13 @@ const KINDS = ['changed', 'added', 'removed'];
  *
  * @param {Object} props
  * @param {string} props.providerId - The provider (a model gateway or Google)
+ * @param {string} [props.modelId] - Show only this iHub model (the Sync button of a model's page):
+ *   its changes and, when the provider dropped it, the offer to disable it. New models at the
+ *   provider belong to the provider's page and are left out.
  * @param {() => void} props.onClose
  * @param {() => void} [props.onSynced] - Called once after changes were applied, so the page reloads its models
  */
-function GatewaySyncDialog({ providerId, onClose, onSynced }) {
+function GatewaySyncDialog({ providerId, modelId, onClose, onSynced }) {
   const { t } = useTranslation();
 
   // 'loading' | 'review' | 'applying' | 'done' | 'error'
@@ -53,7 +56,10 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
       const response = await makeAdminApiCall(
         `/admin/providers/${encodeURIComponent(providerId)}/_model-drift`
       );
-      const list = Array.isArray(response.data?.items) ? response.data.items : [];
+      const all = Array.isArray(response.data?.items) ? response.data.items : [];
+      const list = modelId
+        ? all.filter(item => item.kind !== 'added' && item.modelId === modelId)
+        : all;
       setItems(list);
       // Changes and gone models start ticked: they bring the imported models in line. New models
       // start unticked: an admin who left a model out on purpose must not make it available to
@@ -71,7 +77,7 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
       });
       setStep('error');
     }
-  }, [providerId]);
+  }, [providerId, modelId]);
 
   useEffect(() => {
     void load();
@@ -200,7 +206,9 @@ function GatewaySyncDialog({ providerId, onClose, onSynced }) {
     if (items.length === 0) {
       return (
         <p role="status" className="text-sm text-gray-700 dark:text-gray-300">
-          {t('admin.providers.sync.inSync', 'The models are in sync with the provider.')}
+          {modelId
+            ? t('admin.providers.sync.modelInSync', 'This model is in sync with the provider.')
+            : t('admin.providers.sync.inSync', 'The models are in sync with the provider.')}
         </p>
       );
     }

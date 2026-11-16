@@ -334,3 +334,42 @@ test('two models of one remote model are separate rows, ticked and sent one by o
   });
   expect(screen.getByText('1 applied, 0 not applied.')).toBeInTheDocument();
 });
+
+describe('scoped to one model (the Sync button of a model page)', () => {
+  test('shows only that model and leaves new models at the provider out', async () => {
+    setup();
+    await open({ modelId: 'gw-qwen' });
+
+    expect(
+      screen.getByRole('heading', { name: /Changed at the provider \(1\)/ })
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /New at the provider/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /No longer available/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('gw-retired')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apply 1' })).toBeEnabled();
+  });
+
+  test('says so when the model already matches the provider', async () => {
+    setup();
+    await open({ modelId: 'gw-other' });
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'This model is in sync with the provider.'
+    );
+  });
+
+  test('applies the pick of the model and tells the page to reload it', async () => {
+    setup();
+    const { onSynced } = await open({ modelId: 'gw-qwen' });
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Apply 1' }));
+    });
+
+    expect(writes()).toHaveLength(1);
+    expect(writes()[0][1].body.items).toEqual([
+      { kind: 'changed', remoteId: 'qwen3-vl', modelId: 'gw-qwen' }
+    ]);
+    expect(onSynced).toHaveBeenCalledTimes(1);
+  });
+});

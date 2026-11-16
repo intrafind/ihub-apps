@@ -16,10 +16,11 @@ const byLevel = (a, b) => ORDER[a.level] - ORDER[b.level];
 function FixLink({ fix, label }) {
   const { t } = useTranslation();
   const text = t(fix.labelKey, 'Open');
-  const [pathname, hash] = fix.href.split('#');
+  const [beforeHash, hash] = fix.href.split('#');
+  const [pathname, search] = beforeHash.split('?');
   return (
     <Link
-      to={{ pathname, hash: hash ? `#${hash}` : '' }}
+      to={{ pathname, search: search ? `?${search}` : '', hash: hash ? `#${hash}` : '' }}
       aria-label={`${text}: ${label}`}
       className="ml-auto text-sm font-medium text-indigo-700 dark:text-indigo-300 hover:underline focus-visible:ring-2 focus-visible:ring-indigo-500 rounded-sm"
     >
@@ -133,6 +134,15 @@ export default function ConfigCheckCard({ status, loading, error, checking, onRe
               <CheckRow key={`${check.id}-${check.modelId || ''}`} check={check} />
             ))}
           </ul>
+          <p
+            data-testid="marking-sync-note"
+            className="mt-4 text-sm text-gray-600 dark:text-gray-400"
+          >
+            {t(
+              'admin.euAiAct.check.syncNote',
+              'Models you added earlier do not follow what their provider declares by themselves. Google and Anthropic say which models mark their output: use "Sync with provider" on a model (Admin → Models) or "Sync models" on the provider\'s page to review and take it over. Mistral and others declare nothing.'
+            )}
+          </p>
           <div className="mt-4 flex flex-wrap items-center gap-3">
             <button
               type="button"

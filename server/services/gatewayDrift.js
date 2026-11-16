@@ -51,6 +51,7 @@ import {
   suggestModelId
 } from '../../shared/modelImportConfig.js';
 import { comparableUrl, stripTrailingSlashes } from './ModelEndpointDiscovery.js';
+import { providerMarkingFacts } from './provenance/providerMarking.js';
 
 /** Order the items are reported in. */
 const KIND_ORDER = { changed: 0, added: 1, removed: 2 };
@@ -134,6 +135,36 @@ function markingToAdopt(model, entry) {
     adopted = true;
   }
   return adopted ? next : null;
+}
+
+/**
+ * The kinds (`text`, `image`) of a configured model that its provider declares a mark
+ * for and the model does not carry yet: what **Sync models** would offer, worked out
+ * from the model alone, without asking the provider. Used by the EU AI Act overview
+ * to point an admin at the Sync button of the model. Empty for a provider that
+ * declares nothing (Mistral, OpenAI, local), for models that generate nothing to mark
+ * and for a model that already has a marking.
+ *
+ * @param {Object} model - A model config (`provider`, `modelId`, `url`, `contentMarking`, …)
+ * @returns {Array<'text'|'image'>}
+ */
+export function providerMarkingOffer(model) {
+  if (!model || modelClass(model) !== 'chat') return [];
+  const facts = providerMarkingFacts(
+    model.provider,
+    { id: model.modelId || model.id, type: 'chat' },
+    {
+      baseUrl: model.url
+    }
+  );
+  const next = markingToAdopt(model, {
+    contentMarking: facts.contentMarking,
+    markingNeedsDefaultSampling: facts.markingNeedsDefaultSampling
+  });
+  if (!next) return [];
+  return ['text', 'image'].filter(
+    kind => isMarked(next[kind]) && !isMarked(model.contentMarking?.[kind])
+  );
 }
 
 /** The fields of `model` that differ from what the provider lists for it now. */

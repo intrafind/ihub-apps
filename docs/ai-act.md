@@ -181,7 +181,10 @@ it; "Not found" only means there is no record, not that a person wrote it.
   marking*). Choose `provider` only with the provider's written statement; iHub cannot check it. The models
   list shows "Not marked" as a hint, never as a block. Models imported from Google, and the Claude models
   Anthropic names, come with the provider's declaration filled in ([Models](models.md#filled-in-on-import)); Mistral
-  documents no mark and gets none.
+  documents no mark and gets none. Models you added **before** this do not follow by themselves: the configuration
+  check on this page flags a model whose provider declares a mark but the model does not say so, with a **Sync with
+  provider** link that opens the model and its sync dialog (see [Models](models.md#syncing-a-single-model)). Nothing is
+  changed until you apply.
 - **Platform:** edit these in **Admin → EU AI Act → Provenance settings** (see below) or in `platform.json`.
   Defaults and bounds (the form and the server refuse values outside them):
 
