@@ -97,7 +97,7 @@ Use an existing instance, or the sizing lab. The lab gives you a fixed CPU budge
 IHUB_CPUS=2 IHUB_WORKERS=2 docker compose -f tests/load/docker-compose.yml up -d
 ```
 
-The compose file already lifts the per-IP rate limits and turns off the AI-use acknowledgement. It allows the stub host for crawling and whitelists `gpu-01.local.intrafind.io` for TLS. **You need the VPN** for the GPU.
+The compose file already lifts the per-IP rate limits. The AI-use acknowledgement stays enforced, as shipped: `run.mjs` confirms it for each user before the clock starts and logs how many chat turns still got a 428 (that must be 0). `IHUB_AI_ACK_ENFORCE=false` turns it off for a comparison run. The compose file allows the stub host for crawling and whitelists `gpu-01.local.intrafind.io` for TLS. **You need the VPN** for the GPU.
 
 ### 2. Prepare it
 

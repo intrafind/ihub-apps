@@ -20,7 +20,7 @@ import zlib from 'node:zlib';
 import { performance } from 'node:perf_hooks';
 import { loadConfig, userName, publicConfig } from './lib/config.mjs';
 import { Metrics } from './lib/metrics.mjs';
-import { Client, login } from './lib/http.mjs';
+import { Client, login, ensureAiAcknowledged } from './lib/http.mjs';
 import { loadFixtures } from './lib/fixtures.mjs';
 import { listProjects } from './lib/projects.mjs';
 import { runSchedule, buildTimeline } from './lib/scheduler.mjs';
@@ -92,12 +92,16 @@ if (cfg.users.count < cfg.maxVus) {
   );
 }
 
+let aiAcknowledged = 0;
 async function loginUser(idx) {
   const username = userName(cfg, idx);
   const { client } = await withRetry(
     () => login({ baseUrl: cfg.baseUrl, username, password: cfg.users.password }),
     { label: `login ${username}` }
   );
+  // A restored state may have no acknowledgements: confirm before the clock starts,
+  // or the enforced 428 guard blocks every chat of this user.
+  if (await ensureAiAcknowledged(client)) aiAcknowledged += 1;
   client.metrics = metrics;
   client.rate = { tracker: rateTracker, user: username };
   let projects = { own: [], shared: [] };
@@ -120,7 +124,7 @@ const withProjects = [...sessions.values()].filter(
   s => s.projects.own.length + s.projects.shared.length > 0
 ).length;
 log(
-  `logged in ${sessions.size} users in ${((performance.now() - t0Login) / 1000).toFixed(1)} s · ${withProjects} see LT-chat projects`
+  `logged in ${sessions.size} users in ${((performance.now() - t0Login) / 1000).toFixed(1)} s · ${withProjects} see LT-chat projects · ${aiAcknowledged} confirmed the AI-use notice`
 );
 if (cfg.mix.projectChat > 0 && withProjects === 0) {
   console.error(
@@ -249,6 +253,9 @@ const result = await runSchedule({
   }
 });
 samplers.stop();
+// Every user confirmed the notice before the clock started, so this has to be 0.
+const ack428 = Object.values(metrics.counts['chat.ack428'] || {}).reduce((a, b) => a + b, 0);
+log(`chat turns refused with 428 (AI acknowledgement): ${ack428}`);
 rateTracker.flush();
 rateTracker.stop();
 if (result.abandonedVus)

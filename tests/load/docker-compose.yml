@@ -26,7 +26,9 @@ services:
       IHUB_PLATFORM__RATE_LIMIT__PUBLIC_API__LIMIT: ${IHUB_PUBLIC_API_LIMIT:-1000000}
       IHUB_PLATFORM__RATE_LIMIT__ADMIN_API__LIMIT: ${IHUB_ADMIN_API_LIMIT:-100000}
       IHUB_PLATFORM__RATE_LIMIT__INFERENCE_API__LIMIT: ${IHUB_INFERENCE_API_LIMIT:-1000000}
-      IHUB_PLATFORM__AI_ACKNOWLEDGEMENT__ENFORCE: 'false'
+      # The AI-use acknowledgement is enforced by default, as shipped; IHUB_AI_ACK_ENFORCE=false
+      # measures without it (run.mjs confirms the notice for its users before the clock starts).
+      IHUB_PLATFORM__AI_ACKNOWLEDGEMENT__ENFORCE: ${IHUB_AI_ACK_ENFORCE:-true}
       # Crawl the stub site (private address) and reach the GPU with the internal CA.
       IHUB_PLATFORM__SSRF__ALLOWED_HOSTS: '["loadtest-stubs"]'
       IHUB_PLATFORM__SSL__DOMAIN_WHITELIST: '["gpu-01.local.intrafind.io"]'

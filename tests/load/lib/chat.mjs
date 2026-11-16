@@ -167,6 +167,7 @@ export class ChatSession {
         }
         const b = postResult.body;
         if (!postResult.ok) {
+          if (postResult.status === 428) metrics.count('chat.ack428');
           streamError = { code: b?.code || `HTTP_${postResult.status}` };
           break;
         }

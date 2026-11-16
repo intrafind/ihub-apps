@@ -22,7 +22,7 @@
  */
 
 import { loadConfig, userName } from './lib/config.mjs';
-import { login, HttpError } from './lib/http.mjs';
+import { login, HttpError, ensureAiAcknowledged } from './lib/http.mjs';
 import { loadFixtures, TOPICS } from './lib/fixtures.mjs';
 import {
   createProject,
@@ -257,18 +257,7 @@ await mapLimit(
 log(`logged in ${users} users`);
 let acknowledged = 0;
 for (const { client } of clients) {
-  const me = await client.get('/api/eu-ai-act/acknowledgements/me');
-  if (me.status === 200 && me.body?.enabled && me.body?.enforce && !me.body?.acknowledged) {
-    await client.request('POST', '/api/eu-ai-act/acknowledgements/me', {
-      json: {
-        version: me.body.requiredVersion,
-        textHash: me.body.textHash,
-        language: me.body.language
-      },
-      expect: [200, 201]
-    });
-    acknowledged += 1;
-  }
+  if (await ensureAiAcknowledged(client)) acknowledged += 1;
 }
 if (acknowledged) log(`confirmed the AI-use notice for ${acknowledged} users`);
 
