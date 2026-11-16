@@ -921,7 +921,9 @@ tool, in the installation's `actions.overrides.<tool>` — see
 - Jira, other connected systems and any MCP tool that merely has "search" in its name stay plain
   tool calls.
 - Brave, Qwant and Staan search, the page reader, project knowledge and iFinder look as before.
-- The activity and sources of chats stored earlier are unchanged.
+- The activity and sources of chats stored earlier are unchanged, with one exception: a shared chat
+  keeps a web search's hits only for runs recorded from now on (the server marks them public). Shares
+  of older chats show the search and its query, but no longer its hits.
 
 **Before upgrading:** if a custom tool or an MCP server (for example Tavily) is a real web search
 and its calls should keep showing as one, with its pages as sources and in the citations, declare it
