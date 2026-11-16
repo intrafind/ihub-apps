@@ -2177,7 +2177,9 @@ whether projects, the web or connected systems carry the load and where searches
 - `ihub.answer.basis` counts answers by how many kinds of source they rest on.
 - `ihub.answer.origin.mismatch` counts answers whose footer and Sources panel would disagree; it is
   expected to stay at 0.
-- `ihub.source.actions` counts opens of a source document and its details through an integration.
+- `ihub.source.actions` counts successful requests for a source document's content or details
+  through an integration, by the integration's catalog definition. A preview and a download both
+  count as content, and opens of an external link are not counted.
 
 The labels come from small fixed sets, so the metrics add a handful of series, never one per chat or
 tool. See [Telemetry](../../telemetry.md).

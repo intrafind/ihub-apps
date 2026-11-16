@@ -136,6 +136,22 @@ export async function resolveDocumentProvider(id, user) {
 }
 
 /**
+ * The provider of a document, for a counter label: the installation's catalog
+ * definition (`com.intrafind/ifinder`), the id of a built-in provider
+ * (`project`), `unknown` for anything else. Two installations of one
+ * definition share a label, and an id nobody installed never becomes one, so
+ * the label set stays as small as the catalog.
+ *
+ * @param {string} id
+ * @returns {string}
+ */
+export function documentProviderCategory(id) {
+  const instance = installedList().find(entry => entry?.id === id);
+  if (instance) return typeof instance.definition === 'string' ? instance.definition : 'unknown';
+  return hasSourceProvider(id) ? String(id) : 'unknown';
+}
+
+/**
  * What the probe answers for an id after {@link resolveDocumentProvider}: the
  * installation's description, or just the id for a provider that is not one.
  *
