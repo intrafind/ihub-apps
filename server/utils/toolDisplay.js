@@ -13,6 +13,8 @@
  *  - `activityOrigin`: where the call looked, in the footer's vocabulary of
  *    answer-basis kinds (`project`, `web`, `ifinder`, `documents`,
  *    `integration`); absent when the server does not know
+ *  - `publicHits`: `true` when what the call found is on the open web (a shipped
+ *    web search engine); a share keeps those hits and drops every other call's
  *  - `outputKind`: for the built-in creators of a file or a document (a web
  *    artifact, a PDF, a workbook …), what they produce. It is sent on the
  *    `args` progress frames while the arguments still stream, where the chat
@@ -23,8 +25,8 @@
  */
 
 import { categoryOf } from '../services/tools/toolCategory.js';
+import { hasPublicHits } from '../services/sources/producers/web.js';
 import { boundedText, integrationLabelOf } from './toolIntegrationLabel.js';
-import { activityOriginOfSource } from '../services/chat/answerBasis.js';
 import { ACTIVITY_ORIGINS } from '../../shared/runEvents.js';
 
 export { ACTIVITY_ORIGINS };
@@ -46,7 +48,7 @@ export function activityOriginOf(toolDef) {
   return categoryOf(toolDef).origin;
 }
 
-export { activityOriginOfSource };
+export { activityOriginOfSource } from '../services/chat/answerBasis.js';
 
 /** What the built-in creator tools produce; the chat words each one. */
 export const OUTPUT_KINDS = Object.freeze([
@@ -79,7 +81,7 @@ export function outputKindOf(toolDef) {
 
 /**
  * @param {Object|null|undefined} toolDef - the resolved (localized) tool definition
- * @returns {{title?: string, integration?: string, activityKind?: string, activityOrigin?: string, outputKind?: string}}
+ * @returns {{title?: string, integration?: string, activityKind?: string, activityOrigin?: string, publicHits?: true, outputKind?: string}}
  *   the fields that are known; nothing for an unknown tool (a plain call)
  */
 export function toolDisplayOf(toolDef) {
@@ -105,12 +107,14 @@ export function toolDisplayOf(toolDef) {
   const { kind: activityKind, origin: activityOrigin } = categoryOf(toolDef);
 
   const outputKind = outputKindOf(toolDef);
+  const publicHits = hasPublicHits(toolDef);
 
   return {
     ...(title ? { title } : {}),
     ...(integration ? { integration } : {}),
     activityKind,
     ...(activityOrigin ? { activityOrigin } : {}),
+    ...(publicHits ? { publicHits: true } : {}),
     ...(outputKind ? { outputKind } : {})
   };
 }

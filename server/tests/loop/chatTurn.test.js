@@ -712,6 +712,7 @@ test('tools path: step/completed{tool_calls} → tool/started → tool/completed
     // The server decides how the chat draws the call: a web search.
     activityKind: 'search',
     activityOrigin: 'web',
+    publicHits: true,
     args: { query: 'berlin' },
     execution: 'server'
   });

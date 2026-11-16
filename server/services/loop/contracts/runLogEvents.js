@@ -300,6 +300,8 @@ export const toolCallData = z.object({
    * inferred from the tool id by the client.
    */
   activityOrigin: z.enum(ACTIVITY_ORIGINS).optional(),
+  /** What the call found is on the open web (a shipped web search engine): a share keeps its hits. */
+  publicHits: z.literal(true).optional(),
   args: z.any(),
   argsRepaired: z.boolean().optional(),
   /** Execution class decided by the segment planner. */

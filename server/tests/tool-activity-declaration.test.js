@@ -165,3 +165,25 @@ test('people, ticket and MCP tools called "search" are never shown as a web sear
     ['search', 'search', 'tool', 'tool']
   );
 });
+
+test('only the shipped web search engines say their hits are public', () => {
+  const engine = id =>
+    toolFromAction(resolved(`com.intrafind/${id}-search`), action('search'), 'en');
+  for (const id of ['brave', 'qwant', 'staan']) {
+    assert.equal(toolDisplayOf(engine(id)).publicHits, true, id);
+  }
+  // A third-party engine, a tool named like one and the page reader are not public.
+  const thirdParty = {
+    ...engine('brave'),
+    _integration: { definition: 'org.acme/search', action: 'search' }
+  };
+  assert.equal(toolDisplayOf(thirdParty).publicHits, undefined);
+  assert.equal(
+    toolDisplayOf({ id: 'braveSearch', activity: { kind: 'search', origin: 'web' } }).publicHits,
+    undefined
+  );
+  assert.equal(
+    toolDisplayOf({ id: 'read_url', activity: { kind: 'fetch', origin: 'web' } }).publicHits,
+    undefined
+  );
+});
