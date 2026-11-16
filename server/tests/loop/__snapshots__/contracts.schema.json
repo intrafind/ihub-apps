@@ -1006,6 +1006,10 @@
                 "type": "string",
                 "enum": ["project", "web", "ifinder", "iassistant", "documents", "integration"]
               },
+              "publicHits": {
+                "type": "boolean",
+                "const": true
+              },
               "args": {},
               "argsRepaired": {
                 "type": "boolean"
@@ -5014,6 +5018,10 @@
               "activityOrigin": {
                 "type": "string",
                 "enum": ["project", "web", "ifinder", "iassistant", "documents", "integration"]
+              },
+              "publicHits": {
+                "type": "boolean",
+                "const": true
               },
               "args": {},
               "execution": {

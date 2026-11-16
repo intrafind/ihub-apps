@@ -73,6 +73,18 @@ function isPageReader(toolDef) {
   return kind === 'fetch' && origin === 'web';
 }
 
+/**
+ * Whether what the tool found is public: it searched the web and ran one of
+ * the platform's own engines. The server says so on the call (`publicHits`),
+ * and a share keeps such hits; never decided from the tool id.
+ *
+ * @param {Object} [toolDef]
+ * @returns {boolean}
+ */
+export function hasPublicHits(toolDef) {
+  return isWebSearch(toolDef) && isBuiltInWebSearch(toolDef?.id, toolDef);
+}
+
 /** Whether the tool searches the web: a search whose origin is the web. */
 function isWebSearch(toolDef) {
   const { kind, origin } = categoryOf(toolDef);

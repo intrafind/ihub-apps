@@ -458,6 +458,8 @@ function callRow(run, { tool, stream }, finished) {
       // Where the server says the call looked (`activityOrigin`): never worked
       // out here from the tool id or the provider. null = not said.
       origin: tool?.activityOrigin || stream?.activityOrigin || null,
+      // The server says the hits are on the open web: a share keeps them.
+      publicHits: tool?.publicHits === true ? true : undefined,
       // What the server declared the call came to: the hits of a search (0
       // included), whether a read delivered text (`opened`, `empty`). null =
       // not declared, never worked out from `sources`.

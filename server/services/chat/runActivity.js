@@ -363,6 +363,8 @@ function boundToolItem(item) {
     id: text(item.id, MAX_LABEL_CHARS),
     kind: item.kind,
     native: item.native === true ? true : undefined,
+    // The server said the hits are on the open web (a shipped engine): a share keeps them.
+    publicHits: item.publicHits === true ? true : undefined,
     toolId: text(item.toolId, MAX_LABEL_CHARS),
     name: text(item.name, MAX_LABEL_CHARS),
     // A `skill` row: which skill, and who brought it in (`SKILL_ACTIVATORS`).
@@ -532,15 +534,14 @@ export function boundStoredActivity(activity) {
 }
 
 /**
- * Tools whose hits are public pages: what they found is on the open web, not
- * behind the owner's permissions. Provider-run web search (`native`) is too.
- * The page reader (`read_url`) is not: hosts on the SSL whitelist
- * bypass its private-address guard, so a page it read may be an intranet one.
+ * Calls whose hits are public pages: what they found is on the open web, not
+ * behind the owner's permissions. The server says so (`publicHits`, a shipped
+ * web search engine), never the tool id; provider-run web search (`native`) is
+ * too. The page reader is not: hosts on the SSL whitelist bypass its
+ * private-address guard, so a page it read may be an intranet one.
  */
-const PUBLIC_WEB_TOOLS = new Set(['bravesearch', 'qwantsearch', 'staansearch']);
-
 function isPublicWebItem(item) {
-  return item?.native === true || PUBLIC_WEB_TOOLS.has(String(item?.toolId || '').toLowerCase());
+  return item?.native === true || item?.publicHits === true;
 }
 
 /**
