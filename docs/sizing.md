@@ -183,7 +183,22 @@ The shipped rate limits and the model concurrency fit a company of **10,000 empl
 
 **Demand per user** (load test, `company` mix, page loads included): 2 requests per minute at the
 median, 18 at the 99th percentile, at most 50. 1,000 users from one address made at most 2,025
-requests per minute on the general API. _Measured values with the new defaults: to be added._
+requests per minute on the general API.
+
+**Measured** (1,000 test users from two addresses, 6 workers, stub model with 7 s answers):
+
+| Run                                         | Chat turns/min | First word p50 / p95 | Failed turns | HTTP errors | 429s   |
+| ------------------------------------------- | -------------: | -------------------: | -----------: | ----------: | -----: |
+| Lab without limits (reference)              |          1,359 |       0.8 s / 1.1 s |           0% |          0% |      0 |
+| Old defaults: 500 per IP                    |            961 |       1.0 s / 3.4 s |      **38%** |     **45%** | 20,387 |
+| Old default: 5 calls at once per model      |            426 |      **96 s / 100 s** |           0% |          0% |      0 |
+| New defaults: 300 per user, 25 per model    |          1,359 |       0.8 s / 1.4 s |           0% |          0% |      0 |
+
+- With the old per-address limit, about 115 users per address and worker fit before the first
+  429; behind one NAT address most of the company is refused.
+- With 5 calls at once, every call waits for a slot: the server is idle (19% CPU) while the first
+  word takes a minute and a half.
+- With the new defaults, the busiest user made 48 requests per minute against a limit of 300.
 
 | Setting                                  | Default                       | Counts per                         | Why                                                                                       |
 | ---------------------------------------- | ----------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
