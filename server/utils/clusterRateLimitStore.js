@@ -92,7 +92,7 @@ export class ClusterRateLimitStore {
   }
 
   async _ask(channel, payload) {
-    const reply = await request(channel, payload, { timeoutMs: BUS_TIMEOUT_MS });
+    const reply = await request(channel, payload, { timeoutMs: BUS_TIMEOUT_MS, primaryOnly: true });
     if (reply === null && !this._warned) {
       this._warned = true;
       logger.warn('Rate limit: no answer from the primary process; counting on this worker', {

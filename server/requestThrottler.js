@@ -186,12 +186,16 @@ async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayO
   const grant = await request(
     ACQUIRE_CHANNEL,
     { id, limit, delayMs, ticket, pid: process.pid },
-    { timeoutMs: CLUSTER_ACQUIRE_TIMEOUT_MS }
+    { timeoutMs: CLUSTER_ACQUIRE_TIMEOUT_MS, primaryOnly: true }
   );
   if (!grant?.granted) {
     // No answer from the primary. Withdraw the ticket, in case a slot is
     // granted to it after all, and fall back to this worker's own limits.
-    void request(CANCEL_CHANNEL, { id, ticket }, { timeoutMs: RELEASE_TIMEOUT_MS });
+    void request(
+      CANCEL_CHANNEL,
+      { id, ticket },
+      { timeoutMs: RELEASE_TIMEOUT_MS, primaryOnly: true }
+    );
     logger.warn('Request throttle: no slot from the primary process; using this worker only', {
       component: 'RequestThrottler',
       id
@@ -210,7 +214,11 @@ async function clusterThrottledRun(id, limit, delayMs, fn, concurrencyOf, delayO
     diag.wait.record(performance.now() - startedAt);
     return await fn();
   } finally {
-    void request(RELEASE_CHANNEL, { id, ticket }, { timeoutMs: RELEASE_TIMEOUT_MS });
+    void request(
+      RELEASE_CHANNEL,
+      { id, ticket },
+      { timeoutMs: RELEASE_TIMEOUT_MS, primaryOnly: true }
+    );
   }
 }
 

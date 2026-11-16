@@ -43,7 +43,8 @@
  *
  *  - **request/reply** — `request(type, payload, {route})` asks another worker a
  *    question and awaits its answer; `respond(type, handler)` answers. Built on
- *    pub/sub with correlation ids, so the primary stays a dumb repeater. Needed
+ *    pub/sub with correlation ids, so the primary stays a dumb repeater; the
+ *    question carries the asker's worker id and the reply goes to it alone. Needed
  *    when the state cannot be replicated because reading it *mutates* it — a
  *    single-use OAuth authorization code has to be consumed on exactly one
  *    worker, so the worker holding it is asked to consume it rather than being
@@ -355,6 +356,11 @@ export function initPrimaryBus({ getWorkers }) {
         // A question only the primary can answer (quota counters): repeating it
         // to every worker would make each one deserialise and drop it.
         if (message.primaryOnly) break;
+        // A reply names the worker that asked; nobody else holds its id.
+        if (message.to !== undefined) {
+          sendTo(message.to, message);
+          break;
+        }
         // A directed message names the presence entry that should receive it.
         // The primary is the only process that knows who owns what, so it can
         // deliver straight to that worker; chat token streams are the hot path
@@ -652,12 +658,15 @@ export function isClusterBusActive() {
  * @param {object} [options]
  * @param {boolean} [options.primaryOnly=false] - Only the primary's responder
  *   sees the message; it is not repeated to the workers.
+ * @param {number} [options.to] - Cluster worker id to deliver to, and only to.
+ *   Replies use it to reach the asker; the route is then ignored.
  * @returns {boolean} Whether the message was handed to the primary.
  */
-export function publish(type, payload, route, { primaryOnly = false } = {}) {
+export function publish(type, payload, route, { primaryOnly = false, to } = {}) {
   if (!busActive) return false;
   const message = { kind: MSG_PUBLISH, type, payload, route };
   if (primaryOnly) message.primaryOnly = true;
+  if (to !== undefined) message.to = to;
   const sent = sendToPrimary(message);
   if (sent) {
     stats.published += 1;
@@ -702,8 +711,8 @@ const replyChannels = new Set();
 let nextRequestId = 1;
 
 /**
- * Correlation id. The pid makes it unique across the cluster, so a reply
- * broadcast can never settle a different worker's pending request.
+ * Correlation id. The pid makes it unique across the cluster, so a reply can
+ * never settle a different worker's pending request.
  */
 function newRequestId() {
   return `${process.pid}:${nextRequestId++}`;
@@ -715,7 +724,7 @@ function ensureReplyChannel(type) {
   subscribe(type + REPLY_SUFFIX, message => {
     const id = message?.requestId;
     if (typeof id !== 'string') return;
-    // Replies fan out to every worker; only the originator holds the id.
+    // Replies are addressed to the asker (`replyTo`), so the id is ours.
     const collect = pendingGathers.get(id);
     if (collect) {
       collect(message.reply);
@@ -779,7 +788,9 @@ export function request(type, payload, { route, timeoutMs = 1500, primaryOnly = 
       resolve(reply === undefined ? null : reply);
     });
 
-    if (!publish(type, { requestId, payload }, route, { primaryOnly })) {
+    if (
+      !publish(type, { requestId, payload, replyTo: cluster.worker?.id }, route, { primaryOnly })
+    ) {
       clearTimeout(timer);
       pendingRequests.delete(requestId);
       diag.unsent += 1;
@@ -835,7 +846,7 @@ export function gather(type, payload, { expected, timeoutMs = 1000 } = {}) {
       if (Number.isFinite(expected) && replies.length >= expected) finish();
     });
 
-    if (!publish(type, { requestId, payload })) finish();
+    if (!publish(type, { requestId, payload, replyTo: cluster.worker?.id })) finish();
   });
 }
 
@@ -894,7 +905,9 @@ export function respond(type, handler) {
     }
 
     if (reply === undefined) return;
-    publish(type + REPLY_SUFFIX, { requestId, reply });
+    // Straight back to the asker; without `replyTo` every other worker would
+    // receive, parse and drop the reply.
+    publish(type + REPLY_SUFFIX, { requestId, reply }, undefined, { to: message.replyTo });
   });
 }
 

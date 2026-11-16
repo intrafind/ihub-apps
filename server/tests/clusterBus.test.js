@@ -27,6 +27,7 @@ import {
   respondInPrimary,
   request
 } from '../clusterBus.js';
+import { getWaitDiagnostics, resetWaitDiagnosticsForTests } from '../telemetry/waitDiagnostics.js';
 
 const WORKER_COUNT = 3;
 /** Time allowed for an announcement to reach the primary and fan back out. */
@@ -249,6 +250,23 @@ async function runPrimary() {
       assert.ok(gathered.elapsedMs < 2000, `took ${gathered.elapsedMs}ms`)
     );
 
+    // ---- replies go to the asker only ----
+    // A reply used to be broadcast: every worker but the replier received it,
+    // deserialised it and dropped it, since only the asker holds the id.
+    await askAll(() => ({ step: 'reset-stats' }));
+    await ask(workers[0], { step: 'gather', expected: WORKER_COUNT, timeoutMs: 3000 });
+    const asked = await ask(workers[0], { step: 'request' });
+    await settle();
+    const replyCounts = await askAll(() => ({ step: 'reply-count', type: 'test:whoami:reply' }));
+    check('request and gather replies reach the asker and no other worker', () => {
+      assert.ok(asked.reply?.pid, 'the request was answered');
+      // Two gather replies and one request reply from the workers, and one of
+      // each from the primary; the request settles on the first, but all arrive.
+      assert.strictEqual(replyCounts[0].received, 6);
+      assert.strictEqual(replyCounts[1].received, 0);
+      assert.strictEqual(replyCounts[2].received, 0);
+    });
+
     // ---- a dead worker's registrations are retracted ----
     // Otherwise the survivors keep relaying into a process that no longer
     // exists, and every event for that chat is silently dropped.
@@ -433,6 +451,16 @@ function runWorker() {
         );
         break;
       }
+      case 'request':
+        request('test:whoami', null, { timeoutMs: 2000 }).then(r => reply({ reply: r }));
+        break;
+      case 'reset-stats':
+        resetWaitDiagnosticsForTests();
+        reply({ ok: true });
+        break;
+      case 'reply-count':
+        reply({ received: getWaitDiagnostics().busTypes?.[msg.type]?.received ?? 0 });
+        break;
       case 'disconnect':
         // Close the channel but stay alive for a while, like a worker that is
         // crashing: not dead yet, unreachable already.
