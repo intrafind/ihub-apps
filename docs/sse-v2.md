@@ -221,6 +221,9 @@ one is missing and never works them out from a tool id or a provider. The old `a
   [`activity`](tool-calling.md#what-a-tool-is-in-the-chat-activity)). Absent when the tool declares no
   origin and is no connected system. `read_url` declares `web`; an integration is named by `integration`.
   `activityKind` (`search | fetch | tool`) comes from the same declaration, never from the tool id.
+  `tool/started` and the ledger `tool/call` may also carry `publicHits: true` when what the call found
+  is on the open web (a web search run by a shipped engine): a shared chat keeps those hits and drops
+  the hits of every other call.
 - `tool/completed` and the ledger `tool/result` may carry `resultCount` (hits a search returned, `0`
   included; absent when unknown, so an empty source list is never "no results") and `readOutcome`
   (`opened`: a page or document read delivered text; `empty`: it completed without, for example
