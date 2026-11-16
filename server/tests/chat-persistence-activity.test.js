@@ -637,6 +637,7 @@ describe('what a share carries of the activity', () => {
           id: 'w',
           kind: 'search',
           toolId: 'braveSearch',
+          publicHits: true,
           query: 'public',
           sources: [{ url: 'https://example.org' }]
         },
@@ -672,6 +673,26 @@ describe('what a share carries of the activity', () => {
     assert.equal(shared.searchSummary.totalHits, 12);
     assert.deepEqual(shared.searchSummary.applications, []);
     assert.deepEqual(shared.searchSummary.sources, []);
+  });
+
+  it('keeps a call’s hits only when the server said they are public, never because of its id', () => {
+    const hits = [{ url: 'https://example.org' }];
+    const shared = shareableActivity({
+      toolActivity: {
+        items: [
+          { id: 'a', kind: 'search', toolId: 'braveSearch', publicHits: true, sources: hits },
+          // Named like the shipped engine, but the server did not say its hits are public.
+          { id: 'b', kind: 'search', toolId: 'braveSearch', sources: hits }
+        ]
+      }
+    });
+    assert.deepEqual(shared.toolActivity.items[0].sources, hits);
+    assert.deepEqual(shared.toolActivity.items[1].sources, []);
+    // The flag survives storing the activity.
+    const stored = boundStoredActivity({
+      toolActivity: { items: [{ id: 'a', kind: 'search', toolId: 'x', publicHits: true }] }
+    });
+    assert.equal(stored.toolActivity.items[0].publicHits, true);
   });
 
   it('keeps that a private project was used, not which one', () => {

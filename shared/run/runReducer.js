@@ -738,6 +738,8 @@ export function reduceRunEvent(state, envelope) {
         activityKind: data.activityKind || null,
         // Where it looked, in the footer's vocabulary (server `activityOriginOf`).
         activityOrigin: originOrNull(data.activityOrigin),
+        // The server says the hits are on the open web (a shipped engine); a share keeps them.
+        publicHits: data.publicHits === true ? true : null,
         args: data.args,
         execution: data.execution || 'server',
         status: 'running',
