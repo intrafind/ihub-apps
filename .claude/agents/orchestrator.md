@@ -56,6 +56,7 @@ Once code passes all quality gates:
    - Summary of all quality check reports
    - List of any issues resolved during iterations
    - Clear next steps for human review
+   - The AI-drafted preamble and footer, as defined in `CLAUDE.md`, "AI Attribution"
 3. Assign the pull request to a human engineer for final review and merge
 
 ## Operational Guidelines
