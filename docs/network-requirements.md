@@ -170,7 +170,7 @@ destinations, prefer trusting the CA over a long whitelist.
 6. Check the server log (component `HttpConfig`) for lines that say a proxy was
    loaded and for "SSL bypass not applied" warnings.
 
-For a step-by-step proxy verification see [Proxy Testing](proxy-testing-guide.md).
+For a step-by-step proxy verification see [Verify the proxy](proxy-configuration.md#verify-the-proxy).
 
 ## See also
 

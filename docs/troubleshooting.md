@@ -23,7 +23,7 @@ Start here when you see a problem but do not yet know the cause. Each entry list
 
 - Confirm `auth.authMode` and the enabled `auth.authMethods` in `contents/config/platform.json` match the login you expect. See [Login Failures](#login-failures).
 - For local accounts, check that the entry in `users.json` has a `passwordHash`. The same section describes the rehash utility.
-- For SSO, see [OIDC/SSO Authentication Problems](#oidcsso-authentication-problems). For LDAP, see [LDAP group mapping troubleshooting](LDAP-GROUP-MAPPING-TROUBLESHOOTING.md).
+- For SSO, see [OIDC/SSO Authentication Problems](#oidcsso-authentication-problems). For LDAP, see [LDAP group lookup and mapping](LDAP-GROUP-LOOKUP-QUICKSTART.md#troubleshooting).
 
 ### A model is unavailable or answers with an error
 
