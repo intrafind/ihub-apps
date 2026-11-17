@@ -20,6 +20,8 @@ import { FilesystemStorageProvider } from '../storage/providers/filesystem/index
 import { AiAcknowledgementRepository } from '../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 import {
   importAcknowledgements,
+  locateUsersFile,
+  moveAcknowledgements,
   precondition,
   version
 } from '../migrations/V255__move_ai_acknowledgements_to_runtime_store.js';
@@ -160,5 +162,104 @@ describe('V255 move AI acknowledgements to the runtime store', () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
+  });
+
+  it('locates usersFile the way the server does (relative to the installation root)', () => {
+    const rootDir = path.resolve('/srv/ihub');
+    const contentsDir = path.join(rootDir, 'contents');
+    const at = (configured, dirs = { rootDir, contentsDir }) => locateUsersFile(configured, dirs);
+    assert.deepEqual(at('contents/config/users.json'), {
+      fullPath: path.join(contentsDir, 'config/users.json'),
+      relPath: 'config/users.json'
+    });
+    // Not under contents/: read and written outside it, never as <contents>/secrets/...
+    assert.deepEqual(at('secrets/users.json'), {
+      fullPath: path.join(rootDir, 'secrets/users.json'),
+      relPath: null
+    });
+    // A renamed contents directory (CONTENTS_DIR=data).
+    assert.equal(
+      at('data/config/users.json', { rootDir, contentsDir: path.join(rootDir, 'data') }).relPath,
+      'config/users.json'
+    );
+    assert.equal(at(path.join(contentsDir, 'auth/users.json')).relPath, 'auth/users.json');
+    assert.equal(at(path.resolve('/mnt/secret/users.json')).relPath, null);
+  });
+
+  it('warns when a configured usersFile does not exist', async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-v255-missing-'));
+    try {
+      await fs.mkdir(path.join(dir, 'config'), { recursive: true });
+      const missing = path.join(dir, 'nowhere/users.json');
+      await fs.writeFile(
+        path.join(dir, 'config/platform.json'),
+        JSON.stringify({ localAuth: { usersFile: missing } })
+      );
+      const warnings = [];
+      const ctx = {
+        contentsDir: dir,
+        fileExists: rel =>
+          fs.access(path.join(dir, rel)).then(
+            () => true,
+            () => false
+          ),
+        readJson: async rel => JSON.parse(await fs.readFile(path.join(dir, rel), 'utf8')),
+        warn: message => warnings.push(message)
+      };
+      assert.equal(await precondition(ctx), false);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0], /does not exist/);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps what older servers wrote to users.json while the documents were written', async () => {
+    await withStore(async open => {
+      const provider = await open();
+      const snapshot = legacyUsers();
+      // users.json as an older server left it after the snapshot was read:
+      // a new user, an admin edit, and a confirmation that landed in the meantime.
+      const fresh = legacyUsers();
+      fresh.users.dave = { username: 'dave', aiAcknowledgements: [V1] };
+      fresh.users.carol.name = 'Carol';
+      fresh.users.alice.aiAcknowledgements.push({ ...V2, version: 3 });
+      let written;
+      const result = await moveAcknowledgements({
+        documents: provider.documents,
+        snapshot,
+        update: async change => {
+          written = await change(structuredClone(fresh));
+        }
+      });
+      assert.equal(result.entries, 4);
+      assert.equal(written.users.carol.name, 'Carol');
+      assert.equal(written.users.dave.username, 'dave');
+      for (const user of Object.values(written.users)) {
+        assert.equal(Object.hasOwn(user, 'aiAcknowledgements'), false);
+        assert.equal(Object.hasOwn(user, 'aiAcknowledgementsClearedAt'), false);
+      }
+      const repository = new AiAcknowledgementRepository({ documents: provider.documents });
+      assert.deepEqual((await repository.get('dave')).aiAcknowledgements, [V1]);
+      assert.deepEqual(
+        (await repository.get('alice')).aiAcknowledgements.map(entry => entry.version),
+        [1, 2, 3]
+      );
+    });
+  });
+
+  it('writes nothing under the lock when another run already stripped users.json', async () => {
+    await withStore(async open => {
+      const provider = await open();
+      let written = 'untouched';
+      await moveAcknowledgements({
+        documents: provider.documents,
+        snapshot: legacyUsers(),
+        update: async change => {
+          written = await change({ users: { carol: { username: 'carol' } } });
+        }
+      });
+      assert.equal(written, undefined);
+    });
   });
 });

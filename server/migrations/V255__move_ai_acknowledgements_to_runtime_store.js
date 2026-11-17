@@ -16,8 +16,10 @@
  * lock) before any worker serves, and V219 already brings the storage provider
  * up the same way. Safe to run again: the documents are written first, merged
  * with what a document already holds (an entry per version, the existing one
- * wins; the later cleared stamp wins), and users.json is changed only after.
- * A run that stops between the two steps is repeated in full on the next start.
+ * wins; the later cleared stamp wins), and users.json is changed only after,
+ * from a fresh read under the lock the server writes it under (see
+ * `moveAcknowledgements`). A run that stops between the two steps is repeated
+ * in full on the next start.
  *
  * Self-contained: the document key and shape are a snapshot of
  * `AiAcknowledgementRepository` as of V255. Do NOT replace them with an import.
@@ -26,6 +28,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { getRootDir } from '../pathUtils.js';
+import { atomicWriteJSON } from '../utils/atomicWrite.js';
 
 export const version = '255';
 export const description = 'move_ai_acknowledgements_to_runtime_store';
@@ -46,16 +50,37 @@ function acknowledgementKey(userId) {
 }
 
 /**
- * Where users.json lives (resolution as in V117): `platform.localAuth.usersFile`
- * may move it. A contents-relative path is read through the migration context;
- * an absolute path outside the contents directory directly, so its
- * acknowledgements are moved too.
+ * Where a configured users.json lives — the rule of `locateConfigFile`
+ * (utils/configFileLocation.js), which the server reads and writes it by,
+ * mirrored here with the migration's contents directory: a relative path is
+ * relative to the installation root, and the file is addressed through the
+ * contents directory only when it lies inside it.
+ *
+ * @param {string} configured - `platform.localAuth.usersFile` as configured
+ * @param {{rootDir: string, contentsDir: string}} dirs - Absolute directories
+ * @returns {{fullPath: string, relPath: string|null}} `relPath` is
+ *   contents-relative, or null for a file outside the contents directory
+ */
+export function locateUsersFile(configured, { rootDir, contentsDir }) {
+  const fullPath = path.isAbsolute(configured) ? configured : path.join(rootDir, configured);
+  const fromContents = path.relative(contentsDir, fullPath);
+  const contained =
+    !!fromContents && !path.isAbsolute(fromContents) && !fromContents.startsWith('..');
+  return { fullPath, relPath: contained ? fromContents.split(path.sep).join('/') : null };
+}
+
+/**
+ * Where users.json lives: `platform.localAuth.usersFile` may move it.
  *
  * @param {Object} ctx - Migration context
- * @returns {Promise<{rel: string}|{abs: string}>}
+ * @returns {Promise<{fullPath: string, relPath: string|null, configured: boolean}>}
  */
 async function resolveUsersFile(ctx) {
-  const fallback = { rel: 'config/users.json' };
+  const fallback = {
+    fullPath: path.join(ctx.contentsDir, 'config/users.json'),
+    relPath: 'config/users.json',
+    configured: false
+  };
   if (!(await ctx.fileExists('config/platform.json'))) return fallback;
   let configured;
   try {
@@ -64,34 +89,45 @@ async function resolveUsersFile(ctx) {
     return fallback;
   }
   if (typeof configured !== 'string' || configured.trim() === '') return fallback;
-  const normalized = configured.replace(/\\/g, '/').replace(/^\.\//, '');
-  if (normalized.startsWith('contents/')) return { rel: normalized.slice('contents/'.length) };
-  if (!path.isAbsolute(configured)) return { rel: normalized };
-  const fromContents = ctx.contentsDir ? path.relative(ctx.contentsDir, configured) : '';
-  if (fromContents && !fromContents.startsWith('..') && !path.isAbsolute(fromContents)) {
-    return { rel: fromContents.split(path.sep).join('/') };
-  }
-  return { abs: configured };
+  return {
+    ...locateUsersFile(configured, { rootDir: getRootDir(), contentsDir: ctx.contentsDir }),
+    configured: true
+  };
 }
 
 async function usersFileExists(ctx, where) {
-  if (where.rel) return ctx.fileExists(where.rel);
-  return fs.access(where.abs).then(
+  if (where.relPath) return ctx.fileExists(where.relPath);
+  return fs.access(where.fullPath).then(
     () => true,
     () => false
   );
 }
 
 async function readUsers(ctx, where) {
-  if (where.rel) return ctx.readJson(where.rel);
-  return JSON.parse(await fs.readFile(where.abs, 'utf8'));
+  if (where.relPath) return ctx.readJson(where.relPath);
+  return JSON.parse(await fs.readFile(where.fullPath, 'utf8'));
 }
 
-async function writeUsers(ctx, where, data) {
-  if (where.rel) return ctx.writeJson(where.rel, data);
-  const temp = `${where.abs}.${process.pid}.tmp`;
-  await fs.writeFile(temp, JSON.stringify(data, null, 2), 'utf8');
-  await fs.rename(temp, where.abs);
+/**
+ * Change users.json under the lock the server writes it under (see
+ * `updateUsersFile` in utils/userManager.js): `configStore.updateJson` for a
+ * file under contents/, a lock file next to it otherwise.
+ *
+ * @param {{fullPath: string, relPath: string|null}} where
+ * @param {(current: Object) => Promise<Object|undefined>} change - Returns the
+ *   body to write, or undefined to leave the file alone; may run more than once
+ */
+async function updateUsersLocked(where, change) {
+  if (where.relPath) {
+    const { default: configStore } = await import('../services/config/ConfigStore.js');
+    await configStore.updateJson(where.relPath, current => (current ? change(current) : undefined));
+    return;
+  }
+  const { withFileLock } = await import('../utils/fileLock.js');
+  await withFileLock(`${where.fullPath}.lock`, async () => {
+    const next = await change(JSON.parse(await fs.readFile(where.fullPath, 'utf8')));
+    if (next !== undefined) await atomicWriteJSON(where.fullPath, next);
+  });
 }
 
 /** Whether a record still carries an acknowledgement field. */
@@ -171,16 +207,71 @@ export async function importAcknowledgements({ documents, usersConfig }) {
   return { users: moved, entries };
 }
 
+/** A record's acknowledgement fields, comparable as a string. */
+function legacyFingerprint(user) {
+  return JSON.stringify([user?.aiAcknowledgements, user?.aiAcknowledgementsClearedAt]);
+}
+
+/**
+ * Move the acknowledgements in two passes, so users.json is locked only briefly.
+ *
+ * The bulk is copied from `snapshot` without any lock. users.json is then
+ * changed from a fresh read under the server's lock: during a rolling deploy
+ * older servers keep writing it (new users, admin edits, new confirmations),
+ * and rewriting the snapshot would erase those. A record whose fields changed
+ * since the snapshot is imported again before the fields are stripped.
+ *
+ * @param {Object} params
+ * @param {Object} params.documents - Document facet of the storage provider
+ * @param {Object} params.snapshot - users.json as read before the first pass
+ * @param {(change: Function) => Promise<void>} params.update - Runs `change`
+ *   on a fresh users.json under its lock and writes what it returns
+ * @returns {Promise<{users: number, entries: number}>}
+ */
+export async function moveAcknowledgements({ documents, snapshot, update }) {
+  const before = snapshot?.users && typeof snapshot.users === 'object' ? snapshot.users : {};
+  const first = await importAcknowledgements({ documents, usersConfig: snapshot });
+  let late = { users: 0, entries: 0 };
+  await update(async current => {
+    const users = current?.users && typeof current.users === 'object' ? current.users : {};
+    const changed = {};
+    let stripped = false;
+    for (const [id, user] of Object.entries(users)) {
+      if (!hasLegacyFields(user)) continue;
+      stripped = true;
+      changed[id] = user;
+      if (legacyFingerprint(user) === legacyFingerprint(before[id])) {
+        // Already in the documents; only the fields go.
+        delete user.aiAcknowledgements;
+        delete user.aiAcknowledgementsClearedAt;
+        delete changed[id];
+      }
+    }
+    // `update` may run more than once; only the last run's count is reported.
+    late = await importAcknowledgements({ documents, usersConfig: { users: changed } });
+    return stripped ? current : undefined;
+  });
+  return { users: first.users, entries: first.entries + late.entries };
+}
+
 export async function precondition(ctx) {
   const where = await resolveUsersFile(ctx);
-  if (!(await usersFileExists(ctx, where))) return false;
+  if (!(await usersFileExists(ctx, where))) {
+    if (where.configured) {
+      ctx.warn?.(
+        `localAuth.usersFile points to ${where.fullPath}, which does not exist; ` +
+          'no AI acknowledgements to move'
+      );
+    }
+    return false;
+  }
   const usersConfig = await readUsers(ctx, where);
   return Object.values(usersConfig?.users || {}).some(hasLegacyFields);
 }
 
 export async function up(ctx) {
   const where = await resolveUsersFile(ctx);
-  const usersConfig = await readUsers(ctx, where);
+  const snapshot = await readUsers(ctx, where);
   let platform = {};
   try {
     platform = await ctx.readJson('config/platform.json');
@@ -190,11 +281,11 @@ export async function up(ctx) {
   const { bootstrapStorage, shutdownStorageBootstrap } = await import('../storage/bootstrap.js');
   const provider = await bootstrapStorage(platform);
   try {
-    const { users, entries } = await importAcknowledgements({
+    const { users, entries } = await moveAcknowledgements({
       documents: provider.documents,
-      usersConfig
+      snapshot,
+      update: change => updateUsersLocked(where, change)
     });
-    await writeUsers(ctx, where, usersConfig);
     ctx.log(
       `Moved the AI acknowledgements of ${users} users (${entries} entries) out of users.json`
     );
