@@ -15,8 +15,12 @@ import { getContentsPath } from './contentsPath.js';
  *
  * Security design:
  * - Tokens are indexed by SHA-256 hash (fast O(1) lookup, no secret in index keys).
- * - The actual token value is stored as a bcrypt hash for defense-in-depth: even if
- *   the file is read by an attacker they cannot reconstruct the token.
+ * - The token value is stored only as its SHA-256 (`sha256`), checked with a
+ *   constant-time compare. Tokens are 256 random bits, so a fast hash is enough
+ *   to keep a leaked file from yielding usable tokens; bcrypt cost ~100 ms of
+ *   event-loop CPU per refresh for no added protection. Entries written before
+ *   carry `bcryptHash` and are still verified with bcryptjs; they disappear as
+ *   they rotate (the new token is stored as SHA-256) or expire.
  * - Each token is single-use (RFC 6749 section 10.4 token rotation). A second
  *   redemption attempt receives `invalid_grant`.
  * - Expired tokens are cleaned up lazily on every write to keep the file small.
@@ -37,7 +41,7 @@ const STORE_PATH = getContentsPath('data', 'oauth-refresh-tokens.json');
  * a freshly issued token vanished (the client's next refresh failed with
  * `invalid_grant`) or a consumed one came back — and two workers could both
  * redeem the same token. Changes run under this lock file, on a fresh read;
- * bcrypt work stays outside it.
+ * hash work stays outside it.
  */
 const LOCK_PATH = `${STORE_PATH}.lock`;
 
@@ -56,12 +60,12 @@ const TOKEN_TTL_DAYS = 30;
  * corrupt. Errors are absorbed silently so the server does not crash on a
  * bad JSON file – the next write will overwrite the broken file.
  *
- * @returns {{ tokens: Object.<string, Object> }}
+ * @returns {Promise<{ tokens: Object.<string, Object> }>}
  */
-function loadStore() {
+async function loadStore() {
   let raw;
   try {
-    raw = fs.readFileSync(STORE_PATH, 'utf8');
+    raw = await fs.promises.readFile(STORE_PATH, 'utf8');
   } catch (error) {
     if (error.code === 'ENOENT') return { tokens: {} };
     // Unreadable (EIO, EACCES, ...) is not empty: the caller's next write would
@@ -79,7 +83,7 @@ function loadStore() {
     // a bad write or a hand edit can be recovered rather than silently lost.
     const backup = `${STORE_PATH}.corrupt-${Date.now()}`;
     try {
-      fs.writeFileSync(backup, raw, { mode: 0o600 });
+      await fs.promises.writeFile(backup, raw, { mode: 0o600 });
     } catch {
       /* best effort */
     }
@@ -123,6 +127,39 @@ function tokenIndexKey(token) {
 }
 
 /**
+ * The stored verifier for a new token: its SHA-256 hex. Equal to the index
+ * key; kept as its own field so verification does not depend on how the map
+ * is keyed.
+ *
+ * @param {string} token - Plaintext refresh token.
+ * @returns {{ sha256: string }}
+ */
+function tokenVerifier(token) {
+  return { sha256: tokenIndexKey(token) }; // lgtm[js/insufficient-password-hash] -- 256-bit random token, not a password
+}
+
+/**
+ * Whether a plaintext token matches a stored entry: constant-time SHA-256
+ * compare, or bcryptjs for an entry stored before the switch.
+ *
+ * @param {string} token - Plaintext refresh token.
+ * @param {Object} entry - Stored entry.
+ * @returns {Promise<boolean>}
+ */
+async function verifyToken(token, entry) {
+  if (typeof entry.sha256 === 'string') {
+    const expected = Buffer.from(entry.sha256, 'hex');
+    const actual = crypto.createHash('sha256').update(token).digest();
+    return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  }
+  if (typeof entry.bcryptHash === 'string') return bcrypt.compare(token, entry.bcryptHash);
+  return false;
+}
+
+/** Identity of an entry's verifier, to tell whether it was replaced meanwhile. */
+const verifierOf = entry => entry?.sha256 ?? entry?.bcryptHash;
+
+/**
  * Generate a cryptographically random refresh token.
  *
  * Returns a 64-character hex string (256 bits of entropy), which is well above
@@ -141,7 +178,7 @@ export function generateRefreshToken() {
 /**
  * Persist a new refresh token with its associated user and client context.
  *
- * The plaintext token is hashed with bcrypt before storage so that a file
+ * The plaintext token is hashed with SHA-256 before storage so that a file
  * compromise does not expose usable tokens. The SHA-256 of the token is used
  * as the map key for O(1) lookup.
  *
@@ -161,13 +198,12 @@ export function generateRefreshToken() {
  */
 export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
   const tokenHash = tokenIndexKey(token);
-  const bcryptHash = await bcrypt.hash(token, 10);
   const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
 
   await withStoreLock(async () => {
-    const store = loadStore();
+    const store = await loadStore();
     store.tokens[tokenHash] = {
-      bcryptHash,
+      ...tokenVerifier(token),
       expiresAt,
       ...data,
       createdAt: new Date().toISOString()
@@ -197,7 +233,7 @@ export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
  * Performs three security checks in order:
  * 1. Token exists in the store (unknown token → `invalid_grant`).
  * 2. Token has not passed its `expiresAt` timestamp.
- * 3. bcrypt verification confirms the plaintext token matches the stored hash.
+ * 3. The plaintext token matches the stored hash (SHA-256, or bcrypt for old entries).
  *
  * On success the token entry is deleted immediately so that a second call with
  * the same value returns null (replay protection). The caller is responsible for
@@ -205,7 +241,7 @@ export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
  *
  * @param {string} token - Plaintext refresh token from the client request.
  * @returns {Promise<Object|null>} The stored context data if the token is valid,
- *   or null if the token is unknown, expired, or the bcrypt check fails.
+ *   or null if the token is unknown, expired, or the hash check fails.
  */
 export async function consumeRefreshToken(token) {
   const result = await redeem(token, false);
@@ -234,7 +270,7 @@ const rotationLive = entry =>
  * @returns {Promise<{data: Object, rotationId: string|null}|null>}
  */
 async function redeem(token, keep) {
-  const store = loadStore();
+  const store = await loadStore();
   const tokenHash = tokenIndexKey(token);
   const entry = store.tokens[tokenHash];
 
@@ -249,11 +285,11 @@ async function redeem(token, keep) {
     return null;
   }
 
-  // Check expiry before bcrypt to short-circuit the (expensive) hash comparison.
+  // Check expiry before the hash comparison (bcrypt for old entries is expensive).
   if (new Date(entry.expiresAt).getTime() < Date.now()) {
     logger.warn('Token expired', { component: 'RefreshTokenStore' });
     await withStoreLock(async () => {
-      const current = loadStore();
+      const current = await loadStore();
       if (!current.tokens[tokenHash]) return;
       delete current.tokens[tokenHash];
       await saveStore(current);
@@ -261,8 +297,8 @@ async function redeem(token, keep) {
     return null;
   }
 
-  // Verify the bcrypt hash – this is the authoritative check.
-  const valid = await bcrypt.compare(token, entry.bcryptHash);
+  // Verify the stored hash – this is the authoritative check.
+  const valid = await verifyToken(token, entry);
   if (!valid) {
     logger.warn('Token hash mismatch', { component: 'RefreshTokenStore' });
     return null;
@@ -273,9 +309,9 @@ async function redeem(token, keep) {
   // redemptions, on this worker or another, exactly one finds it.
   const rotationId = keep ? crypto.randomUUID() : null;
   const consumed = await withStoreLock(async () => {
-    const current = loadStore();
+    const current = await loadStore();
     const now = current.tokens[tokenHash];
-    if (now?.bcryptHash !== entry.bcryptHash || rotationLive(now)) return false;
+    if (verifierOf(now) !== verifierOf(entry) || rotationLive(now)) return false;
     if (keep) now.rotation = { id: rotationId, startedAt: Date.now() };
     else delete current.tokens[tokenHash];
     await saveStore(current);
@@ -287,7 +323,7 @@ async function redeem(token, keep) {
   }
 
   // Strip the internal fields before returning to callers.
-  const { bcryptHash: _, rotation: __, ...data } = entry;
+  const { sha256: _, bcryptHash: __, rotation: ___, ...data } = entry;
   return { data, rotationId };
 }
 
@@ -331,14 +367,18 @@ export async function completeRefreshRotation(
 ) {
   const oldHash = tokenIndexKey(oldToken);
   const newHash = tokenIndexKey(newToken);
-  const bcryptHash = await bcrypt.hash(newToken, 10);
   const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
 
   const stored = await withStoreLock(async () => {
-    const store = loadStore();
+    const store = await loadStore();
     if (store.tokens[oldHash]?.rotation?.id !== rotationId) return false;
     delete store.tokens[oldHash];
-    store.tokens[newHash] = { bcryptHash, expiresAt, ...data, createdAt: new Date().toISOString() };
+    store.tokens[newHash] = {
+      ...tokenVerifier(newToken),
+      expiresAt,
+      ...data,
+      createdAt: new Date().toISOString()
+    };
     const now = Date.now();
     for (const [key, entry] of Object.entries(store.tokens)) {
       if (new Date(entry.expiresAt).getTime() < now) delete store.tokens[key];
@@ -376,7 +416,7 @@ export async function completeRefreshRotation(
 export async function abortRefreshRotation(oldToken, rotationId, { restore = false } = {}) {
   const oldHash = tokenIndexKey(oldToken);
   await withStoreLock(async () => {
-    const store = loadStore();
+    const store = await loadStore();
     const entry = store.tokens[oldHash];
     if (entry?.rotation?.id !== rotationId) return;
     if (restore) delete entry.rotation;
@@ -397,12 +437,12 @@ export async function abortRefreshRotation(oldToken, rotationId, { restore = fal
  */
 export async function revokeRefreshToken(token) {
   const tokenHash = tokenIndexKey(token);
-  if (!loadStore().tokens[tokenHash]) {
+  if (!(await loadStore()).tokens[tokenHash]) {
     return false;
   }
 
   const revoked = await withStoreLock(async () => {
-    const store = loadStore();
+    const store = await loadStore();
     if (!store.tokens[tokenHash]) return false;
     delete store.tokens[tokenHash];
     await saveStore(store);
@@ -437,10 +477,10 @@ export async function revokeRefreshTokensFor(clientId, userId) {
       .filter(([, entry]) => entry?.clientId === clientId && entry?.userId === userId)
       .map(([key]) => key);
 
-  if (doomedIn(loadStore()).length === 0) return 0;
+  if (doomedIn(await loadStore()).length === 0) return 0;
 
   const doomed = await withStoreLock(async () => {
-    const store = loadStore();
+    const store = await loadStore();
     const keys = doomedIn(store);
     if (keys.length === 0) return keys;
     for (const key of keys) {
@@ -478,10 +518,10 @@ export async function revokeRefreshTokensForUser(userId) {
       .filter(([, entry]) => entry?.userId === userId)
       .map(([key]) => key);
 
-  if (doomedIn(loadStore()).length === 0) return 0;
+  if (doomedIn(await loadStore()).length === 0) return 0;
 
   const doomed = await withStoreLock(async () => {
-    const store = loadStore();
+    const store = await loadStore();
     const keys = doomedIn(store);
     if (keys.length > 0) {
       for (const key of keys) {
@@ -511,12 +551,12 @@ export async function revokeRefreshTokensForUser(userId) {
  * This is how the bulk revoke finds those users too.
  *
  * @param {string} clientId - OAuth client identifier.
- * @returns {Array<string>} Distinct user IDs, in no particular order.
+ * @returns {Promise<Array<string>>} Distinct user IDs, in no particular order.
  */
-export function listRefreshTokenUserIds(clientId) {
+export async function listRefreshTokenUserIds(clientId) {
   if (!clientId) return [];
 
-  const store = loadStore();
+  const store = await loadStore();
   const userIds = new Set();
   for (const entry of Object.values(store.tokens || {})) {
     if (entry?.clientId === clientId && entry.userId) userIds.add(entry.userId);

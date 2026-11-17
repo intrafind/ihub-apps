@@ -5,12 +5,14 @@ import { jest, describe, it, expect, afterAll } from '@jest/globals';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
+import bcrypt from 'bcryptjs';
 
 /**
  * Concurrent changes to the refresh token store.
  *
  * Every change is a read-modify-write of one file, made by whichever cluster
- * worker received the request, with a bcrypt hash in the middle. Without a
+ * worker received the request, with a hash in the middle. Without a
  * lock, rotations overwrote each other — an issued token vanished and the
  * client's next refresh failed — and a token could be redeemed twice. The lock
  * is a file, so concurrent calls in one process exercise it the same way two
@@ -55,7 +57,7 @@ describe('refresh token store under concurrent changes', () => {
     );
 
     expect(tokensOnDisk()).toHaveLength(8);
-    expect(listRefreshTokenUserIds('c1').sort()).toEqual(
+    expect((await listRefreshTokenUserIds('c1')).sort()).toEqual(
       Array.from({ length: 8 }, (_, i) => `user-${i}`).sort()
     );
   });
@@ -125,7 +127,7 @@ describe('refresh token rotation with a revoke in the gap', () => {
     const fresh = generateRefreshToken();
     expect(await completeRefreshRotation(old, rotation.rotationId, fresh, grant)).toBe(false);
     expect(await consumeRefreshToken(fresh)).toBeNull();
-    expect(listRefreshTokenUserIds('rot')).toEqual([]);
+    expect(await listRefreshTokenUserIds('rot')).toEqual([]);
   });
 
   it('a user deletion between redeeming and storing is not undone', async () => {
@@ -139,7 +141,7 @@ describe('refresh token rotation with a revoke in the gap', () => {
     expect(
       await completeRefreshRotation(old, rotation.rotationId, fresh, { ...grant, clientId: 'rot2' })
     ).toBe(false);
-    expect(listRefreshTokenUserIds('rot2')).toEqual([]);
+    expect(await listRefreshTokenUserIds('rot2')).toEqual([]);
   });
 
   it('a refused rotation ends the grant, or puts it back when asked to', async () => {
@@ -169,5 +171,70 @@ describe('refresh token rotation with a revoke in the gap', () => {
     } finally {
       Date.now = real;
     }
+  });
+});
+
+describe('refresh token hashing', () => {
+  const sha256 = value => crypto.createHash('sha256').update(value).digest('hex');
+  const readStore = () => JSON.parse(fs.readFileSync(storeFile, 'utf8'));
+  const writeStore = store => fs.writeFileSync(storeFile, JSON.stringify(store));
+
+  it('stores a new token as SHA-256 and verifies it', async () => {
+    const token = generateRefreshToken();
+    await storeRefreshToken(token, { clientId: 'h1', userId: 'hana' });
+
+    const entry = readStore().tokens[sha256(token)];
+    expect(entry.sha256).toBe(sha256(token));
+    expect(entry.bcryptHash).toBeUndefined();
+    const data = await consumeRefreshToken(token);
+    expect(data).toMatchObject({ clientId: 'h1', userId: 'hana' });
+    expect(data.sha256).toBeUndefined();
+  });
+
+  it('still verifies an entry stored as bcrypt, and its rotation is stored as SHA-256', async () => {
+    const old = generateRefreshToken();
+    const store = readStore();
+    store.tokens[sha256(old)] = {
+      bcryptHash: await bcrypt.hash(old, 4),
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      clientId: 'h2',
+      userId: 'ivan',
+      createdAt: new Date().toISOString()
+    };
+    writeStore(store);
+
+    const rotation = await beginRefreshRotation(old);
+    expect(rotation.data).toMatchObject({ clientId: 'h2', userId: 'ivan' });
+    expect(rotation.data.bcryptHash).toBeUndefined();
+    const fresh = generateRefreshToken();
+    expect(await completeRefreshRotation(old, rotation.rotationId, fresh, rotation.data)).toBe(
+      true
+    );
+
+    const tokens = readStore().tokens;
+    expect(tokens[sha256(old)]).toBeUndefined();
+    expect(tokens[sha256(fresh)]).toMatchObject({ sha256: sha256(fresh), userId: 'ivan' });
+    expect(tokens[sha256(fresh)].bcryptHash).toBeUndefined();
+  });
+
+  it('refuses a token that does not match the stored hash', async () => {
+    const token = generateRefreshToken();
+    const other = generateRefreshToken();
+    const expiresAt = new Date(Date.now() + 60_000).toISOString();
+    const store = readStore();
+    // Entries filed under the token's key whose hash belongs to another token.
+    store.tokens[sha256(token)] = { sha256: sha256(other), expiresAt, clientId: 'h3', userId: 'x' };
+    const legacy = generateRefreshToken();
+    store.tokens[sha256(legacy)] = {
+      bcryptHash: await bcrypt.hash(other, 4),
+      expiresAt,
+      clientId: 'h3',
+      userId: 'y'
+    };
+    writeStore(store);
+
+    expect(await consumeRefreshToken(token)).toBeNull();
+    expect(await consumeRefreshToken(legacy)).toBeNull();
+    expect(await consumeRefreshToken(generateRefreshToken())).toBeNull();
   });
 });
