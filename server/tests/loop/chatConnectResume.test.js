@@ -817,3 +817,29 @@ test('a refused resume (not connected, expired, another user) is not audited', a
   });
   assert.deepEqual(entries, []);
 });
+
+test('a call the model made again in a later step is stored once: only the last failing step', async t => {
+  const chatId = newChatId('retry');
+  captureFrames(t, chatId);
+  const repository = await chatStore(t);
+  const { service, runTool } = makeService(
+    [
+      toolTurn('jira_search', ARGS, { id: 'call_1' }),
+      toolTurn('jira_search', { jql: 'corrected' }, { id: 'call_2' }),
+      textTurn('Please connect Jira.')
+    ],
+    { runTool: async () => ({ ...AUTH_REQUIRED }) }
+  );
+  await turn(service, {
+    chatId,
+    prepData: prep(),
+    persistence: persistenceFor(repository)
+  });
+  assert.equal(runTool.calls.length, 2, 'the model tried twice');
+  const record = (await repository.getChat(chatId)).pendingConnect;
+  assert.deepEqual(
+    record.calls.map(c => c.id),
+    ['call_2']
+  );
+  assert.deepEqual(record.calls[0].args, { jql: 'corrected' });
+});

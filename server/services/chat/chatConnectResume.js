@@ -127,9 +127,8 @@ export function buildPendingConnect({
   continues = [],
   now
 }) {
-  const list = Array.isArray(calls) ? calls : [];
-  if (!runId || list.length === 0 || list.length > MAX_CONNECT_CALLS) return null;
-  if (!list.every(c => c?.id && c.toolId && c.integration && argsKeptWhole(c.args))) return null;
+  const failed = Array.isArray(calls) ? calls : [];
+  if (!runId || failed.length === 0) return null;
   // Anything the turn did after the failed step is not part of the stored
   // transcript: a later call that ran (a write) would be unknown to the
   // continuation, which could then do it again. Not resumable.
@@ -137,12 +136,18 @@ export function buildPendingConnect({
     m =>
       m?.role === 'assistant' &&
       Array.isArray(m.tool_calls) &&
-      m.tool_calls.some(c => c?.id === list.at(-1).id)
+      m.tool_calls.some(c => c?.id === failed.at(-1)?.id)
   );
   if (stepAt < 0) return null;
   let afterStep = stepAt + 1;
   while (messages[afterStep]?.role === 'tool') afterStep++;
   if (messages.slice(afterStep).some(m => m?.role === 'tool')) return null;
+  // Only the calls of the last failing step: a call the model made again in a
+  // later step (the first one never ran) must not run twice.
+  const stepIds = new Set(messages[stepAt].tool_calls.map(c => c?.id));
+  const list = failed.filter(c => stepIds.has(c?.id));
+  if (list.length === 0 || list.length > MAX_CONNECT_CALLS) return null;
+  if (!list.every(c => c?.id && c.toolId && c.integration && argsKeptWhole(c.args))) return null;
   const transcript = stepTranscript(messages, startMessage, list[0].id, list.at(-1).id);
   if (!transcript) return null;
   // A transcript call whose arguments were cut is not the call that failed.
