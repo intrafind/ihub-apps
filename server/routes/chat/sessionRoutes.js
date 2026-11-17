@@ -26,8 +26,8 @@ import {
   isChatDurable,
   locateChatClient,
   markChatDurable,
-  deliverToPostStream,
   openChatPostStream,
+  postStreams,
   writeStreamStart
 } from '../../sse.js';
 import { resumeChatRun } from '../../services/chat/chatResume.js';
@@ -71,7 +71,7 @@ import { describeCause, userAbortCause } from '../../services/chat/abortCause.js
 import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import { resolveChatScopes } from '../../services/integrations/scopes/index.js';
 import { ServiceError } from '../../utils/ServiceError.js';
-import { codeOfStatus } from '../../utils/errorResponse.js';
+import { codeOfStatus, toErrorResponse } from '../../utils/errorResponse.js';
 import { drainPendingFinish } from '../../services/workflow/chatBridge.js';
 import { cancelChatWorkflow, replayChatWorkflowProgress } from '../../tools/workflowRunner.js';
 import {
@@ -93,26 +93,45 @@ function refusal(status, message, { code, details } = {}) {
 }
 
 /**
- * The `stream/error` frame that answers a refusal or failure after a POST
- * stream committed, when no status line can carry it any more. A refusal says
- * what it says in its problem+json body; anything else is not explained.
+ * The frames that answer a refusal or failure after a POST stream committed,
+ * when no status line can carry it any more: `stream/error`, then the turn's
+ * `run/ended { status: 'error' }`. The error is described exactly as its
+ * problem+json body would be (`toErrorResponse`): the same code, and a 5xx
+ * message only when it is safe to show.
  *
  * @param {string} chatId
+ * @param {string} runId - The turn's run
  * @param {Error} error
- * @returns {Object} SSE v2 envelope
+ * @returns {Object[]} SSE v2 envelopes
  */
-function lateRefusalFrame(chatId, error) {
-  const refused = error instanceof ServiceError;
-  return buildEnvelope({
-    streamId: chatId,
-    runId: chatId,
-    type: SSE_V2_EVENTS.STREAM_ERROR,
-    data: {
-      code: refused || isLLMError(error) ? String(error.code) : 'INTERNAL_ERROR',
-      message: refused ? error.message : 'Internal server error',
-      ...(refused && error.status ? { details: { status: error.status } } : {})
-    }
-  });
+function lateRefusalFrames(chatId, runId, error) {
+  const { body } = toErrorResponse(error);
+  const frame = (type, data) => buildEnvelope({ streamId: chatId, runId, type, data });
+  const described = { code: body.code, message: body.detail };
+  return [
+    frame(SSE_V2_EVENTS.STREAM_ERROR, {
+      ...described,
+      retryable: false,
+      details: { ...body.details, status: body.status }
+    }),
+    frame(SSE_V2_EVENTS.RUN_ENDED, { status: 'error', finishReason: 'error', error: described })
+  ];
+}
+
+/**
+ * Whether a chat POST asks for its turn as a stream: `text/event-stream` named
+ * in `Accept` and preferred over JSON (q-values respected). A wildcard alone
+ * (any type, `text/*`) keeps the JSON answer.
+ *
+ * @param {import('express').Request} req
+ * @returns {boolean}
+ */
+function wantsEventStream(req) {
+  const accept = req.get?.('accept') || '';
+  return (
+    /\btext\/event-stream\b/i.test(accept) &&
+    req.accepts(['application/json', 'text/event-stream']) === 'text/event-stream'
+  );
 }
 
 /**
@@ -571,6 +590,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *
    *               event: run/ended
    *               data: {"v":2,"seq":9,"runId":"chat-…","ts":"…","type":"run/ended","data":{"status":"completed","finishReason":"stop"}}
+   *       400:
+   *         description: Invalid `resumeRun` or `afterLedgerSeq` (VALIDATION_FAILED, problem+json)
    *       401:
    *         description: Authentication required
    *       500:
@@ -888,7 +909,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *             schema:
    *               type: string
    *               description: >-
-   *                 SSE v2 frames (see docs/sse-v2.md), starting with `stream/connected`.
+   *                 SSE v2 frames (see docs/streaming-events.md), starting with `stream/connected`.
    *             example: |
    *               event: stream/connected
    *               data: {"v":2,"seq":1,"runId":"550e8400-…","ts":"…","type":"stream/connected","data":{"runId":"550e8400-…","lastSeq":0,"protocol":2}}
@@ -981,10 +1002,11 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       // response instead of over its GET stream; without the header the answer
       // is the JSON it always was. Opened at the commit point below: every
       // refusal before it is problem+json either way.
-      const wantsStream =
-        typeof req.accepts === 'function' &&
-        req.accepts(['application/json', 'text/event-stream']) === 'text/event-stream';
+      const wantsStream = wantsEventStream(req);
+      // This request's own stream (`openChatPostStream`) and the turn's run, for
+      // a refusal that can only be told as frames.
       let postStream = null;
+      let postStreamRunId = null;
       try {
         const {
           messages,
@@ -1569,6 +1591,7 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // refusal is a `stream/error` frame (see the catch below).
         if (wantsStream) {
           postStream = openChatPostStream({ req, res, chatId });
+          postStreamRunId = turnRunId;
           // Whether the reader is still there when a durable turn ends (the
           // stored answer is marked unread otherwise): this stream, or a GET
           // the client re-attached with after losing it.
@@ -1671,6 +1694,9 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // Refused at persistence: the chat's container changed under the
         // turn (`settleUserTurn`), and nothing of it was stored.
         if (outcome?.refusal) {
+          // The failed run's frames, when ChatService emitted them, were the
+          // answer on a POST stream (a refusal before the run started has none).
+          if (postStream?.hasEnded(turnRunId)) return;
           throw refusal(409, outcome.refusal.message, {
             code: outcome.refusal.code
           });
@@ -1685,7 +1711,12 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         if (!expected) logger.error('Error in app chat', { component: 'sessionRoutes', error });
         // Past the commit point the status line is gone: the refusal is a frame.
         if (postStream) {
-          deliverToPostStream(chatId, lateRefusalFrame(chatId, error));
+          // A run that already ended on this stream has said its last word.
+          if (!postStream.hasEnded(postStreamRunId)) {
+            for (const frame of lateRefusalFrames(chatId, postStreamRunId, error)) {
+              postStream.write(frame);
+            }
+          }
           return;
         }
         // A refusal and a failing model call are answered as they are.
@@ -1693,14 +1724,18 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
       } finally {
         // The turn is over however it ended, so a disconnect from here on has
         // nothing to protect and should abort again.
-        if (durableTurn) clearChatDurable(chatId);
-        // Answered, but the turn was refused (or failed) before its loop
-        // could run the call: put the approval back, with its answer, so the
-        // same decision can be sent again.
-        if (restoreApproval && !toolApproval?.started) await restoreApproval();
-        // Never after the loop started: the call may have run.
-        if (restoreConnect && !connectResume?.started) await restoreConnect();
-        postStream?.end();
+        try {
+          if (durableTurn) clearChatDurable(chatId);
+          // Answered, but the turn was refused (or failed) before its loop
+          // could run the call: put the approval back, with its answer, so the
+          // same decision can be sent again.
+          if (restoreApproval && !toolApproval?.started) await restoreApproval();
+          // Never after the loop started: the call may have run.
+          if (restoreConnect && !connectResume?.started) await restoreConnect();
+        } finally {
+          // Ended however the restores went: the client is waiting for it.
+          postStream?.end();
+        }
       }
     }
   );
@@ -1940,7 +1975,8 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // `active` and `processing` are the parts callers branch on.
         return res.status(200).json({
           active: true,
-          lastActivity: clients.get(chatId)?.lastActivity ?? null,
+          lastActivity:
+            clients.get(chatId)?.lastActivity ?? postStreams.get(chatId)?.lastActivity ?? null,
           processing: hasActiveChatRequest(chatId)
         });
       }

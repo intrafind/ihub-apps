@@ -36,7 +36,9 @@ const { default: express } = await import('express');
 const { default: configCache } = await import('../configCache.js');
 const { bootstrapStorage, shutdownStorageBootstrap } = await import('../storage/bootstrap.js');
 const { default: ChatService } = await import('../services/chat/ChatService.js');
-const { activeRequests, postStreams } = await import('../sse.js');
+const { activeRequests, clients, hasChatClient, openChatPostStream, postStreams } =
+  await import('../sse.js');
+const { ServiceError } = await import('../utils/ServiceError.js');
 const { RunStreamEmitter, bindStreamRun, unbindStreamRun, emitToolProgress } =
   await import('../services/loop/RunStream.js');
 const { normalizeAbortCause } = await import('../services/chat/abortCause.js');
@@ -142,6 +144,20 @@ function post(chatId, body, { accept, onFirstChunk } = {}) {
     );
     req.on('error', error => (onFirstChunk ? resolve({ aborted: true }) : reject(error)));
     req.end(payload);
+  });
+}
+
+/** GET a JSON route; resolves with status and the parsed body. */
+function getJson(urlPath) {
+  return new Promise((resolve, reject) => {
+    http
+      .get({ port, path: urlPath }, res => {
+        let text = '';
+        res.setEncoding('utf8');
+        res.on('data', chunk => (text += chunk));
+        res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+      })
+      .on('error', reject);
   });
 }
 
@@ -251,17 +267,19 @@ describe('without Accept: text/event-stream the POST is unchanged', () => {
     );
   });
 
-  test('an Accept header that prefers JSON keeps the JSON answer', async () => {
-    const res = await post('chat-json-2', message(), {
-      accept: 'application/json, text/plain, */*'
-    });
+  test.each([
+    ['prefers JSON', 'application/json, text/plain, */*'],
+    ['names only text/*', 'text/*'],
+    ['ranks the stream below JSON', 'text/event-stream;q=0.1, application/json'],
+    ['refuses the stream', 'text/event-stream;q=0, */*']
+  ])('an Accept header that %s keeps the JSON answer', async (_what, accept) => {
+    const res = await post(`chat-json-${_what.replace(/\W/g, '')}`, message(), { accept });
     expect(res.headers['content-type']).toMatch(/^application\/json/);
   });
 });
 
 describe('with Accept: text/event-stream', () => {
   test('streams the turn on the POST and nothing crosses the bus', async () => {
-    remote.add('sse:chat-stream');
     const res = await post('chat-stream', message(), { accept: SSE });
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toBe('text/event-stream');
@@ -295,6 +313,58 @@ describe('with Accept: text/event-stream', () => {
     expect(postStreams.has('chat-stream')).toBe(false);
   });
 
+  test('a GET on the same chat in another worker gets every frame too', async () => {
+    // A second tab, or a re-attach while the POST socket is half-open.
+    remote.add('sse:chat-fanout-remote');
+    const res = await post('chat-fanout-remote', message(), { accept: SSE });
+    const runId = turn.calls[0].runId;
+    expect(framesOf(res.text).at(-1).event).toBe('run/ended');
+    const relayed = published
+      .filter(p => p.type === 'sse:event')
+      .map(
+        p => `${p.payload.envelope.runId === runId ? 'turn' : 'other'}:${p.payload.envelope.type}`
+      );
+    expect(relayed).toEqual(expect.arrayContaining(['turn:run/started', 'turn:step/delta']));
+    expect(relayed.at(-1)).toBe('turn:run/ended');
+  });
+
+  test('a GET on the same chat in this worker gets every frame too', async () => {
+    const written = [];
+    const entry = {
+      lastActivity: new Date(),
+      response: { write: chunk => written.push(chunk), end: () => {} }
+    };
+    clients.set('chat-fanout-local', entry);
+    try {
+      const res = await post('chat-fanout-local', message(), { accept: SSE });
+      expect(framesOf(res.text).at(-1).event).toBe('run/ended');
+      const events = written.filter(w => w.startsWith('event: ')).map(w => w.slice(7, -1));
+      expect(events).toEqual(expect.arrayContaining(['run/started', 'step/delta']));
+      expect(events.at(-1)).toBe('run/ended');
+      expect(published.filter(p => p.type === 'sse:event')).toHaveLength(0);
+    } finally {
+      clients.delete('chat-fanout-local');
+    }
+  });
+
+  test('during the turn the chat has a client and /status says it is processing', async () => {
+    let during = null;
+    ChatService.prototype.runTurn = async function (params) {
+      // Workflows a tool launches decide on this whether to stash their finish.
+      const connected = hasChatClient(params.chatId);
+      activeRequests.set(params.chatId, new AbortController());
+      const status = await getJson(`/api/apps/chat/chat/${params.chatId}/status`);
+      activeRequests.delete(params.chatId);
+      during = { connected, status };
+      return playTurn(params);
+    };
+    await post('chat-status', message(), { accept: SSE });
+    expect(during.connected).toBe(true);
+    expect(during.status.body).toMatchObject({ active: true, processing: true });
+    expect(during.status.body.lastActivity).toBeTruthy();
+    expect(hasChatClient('chat-status')).toBe(false);
+  });
+
   test('the turn is told whether its reader is still there', async () => {
     let connectedDuringTurn = null;
     ChatService.prototype.runTurn = async function (params) {
@@ -317,17 +387,39 @@ describe('with Accept: text/event-stream', () => {
     expect(framesOf(res.text)[2].data.data.code).toBe('MODEL_NOT_FOUND');
   });
 
-  test('a refusal after the commit point is a stream/error frame with its code', async () => {
-    turn.result = { refusal: { message: 'The chat moved', code: 'CHAT_CONTAINER_CHANGED' } };
+  test('a refusal after the commit point is stream/error with its code, then run/ended', async () => {
+    // Refused before the run started (`admitTurnProjects`): no frames of its own.
+    const refusal = { message: 'The chat moved', code: 'CHAT_CONTAINER_CHANGED' };
+    ChatService.prototype.runTurn = async params => {
+      turn.calls.push(params);
+      return { status: 'error', refusal };
+    };
     const res = await post('chat-late-refusal', message(), { accept: SSE });
     expect(res.status).toBe(200);
-    const last = framesOf(res.text).at(-1);
-    expect(last.event).toBe('stream/error');
-    expect(last.data.data).toMatchObject({
+    const frames = framesOf(res.text);
+    expect(frames.map(f => f.event)).toEqual(['stream/connected', 'stream/error', 'run/ended']);
+    const runId = turn.calls[0].runId;
+    expect(frames[1].data).toMatchObject({ runId });
+    expect(frames[1].data.data).toMatchObject({
       code: 'CHAT_CONTAINER_CHANGED',
       message: 'The chat moved',
       details: { status: 409 }
     });
+    expect(frames[2].data).toMatchObject({ runId, data: { status: 'error' } });
+  });
+
+  test('a refusal the turn already streamed is not told twice', async () => {
+    // Refused at persistence (`settleUserTurn`): ChatService emitted the failed run.
+    const refusal = { message: 'The chat moved', code: 'CHAT_CONTAINER_CHANGED' };
+    ChatService.prototype.runTurn = async params => {
+      const stream = new RunStreamEmitter({ streamId: params.chatId, runId: params.runId });
+      stream.emit('stream/error', refusal);
+      stream.emit('run/ended', { status: 'error', finishReason: 'error', error: refusal });
+      return { status: 'error', refusal };
+    };
+    const res = await post('chat-late-refusal-2', message(), { accept: SSE });
+    const events = framesOf(res.text).map(f => f.event);
+    expect(events).toEqual(['stream/connected', 'stream/error', 'run/ended']);
   });
 
   test('an unexpected failure after the commit point says nothing about itself', async () => {
@@ -335,9 +427,49 @@ describe('with Accept: text/event-stream', () => {
       throw new Error('db password is hunter2');
     };
     const res = await post('chat-late-crash', message(), { accept: SSE });
-    const last = framesOf(res.text).at(-1);
-    expect(last.data.data.code).toBe('INTERNAL_ERROR');
+    const frames = framesOf(res.text);
+    expect(frames.at(-2).data.data.code).toBe('INTERNAL_ERROR');
+    expect(frames.at(-1).data.data.status).toBe('error');
     expect(res.text).not.toContain('hunter2');
+  });
+
+  test('a late 5xx is told like its problem+json: code kept, unsafe message hidden', async () => {
+    ChatService.prototype.runTurn = async () => {
+      throw new ServiceError('PROVIDER_ERROR', 'connect ECONNREFUSED 10.0.0.7:443', {
+        status: 502
+      });
+    };
+    const res = await post('chat-late-5xx', message(), { accept: SSE });
+    const error = framesOf(res.text).find(f => f.event === 'stream/error').data.data;
+    expect(error).toMatchObject({ code: 'PROVIDER_ERROR', details: { status: 502 } });
+    expect(error.message).toBeTruthy();
+    expect(res.text).not.toContain('ECONNREFUSED');
+  });
+
+  test('a late failure of an older turn never lands on the newer turn’s stream', async () => {
+    let failA;
+    const aFailed = new Promise(resolve => {
+      failA = resolve;
+    });
+    ChatService.prototype.runTurn = async function (params) {
+      turn.calls.push(params);
+      if (turn.calls.length === 1) {
+        await aFailed;
+        throw new Error('turn A broke');
+      }
+      // B is the chat's POST stream now: let A fail, then play B.
+      failA();
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return playTurn(params);
+    };
+    const a = post('chat-overlap', message(), { accept: SSE });
+    await waitFor(() => turn.calls.length === 1, 'turn A');
+    const b = await post('chat-overlap', message('again'), { accept: SSE });
+    const bEvents = framesOf(b.text).map(f => f.event);
+    expect(bEvents).not.toContain('stream/error');
+    expect(bEvents.at(-1)).toBe('run/ended');
+    const aEvents = framesOf((await a).text).map(f => f.event);
+    expect(aEvents).toEqual(['stream/connected']);
   });
 
   test('closing a temporary chat’s POST aborts its turn', async () => {
@@ -377,6 +509,25 @@ describe('with Accept: text/event-stream', () => {
     release();
     await waitFor(() => finished, 'the turn to finish');
     expect(turn.aborted).toBeNull();
+  });
+});
+
+describe('openChatPostStream', () => {
+  test('a response already gone is not registered and leaves another POST in place', () => {
+    const other = { response: {}, lastActivity: new Date(), seq: 0, endedRuns: new Set() };
+    postStreams.set('chat-dead', other);
+    try {
+      const handle = openChatPostStream({
+        req: {},
+        res: { destroyed: true },
+        chatId: 'chat-dead'
+      });
+      expect(postStreams.get('chat-dead')).toBe(other);
+      expect(handle.isOpen()).toBe(false);
+      expect(handle.write({ type: 'run/ended', runId: 'r' })).toBe(false);
+    } finally {
+      postStreams.delete('chat-dead');
+    }
   });
 });
 
