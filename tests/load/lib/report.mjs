@@ -207,7 +207,12 @@ export function checkSlo(stat, slo) {
   return v;
 }
 
-function bottleneckHint(stat) {
+/** The run talked to the paced LLM stub, not a GPU: its vLLM-style gauges are emulated. */
+export function isStubRun(cfg) {
+  return Boolean(cfg?.modelId) && cfg.modelId === cfg.setup?.stub?.id && !cfg.vuModelIds;
+}
+
+function bottleneckHint(stat, { stubRun = false } = {}) {
   if (!stat) return null;
   const codes = Object.keys(stat.errorCodes).join(' ');
   if (/HTTP_429|RATE_LIMIT/.test(codes))
@@ -218,9 +223,12 @@ function bottleneckHint(stat) {
     return 'Storage lock timeouts (503): filesystem persistence contention — check disk/NFS latency; more CPU will not help.';
   if (stat.runner.eldP99Max > 100)
     return 'The load generator itself is saturated (event-loop p99 > 100 ms) — add runner shards; these numbers are not trustworthy.';
-  const busyGpu = [['', stat.llm], ...Object.entries(stat.byModel)].find(
-    ([, l]) => l.waitingAvg > 1 || l.kvCacheMax > 95
-  );
+  // The stub never queues, and its "KV cache" only mirrors streams in flight: no GPU verdict.
+  const busyGpu =
+    !stubRun &&
+    [['', stat.llm], ...Object.entries(stat.byModel)].find(
+      ([, l]) => l.waitingAvg > 1 || l.kvCacheMax > 95
+    );
   if (busyGpu)
     return `GPU saturated${busyGpu[0] ? ` (${busyGpu[0]})` : ''}: vLLM queues requests (waiting avg ${fmt(busyGpu[1].waitingAvg, 1)}, KV cache max ${fmt(busyGpu[1].kvCacheMax)}%) — the LLM is the limit, not iHub. More GPU capacity, smaller project context or fewer thinking tokens.`;
   if (stat.pod.throttledPctAvg > 20)
@@ -287,7 +295,14 @@ export function analyze(result) {
       };
     }
   }
-  return { stats, verdicts, capacity, firstFail, sizing, hint: bottleneckHint(firstFail?.stat) };
+  return {
+    stats,
+    verdicts,
+    capacity,
+    firstFail,
+    sizing,
+    hint: bottleneckHint(firstFail?.stat, { stubRun: isStubRun(cfg) })
+  };
 }
 
 export function renderMarkdown(result) {
@@ -454,6 +469,12 @@ function renderLlmAndPod(a, cfg) {
     L.push(
       '"First token" counts thinking tokens; "Answer TTFT" waits for visible answer text. A growing `waiting` count or KV cache near 100% means vLLM is queueing: the GPU is the limit.'
     );
+    if (isStubRun(cfg)) {
+      L.push(
+        '',
+        'LLM stub run: the vLLM columns come from the stub (running = answers streaming; it never queues), so they show load on iHub, not a GPU limit.'
+      );
+    }
     L.push('');
   }
   const models = Object.keys(a.stats[0]?.byModel || {});
@@ -500,6 +521,14 @@ function renderLlmAndPod(a, cfg) {
 /** Limiters counted in one store for the whole cluster (others count per worker). */
 const CLUSTER_WIDE = new Set(['authApi', 'oauthApi']);
 
+/**
+ * Whether a limiter counts signed-in requests per user. Servers with per-user limits
+ * report `keyBy` ("user" | "ip") for publicApi, adminApi and inferenceApi (anonymous
+ * requests then count per IP against `anonymousLimit`); older servers report no
+ * `keyBy` and count every request per IP.
+ */
+const keyedByUser = lim => lim?.keyBy === 'user';
+
 export function rateLimitAnalysis(result, a) {
   const { trends, counts } = result.metrics;
   const cfg = result.meta.config;
@@ -519,19 +548,26 @@ export function rateLimitAnalysis(result, a) {
     const perRunner = summarize(collect(`rl.${cls}.perRunnerMin`));
     if (!perUser && !perRunner) continue;
     const lim = limits[cls];
+    const perUserKey = keyedByUser(lim);
     const perMin = lim ? (lim.limit * 60000) / lim.windowMs : null;
-    const spread = CLUSTER_WIDE.has(cls) ? 1 : workers;
-    // One client IP is spread over the workers round robin, each counting alone.
+    // One client IP is spread over the workers round robin, each counting alone. A
+    // user's few keep-alive connections may all sit on one worker: no spread there.
+    const spread = CLUSTER_WIDE.has(cls) || perUserKey ? 1 : workers;
     const ipBudgetPerMin = perMin !== null ? perMin * spread : null;
     const userRate = perUser ? Math.max(perUser.p99, 1) : null;
-    const fit = ipBudgetPerMin !== null && userRate ? Math.floor(ipBudgetPerMin / userRate) : null;
+    const fit =
+      !perUserKey && ipBudgetPerMin !== null && userRate
+        ? Math.floor(ipBudgetPerMin / userRate)
+        : null;
     // 2x headroom for bursts (page loads, many tabs) and uneven worker spread.
-    const neededPerMin = userRate ? Math.ceil((userRate * usersPerIp * 2) / spread) : null;
+    const demand = perUserKey ? userRate : userRate * usersPerIp;
+    const neededPerMin = userRate ? Math.ceil((demand * 2) / spread) : null;
     const recommended =
       neededPerMin !== null && lim ? Math.ceil((neededPerMin * lim.windowMs) / 60000) : null;
     rows.push({
       cls,
       lim,
+      perUserKey,
       perUser,
       perRunner,
       fit,
@@ -547,9 +583,17 @@ export function rateLimitAnalysis(result, a) {
 function renderRateLimits(result, a) {
   const r = rateLimitAnalysis(result, a);
   if (!r.rows.length) return [];
+  const anyPerUser = r.rows.some(row => row.perUserKey);
+  const anyPerIp = r.rows.some(row => !row.perUserKey && row.cls !== 'unlimited');
   const L = ['## Rate limits: real demand vs configured limits', ''];
   L.push(
-    `Requests per **active user per minute** as this workload produced them (page loads included), set against the limits the server ran with. Per-worker limiters are multiplied by ${r.workers} worker(s), because one client IP is spread over all workers. Recommendation: enough for **${r.usersPerIp} concurrent users behind one IP** (corporate NAT, or a proxy whose hops \`trustProxy\` does not cover) with 2× headroom.`
+    `Requests per **active user per minute** as this workload produced them (page loads included), set against the limits the server ran with. ` +
+      (anyPerUser
+        ? "Limiters counted **per user** are compared with one user's demand (2× headroom; a user's connections may all reach one worker, so no worker multiplier). "
+        : '') +
+      (anyPerIp
+        ? `Limiters counted **per IP** are multiplied by ${r.workers} worker(s) when each worker counts alone, because one client IP is spread over all workers; their recommendation is enough for **${r.usersPerIp} concurrent users behind one IP** (corporate NAT, or a proxy whose hops \`trustProxy\` does not cover) with 2× headroom.`
+        : '')
   );
   L.push('');
   L.push(
@@ -557,28 +601,50 @@ function renderRateLimits(result, a) {
   );
   L.push('|---|---|---|---|---:|---:|---:|---|');
   for (const row of r.rows) {
+    const window = row.lim ? ` / ${Math.round(row.lim.windowMs / 60000)} min` : '';
     const conf = row.lim
-      ? `${row.lim.limit} / ${Math.round(row.lim.windowMs / 60000)} min`
+      ? `${row.lim.limit}${window}${row.perUserKey && row.lim.anonymousLimit ? ` (anonymous: ${row.lim.anonymousLimit} per IP)` : ''}`
       : row.cls === 'unlimited'
         ? 'none'
         : '?';
+    const scope = row.perUserKey
+      ? `per user${r.workers > 1 ? ', per worker' : ''}`
+      : row.cls === 'unlimited'
+        ? '–'
+        : row.spread > 1
+          ? 'per IP, per worker'
+          : 'per IP, cluster-wide';
     const verdict =
       row.recommended === null || !row.lim
         ? '–'
         : row.recommended <= row.lim.limit
-          ? `keep (${row.lim.limit} ≥ ${row.recommended})`
-          : `**raise to ≥ ${row.recommended}**`;
+          ? `keep (${row.lim.limit} ≥ ${row.recommended}${row.perUserKey ? ' per user' : ''})`
+          : `**raise to ≥ ${row.recommended}${row.perUserKey ? ' per user' : ''}**`;
+    const fit = row.perUserKey ? 'any (per user)' : row.fit === null ? '–' : fmt(row.fit);
     L.push(
-      `| ${row.cls} | ${conf} | ${row.spread > 1 ? 'per IP, per worker' : row.cls === 'unlimited' ? '–' : 'per IP, cluster-wide'} | ${fmt(row.perUser?.p50)} / ${fmt(row.perUser?.p99)} / ${fmt(row.perUser?.max)} | ${fmt(row.perRunner?.max)} | ${row.fit === null ? '–' : fmt(row.fit)} | ${row.n429} | ${verdict} |`
+      `| ${row.cls} | ${conf} | ${scope} | ${fmt(row.perUser?.p50)} / ${fmt(row.perUser?.p99)} / ${fmt(row.perUser?.max)} | ${fmt(row.perRunner?.max)} | ${fit} | ${row.n429} | ${verdict} |`
     );
   }
   L.push('');
+  if (anyPerUser) {
+    L.push(
+      "- The runner's users are signed in, so `anonymousLimit` (per IP) is not exercised here; it only has to cover pages loaded before a sign-in."
+    );
+  }
   const auth = (result.meta.serverLimits?.rateLimits || {}).authApi;
   if (auth) {
     const wantAuth = Math.ceil(r.usersPerIp * 1.2);
-    L.push(
-      `- **authApi** (${auth.limit} per ${Math.round(auth.windowMs / 60000)} min, cluster-wide) counts only credential POSTs (local, LDAP, NTLM login); OIDC sign-in is exempt. With local/LDAP login, ${r.usersPerIp} users behind one IP logging in within one window need **≥ ${wantAuth}**${auth.limit >= wantAuth ? ' — the current value is enough.' : ` — **the current ${auth.limit} locks out everyone after the ${auth.limit}th login of the window** (e.g. the morning wave of an office behind NAT).`} Failed-login protection does not depend on this limit: accounts lock after 5 failures.`
-    );
+    const win = `${Math.round(auth.windowMs / 60000)} min`;
+    if (auth.perIpLimit) {
+      // Servers with per-user limits: `limit` counts per IP and username, `perIpLimit` per IP.
+      L.push(
+        `- **authApi** counts only credential POSTs (local, LDAP, NTLM login); OIDC sign-in is exempt. \`limit\` (${auth.limit} per ${win}) counts per IP **and username**, so it limits one account, not an office. \`perIpLimit\` (${auth.perIpLimit} per ${win}, cluster-wide) is the ceiling of one address: ${r.usersPerIp} users behind one IP logging in within one window need **≥ ${wantAuth}**${auth.perIpLimit >= wantAuth ? ' — the current value is enough.' : ` — **the current ${auth.perIpLimit} locks out everyone behind that address after the ${auth.perIpLimit}th login of the window**.`} Accounts also lock after 5 failed logins.`
+      );
+    } else {
+      L.push(
+        `- **authApi** (${auth.limit} per ${win}, cluster-wide) counts only credential POSTs (local, LDAP, NTLM login); OIDC sign-in is exempt. With local/LDAP login, ${r.usersPerIp} users behind one IP logging in within one window need **≥ ${wantAuth}**${auth.limit >= wantAuth ? ' — the current value is enough.' : ` — **the current ${auth.limit} locks out everyone after the ${auth.limit}th login of the window** (e.g. the morning wave of an office behind NAT).`} Failed-login protection does not depend on this limit: accounts lock after 5 failures.`
+      );
+    }
   }
   if (
     r.trustProxy === undefined ||
@@ -587,7 +653,7 @@ function renderRateLimits(result, a) {
     r.trustProxy === 0
   ) {
     L.push(
-      `- **trustProxy is ${JSON.stringify(r.trustProxy ?? 'unset')}**: behind an ingress or reverse proxy every request then carries the proxy's address, so *all users share one counter* and the limits above apply to the whole user base, not per user. Set \`trustProxy\` to the number of proxy hops (docs/rate-limiting.md).`
+      `- **trustProxy is ${JSON.stringify(r.trustProxy ?? 'unset')}**: behind an ingress or reverse proxy every request then carries the proxy's address, so *all users share one counter* in ${anyPerUser ? 'the per-IP limits (anonymous requests, sign-in)' : 'the limits above, which then apply to the whole user base, not per user'}. Set \`trustProxy\` to the number of proxy hops (docs/rate-limiting.md).`
     );
   }
   L.push(
