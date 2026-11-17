@@ -261,6 +261,50 @@ export async function getApiKeyForModel(modelId) {
   return (await resolveModelApiKey(modelId)).apiKey;
 }
 
+/** Longest query text an interaction log line keeps, like the response. */
+const LOG_QUERY_MAX_CHARS = 1000;
+/**
+ * A `<content …>…</content>` block. The opening tag holds no `<` (attribute
+ * values are escaped, `shared/promptContext.js`) and is not self-closing: a
+ * `<content … />` reference has no text, and the user's question after it
+ * must stay in the log.
+ */
+const CONTENT_BLOCK = /(<content\b[^<>]*(?<!\/)>)([\s\S]*?)(<\/content>)/g;
+const CONTENT_CLOSE = '</content>';
+
+/**
+ * The user's query as it goes into the interaction log: the text of attached
+ * documents (`<content …>…</content>` blocks) is replaced by its length, and
+ * the rest is cut to {@link LOG_QUERY_MAX_CHARS}. The log names what was asked,
+ * not the documents, which can be hundreds of KB and must not end up in it.
+ *
+ * @param {string|Array<Object>} content - Content of the last user message
+ * @returns {string}
+ */
+export function queryForLog(content) {
+  const text = Array.isArray(content)
+    ? content
+        .map(part => (part?.type === 'text' ? part.text || '' : `[${part?.type || 'part'}]`))
+        .join(' ')
+    : String(content ?? '');
+  // Only up to the last closing tag: an opener after it cannot close, and
+  // searching the rest for a close from every such opener is quadratic on
+  // user-controlled text.
+  const end = text.lastIndexOf(CONTENT_CLOSE) + CONTENT_CLOSE.length;
+  const withoutDocuments =
+    end < CONTENT_CLOSE.length
+      ? text
+      : text
+          .slice(0, end)
+          .replace(
+            CONTENT_BLOCK,
+            (_, open, body, close) => `${open}[${body.length} characters omitted]${close}`
+          ) + text.slice(end);
+  return withoutDocuments.length > LOG_QUERY_MAX_CHARS
+    ? `${withoutDocuments.slice(0, LOG_QUERY_MAX_CHARS)}…[${withoutDocuments.length - LOG_QUERY_MAX_CHARS} more characters]`
+    : withoutDocuments;
+}
+
 /**
  * Logs user interactions with the iHub Apps
  *
@@ -279,34 +323,6 @@ export async function getApiKeyForModel(modelId) {
  * @param {string} [data.messageId] - Unique ID for the message (used for linking request, response, and feedback)
  * @returns {Promise<void>}
  */
-/** Longest query text an interaction log line keeps, like the response. */
-const LOG_QUERY_MAX_CHARS = 1000;
-const CONTENT_BLOCK = /(<content\b[^>]*>)([\s\S]*?)(<\/content>)/g;
-
-/**
- * The user's query as it goes into the interaction log: the text of attached
- * documents (`<content …>…</content>` blocks) is replaced by its length, and
- * the rest is cut to {@link LOG_QUERY_MAX_CHARS}. The log names what was asked,
- * not the documents, which can be hundreds of KB and must not end up in it.
- *
- * @param {string|Array<Object>} content - Content of the last user message
- * @returns {string}
- */
-export function queryForLog(content) {
-  const text = Array.isArray(content)
-    ? content
-        .map(part => (part?.type === 'text' ? part.text || '' : `[${part?.type || 'part'}]`))
-        .join(' ')
-    : String(content ?? '');
-  const withoutDocuments = text.replace(
-    CONTENT_BLOCK,
-    (_, open, body, close) => `${open}[${body.length} characters omitted]${close}`
-  );
-  return withoutDocuments.length > LOG_QUERY_MAX_CHARS
-    ? `${withoutDocuments.slice(0, LOG_QUERY_MAX_CHARS)}…[${withoutDocuments.length - LOG_QUERY_MAX_CHARS} more characters]`
-    : withoutDocuments;
-}
-
 export async function logInteraction(interactionType, data) {
   try {
     const timestamp = new Date().toISOString();
