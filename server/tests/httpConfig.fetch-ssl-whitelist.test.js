@@ -55,3 +55,20 @@ test('warns about a non-whitelisted host once per process, not on every request'
     warn.mockRestore();
   }
 });
+
+test('warns again about a host after the whitelist changed', () => {
+  const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+  try {
+    setSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['internal.example'] });
+    skipsVerification('https://again.example/v1/chat');
+    skipsVerification('https://again.example/v1/chat');
+    setSsl({ ignoreInvalidCertificates: true, domainWhitelist: ['other-internal.example'] });
+    skipsVerification('https://again.example/v1/chat');
+    const warnings = warn.mock.calls.filter(([message]) =>
+      String(message).includes('not in ssl.domainWhitelist')
+    );
+    expect(warnings).toHaveLength(2);
+  } finally {
+    warn.mockRestore();
+  }
+});

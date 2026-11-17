@@ -164,9 +164,11 @@ export function isSsrfTrustedHost(hostname) {
 }
 
 // Hosts already warned about, so a per-request check does not repeat the same
-// warning on every LLM call. ponytail: grows with distinct hosts, which are few.
+// warning on every LLM call. Cleared when the whitelist changes, so a new
+// configuration warns again. ponytail: grows with distinct hosts, which are few.
 const warnedNotWhitelisted = new Set();
 const warnedEmptyWhitelist = new Set();
+let warnedForWhitelist = '';
 
 /**
  * Determine if SSL certificate validation should be ignored for a specific URL
@@ -191,6 +193,13 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
       hostname
     });
     return false;
+  }
+
+  const whitelistKey = JSON.stringify(config.domainWhitelist || []);
+  if (whitelistKey !== warnedForWhitelist) {
+    warnedForWhitelist = whitelistKey;
+    warnedNotWhitelisted.clear();
+    warnedEmptyWhitelist.clear();
   }
 
   // If whitelist is empty, do NOT ignore SSL (security: require explicit domain whitelisting).
