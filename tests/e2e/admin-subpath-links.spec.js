@@ -41,7 +41,7 @@ test.describe('Short links under the base path', () => {
     baseURL
   }) => {
     const created = await context.request.post(`${BASE}/api/shortlinks`, {
-      data: { code: CODE, appId: 'chat', params: { prefill: 'Hello there' } }
+      data: { code: CODE, appId: 'chat', params: { prefill: 'Hello there' }, includeParams: true }
     });
     expect(created.ok()).toBeTruthy();
 
