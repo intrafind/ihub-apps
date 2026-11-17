@@ -97,8 +97,9 @@ Other ways chat content can become durable are:
    characters of the rated message (plus any free-text comment) are appended
    to `contents/data/feedback.jsonl` (`server/feedbackStorage.js`).
 2. **Verbose logging** — `server/utils.js`'s `logInteraction()` calls
-   `logger.info(...)` with the user query and the first 1000 characters of the
-   response. By default the logger only writes to **stdout**, so this becomes
+   `logger.info(...)` with the first 1000 characters of the user query and of the
+   response. The text of attached documents is not logged: each `<content>` block
+   is replaced by its length (`[N characters omitted]`). By default the logger only writes to **stdout**, so this becomes
    durable only if `logging.file.enabled: true` is set or stdout is captured
    by your container runtime / log shipper.
 3. **External iAssistant / iFinder integration** — when configured, full

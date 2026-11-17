@@ -862,3 +862,11 @@ providers, apps, groups and the like).
 
 - Check `users.json` for names or emails whose placeholders were replaced before the upgrade; the upgrade
   does not restore those records.
+
+## Chat Logs No Longer Contain the Text of Attached Files
+
+The `Chat request received` line (`CHAT_REQUEST`) logged the whole user message at info level, including
+the extracted text of every attached file. One message with a spreadsheet put several hundred KB of
+document content into the server log. The line now names attached documents with their size instead of
+their text (`[N characters omitted]`) and keeps at most the first 1,000 characters of the message, like the
+response.

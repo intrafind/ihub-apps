@@ -279,6 +279,34 @@ export async function getApiKeyForModel(modelId) {
  * @param {string} [data.messageId] - Unique ID for the message (used for linking request, response, and feedback)
  * @returns {Promise<void>}
  */
+/** Longest query text an interaction log line keeps, like the response. */
+const LOG_QUERY_MAX_CHARS = 1000;
+const CONTENT_BLOCK = /(<content\b[^>]*>)([\s\S]*?)(<\/content>)/g;
+
+/**
+ * The user's query as it goes into the interaction log: the text of attached
+ * documents (`<content …>…</content>` blocks) is replaced by its length, and
+ * the rest is cut to {@link LOG_QUERY_MAX_CHARS}. The log names what was asked,
+ * not the documents, which can be hundreds of KB and must not end up in it.
+ *
+ * @param {string|Array<Object>} content - Content of the last user message
+ * @returns {string}
+ */
+export function queryForLog(content) {
+  const text = Array.isArray(content)
+    ? content
+        .map(part => (part?.type === 'text' ? part.text || '' : `[${part?.type || 'part'}]`))
+        .join(' ')
+    : String(content ?? '');
+  const withoutDocuments = text.replace(
+    CONTENT_BLOCK,
+    (_, open, body, close) => `${open}[${body.length} characters omitted]${close}`
+  );
+  return withoutDocuments.length > LOG_QUERY_MAX_CHARS
+    ? `${withoutDocuments.slice(0, LOG_QUERY_MAX_CHARS)}…[${withoutDocuments.length - LOG_QUERY_MAX_CHARS} more characters]`
+    : withoutDocuments;
+}
+
 export async function logInteraction(interactionType, data) {
   try {
     const timestamp = new Date().toISOString();
@@ -324,7 +352,7 @@ export async function logInteraction(interactionType, data) {
       const userMessages = data.messages.filter(m => m.role === 'user');
       const userQuery = userMessages.length > 0 ? userMessages.at(-1).content : '';
 
-      logEntry.query = userQuery;
+      logEntry.query = queryForLog(userQuery);
       logEntry.messageCount = data.messages.length;
     }
 
