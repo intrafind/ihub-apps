@@ -16,9 +16,9 @@ function readTheme() {
  * The theme iHub currently shows, `'light'` or `'dark'`, kept current when the
  * user flips the dark-mode switch.
  *
- * Unlike `useDarkMode`, which owns the preference and whose state is local to
- * each caller, this only reads what `applyThemeToDocument` put on `<html>`, so
- * every reader agrees with the switch wherever it was flipped.
+ * `useDarkMode` reads the shared theme store; this reads only what is on
+ * `<html>`, so it also sees themes applied outside the store (for example by
+ * the Teams or Office integrations).
  *
  * @returns {'light'|'dark'}
  */

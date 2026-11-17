@@ -478,7 +478,7 @@ function AdminOAuthClientsPage() {
                     max="3650"
                     value={pruneDays}
                     onChange={e => setPruneDays(Number(e.target.value))}
-                    className="w-20 text-sm rounded-md border border-gray-200 dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2"
+                    className="w-20 text-sm rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-2 py-2"
                   />
                 </label>
                 <button

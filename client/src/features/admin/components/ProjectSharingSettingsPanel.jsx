@@ -34,7 +34,7 @@ import {
 } from '../utils/cacheSettings';
 
 const NUMBER_INPUT_CLASS =
-  'block w-32 rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2';
+  'block w-32 rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 px-3 py-2';
 
 /**
  * A whole-number setting with its label and help text.

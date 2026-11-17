@@ -180,7 +180,7 @@ export default function DocsSearch() {
         onFocus={() => setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder={t('admin.docs.searchPlaceholder', 'Search the documentation...')}
-        className="w-full rounded-lg border border-gray-200 bg-gray-50 py-1.5 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-500 focus:border-indigo-500 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400 dark:focus:bg-gray-900"
+        className="w-full rounded-lg border border-admin-control-border bg-gray-50 py-1.5 pl-9 pr-9 text-sm text-gray-900 placeholder:text-gray-500 focus:border-indigo-500 focus:bg-white focus:outline-hidden focus:ring-1 focus:ring-indigo-500 dark:border-admin-control-border-dark dark:bg-gray-800 dark:text-gray-100 dark:placeholder:text-gray-400 dark:focus:bg-gray-900"
       />
       {!query && (
         <kbd

@@ -41,7 +41,7 @@ function LdapLoginTest({ provider }) {
   };
 
   const inputClass =
-    'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm';
+    'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 rounded-md shadow-xs focus:ring-blue-500 focus:border-blue-500 sm:text-sm';
 
   return (
     <div className="md:col-span-2 mt-2 p-4 rounded-md border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40">

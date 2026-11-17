@@ -12,7 +12,7 @@ import { knowledgeModeDescription } from '../../projects/utils/knowledgeModes';
 import { KNOWLEDGE_MODES } from '../../../../../shared/knowledgeModes.js';
 
 const INPUT_CLASS =
-  'w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
+  'w-full border border-admin-control-border dark:border-admin-control-border-dark rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500';
 const LABEL_CLASS = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2';
 
 /**

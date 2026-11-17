@@ -300,7 +300,7 @@ function AdminMcpGatewayPage() {
                         .filter(Boolean)
                     })
                   }
-                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
             )}
@@ -331,7 +331,7 @@ function AdminMcpGatewayPage() {
                         .filter(Boolean)
                     })
                   }
-                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
             )}
@@ -353,7 +353,7 @@ function AdminMcpGatewayPage() {
                   id="cimd-approval-mode"
                   value={cimdApprovalMode}
                   onChange={e => setCimd({ approvalMode: e.target.value })}
-                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 >
                   <option value="approval">
                     {t('admin.mcp.gateway.cimdApprovalRequired', 'Require approval (recommended)')}
@@ -394,7 +394,7 @@ function AdminMcpGatewayPage() {
             placeholder="https://ihub.example.com"
             value={gateway.publicUrl || ''}
             onChange={e => update({ publicUrl: e.target.value })}
-            className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+            className="w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
         </section>
 
@@ -481,7 +481,7 @@ function AdminMcpGatewayPage() {
                       }
                     }))
                   }
-                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  className="w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
               </div>
             )}

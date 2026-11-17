@@ -8,7 +8,7 @@ import { LLM_TIMEOUT_KEYS, LLM_TIMEOUT_MAX_MS } from '../../../../../shared/llmP
 import Icon from '../../../shared/components/Icon';
 
 const INPUT =
-  'mt-1 w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm';
+  'mt-1 w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm';
 
 /** 30000 → "30 s", 1500 → "1500 ms", 0 → null (no ceiling). */
 function formatMs(ms, t) {

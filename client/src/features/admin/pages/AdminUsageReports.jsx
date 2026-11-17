@@ -59,7 +59,7 @@ function TrackingMode() {
               setSaving(false);
             }
           }}
-          className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs dark:border-gray-600 dark:bg-gray-800 dark:text-gray-200"
+          className="rounded-md border border-admin-control-border bg-white px-2 py-1 text-xs dark:border-admin-control-border-dark dark:bg-gray-800 dark:text-gray-200"
         >
           {MODES.map(m => (
             <option key={m} value={m}>

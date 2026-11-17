@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { apiClient } from '../../../api/client';
+import useSurface from '../../../shared/hooks/useSurface';
 import { WorkflowEditor } from '../../workflows/editor/WorkflowEditor';
 import {
   workflowToFlow,
@@ -23,6 +24,8 @@ const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
  * Route: /admin/workflows/:id/edit
  */
 function WorkflowEditorPage() {
+  // The editor is full screen, outside AdminLayout, so it marks the admin surface itself.
+  useSurface('admin');
   const { id } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -280,7 +283,7 @@ function WorkflowEditorPage() {
                 }}
                 autoFocus
                 placeholder="my-workflow"
-                className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                className="w-full text-sm border border-admin-control-border dark:border-admin-control-border-dark rounded-sm px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {t(

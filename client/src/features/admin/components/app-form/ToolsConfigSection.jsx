@@ -73,7 +73,7 @@ function ToolApprovalOverride({ toolApproval, onChange }) {
 }
 
 const TOOL_SEARCH_INPUT_CLASS =
-  'mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
+  'mt-1 block w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark dark:bg-gray-700 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm';
 
 /**
  * Tool search (the platform's `toolSearch` feature): when the tools of the

@@ -12,7 +12,7 @@ const TEAMS_DEVELOPER_PORTAL_URL = 'https://dev.teams.microsoft.com/tools';
 const CARD =
   'bg-white dark:bg-gray-800 rounded-xl shadow-xs border border-gray-200 dark:border-gray-700 p-6';
 const INPUT =
-  'w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500';
+  'w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500';
 const SECONDARY_BUTTON =
   'shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50';
 const PRIMARY_BUTTON =

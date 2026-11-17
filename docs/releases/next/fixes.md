@@ -832,10 +832,12 @@ Localization, Voice input, Updates) had no visible edge: their border had no wid
 looked like plain page background. In dark mode, labels on **Authentication** were dark gray on a dark
 card, and the **Save** button under **Security → Cookies** had no fill.
 
-- Every admin text field, select and text area now has a visible border and padding. Field borders are
-  darker than before (gray-500, gray-400 in dark mode) so they meet the 3:1 contrast WCAG asks for.
+- Text fields, selects and text areas on the admin pages, including the search box, filters and
+  page-size select above admin lists, now have a visible border and padding. Their borders are darker
+  than before (gray-500, gray-400 in dark mode) so they meet the 3:1 contrast WCAG asks for.
 - Primary buttons on the admin pages that share the admin's form styles are now **indigo**, the admin's
-  accent colour, instead of blue; focus rings and checkboxes use the same colour.
+  accent colour, instead of blue; focus rings and checkboxes use the same colour, in a lighter indigo
+  in dark mode so they stay visible on dark cards.
 - Labels and checkbox texts on **Authentication** are readable in dark mode, and clicking a checkbox's
   text toggles it.
 - The admin opens in your light/dark choice straight away, also while it checks your sign-in, and the

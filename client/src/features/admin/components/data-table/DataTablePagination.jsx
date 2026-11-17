@@ -72,7 +72,7 @@ function DataTablePagination({
           <select
             value={pageSize}
             onChange={e => onPageSizeChange && onPageSizeChange(Number(e.target.value))}
-            className="text-sm rounded-md border border-gray-200 dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 px-2 py-1 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+            className="text-sm rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-200 px-2 py-1 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
           >
             {pageSizeOptions.map(size => (
               <option key={size} value={size}>

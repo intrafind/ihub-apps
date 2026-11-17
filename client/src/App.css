@@ -206,6 +206,12 @@
     accent-color: var(--color-admin-accent);
   }
 
+  /* indigo-600 is 2.33:1 on the gray-800 card; the checked fill needs indigo-400 in dark mode. */
+  [data-surface='admin'][data-theme='dark']
+    :is(input[type='checkbox'], input[type='radio']):not([data-surface='app'] *) {
+    accent-color: var(--color-admin-accent-fg-dark);
+  }
+
   /* Native checkboxes, date pickers and select popups follow the admin theme;
      the embedded end-user chat keeps the browser default it has elsewhere. */
   [data-surface='admin'][data-theme='dark'] {

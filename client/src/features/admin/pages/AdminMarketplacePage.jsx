@@ -213,7 +213,7 @@ function AdminMarketplacePage() {
                     setSelectedRegistry(e.target.value);
                     resetPaging();
                   }}
-                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                  className="px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                 >
                   <option value="">{t('admin.marketplace.allRegistries', 'All Registries')}</option>
                   {registries.map(r => (
@@ -229,7 +229,7 @@ function AdminMarketplacePage() {
                     setStatusFilter(e.target.value);
                     resetPaging();
                   }}
-                  className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
+                  className="px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm"
                 >
                   <option value="all">{t('admin.marketplace.statusAll', 'All Status')}</option>
                   <option value="available">

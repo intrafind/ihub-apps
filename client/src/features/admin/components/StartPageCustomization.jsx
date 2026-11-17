@@ -71,7 +71,7 @@ function StartPageCustomization({ config, pages, onUpdate, t }) {
     (defaultPage === 'page' && !defaultPageId) || (defaultPage === 'app' && !defaultPageAppId);
 
   const selectClass =
-    'block w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
+    'block w-full rounded-md border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 dark:text-gray-100 px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed';
   const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1';
   const helpClass = 'mt-2 text-xs text-gray-500 dark:text-gray-400';
 

@@ -15,7 +15,7 @@ const BUTTON_PRIMARY =
 const BUTTON_SECONDARY =
   'inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-indigo-500';
 const INPUT =
-  'block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs sm:text-sm focus:ring-indigo-500 focus:border-indigo-500';
+  'block w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-xs sm:text-sm focus:ring-indigo-500 focus:border-indigo-500';
 const SECRET_BLOCK =
   'font-mono text-xs break-all whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded-md p-3 select-all';
 

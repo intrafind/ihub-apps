@@ -667,7 +667,7 @@ export default function AdminAgentEditPage() {
                         disabled={!profile.planner?.enabled}
                         value={profile.planner?.maxTasks ?? 10}
                         onChange={e => handlePlanner({ maxTasks: Number(e.target.value) })}
-                        className="mt-1 block w-32 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        className="mt-1 block w-32 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                       />
                     </div>
                     <div>
@@ -684,7 +684,7 @@ export default function AdminAgentEditPage() {
                         disabled={!profile.planner?.enabled}
                         value={profile.planner?.modelId || ''}
                         onChange={e => handlePlanner({ modelId: e.target.value })}
-                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                       >
                         <option value="">
                           {t('admin.agents.edit.plannerModelInherit', '(inherit Preferred model)')}
@@ -769,7 +769,7 @@ export default function AdminAgentEditPage() {
                       disabled={!profile.dynamicTasks?.enabled}
                       value={profile.dynamicTasks?.maxDepth ?? 3}
                       onChange={e => handleDynamicTasks({ maxDepth: Number(e.target.value) })}
-                      className="mt-1 block w-32 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-32 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                     />
                   </div>
                   <div>
@@ -783,7 +783,7 @@ export default function AdminAgentEditPage() {
                       disabled={!profile.dynamicTasks?.enabled}
                       value={profile.dynamicTasks?.modelId || ''}
                       onChange={e => handleDynamicTasks({ modelId: e.target.value || undefined })}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                     >
                       <option value="">
                         {t(
@@ -843,7 +843,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.synthesizer?.modelId || ''}
                     onChange={e => handleSynthesizer({ modelId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   >
                     <option value="">
                       {t('admin.agents.edit.synthesizerModelInherit', '(inherit Preferred model)')}
@@ -874,7 +874,7 @@ export default function AdminAgentEditPage() {
                     step="1000"
                     value={profile.synthesizer?.maxTokens ?? 8000}
                     onChange={e => handleSynthesizer({ maxTokens: Number(e.target.value) || 8000 })}
-                    className="mt-1 block w-40 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-40 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
                 <DynamicLanguageEditor
@@ -930,7 +930,7 @@ export default function AdminAgentEditPage() {
                   <select
                     value={profile.review?.strictness || 'balanced'}
                     onChange={e => handleReview({ strictness: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   >
                     <option value="lenient">
                       {t('admin.agents.edit.reviewLenient', 'Lenient')}
@@ -992,7 +992,7 @@ export default function AdminAgentEditPage() {
                           e.target.value === '' ? undefined : Number(e.target.value) || undefined
                       })
                     }
-                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    className="mt-1 block w-24 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                   />
                 </div>
 
@@ -1017,7 +1017,7 @@ export default function AdminAgentEditPage() {
                           e.target.value === '' ? undefined : Number(e.target.value) || undefined
                       })
                     }
-                    className="mt-1 block w-24 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-24 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
                 <div>
@@ -1037,7 +1037,7 @@ export default function AdminAgentEditPage() {
                     rows={3}
                     value={profile.review?.criteria || ''}
                     onChange={e => handleReview({ criteria: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
 
@@ -1055,7 +1055,7 @@ export default function AdminAgentEditPage() {
                     disabled={!profile.review?.enabled}
                     value={profile.review?.modelId || ''}
                     onChange={e => handleReview({ modelId: e.target.value })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                   >
                     <option value="">
                       {t('admin.agents.edit.reviewModelInherit', '(inherit Preferred model)')}
@@ -1159,7 +1159,7 @@ export default function AdminAgentEditPage() {
                     max="1000000"
                     value={profile.memory?.maxBytes ?? 8192}
                     onChange={e => handleMemory({ maxBytes: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -1195,7 +1195,7 @@ export default function AdminAgentEditPage() {
                       disabled={profile.memory?.enabled === false}
                       value={profile.memory?.modelId || ''}
                       onChange={e => handleMemory({ modelId: e.target.value })}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 disabled:opacity-50"
                     >
                       <option value="">
                         {t(
@@ -1257,7 +1257,7 @@ export default function AdminAgentEditPage() {
                     max="86400"
                     value={profile.budgets?.maxWallTimeSec ?? 600}
                     onChange={e => handleBudgets({ maxWallTimeSec: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {t(
@@ -1276,7 +1276,7 @@ export default function AdminAgentEditPage() {
                     max="10"
                     value={profile.concurrency?.maxConcurrent ?? 1}
                     onChange={e => handleConcurrency({ maxConcurrent: Number(e.target.value) })}
-                    className="mt-1 block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    className="mt-1 block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                   />
                 </div>
               </div>
@@ -1302,7 +1302,7 @@ export default function AdminAgentEditPage() {
                       .filter(Boolean)
                   })
                 }
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
               />
             </Section>
 
@@ -1326,7 +1326,7 @@ export default function AdminAgentEditPage() {
                       .filter(Boolean)
                   })
                 }
-                className="block w-full rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                className="block w-full rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
               />
             </Section>
           </div>

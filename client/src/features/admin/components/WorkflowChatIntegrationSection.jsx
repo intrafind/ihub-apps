@@ -11,7 +11,7 @@ import { chatIntegrationWarnings } from '../../workflows/utils/chatIntegration';
 const OUTPUT_FORMATS = ['markdown', 'text', 'json'];
 
 const inputClass =
-  'mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-xs py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm';
+  'mt-1 block w-full border border-admin-control-border dark:border-admin-control-border-dark rounded-md shadow-xs py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-hidden focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm';
 const labelClass = 'block text-sm font-medium text-gray-700 dark:text-gray-300';
 const helpClass = 'mt-1 text-xs text-gray-500 dark:text-gray-400';
 

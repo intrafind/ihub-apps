@@ -10,7 +10,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
 const inputClass =
-  'w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
+  'w-full px-3 py-2 border border-admin-control-border dark:border-admin-control-border-dark rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100';
 const cardClass = 'bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6';
 const headingClass =
   'text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center';

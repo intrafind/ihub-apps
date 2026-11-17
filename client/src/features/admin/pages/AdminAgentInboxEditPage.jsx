@@ -281,7 +281,7 @@ export default function AdminAgentInboxEditPage() {
                     'admin.agents.inbox.itemPlaceholder',
                     'Describe a task the agent should do'
                   )}
-                  className="flex-1 rounded-lg border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                  className="flex-1 rounded-lg border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                 />
                 <button
                   onClick={addItem}
@@ -325,7 +325,7 @@ export default function AdminAgentInboxEditPage() {
                       <select
                         value={item.priority}
                         onChange={e => updateItem(idx, { priority: e.target.value })}
-                        className="rounded-sm border-gray-300 shadow-xs text-xs dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                        className="rounded-sm border-admin-control-border shadow-xs text-xs dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100"
                       >
                         <option value="">—</option>
                         <option value="p1">P1</option>
@@ -336,7 +336,7 @@ export default function AdminAgentInboxEditPage() {
                         type="text"
                         value={item.text}
                         onChange={e => updateItem(idx, { text: e.target.value })}
-                        className={`flex-1 rounded border-gray-300 shadow-xs text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 ${
+                        className={`flex-1 rounded border-admin-control-border shadow-xs text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-gray-100 ${
                           item.status === 'done' ? 'line-through text-gray-500' : ''
                         }`}
                       />

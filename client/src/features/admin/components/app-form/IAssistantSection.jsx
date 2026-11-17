@@ -21,7 +21,7 @@ const BINDING_KEY = 'iassistant';
 const ASK_ACTION = 'ask';
 
 const INPUT_CLASS =
-  'mt-1 block w-full rounded-md border-gray-300 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
+  'mt-1 block w-full rounded-md border-admin-control-border shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-admin-control-border-dark dark:text-white disabled:opacity-60 disabled:cursor-not-allowed';
 
 /**
  * IAssistantSection - iAssistant integration configuration card for the App form.

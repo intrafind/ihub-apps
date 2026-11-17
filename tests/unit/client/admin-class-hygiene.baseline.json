@@ -29,12 +29,9 @@
     "components/app-form/CompareModeSection.jsx": 1,
     "components/app-form/ExportConfigSection.jsx": 1,
     "components/app-form/FeedbackSection.jsx": 1,
-    "components/app-form/IAssistantSection.jsx": 1,
-    "components/app-form/IFinderSection.jsx": 1,
     "components/app-form/ProjectsConfigSection.jsx": 2,
     "components/app-form/SettingsConfigSection.jsx": 4,
     "components/app-form/SkillsConfigSection.jsx": 1,
-    "components/app-form/ToolsConfigSection.jsx": 1,
     "components/app-form/UploadConfigSection.jsx": 2,
     "components/data-table/filters/FilterMultiSelect.jsx": 2,
     "components/euAiAct/ConformityCard.jsx": 1,
@@ -48,13 +45,11 @@
     "components/voice/VoiceInputTestPanel.jsx": 2,
     "pages/AdminAdvancedPage.jsx": 1,
     "pages/AdminAgentApprovalsPage.jsx": 1,
-    "pages/AdminAgentEditPage.jsx": 25,
-    "pages/AdminAgentInboxEditPage.jsx": 4,
-    "pages/AdminAgentInboxesPage.jsx": 1,
+    "pages/AdminAgentEditPage.jsx": 8,
+    "pages/AdminAgentInboxEditPage.jsx": 1,
     "pages/AdminAuditLogPage.jsx": 1,
     "pages/AdminChatHistoryPage.jsx": 1,
     "pages/AdminLoggingPage.jsx": 10,
-    "pages/AdminMcpGatewayPage.jsx": 5,
     "pages/AdminOAuthCimdClientEditPage.jsx": 3,
     "pages/AdminOAuthClientEditPage.jsx": 4,
     "pages/AdminOfficeIntegrationPage.jsx": 2,
@@ -64,13 +59,13 @@
     "pages/AdminProviderEditPage.jsx": 1,
     "pages/AdminScheduledTasksPage.jsx": 2,
     "pages/AdminTelemetryPage.jsx": 9,
-    "pages/AdminUpdatesPage.jsx": 1,
-    "pages/AdminWorkflowEditPage.jsx": 1
+    "pages/AdminUpdatesPage.jsx": 1
   },
   "primaryRamp": {},
   "grayTextWithoutDark": {
     "components/ArtifactViewer.jsx": 2,
     "components/StepDetails.jsx": 13,
     "pages/AgentRunDetailPage.jsx": 2
-  }
+  },
+  "lowContrastFieldBorder": {}
 }

@@ -454,7 +454,7 @@ function AdminWorkflowEditPage() {
                       const ms = Math.min(seconds * 1000, 3600000);
                       handleMetadataChange('config.maxExecutionTime', ms);
                     }}
-                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(

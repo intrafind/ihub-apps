@@ -179,7 +179,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
                       value={link.href || ''}
                       onChange={e => updateNavigationLink(index, { href: e.target.value })}
                       placeholder="/page-url"
-                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      className="w-full px-2 py-1 border border-admin-control-border dark:border-admin-control-border-dark rounded-sm text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                     <div className="mt-2 flex items-center space-x-4">
                       <label className="flex items-center">
@@ -197,7 +197,7 @@ function HeaderCustomization({ config, onUpdate, t }) {
                         aria-label={t('admin.ui.linkTarget', 'Open link in')}
                         value={link.target || '_self'}
                         onChange={e => updateNavigationLink(index, { target: e.target.value })}
-                        className="text-sm border border-gray-300 dark:border-gray-600 rounded-sm px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                        className="text-sm border border-admin-control-border dark:border-admin-control-border-dark rounded-sm px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       >
                         <option value="_self">{t('admin.ui.header.samePage', 'Same Page')}</option>
                         <option value="_blank">{t('admin.ui.header.newPage', 'New Page')}</option>

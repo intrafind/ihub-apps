@@ -16,7 +16,7 @@ import {
 import { formatDateTime, formatDuration, reasonText } from '../../tasks/utils/taskFormat';
 
 const input =
-  'block w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100';
+  'block w-full rounded-lg border border-admin-control-border dark:border-admin-control-border-dark bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-gray-100';
 const card = 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5';
 const button =
   'px-2.5 py-1 rounded-md text-xs font-medium border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50';

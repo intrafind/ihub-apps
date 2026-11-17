@@ -22,12 +22,15 @@ export const LABEL_CLASS = 'block text-sm font-medium text-gray-700 dark:text-gr
 
 export const HELP_CLASS = 'mt-1 text-xs text-gray-600 dark:text-gray-400';
 
-/** Native checkbox: `accent-color` tints it (border and text utilities do nothing on it). */
+/**
+ * Native checkbox: `accent-color` tints it (border and text utilities do nothing on it). Dark
+ * mode switches to indigo-400, because indigo-600 is 2.33:1 on the gray-800 card.
+ */
 export const CHECKBOX_CLASS =
-  'h-4 w-4 shrink-0 accent-admin-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-admin-accent';
+  'h-4 w-4 shrink-0 accent-admin-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-admin-accent dark:accent-admin-accent-fg-dark dark:focus-visible:outline-admin-accent-fg-dark';
 
 export const RADIO_CLASS =
-  'h-4 w-4 shrink-0 accent-admin-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-admin-accent';
+  'h-4 w-4 shrink-0 accent-admin-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-admin-accent dark:accent-admin-accent-fg-dark dark:focus-visible:outline-admin-accent-fg-dark';
 
 export const SECONDARY_BUTTON_CLASS =
   'inline-flex items-center justify-center gap-1.5 min-h-[36px] px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-xs text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-hidden focus:ring-2 focus:ring-admin-accent dark:focus:ring-admin-accent-fg-dark focus:ring-offset-2 dark:focus:ring-offset-gray-800 disabled:opacity-50 disabled:cursor-not-allowed';

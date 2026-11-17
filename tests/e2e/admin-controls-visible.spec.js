@@ -59,7 +59,9 @@ const STRICT_ROUTES = [
   { path: '/admin/voice-input', minFields: 1 },
   // The update page shows its text fields only while an update is staged or a file is chosen.
   { path: '/admin/updates', minFields: 0 },
-  { path: '/admin/security', minFields: 3 }
+  { path: '/admin/security', minFields: 3 },
+  // A DataTable list page: the search box, filter selects and page-size select.
+  { path: '/admin/apps', minFields: 1 }
 ];
 
 const THEMES = [
@@ -81,7 +83,6 @@ function measureFields() {
   /** Any CSS colour (oklch, color-mix, rgb, named) as [r, g, b, a] with a in 0..1. */
   const toRgba = color => {
     ctx.clearRect(0, 0, 1, 1);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0)';
     ctx.fillStyle = color;
     ctx.fillRect(0, 0, 1, 1);
     const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
@@ -289,7 +290,6 @@ for (const theme of THEMES) {
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         const toRgba = color => {
           ctx.clearRect(0, 0, 1, 1);
-          ctx.fillStyle = 'rgba(0, 0, 0, 0)';
           ctx.fillStyle = color;
           ctx.fillRect(0, 0, 1, 1);
           const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
