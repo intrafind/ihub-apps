@@ -128,6 +128,9 @@ export function extractPageLinks(html, pageUrl) {
  * @returns {{html: string, title: string, links: string[]}}
  */
 export function readCrawledPage(bytes, contentType, pageUrl) {
-  const html = decodeHtml(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), contentType);
+  const html = decodeHtml(
+    Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength),
+    contentType
+  );
   return { html, ...extractPageLinks(html, pageUrl) };
 }

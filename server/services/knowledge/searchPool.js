@@ -93,7 +93,9 @@ function spawn(index) {
       )
     )
   );
-  worker.on('exit', code => retire(index, slot, failure(`The search thread exited (code ${code}).`)));
+  worker.on('exit', code =>
+    retire(index, slot, failure(`The search thread exited (code ${code}).`))
+  );
   // An idle thread must not keep the process alive; one with jobs does (`post`).
   worker.unref();
   slots[index] = slot;

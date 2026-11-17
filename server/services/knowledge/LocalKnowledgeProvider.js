@@ -301,12 +301,13 @@ export class LocalKnowledgeProvider extends KnowledgeProvider {
     projectActivityTracker.recordProjectUse(project);
     const q = typeof query === 'string' ? query.trim() : '';
     if (!q) throw new KnowledgeError('INVALID_REF', 'A query is needed', { projectId: project.id });
-    const { texts, unavailable, found } = await this._rank(
-      project,
-      { ...ctx, query: q },
-      itemIds,
-      { query: q, limit, budgetChars, docIds: docIds ? [...docIds] : undefined, sections }
-    );
+    const { texts, unavailable, found } = await this._rank(project, { ...ctx, query: q }, itemIds, {
+      query: q,
+      limit,
+      budgetChars,
+      docIds: docIds ? [...docIds] : undefined,
+      sections
+    });
     const byId = new Map(texts.map(({ item }) => [item.id, item]));
     const hits = found.hits.map(hit => ({
       ...hit,
