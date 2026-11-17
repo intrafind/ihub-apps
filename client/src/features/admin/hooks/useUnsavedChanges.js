@@ -7,7 +7,8 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 // exposes the history object the router navigates with; patching its push /
 // replace / go is the standard way to block in-app navigation in that mode.
 // Browser Back/Forward (POP) never goes through the navigator, so it is handled
-// with a capture-phase `popstate` listener (see installGuardRegistry).
+// with a `popstate` listener registered before the router's (see
+// installUnsavedChangesPopGate).
 import { UNSAFE_NavigationContext as NavigationContext, parsePath } from 'react-router-dom';
 
 /**
@@ -76,6 +77,33 @@ function readHistoryIndex() {
   if (typeof window === 'undefined') return null;
   const idx = window.history?.state?.idx;
   return typeof idx === 'number' ? idx : null;
+}
+
+/**
+ * The registry handler that currently decides about Back/Forward, or null.
+ * One `popstate` listener (the gate) delegates to it.
+ */
+let activePopHandler = null;
+let popGateInstalled = false;
+
+/**
+ * Adds the one `popstate` listener the guards use. It must be registered before
+ * React Router's own listener: listeners on `window` run in registration order
+ * (a capture flag does not move a listener ahead at the target), so a listener
+ * added when a guard mounts would run after the router had already rendered the
+ * other page. The client entry calls this before the app renders; guards call
+ * it too, as a fallback (tests, embeds).
+ */
+export function installUnsavedChangesPopGate() {
+  if (popGateInstalled || typeof window === 'undefined') return;
+  popGateInstalled = true;
+  window.addEventListener(
+    'popstate',
+    event => {
+      if (activePopHandler) activePopHandler(event);
+    },
+    true
+  );
 }
 
 function getRegistry(navigator) {
@@ -200,9 +228,8 @@ function installGuardRegistry(registry) {
         }
         const delta = nextIdx - fromIdx;
         // Keep the router from seeing this POP, put the previous entry back and
-        // ask the user. The router's own popstate listener is a bubbling listener
-        // on window; capture listeners at the target run first, so stopping here
-        // keeps it from rendering the other page.
+        // ask the user. The gate's listener was registered before the router's,
+        // so stopping here keeps the router from rendering the other page.
         event.stopImmediatePropagation();
         registry.swallowNextPop = true;
         window.history.go(-delta);
@@ -214,8 +241,9 @@ function installGuardRegistry(registry) {
         registry.currentIdx = nextIdx;
       }
     };
-    // Capture phase so this runs before React Router's (bubbling) listener.
-    window.addEventListener('popstate', registry.onPopState, true);
+    // Runs through the gate, which is registered before React Router's listener.
+    installUnsavedChangesPopGate();
+    activePopHandler = registry.onPopState;
   }
 }
 
@@ -231,8 +259,8 @@ function uninstallGuardRegistry(registry) {
     navigator.replace = originals.replace;
     if (typeof originals.go === 'function') navigator.go = originals.go;
   }
-  if (registry.onPopState && typeof window !== 'undefined') {
-    window.removeEventListener('popstate', registry.onPopState, true);
+  if (registry.onPopState && activePopHandler === registry.onPopState) {
+    activePopHandler = null;
   }
   registry.originals = null;
   registry.onPopState = null;

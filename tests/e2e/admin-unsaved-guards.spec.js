@@ -34,8 +34,14 @@ test.describe('Admin unsaved-changes guard', () => {
     await page.addInitScript(() => {
       window.localStorage.setItem('ihub-disclaimer-acknowledged', 'true');
     });
-    const login = await page.request.post('/api/auth/local/login', { data: ADMIN });
-    expect(login.ok(), 'sign in as the default admin').toBeTruthy();
+    // The web server is "up" once Vite answers; the API behind it can take a
+    // few seconds longer on the first run, so the first sign-in is retried.
+    await expect
+      .poll(async () => (await page.request.post('/api/auth/local/login', { data: ADMIN })).ok(), {
+        message: 'sign in as the default admin',
+        timeout: 30_000
+      })
+      .toBe(true);
   });
 
   test.describe('Security (AdminSettingsPage)', () => {
@@ -95,7 +101,9 @@ test.describe('Admin unsaved-changes guard', () => {
 
       const original = await maxAge(page).inputValue();
       await maxAge(page).fill(`${original}1`);
-
+      // Move the pointer off the spot where the dialog's buttons will appear:
+      // headless Chromium delivers a click there after the history move.
+      await page.mouse.move(5, 5);
       await page.goForward();
       await expect(leaveDialog(page)).toBeVisible();
       await expect(page).toHaveURL(/\/admin\/security/);
@@ -177,6 +185,17 @@ test.describe('Admin unsaved-changes guard', () => {
   });
 
   test.describe('Visual workflow editor (AX-B6)', () => {
+    // Workflows are a preview feature, off on a fresh install: switch it on
+    // for these tests and back off afterwards.
+    async function setWorkflowsFeature(request, enabled) {
+      const login = await request.post('/api/auth/local/login', { data: ADMIN });
+      expect(login.ok()).toBeTruthy();
+      const res = await request.put('/api/admin/features', { data: { workflows: enabled } });
+      expect(res.ok(), 'toggle the workflows feature').toBeTruthy();
+    }
+    test.beforeAll(async ({ request }) => setWorkflowsFeature(request, true));
+    test.afterAll(async ({ request }) => setWorkflowsFeature(request, false));
+
     const EDITOR = '/admin/workflows/approval-workflow/edit';
     const WORKFLOW_PAGE = /\/admin\/workflows\/approval-workflow\/?$/;
 
@@ -185,12 +204,14 @@ test.describe('Admin unsaved-changes guard', () => {
       await page.goto('/admin/workflows/approval-workflow');
       await page.getByRole('button', { name: 'Open visual editor' }).click();
       await expect(page).toHaveURL(new RegExp(EDITOR));
-      await expect(page.getByRole('textbox', { name: 'Search steps...' })).toBeVisible();
+      await expect(page.getByRole('searchbox', { name: 'Search steps...' })).toBeVisible({
+        timeout: 20_000
+      });
     }
 
     /** Adds a step from the palette: an unsaved canvas edit. */
     async function addStep(page) {
-      const palette = page.getByRole('textbox', { name: 'Search steps...' }).locator('xpath=..');
+      const palette = page.getByRole('searchbox', { name: 'Search steps...' }).locator('xpath=..');
       await palette.getByRole('button').first().click();
     }
 
@@ -219,6 +240,7 @@ test.describe('Admin unsaved-changes guard', () => {
     test('browser Back asks after a canvas edit', async ({ page }) => {
       await openEditor(page);
       await addStep(page);
+      await page.mouse.move(5, 5);
       await page.goBack();
       await expect(leaveDialog(page)).toBeVisible();
       await expect(page).toHaveURL(new RegExp(EDITOR));
