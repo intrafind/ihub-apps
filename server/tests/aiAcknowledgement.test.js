@@ -68,7 +68,15 @@ jest.unstable_mockModule('../configCache.js', () => ({
 }));
 jest.unstable_mockModule('../configSync.js', () => ({ announceConfigChange: () => undefined }));
 jest.unstable_mockModule('../utils/tokenService.js', () => ({
-  resolveJwtSecret: () => 'test-secret'
+  resolveJwtSecret: () => 'test-secret',
+  // Imported (not called) by modules the admin user route pulls in.
+  getJwtAlgorithm: () => 'HS256',
+  getJwtSigningKey: () => 'test-secret',
+  getJwtVerificationKey: () => 'test-secret',
+  generateJwt: () => '',
+  signAppJwt: () => '',
+  verifyJwt: () => null,
+  decodeJwt: () => null
 }));
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({
   logAudit: entry => store.audits.push(entry)
@@ -1110,6 +1118,46 @@ describe('acknowledgement documents', () => {
     const step = USER_CLEANUP_STEPS.find(item => item.name === 'aiAcknowledgements');
     expect(await step.run('u0')).toEqual({ removed: 1 });
     expect(await repo().get('u0')).toBeNull();
+  });
+});
+
+describe('admin user list (GET /api/admin/auth/users)', () => {
+  beforeEach(() => seed());
+
+  async function listUsers() {
+    const { default: registerAdminAuthRoutes } = await import('../routes/admin/auth.js');
+    const app = express();
+    registerAdminAuthRoutes(app);
+    app.use(errorHandler);
+    const res = await request(app).get('/api/admin/auth/users').set('x-admin', '1');
+    expect(res.status).toBe(200);
+    return res.body.users;
+  }
+
+  test('shows the acknowledgements of each user', async () => {
+    expect((await listUsers()).bob.aiAcknowledgements).toEqual([BOB_ENTRY]);
+  });
+
+  test('a store that cannot be listed leaves the fields out instead of failing', async () => {
+    const spy = jest.spyOn(storage.current.documents, 'list').mockRejectedValue(new Error('down'));
+    try {
+      const users = await listUsers();
+      expect(users.bob.username).toBe('bob');
+      expect(users.bob).not.toHaveProperty('aiAcknowledgements');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  test('the feature off: the store is not listed', async () => {
+    store.files[PLATFORM].aiAcknowledgement.enabled = false;
+    const spy = jest.spyOn(storage.current.documents, 'list');
+    try {
+      expect((await listUsers()).bob).not.toHaveProperty('aiAcknowledgements');
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 

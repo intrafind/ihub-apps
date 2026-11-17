@@ -268,8 +268,20 @@ export default function registerAdminAuthRoutes(app) {
     }
 
     // AI-use acknowledgements live in their own documents (one listing for all users).
+    // Not listed while the feature is off; a store that cannot be read leaves the
+    // fields out rather than failing the user page.
     const acknowledgementSettings = getAcknowledgementSettings();
-    const acknowledgements = await getAiAcknowledgementRepository().listAll();
+    let acknowledgements = new Map();
+    if (acknowledgementSettings.enabled) {
+      try {
+        acknowledgements = await getAiAcknowledgementRepository().listAll();
+      } catch (error) {
+        logger.warn('Could not list AI acknowledgements; users are shown without them', {
+          component: 'AdminAuth',
+          error
+        });
+      }
+    }
     const sanitizedUsers = Object.fromEntries(
       Object.entries(usersData.users || {}).map(([id, user]) => {
         // users.json no longer holds acknowledgements; a leftover copy there is not shown.
