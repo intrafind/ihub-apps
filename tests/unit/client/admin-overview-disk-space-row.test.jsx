@@ -29,6 +29,10 @@ jest.mock('../../../client/src/features/admin/hooks/useUpdateCheck', () => ({
   __esModule: true,
   useUpdateCheck: () => ({ updateInfo: null })
 }));
+jest.mock('../../../client/src/features/admin/hooks/useSetupChecklist', () => ({
+  __esModule: true,
+  useSetupChecklist: () => ({ steps: null, visible: false, dismiss: () => {} })
+}));
 jest.mock('../../../client/src/shared/contexts/UIConfigContext', () => ({
   __esModule: true,
   useUIConfig: () => ({ uiConfig: {} })
