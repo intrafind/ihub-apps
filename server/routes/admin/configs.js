@@ -170,6 +170,9 @@ function assertPatchShape(patch) {
   }
 }
 
+/** Keys a merge must never assign: they reach the prototype, not a member. */
+const UNSAFE_MERGE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 /**
  * RFC 7396 JSON Merge Patch of `patch` onto `target`, except that `null` on a
  * secret leaf stays `null`: {@link restoreRedacted} reads it as "clear the
@@ -184,6 +187,11 @@ function mergePatch(target, patch, path) {
   if (!isPlainObject(patch)) return structuredClone(patch);
   const result = isPlainObject(target) ? structuredClone(target) : {};
   for (const [key, value] of Object.entries(patch)) {
+    // `result[key] = …` with `__proto__` would replace the section object's
+    // prototype, and every validator that reads a property the section does
+    // not set itself would then read the attacker's. No config key has these
+    // names, so they are dropped.
+    if (UNSAFE_MERGE_KEYS.has(key)) continue;
     const childPath = [...path, key];
     if (value === null) {
       if (isSecretLeaf(childPath)) result[key] = null;
@@ -399,9 +407,13 @@ async function applyPlatformChange(req, body, { mode }) {
       // speech key, masked JWKS URLs): omitted keeps, null clears.
       restoreRedacted(mergedConfig, existingConfig, PLATFORM_SECRET_PATHS);
       // A marker that is still there stands for nothing stored; saving it would
-      // replace a secret with the word "REDACTED".
+      // replace a secret with the word "REDACTED". Only the sections this
+      // request can change are checked, and only the values it changes: a
+      // full-body page also sends `features`, `cors`, … back, which the merge
+      // ignores, and a value already stored is not this request's doing.
       for (const key of Object.keys(newConfig)) {
-        assertNoMarkers(mergedConfig[key], [key]);
+        if (!PATCHABLE_PLATFORM_SECTIONS.includes(key)) continue;
+        assertNoMarkers(mergedConfig[key], [key], { stored: existingConfig?.[key] });
       }
 
       // No save may lock the caller, or every administrator, out (409

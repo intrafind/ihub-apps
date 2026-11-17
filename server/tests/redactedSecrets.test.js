@@ -9,9 +9,17 @@
 
 import { describe, test, expect } from '@jest/globals';
 
-const { SECRET_MARKER, assertNoMarkers, isRedactedValue, redactForRead, restoreRedacted } =
-  await import('../utils/redactedSecrets.js');
+const {
+  SECRET_MARKER,
+  assertNoMarkers,
+  isRedactedValue,
+  maskUrlCredentials,
+  redactForRead,
+  restoreRedacted
+} = await import('../utils/redactedSecrets.js');
 const { revisionOf, parseIfMatch } = await import('../utils/configRevision.js');
+const { createHash } = await import('node:crypto');
+const { default: tokenStorageService } = await import('../services/TokenStorageService.js');
 
 const PATHS = [
   { path: 'auth.jwtSecret' },
@@ -113,9 +121,105 @@ describe('configRevision', () => {
     expect(revisionOf({})).toMatch(/^[A-Za-z0-9_-]{43}$/);
   });
 
+  test('is keyed: not the plain SHA-256 of the body, so it cannot be reproduced offline (R3)', () => {
+    const body = { auth: { jwtSecret: 'Winter2026!' }, defaultLanguage: 'en' };
+    const canonical = '{"auth":{"jwtSecret":"Winter2026!"},"defaultLanguage":"en"}';
+    const unkeyed = createHash('sha256').update(canonical).digest('base64url');
+
+    expect(revisionOf(body)).not.toBe(unkeyed);
+    // A change of the secret alone still changes it.
+    expect(revisionOf({ ...body, auth: { jwtSecret: 'Summer2026!' } })).not.toBe(revisionOf(body));
+  });
+
+  test('is derived from the encryption key, so every worker that shares it agrees (R3)', () => {
+    const previous = tokenStorageService.encryptionKey;
+    try {
+      tokenStorageService.encryptionKey = 'a'.repeat(64);
+      const first = revisionOf({ a: 1 });
+      expect(revisionOf({ a: 1 })).toBe(first);
+      tokenStorageService.encryptionKey = 'b'.repeat(64);
+      expect(revisionOf({ a: 1 })).not.toBe(first);
+      tokenStorageService.encryptionKey = 'a'.repeat(64);
+      expect(revisionOf({ a: 1 })).toBe(first);
+    } finally {
+      tokenStorageService.encryptionKey = previous;
+    }
+  });
+
+  test('orders keys by code unit, independent of locale', () => {
+    // `localeCompare` puts "a" before "B"; code-unit order puts "B" first.
+    // Either is stable; what matters is that insertion order never counts.
+    expect(revisionOf({ a: 1, B: 2, é: 3, e: 4 })).toBe(revisionOf({ é: 3, e: 4, B: 2, a: 1 }));
+  });
+
   test('parseIfMatch', () => {
+    expect(parseIfMatch(null)).toBeNull();
+    expect(parseIfMatch(42)).toBeNull();
+    expect(parseIfMatch('  ')).toBeNull();
     expect(parseIfMatch(undefined)).toBeNull();
     expect(parseIfMatch(' * ')).toBe('*');
     expect(parseIfMatch('"a", W/"b"')).toEqual(['a', 'W/"b"']);
+  });
+});
+
+describe('URL credentials (R2)', () => {
+  test.each([
+    ['https://fn.azurewebsites.net/api/jwks?code=SUPERSECRETKEY', 'code'],
+    ['https://acct.blob.core.windows.net/k/jwks.json?sv=2024&sig=abc%2Bdef', 'sig'],
+    ['https://apim.example.com/jwks?subscription-key=abc123', 'subscription-key'],
+    ['https://s3.example.com/jwks?X-Amz-Credential=AK&X-Amz-Signature=deadbeef', 'X-Amz-Signature'],
+    ['https://idp.example.com/jwks?apiKey=abc123', 'apiKey'],
+    ['https://idp.example.com/jwks?auth=abc123', 'auth'],
+    ['https://idp.example.com/jwks?refresh_token=abc123', 'refresh_token']
+  ])('%s: the %s value is masked on read', (url, param) => {
+    const masked = maskUrlCredentials(url);
+    expect(masked).toContain(`${param}=REDACTED`);
+    expect(masked).not.toMatch(/SUPERSECRETKEY|abc%2Bdef|abc123|deadbeef/);
+    expect(isRedactedValue(masked)).toBe(true);
+  });
+
+  test('keeps the address and non-secret parameters as stored', () => {
+    expect(maskUrlCredentials('https://idp.example.com/jwks?tenant=acme&sv=2024')).toBe(
+      'https://idp.example.com/jwks?tenant=acme&sv=2024'
+    );
+  });
+
+  test('a masked URL sent back restores the stored one; a changed one is kept', () => {
+    const stored = { providers: [{ id: 'p1', url: 'https://fn.example.net/jwks?code=K&x=1' }] };
+    const read = redactForRead(stored, PATHS);
+    expect(read.providers[0].url).toBe('https://fn.example.net/jwks?code=REDACTED&x=1');
+
+    const unchanged = restoreRedacted(structuredClone(read), stored, PATHS);
+    expect(unchanged.providers[0].url).toBe('https://fn.example.net/jwks?code=K&x=1');
+
+    const edited = structuredClone(read);
+    edited.providers[0].url = 'https://fn.example.net/jwks?code=NEW';
+    expect(restoreRedacted(edited, stored, PATHS).providers[0].url).toBe(
+      'https://fn.example.net/jwks?code=NEW'
+    );
+  });
+});
+
+describe('assertNoMarkers with the stored value (R8)', () => {
+  test('a marker equal to the stored value at the same place passes; a new one is refused', () => {
+    const stored = { vars: { a: '[REDACTED]' }, list: ['[redacted]'] };
+    expect(() =>
+      assertNoMarkers({ vars: { a: '[REDACTED]' }, list: ['[redacted]'] }, [], { stored })
+    ).not.toThrow();
+
+    let error;
+    try {
+      assertNoMarkers({ vars: { a: '[REDACTED]', b: '[REDACTED]' }, list: ['[redacted]'] }, [], {
+        stored
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error?.code).toBe('VALIDATION_FAILED');
+    expect(error.details.issues.map(issue => issue.path.join('.'))).toEqual(['vars.b']);
+  });
+
+  test('without the stored value every marker is refused, as before', () => {
+    expect(() => assertNoMarkers({ a: '[REDACTED]' })).toThrow();
   });
 });

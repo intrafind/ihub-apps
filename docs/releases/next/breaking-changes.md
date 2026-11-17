@@ -979,7 +979,8 @@ Only scripts that call the admin API directly are affected; the admin pages need
   `REDACTED` in place of a password or token) and has no stored value behind it is refused with
   `400 VALIDATION_FAILED`; `errors[].pointer` names the field. Before, it was stored as the secret.
 - `GET /api/admin/configs/platform` now returns every field of `proxyAuth.jwtProviders`, including
-  `jwkUrl` (credentials in it masked).
+  `jwkUrl` (user info and credential query parameters such as `token`, `key`, `code`, `sig`,
+  `subscription-key` or `X-Amz-Signature` masked).
 - `POST /api/admin/ui/config` ignores `pages` and keeps the stored ones; create, change and delete
   pages through `/api/admin/pages`.
 

@@ -14,7 +14,8 @@
  * `412 PRECONDITION_FAILED` and writes nothing; this module then raises the
  * {@link CONFIG_CONFLICT_EVENT} window event, which `AdminConfigConflictNotice`
  * turns into one dialog: the page keeps the admin's edits, and they choose
- * whether to reload.
+ * between reloading and keeping their edits. Keeping them re-reads the current
+ * revision, so the next save deliberately replaces the newer version.
  *
  * Scoped writes (`PATCH`, which change only the fields they name) are not
  * guarded by default: a one-field toggle should not fail because another
@@ -31,6 +32,18 @@ const GUARDED_ENDPOINTS = Object.freeze({
   '/admin/configs/platform': 'platform',
   '/admin/ui/config': 'ui'
 });
+
+/**
+ * The admin read that answers each guarded resource's current `ETag`; the
+ * paths of {@link GUARDED_ENDPOINTS}, keyed the other way round.
+ *
+ * @param {string} resource - `'platform'` or `'ui'`
+ * @returns {string|null} The URL to pass to `makeAdminApiCall`, or `null`
+ */
+export function revisionReadUrlOf(resource) {
+  const entry = Object.entries(GUARDED_ENDPOINTS).find(([, name]) => name === resource);
+  return entry ? entry[0] : null;
+}
 
 /** Last known revision per resource, as the quoted ETag the server sent. */
 const revisions = new Map();

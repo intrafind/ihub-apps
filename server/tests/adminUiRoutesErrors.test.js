@@ -18,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ihub-ui-routes-'));
-const state = { written: null, writeError: null };
+const state = { stored: null, written: null, writeError: null };
 
 const realContentsPath = await import('../utils/contentsPath.js');
 
@@ -32,11 +32,25 @@ jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
 jest.unstable_mockModule('../middleware/authRequired.js', () => ({
   authRequired: (req, res, next) => next()
 }));
+// A store with one document: `writeJson` replaces it, `updateJson` hands the
+// mutator a copy of it and writes what the mutator returns (nothing when it
+// returns `undefined` or throws), as the real ConfigStore does.
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
+    readJson: async () => structuredClone(state.stored),
     writeJson: async (_path, data) => {
       if (state.writeError) throw state.writeError;
       state.written = data;
+      state.stored = structuredClone(data);
+    },
+    updateJson: async (_path, mutate) => {
+      const current = structuredClone(state.stored);
+      const next = await mutate(current);
+      if (next === undefined) return { data: current, written: false };
+      if (state.writeError) throw state.writeError;
+      state.written = next;
+      state.stored = structuredClone(next);
+      return { data: next, written: true };
     }
   }
 }));
@@ -58,6 +72,7 @@ app.use(errorHandler);
 const VALID_CONFIG = { title: { en: 'iHub' }, header: {}, footer: {} };
 
 beforeEach(() => {
+  state.stored = null;
   state.written = null;
   state.writeError = null;
 });

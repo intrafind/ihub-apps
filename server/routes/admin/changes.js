@@ -179,7 +179,9 @@ export default function registerAdminChangesRoutes(app) {
               PLATFORM_SECRET_PATHS,
               { mode: 'rollback' }
             );
-            assertNoMarkers(next);
+            // Only what the rollback changes: a value the current file already
+            // holds is not brought back by it.
+            assertNoMarkers(next, [], { stored });
             await assertPlatformChangeKeepsAccess(req.user, stored, next);
             return next;
           });

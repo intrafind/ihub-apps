@@ -42,6 +42,24 @@ const MAX_FEATURED_APPS = 50;
 /** The UI configuration, as a path relative to `contents/`. */
 const UI_FILE = 'config/ui.json';
 
+/**
+ * The revision of `ui.json` as the UI form sees it: the stored body without
+ * `pages`. The save keeps the stored page registry whatever it is sent, so a
+ * page created, changed or deleted after the form loaded cannot conflict with
+ * it and must not make its save fail with 412. GET, POST and the `If-Match`
+ * comparison all use this one definition.
+ *
+ * @param {Object|null} stored - The stored `ui.json`, `null` when missing
+ * @returns {string}
+ */
+export function uiRevisionOf(stored) {
+  if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) {
+    return revisionOf(stored);
+  }
+  const { pages: _pages, ...withoutPages } = stored;
+  return revisionOf(withoutPages);
+}
+
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
   const storage = multer.diskStorage({
@@ -231,13 +249,17 @@ export default function registerAdminUIRoutes(app) {
    * Get UI configuration
    */
   app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, async (req, res) => {
-    const uiConfig = configCache.getUI();
-    // The revision is of the stored file, which is what a save with
-    // `If-Match` is compared against.
+    // Body and revision come from the same read of the stored file, which is
+    // what a save with `If-Match` is compared against. The runtime cache can
+    // lag behind another worker's write, and a stale body paired with a fresh
+    // revision would let a save erase that write. The cache is only the
+    // fallback when there is no readable file (the revision is then that of a
+    // missing file, as the save sees it).
     const stored = await configStore.readJson(UI_FILE);
+    const body = stored ?? configCache.getUI()?.data ?? {};
 
-    setRevisionHeaders(res, revisionOf(stored));
-    res.json(uiConfig?.data || {});
+    setRevisionHeaders(res, uiRevisionOf(stored));
+    res.json(body);
   });
 
   /**
@@ -264,7 +286,7 @@ export default function registerAdminUIRoutes(app) {
 
     // Read, compare and write under the file's update lock.
     const { data: stored } = await configStore.updateJson(UI_FILE, current => {
-      assertIfMatch(req, current, 'ui');
+      assertIfMatch(req, current, 'ui', uiRevisionOf);
       const next = { ...config };
       if (current?.pages !== undefined) next.pages = current.pages;
       else delete next.pages;
@@ -281,7 +303,7 @@ export default function registerAdminUIRoutes(app) {
       summary: 'Updated UI configuration'
     });
 
-    setRevisionHeaders(res, revisionOf(stored));
+    setRevisionHeaders(res, uiRevisionOf(stored));
     res.status(204).end();
   });
 

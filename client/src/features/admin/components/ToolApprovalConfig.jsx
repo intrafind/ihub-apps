@@ -24,6 +24,27 @@ export function toolApprovalFromForm(form) {
 }
 
 /**
+ * The JSON Merge Patch that stores what the form holds: the three defaults,
+ * an empty select as `null` (which removes that default), or `null` for the
+ * whole block when nothing is set, as {@link toolApprovalFromForm} decides.
+ *
+ * @param {{default?: string, internal?: string, external?: string}} form
+ * @returns {{toolApproval: Object|null}}
+ */
+export function toolApprovalPatchFromForm(form) {
+  if (toolApprovalFromForm(form) === null) return { toolApproval: null };
+  return {
+    toolApproval: {
+      defaults: {
+        default: form.default || null,
+        internal: form.internal || null,
+        external: form.external || null
+      }
+    }
+  };
+}
+
+/**
  * Admin → Security → Tool approval (#2945): the platform defaults that decide
  * whether a person approves a model's tool call before it runs. Installations,
  * tools, actions and apps can only tighten these.
@@ -63,13 +84,13 @@ function ToolApprovalConfig() {
     setSaving(true);
     setMessage(null);
     try {
-      // Only the approval block: the save route keeps every section the body
-      // leaves out, while the GET answer it would otherwise echo back has
-      // fields removed (a proxy JWT provider's `jwkUrl`), which a full-body
-      // save would erase.
+      // A scoped change of the approval block only. Not a POST: the Security
+      // page's other cards save platform.json through their own routes, so the
+      // revision this card loaded is stale after any of them saved, and a
+      // guarded POST would report a conflict with the admin's own change.
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        body: { toolApproval: toolApprovalFromForm(form) }
+        method: 'PATCH',
+        body: toolApprovalPatchFromForm(form)
       });
       setMessage({
         type: 'success',

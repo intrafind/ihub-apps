@@ -51,12 +51,12 @@ function CookieSettingsConfig() {
     setMessage('');
 
     try {
-      // Only the cookie block: the save route keeps every section the body
-      // leaves out, while the GET answer it would otherwise echo back has
-      // fields removed (a proxy JWT provider's `jwkUrl`), which a full-body
-      // save would erase.
+      // A scoped change of this one field. Not a POST: the Security page's
+      // other cards save platform.json through their own routes, so the
+      // revision this card loaded is stale after any of them saved, and a
+      // guarded POST would report a conflict with the admin's own change.
       await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
+        method: 'PATCH',
         body: { cookieSettings: { disableSecure: config.disableSecure } }
       });
 

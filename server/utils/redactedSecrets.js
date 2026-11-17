@@ -34,6 +34,7 @@
  */
 
 import { redactUrlSecrets } from './urlSecrets.js';
+import { isSecretName } from './secretRedaction.js';
 import { ServiceError } from './ServiceError.js';
 
 /** What an admin read shows instead of a stored secret. */
@@ -144,6 +145,37 @@ function walk(next, stored, segments, visit, pointer = []) {
   });
 }
 
+/** A query parameter name as written, decoded where it can be. */
+function decodeParamName(name) {
+  try {
+    return decodeURIComponent(name.replaceAll('+', ' '));
+  } catch {
+    return name;
+  }
+}
+
+/**
+ * A URL with every credential masked: user info and the parameters
+ * `redactUrlSecrets` knows, plus every query parameter whose name looks like a
+ * credential by the rule the action-test redaction uses (`isSecretName`:
+ * `apiKey`, `X-Amz-Signature`, `refresh_token`, …). Only the
+ * values change, so the rest of the URL reads as stored. Read and restore both
+ * use this one function, so a masked URL sent back is recognized exactly.
+ *
+ * @param {unknown} value
+ * @returns {unknown} The masked URL, or `value` when it is not a string
+ */
+export function maskUrlCredentials(value) {
+  if (typeof value !== 'string') return value;
+  return redactUrlSecrets(value).replace(
+    /([?&])([^=&#\s]+)=([^&#\s]*)/g,
+    (match, separator, name, paramValue) =>
+      paramValue === 'REDACTED' || !isSecretName(decodeParamName(name))
+        ? match
+        : `${separator}${name}=REDACTED`
+  );
+}
+
 /**
  * The form a read shows of a stored value.
  *
@@ -152,7 +184,7 @@ function walk(next, stored, segments, visit, pointer = []) {
  * @returns {unknown} The masked value, or `undefined` to leave the field out
  */
 function maskForRead(value, kind) {
-  if (kind === 'url') return redactUrlSecrets(value);
+  if (kind === 'url') return maskUrlCredentials(value);
   if (value === undefined || value === null || value === '') return undefined;
   if (isEnvVarPlaceholder(value)) return value;
   return SECRET_MARKER;
@@ -174,7 +206,7 @@ function isMaskOf(value, storedValue, kind) {
     typeof value === 'string' &&
     typeof storedValue === 'string' &&
     value !== storedValue &&
-    value === redactUrlSecrets(storedValue)
+    value === maskUrlCredentials(storedValue)
   );
 }
 
@@ -263,30 +295,51 @@ export function isRedactedValue(value) {
   return typeof value === 'string' && (KNOWN_MARKERS.has(value) || URL_MASK_PATTERN.test(value));
 }
 
+/** The child of a stored value at `key`, or `undefined` when there is none. */
+function storedChildOf(stored, key, isArrayIndex) {
+  if (isArrayIndex) return Array.isArray(stored) ? stored[Number(key)] : undefined;
+  return isPlainObject(stored) && Object.hasOwn(stored, key) ? stored[key] : undefined;
+}
+
 /**
- * Refuse a body that still holds a redaction marker anywhere.
+ * Refuse a body that still holds a redaction marker.
  *
  * Runs after {@link restoreRedacted}: a marker that survives it had no stored
  * value to stand for (a field the restore does not know, a renamed provider), and
  * storing it would replace a secret with the word "REDACTED".
  *
+ * With `options.stored`, only values the write changes are checked: a string
+ * equal to the value stored at the same place is left alone, so a value that
+ * is already stored (a prompt variable that reads "[REDACTED]", a legacy marker
+ * from an older writer) cannot make every later save, or a rollback, fail on a
+ * field the request did not touch. Array elements are compared by position.
+ *
  * @param {unknown} obj - The body about to be written
  * @param {Array<string>} [basePath] - Path segments of `obj` within the document
+ * @param {Object} [options]
+ * @param {unknown} [options.stored] - The value stored now at `basePath`;
+ *   omitted, every marker is refused
  * @throws {ServiceError} `VALIDATION_FAILED` (400) whose `errors[].pointer` names each field
  */
-export function assertNoMarkers(obj, basePath = []) {
+export function assertNoMarkers(obj, basePath = [], options = {}) {
+  const compare = Object.hasOwn(options, 'stored');
   const found = [];
-  const visit = (value, path) => {
+  const visit = (value, stored, path) => {
     if (isRedactedValue(value)) {
-      found.push(path);
+      if (!compare || value !== stored) found.push(path);
       return;
     }
-    if (Array.isArray(value)) value.forEach((item, index) => visit(item, [...path, String(index)]));
-    else if (isPlainObject(value)) {
-      for (const [key, child] of Object.entries(value)) visit(child, [...path, key]);
+    if (Array.isArray(value)) {
+      value.forEach((item, index) =>
+        visit(item, storedChildOf(stored, String(index), true), [...path, String(index)])
+      );
+    } else if (isPlainObject(value)) {
+      for (const [key, child] of Object.entries(value)) {
+        visit(child, storedChildOf(stored, key, false), [...path, key]);
+      }
     }
   };
-  visit(obj, basePath);
+  visit(obj, options.stored, basePath);
   if (found.length === 0) return;
   throw new ServiceError(
     'VALIDATION_FAILED',

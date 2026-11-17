@@ -1047,9 +1047,9 @@
   "admin": {
     "configConflict": {
       "title": "Das wurde geändert, seit Sie die Seite geöffnet haben",
-      "message": "Jemand hat die {{resource}} gespeichert, nachdem Sie diese Seite geöffnet haben (ein anderer Administrator, ein anderer Tab oder ein Skript). Ihre Änderungen wurden nicht gespeichert und sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und nehmen Sie Ihre Änderungen dann erneut vor.",
+      "message": "Jemand hat die {{resource}} gespeichert, nachdem Sie diese Seite geöffnet haben (ein anderer Administrator, ein anderer Tab oder ein Skript). Ihre Änderungen wurden nicht gespeichert und sind noch auf der Seite. Laden Sie neu, um den aktuellen Stand zu sehen, und nehmen Sie Ihre Änderungen erneut vor, oder behalten Sie Ihre Änderungen: Ihr nächstes Speichern ersetzt dann den neueren Stand, einschließlich der Änderungen der anderen Person.",
       "reload": "Neu laden und meine Änderungen verwerfen",
-      "keep": "Meine Änderungen auf der Seite behalten",
+      "keep": "Meine Änderungen behalten und beim nächsten Speichern überschreiben",
       "resource": {
         "platform": "Plattformkonfiguration",
         "ui": "UI-Anpassung"

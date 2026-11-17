@@ -553,9 +553,11 @@ section that has its own admin page with its own checks (`ssl`, `ssrf`, `cors`, 
 
 - **`GET`** returns the file with secrets redacted: `auth.jwtSecret`, `localAuth.jwtSecret` and
   `speech.azure.subscriptionKey` read as `***REDACTED***` (a `${ENV_VAR}` placeholder is shown as
-  it is), and each `proxyAuth.jwtProviders[].jwkUrl` with user name, password and token query
-  parameters replaced by `REDACTED`. The response carries an `ETag` (the revision of the stored
-  file) and `Cache-Control: no-store`.
+  it is), and each `proxyAuth.jwtProviders[].jwkUrl` with user name, password and credential query
+  parameters (`token`, `key`, `code`, `sig`, `subscription-key`, `X-Amz-Signature`, `apiKey`, …)
+  replaced by `REDACTED`. The response carries an `ETag` (the revision of the stored file, keyed
+  with the server's encryption key so it reveals nothing about the secrets) and
+  `Cache-Control: no-store`.
 - **`POST`** replaces each section the body names, from a fixed list (`auth`, `anonymousAuth`,
   `localAuth`, `oidcAuth`, `ldapAuth`, `ntlmAuth`, `proxyAuth`, `authorization`, `oauth`,
   `defaultLanguage`, `setup`, `aiDisclosure`, `aiAcknowledgement`, `provenance`, `mcpServer`,
@@ -580,14 +582,16 @@ Secrets in a `POST` or `PATCH` body:
 
 A redaction marker that has no stored value behind it (for example in a provider that was renamed)
 is refused with `400` `VALIDATION_FAILED` and the field's pointer, so the word "REDACTED" is never
-saved as a secret. JWKS URLs are matched to the stored provider by `name`, not by position.
+saved as a secret. Only the sections the request can change, and only values that differ from the
+stored ones, are checked: a marker-like value already stored elsewhere does not block a save. JWKS URLs are matched to the stored provider by `name`, not by position.
 
 **Concurrent changes.** Send the `ETag` of your `GET` as `If-Match` on the `POST` or `PATCH`. When
 the file changed since (another admin, another script, a hand edit), the answer is `412`
 `PRECONDITION_FAILED` and nothing is written; read again and reapply your change. A successful
 write answers with the new `ETag`. `If-Match: *` only requires the file to exist. Without
 `If-Match` a write behaves as before. The same applies to `GET` and `POST /api/admin/ui/config`;
-that `POST` never changes `pages`, which belong to `/api/admin/pages`.
+that `POST` never changes `pages`, which belong to `/api/admin/pages`, so its `ETag` leaves `pages`
+out: creating or editing a page does not make a UI save fail.
 
 ```bash
 ETAG=$(curl -sI -b cookies.txt https://ihub.example.com/api/admin/configs/platform | awk -F': ' 'tolower($1)=="etag"{print $2}' | tr -d '\r')

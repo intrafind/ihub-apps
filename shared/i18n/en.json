@@ -592,9 +592,9 @@
   "admin": {
     "configConflict": {
       "title": "This changed since you opened it",
-      "message": "Someone saved the {{resource}} after you opened this page (another administrator, another tab or a script). Your changes were not saved and are still on the page. Reload to see the current version, then make your changes again.",
+      "message": "Someone saved the {{resource}} after you opened this page (another administrator, another tab or a script). Your changes were not saved and are still on the page. Reload to see the current version and make your changes again, or keep your changes: your next save then replaces the newer version, including what the other person changed.",
       "reload": "Reload and discard my changes",
-      "keep": "Keep my changes on the page",
+      "keep": "Keep my changes and overwrite on next save",
       "resource": {
         "platform": "platform configuration",
         "ui": "UI customization"

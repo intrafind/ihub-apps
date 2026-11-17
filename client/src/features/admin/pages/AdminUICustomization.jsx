@@ -45,6 +45,21 @@ const TAB_SLICES = {
 };
 
 /**
+ * The page registry (`ui.json` → `pages`) as the start page picker reads it,
+ * from the list `GET /api/admin/pages` answers.
+ *
+ * @param {Array<{id: string, title?: Object, authRequired?: boolean, allowedGroups?: string[], contentType?: string}>} items
+ * @returns {Object<string, Object>} Pages by id
+ */
+export function pagesRegistryFromList(items) {
+  return Object.fromEntries(
+    (Array.isArray(items) ? items : [])
+      .filter(item => item && typeof item.id === 'string')
+      .map(({ id, ...page }) => [id, page])
+  );
+}
+
+/**
  * The configuration as it is stored: a site title or PWA name left empty follows
  * the product name instead of saving as nothing, so a save never blanks them.
  */
@@ -135,9 +150,19 @@ function AdminUICustomization() {
         body: { config: toSave },
         headers: { 'Content-Type': 'application/json' }
       });
+      // The save keeps the stored page registry, whatever the form sent, so
+      // pages created elsewhere since this page loaded are read back for the
+      // start page picker. If that read fails, the form keeps its list.
+      let saved = toSave;
+      try {
+        const pagesResponse = await makeAdminApiCall('/admin/pages');
+        saved = { ...toSave, pages: pagesRegistryFromList(pagesResponse.data?.items) };
+      } catch (pagesError) {
+        console.warn('Could not refresh the page list after saving:', pagesError);
+      }
       markSaved();
-      setSavedConfig(toSave);
-      setConfig(toSave);
+      setSavedConfig(saved);
+      setConfig(saved);
       setSuccessMessage(t('admin.ui.saved', 'UI configuration saved successfully'));
       // Apply the change in this browser right away.
       await refreshUIConfig();

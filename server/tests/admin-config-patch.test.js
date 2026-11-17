@@ -370,3 +370,71 @@ describe('PATCH /api/admin/configs/platform: the POST checks apply', () => {
     expect(response.status).toBe(403);
   });
 });
+
+describe('review fixes: marker scope and unsafe keys', () => {
+  const post = body => request(appFor(LOCAL_ADMIN)).post('/api/admin/configs/platform').send(body);
+
+  test('a full-body save is not refused for a marker stored in a section it cannot change (R8)', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      features: { banner: '[REDACTED]' },
+      cors: { origin: ['https://a.example.com/?token=REDACTED'] }
+    });
+    const read = await request(appFor(LOCAL_ADMIN)).get('/api/admin/configs/platform');
+
+    const response = await post({ ...read.body, defaultLanguage: 'de' });
+
+    expect(response.status).toBe(200);
+    const stored = await readPlatform();
+    expect(stored.defaultLanguage).toBe('de');
+    expect(stored.features).toEqual({ banner: '[REDACTED]' });
+  });
+
+  test('a marker already stored in a section the request sends back unchanged is kept (R8)', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      globalPromptVariables: { context: '[REDACTED]' }
+    });
+
+    const response = await patch({ globalPromptVariables: { extra: 'x' } });
+
+    expect(response.status).toBe(200);
+    expect((await readPlatform()).globalPromptVariables).toEqual({
+      context: '[REDACTED]',
+      extra: 'x'
+    });
+  });
+
+  test('a marker the request writes in a section it changes is still refused (R8)', async () => {
+    await writeConfig('platform.json', {
+      ...PLATFORM,
+      globalPromptVariables: { context: '[REDACTED]' }
+    });
+
+    const response = await patch({ globalPromptVariables: { other: '[REDACTED]' } });
+
+    expect(response.status).toBe(400);
+    expect(response.body.errors.map(error => error.pointer)).toEqual([
+      '/globalPromptVariables/other'
+    ]);
+  });
+
+  test.each(['__proto__', 'constructor', 'prototype'])(
+    'a "%s" member of a patch is dropped, never assigned (R9)',
+    async key => {
+      const body = JSON.parse(
+        `{"telemetry":{"enabled":true,"${key}":{"polluted":true,"enabled":false}}}`
+      );
+
+      const response = await patch(body);
+
+      expect(response.status).toBe(200);
+      const stored = await readPlatform();
+      expect(stored.telemetry.enabled).toBe(true);
+      expect(Object.hasOwn(stored.telemetry, key)).toBe(false);
+      expect(stored.telemetry.polluted).toBeUndefined();
+      expect(Object.getPrototypeOf(stored.telemetry)).toBe(Object.prototype);
+      expect({}.polluted).toBeUndefined();
+    }
+  );
+});

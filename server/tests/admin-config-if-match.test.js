@@ -5,7 +5,8 @@
  * Optional `If-Match` on admin config writes (decision 6, CU-B3).
  *
  * GET /api/admin/configs/platform and GET /api/admin/ui/config answer with a
- * strong `ETag`: SHA-256 of the STORED file, so an edit on disk or by another
+ * strong `ETag`: a keyed HMAC of the STORED file (for the UI, without the
+ * `pages` registry its save never writes), so an edit on disk or by another
  * worker changes it, and a change of a secret alone changes it although the
  * redacted body does not. A write that sends a stale `If-Match` is refused with
  * 412 `PRECONDITION_FAILED` and leaves the file untouched; a write without the
@@ -34,12 +35,14 @@ jest.unstable_mockModule('../storage/bootstrap.js', () => ({
   getStorage: () => null
 }));
 
-// The UI read serves the cache; here the cache is the file.
+// The cache is the file, unless a test sets `state.staleUI` to model a cache
+// that has not seen another worker's write yet.
 jest.unstable_mockModule('../configCache.js', () => ({
   default: {
     refreshCacheEntry: async () => {},
     getPlatform: () => ({}),
     getUI: () => {
+      if (state.staleUI) return { data: structuredClone(state.staleUI) };
       const text = state.uiText();
       return text ? { data: JSON.parse(text) } : null;
     }
@@ -141,6 +144,7 @@ function appFor(user = LOCAL_ADMIN) {
 }
 
 beforeEach(async () => {
+  state.staleUI = null;
   state.rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-if-match-'));
   await fs.mkdir(path.join(state.rootDir, 'contents', 'config'), { recursive: true });
   await writeConfig('platform.json', PLATFORM);
@@ -292,10 +296,26 @@ describe('UI config: ETag, optional If-Match and pages (CU-B3)', () => {
     expect(Object.keys(stored.pages).sort()).toEqual(['faq', 'news']);
   });
 
-  test('two-writer scenario with If-Match: the stale save is 412 and the page entry survives', async () => {
+  test('two-writer scenario with If-Match: a page created meanwhile does not make the save stale (R5)', async () => {
     const app = appFor();
     const read = await getUI(app);
     await createPage(app);
+
+    const response = await saveUI(app, { ...read.body, title: { en: 'Hub' } }, read.headers.etag);
+
+    expect(response.status).toBe(204);
+    const stored = JSON.parse(await readText('ui.json'));
+    expect(stored.title).toEqual({ en: 'Hub' });
+    expect(Object.keys(stored.pages).sort()).toEqual(['faq', 'news']);
+  });
+
+  test('a change the form can write (the disclaimer) still makes the save 412', async () => {
+    const app = appFor();
+    const read = await getUI(app);
+    await request(app)
+      .put('/api/admin/ui/disclaimer')
+      .send({ enabled: true, text: { en: 'Hi' } })
+      .expect(200);
     const before = await readText('ui.json');
 
     const response = await saveUI(app, { ...read.body, title: { en: 'Hub' } }, read.headers.etag);
@@ -304,6 +324,20 @@ describe('UI config: ETag, optional If-Match and pages (CU-B3)', () => {
     expect(response.body.code).toBe('PRECONDITION_FAILED');
     expect(response.body.details).toEqual({ resource: 'ui' });
     expect(await readText('ui.json')).toBe(before);
+  });
+
+  test('the read serves body and ETag from the stored file, never a lagging cache (R4)', async () => {
+    const app = appFor();
+    // Another worker saved a new title; this worker's cache still has the old one.
+    state.staleUI = structuredClone(UI);
+    await writeConfig('ui.json', { ...UI, title: { en: 'Saved elsewhere' } });
+
+    const read = await getUI(app);
+
+    expect(read.body.title).toEqual({ en: 'Saved elsewhere' });
+    const saved = await saveUI(app, { ...read.body, footer: { enabled: true } }, read.headers.etag);
+    expect(saved.status).toBe(204);
+    expect(JSON.parse(await readText('ui.json')).title).toEqual({ en: 'Saved elsewhere' });
   });
 
   test('a save cannot add, change or remove pages; the stored registry is kept', async () => {

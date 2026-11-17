@@ -59,6 +59,8 @@ const AdminConfigConflictNotice =
   require('../../../client/src/features/admin/components/AdminConfigConflictNotice').default;
 const AdminAdvancedPage =
   require('../../../client/src/features/admin/pages/AdminAdvancedPage').default;
+const CookieSettingsConfig =
+  require('../../../client/src/features/admin/components/CookieSettingsConfig').default;
 
 const ok = (data, etag) => ({ status: 200, data, headers: etag ? { etag } : {} });
 const conflict = () => {
@@ -173,15 +175,42 @@ describe('AdminConfigConflictNotice', () => {
     ).toBeInTheDocument();
   });
 
-  test('"Keep my changes" closes the dialog and reloads nothing', () => {
+  test('"Keep my changes" closes the dialog, reloads nothing and says the next save overwrites', () => {
+    mockRequest.mockResolvedValue(ok({}, '"rev-9"'));
     const onReload = jest.fn();
     render(<AdminConfigConflictNotice onReload={onReload} />);
     raise('platform');
+    expect(screen.getByText(/your next save then replaces the newer version/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Keep my changes on the page' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Keep my changes and overwrite on next save' })
+    );
 
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(onReload).not.toHaveBeenCalled();
+  });
+
+  test('after "Keep my changes" the next save goes through with the current revision (R7)', async () => {
+    // Loaded rev-1; someone else saved rev-2; the save with rev-1 is refused.
+    mockRequest.mockResolvedValueOnce(ok({}, '"rev-1"'));
+    await makeAdminApiCall('/admin/ui/config');
+    mockRequest.mockRejectedValueOnce(conflict());
+    await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } }).catch(
+      () => {}
+    );
+    render(<AdminConfigConflictNotice onReload={jest.fn()} />);
+    raise('ui');
+
+    mockRequest.mockResolvedValueOnce(ok({}, '"rev-2"'));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Keep my changes and overwrite on next save' })
+    );
+    await waitFor(() => expect(mockRequest).toHaveBeenCalledTimes(3));
+    expect(mockRequest.mock.calls[2][0]).toMatchObject({ url: '/admin/ui/config', method: 'GET' });
+
+    mockRequest.mockResolvedValueOnce({ status: 204, data: '', headers: { etag: '"rev-3"' } });
+    await makeAdminApiCall('/admin/ui/config', { method: 'POST', body: { config: {} } });
+    expect(sentHeaders(3)['If-Match']).toBe('"rev-2"');
   });
 
   test('"Reload" reloads', () => {
@@ -246,5 +275,25 @@ describe('scoped saves send only their own fields', () => {
     expect(writes).toHaveLength(1);
     expect(writes[0][0].url).toBe('/admin/configs/platform');
     expect(writes[0][0].data).toEqual({ setup: { disabled: true } });
+  });
+
+  test("Security → Cookies is a PATCH, so another card's save on the page cannot make it 412 (R1)", async () => {
+    mockRequest.mockImplementation(async config =>
+      config.method === 'PATCH'
+        ? ok({ cookieSettings: { disableSecure: true } }, '"rev-3"')
+        : ok({ cookieSettings: { disableSecure: false } }, '"rev-1"')
+    );
+    render(<CookieSettingsConfig />);
+    fireEvent.click(await screen.findByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'admin.system.cookieSettings.saveConfig' }));
+
+    await waitFor(() =>
+      expect(mockRequest.mock.calls.some(([config]) => config.method === 'PATCH')).toBe(true)
+    );
+    const writes = mockRequest.mock.calls.filter(([config]) => config.method !== 'GET');
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0].method).toBe('PATCH');
+    expect(writes[0][0].data).toEqual({ cookieSettings: { disableSecure: true } });
+    expect(writes[0][0].headers['If-Match']).toBeUndefined();
   });
 });

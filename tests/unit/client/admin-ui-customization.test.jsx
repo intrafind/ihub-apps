@@ -134,6 +134,36 @@ describe('AdminUICustomization', () => {
     expect(screen.queryByRole('region', { name: 'Save changes' })).toBeNull();
   });
 
+  it('reads the page list back after a save, so pages created meanwhile are offered (R10)', async () => {
+    await renderPage();
+    makeAdminApiCall.mockImplementation(async url => {
+      if (url === '/admin/pages') {
+        return {
+          data: { items: [{ id: 'news', title: { en: 'News' }, contentType: 'markdown' }] }
+        };
+      }
+      return { data: {} };
+    });
+
+    fireEvent.click(screen.getByLabelText('Custom text per language'));
+    fireEvent.change(screen.getByDisplayValue('Acme AI'), { target: { value: 'My Hub' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    });
+    await flush();
+    fireEvent.change(screen.getByDisplayValue('My Hub'), { target: { value: 'Our Hub' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
+    });
+    await flush();
+
+    const saves = makeAdminApiCall.mock.calls.filter(([, options]) => options?.method === 'POST');
+    expect(saves).toHaveLength(2);
+    expect(saves[1][1].body.config.pages).toEqual({
+      news: { title: { en: 'News' }, contentType: 'markdown' }
+    });
+  });
+
   it('marks the tab that holds unsaved changes', async () => {
     await renderPage();
     fireEvent.click(screen.getByLabelText('Custom text per language'));

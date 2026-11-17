@@ -21,18 +21,76 @@
  * - The response to a successful write carries the new revision, so a client
  *   keeps saving from what it last wrote without reading again.
  *
- * The revision is SHA-256 (base64url) over canonical JSON (keys sorted) of the
- * parsed stored body. Whitespace-only edits of the file therefore keep it; any
- * change of a value changes it. A missing file and an empty object `{}` share
- * one revision.
+ * The revision is an HMAC-SHA-256 (base64url) over canonical JSON (keys sorted)
+ * of the parsed stored body. Whitespace-only edits of the file therefore keep
+ * it; any change of a value, a secret included, changes it. A missing file and
+ * an empty object `{}` share one revision.
+ *
+ * It is keyed, not a plain hash, because the stored body holds secrets in
+ * plain text (`auth.jwtSecret`) while the read returns every other byte of it:
+ * an unkeyed digest would let anyone who sees the `ETag` (a proxy log, a HAR
+ * file shared for support) test guesses for the secret offline. The key is
+ * derived from the server's encryption key (`TokenStorageService`), which every
+ * worker shares, so all workers agree on a revision. Revisions only need
+ * equality, never a digest a client can reproduce.
  *
  * `If-Match` is optional: a write without it behaves as before.
  *
  * @module utils/configRevision
  */
 
-import { createHash } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
+import tokenStorageService from '../services/TokenStorageService.js';
 import { ServiceError } from './ServiceError.js';
+
+/** Separates the revision key from every other use of the encryption key. */
+const REVISION_KEY_LABEL = 'ihub-config-revision-v1';
+
+/**
+ * Used only while the encryption key is not initialized (a test that never
+ * starts a worker). Per process, so it is never weaker than the derived key;
+ * in a running server the worker initializes the encryption key before any
+ * route answers, so this is not reached.
+ */
+const PROCESS_FALLBACK_KEY = randomBytes(32);
+
+/** The derived key, cached per encryption key. */
+let derivedKey = { from: null, key: null };
+
+/**
+ * The HMAC key of revisions, derived from the server's encryption key.
+ *
+ * @returns {Buffer}
+ */
+function revisionKey() {
+  const encryptionKey = tokenStorageService?.encryptionKey;
+  if (typeof encryptionKey !== 'string' || !encryptionKey) return PROCESS_FALLBACK_KEY;
+  if (derivedKey.from !== encryptionKey) {
+    derivedKey = {
+      from: encryptionKey,
+      key: createHmac('sha256', Buffer.from(encryptionKey, 'hex'))
+        .update(REVISION_KEY_LABEL)
+        .digest()
+    };
+  }
+  return derivedKey.key;
+}
+
+/**
+ * Order two strings by UTF-16 code units: the order the default `sort()` uses,
+ * written out. Deliberately not `localeCompare`, whose order depends on the
+ * ICU data and locale of the process: two workers, or two Node versions, must
+ * produce the same canonical JSON for the same body.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function compareCodeUnits(a, b) {
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
+}
 
 /**
  * JSON with object keys in sorted order, so equal bodies hash equally whatever
@@ -46,7 +104,7 @@ function canonicalJson(value) {
   if (value !== null && typeof value === 'object') {
     const keys = Object.keys(value)
       .filter(key => value[key] !== undefined)
-      .sort();
+      .sort(compareCodeUnits);
     return `{${keys.map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
@@ -56,11 +114,11 @@ function canonicalJson(value) {
  * The revision of a stored configuration body.
  *
  * @param {unknown} stored - The parsed stored body; `null`/`undefined` for a missing file
- * @returns {string} base64url SHA-256, 43 characters
+ * @returns {string} base64url HMAC-SHA-256, 43 characters
  */
 export function revisionOf(stored) {
   const body = stored === null || stored === undefined ? {} : stored;
-  return createHash('sha256').update(canonicalJson(body)).digest('base64url');
+  return createHmac('sha256', revisionKey()).update(canonicalJson(body)).digest('base64url');
 }
 
 /**
@@ -83,8 +141,9 @@ export function setRevisionHeaders(res, revision) {
  *   (quotes removed; weak tags keep their `W/` prefix and so never match)
  */
 export function parseIfMatch(header) {
-  if (header === undefined || header === null) return null;
-  const text = String(header).trim();
+  // `req.get()` answers a string or `undefined`; anything else is no header.
+  if (typeof header !== 'string') return null;
+  const text = header.trim();
   if (text === '') return null;
   if (text === '*') return '*';
   return text
@@ -104,16 +163,18 @@ export function parseIfMatch(header) {
  * @param {import('express').Request} req
  * @param {unknown} stored - The stored body, as read under the lock (`null` when missing)
  * @param {string} resource - What the file is, for the error's `details.resource`
+ * @param {(stored: unknown) => string} [revisionFn] - How the revision of this
+ *   file is computed; must be the function its read and write responses use
  * @throws {ServiceError} `PRECONDITION_FAILED` (412)
  */
-export function assertIfMatch(req, stored, resource) {
+export function assertIfMatch(req, stored, resource, revisionFn = revisionOf) {
   const expected = parseIfMatch(req.get('If-Match'));
   if (expected === null) return;
   const exists =
     stored !== null &&
     stored !== undefined &&
     !(typeof stored === 'object' && !Array.isArray(stored) && Object.keys(stored).length === 0);
-  if (expected === '*' ? exists : expected.includes(revisionOf(stored))) return;
+  if (expected === '*' ? exists : expected.includes(revisionFn(stored))) return;
   throw new ServiceError(
     'PRECONDITION_FAILED',
     `The ${resource} configuration was changed after it was read. Nothing was saved. Reload it, apply your changes again and save.`,
