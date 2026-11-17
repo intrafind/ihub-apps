@@ -15,6 +15,7 @@ import {
   callerRecordId,
   countUsableAdmins,
   dependantsOf,
+  applySignInEnvFlags,
   effectivePlatformConfig,
   groupsResolutionError,
   isMethodEnabled,
@@ -276,5 +277,20 @@ describe('callerRecordId', () => {
   test('no record, no users file', () => {
     expect(callerRecordId(users, { id: 'nobody', authMode: 'oidc' })).toBeUndefined();
     expect(callerRecordId(null, { id: 'x', authMode: 'oidc' })).toBeUndefined();
+  });
+});
+
+describe('applySignInEnvFlags', () => {
+  test('turns proxy sign-in on when PROXY_AUTH_ENABLED=true and leaves the input alone', () => {
+    const stored = { proxyAuth: { enabled: false, userHeader: 'X-User' } };
+    const out = applySignInEnvFlags(stored, { PROXY_AUTH_ENABLED: 'true' });
+    expect(out.proxyAuth).toEqual({ enabled: true, userHeader: 'X-User' });
+    expect(stored.proxyAuth.enabled).toBe(false);
+  });
+
+  test('changes nothing without the switch', () => {
+    const stored = { proxyAuth: { enabled: false } };
+    expect(applySignInEnvFlags(stored, {})).toBe(stored);
+    expect(applySignInEnvFlags(stored, { PROXY_AUTH_ENABLED: 'false' })).toBe(stored);
   });
 });

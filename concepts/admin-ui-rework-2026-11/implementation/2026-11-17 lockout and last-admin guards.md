@@ -98,7 +98,9 @@ would need a lock the document store backends share; not worth it for a two-admi
 - Proxy: changing `userHeader`, `trustedProxies` or removing the caller's `jwtProviders[]` entry is
   not detected (proxy sessions carry no provider name).
 - The admin rescue's behaviour is unchanged (brief), apart from reading `enabled` as the runtime
-  does (see above). Its escalation risk remains for on-disk edits.
+  does (see above) and counting proxy sign-in switched on by `PROXY_AUTH_ENABLED` (requester
+  decision after review, `applySignInEnvFlags`), so guard and rescue see the same admins. Its
+  escalation risk remains for on-disk edits.
 - Out of scope on purpose:
   - **Backup import** (`POST /api/admin/backup/_import`) replaces platform, users and groups
     wholesale. A restore is deliberate; the archive may come from another installation where the

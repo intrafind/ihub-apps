@@ -6,7 +6,7 @@ import { loadUsers, saveUsers } from './userManager.js';
 import configCache from '../configCache.js';
 import logger from './logger.js';
 import { localUsersFile } from './contentsPath.js';
-import { isUsableAdmin, isUserAuthMethodEnabled } from './authInvariants.js';
+import { applySignInEnvFlags, isUsableAdmin, isUserAuthMethodEnabled } from './authInvariants.js';
 
 /**
  * Check if there is at least one admin user across all enabled authentication methods
@@ -15,7 +15,10 @@ import { isUsableAdmin, isUserAuthMethodEnabled } from './authInvariants.js';
  */
 export function hasAnyAdmin(usersFilePath = localUsersFile()) {
   try {
-    const platform = configCache.getPlatform() || {};
+    // Same view of the sign-in methods as the lockout guards (adminGuards.js):
+    // proxy sign-in switched on by PROXY_AUTH_ENABLED counts, so a proxy admin
+    // is seen and the rescue promotes nobody.
+    const platform = applySignInEnvFlags(configCache.getPlatform() || {});
     const groupsConfig = loadGroupsConfiguration();
 
     // Check persisted users (local, OIDC, proxy, NTLM auth users)
@@ -285,7 +288,7 @@ export function isLastAdmin(userId, usersFilePath = localUsersFile()) {
     const usersConfig = loadUsers(usersFilePath);
     const users = usersConfig.users || {};
     const groupsConfig = loadGroupsConfiguration();
-    const platform = configCache.getPlatform() || {};
+    const platform = applySignInEnvFlags(configCache.getPlatform() || {});
 
     let adminCount = 0;
     let isUserAdmin = false;

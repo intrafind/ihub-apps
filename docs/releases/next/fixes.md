@@ -865,6 +865,9 @@ with an explanation on the page, and nothing is saved.
 - A sign-in method switched on by a placeholder or environment variable that resolves to text
   such as `"true"` counts as on for these checks and for the admin rescue, as it does for
   sign-in itself.
+- Proxy sign-in switched on only by `PROXY_AUTH_ENABLED=true` now counts for the admin rescue as
+  it does for these checks. Before, the rescue could make the next proxy user an administrator
+  even though a proxy administrator was left.
 
 How to recover when nobody can sign in as an administrator: see
 [Authentication Quick Start → Recover Admin Access](../../AUTHENTICATION_QUICK_START.md#recover-admin-access).

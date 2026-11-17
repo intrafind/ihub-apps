@@ -956,7 +956,7 @@ response whose `code` says what happened; nothing is changed. There is no overri
 | `DELETE /api/admin/auth/users/{id}` | deleting your own account | 409 | `SELF_LOCKOUT` |
 | `DELETE /api/admin/auth/users/{id}` | the last administrator who can sign in (unchanged) | 403 | `FORBIDDEN` |
 | `DELETE /api/admin/groups/{id}` | other groups inherit from it (`details.dependants`) | 409 | `GROUP_IN_USE` |
-| `PUT /api/admin/groups/{id}`, group rollback | no active administrator who can sign in would remain | 409 | `LAST_ADMIN` |
+| `PUT`, `DELETE /api/admin/groups/{id}`, group rollback | no active administrator who can sign in would remain | 409 | `LAST_ADMIN` |
 | every groups.json write (create, update, delete, content access, rollback) | the group inheritance would not resolve | 400 | `BAD_REQUEST` |
 | any of the above | the check itself could not run (a file unreadable) | 503 | `ADMIN_CHECK_FAILED` |
 
