@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { filenameParameter, settingsParameter, textEditsParameter } from '../editToolParameters.js';
+
 /**
  * Definition of the tool the `docx` system skill brings (see
  * `server/systemSkills/docx`). Plain data: the handler lives in
@@ -106,32 +108,13 @@ export const EDIT_DOCX_TOOL = {
   parameters: {
     type: 'object',
     properties: {
-      filename: {
-        type: 'string',
-        description:
-          'The document to change: its file name as created (e.g. "quarterly-report.docx") or its id.'
-      },
-      edits: {
-        type: 'array',
-        description:
-          'Replacements in the Markdown, applied in order. Keep each oldText short but unique: a heading, a sentence or a table row, copied exactly.',
-        items: {
-          type: 'object',
-          properties: {
-            oldText: { type: 'string', description: 'Text to replace, exactly as it is now.' },
-            newText: {
-              type: 'string',
-              description: 'The replacement; an empty string deletes oldText.'
-            }
-          },
-          required: ['oldText', 'newText']
-        }
-      },
-      set: {
-        type: 'object',
-        description:
-          'Settings to change, as in create_docx (e.g. {"title": "Q3 Report", "toc": true}); null removes one. The Markdown changes through "edits".'
-      }
+      filename: filenameParameter('quarterly-report.docx', 'document'),
+      edits: textEditsParameter(
+        'Replacements in the Markdown, applied in order. Keep each oldText short but unique: a heading, a sentence or a table row, copied exactly.'
+      ),
+      set: settingsParameter(
+        'Settings to change, as in create_docx (e.g. {"title": "Q3 Report", "toc": true}); null removes one. The Markdown changes through "edits".'
+      )
     },
     required: ['filename']
   }

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { filenameParameter, settingsParameter, textEditsParameter } from '../editToolParameters.js';
+
 /**
  * Definition of the tool the `pptx` system skill brings (see
  * `server/systemSkills/pptx`). Plain data: the handler lives in
@@ -108,38 +110,19 @@ export const EDIT_PPTX_TOOL = {
   parameters: {
     type: 'object',
     properties: {
-      filename: {
-        type: 'string',
-        description:
-          'The presentation to change: its file name as created (e.g. "strategy-2027.pptx") or its id.'
-      },
+      filename: filenameParameter('strategy-2027.pptx', 'presentation'),
       changes: {
         type: 'array',
         description:
           'Slide operations, applied in order: {"op":"replace","slide":3,"with":{…slide…}}, {"op":"update","slide":2,"set":{"title":"New title","chart":{…}}} (null removes a field), {"op":"insert","after":4,"slide":{…slide…}} (after 0 = first), {"op":"delete","slide":5}, {"op":"move","slide":6,"to":2}. A slide is written as in create_pptx.',
         items: { type: 'object' }
       },
-      edits: {
-        type: 'array',
-        description:
-          'Replacements in the texts of the slides (titles, bullets, table cells, notes), applied after "changes". Each oldText must occur exactly once in all of them.',
-        items: {
-          type: 'object',
-          properties: {
-            oldText: { type: 'string', description: 'Text to replace, exactly as it is now.' },
-            newText: {
-              type: 'string',
-              description: 'The replacement; an empty string deletes oldText.'
-            }
-          },
-          required: ['oldText', 'newText']
-        }
-      },
-      set: {
-        type: 'object',
-        description:
-          'Settings to change, as in create_pptx (e.g. {"footer": "Internal"}); null removes one. The slides change through "changes" and "edits".'
-      }
+      edits: textEditsParameter(
+        'Replacements in the texts of the slides (titles, bullets, table cells, notes), applied after "changes". Each oldText must occur exactly once in all of them.'
+      ),
+      set: settingsParameter(
+        'Settings to change, as in create_pptx (e.g. {"footer": "Internal"}); null removes one. The slides change through "changes" and "edits".'
+      )
     },
     required: ['filename']
   }

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
+import { filenameParameter, settingsParameter, textEditsParameter } from '../editToolParameters.js';
+
 /**
  * Definition of the tool the `xlsx` system skill brings (see
  * `server/systemSkills/xlsx`). Plain data: the handler lives in
@@ -73,38 +75,19 @@ export const EDIT_XLSX_TOOL = {
   parameters: {
     type: 'object',
     properties: {
-      filename: {
-        type: 'string',
-        description:
-          'The workbook to change: its file name as created (e.g. "budget-2027.xlsx") or its id.'
-      },
+      filename: filenameParameter('budget-2027.xlsx', 'workbook'),
       changes: {
         type: 'array',
         description:
           'Sheet operations, applied in order; "sheet" is a sheet name or its 1-based number: {"op":"setCells","sheet":"Summary","cell":"B3","values":[[125000,"=B3*1.1"]]} (row 1 sets column headers), {"op":"appendRows","sheet":"Summary","rows":[["APAC",90000]]}, {"op":"insertRows","sheet":"Summary","before":4,"rows":[…]}, {"op":"deleteRows","sheet":"Summary","row":5,"count":2}, {"op":"replaceSheet","sheet":"Data","with":{…sheet…}}, {"op":"addSheet","sheet":{…sheet…},"after":"Summary"}, {"op":"deleteSheet","sheet":"Old"}, {"op":"renameSheet","sheet":"Sheet1","to":"Summary"}. Rows and sheets are written as in create_xlsx.',
         items: { type: 'object' }
       },
-      edits: {
-        type: 'array',
-        description:
-          'Replacements in the texts and formulas of the cells, applied after "changes". Each oldText must occur exactly once in all of them.',
-        items: {
-          type: 'object',
-          properties: {
-            oldText: { type: 'string', description: 'Text to replace, exactly as it is now.' },
-            newText: {
-              type: 'string',
-              description: 'The replacement; an empty string deletes oldText.'
-            }
-          },
-          required: ['oldText', 'newText']
-        }
-      },
-      set: {
-        type: 'object',
-        description:
-          'Settings to change, as in create_xlsx (e.g. {"title": "Budget 2027"}); null removes one. The sheets change through "changes" and "edits".'
-      }
+      edits: textEditsParameter(
+        'Replacements in the texts and formulas of the cells, applied after "changes". Each oldText must occur exactly once in all of them.'
+      ),
+      set: settingsParameter(
+        'Settings to change, as in create_xlsx (e.g. {"title": "Budget 2027"}); null removes one. The sheets change through "changes" and "edits".'
+      )
     },
     required: ['filename']
   }
