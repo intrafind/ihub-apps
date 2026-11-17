@@ -311,7 +311,7 @@ function AdminPromptsPage() {
   const actions = [
     {
       id: 'edit',
-      label: t('admin.prompts.edit', 'Edit'),
+      label: t('common.edit', 'Edit'),
       icon: 'pencil',
       priority: 'primary',
       onClick: p => navigate(`/admin/prompts/${p.id}`)

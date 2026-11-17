@@ -834,3 +834,12 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Admin Pages Show Their Icons and the "Edit" Label Again
+
+Some admin pages showed an empty box where an icon belonged: the rate-limit and outbound-proxy
+settings, the default icon of a new agent, the workflow lists and the prompt-variables hint. The
+prompt lists showed "key 'admin.prompts.edit' returned an object instead of string" instead of
+**Edit**. Both show correctly now. The **All (\*)** checkbox of the app, model and prompt pickers is
+named for screen readers ("Apps: All (\*)") and can be ticked by clicking its text, and the agent
+editor no longer offers a Skills field while skills are switched off.

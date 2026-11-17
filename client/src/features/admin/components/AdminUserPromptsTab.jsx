@@ -555,7 +555,7 @@ function AdminUserPromptsTab() {
   const actions = [
     {
       id: 'edit',
-      label: t('admin.prompts.edit', 'Edit'),
+      label: t('common.edit', 'Edit'),
       icon: 'pencil',
       priority: 'primary',
       onClick: prompt => setEditing(prompt)
