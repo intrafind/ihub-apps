@@ -40,6 +40,10 @@ The user answered these on 2026-11-17 (asked with the panel's recommendation fir
 | 10 | Secrets in backups | **(a) callout only**; export format unchanged. | PR 5. |
 | 12 | Prompt "Linked App" | **Relabel "Opens in app"**, fix docs. | PR 11. |
 | 14 | TLS allowlist grants SSRF trust | **(a) show the coupling**; behaviour unchanged. Splitting the lists (b, with a migration) is Next. | PR 9. |
+| — | Admin rescue (`ensureFirstUserIsAdmin`) when no admin is left | **Unchanged**: the next OIDC or proxy user to sign in still becomes admin. PR 2's guards keep the admin API from reaching that state. | Documented in "Recover admin access". |
+| — | `ADMIN_SECRET` (documented, read by no code) | **Delete the claim** from the docs; a real break-glass is Next. | PR 2. |
+| — | Workflow run dialog `message` → `input` | **Clean break**, in `breaking-changes.md`. | PR 7. |
+| — | App wizard templates | **List every enabled app**; `allowInheritance` keeps its runtime meaning. | PR 7. |
 | — | Admin restyle (indigo primary, gray-500/400 field borders for WCAG 1.4.11) | **Approved.** | PR 6. |
 
 Decisions 1, 2, 3, 5, 8, 11 (beyond the US/"Benutzer"/*Sie* wording used in new copy) and 13 do not touch the Now phase and stay open on #3739.
@@ -145,9 +149,7 @@ Not in the November review; triaged into Now where they sit on the same code pat
 
 | Question | Default used |
 |---|---|
-| Should the admin rescue fire for OIDC/proxy users at all, and should IdP group mappings count as "an admin exists"? | Unchanged in Now; mappings count for the caller's own route; ask before changing the rescue. |
 | Self-demotion when another admin exists? | Allowed; self-deactivate and self-delete always refused. |
-| `ADMIN_SECRET`: implement as break-glass or delete from docs? | Delete the claim; propose a real break-glass in Next. |
 | Platform rollback after a secret rotation: restore the old secret or keep the current? | Keep the current secret. |
 | Who scripts against the admin API (user PUT, platform POST, OAuth client create)? | Assume some on-prem customers do; every contract change in `breaking-changes.md`. |
 | Is a DPIA based on `pii-data-handling.md` already with customers? | Changelog bullet plus a note asking support to inform known DPO contacts. |
