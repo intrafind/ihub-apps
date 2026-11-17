@@ -114,66 +114,61 @@ function AdminModelEditPage() {
   }, [location.state]);
 
   const loadResource = useCallback(async id => {
-    try {
-      const response = await makeAdminApiCall(`/admin/models/${id}`);
-      const model = response.data;
-      console.log('Model loaded:', model);
-      console.log('Model name structure:', model.name);
-      console.log('Model description structure:', model.description);
+    const response = await makeAdminApiCall(`/admin/models/${id}`);
+    const model = response.data;
+    console.log('Model loaded:', model);
+    console.log('Model name structure:', model.name);
+    console.log('Model description structure:', model.description);
 
-      // Ensure name and description are proper localized objects
-      const ensureLocalizedObject = value => {
-        if (!value) return { [DEFAULT_LANGUAGE]: '' };
-        if (typeof value === 'string') return { [DEFAULT_LANGUAGE]: value };
-        if (typeof value === 'object' && value !== null) return value;
-        return { [DEFAULT_LANGUAGE]: '' };
-      };
+    // Ensure name and description are proper localized objects
+    const ensureLocalizedObject = value => {
+      if (!value) return { [DEFAULT_LANGUAGE]: '' };
+      if (typeof value === 'string') return { [DEFAULT_LANGUAGE]: value };
+      if (typeof value === 'object' && value !== null) return value;
+      return { [DEFAULT_LANGUAGE]: '' };
+    };
 
-      const formDataObj = {
-        ...model, // Preserve all fields from the loaded model
-        id: model.id || '',
-        modelId: model.modelId || '',
-        name: ensureLocalizedObject(model.name),
-        description: ensureLocalizedObject(model.description),
-        url: model.url || '',
-        provider: model.provider || '',
-        contextWindow: model.contextWindow || '',
-        maxOutputTokens: model.maxOutputTokens || '',
-        supportsTools: model.supportsTools || 'none',
-        enabled: model.enabled !== undefined ? model.enabled : true,
-        default: model.default || false
-      };
+    const formDataObj = {
+      ...model, // Preserve all fields from the loaded model
+      id: model.id || '',
+      modelId: model.modelId || '',
+      name: ensureLocalizedObject(model.name),
+      description: ensureLocalizedObject(model.description),
+      url: model.url || '',
+      provider: model.provider || '',
+      contextWindow: model.contextWindow || '',
+      maxOutputTokens: model.maxOutputTokens || '',
+      supportsTools: model.supportsTools || 'none',
+      enabled: model.enabled !== undefined ? model.enabled : true,
+      default: model.default || false
+    };
 
-      // Only include optional number fields if they exist
-      if (model.concurrency !== undefined) {
-        formDataObj.concurrency = model.concurrency;
-      }
-      if (model.requestDelayMs !== undefined) {
-        formDataObj.requestDelayMs = model.requestDelayMs;
-      }
-      if (model.connectTimeoutMs !== undefined) {
-        formDataObj.connectTimeoutMs = model.connectTimeoutMs;
-      }
-      if (model.streamIdleTimeoutMs !== undefined) {
-        formDataObj.streamIdleTimeoutMs = model.streamIdleTimeoutMs;
-      }
-
-      // Handle API key display - show placeholder if key is set
-      if (model.apiKeySet) {
-        formDataObj.apiKeySet = true;
-        formDataObj.apiKey = model.apiKeyMasked || API_KEY_PLACEHOLDER;
-      } else {
-        formDataObj.apiKeySet = false;
-        formDataObj.apiKey = '';
-      }
-
-      console.log('Form data set with name:', ensureLocalizedObject(model.name));
-      console.log('Form data set with description:', ensureLocalizedObject(model.description));
-      return formDataObj;
-    } catch (err) {
-      // The hook shows `err.message`; keep the server-supplied message the page showed before.
-      throw new Error(getAdminApiErrorMessage(err));
+    // Only include optional number fields if they exist
+    if (model.concurrency !== undefined) {
+      formDataObj.concurrency = model.concurrency;
     }
+    if (model.requestDelayMs !== undefined) {
+      formDataObj.requestDelayMs = model.requestDelayMs;
+    }
+    if (model.connectTimeoutMs !== undefined) {
+      formDataObj.connectTimeoutMs = model.connectTimeoutMs;
+    }
+    if (model.streamIdleTimeoutMs !== undefined) {
+      formDataObj.streamIdleTimeoutMs = model.streamIdleTimeoutMs;
+    }
+
+    // Handle API key display - show placeholder if key is set
+    if (model.apiKeySet) {
+      formDataObj.apiKeySet = true;
+      formDataObj.apiKey = model.apiKeyMasked || API_KEY_PLACEHOLDER;
+    } else {
+      formDataObj.apiKeySet = false;
+      formDataObj.apiKey = '';
+    }
+
+    console.log('Form data set with name:', ensureLocalizedObject(model.name));
+    console.log('Form data set with description:', ensureLocalizedObject(model.description));
+    return formDataObj;
   }, []);
 
   const saveResource = async (data, id) => {

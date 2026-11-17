@@ -154,81 +154,77 @@ function AdminAppEditPage() {
   };
 
   const loadResource = async id => {
-    try {
-      const response = await makeAdminApiCall(`/admin/apps/${id}`);
-      const data = response.data;
+    const response = await makeAdminApiCall(`/admin/apps/${id}`);
+    const data = response.data;
 
-      // Ensure all configuration sections exist with defaults
-      const appWithDefaults = {
-        ...data,
-        greeting: data.greeting || {
-          en: {
-            title: '👋 Hello!',
-            subtitle: 'How can I help you today?'
-          },
-          de: {
-            title: '👋 Hallo!',
-            subtitle: 'Wie kann ich Ihnen heute helfen?'
-          }
+    // Ensure all configuration sections exist with defaults
+    const appWithDefaults = {
+      ...data,
+      greeting: data.greeting || {
+        en: {
+          title: '👋 Hello!',
+          subtitle: 'How can I help you today?'
         },
-        allowEmptyContent: data.allowEmptyContent ?? false,
-        sendChatHistory: data.sendChatHistory ?? true,
-        ephemeral: data.ephemeral ?? false,
-        inputMode: {
-          type: 'singleline',
-          rows: 5,
-          microphone: {
-            enabled: true,
-            mode: 'manual',
-            showTranscript: true
-          },
-          ...data.inputMode
-        },
-        upload: {
-          enabled: data.upload?.enabled || false,
-          imageUpload: {
-            enabled: data.upload?.imageUpload?.enabled || false,
-            resizeImages: data.upload?.imageUpload?.resizeImages ?? true,
-            maxFileSizeMB: data.upload?.imageUpload?.maxFileSizeMB || 10,
-            supportedFormats: data.upload?.imageUpload?.supportedFormats || [
-              'image/jpeg',
-              'image/jpg',
-              'image/png',
-              'image/gif',
-              'image/webp'
-            ]
-          },
-          fileUpload: {
-            enabled: data.upload?.fileUpload?.enabled || false,
-            maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 20,
-            supportedFormats: data.upload?.fileUpload?.supportedFormats || [
-              'text/plain',
-              'text/markdown',
-              'text/csv',
-              'text/vtt',
-              'application/json',
-              'text/html',
-              'text/css',
-              'text/javascript',
-              'application/javascript',
-              'text/xml',
-              'message/rfc822',
-              'application/pdf',
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-              'application/vnd.ms-outlook',
-              'application/vnd.oasis.opendocument.text',
-              'application/vnd.oasis.opendocument.spreadsheet',
-              'application/vnd.oasis.opendocument.presentation'
-            ]
-          },
-          ...data.upload
+        de: {
+          title: '👋 Hallo!',
+          subtitle: 'Wie kann ich Ihnen heute helfen?'
         }
-      };
+      },
+      allowEmptyContent: data.allowEmptyContent ?? false,
+      sendChatHistory: data.sendChatHistory ?? true,
+      ephemeral: data.ephemeral ?? false,
+      inputMode: {
+        type: 'singleline',
+        rows: 5,
+        microphone: {
+          enabled: true,
+          mode: 'manual',
+          showTranscript: true
+        },
+        ...data.inputMode
+      },
+      upload: {
+        enabled: data.upload?.enabled || false,
+        imageUpload: {
+          enabled: data.upload?.imageUpload?.enabled || false,
+          resizeImages: data.upload?.imageUpload?.resizeImages ?? true,
+          maxFileSizeMB: data.upload?.imageUpload?.maxFileSizeMB || 10,
+          supportedFormats: data.upload?.imageUpload?.supportedFormats || [
+            'image/jpeg',
+            'image/jpg',
+            'image/png',
+            'image/gif',
+            'image/webp'
+          ]
+        },
+        fileUpload: {
+          enabled: data.upload?.fileUpload?.enabled || false,
+          maxFileSizeMB: data.upload?.fileUpload?.maxFileSizeMB || 20,
+          supportedFormats: data.upload?.fileUpload?.supportedFormats || [
+            'text/plain',
+            'text/markdown',
+            'text/csv',
+            'text/vtt',
+            'application/json',
+            'text/html',
+            'text/css',
+            'text/javascript',
+            'application/javascript',
+            'text/xml',
+            'message/rfc822',
+            'application/pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'application/vnd.ms-outlook',
+            'application/vnd.oasis.opendocument.text',
+            'application/vnd.oasis.opendocument.spreadsheet',
+            'application/vnd.oasis.opendocument.presentation'
+          ]
+        },
+        ...data.upload
+      }
+    };
 
-      return appWithDefaults;
-    } catch (err) {
-      throw new Error(getAdminApiErrorMessage(err));
-    }
+    return appWithDefaults;
   };
 
   const saveResource = async (data, id) => {

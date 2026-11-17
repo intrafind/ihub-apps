@@ -48,29 +48,24 @@ function AdminPromptEditPage() {
   } = useAdminResourceEditor({
     resourceId: promptId,
     loadResource: async id => {
-      try {
-        const data = await fetchAdminPrompts();
-        const promptDataFromApi = data.find(p => p.id === id);
+      const data = await fetchAdminPrompts();
+      const promptDataFromApi = data.find(p => p.id === id);
 
-        if (!promptDataFromApi) {
-          throw new Error('Prompt not found');
-        }
-
-        // Ensure proper structure for editing
-        return {
-          ...promptDataFromApi,
-          name: promptDataFromApi.name || { en: '' },
-          description: promptDataFromApi.description || { en: '' },
-          prompt: promptDataFromApi.prompt || { en: '' },
-          variables: promptDataFromApi.variables || [],
-          appId: promptDataFromApi.appId || '',
-          order: promptDataFromApi.order,
-          enabled: promptDataFromApi.enabled !== false
-        };
-      } catch (err) {
-        // The hook surfaces `err.message`; keep the server-provided error detail.
-        throw new Error(getAdminApiErrorMessage(err));
+      if (!promptDataFromApi) {
+        throw new Error('Prompt not found');
       }
+
+      // Ensure proper structure for editing
+      return {
+        ...promptDataFromApi,
+        name: promptDataFromApi.name || { en: '' },
+        description: promptDataFromApi.description || { en: '' },
+        prompt: promptDataFromApi.prompt || { en: '' },
+        variables: promptDataFromApi.variables || [],
+        appId: promptDataFromApi.appId || '',
+        order: promptDataFromApi.order,
+        enabled: promptDataFromApi.enabled !== false
+      };
     },
     makeDefault: () => {
       const defaults = {

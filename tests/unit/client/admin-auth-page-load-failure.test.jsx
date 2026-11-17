@@ -346,4 +346,27 @@ describe('AdminAuthPage edits made while saving (R3)', () => {
     expect(screen.queryByRole('heading', { name: 'Users page' })).not.toBeInTheDocument();
     expect(screen.getByText('You have unsaved changes. Leave anyway?')).toBeInTheDocument();
   });
+
+  it('asks before leaving after a single edit made once the save finished', async () => {
+    routeApi({
+      platform: ok(PLATFORM),
+      groups: ok({ groups: {} }),
+      schema: () => Promise.resolve({})
+    });
+    renderPage();
+    await flush();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save Configuration' }));
+    });
+    await flush();
+    expect(writes()).toHaveLength(1);
+
+    // One edit after the save, then straight to another page.
+    fireEvent.change(screen.getByDisplayValue('480'), { target: { value: '60' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Go to users' }));
+
+    expect(screen.queryByRole('heading', { name: 'Users page' })).not.toBeInTheDocument();
+    expect(screen.getByText('You have unsaved changes. Leave anyway?')).toBeInTheDocument();
+  });
 });
