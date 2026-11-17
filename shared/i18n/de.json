@@ -2839,7 +2839,7 @@
           },
           "adminApi": {
             "name": "Admin-API",
-            "description": "Alles unter /api/admin."
+            "description": "Alles unter /api/admin. Gezählt pro angemeldetem Benutzer oder API-Client; nur Anfragen ohne Anmeldung zählen pro Adresse."
           },
           "authApi": {
             "name": "Anmeldung",
