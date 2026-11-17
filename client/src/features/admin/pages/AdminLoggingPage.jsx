@@ -510,7 +510,9 @@ function AdminLoggingPage() {
                       />
                       <div className="ml-3 flex-1">
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {component.nameKey ? t(component.nameKey, component.name) : component.name}
+                          {component.nameKey
+                            ? t(component.nameKey, component.name)
+                            : component.name}
                         </div>
                         <div
                           id={`logging-component-${component.id}-description`}

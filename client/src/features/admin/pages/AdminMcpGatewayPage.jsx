@@ -57,8 +57,7 @@ function AdminMcpGatewayPage() {
     sources: {
       platform: {
         load: async () =>
-          (await makeAdminApiCall('/admin/configs/platform', { revision: revisionRef })).data ||
-          {},
+          (await makeAdminApiCall('/admin/configs/platform', { revision: revisionRef })).data || {},
         onLoad: data => {
           setPlatform(data);
           setSavedPlatform(data);

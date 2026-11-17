@@ -124,7 +124,10 @@ function ToolApprovalConfig({ onDirtyChange }) {
         resourceLabel={t('admin.toolApproval.resource', 'tool approval settings')}
         loadingFallback={
           <div className="flex items-center justify-center py-8">
-            <Icon name="loader" className="h-6 w-6 animate-spin text-admin-accent dark:text-admin-accent-fg-dark" />
+            <Icon
+              name="loader"
+              className="h-6 w-6 animate-spin text-admin-accent dark:text-admin-accent-fg-dark"
+            />
           </div>
         }
       />
