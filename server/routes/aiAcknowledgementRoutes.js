@@ -33,6 +33,7 @@ import {
 } from '../services/aiAcknowledgement/aiAcknowledgementService.js';
 import { getAiAcknowledgementRepository } from '../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 import { evaluateAcknowledgement } from '../middleware/aiAcknowledgementRequired.js';
+import { rememberAcknowledged } from '../services/aiAcknowledgement/acknowledgementCache.js';
 import {
   hasValidAcknowledgementCookie,
   setAcknowledgementCookie
@@ -213,6 +214,7 @@ export default function registerAiAcknowledgementRoutes(app) {
           { resetAt: settings.resetAt }
         );
         if (stored) {
+          rememberAcknowledged(user.id, settings);
           if (!recorded) return res.status(200).json(stored);
           audit();
           setAcknowledgementCookie(req, res, version);

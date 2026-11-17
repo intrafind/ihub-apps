@@ -32,6 +32,7 @@ import logger from '../../utils/logger.js';
 import { StorageError } from '../../storage/errors.js';
 import { getStorage, readFacet } from '../../storage/bootstrap.js';
 import { RUNTIME_NAMESPACES } from '../../storage/namespaces.js';
+import { forgetAcknowledgement } from './acknowledgementCache.js';
 
 /** Namespace holding one document per user. */
 export const AI_ACKNOWLEDGEMENTS_NAMESPACE = RUNTIME_NAMESPACES.aiAcknowledgements;
@@ -179,10 +180,12 @@ export class AiAcknowledgementRepository {
    */
   async clear(userId, { now = new Date().toISOString() } = {}) {
     if (!this.isAvailable() || !userId) return { entries: 0 };
-    return this._update(userId, current => ({
+    const result = await this._update(userId, current => ({
       next: { ...current, aiAcknowledgements: [], aiAcknowledgementsClearedAt: now },
       result: { entries: entriesOf(current).length }
     }));
+    forgetAcknowledgement(userId);
+    return result;
   }
 
   /**
@@ -262,7 +265,12 @@ export class AiAcknowledgementRepository {
    */
   async delete(userId) {
     if (!this.isAvailable() || !userId) return false;
-    return this.documents.delete(AI_ACKNOWLEDGEMENTS_NAMESPACE, acknowledgementKey(userId));
+    const removed = await this.documents.delete(
+      AI_ACKNOWLEDGEMENTS_NAMESPACE,
+      acknowledgementKey(userId)
+    );
+    forgetAcknowledgement(userId);
+    return removed;
   }
 }
 

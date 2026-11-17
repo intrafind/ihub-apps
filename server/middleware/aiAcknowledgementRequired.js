@@ -22,6 +22,10 @@ import {
 } from '../services/aiAcknowledgement/aiAcknowledgementService.js';
 import { getAiAcknowledgementRepository } from '../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 import {
+  isRememberedAcknowledged,
+  rememberAcknowledged
+} from '../services/aiAcknowledgement/acknowledgementCache.js';
+import {
   ACK_COOKIE,
   hasValidAcknowledgementCookie,
   verifyAcknowledgement
@@ -82,8 +86,17 @@ export async function aiAcknowledgementRequired(req, res, next) {
     if (!settings.enabled || !settings.enforce) return next();
     if (isMachinePrincipal(req.user)) return next();
 
+    // A signed-in user's "yes" is remembered on this worker (see
+    // acknowledgementCache); "not yet" is always asked again.
+    const userId = req.user?.id;
+    const isUser = Boolean(userId) && userId !== 'anonymous';
+    if (isUser && isRememberedAcknowledged(userId, settings)) return next();
+
     const { acknowledged } = await evaluateAcknowledgement(req, settings);
-    if (acknowledged) return next();
+    if (acknowledged) {
+      if (isUser) rememberAcknowledged(userId, settings);
+      return next();
+    }
 
     logger.debug('AI acknowledgement required', {
       component: 'AiAcknowledgement',

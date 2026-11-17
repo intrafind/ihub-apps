@@ -123,9 +123,10 @@ const { default: registerAdminRoutes } = await import('../routes/admin/aiAcknowl
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { ServiceError } = await import('../utils/ServiceError.js');
 const { loadUsersFresh, updateUsersFile } = await import('../utils/userManager.js');
-const { getAiAcknowledgementRepository, AI_ACKNOWLEDGEMENTS_NAMESPACE } =
+const { getAiAcknowledgementRepository, AI_ACKNOWLEDGEMENTS_NAMESPACE, acknowledgementKey } =
   await import('../services/aiAcknowledgement/AiAcknowledgementRepository.js');
 const { setGuestId, guestOwnerId } = await import('../services/chat/chatOwner.js');
+const ackCache = await import('../services/aiAcknowledgement/acknowledgementCache.js');
 const { mergeSettingsForSave, describeSettingsChange } = service;
 
 const USERS = 'config/users.json';
@@ -140,6 +141,7 @@ const BOB_ENTRY = { version: 1, textHash: 'sha256:aa', acknowledgedAt: '2026-01-
 
 async function seed({ settings = {}, users, acknowledgements = { bob: [BOB_ENTRY] } } = {}) {
   await freshStore();
+  ackCache.resetAcknowledgementCacheForTests();
   store.audits = [];
   store.files[PLATFORM] = {
     aiAcknowledgement: {
@@ -511,6 +513,101 @@ describe('428 guard', () => {
     expect((await post(app, 'guest', `${guest.ACK_COOKIE}=${good}`)).status).toBe(200);
     const other = guest.signAcknowledgement(`guest:${'c'.repeat(64)}`, 1);
     expect((await post(app, 'guest', `${guest.ACK_COOKIE}=${other}`)).status).toBe(428);
+  });
+});
+
+describe('per-worker acknowledgement cache', () => {
+  beforeEach(() => seed());
+
+  const post = (app, user) => request(app).post('/api/apps/x/chat/c1').set('x-user', user).send({});
+  const countReads = () => jest.spyOn(storage.current.documents, 'get');
+
+  test('a positive result is remembered: the second request reads nothing', async () => {
+    const app = buildApp();
+    const reads = countReads();
+    try {
+      expect((await post(app, asUser('bob'))).status).toBe(200);
+      expect((await post(app, asUser('bob'))).status).toBe(200);
+      expect(reads).toHaveBeenCalledTimes(1);
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  test('"not yet" is never remembered: a confirmation written elsewhere counts at once', async () => {
+    const app = buildApp();
+    expect((await post(app, asUser('alice'))).status).toBe(428);
+    // Written straight to the store, as another pod would, bypassing this worker's cache.
+    await repo().record('alice', { ...BOB_ENTRY });
+    expect((await post(app, asUser('alice'))).status).toBe(200);
+  });
+
+  test('POST /me remembers the confirmation right away', async () => {
+    const app = buildApp();
+    const confirm = await request(app)
+      .post('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('alice'))
+      .send({ version: 1, textHash: service.textHash('Use AI responsibly.'), language: 'en' });
+    expect(confirm.status).toBe(201);
+    const reads = countReads();
+    try {
+      expect((await post(app, asUser('alice'))).status).toBe(200);
+      expect(reads).not.toHaveBeenCalled();
+    } finally {
+      reads.mockRestore();
+    }
+  });
+
+  test('a version bump or "Remove all" invalidates remembered entries at once', async () => {
+    const app = buildApp();
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    store.files[PLATFORM].aiAcknowledgement.requiredVersion = 2;
+    expect((await post(app, asUser('bob'))).status).toBe(428);
+
+    store.files[PLATFORM].aiAcknowledgement.requiredVersion = 1;
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    store.files[PLATFORM].aiAcknowledgement.resetAt = new Date(Date.now() + 1000).toISOString();
+    expect((await post(app, asUser('bob'))).status).toBe(428);
+  });
+
+  test('an entry expires after the TTL and the store is asked again', async () => {
+    const app = buildApp();
+    const realNow = Date.now;
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    // Removed behind this worker's back (another pod): still remembered...
+    await storage.current.documents.delete(
+      AI_ACKNOWLEDGEMENTS_NAMESPACE,
+      acknowledgementKey('bob')
+    );
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    // ...until the TTL has passed.
+    Date.now = () => realNow() + ackCache.ACKNOWLEDGEMENT_CACHE_TTL_MS + 1;
+    try {
+      expect((await post(app, asUser('bob'))).status).toBe(428);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  test('per-user removal forgets the user on this worker at once', async () => {
+    const app = buildApp();
+    expect((await post(app, asUser('bob'))).status).toBe(200);
+    expect(
+      (
+        await request(app)
+          .delete('/api/admin/eu-ai-act/users/bob/acknowledgements')
+          .set('x-admin', '1')
+      ).status
+    ).toBe(204);
+    expect((await post(app, asUser('bob'))).status).toBe(428);
+  });
+
+  test('the bus message from another worker forgets the user', () => {
+    const settings = { requiredVersion: 1, resetAt: null };
+    ackCache.rememberAcknowledged('bob', settings);
+    expect(ackCache.isRememberedAcknowledged('bob', settings)).toBe(true);
+    ackCache.onForgetMessage({ userId: 'bob' });
+    expect(ackCache.isRememberedAcknowledged('bob', settings)).toBe(false);
   });
 });
 
