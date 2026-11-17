@@ -62,6 +62,45 @@ describe('FilesystemLockManager: unfenced locks', () => {
     assert.ok(next > first);
   });
 
+  it('hands an unfenced lease on in-process, but never to a fenced caller', async () => {
+    const locks = await manager();
+    const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+    const owners = [];
+    const owner = async () =>
+      JSON.parse(
+        await fs.readFile(
+          locks.lockDir + '/' + (await fs.readdir(locks.lockDir)).find(f => f.endsWith('.lock')),
+          'utf8'
+        )
+      ).owner;
+    // One TTL and renewal for all three, so only the fence decides the hand-off.
+    const opts = { ttlMs: 30_000, renewMs: 10 };
+    let fenced;
+    await Promise.all([
+      locks.withLock('line', async () => owners.push(await owner()) && sleep(5), {
+        ...opts,
+        fence: false
+      }),
+      locks.withLock('line', async () => owners.push(await owner()), { ...opts, fence: false }),
+      locks.withLock(
+        'line',
+        async lease => {
+          // Past a renewal of the lease it would otherwise have inherited.
+          await sleep(40);
+          fenced = { token: lease.token, current: await lease.isCurrent() };
+        },
+        opts
+      )
+    ]);
+    assert.equal(owners[0], owners[1], 'the second unfenced caller inherited the lease');
+    assert.ok(fenced.token > 0);
+    assert.equal(fenced.current, true, 'the fenced section holds a lease naming its token');
+    assert.deepEqual(
+      (await fs.readdir(locks.lockDir)).filter(f => f.endsWith('.lock')),
+      []
+    );
+  });
+
   it('keeps separate processes out of each other’s sections', async () => {
     const locks = await manager();
     const baseDir = path.dirname(locks.lockDir);

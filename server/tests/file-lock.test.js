@@ -296,13 +296,14 @@ describe('withFileLock', () => {
 });
 
 describe('withFileLock: callers in one process', () => {
-  /** Count exclusive creates of `lockPath` while `run` runs. */
+  /** Count exclusive creates of `lockPath` that succeeded while `run` runs. */
   async function countLeaseCreates(lockPath, run) {
     const realOpen = fs.open;
     let creates = 0;
-    mock.method(fs, 'open', (file, flags, ...rest) => {
+    mock.method(fs, 'open', async (file, flags, ...rest) => {
+      const handle = await realOpen(file, flags, ...rest);
       if (file === lockPath && flags === 'wx') creates++;
-      return realOpen(file, flags, ...rest);
+      return handle;
     });
     try {
       await run();
