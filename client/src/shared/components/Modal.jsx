@@ -4,7 +4,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useFocusTrap from '../hooks/useFocusTrap';
-import useOverlayStack from '../hooks/useOverlayStack';
+import useOverlayStack, { OverlayOwner } from '../hooks/useOverlayStack';
 import ConfirmDialog from './ConfirmDialog';
 
 /**
@@ -69,6 +69,9 @@ function ModalPanel({
   const { t } = useTranslation();
   const containerRef = useRef(null);
   const [discardAsked, setDiscardAsked] = useState(false);
+  // A modal that became clean has nothing to discard: drop a pending question,
+  // so it does not reappear when the modal turns dirty again.
+  if (!isDirty && discardAsked) setDiscardAsked(false);
 
   useFocusTrap(containerRef, {
     isActive: true,
@@ -85,46 +88,52 @@ function ModalPanel({
     onClose();
   }, [isDirty, onClose]);
 
-  useOverlayStack(true, requestClose);
+  // Overlays rendered in the modal (its children, the discard question) stack above it.
+  const { owner: overlayOwner } = useOverlayStack(true, requestClose);
 
   const handleBackdropClick = closeOnBackdropClick && !isDirty ? onClose : undefined;
 
   return (
-    <div
-      className={`fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full ${zIndexClassName} flex items-center justify-center ${overlayPaddingClassName}`}
-    >
-      <div className="fixed inset-0" aria-hidden="true" onClick={handleBackdropClick} />
+    <OverlayOwner owner={overlayOwner}>
       <div
-        ref={containerRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={labelledBy}
-        className={`relative ${surfaceClassName} rounded-lg shadow-xl w-full ${maxHeightClassName} overflow-hidden flex flex-col ${maxWidthClassName} ${panelClassName}`}
+        className={`fixed inset-0 bg-gray-600/50 overflow-y-auto h-full w-full ${zIndexClassName} flex items-center justify-center ${overlayPaddingClassName}`}
       >
-        {typeof children === 'function' ? children({ requestClose }) : children}
+        <div className="fixed inset-0" aria-hidden="true" onClick={handleBackdropClick} />
+        <div
+          ref={containerRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={labelledBy}
+          className={`relative ${surfaceClassName} rounded-lg shadow-xl w-full ${maxHeightClassName} overflow-hidden flex flex-col ${maxWidthClassName} ${panelClassName}`}
+        >
+          {typeof children === 'function' ? children({ requestClose }) : children}
+        </div>
+        <ConfirmDialog
+          isOpen={discardAsked && isDirty}
+          // Same layer as the modal: the dialog is portalled to <body> after the
+          // modal, so at an equal z-index it paints above it (also for a modal
+          // raised above z-50).
+          zIndexClassName={zIndexClassName}
+          title={t('common.discardDialog.title', 'Discard changes?')}
+          message={
+            dirtyTitle
+              ? t('common.discardDialog.bodyNamed', {
+                  title: dirtyTitle,
+                  defaultValue: 'What you entered in "{{title}}" will be lost.'
+                })
+              : t('common.discardDialog.body', 'What you entered will be lost.')
+          }
+          denyLabel={t('common.discardDialog.keepEditing', 'Keep editing')}
+          confirmLabel={t('common.discardDialog.discard', 'Discard')}
+          danger
+          onDeny={() => setDiscardAsked(false)}
+          onConfirm={() => {
+            setDiscardAsked(false);
+            onClose();
+          }}
+        />
       </div>
-      <ConfirmDialog
-        // A modal that became clean meanwhile has nothing to discard.
-        isOpen={discardAsked && isDirty}
-        title={t('common.discardDialog.title', 'Discard changes?')}
-        message={
-          dirtyTitle
-            ? t('common.discardDialog.bodyNamed', {
-                title: dirtyTitle,
-                defaultValue: 'What you entered in "{{title}}" will be lost.'
-              })
-            : t('common.discardDialog.body', 'What you entered will be lost.')
-        }
-        denyLabel={t('common.discardDialog.keepEditing', 'Keep editing')}
-        confirmLabel={t('common.discardDialog.discard', 'Discard')}
-        danger
-        onDeny={() => setDiscardAsked(false)}
-        onConfirm={() => {
-          setDiscardAsked(false);
-          onClose();
-        }}
-      />
-    </div>
+    </OverlayOwner>
   );
 }
 

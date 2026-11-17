@@ -12,10 +12,16 @@ import {
   deleteCredential
 } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
-import { fetchInstalledIntegrations } from '../../../api/integrationsAdminApi';
+import {
+  fetchInstalledIntegrations,
+  fetchIntegrationDefinition
+} from '../../../api/integrationsAdminApi';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 import { deleteConfirmText, namedList } from '../utils/confirmText';
-import { installationsUsingCredential } from '../utils/credentialUsage';
+import {
+  credentialFieldsByDefinition,
+  installationsUsingCredential
+} from '../utils/credentialUsage';
 
 /**
  * Admin page for managing the central credential store.
@@ -456,7 +462,12 @@ function AdminCredentialsPage() {
     let usedBy = null;
     try {
       const installed = await fetchInstalledIntegrations();
-      usedBy = installationsUsingCredential(installed?.items, id);
+      // The definitions say which fields are credential fields.
+      const fields = await credentialFieldsByDefinition(
+        installed?.items,
+        fetchIntegrationDefinition
+      );
+      usedBy = installationsUsingCredential(installed?.items, id, fields);
     } catch {
       usedBy = null;
     } finally {
@@ -499,9 +510,9 @@ function AdminCredentialsPage() {
         await deleteCredential(id);
         setMessage({ type: 'success', text: t('admin.credentials.deleted', 'Credential deleted') });
         await load();
-        // The row's Delete button is gone: keep keyboard focus on the page.
-        headingRef.current?.focus();
-      }
+      },
+      // The row's Delete button is gone: keep keyboard focus on the page.
+      focusAfterSuccess: headingRef
     });
   };
 

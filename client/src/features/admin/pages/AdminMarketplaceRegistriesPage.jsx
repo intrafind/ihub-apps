@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -37,6 +37,8 @@ function AdminMarketplaceRegistriesPage() {
   // A failed row action (refresh, enable/disable), shown inline above the list.
   const [actionError, setActionError] = useState(null);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
+  // Focus target after a delete: the registry's row (and its button) is gone.
+  const headingRef = useRef(null);
 
   /**
    * Loads all registries from the server and updates local state.
@@ -111,7 +113,8 @@ function AdminMarketplaceRegistriesPage() {
       action: async () => {
         await deleteMarketplaceRegistry(registry.id);
         await loadRegistries();
-      }
+      },
+      focusAfterSuccess: headingRef
     });
   };
 
@@ -156,7 +159,11 @@ function AdminMarketplaceRegistriesPage() {
                 <span>/</span>
                 <span>{t('admin.marketplace.registries.title', 'Registries')}</span>
               </div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              <h1
+                ref={headingRef}
+                tabIndex={-1}
+                className="text-2xl font-bold text-gray-900 dark:text-white focus:outline-hidden"
+              >
                 {t('admin.marketplace.registries.title', 'Marketplace Registries')}
               </h1>
               <p className="text-gray-500 dark:text-gray-400 mt-1">

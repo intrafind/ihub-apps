@@ -10,7 +10,7 @@
  * Cancel sends no write.
  */
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import i18next from 'i18next';
 import en from '../../../shared/i18n/en.json';
@@ -194,6 +194,29 @@ describe('Models: Disable All', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(mockApi.toggleModels).not.toHaveBeenCalled();
+  });
+
+  it('Enable All reloads the list, so the default the server chose shows', async () => {
+    await renderModels([model('gpt', { enabled: false }), model('claude', { enabled: false })]);
+    expect(screen.queryByText('Default')).not.toBeInTheDocument();
+    // After enabling, the server has made "claude" the default.
+    mockApi.makeAdminApiCall.mockImplementation(async path => {
+      if (path === '/admin/models')
+        return { data: { items: [model('gpt'), model('claude', { default: true })] } };
+      if (path === '/admin/providers') return { data: { items: [] } };
+      return { data: {} };
+    });
+    mockApi.toggleModels.mockResolvedValue({});
+    fireEvent.click(screen.getByRole('button', { name: 'More model actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Enable All' }));
+    const dialog = screen.getByRole('alertdialog', { name: 'Enable all models?' });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: /Enable/ }));
+    });
+    expect(mockApi.toggleModels).toHaveBeenCalledWith('*', true);
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    const claudeRow = (await screen.findByText('Model claude')).closest('tr');
+    expect(within(claudeRow).getByText('Default')).toBeInTheDocument();
   });
 });
 

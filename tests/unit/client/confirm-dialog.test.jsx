@@ -300,6 +300,59 @@ describe('overlay stack: Escape closes only the topmost overlay (UX-N2)', () => 
     await flush();
     unmount();
   });
+
+  it('a modal and a confirmation inside it that open in the same render: Escape goes to the confirmation', async () => {
+    // React runs the child's layout effect first, so the confirmation used to
+    // register below its modal, and Escape closed the modal.
+    const onModalClose = jest.fn();
+    const onDeny = jest.fn();
+    const { unmount } = render(
+      <Modal isOpen onClose={onModalClose} labelledBy="m2-title">
+        <h2 id="m2-title">Connected users</h2>
+        <ConfirmDialog
+          isOpen
+          title='Disconnect "alice"?'
+          confirmLabel="Disconnect"
+          onConfirm={jest.fn()}
+          onDeny={onDeny}
+        />
+      </Modal>
+    );
+    expect(getOpenOverlayCount()).toBe(2);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onDeny).toHaveBeenCalledTimes(1);
+    expect(onModalClose).not.toHaveBeenCalled();
+    unmount();
+    await flush();
+  });
+
+  it('an overlay opened later outside the modal goes on top of it', async () => {
+    const onModalClose = jest.fn();
+    const onDeny = jest.fn();
+    function Page({ confirmOpen }) {
+      return (
+        <>
+          <Modal isOpen onClose={onModalClose} labelledBy="m3-title">
+            <h2 id="m3-title">Settings</h2>
+          </Modal>
+          <ConfirmDialog
+            isOpen={confirmOpen}
+            title="Rotate the secret?"
+            confirmLabel="Rotate"
+            onConfirm={jest.fn()}
+            onDeny={onDeny}
+          />
+        </>
+      );
+    }
+    const { rerender, unmount } = render(<Page confirmOpen={false} />);
+    rerender(<Page confirmOpen />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onDeny).toHaveBeenCalledTimes(1);
+    expect(onModalClose).not.toHaveBeenCalled();
+    unmount();
+    await flush();
+  });
 });
 
 describe('Modal isDirty (IN-B12)', () => {
@@ -359,5 +412,40 @@ describe('Modal isDirty (IN-B12)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
     expect(onClose).toHaveBeenCalledTimes(1);
     unmount();
+  });
+
+  it('a question pending when the modal turned clean does not come back when it is dirty again', async () => {
+    const onClose = jest.fn();
+    const { rerender, unmount } = render(<DirtyModal isDirty onClose={onClose} />);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
+
+    rerender(<DirtyModal isDirty={false} onClose={onClose} />);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    rerender(<DirtyModal isDirty onClose={onClose} />);
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    unmount();
+    await flush();
+  });
+
+  it('the discard question stacks on the layer of a raised modal', async () => {
+    const { unmount } = render(
+      <Modal isOpen onClose={jest.fn()} isDirty zIndexClassName="z-[70]" labelledBy="r-title">
+        {({ requestClose }) => (
+          <>
+            <h2 id="r-title">Share artifact</h2>
+            <button type="button" aria-label="Close" onClick={requestClose}>
+              ✕
+            </button>
+          </>
+        )}
+      </Modal>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const layer = screen.getByRole('alertdialog').closest('[role="presentation"]');
+    expect(layer).toHaveClass('z-[70]');
+    expect(layer).not.toHaveClass('z-50');
+    unmount();
+    await flush();
   });
 });

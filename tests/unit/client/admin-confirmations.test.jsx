@@ -19,6 +19,7 @@ const mockAdminApi = {
   deleteCredential: jest.fn(),
   fetchAdminSkills: jest.fn(),
   deleteSkill: jest.fn(),
+  toggleSkill: jest.fn(),
   makeAdminApiCall: jest.fn()
 };
 jest.mock('../../../client/src/api/adminApi', () => ({
@@ -32,15 +33,17 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   deleteCredential: (...a) => mockAdminApi.deleteCredential(...a),
   fetchAdminSkills: (...a) => mockAdminApi.fetchAdminSkills(...a),
   deleteSkill: (...a) => mockAdminApi.deleteSkill(...a),
-  toggleSkill: jest.fn(),
+  toggleSkill: (...a) => mockAdminApi.toggleSkill(...a),
   exportSkill: jest.fn(),
   importSkill: jest.fn(),
   makeAdminApiCall: (...a) => mockAdminApi.makeAdminApiCall(...a),
   getAdminApiErrorMessage: err => err?.message || 'error'
 }));
 const mockFetchInstalled = jest.fn();
+const mockFetchDefinition = jest.fn();
 jest.mock('../../../client/src/api/integrationsAdminApi', () => ({
-  fetchInstalledIntegrations: (...a) => mockFetchInstalled(...a)
+  fetchInstalledIntegrations: (...a) => mockFetchInstalled(...a),
+  fetchIntegrationDefinition: (...a) => mockFetchDefinition(...a)
 }));
 jest.mock('../../../client/src/shared/components/Icon', () => ({
   __esModule: true,
@@ -75,11 +78,14 @@ const {
   SHIPPED_REGISTRY_IDS
 } = require('../../../client/src/features/admin/utils/shippedRegistries');
 const {
+  credentialFieldsByDefinition,
   installationsUsingCredential
 } = require('../../../client/src/features/admin/utils/credentialUsage');
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Definitions unknown by default: credential fields fall back to the `…Ref` names.
+  mockFetchDefinition.mockRejectedValue(new Error('not loaded'));
 });
 
 describe('registry delete (AX-B14)', () => {
@@ -148,6 +154,23 @@ describe('registry delete (AX-B14)', () => {
     });
     expect(mockAdminApi.deleteMarketplaceRegistry).toHaveBeenCalledWith('team-catalog');
   });
+
+  it('after the delete, focus moves to the page heading (the row is gone)', async () => {
+    await renderPage();
+    mockAdminApi.fetchMarketplaceRegistries.mockResolvedValue([OFFICIAL]);
+    const trigger = deleteButtonOf(TEAM.name);
+    trigger.focus();
+    fireEvent.click(trigger);
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' })
+      );
+    });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    await act(async () => {});
+    expect(screen.queryByText(TEAM.name)).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Marketplace Registries' })).toHaveFocus();
+  });
 });
 
 describe('credential delete (IN-B3, client part)', () => {
@@ -176,6 +199,51 @@ describe('credential delete (IN-B3, client part)', () => {
     ]);
     expect(installationsUsingCredential(INSTALLED, 'unused')).toEqual([]);
     expect(installationsUsingCredential(null, 'brave-key')).toEqual([]);
+  });
+
+  it("uses the definition's credential fields where the definition is known", async () => {
+    const installed = [
+      // `token` is a credential field by its definition, though not named `…Ref`.
+      { id: 'a', label: 'A', definition: 'def-a', values: { token: 'k' } },
+      // `productRef` is not a credential field in its definition.
+      { id: 'b', label: 'B', definition: 'def-b', values: { productRef: 'k' } },
+      // Definition could not be loaded: the name convention still finds it.
+      { id: 'c', label: 'C', definition: 'def-gone', values: { apiKeyRef: 'k' } }
+    ];
+    const definitions = {
+      'def-a': { install: [{ key: 'token', type: 'credential' }] },
+      'def-b': { install: [{ key: 'productRef', type: 'string' }] }
+    };
+    const fetchDefinition = jest.fn(async id => {
+      if (!definitions[id]) throw new Error('404');
+      return definitions[id];
+    });
+    const fields = await credentialFieldsByDefinition(installed, fetchDefinition);
+    expect(fetchDefinition).toHaveBeenCalledTimes(3);
+    expect(installationsUsingCredential(installed, 'k', fields)).toEqual([
+      { id: 'a', label: 'A' },
+      { id: 'c', label: 'C' }
+    ]);
+  });
+
+  it('the dialog lists an installation by a credential field its definition declares', async () => {
+    mockAdminApi.listCredentials.mockResolvedValue([{ id: 'k', name: 'Key', type: 'secret' }]);
+    mockFetchInstalled.mockResolvedValue({
+      items: [{ id: 'ldap', label: 'Directory', definition: 'ldap', values: { bindSecret: 'k' } }]
+    });
+    mockFetchDefinition.mockResolvedValue({
+      install: [{ key: 'bindSecret', type: 'credential' }]
+    });
+    render(<AdminCredentialsPage />);
+    const remove = await screen.findByRole('button', { name: 'Delete credential "k"' });
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    expect(mockFetchDefinition).toHaveBeenCalledWith('ldap');
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete credential "k"?' });
+    expect(dialog).toHaveTextContent('Used by 1 installed integration, which stops working:');
+    expect(dialog).toHaveTextContent('Directory');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
   });
 
   it('lists the installations that use the credential in the dialog', async () => {
@@ -342,5 +410,50 @@ describe('delete keeps the page mounted while the list reloads', () => {
     });
     await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
     expect(screen.getByText('Asset deleted successfully')).toBeInTheDocument();
+    await act(async () => {});
+    expect(screen.getByRole('heading', { name: 'Asset Management' })).toHaveFocus();
+  });
+});
+
+describe('skills: overlapping reloads', () => {
+  it('a reload that answers after a newer one does not overwrite the list', async () => {
+    const reloads = [];
+    mockAdminApi.fetchAdminSkills
+      .mockResolvedValueOnce([
+        { name: 's1', displayName: 'Skill one', enabled: true },
+        { name: 's2', displayName: 'Skill two', enabled: true }
+      ])
+      .mockImplementation(() => new Promise(resolve => reloads.push(resolve)));
+    mockAdminApi.toggleSkill.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <AdminSkillsPage />
+      </MemoryRouter>
+    );
+    const rowOne = (await screen.findByText('Skill one')).closest('tr');
+    const rowTwo = screen.getByText('Skill two').closest('tr');
+    await act(async () => {
+      fireEvent.click(within(rowOne).getByTitle('Disable'));
+    });
+    await act(async () => {
+      fireEvent.click(within(rowTwo).getByTitle('Disable'));
+    });
+    expect(reloads).toHaveLength(2);
+
+    // The newer reload answers first, then the older one with its stale list.
+    await act(async () => {
+      reloads[1]([
+        { name: 's1', displayName: 'Skill one', enabled: false },
+        { name: 's2', displayName: 'Skill two', enabled: false }
+      ]);
+    });
+    await act(async () => {
+      reloads[0]([
+        { name: 's1', displayName: 'Skill one', enabled: false },
+        { name: 's2', displayName: 'Skill two', enabled: true }
+      ]);
+    });
+    const rowTwoAfter = screen.getByText('Skill two').closest('tr');
+    expect(within(rowTwoAfter).getByTitle('Enable')).toBeInTheDocument();
   });
 });

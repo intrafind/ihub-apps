@@ -2,8 +2,11 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * A `t` that reads the real English strings from `shared/i18n/en.json`, so a
- * test fails when a key the UI uses is missing there. It understands both call
+ * A `t` that reads the real English strings from `shared/i18n/en.json`. A
+ * key missing there comes back as the key itself, so a test that looks for the
+ * English text fails. A call with a fallback (`t(key, 'Fallback')` or a
+ * `defaultValue`) skips that check: it gets the fallback when the key is
+ * missing, as i18next does. It understands both call
  * shapes the client uses — `t(key, 'Fallback {{x}}', { x })` and
  * `t(key, { x, defaultValue })` — and i18next's `_one` / `_other` plurals.
  *

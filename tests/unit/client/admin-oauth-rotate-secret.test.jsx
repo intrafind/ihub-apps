@@ -72,3 +72,71 @@ test('rotating a secret asks with the client named and reveals the secret in a d
   expect(alertSpy).not.toHaveBeenCalled();
   alertSpy.mockRestore();
 });
+
+describe('rotation runs inside its confirmation', () => {
+  function mockApi(rotate) {
+    mockMakeAdminApiCall.mockImplementation(async (url, options) => {
+      if (url === '/admin/configs/platform')
+        return { data: { oauth: { enabled: { clients: true } } } };
+      if (url === '/admin/oauth/clients')
+        return {
+          data: {
+            clients: [{ clientId: 'svc-1', name: 'Reporting bot', active: true }],
+            cimdClients: []
+          }
+        };
+      if (url === '/admin/oauth/clients/svc-1/rotate-secret' && options?.method === 'POST')
+        return rotate();
+      return { data: {} };
+    });
+  }
+
+  it('stays open and busy until the POST answered, then reveals the secret', async () => {
+    let answer;
+    mockApi(() => new Promise(resolve => (answer = resolve)));
+    render(<AdminOAuthClientsPage />);
+    fireEvent.click(await screen.findByTitle('Rotate Secret'));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Rotate secret' })
+      );
+    });
+    // The request runs: the confirmation is still there, busy, and Escape does not close it.
+    const ask = screen.getByRole('alertdialog', { name: 'Rotate the secret of "Reporting bot"?' });
+    expect(ask).toHaveAttribute('aria-busy', 'true');
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+
+    await act(async () => {
+      answer({ data: { clientSecret: SECRET } });
+    });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    const reveal = screen.getByRole('dialog', { name: 'New secret for "Reporting bot"' });
+    expect(within(reveal).getByRole('textbox', { name: 'Client Secret' })).toHaveValue(SECRET);
+
+    // No second rotation while the new secret is still shown.
+    fireEvent.click(screen.getByTitle('Rotate Secret'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(within(reveal).getByRole('textbox', { name: 'Client Secret' })).toHaveValue(SECRET);
+  });
+
+  it('shows a failure in the confirmation', async () => {
+    mockApi(async () => {
+      const error = new Error('Request failed');
+      error.response = { data: { detail: 'Rotation is not allowed for this client.' } };
+      throw error;
+    });
+    render(<AdminOAuthClientsPage />);
+    fireEvent.click(await screen.findByTitle('Rotate Secret'));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Rotate secret' })
+      );
+    });
+    const ask = screen.getByRole('alertdialog');
+    expect(within(ask).getByRole('alert')).toHaveTextContent(
+      'Rotation is not allowed for this client.'
+    );
+    expect(screen.queryByRole('dialog', { name: /New secret/ })).not.toBeInTheDocument();
+  });
+});

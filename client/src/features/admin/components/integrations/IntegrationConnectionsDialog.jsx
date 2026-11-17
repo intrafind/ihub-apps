@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Modal from '../../../../shared/components/Modal';
 import Icon from '../../../../shared/components/Icon';
@@ -32,6 +32,8 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
   const [message, setMessage] = useState(null);
   const [busy, setBusy] = useState(null);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
+  // Focus target after a disconnect: the user's row (and its button) is gone.
+  const closeButtonRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -76,7 +78,8 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
         } finally {
           setBusy(null);
         }
-      }
+      },
+      focusAfterSuccess: closeButtonRef
     });
   };
 
@@ -200,7 +203,12 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
             'Reset OAuth client registration'
           )}
         </button>
-        <button type="button" className={SECONDARY_BUTTON_CLASS} onClick={onClose}>
+        <button
+          ref={closeButtonRef}
+          type="button"
+          className={SECONDARY_BUTTON_CLASS}
+          onClick={onClose}
+        >
           {t('common.close', 'Close')}
         </button>
       </div>

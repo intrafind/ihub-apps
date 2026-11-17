@@ -351,6 +351,23 @@ describe('MemoryEditor', () => {
     expect(textarea()).toHaveValue('');
   });
 
+  it('drops an open clear question when the editor moves to other notes', async () => {
+    const clear = jest.fn().mockResolvedValue({ version: 2 });
+    const load = jest
+      .fn()
+      .mockResolvedValueOnce(DOC)
+      .mockResolvedValueOnce({ body: 'other task', version: 1 });
+    const { props, rerender } = setup({ clear, load });
+    await flush();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByRole('alertdialog', { name: 'Clear all notes?' })).toBeInTheDocument();
+
+    rerender(<MemoryEditor {...props} id="task-2" />);
+    await flush();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(clear).not.toHaveBeenCalled();
+  });
+
   it('shows a load failure through formatError', async () => {
     setup({
       load: jest.fn().mockRejectedValue(new Error('not found')),

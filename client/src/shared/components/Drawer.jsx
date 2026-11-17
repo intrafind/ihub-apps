@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 import useFocusTrap, { getFocusableElements } from '../hooks/useFocusTrap';
-import useOverlayStack from '../hooks/useOverlayStack';
+import useOverlayStack, { OverlayOwner } from '../hooks/useOverlayStack';
 
 /** Panel width from the `sm` breakpoint up; below it the panel is full width. */
 const WIDTHS = {
@@ -118,7 +118,7 @@ function Drawer({
   useBodyScrollLock(open);
   // Joins the shared overlay stack without an Escape handler: the drawer
   // handles Escape itself (below) and only while it is the topmost overlay.
-  const { isTop } = useOverlayStack(open);
+  const { isTop, owner: overlayOwner } = useOverlayStack(open);
 
   // Runs after the focus trap's activation: when it found nothing to focus,
   // focus the panel itself so the keyboard is inside the dialog.
@@ -166,76 +166,79 @@ function Drawer({
   if (typeof document === 'undefined') return null;
 
   return createPortal(
-    <div
-      inert={!open}
-      aria-hidden={open ? undefined : true}
-      className={`fixed inset-0 z-50 ${
-        open
-          ? 'visible'
-          : 'pointer-events-none invisible transition-[visibility] delay-300 duration-0 motion-reduce:delay-0'
-      }`}
-    >
+    // Overlays opened from the drawer's content stack above it.
+    <OverlayOwner owner={overlayOwner}>
       <div
-        aria-hidden="true"
-        className={`fixed inset-0 bg-black/30 transition-opacity duration-300 motion-reduce:transition-none ${
-          open ? 'opacity-100 starting:opacity-0' : 'opacity-0'
-        }`}
-        onClick={closeOnBackdropClick ? onClose : undefined}
-      />
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={description ? descriptionId : undefined}
-        tabIndex={-1}
-        data-testid={testId}
-        className={`fixed inset-y-0 right-0 flex w-full max-w-full ${WIDTHS[size] || WIDTHS.md} transform flex-col border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-in-out focus:outline-hidden motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900 ${
-          open ? 'translate-x-0 starting:translate-x-full' : 'translate-x-full'
+        inert={!open}
+        aria-hidden={open ? undefined : true}
+        className={`fixed inset-0 z-50 ${
+          open
+            ? 'visible'
+            : 'pointer-events-none invisible transition-[visibility] delay-300 duration-0 motion-reduce:delay-0'
         }`}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-700">
-          <div className="flex min-w-0 items-center gap-2">
-            {icon && (
-              <span aria-hidden="true" className="flex shrink-0">
-                {icon}
-              </span>
-            )}
-            <div className="min-w-0">
-              <h2
-                id={titleId}
-                className="truncate text-lg font-semibold text-gray-900 dark:text-gray-100"
-              >
-                {title}
-              </h2>
-              {description && (
-                <p id={descriptionId} className="text-sm text-gray-500 dark:text-gray-400">
-                  {description}
-                </p>
+        <div
+          aria-hidden="true"
+          className={`fixed inset-0 bg-black/30 transition-opacity duration-300 motion-reduce:transition-none ${
+            open ? 'opacity-100 starting:opacity-0' : 'opacity-0'
+          }`}
+          onClick={closeOnBackdropClick ? onClose : undefined}
+        />
+        <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={description ? descriptionId : undefined}
+          tabIndex={-1}
+          data-testid={testId}
+          className={`fixed inset-y-0 right-0 flex w-full max-w-full ${WIDTHS[size] || WIDTHS.md} transform flex-col border-l border-gray-200 bg-white shadow-2xl transition-transform duration-300 ease-in-out focus:outline-hidden motion-reduce:transition-none dark:border-gray-700 dark:bg-gray-900 ${
+            open ? 'translate-x-0 starting:translate-x-full' : 'translate-x-full'
+          }`}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-gray-700">
+            <div className="flex min-w-0 items-center gap-2">
+              {icon && (
+                <span aria-hidden="true" className="flex shrink-0">
+                  {icon}
+                </span>
               )}
+              <div className="min-w-0">
+                <h2
+                  id={titleId}
+                  className="truncate text-lg font-semibold text-gray-900 dark:text-gray-100"
+                >
+                  {title}
+                </h2>
+                {description && (
+                  <p id={descriptionId} className="text-sm text-gray-500 dark:text-gray-400">
+                    {description}
+                  </p>
+                )}
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              aria-label={closeLabel || t('common.close', 'Close')}
+            >
+              <XMarkIcon className="h-5 w-5" aria-hidden="true" />
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-600 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 dark:hover:bg-gray-800 dark:hover:text-gray-300"
-            aria-label={closeLabel || t('common.close', 'Close')}
-          >
-            <XMarkIcon className="h-5 w-5" aria-hidden="true" />
-          </button>
+
+          {subheader && <div className="shrink-0">{subheader}</div>}
+
+          <div className={`flex-1 overflow-y-auto ${bodyClassName}`}>{children}</div>
+
+          {footer && (
+            <div className="shrink-0 border-t border-gray-200 px-5 py-3 dark:border-gray-700">
+              {footer}
+            </div>
+          )}
         </div>
-
-        {subheader && <div className="shrink-0">{subheader}</div>}
-
-        <div className={`flex-1 overflow-y-auto ${bodyClassName}`}>{children}</div>
-
-        {footer && (
-          <div className="shrink-0 border-t border-gray-200 px-5 py-3 dark:border-gray-700">
-            {footer}
-          </div>
-        )}
       </div>
-    </div>,
+    </OverlayOwner>,
     document.body
   );
 }

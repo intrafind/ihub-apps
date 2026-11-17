@@ -19,6 +19,8 @@ function AssetManager({ t }) {
   const [showDocumentation, setShowDocumentation] = useState(false);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const fileInputRef = useRef(null);
+  // Focus target after a delete: the deleted asset's row (and its button) is gone.
+  const headingRef = useRef(null);
 
   /**
    * Reads the asset list. Only the first load shows the spinner (`loading`
@@ -124,7 +126,8 @@ function AssetManager({ t }) {
         setSuccessMessage(t('admin.ui.assets.deleted', 'Asset deleted successfully'));
         await loadAssets(); // Refresh the asset list
         setTimeout(() => setSuccessMessage(''), 3000);
-      }
+      },
+      focusAfterSuccess: headingRef
     });
   };
 
@@ -173,7 +176,11 @@ function AssetManager({ t }) {
 
   return (
     <div className="p-6">
-      <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
+      <h2
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6 focus:outline-hidden"
+      >
         {t('admin.ui.assets.title', 'Asset Management')}
       </h2>
 

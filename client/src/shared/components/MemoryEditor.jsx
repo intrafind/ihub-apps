@@ -102,6 +102,8 @@ export default function MemoryEditor({
       setError(null);
       setConflict(false);
       setStale(false);
+      // A clear asked for the previous notes must not run on these.
+      setConfirmingClear(false);
     }
     try {
       const data = (await callbacksRef.current.load()) || {};

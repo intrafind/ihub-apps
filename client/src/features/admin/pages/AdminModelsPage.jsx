@@ -239,9 +239,9 @@ function AdminModelsPage() {
       }),
       action: async () => {
         await toggleModels('*', enable);
-        setModels(prev =>
-          prev.map(m => ({ ...m, enabled: enable, ...(enable ? {} : { default: false }) }))
-        );
+        // Reload instead of patching the list: enabling makes the server pick
+        // a new default model, which only the server's list shows.
+        await loadModels();
       }
     });
   };

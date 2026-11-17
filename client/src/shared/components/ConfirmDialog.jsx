@@ -65,6 +65,9 @@ const TOKEN_INPUT_CLASS =
  * @param {string} [props.denyLabel] - Label of the cancel button (default "Cancel").
  * @param {string} [props.busyLabel] - Text announced while busy (default "Working…").
  * @param {boolean} [props.danger=false] - Styles the dialog as destructive (red).
+ * @param {string} [props.zIndexClassName='z-50'] - Stacking of the dialog. A dialog
+ *   opened from an overlay raised above z-50 passes that overlay's class; being
+ *   portalled later, it then paints above it.
  * @param {() => void} props.onConfirm - Called when the user confirms.
  * @param {() => void} props.onDeny - Called on Cancel, Close, Escape and backdrop click.
  * @returns {React.ReactPortal|null}
@@ -108,6 +111,7 @@ function ConfirmDialogPanel({
   denyLabel,
   busyLabel,
   danger = false,
+  zIndexClassName = 'z-50',
   onConfirm,
   onDeny
 }) {
@@ -189,7 +193,7 @@ function ConfirmDialogPanel({
   const hasConsequences = Array.isArray(consequences) && consequences.length > 0;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto" role="presentation">
+    <div className={`fixed inset-0 ${zIndexClassName} overflow-y-auto`} role="presentation">
       <div
         className="fixed inset-0 bg-black/50 dark:bg-black/70 transition-opacity"
         onClick={handleDeny}

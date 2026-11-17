@@ -51,6 +51,8 @@ function AdminSkillsPage() {
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState('');
   const headingRef = useRef(null);
+  // Id of the latest list request (see loadSkills).
+  const loadRequestRef = useRef(0);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   useEffect(() => {
@@ -77,9 +79,14 @@ function AdminSkillsPage() {
    * it an open confirmation, mounted.
    */
   const loadSkills = async () => {
+    // Toggles in quick succession start overlapping reloads; only the latest
+    // one may set the list, or an older response could overwrite a newer one.
+    const requestId = ++loadRequestRef.current;
+    const isLatest = () => requestId === loadRequestRef.current;
     try {
       setError(null);
       const data = await fetchAdminSkills();
+      if (!isLatest()) return;
       const skillsArray = Array.isArray(data) ? data : [];
       setSkills(skillsArray);
 
@@ -87,11 +94,12 @@ function AdminSkillsPage() {
         console.warn('No skills returned from API');
       }
     } catch (err) {
+      if (!isLatest()) return;
       console.error('Error loading skills:', err);
       setError(getAdminApiErrorMessage(err));
       setSkills([]);
     } finally {
-      setLoading(false);
+      if (isLatest()) setLoading(false);
     }
   };
 
@@ -126,9 +134,9 @@ function AdminSkillsPage() {
             defaultValue: 'Skill "{{name}}" deleted.'
           })
         );
-        // The row's Delete button is gone: keep keyboard focus on the page.
-        headingRef.current?.focus();
-      }
+      },
+      // The row's Delete button is gone: keep keyboard focus on the page.
+      focusAfterSuccess: headingRef
     });
   };
 

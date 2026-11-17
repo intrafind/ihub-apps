@@ -75,6 +75,8 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
   const [created, setCreated] = useState(null);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const recorderRef = useRef(null);
+  // Focus target after a delete: the voice's row (and its button) is gone.
+  const voicesHeadingRef = useRef(null);
 
   // Leaving the page releases the microphone and the preview.
   useEffect(() => () => recorderRef.current?.cancel(), []);
@@ -120,7 +122,8 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
           method: 'DELETE'
         });
         setVoices(prev => (prev || []).filter(v => v.id !== voice.id));
-      }
+      },
+      focusAfterSuccess: voicesHeadingRef
     });
   };
 
@@ -268,7 +271,11 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
     <div className="space-y-4">
       <div className={sectionClass}>
         <div className="flex items-center justify-between gap-3">
-          <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          <h4
+            ref={voicesHeadingRef}
+            tabIndex={-1}
+            className="text-sm font-medium text-gray-900 dark:text-gray-100 focus:outline-hidden"
+          >
             {t('admin.models.ttsVoices.title', 'Available voices')}
           </h4>
           <button

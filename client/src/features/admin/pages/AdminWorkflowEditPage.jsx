@@ -277,6 +277,8 @@ function AdminWorkflowEditPage() {
       }),
       action: async () => {
         await deleteAdminWorkflow(id);
+        // The workflow is gone: its unsaved edits must not block leaving the page.
+        markSaved();
         navigate('/admin/workflows');
       }
     });

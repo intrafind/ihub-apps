@@ -12,7 +12,9 @@ import { apiErrorMessage } from '../../../utils/apiErrorMessage';
  * pattern. The dialog:
  *   - names the item and the consequence (the caller passes title/message);
  *   - shows a spinner and ignores Escape while the action runs (`busy`);
- *   - closes when the action succeeds;
+ *   - closes when the action succeeds, and then moves focus to
+ *     `focusAfterSuccess` when given (a delete removes the row whose button
+ *     opened the dialog, so focus would otherwise fall to <body>);
  *   - stays open with the server's message inline when it fails, so the admin
  *     can retry or cancel (no `alert()`, no silent failure).
  *
@@ -36,6 +38,11 @@ import { apiErrorMessage } from '../../../utils/apiErrorMessage';
  *   the dialog open with the error shown.
  * @property {(error: unknown) => string} [errorMessage] - Turns a thrown error
  *   into the inline message (default: the API problem `detail`, localized by `code`).
+ * @property {{ current: (HTMLElement|null) }} [focusAfterSuccess] - Element that
+ *   gets focus once the action succeeded: a stable control such as the page
+ *   heading (`tabIndex={-1}`) or the Close button of the surrounding modal. Use it
+ *   when the action removes the trigger. Cancel and a failure still return focus
+ *   to the trigger.
  *
  * @example
  * const { requestConfirm, dialogProps } = useConfirmAction();
@@ -56,6 +63,8 @@ export function useConfirmAction() {
   const runningRef = useRef(null);
 
   const requestConfirm = useCallback(options => {
+    // A still-running earlier action must not close or show its error in this one.
+    runningRef.current = null;
     setError(null);
     setBusy(false);
     setRequest(options);
@@ -75,7 +84,11 @@ export function useConfirmAction() {
     setError(null);
     try {
       await request.action();
-      if (runningRef.current === request) close();
+      if (runningRef.current !== request) return;
+      // Focus moves before the dialog closes: the dialog then leaves focus where
+      // it is instead of returning it to a trigger that may be gone.
+      request.focusAfterSuccess?.current?.focus();
+      close();
     } catch (err) {
       if (runningRef.current !== request) return;
       const message = request.errorMessage
