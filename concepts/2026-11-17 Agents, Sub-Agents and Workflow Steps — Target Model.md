@@ -31,12 +31,15 @@ rules (#3195, #2411), cost per run (#2401), MCP 2026-07-28 and A2A 1.0 migration
    sub-agents.
 6. **A summary never replaces the original.** Full results stay as artifacts; summaries point to
    them.
-7. **The existing evidence record is the audit record.** It is extended to agent, workflow and
-   sub-agent runs; no second format.
+7. **The chat is where things persist; the ledger is only for running.** An agent's timeline is
+   a chat, and the chat store is extended for agents and workflows. The existing evidence record
+   is the audit record, extended to agent, workflow and sub-agent runs; no second format.
 8. **Self-improvement is gated.** Personal agents apply memory changes with a diary and undo;
    admin agents need approval. Changes to instructions and skills are always versioned.
 9. **Planner, verifier, synthesizer, inbox and memory nodes leave the engine.** Workflows get a
    small set of steps named for what they do.
+10. **Clean cut.** The Agent Factory (profiles, inbox, admin pages) is replaced, not migrated;
+    nobody uses it today. The default and marketplace workflows are rebuilt on the new steps.
 
 ## Where iHub stands (code read on 2026-11-17)
 
@@ -188,6 +191,12 @@ and the original is never deleted by summarising.
 
 ### Evidence
 
+**Persistence lives in the chat, not in the ledger.** The run ledger exists so a run can be
+followed, reattached and recovered while it is active; its journal goes once the result is stored
+(#3687). What lasts is the chat: messages, activity, artifacts and the evidence record per answer.
+The agent timeline is a chat, and a workflow or agent run stores its steps, results and evidence
+there. History search reads chats and evidence, never the journal.
+
 No new format. The existing record is extended (#3687 later phases) by:
 
 1. Records for workflow, agent and sub-agent runs.
@@ -232,8 +241,13 @@ types.
 | Upload (`stellungnahmen-review-v2`) | 7 nodes | Start → For each document: Extract → Write result |
 | iFinder (`stellungnahmen-review-ifinder-v2`) | 13 nodes | Start → Find documents → For each document: Extract → Write result |
 
-The two v1 files are deleted. The other default workflows and the six in the marketplace are not
-migrated; see open points.
+The two v1 files are deleted.
+
+### The other workflows
+
+The remaining default workflows and the six in the marketplace are rebuilt on the new steps. Where
+a default exists as an old version and a `-v2`, only the `-v2` is rebuilt. The two
+`claude-style-agent` defaults become one planned-mode agent.
 
 ## What the others do
 
@@ -274,17 +288,11 @@ Steps 1–6 give a working free agent. Steps 8–9 give planned and fixed agents
 
 ## Open points
 
-1. **#3687 deletes chat run journals 15 minutes after a run ends.** A timeline with history search
-   needs past runs to stay findable. The evidence record may be enough; this has to be checked
-   before step 6.
-2. **Default and marketplace workflows.** Fourteen default workflows besides the four law
-   consultation files, and six marketplace workflows, use the old node types. Proposal: delete the
-   defaults, rebuild the marketplace ones on the new steps or withdraw them.
-3. **Agent Factory.** The current profiles, inbox and admin pages are replaced by step 6. The two
-   `claude-style-agent` defaults become one planned-mode agent.
-4. **Multi-pod.** The run executor's leases must fit the plan in
+1. **Chat store for agents and workflows.** What exactly the chat has to hold for a workflow or
+   agent run (steps, plan revisions, sub-agent links) is to be specified with step 6 and step 10.
+2. **Multi-pod.** The run executor's leases must fit the plan in
    `concepts/2026-11-16 Scaling Beyond One Pod Without a Database.md`.
-5. **Shared timelines.** Whether several users may share one agent conversation, and whose input
+3. **Shared timelines.** Whether several users may share one agent conversation, and whose input
    may steer it, is undecided. Default here: one timeline per agent and user.
 
 ## Sources
