@@ -87,6 +87,24 @@ describe('atomicWrite permissions', { skip: process.platform === 'win32' }, () =
     assert.deepEqual(await fs.readdir(dir), ['doc.json'], 'no temp file left behind');
   });
 
+  it('atomicCreateJSON falls back to an exclusive create where hard links are not supported', async () => {
+    const dir = path.join(ROOT, 'nolink');
+    await fs.mkdir(dir);
+    const file = path.join(dir, 'doc.json');
+    const realLink = fs.link;
+    fs.link = async () => {
+      throw Object.assign(new Error('not permitted'), { code: 'EPERM' });
+    };
+    try {
+      await atomicCreateJSON(file, { a: 1 });
+      await assert.rejects(atomicCreateJSON(file, { a: 2 }), error => error.code === 'EEXIST');
+    } finally {
+      fs.link = realLink;
+    }
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    assert.deepEqual(await fs.readdir(dir), ['doc.json'], 'no temp file left behind');
+  });
+
   it('leaves no temp file behind', async () => {
     const dir = path.join(ROOT, 'tmpcheck');
     await fs.mkdir(dir);

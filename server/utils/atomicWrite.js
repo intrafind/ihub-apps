@@ -167,6 +167,9 @@ export async function atomicWriteJSON(filePath, data, options = {}) {
  * @param {any} data - The data to serialize as JSON
  * @returns {Promise<void>}
  */
+/** `link` errors of a filesystem that has no hard links. */
+const NO_HARD_LINKS = new Set(['EPERM', 'ENOTSUP', 'ENOSYS', 'EOPNOTSUPP']);
+
 export async function atomicCreateJSON(filePath, data) {
   const jsonData = JSON.stringify(data, null, 2);
   const dir = dirname(filePath);
@@ -180,8 +183,16 @@ export async function atomicCreateJSON(filePath, data) {
     } finally {
       await handle.close();
     }
-    // lgtm[js/path-injection] -- caller-validated path; see function doc.
-    await fs.link(tempPath, filePath);
+    try {
+      // lgtm[js/path-injection] -- caller-validated path; see function doc.
+      await fs.link(tempPath, filePath);
+    } catch (error) {
+      if (!NO_HARD_LINKS.has(error.code)) throw error;
+      // A filesystem without hard links (some network and FUSE mounts): an
+      // exclusive create of the target, briefly visible half-written.
+      // lgtm[js/path-injection] -- caller-validated path; see function doc.
+      await fs.writeFile(filePath, jsonData, { encoding: 'utf8', flag: 'wx' });
+    }
   } finally {
     // lgtm[js/path-injection] -- caller-validated path; see function doc.
     await fs.unlink(tempPath).catch(() => {});
