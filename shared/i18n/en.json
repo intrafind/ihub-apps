@@ -2415,7 +2415,7 @@
       "jsonDescription": "Structured JSON logging for parsing and analysis",
       "textDescription": "Human-readable text format with colors",
       "enableComponentFilter": "Enable component filtering",
-      "componentFilterHelp": "When enabled, only logs from selected components will be shown",
+      "componentFilterHelp": "When enabled, only logs from the selected components are written. Errors are always written, whichever component logs them.",
       "selectAll": "Select All",
       "deselectAll": "Deselect All",
       "enableFileLogging": "Enable file logging",
@@ -2448,7 +2448,49 @@
       "note2": "Log level changes are persisted to platform.json configuration",
       "note3": "Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more",
       "note4": "Use \"info\" level for production, \"debug\" for development",
-      "note5": "Authentication debug logging is separate and requires restart"
+      "note5": "Authentication debug logging is separate and requires restart",
+      "components": {
+        "WorkflowEngine": {
+          "name": "Workflow Engine",
+          "description": "Workflow runs: node scheduling, state, retries and failures"
+        },
+        "NtlmAuth": {
+          "name": "NTLM Authentication",
+          "description": "Windows (NTLM/Kerberos) sign-in and group lookup"
+        },
+        "OidcAuth": {
+          "name": "OIDC Authentication",
+          "description": "OpenID Connect sign-in: redirects, token exchange, group mapping"
+        },
+        "LdapAuth": {
+          "name": "LDAP Authentication",
+          "description": "LDAP and Active Directory sign-in and group lookup"
+        },
+        "ProxyAuth": {
+          "name": "Proxy Authentication",
+          "description": "Sign-in from headers or tokens set by a reverse proxy"
+        },
+        "Authorization": {
+          "name": "Authorization",
+          "description": "Group inheritance and permission checks for apps, models and tools"
+        },
+        "IFinderService": {
+          "name": "iFinder",
+          "description": "iFinder document search and retrieval"
+        },
+        "JiraService": {
+          "name": "Jira",
+          "description": "Jira integration: sign-in and issue requests"
+        },
+        "WebSearch": {
+          "name": "Web Search",
+          "description": "Web search requests to Brave, Tavily and other search engines"
+        },
+        "McpClientManager": {
+          "name": "MCP Clients",
+          "description": "Connections to MCP servers: connect, list tools, reconnect"
+        }
+      }
     },
     "nav": {
       "chatHistory": "Chat History",
@@ -5984,7 +6026,10 @@
       "noApp": "No app selected",
       "urlHint": "A path on this server (/apps/chat) always works. A link to another website works only when its host is on the SSRF allowlist.",
       "ssrfNotice": "Short links to other websites work only for hosts on the SSRF allowlist; links to any other host answer \"Not found\".",
-      "ssrfLink": "Admin → Security → SSRF Allowlist"
+      "ssrfLink": "Admin → Security → SSRF Allowlist",
+      "urlEmptyHint": "Leave it empty to open the app or path above.",
+      "paramsLeftOut": "These params are not added to the link while “Include Params” is off.",
+      "targetPreview": "Opens:"
     },
     "toolApproval": {
       "mode": {
@@ -6923,7 +6968,19 @@
     "documentTooLargeCombined": "The {{fileCount}} attached documents together are large (~{{estimatedTokens}} estimated tokens combined) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider removing some documents or selecting a model with a larger context window.",
     "documentTooLargeFileItem": "{{fileName}}: ~{{estimatedTokens}} tokens",
     "rendererError": "Renderer Error",
-    "noComponentFound": "No renderer found"
+    "noComponentFound": "No renderer found",
+    "fields": {
+      "REQUIRED": "Required.",
+      "NOT_A_NUMBER": "Enter a number.",
+      "NOT_A_BOOLEAN": "Choose yes or no.",
+      "INVALID_CHOICE": "Choose one of the offered values.",
+      "INVALID_URL": "Enter an http(s) URL.",
+      "NOT_A_LIST": "Enter a list of values.",
+      "NOT_A_STRING": "Enter text.",
+      "PATTERN_MISMATCH": "The value does not have the expected format.",
+      "UNKNOWN_FIELD": "This setting is not known to the integration.",
+      "SENSITIVE_VALUE": "Secret values belong in the credential store."
+    }
   },
   "toolbar": {
     "bold": "Bold",

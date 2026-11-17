@@ -11,6 +11,46 @@ import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import AdminBreadcrumb from '../components/AdminBreadcrumb';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import {
+  buildShortLinkTarget,
+  hasShortLinkParams
+} from '../../../../../shared/shortLinkTargetPath.js';
+
+/**
+ * The params typed into the editor as an object, or null while the JSON does
+ * not parse.
+ *
+ * @param {string} text - The "Params (JSON)" field
+ * @returns {Object|null}
+ */
+function parseParams(text) {
+  if (!text.trim()) return {};
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The link as the editor holds it. A stored `url` that was built from the
+ * app, path and params is not shown as a custom "Redirect URL": the field
+ * stays empty, so a new app, path or params changes where the link leads
+ * (CU-B1). Only a target someone typed is kept in the field.
+ *
+ * @param {Object} data - `GET /api/shortlinks/:code`
+ * @returns {Object}
+ */
+function editableShortLink(data) {
+  const customUrl = data.url && data.url !== buildShortLinkTarget(data) ? data.url : '';
+  return {
+    ...data,
+    url: customUrl,
+    params: data.params || {},
+    expiresAt: data.expiresAt || ''
+  };
+}
 
 function AdminShortLinkEditPage() {
   const { code } = useParams();
@@ -35,7 +75,8 @@ function AdminShortLinkEditPage() {
     appId: '',
     path: '',
     url: '',
-    includeParams: false,
+    // Params typed into a new link are meant to reach it (a prefilled prompt).
+    includeParams: true,
     params: {},
     expiresAt: ''
   };
@@ -67,15 +108,10 @@ function AdminShortLinkEditPage() {
       void (async () => {
         try {
           const res = await makeAdminApiCall(`/shortlinks/${code}`);
-          const data = res.data;
-          const loadedLink = {
-            ...data,
-            params: data.params || {},
-            expiresAt: data.expiresAt || ''
-          };
+          const loadedLink = editableShortLink(res.data);
           setLink(loadedLink);
           setInitialData(loadedLink);
-          setParamsText(JSON.stringify(data.params || {}, null, 2));
+          setParamsText(JSON.stringify(loadedLink.params, null, 2));
         } catch (e) {
           setError(e.message);
         } finally {
@@ -84,6 +120,13 @@ function AdminShortLinkEditPage() {
       })();
     }
   }, [code, isNew]);
+
+  // Where the link leads once saved: the typed Redirect URL, else the target
+  // built from the app or path and (when included) the params.
+  const typedParams = parseParams(paramsText);
+  const builtTarget = buildShortLinkTarget({ ...link, params: typedParams || {} });
+  const targetPreview = link.url?.trim() || builtTarget;
+  const paramsLeftOut = !link.url?.trim() && !link.includeParams && hasShortLinkParams(typedParams);
 
   const handleChange = (field, value) => {
     setLink(l => ({ ...l, [field]: value }));
@@ -159,11 +202,15 @@ function AdminShortLinkEditPage() {
         )}
         <form onSubmit={handleSave} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="shortlink-code"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.shortlinks.code', 'Code')}
             </label>
             <input
               type="text"
+              id="shortlink-code"
               value={link.code}
               onChange={e => handleChange('code', e.target.value)}
               disabled={!isNew}
@@ -196,28 +243,38 @@ function AdminShortLinkEditPage() {
             </div>
           )}
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="shortlink-path"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.shortlinks.path', 'Path')}
             </label>
             <input
               type="text"
+              id="shortlink-path"
               value={link.path || ''}
               onChange={e => handleChange('path', e.target.value)}
               className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="shortlink-url"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.shortlinks.url', 'Redirect URL')}
             </label>
             <input
               type="text"
+              id="shortlink-url"
               value={link.url || ''}
               onChange={e => handleChange('url', e.target.value)}
+              placeholder={builtTarget}
               aria-describedby="shortlink-url-hint"
               className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
             <p id="shortlink-url-hint" className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {t('admin.shortlinks.urlEmptyHint', 'Leave it empty to open the app or path above.')}{' '}
               {t(
                 'admin.shortlinks.urlHint',
                 'A path on this server (/apps/chat) always works. A link to another website works only when its host is on the SSRF allowlist.'
@@ -233,36 +290,62 @@ function AdminShortLinkEditPage() {
           <div className="flex items-center">
             <input
               type="checkbox"
+              id="shortlink-include-params"
               checked={link.includeParams}
               onChange={e => handleChange('includeParams', e.target.checked)}
               className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded-sm"
             />
-            <label className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="shortlink-include-params"
+              className="ml-2 block text-sm text-gray-700 dark:text-gray-300"
+            >
               {t('admin.shortlinks.includeParams', 'Include Params')}
             </label>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="shortlink-expires-at"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.shortlinks.expiresAt', 'Expires At')}
             </label>
             <input
               type="datetime-local"
+              id="shortlink-expires-at"
               value={link.expiresAt ? link.expiresAt.substring(0, 16) : ''}
               onChange={e => handleChange('expiresAt', e.target.value)}
               className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label
+              htmlFor="shortlink-params"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               {t('admin.shortlinks.params', 'Params (JSON)')}
             </label>
             <textarea
               rows="4"
+              id="shortlink-params"
               value={paramsText}
               onChange={e => setParamsText(e.target.value)}
               className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-xs bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono"
             />
+            {paramsLeftOut && (
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                {t(
+                  'admin.shortlinks.paramsLeftOut',
+                  'These params are not added to the link while “Include Params” is off.'
+                )}
+              </p>
+            )}
           </div>
+          <p className="text-sm text-gray-700 dark:text-gray-300">
+            {t('admin.shortlinks.targetPreview', 'Opens:')}{' '}
+            <code data-testid="shortlink-target-preview" className="break-all">
+              {targetPreview}
+            </code>
+          </p>
           <div className="flex justify-end space-x-4">
             <button
               type="button"

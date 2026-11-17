@@ -12,6 +12,7 @@ import installedIntegrationService, {
 } from '../../services/integrations/InstalledIntegrationService.js';
 import {
   getProtocolAdapter,
+  supportedAuthModesOf,
   supportedProtocols
 } from '../../services/integrations/protocols/index.js';
 import { INTEGRATION_ID_PATTERN } from '../../validators/integrationDefinitionSchema.js';
@@ -177,12 +178,14 @@ function catalogEntryView(entry, language, instances, updates) {
     runsCode: def.protocol.type === 'script',
     /** Installed at all times (iHub's own tools): no enable switch, no remove. */
     alwaysInstalled: def.alwaysInstalled === true,
+    /**
+     * Installed once, under a fixed id (`{ instanceId }`), or null: the install
+     * form proposes that id and locks it (IN-B2).
+     */
+    singleton: def.singleton?.instanceId ? { instanceId: def.singleton.instanceId } : null,
     authModes: def.auth.modes,
     /** Sign-in modes the adapter can run in this release (all declared ones when absent). */
-    supportedAuthModes: getProtocolAdapter(def.protocol.type)?.supportedAuthModes || [
-      'none',
-      'service-account'
-    ],
+    supportedAuthModes: supportedAuthModesOf(def),
     defaultAuthMode: def.auth.default,
     capabilities: def.capabilities,
     actionCount: def.actions.length,

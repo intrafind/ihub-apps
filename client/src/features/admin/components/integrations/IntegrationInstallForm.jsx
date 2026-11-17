@@ -33,6 +33,8 @@ import {
   updateInstalledIntegration
 } from '../../../../api/integrationsAdminApi';
 import { fetchAdminGroups, getAdminApiErrorMessage } from '../../../../api/adminApi';
+import { apiErrorMessage } from '../../../../utils/apiErrorMessage';
+import { mapProblemErrorsToFields } from '../../../../utils/mapProblemErrorsToFields';
 
 const AUTH_MODE_KEYS = {
   none: ['none', 'No sign-in (public API)'],
@@ -54,19 +56,6 @@ export function proposeInstanceId(definitionId, taken = []) {
   let n = 2;
   while (taken.includes(`${base}-${n}`)) n += 1;
   return `${base}-${n}`;
-}
-
-/** One validation detail as text: `key: message`, `path.to.field: message` or the message. */
-function detailLine(detail) {
-  if (detail?.key) return `${detail.key}: ${detail.message}`;
-  if (detail?.path) return `${detail.path.join('.')}: ${detail.message}`;
-  return detail?.message;
-}
-
-function detailText(err) {
-  const issues = err?.response?.data?.details?.issues;
-  if (!Array.isArray(issues)) return '';
-  return issues.map(detailLine).filter(Boolean).join('; ');
 }
 
 /** `GET /api/admin/groups` → `groups` (id → group), or null when it failed. */
@@ -306,16 +295,30 @@ function IntegrationInstallForm({
     return payload;
   };
 
+  /**
+   * Show a failed test or save: each `errors[]` entry of the problem answer
+   * at its field (`/values/<key>` or `/secrets/<key>`, IN-B4), and the rest —
+   * a field the form does not show, or another part of the request — in the
+   * message above the form.
+   */
   const applyError = err => {
-    const data = err?.response?.data;
-    if (Array.isArray(data?.details?.issues) && data.code === 'INVALID_VALUES') {
-      const errors = {};
-      for (const d of data.details.issues) if (d?.key) errors[d.key] = d.message;
-      setFieldErrors(errors);
-    }
-    const detail = detailText(err);
-    const message = getAdminApiErrorMessage(err);
-    setError(detail ? `${message} (${detail})` : message);
+    const byField = {
+      ...mapProblemErrorsToFields(err, { prefix: '/secrets', t }),
+      ...mapProblemErrorsToFields(err, { prefix: '/values', t })
+    };
+    const shown = new Set([...visibleFields.map(f => f.key), secretField?.key].filter(Boolean));
+    setFieldErrors(Object.fromEntries(Object.entries(byField).filter(([key]) => shown.has(key))));
+    if (advancedFields.some(f => byField[f.key])) setShowAdvanced(true);
+
+    const elsewhere = Object.entries(mapProblemErrorsToFields(err, { t }))
+      .filter(([path]) => {
+        const [part, key, ...rest] = path.split('.');
+        return !((part === 'values' || part === 'secrets') && rest.length === 0 && shown.has(key));
+      })
+      .map(([path, message]) => `${path}: ${message}`);
+    // The code's localized message (INVALID_VALUES: "Some of the entered values are not valid.").
+    const message = apiErrorMessage(err, t) || getAdminApiErrorMessage(err);
+    setError(elsewhere.length ? `${message} (${elsewhere.join('; ')})` : message);
   };
 
   const runTest = async () => {

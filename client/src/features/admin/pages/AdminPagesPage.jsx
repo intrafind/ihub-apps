@@ -9,6 +9,7 @@ import { deletePage, fetchAdminPages, getAdminApiErrorMessage } from '../../../a
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable } from '../components/data-table';
+import { buildPath } from '../../../utils/runtimeBasePath';
 
 function AdminPagesPage() {
   const { t, i18n } = useTranslation();
@@ -85,7 +86,7 @@ function AdminPagesPage() {
       id: 'view',
       label: t('common.view', 'View'),
       icon: 'eye',
-      onClick: page => window.open(`/pages/${page.id}`, '_blank')
+      onClick: page => window.open(buildPath(`/pages/${page.id}`), '_blank')
     },
     {
       id: 'edit',

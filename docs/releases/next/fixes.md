@@ -824,3 +824,25 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Short Links Lead Where You Set Them, With Their Prompt and Under the Base Path
+
+Short links created or edited under **Admin → Customization → Short Links** went somewhere else
+than the form said:
+
+- Changing a link's app, path or params had no effect: the link kept opening the old app. A
+  link's target now follows them, unless a fixed **Redirect URL** is set.
+- A link to an app with a prefilled prompt (`{ "prefill": "…" }`) opened the app without the
+  prompt, because **Include Params** was off by default. It is on now, the form warns when params
+  are left out, and **Opens:** shows the target before you save.
+- On an installation under a base path (`/ihub`), **Copy link**, **Test link**, the details
+  popup and **Pages → View** left the base path out, and opening `/ihub/s/<code>` redirected to
+  `/apps/…` outside the installation. Both keep the base path now.
+
+## Logging: The Component Filter No Longer Hides Errors
+
+With component filtering on under **Admin → Observability → Logging**, errors of every other
+component were dropped, so the failure you were tracing could vanish from the log. Errors are now
+always written, whichever component logs them. The list offers only components the server logs
+with, including **Workflow Engine**, **iFinder** and the sign-in components; three that never
+logged anything are gone.

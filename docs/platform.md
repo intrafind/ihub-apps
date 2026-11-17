@@ -384,6 +384,13 @@ Short links belong to the signed-in user who creates them. Only that user and ad
 list, change or delete them; links saved before links had owners can be managed by administrators
 only.
 
+A link's target (`url`) is either built from its `appId` or `path` plus `params`, or a custom
+target. A built target follows the link: changing the app, path or params rebuilds it, and params
+sent without `includeParams` are added (only `includeParams: false` leaves them out). A custom
+target stays until it is replaced; an empty `url` turns it back into a built one. Under a base path
+(`X-Forwarded-Prefix: /ihub`), `/s/<code>` redirects a path on this server to `/ihub/apps/…`; a
+target that already starts with the base path, or names another host, is redirected as stored.
+
 ### **Request Configuration**
 
 - **defaultLanguage** (string) – Fallback language code when requested language is unavailable. Default: `"en"`

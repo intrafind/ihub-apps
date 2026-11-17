@@ -4,7 +4,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * The route crawl against a deployment on a path prefix (`/ihub`): the production
+ * The route crawl and the short-link checks (admin-subpath-links.spec.js) against a
+ * deployment on a path prefix (`/ihub`): the production
  * build behind a proxy that adds `X-Forwarded-Prefix`, see subpath-server.mjs.
  * Build the client first (`cd client && npm run build`); run with
  * `npm run test:e2e:subpath`.
@@ -16,7 +17,7 @@ process.env.CRAWL_BASE_PATH = PREFIX;
 
 export default defineConfig({
   testDir: '../e2e',
-  testMatch: 'route-crawl.spec.js',
+  testMatch: ['route-crawl.spec.js', 'admin-subpath-links.spec.js'],
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,

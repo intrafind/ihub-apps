@@ -76,6 +76,29 @@ export function getProtocolAdapter(protocolType) {
   return adapters[protocolType] || null;
 }
 
+/** Sign-in modes the OpenAPI and other adapters without a list can run themselves. */
+const DEFAULT_SUPPORTED_AUTH_MODES = ['none', 'service-account'];
+
+/**
+ * The sign-in modes an installation of `definition` can use in this release,
+ * as the install form offers them:
+ *
+ * - the adapter's `supportedAuthModes`, when it lists them (MCP, A2A, HTTP);
+ * - every mode the definition declares for a `native` or `script` connector,
+ *   which runs its own sign-in (Jira and the storage providers sign each user
+ *   in with OAuth) — the install check accepts all of them too;
+ * - otherwise `none` and `service-account`, the modes the OpenAPI runner applies.
+ *
+ * @param {Object} definition - A validated integration definition
+ * @returns {string[]}
+ */
+export function supportedAuthModesOf(definition) {
+  const adapter = getProtocolAdapter(definition?.protocol?.type);
+  if (Array.isArray(adapter?.supportedAuthModes)) return adapter.supportedAuthModes;
+  if (adapter && adapter === native) return [...(definition.auth?.modes || [])];
+  return DEFAULT_SUPPORTED_AUTH_MODES;
+}
+
 /** Protocol types an adapter exists for. */
 export function supportedProtocols() {
   return Object.keys(adapters);

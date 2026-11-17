@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import Modal from './Modal';
 import { DetailsPopupHeader, DetailsPopupFooter } from './DetailsPopup';
+import { shortLinkUrl } from '../../utils/shortLinkUrl';
 
 function ShortLinkDetailsPopup({ link, isOpen, onClose }) {
   const { t } = useTranslation();
@@ -14,7 +15,7 @@ function ShortLinkDetailsPopup({ link, isOpen, onClose }) {
   if (!isOpen || !link) return null;
 
   const handleTest = () => {
-    window.open(`/s/${link.code}`, '_blank');
+    window.open(shortLinkUrl(link.code), '_blank');
   };
 
   return (

@@ -365,6 +365,22 @@ See [Realtime Voice & Transcription](voice-transcription.md) and [Read Aloud](te
 
 ---
 
+## Short Links
+
+**Customization → Short Links** lists every short link (`/s/<code>`): who created it, how often it was opened and when it expires. **Copy link** copies the full address and **Test link** opens it; both include the base path when iHub runs under one (`https://host/ihub/s/<code>`).
+
+To create a link, click **Add New Link**:
+
+1. **Code**: leave it empty for a random code, or type your own.
+2. **App**: the app the link opens, or **Path** for another page on this server (`/pages/faq`).
+3. **Params (JSON)**: settings passed to the app, for example `{ "prefill": "Summarize this", "send": "true" }` to prefill the chat input and send it. Keep **Include Params** ticked; untick it to keep the params on the link without adding them.
+4. **Redirect URL**: leave it empty to open the app or path above. Fill it in only for a fixed target, such as a page on an allowed external host.
+5. **Opens:** shows where the link leads before you save.
+
+Editing a link works the same way: a new app, path or params change where the link leads, unless a fixed **Redirect URL** is set. Under a base path, opening `/ihub/s/<code>` redirects to `/ihub/apps/…`. Links to other websites need their host on the SSRF allowlist, see [Platform → shortLinks](platform.md#shortlinks).
+
+---
+
 ## Usage Reports
 
 **Observability → Usage Reports** (`/admin/usage`) shows requests, tokens, errors and latency of

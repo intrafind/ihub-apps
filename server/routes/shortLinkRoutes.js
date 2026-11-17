@@ -17,7 +17,7 @@ import { authenticatedOnly } from '../middleware/authRequired.js';
 import { isAdmin } from '../utils/authorization.js';
 import { shortLinkTargetRefusal } from '../utils/shortLinkTarget.js';
 import { ServiceError } from '../utils/ServiceError.js';
-import { buildServerPath } from '../utils/basePath.js';
+import { buildServerPath, getBasePath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
@@ -40,6 +40,30 @@ const redirectLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false
 });
+
+/**
+ * Where `/s/:code` sends the visitor: a path on this server gets the
+ * deployment's base path in front (the `X-Forwarded-Prefix` of a reverse proxy
+ * on a path prefix such as `/ihub`), unless it already starts with it; a link
+ * to another host is left as it is.
+ *
+ * Without this, a link to `/apps/chat` would send a visitor of
+ * `https://host/ihub/s/abc` to `https://host/apps/chat`, outside the
+ * installation, whenever the proxy does not rewrite `Location`.
+ *
+ * @param {string} target - The link's stored `url`
+ * @returns {string}
+ */
+export function redirectLocation(target) {
+  const basePath = getBasePath();
+  if (!basePath || !target.startsWith('/') || target.startsWith('//')) return target;
+  const alreadyPrefixed =
+    target === basePath ||
+    target.startsWith(`${basePath}/`) ||
+    target.startsWith(`${basePath}?`) ||
+    target.startsWith(`${basePath}#`);
+  return alreadyPrefixed ? target : `${basePath}${target}`;
+}
 
 export default function registerShortLinkRoutes(app) {
   // Links belong to the signed-in user who creates them; only they and admins
@@ -170,7 +194,7 @@ export default function registerShortLinkRoutes(app) {
             error: error.message
           });
         }
-        res.redirect(link.url);
+        res.redirect(redirectLocation(link.url));
       } catch (error) {
         logger.error('Error redirecting short link', { component: 'ShortLinkRoutes', error });
         res.status(500).send('Error');

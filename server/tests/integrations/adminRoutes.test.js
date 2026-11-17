@@ -150,6 +150,23 @@ await fs.writeFile(
   })
 );
 
+// A native connector installed once (like Jira): it signs each user in with
+// OAuth itself, and its installation id is fixed.
+await fs.mkdir(path.join(shippedDir, 'com.example__tracker'), { recursive: true });
+await fs.writeFile(
+  path.join(shippedDir, 'com.example__tracker', 'integration.json'),
+  JSON.stringify({
+    id: 'com.example/tracker',
+    version: '1.0.0',
+    name: { en: 'Tracker' },
+    protocol: { type: 'native', module: 'jira' },
+    singleton: { instanceId: 'tracker' },
+    auth: { modes: ['oauth-user'], oauthUser: { field: 'clientSecret' } },
+    install: [{ key: 'clientSecret', type: 'secret', title: { en: 'Client secret' } }],
+    actions: [{ name: 'searchTickets', sideEffect: 'read' }]
+  })
+);
+
 const { IntegrationRegistry } =
   await import('../../services/integrations/definitions/IntegrationRegistry.js');
 const registryModule =
@@ -197,8 +214,11 @@ describe('catalog', () => {
     const res = await admin(request(app).get('/api/admin/integrations/catalog?lang=de')).expect(
       200
     );
-    expect(res.body.items).toHaveLength(1);
-    expect(res.body.items[0]).toMatchObject({
+    expect(res.body.items.map(i => i.id).sort()).toEqual([
+      'com.example/tracker',
+      'org.ckan/portal'
+    ]);
+    expect(res.body.items.find(i => i.id === 'org.ckan/portal')).toMatchObject({
       id: 'org.ckan/portal',
       name: 'Portal',
       protocol: 'openapi',
@@ -214,6 +234,48 @@ describe('catalog', () => {
     expect(detail.body.actions[0].name).toBe('search');
     await admin(request(app).get('/api/admin/integrations/catalog/nope.missing')).expect(404);
     await admin(request(app).get('/api/admin/integrations/catalog/Bad%20Id')).expect(400);
+  });
+
+  it('names the fixed id of an integration that is installed once (IN-B2)', async () => {
+    const res = await admin(request(app).get('/api/admin/integrations/catalog')).expect(200);
+    const byId = Object.fromEntries(res.body.items.map(i => [i.id, i]));
+    expect(byId['com.example/tracker'].singleton).toEqual({ instanceId: 'tracker' });
+    expect(byId['org.ckan/portal'].singleton).toBeNull();
+
+    const detail = await admin(
+      request(app).get(
+        `/api/admin/integrations/catalog/${encodeURIComponent('com.example/tracker')}`
+      )
+    ).expect(200);
+    expect(detail.body.singleton).toEqual({ instanceId: 'tracker' });
+  });
+
+  it('offers a native connector every sign-in mode it declares (IN-B5)', async () => {
+    const res = await admin(request(app).get('/api/admin/integrations/catalog')).expect(200);
+    const byId = Object.fromEntries(res.body.items.map(i => [i.id, i]));
+    expect(byId['com.example/tracker']).toMatchObject({
+      authModes: ['oauth-user'],
+      supportedAuthModes: ['oauth-user']
+    });
+    // The OpenAPI runner applies no sign-in but these two.
+    expect(byId['org.ckan/portal'].supportedAuthModes).toEqual(['none', 'service-account']);
+  });
+
+  it('answers invalid install values with errors[] pointing at the fields (IN-B4)', async () => {
+    const res = await admin(
+      request(app)
+        .post(`/api/admin/integrations/catalog/${encodeURIComponent('org.ckan/portal')}/_test`)
+        .send({ values: { maxRows: 99 }, auth: { mode: 'none' } })
+    ).expect(400);
+    expect(res.headers['content-type']).toMatch(/application\/problem\+json/);
+    expect(res.body.code).toBe('INVALID_VALUES');
+    expect(res.body.errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ pointer: '/values/baseUrl', code: 'REQUIRED' }),
+        expect.objectContaining({ pointer: '/values/maxRows', code: 'TOO_LARGE' })
+      ])
+    );
+    expect(res.body.details?.issues).toBeUndefined();
   });
 
   it('tests an unsaved draft without writing anything', async () => {

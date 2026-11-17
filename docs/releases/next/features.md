@@ -768,8 +768,9 @@ See [Marketplace → Air-gapped installations](../../marketplace.md#air-gapped-i
 ## Localization: Edit Translation Overrides in the Admin UI
 
 **Admin → Customization → Localization** now lets you overwrite labels and translations without
-editing files. The editor opens on the keys you changed; search by key or text to find any other
-label, edit it per language and save, or reset a key to the built-in text. Changes are stored in
+editing files. Search by key or text to find any label, edit it per language and save, or reset a
+key to the built-in text; tick **Changed only** to list just the keys you changed. An unsaved edit
+stays with its language when you switch languages. Changes are stored in
 `contents/locales/{lang}.json` and apply immediately.
 
 ## Configure Group Inheritance in the Group Editor

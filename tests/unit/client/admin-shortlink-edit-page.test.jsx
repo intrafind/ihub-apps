@@ -109,3 +109,66 @@ test('the redirect URL says that other websites need the SSRF allowlist', async 
     '/admin/security#settings-section-ssrf'
   );
 });
+
+const savedBody = () => makeAdminApiCall.mock.calls.at(-1)[1].body;
+const preview = () => screen.getByTestId('shortlink-target-preview').textContent;
+
+test('a new link adds its params (a prefilled prompt) and shows where it leads (CU-B2)', async () => {
+  await renderPage();
+  fireEvent.focus(screen.getByPlaceholderText('Search apps...'));
+  fireEvent.click(screen.getByRole('button', { name: /^Chat$/ }));
+  fireEvent.change(screen.getByLabelText('Params (JSON)'), {
+    target: { value: '{"prefill":"Hello there"}' }
+  });
+  expect(preview()).toBe('/apps/chat?prefill=Hello+there');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await flush();
+  expect(savedBody()).toMatchObject({
+    appId: 'chat',
+    includeParams: true,
+    params: { prefill: 'Hello there' }
+  });
+});
+
+test('params left out by "Include Params" are called out', async () => {
+  await renderPage();
+  fireEvent.change(screen.getByLabelText('Params (JSON)'), {
+    target: { value: '{"prefill":"Hi"}' }
+  });
+  expect(screen.queryByText(/not added to the link/)).not.toBeInTheDocument();
+  fireEvent.click(screen.getByLabelText('Include Params'));
+  expect(screen.getByText(/not added to the link/)).toBeInTheDocument();
+  expect(preview()).toBe('/');
+});
+
+test('editing a link built from its app sends no stale target, so a new app takes effect (CU-B1)', async () => {
+  makeAdminApiCall.mockResolvedValueOnce({
+    data: { code: 'abc', appId: 'chat', url: '/apps/chat', includeParams: false, params: {} }
+  });
+  await renderPage('/admin/shortlinks/abc');
+  // The built target is not a custom Redirect URL.
+  expect(screen.getByLabelText('Redirect URL')).toHaveValue('');
+  expect(preview()).toBe('/apps/chat');
+
+  fireEvent.focus(screen.getByPlaceholderText('Search apps...'));
+  fireEvent.click(screen.getByRole('button', { name: /Email Composer/ }));
+  expect(preview()).toBe('/apps/email-composer');
+
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await flush();
+  expect(makeAdminApiCall).toHaveBeenLastCalledWith(
+    '/shortlinks/abc',
+    expect.objectContaining({ method: 'PUT' })
+  );
+  expect(savedBody()).toMatchObject({ appId: 'email-composer', url: '' });
+});
+
+test('a custom redirect URL stays in its field and wins', async () => {
+  makeAdminApiCall.mockResolvedValueOnce({
+    data: { code: 'abc', appId: 'chat', url: '/pages/faq', includeParams: false, params: {} }
+  });
+  await renderPage('/admin/shortlinks/abc');
+  expect(screen.getByLabelText('Redirect URL')).toHaveValue('/pages/faq');
+  expect(preview()).toBe('/pages/faq');
+});

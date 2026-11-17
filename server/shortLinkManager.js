@@ -6,6 +6,7 @@ import { createSharedJsonFile } from './utils/sharedJsonFile.js';
 import { shortLinkTargetRefusal } from './utils/shortLinkTarget.js';
 import { getContentsPath } from './utils/contentsPath.js';
 import { ServiceError } from './utils/ServiceError.js';
+import { buildShortLinkTarget, hasShortLinkParams } from '../shared/shortLinkTargetPath.js';
 
 const dataFile = getContentsPath('data', 'shortlinks.json');
 
@@ -99,25 +100,6 @@ function assertAllowedTarget(target, allowedHosts) {
 const EDITABLE_FIELDS = ['appId', 'path', 'params', 'url', 'includeParams', 'expiresAt'];
 
 /**
- * The target built from an app or path, plus the settings when included.
- *
- * @returns {string}
- */
-function buildTarget({ appId, path, params, includeParams }) {
-  const basePath = path || (appId ? `/apps/${appId}` : '/');
-  const dummy = new URL('http://localhost');
-  dummy.pathname = basePath;
-  if (includeParams && params && typeof params === 'object') {
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== null && v !== '') {
-        dummy.searchParams.set(k, String(v));
-      }
-    }
-  }
-  return dummy.pathname + (dummy.search ? `?${dummy.searchParams.toString()}` : '');
-}
-
-/**
  * Create a link owned by `ownerId`.
  *
  * @param {Object} data
@@ -126,19 +108,15 @@ function buildTarget({ appId, path, params, includeParams }) {
  * @throws {ShortLinkTargetError} When the target is not allowed
  */
 export async function createLink(
-  {
-    code,
-    appId,
-    ownerId,
-    path = null,
-    params = null,
-    url = null,
-    includeParams = false,
-    expiresAt = null
-  },
+  { code, appId, ownerId, path = null, params = null, url = null, includeParams, expiresAt = null },
   { allowedHosts = [] } = {}
 ) {
-  const finalUrl = url || buildTarget({ appId, path, params, includeParams });
+  // Params sent without saying whether to include them are meant to reach the
+  // link (a prefilled prompt, say); only an explicit `false` leaves them out.
+  const finalIncludeParams =
+    typeof includeParams === 'boolean' ? includeParams : hasShortLinkParams(params);
+  const finalUrl =
+    url || buildShortLinkTarget({ appId, path, params, includeParams: finalIncludeParams });
   assertAllowedTarget(finalUrl, allowedHosts);
 
   return updateLinks(data => {
@@ -160,7 +138,7 @@ export async function createLink(
       path,
       params,
       url: finalUrl,
-      includeParams,
+      includeParams: finalIncludeParams,
       createdAt: now(),
       usage: 0,
       expiresAt
@@ -204,9 +182,31 @@ export async function deleteLink(code) {
 }
 
 /**
+ * The `url` a link has after `changes`.
+ *
+ * A link's `url` is either built from its app, path and params, or a custom
+ * target someone typed. A built one follows the other fields: when they change
+ * and the request sends the stored `url` back unchanged (as an editor that
+ * loaded the whole link does) or sends none, it is built again. A custom one
+ * stays until it is replaced; an empty `url` turns it back into a built one.
+ *
+ * @param {Object} link - The stored link
+ * @param {Object} changes - The editable fields the request sets
+ * @returns {string}
+ */
+function nextTargetOf(link, changes) {
+  const next = { ...link, ...changes };
+  const sentUrl = Object.hasOwn(changes, 'url') ? changes.url : link.url;
+  const keepsStoredUrl = sentUrl === link.url;
+  const storedUrlWasBuilt = !link.url || link.url === buildShortLinkTarget(link);
+  if (!sentUrl || (keepsStoredUrl && storedUrlWasBuilt)) return buildShortLinkTarget(next);
+  return sentUrl;
+}
+
+/**
  * Change a link's editable fields. Everything else in `data` — the code, the
- * owner, usage counters — is ignored. A link left without a `url` gets one
- * built from its app or path again.
+ * owner, usage counters — is ignored. A target built from the app or path is
+ * built again from the new values (see `nextTargetOf`).
  *
  * @param {string} code
  * @param {Object} data
@@ -227,10 +227,9 @@ export async function updateLink(code, data, { allowedHosts = [] } = {}) {
   return updateLinks(stored => {
     const link = stored.links.find(l => l.code === code);
     if (!link) return null;
-    const next = { ...link, ...changes };
-    if (!next.url) next.url = buildTarget(next);
-    assertAllowedTarget(next.url, allowedHosts);
-    Object.assign(link, changes, { url: next.url });
+    const url = nextTargetOf(link, changes);
+    assertAllowedTarget(url, allowedHosts);
+    Object.assign(link, changes, { url });
     return { ...link };
   });
 }
