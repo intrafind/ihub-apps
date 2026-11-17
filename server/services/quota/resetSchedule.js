@@ -40,8 +40,10 @@ export const DEFAULT_RESETS = Object.freeze({
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):([0-5]\d)$/;
 
-/** Whether `tz` is an IANA time zone this runtime knows. */
+/** Validity per time-zone name, filled by isValidTimeZone. */
 const timeZoneValidity = new Map();
+
+/** Whether `tz` is an IANA time zone this runtime knows. */
 export function isValidTimeZone(tz) {
   if (typeof tz !== 'string' || !tz) return false;
   let valid = timeZoneValidity.get(tz);

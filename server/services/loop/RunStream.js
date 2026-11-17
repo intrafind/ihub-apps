@@ -109,6 +109,11 @@ export function currentSeq(streamId) {
  * Forget a stream: its `seq` counter and run binding. Called when the stream
  * is gone for good — the chat's SSE client entry was removed, a workflow /
  * agent execution reached a terminal state — so the registry stays bounded.
+ *
+ * Text still waiting in the stream's coalescing window (up to
+ * DELTA_COALESCE_MS of deltas) is dropped, not delivered: the chat callers
+ * reset only after their client is gone, and an execution's terminal frame,
+ * like any non-delta frame, has already flushed the window before the reset.
  */
 export function resetStream(streamId) {
   seqByStream.delete(streamId);
