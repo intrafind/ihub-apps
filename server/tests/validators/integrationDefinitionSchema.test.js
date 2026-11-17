@@ -281,7 +281,11 @@ describe('checkInstallValues', () => {
   it('rejects a sensitive value in the config values', () => {
     const errors = checkInstallValues(def, { baseUrl: 'https://x.org', apiToken: 'secret' });
     expect(errors).toEqual([
-      { key: 'apiToken', message: 'sensitive values belong in the credential store' }
+      {
+        key: 'apiToken',
+        kind: 'SENSITIVE_VALUE',
+        message: 'sensitive values belong in the credential store'
+      }
     ]);
   });
 
@@ -306,7 +310,7 @@ describe('checkInstallValues', () => {
       metadataProfile: 'dcat-ap-de'
     });
     expect(errors).toEqual([
-      { key: 'apiPath', message: 'required when metadataProfile is dcat-ap-de' }
+      { key: 'apiPath', kind: 'REQUIRED', message: 'required when metadataProfile is dcat-ap-de' }
     ]);
   });
 

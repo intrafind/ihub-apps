@@ -12,6 +12,7 @@ import { useClipboard } from '../../../shared/hooks/useClipboard';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { DataTable, SearchInput, parseSortParam, formatSortParam } from '../components/data-table';
 import AdminLoadError from '../components/AdminLoadError';
+import { shortLinkUrl } from '../../../utils/shortLinkUrl';
 
 function CodeCell({ link }) {
   return (
@@ -87,8 +88,7 @@ function AdminShortLinks() {
   };
 
   const handleCopyLink = async code => {
-    const shortUrl = `${window.location.origin}/s/${code}`;
-    const result = await copyText(shortUrl);
+    const result = await copyText(shortLinkUrl(code));
     if (result.success) {
       setCopiedLink(code);
       setTimeout(() => setCopiedLink(null), 2000);
@@ -96,8 +96,7 @@ function AdminShortLinks() {
   };
 
   const handleTestLink = code => {
-    const shortUrl = `${window.location.origin}/s/${code}`;
-    window.open(shortUrl, '_blank');
+    window.open(shortLinkUrl(code), '_blank');
   };
 
   const columns = [

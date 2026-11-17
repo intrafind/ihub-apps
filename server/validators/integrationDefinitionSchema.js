@@ -1337,14 +1337,19 @@ export function secretFieldForMode(definition, mode) {
  * @param {object} definition - a validated definition
  * @param {Record<string, unknown>} values
  * @param {{ authMode?: string, hasCredential?: boolean }} [options]
- * @returns {Array<{ key: string, message: string }>} empty when valid
+ * Each error carries a `kind`, the code a client localizes the message by
+ * (`REQUIRED`, `TOO_LARGE`, …; the problem answer's `errors[].code`), and an
+ * English `message`.
+ *
+ * @returns {Array<{ key: string, kind: string, message: string }>} empty when valid
  */
 export function checkInstallValues(definition, values = {}, options = {}) {
   const errors = [];
   const fields = new Map(definition.install.map(f => [f.key, f]));
 
   for (const key of Object.keys(values)) {
-    if (!fields.has(key)) errors.push({ key, message: 'unknown install field' });
+    if (!fields.has(key))
+      errors.push({ key, kind: 'UNKNOWN_FIELD', message: 'unknown install field' });
   }
 
   for (const field of definition.install) {
@@ -1352,34 +1357,50 @@ export function checkInstallValues(definition, values = {}, options = {}) {
     if (!fieldApplies(field, values, options.authMode)) continue;
     const value = values[field.key];
     if (field.sensitive && value !== undefined && value !== null && value !== '') {
-      errors.push({ key: field.key, message: 'sensitive values belong in the credential store' });
+      errors.push({
+        key: field.key,
+        kind: 'SENSITIVE_VALUE',
+        message: 'sensitive values belong in the credential store'
+      });
       continue;
     }
     const missing = value === undefined || value === null || value === '';
     if (missing) {
       if (field.required && !field.sensitive) {
-        errors.push({ key: field.key, message: 'required' });
+        errors.push({ key: field.key, kind: 'REQUIRED', message: 'required' });
       }
       continue;
     }
     switch (field.type) {
       case 'number':
         if (typeof value !== 'number' || Number.isNaN(value)) {
-          errors.push({ key: field.key, message: 'must be a number' });
+          errors.push({ key: field.key, kind: 'NOT_A_NUMBER', message: 'must be a number' });
         } else {
           if (field.min !== undefined && value < field.min)
-            errors.push({ key: field.key, message: `must be at least ${field.min}` });
+            errors.push({
+              key: field.key,
+              kind: 'TOO_SMALL',
+              message: `must be at least ${field.min}`
+            });
           if (field.max !== undefined && value > field.max)
-            errors.push({ key: field.key, message: `must be at most ${field.max}` });
+            errors.push({
+              key: field.key,
+              kind: 'TOO_LARGE',
+              message: `must be at most ${field.max}`
+            });
         }
         break;
       case 'boolean':
         if (typeof value !== 'boolean')
-          errors.push({ key: field.key, message: 'must be a boolean' });
+          errors.push({ key: field.key, kind: 'NOT_A_BOOLEAN', message: 'must be a boolean' });
         break;
       case 'enum':
         if (!field.choices.some(c => c.value === value)) {
-          errors.push({ key: field.key, message: 'not one of the allowed choices' });
+          errors.push({
+            key: field.key,
+            kind: 'INVALID_CHOICE',
+            message: 'not one of the allowed choices'
+          });
         }
         break;
       case 'url': {
@@ -1390,17 +1411,18 @@ export function checkInstallValues(definition, values = {}, options = {}) {
         } catch {
           ok = false;
         }
-        if (!ok) errors.push({ key: field.key, message: 'must be an http(s) URL' });
+        if (!ok)
+          errors.push({ key: field.key, kind: 'INVALID_URL', message: 'must be an http(s) URL' });
         break;
       }
       case 'list':
         if (!Array.isArray(value) || value.some(item => typeof item !== 'string')) {
-          errors.push({ key: field.key, message: 'must be a list of strings' });
+          errors.push({ key: field.key, kind: 'NOT_A_LIST', message: 'must be a list of strings' });
         }
         break;
       default:
         if (typeof value !== 'string') {
-          errors.push({ key: field.key, message: 'must be a string' });
+          errors.push({ key: field.key, kind: 'NOT_A_STRING', message: 'must be a string' });
         } else if (field.pattern) {
           let re;
           try {
@@ -1409,7 +1431,11 @@ export function checkInstallValues(definition, values = {}, options = {}) {
             re = null;
           }
           if (re && !re.test(value))
-            errors.push({ key: field.key, message: 'does not match the expected format' });
+            errors.push({
+              key: field.key,
+              kind: 'PATTERN_MISMATCH',
+              message: 'does not match the expected format'
+            });
         }
     }
   }
@@ -1422,7 +1448,11 @@ export function checkInstallValues(definition, values = {}, options = {}) {
     for (const requiredKey of choice?.requires || []) {
       const v = values[requiredKey];
       if (v === undefined || v === null || v === '') {
-        errors.push({ key: requiredKey, message: `required when ${field.key} is ${choice.value}` });
+        errors.push({
+          key: requiredKey,
+          kind: 'REQUIRED',
+          message: `required when ${field.key} is ${choice.value}`
+        });
       }
     }
   }

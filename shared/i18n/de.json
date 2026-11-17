@@ -910,6 +910,20 @@
       "title": "Nicht autorisiert",
       "message": "Sie haben keine Berechtigung für diese Seite.",
       "goBack": "Zurück"
+    },
+    "fields": {
+      "REQUIRED": "Pflichtfeld.",
+      "NOT_A_NUMBER": "Geben Sie eine Zahl ein.",
+      "NOT_A_BOOLEAN": "Wählen Sie Ja oder Nein.",
+      "INVALID_CHOICE": "Wählen Sie einen der angebotenen Werte.",
+      "INVALID_URL": "Geben Sie eine http(s)-URL ein.",
+      "NOT_A_LIST": "Geben Sie eine Liste von Werten ein.",
+      "NOT_A_STRING": "Geben Sie Text ein.",
+      "PATTERN_MISMATCH": "Der Wert hat nicht das erwartete Format.",
+      "UNKNOWN_FIELD": "Diese Einstellung kennt die Integration nicht.",
+      "SENSITIVE_VALUE": "Geheime Werte gehören in den Zugangsdatenspeicher.",
+      "TOO_SMALL": "Geben Sie mindestens {{min}} ein.",
+      "TOO_LARGE": "Geben Sie höchstens {{max}} ein."
     }
   },
   "serverErrors": {
@@ -2960,7 +2974,7 @@
       "jsonDescription": "Strukturiertes JSON-Logging für Parsing und Analyse",
       "textDescription": "Menschenlesbares Textformat mit Farben",
       "enableComponentFilter": "Komponenten-Filterung aktivieren",
-      "componentFilterHelp": "Wenn aktiviert, werden nur Logs von ausgewählten Komponenten angezeigt",
+      "componentFilterHelp": "Wenn aktiviert, werden nur Logs der ausgewählten Komponenten geschrieben. Fehler werden immer geschrieben, egal welche Komponente sie meldet.",
       "selectAll": "Alle auswählen",
       "deselectAll": "Alle abwählen",
       "enableFileLogging": "Datei-Logging aktivieren",
@@ -2994,6 +3008,48 @@
       "note3": "Niedrigere Level (error, warn) zeigen weniger Nachrichten, höhere Level (debug, silly) mehr",
       "note4": "Verwenden Sie \"info\" Level für Produktion, \"debug\" für Entwicklung",
       "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart",
+      "components": {
+        "WorkflowEngine": {
+          "name": "Workflow-Engine",
+          "description": "Workflow-Ausführungen: Planung der Knoten, Zustand, Wiederholungen und Fehler"
+        },
+        "NtlmAuth": {
+          "name": "NTLM-Authentifizierung",
+          "description": "Windows-Anmeldung (NTLM/Kerberos) und Gruppenabfrage"
+        },
+        "OidcAuth": {
+          "name": "OIDC-Authentifizierung",
+          "description": "OpenID-Connect-Anmeldung: Weiterleitungen, Token-Austausch, Gruppenzuordnung"
+        },
+        "LdapAuth": {
+          "name": "LDAP-Authentifizierung",
+          "description": "Anmeldung über LDAP und Active Directory sowie Gruppenabfrage"
+        },
+        "ProxyAuth": {
+          "name": "Proxy-Authentifizierung",
+          "description": "Anmeldung über Header oder Token, die ein Reverse Proxy setzt"
+        },
+        "Authorization": {
+          "name": "Autorisierung",
+          "description": "Gruppenvererbung und Berechtigungsprüfungen für Apps, Modelle und Tools"
+        },
+        "IFinderService": {
+          "name": "iFinder",
+          "description": "Dokumentsuche und -abruf in iFinder"
+        },
+        "JiraService": {
+          "name": "Jira",
+          "description": "Jira-Integration: Anmeldung und Anfragen zu Vorgängen"
+        },
+        "WebSearch": {
+          "name": "Websuche",
+          "description": "Suchanfragen an Brave, Staan, Qwant und andere Suchmaschinen"
+        },
+        "McpClientManager": {
+          "name": "MCP-Clients",
+          "description": "Verbindungen zu MCP-Servern: verbinden, Tools auflisten, neu verbinden"
+        }
+      },
       "resource": "Protokollierungseinstellungen",
       "currentLevel": "Aktuelle Stufe"
     },
@@ -5644,7 +5700,9 @@
         "reset": "Auf Standard zurücksetzen",
         "none": "Noch keine Schlüssel geändert. Suchen Sie oben nach einer Beschriftung.",
         "noMatches": "Keine passenden Übersetzungen.",
-        "more": "Mehr anzeigen"
+        "more": "Mehr anzeigen",
+        "languageUnsaved": "{{language}} ({{unsaved}} nicht gespeichert)",
+        "unsavedElsewhere": "Nicht gespeicherte Änderungen in {{languages}}. Wechseln Sie zu dieser Sprache und speichern Sie sie, bevor Sie die Seite verlassen."
       }
     },
     "prompts": {
@@ -6580,7 +6638,10 @@
       "noApp": "Keine App ausgewählt",
       "urlHint": "Ein Pfad auf diesem Server (/apps/chat) funktioniert immer. Ein Link zu einer anderen Website funktioniert nur, wenn ihr Host auf der SSRF-Allowlist steht.",
       "ssrfNotice": "Kurzlinks zu anderen Websites funktionieren nur für Hosts auf der SSRF-Allowlist; Links zu anderen Hosts antworten mit „Nicht gefunden“.",
-      "ssrfLink": "Admin → Sicherheit → SSRF-Allowlist"
+      "ssrfLink": "Admin → Sicherheit → SSRF-Allowlist",
+      "urlEmptyHint": "Lassen Sie das Feld leer, um die oben gewählte App oder den Pfad zu öffnen.",
+      "paramsLeftOut": "Diese Parameter werden nicht an den Link angehängt, solange „Include Params“ ausgeschaltet ist.",
+      "targetPreview": "Öffnet:"
     },
     "toolApproval": {
       "mode": {

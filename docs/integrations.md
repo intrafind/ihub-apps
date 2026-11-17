@@ -101,7 +101,7 @@ The builder has five steps:
 | Step | What you set |
 | --- | --- |
 | **Basics** | Name and description (per language), the ID (proposed from the name; tool ids are `<id>__<action>`; it cannot change later), an optional https icon URL |
-| **Sign-in** | **None**; a **service account**: a credential picked from the credential store (**Admin → Credentials**), sent as the credential's own type says (bearer, basic, API key header, OAuth2 client credentials, API key query), as a bearer token, as an API key in a named header (with an optional prefix) or as basic auth; **per-user OAuth** for an MCP server (each user connects their own account). A script integration signs in itself |
+| **Sign-in** | **None**; a **service account**: a credential picked from the credential store (**Admin → Credentials**), sent as the credential's own type says (bearer, basic, API key header, OAuth2 client credentials, API key query), as a bearer token, as an API key in a named header (with an optional prefix) or as basic auth; **per-user OAuth** for an MCP server (each user connects their own account). A script integration signs in itself: the form offers it **None** or a **service account** only, never per-user or client-credentials OAuth, because iHub runs no such sign-in for a script (only Jira, Office 365, Google Drive and Nextcloud sign each user in) |
 | **Source** | Where the actions come from (below) |
 | **Actions** | Per action: name, description for the model, parameters (JSON schema), **side effect**, **data flow** and **approval**; plus an approval for every action. See [Tool Approval](tool-approval.md) |
 | **Review** | What will be saved, with the tool id of every action |

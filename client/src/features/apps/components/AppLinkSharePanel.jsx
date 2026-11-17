@@ -5,21 +5,11 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { createShortLink, getShortLink } from '../../../api';
-import { buildPath } from '../../../utils/runtimeBasePath';
+import { shortLinkUrl } from '../../../utils/shortLinkUrl';
 import ShareLinkResult, { shareInputClass } from '../../chat/components/ShareLinkResult';
 
 /** Shortest custom code the form accepts. */
 const CODE_MIN_LENGTH = 5;
-
-/**
- * The absolute URL of a short link, including the deployment base path.
- *
- * @param {string} code - Short code.
- * @returns {string}
- */
-function shortLinkUrl(code) {
-  return `${window.location.origin}${buildPath(`/s/${encodeURIComponent(code)}`)}`;
-}
 
 /**
  * Share the app as a short link — the "Link to the app" part of the share

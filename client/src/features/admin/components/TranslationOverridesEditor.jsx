@@ -14,21 +14,26 @@ const PAGE_SIZE = 50;
 /**
  * Search and edit translation overrides (`contents/locales/{lang}.json`).
  *
- * Opens on the keys that were changed; searching (or switching "changed only"
- * off) explores the whole built-in catalogue so any key can be overridden.
+ * Searches the whole built-in catalogue, so any key can be found and
+ * overridden; "Changed only" narrows the list to the keys already changed.
  * Each row saves on its own — an override is a single key, never a batch.
+ * Unsaved edits are kept per language: switching the language never carries
+ * a draft into another language's file.
  */
 function TranslationOverridesEditor({ languages, initialLanguage }) {
   const { t, i18n } = useTranslation();
   const [language, setLanguage] = useState(initialLanguage || languages[0] || 'en');
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [changedOnly, setChangedOnly] = useState(true);
+  // Off by default: a search must find labels that were never changed (CU-B7).
+  const [changedOnly, setChangedOnly] = useState(false);
   const [data, setData] = useState({ items: [], total: 0, changedCount: 0 });
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [drafts, setDrafts] = useState({});
+  // Unsaved edits by language, then key: { en: { 'common.save': '…' } } (CU-B8).
+  const [draftsByLanguage, setDraftsByLanguage] = useState({});
+  const drafts = draftsByLanguage[language] || {};
   const [busyKey, setBusyKey] = useState(null);
   const requestIdRef = useRef(0);
 
@@ -74,6 +79,23 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
     }
   };
 
+  /** Set or drop (`value` undefined) the draft of `key` in the current language. */
+  const setDraft = (key, value) =>
+    setDraftsByLanguage(prev => {
+      const forLanguage = { ...prev[language] };
+      if (value === undefined) delete forLanguage[key];
+      else forLanguage[key] = value;
+      return { ...prev, [language]: forLanguage };
+    });
+  const discardDraft = key => setDraft(key, undefined);
+
+  // Languages other than the shown one that still hold unsaved edits (R6):
+  // their drafts are not on screen, so the selector and a note name them.
+  const unsavedCountOf = code => Object.keys(draftsByLanguage[code] || {}).length;
+  const otherLanguagesWithDrafts = languages.filter(
+    code => code !== language && unsavedCountOf(code) > 0
+  );
+
   const save = async (entry, value) => {
     setBusyKey(entry.key);
     try {
@@ -81,11 +103,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
         method: 'PUT',
         body: { path: entry.path, value }
       });
-      setDrafts(prev => {
-        const next = { ...prev };
-        delete next[entry.key];
-        return next;
-      });
+      discardDraft(entry.key);
       setError('');
       await load();
       await refreshClientTranslations();
@@ -131,7 +149,13 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
         >
           {languages.map(code => (
             <option key={code} value={code}>
-              {code}
+              {unsavedCountOf(code) > 0
+                ? t('admin.localization.overrides.languageUnsaved', {
+                    defaultValue: '{{language}} ({{unsaved}} unsaved)',
+                    language: code,
+                    unsaved: unsavedCountOf(code)
+                  })
+                : code}
             </option>
           ))}
         </select>
@@ -162,6 +186,17 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
           {t('admin.localization.overrides.changedOnly', 'Changed only')} ({data.changedCount})
         </label>
       </div>
+
+      <p role="status" className="mt-2 text-sm text-amber-700 dark:text-amber-300 empty:hidden">
+        {otherLanguagesWithDrafts.length > 0 &&
+          t('admin.localization.overrides.unsavedElsewhere', {
+            defaultValue:
+              'Unsaved edits in {{languages}}. Switch to that language and save them before you leave this page.',
+            languages: otherLanguagesWithDrafts
+              .map(code => `${code} (${unsavedCountOf(code)})`)
+              .join(', ')
+          })}
+      </p>
 
       {error && (
         <div
@@ -202,7 +237,10 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
                 rows={Math.min(4, Math.max(1, Math.ceil(value.length / 80)))}
                 value={value}
                 disabled={busy || entry.unknown}
-                onChange={e => setDrafts(prev => ({ ...prev, [entry.key]: e.target.value }))}
+                onChange={e =>
+                  // Typing the stored text back is no edit: it leaves no draft behind.
+                  setDraft(entry.key, e.target.value === current ? undefined : e.target.value)
+                }
                 aria-label={entry.key}
                 className={`${INPUT_CLASS} mt-1 block`}
               />
@@ -218,13 +256,7 @@ function TranslationOverridesEditor({ languages, initialLanguage }) {
                 {dirty && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setDrafts(prev => {
-                        const next = { ...prev };
-                        delete next[entry.key];
-                        return next;
-                      })
-                    }
+                    onClick={() => discardDraft(entry.key)}
                     className="rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 dark:border-gray-600 dark:text-gray-200"
                   >
                     {t('admin.localization.overrides.cancel', 'Cancel')}

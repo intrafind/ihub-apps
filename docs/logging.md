@@ -59,10 +59,23 @@ Logging is configured in `contents/config/platform.json`:
 
 ### Accessing Log Configuration
 
-1. Navigate to **Admin** → **System**
-2. Scroll to the **Logging Configuration** section
-3. View current log level and available levels
-4. Click a log level button to change the level immediately
+1. Navigate to **Admin** → **Observability** → **Logging**
+2. View current log level and available levels
+3. Click a log level button to change the level immediately
+
+### Component Filtering
+
+Under **Component Filtering**, tick **Enable component filtering** and select the components
+you want to trace, for example **Workflow Engine** while you look into a failing workflow.
+Only the selected components then write `warn`, `info` and `debug` lines.
+
+- **Errors are never filtered out.** An `error` line is written whichever component logs it,
+  so a filter set up for one component cannot hide the failure you are looking for.
+- While authentication debug logging is on, the authentication components are written too.
+- The list offers only components the server actually logs with. Untick **Enable component
+  filtering** (or **Deselect All**) when you are done: the filter stays until you switch it off.
+
+In `platform.json` this is `logging.components`: `{ "enabled": true, "filter": ["WorkflowEngine"] }`.
 
 ### Features
 
