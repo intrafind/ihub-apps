@@ -1,5 +1,16 @@
 # Fixes — Unreleased
 
+## Refreshing an OAuth Sign-in No Longer Holds Up the Server
+
+Each refresh of an OAuth or MCP client's sign-in hashed the new refresh token with bcrypt on the server's event loop,
+holding up every other request of the process for about 100–150 ms. Refresh tokens are long random values, so they are
+now stored as a SHA-256 hash, and the token store is read without blocking. Refresh tokens issued before the upgrade
+keep working and are converted on their next use. No action is needed after the upgrade.
+
+- **Rolling back:** an older version does not accept refresh tokens issued or rotated after the upgrade. After a
+  rollback, or while older and newer servers share one `contents/` folder, OAuth and MCP clients whose token was
+  refreshed in the meantime are signed out and must sign in again.
+
 ## A New MCP Integration Works at Once
 
 The worker that handled an admin install or change of an integration did not reload its MCP and A2A connections, so a
