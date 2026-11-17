@@ -27,13 +27,18 @@ import { createIndexCache, searchIndex } from './corpusSearch.js';
  * extraction the work is bounded by the text the project holds.
  *
  * `projects.search.threads` sets the threads per server process (default 2; each
- * cluster worker has its own); `0`, a thread that cannot be started, or a
- * shutdown runs the same code on the event loop as before.
+ * cluster worker has its own); `0`, a thread that cannot be started (or fails
+ * {@link MAX_LOAD_FAILURES} times in a row before answering), or a shutdown
+ * runs the same code on the event loop as before. Lowering the setting stops
+ * the threads above it once they are idle. A thread's heap is capped like an
+ * extraction thread's (`projects.extraction.memoryMb`).
  *
  * @module services/knowledge/searchPool
  */
 
 const WORKER_URL = new URL('./searchWorker.js', import.meta.url);
+/** Threads failing in a row before their first answer, after which searches run inline. */
+const MAX_LOAD_FAILURES = 3;
 
 /** The cache the event loop uses when no thread does the work. */
 const inlineCache = createIndexCache();
@@ -41,7 +46,10 @@ const inlineCache = createIndexCache();
 const slots = [];
 let nextJobId = 0;
 let override = null;
+let workerUrl = WORKER_URL;
 let closed = false;
+/** Threads that failed in a row without ever answering (a load failure, not a job's). */
+let loadFailures = 0;
 
 /** Search threads per process: the override, else `projects.search.threads`. */
 export function searchThreads() {
@@ -52,11 +60,14 @@ export function searchThreads() {
 /**
  * Replace the thread count (tests). Pass `null` to read platform.json again.
  *
- * @param {{threads: number}|null} settings
+ * @param {{threads: number, workerUrl?: URL}|null} settings - `workerUrl`
+ *   replaces the thread's entry (tests of a thread that fails to load)
  */
 export function configureSearchPool(settings) {
   override = settings ? settings.threads : null;
+  workerUrl = settings?.workerUrl || WORKER_URL;
   closed = false;
+  loadFailures = 0;
 }
 
 /** The thread a project's indexes live on. */
@@ -71,9 +82,12 @@ function failure(message) {
 }
 
 function spawn(index) {
-  const worker = new Worker(WORKER_URL);
-  const slot = { worker, pending: new Map(), size: { entries: 0, chars: 0 } };
+  const { memoryMb } = projectSettings(configCache.getPlatform?.() || {}).extraction;
+  const worker = new Worker(workerUrl, { resourceLimits: { maxOldGenerationSizeMb: memoryMb } });
+  const slot = { worker, pending: new Map(), size: { entries: 0, chars: 0 }, answered: false };
   worker.on('message', ({ id, ok, result, error }) => {
+    slot.answered = true;
+    loadFailures = 0;
     const job = slot.pending.get(id);
     if (!job) return;
     slot.pending.delete(id);
@@ -82,17 +96,27 @@ function spawn(index) {
     slot.size = { entries: result.entries, chars: result.chars };
     job.resolve(result);
   });
-  worker.on('error', error =>
+  worker.on('error', error => {
+    const memory = error?.code === 'ERR_WORKER_OUT_OF_MEMORY';
+    if (!memory && !slot.answered && slots[index] === slot) {
+      loadFailures += 1;
+      if (loadFailures === MAX_LOAD_FAILURES) {
+        logger.warn('The search threads keep failing to start; searching on the event loop', {
+          component: 'searchPool',
+          error: error?.message || String(error)
+        });
+      }
+    }
     retire(
       index,
       slot,
       failure(
-        error?.code === 'ERR_WORKER_OUT_OF_MEMORY'
+        memory
           ? 'The search thread ran out of memory.'
           : `The search thread failed: ${error?.message || error}`
       )
-    )
-  );
+    );
+  });
   worker.on('exit', code =>
     retire(index, slot, failure(`The search thread exited (code ${code}).`))
   );
@@ -134,7 +158,8 @@ function post(slot, payload) {
  * @throws {Error} `code: 'SEARCH_THREAD_FAILED'` when the thread died with the job
  */
 export async function searchProjectIndex(projectId, request) {
-  const threads = closed ? 0 : searchThreads();
+  const threads = closed || loadFailures >= MAX_LOAD_FAILURES ? 0 : searchThreads();
+  stopThreadsAbove(threads);
   if (threads > 0) {
     const index = slotIndexFor(projectId, threads);
     let slot = slots[index];
@@ -160,6 +185,15 @@ export async function searchProjectIndex(projectId, request) {
     }
   }
   return searchIndex(inlineCache, request);
+}
+
+/** Stop the idle threads at or above `threads` (the setting was lowered). */
+function stopThreadsAbove(threads) {
+  for (let index = threads; index < slots.length; index += 1) {
+    const slot = slots[index];
+    if (slot && slot.pending.size === 0)
+      retire(index, slot, failure('The search thread is no longer used.'));
+  }
 }
 
 /** Forget a project's cached indexes (or all of them) here and on every thread. */

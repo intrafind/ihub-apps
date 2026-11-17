@@ -100,6 +100,33 @@ describe('search pool', () => {
     assert.equal((await searchProjectIndex('prj_b', request('prj_b:v1'))).miss, true);
   });
 
+  it('searches inline after threads keep failing to load', async () => {
+    const broken = new URL('data:text/javascript,throw new Error("load failed")');
+    await shutdownSearchPool();
+    configureSearchPool({ threads: 1, workerUrl: broken });
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await assert.rejects(
+        searchProjectIndex('prj_d', request('prj_d:v1', { docs: DOCS })),
+        error => error.code === 'SEARCH_THREAD_FAILED'
+      );
+    }
+    const found = await searchProjectIndex('prj_d', request('prj_d:v1', { docs: DOCS }));
+    assert.ok(found.hits.length > 0, 'the search ran on the event loop');
+    assert.equal(searchPoolStats().threads, 0, 'no thread was started');
+    configureSearchPool({ threads: 2 });
+  });
+
+  it('stops the threads above a lowered thread count', async () => {
+    configureSearchPool({ threads: 4 });
+    for (const id of ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8']) {
+      await searchProjectIndex(id, request(`${id}:v1`, { docs: DOCS.slice(0, 1) }));
+    }
+    assert.ok(searchPoolStats().threads > 1);
+    configureSearchPool({ threads: 1 });
+    await searchProjectIndex('p1', request('p1:v1', { docs: DOCS.slice(0, 1) }));
+    assert.equal(searchPoolStats().threads, 1);
+  });
+
   it('searches inline once the pool is shut down', async () => {
     configureSearchPool({ threads: 2 });
     await searchProjectIndex('prj_c', request('prj_c:v1', { docs: DOCS }));
