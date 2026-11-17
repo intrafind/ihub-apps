@@ -17,7 +17,7 @@ import {
   KIND_DEFAULT_LABELS,
   KIND_DEFAULT_HELP
 } from '../utils/oauthClientKind';
-import SecretRevealDialog from '../../../shared/components/SecretRevealDialog';
+import { showSecretReveal, useSecretReveal } from '../state/secretReveal';
 import { useConfirmAction } from '../hooks/useConfirmAction';
 
 function AdminOAuthClientsPage() {
@@ -38,8 +38,9 @@ function AdminOAuthClientsPage() {
   const [selectedClientForToken, setSelectedClientForToken] = useState(null);
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState(null);
-  // A rotated secret, shown once in the SecretRevealDialog and dropped on Done.
-  const [revealedSecret, setRevealedSecret] = useState(null);
+  // A rotated secret waiting to be acknowledged. It lives above the routes
+  // (AdminSecretRevealHost), so leaving the page mid-request cannot lose it.
+  const revealedSecret = useSecretReveal();
   // Rotation runs inside its confirmation, which stays open and busy until the
   // server answered: the new secret cannot get lost behind a closed dialog.
   const { requestConfirm: requestRotateConfirm, dialogProps: rotateDialogProps } =
@@ -373,7 +374,18 @@ function AdminOAuthClientsPage() {
             method: 'POST'
           }
         );
-        setRevealedSecret({ name, secret: response.data.clientSecret });
+        showSecretReveal({
+          title: t('admin.auth.oauth.secretReveal.title', {
+            name,
+            defaultValue: 'New secret for "{{name}}"'
+          }),
+          description: t(
+            'admin.auth.oauth.rotateSecretSuccess',
+            'Secret rotated successfully. Save the new secret now.'
+          ),
+          fieldLabel: t('admin.auth.oauth.clientSecret', 'Client Secret'),
+          secret: response.data.clientSecret
+        });
         void loadClients();
       }
     });
@@ -1040,20 +1052,6 @@ function AdminOAuthClientsPage() {
         onDeny={() => setConfirmDialog(null)}
       />
       <ConfirmDialog {...rotateDialogProps} />
-      <SecretRevealDialog
-        isOpen={Boolean(revealedSecret)}
-        title={t('admin.auth.oauth.secretReveal.title', {
-          name: revealedSecret?.name || '',
-          defaultValue: 'New secret for "{{name}}"'
-        })}
-        description={t(
-          'admin.auth.oauth.rotateSecretSuccess',
-          'Secret rotated successfully. Save the new secret now.'
-        )}
-        fieldLabel={t('admin.auth.oauth.clientSecret', 'Client Secret')}
-        secret={revealedSecret?.secret || ''}
-        onDone={() => setRevealedSecret(null)}
-      />
     </div>
   );
 }

@@ -33,6 +33,37 @@ jest.mock('react-i18next', () => {
 
 const AdminOAuthClientsPage =
   require('../../../client/src/features/admin/pages/AdminOAuthClientsPage').default;
+const AdminSecretRevealHost =
+  require('../../../client/src/features/admin/components/AdminSecretRevealHost').default;
+const { clearSecretReveal } = require('../../../client/src/features/admin/state/secretReveal');
+const { useState } = require('react');
+
+/** The page plus the reveal host the admin layout mounts above the routes. */
+function Admin({ showPage = true }) {
+  return (
+    <>
+      {showPage && <AdminOAuthClientsPage />}
+      <AdminSecretRevealHost />
+    </>
+  );
+}
+
+/** Lets a test leave the page (unmount it) while the layout stays. */
+function LeavableAdmin() {
+  const [onPage, setOnPage] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setOnPage(false)}>
+        leave page
+      </button>
+      <Admin showPage={onPage} />
+    </>
+  );
+}
+
+afterEach(() => {
+  act(() => clearSecretReveal());
+});
 
 const SECRET = 'example-rotated-secret-value';
 
@@ -53,7 +84,7 @@ test('rotating a secret asks with the client named and reveals the secret in a d
   });
   const alertSpy = jest.spyOn(window, 'alert').mockImplementation(() => {});
 
-  render(<AdminOAuthClientsPage />);
+  render(<Admin />);
   const rotate = await screen.findByTitle('Rotate Secret');
   fireEvent.click(rotate);
 
@@ -94,7 +125,7 @@ describe('rotation runs inside its confirmation', () => {
   it('stays open and busy until the POST answered, then reveals the secret', async () => {
     let answer;
     mockApi(() => new Promise(resolve => (answer = resolve)));
-    render(<AdminOAuthClientsPage />);
+    render(<Admin />);
     fireEvent.click(await screen.findByTitle('Rotate Secret'));
     await act(async () => {
       fireEvent.click(
@@ -120,13 +151,34 @@ describe('rotation runs inside its confirmation', () => {
     expect(within(reveal).getByRole('textbox', { name: 'Client Secret' })).toHaveValue(SECRET);
   });
 
+  it('still reveals the secret when the page was left before the response', async () => {
+    let answer;
+    mockApi(() => new Promise(resolve => (answer = resolve)));
+    render(<LeavableAdmin />);
+    fireEvent.click(await screen.findByTitle('Rotate Secret'));
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Rotate secret' })
+      );
+    });
+    // Browser Back while the POST runs: the page unmounts, the layout stays.
+    fireEvent.click(screen.getByRole('button', { name: 'leave page' }));
+    expect(screen.queryByTitle('Rotate Secret')).not.toBeInTheDocument();
+
+    await act(async () => {
+      answer({ data: { clientSecret: SECRET } });
+    });
+    const reveal = screen.getByRole('dialog', { name: 'New secret for "Reporting bot"' });
+    expect(within(reveal).getByRole('textbox', { name: 'Client Secret' })).toHaveValue(SECRET);
+  });
+
   it('shows a failure in the confirmation', async () => {
     mockApi(async () => {
       const error = new Error('Request failed');
       error.response = { data: { detail: 'Rotation is not allowed for this client.' } };
       throw error;
     });
-    render(<AdminOAuthClientsPage />);
+    render(<Admin />);
     fireEvent.click(await screen.findByTitle('Rotate Secret'));
     await act(async () => {
       fireEvent.click(

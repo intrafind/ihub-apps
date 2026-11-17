@@ -14,6 +14,7 @@ import { buildPath } from '../../../utils/runtimeBasePath';
 import SkipLink from '../../../shared/components/SkipLink';
 import AdminSidebar from './AdminSidebar';
 import AdminCommandPalette from './AdminCommandPalette';
+import AdminSecretRevealHost from './AdminSecretRevealHost';
 import AdminShortcutsModal from './AdminShortcutsModal';
 import AdminStorageAlert from './AdminStorageAlert';
 import AdminDemoAccountsAlert from './AdminDemoAccountsAlert';
@@ -111,6 +112,7 @@ function AdminLayoutInner() {
       </div>
 
       <AdminCommandPalette />
+      <AdminSecretRevealHost />
       <AdminShortcutsModal isOpen={showCheatsheet} onClose={() => setShowCheatsheet(false)} />
     </SidebarProvider>
   );
