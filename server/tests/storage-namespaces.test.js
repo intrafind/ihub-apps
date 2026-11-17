@@ -35,6 +35,7 @@ import {
   USER_PROMPT_SHARES_NAMESPACE,
   PROMPT_PREFERENCES_NAMESPACE
 } from '../services/prompts/UserPromptRepository.js';
+import { AI_ACKNOWLEDGEMENTS_NAMESPACE } from '../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 import {
   USER_SKILLS_NAMESPACE,
   USER_SKILL_VERSIONS_NAMESPACE,
@@ -82,6 +83,7 @@ describe('storage namespaces', () => {
       ['UserPromptRepository.USER_PROMPT_VERSIONS_NAMESPACE', USER_PROMPT_VERSIONS_NAMESPACE],
       ['UserPromptRepository.USER_PROMPT_SHARES_NAMESPACE', USER_PROMPT_SHARES_NAMESPACE],
       ['UserPromptRepository.PROMPT_PREFERENCES_NAMESPACE', PROMPT_PREFERENCES_NAMESPACE],
+      ['AiAcknowledgementRepository.AI_ACKNOWLEDGEMENTS_NAMESPACE', AI_ACKNOWLEDGEMENTS_NAMESPACE],
       ['UserSkillRepository.USER_SKILLS_NAMESPACE', USER_SKILLS_NAMESPACE],
       ['UserSkillRepository.USER_SKILL_VERSIONS_NAMESPACE', USER_SKILL_VERSIONS_NAMESPACE],
       ['UserSkillRepository.USER_SKILL_SHARES_NAMESPACE', USER_SKILL_SHARES_NAMESPACE],

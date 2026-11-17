@@ -149,6 +149,13 @@ export const RUNTIME_NAMESPACES = Object.freeze({
   /** A user's prompt favorites and recents, one document per user. */
   promptPreferences: 'prompt-preferences',
   /**
+   * A user's AI-use acknowledgements (EU AI Act), one small document per
+   * user: the confirmed versions and when an admin last removed them. Kept
+   * out of users.json so a confirmation writes one tiny document instead of
+   * the whole user file, and every worker and pod reads the same state.
+   */
+  aiAcknowledgements: 'ai-acknowledgements',
+  /**
    * Skills users write themselves, one document per skill (instructions and
    * reference files inline), filed under the owner so "my skills" is an index
    * read. Global skills stay folders under `contents/skills/`.

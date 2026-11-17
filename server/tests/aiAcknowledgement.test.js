@@ -5,11 +5,18 @@
  * AI-use acknowledgement (#3326): the versioning rule, the 428 guard, the user
  * and admin routes, the guest cookie, the CSV and concurrent writes.
  *
- * Native-ESM jest. users.json and platform.json live in one in-memory "store".
+ * Native-ESM jest. users.json and platform.json live in one in-memory "store";
+ * the acknowledgement documents in a real filesystem storage provider over a
+ * scratch directory. A second provider over the same directory is "another
+ * worker" (or pod): it shares nothing with the first but the files.
  */
-import { jest, describe, test, expect, beforeEach } from '@jest/globals';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { jest, describe, test, expect, beforeEach, afterAll } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+import { FilesystemStorageProvider } from '../storage/providers/filesystem/index.js';
 
 // `versions` stands in for the file's inode/mtime/size: bumped by every write.
 const store = { files: {}, audits: [], versions: {} };
@@ -77,6 +84,37 @@ jest.unstable_mockModule('../middleware/authRequired.js', () => ({
   authRequired: (req, res, next) => next()
 }));
 
+// The storage provider the code under test sees; `useWorker` swaps it.
+const storage = { current: null, providers: [], dir: null };
+jest.unstable_mockModule('../storage/bootstrap.js', () => ({
+  StorageBootstrapError: class StorageBootstrapError extends Error {},
+  bootstrapStorage: async () => storage.current,
+  getStorage: () => storage.current,
+  requireStorage: () => storage.current,
+  isStorageReady: () => storage.current !== null,
+  shutdownStorageBootstrap: async () => undefined,
+  readFacet: (provider, facet) => provider?.[facet] || null
+}));
+
+/** A provider over the shared scratch directory: one "worker". */
+async function openWorker() {
+  const provider = new FilesystemStorageProvider({ baseDir: storage.dir, flushIntervalMs: 25 });
+  await provider.initialize();
+  storage.providers.push(provider);
+  return provider;
+}
+
+/** An empty store and one worker on it. */
+async function freshStore() {
+  storage.dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-ai-ack-'));
+  storage.current = await openWorker();
+  return storage.current;
+}
+
+afterAll(async () => {
+  for (const provider of storage.providers) await provider.shutdown().catch(() => {});
+});
+
 const service = await import('../services/aiAcknowledgement/aiAcknowledgementService.js');
 const guest = await import('../services/aiAcknowledgement/guestAcknowledgement.js');
 const { aiAcknowledgementRequired } = await import('../middleware/aiAcknowledgementRequired.js');
@@ -84,8 +122,9 @@ const { default: registerUserRoutes } = await import('../routes/aiAcknowledgemen
 const { default: registerAdminRoutes } = await import('../routes/admin/aiAcknowledgements.js');
 const { default: errorHandler } = await import('../middleware/errorHandler.js');
 const { ServiceError } = await import('../utils/ServiceError.js');
-const { recordAiAcknowledgement, clearAiAcknowledgements, loadUsersFresh } =
-  await import('../utils/userManager.js');
+const { loadUsersFresh, updateUsersFile } = await import('../utils/userManager.js');
+const { getAiAcknowledgementRepository, AI_ACKNOWLEDGEMENTS_NAMESPACE } =
+  await import('../services/aiAcknowledgement/AiAcknowledgementRepository.js');
 const { setGuestId, guestOwnerId } = await import('../services/chat/chatOwner.js');
 const { mergeSettingsForSave, describeSettingsChange } = service;
 
@@ -93,7 +132,14 @@ const USERS = 'config/users.json';
 const PLATFORM = 'config/platform.json';
 const GUEST_ID = 'a'.repeat(64);
 
-function seed({ settings = {}, users } = {}) {
+const repo = () => getAiAcknowledgementRepository();
+/** The stored entries of a user, or undefined without a document. */
+const entriesOf = async id => (await repo().get(id))?.aiAcknowledgements;
+
+const BOB_ENTRY = { version: 1, textHash: 'sha256:aa', acknowledgedAt: '2026-01-01T00:00:00.000Z' };
+
+async function seed({ settings = {}, users, acknowledgements = { bob: [BOB_ENTRY] } } = {}) {
+  await freshStore();
   store.audits = [];
   store.files[PLATFORM] = {
     aiAcknowledgement: {
@@ -109,17 +155,14 @@ function seed({ settings = {}, users } = {}) {
   store.files[USERS] = {
     users: users ?? {
       alice: { username: 'alice', name: 'Alice', authMethods: ['local'], active: true },
-      bob: {
-        username: 'bob',
-        authMethods: ['oidc'],
-        aiAcknowledgements: [
-          { version: 1, textHash: 'sha256:aa', acknowledgedAt: '2026-01-01T00:00:00.000Z' }
-        ]
-      },
+      bob: { username: 'bob', authMethods: ['oidc'] },
       '=evil': { username: '=cmd', name: '=HYPERLINK("x")', authMethods: ['local'] }
     },
     metadata: { version: '2.0.0' }
   };
+  for (const [id, entries] of Object.entries(acknowledgements)) {
+    for (const entry of entries) await repo().record(id, entry);
+  }
 }
 
 function buildApp({ chat = true } = {}) {
@@ -236,12 +279,12 @@ describe('service rules', () => {
   });
 
   test('summary and CSV rows follow the status filter; formulas are neutralised', async () => {
-    expect(service.summary()).toMatchObject({ acknowledged: 1, pending: 2, total: 3 });
-    expect(service.buildCsvRows('acknowledged').map(r => r[0])).toEqual(['bob']);
-    expect(service.buildCsvRows('pending').map(r => r[0])).toEqual(['alice', '=evil']);
-    expect(service.buildCsvRows(undefined)).toHaveLength(3);
+    expect(await service.summary()).toMatchObject({ acknowledged: 1, pending: 2, total: 3 });
+    expect((await service.buildCsvRows('acknowledged')).map(r => r[0])).toEqual(['bob']);
+    expect((await service.buildCsvRows('pending')).map(r => r[0])).toEqual(['alice', '=evil']);
+    expect(await service.buildCsvRows(undefined)).toHaveLength(3);
     const { buildCsv } = await import('../utils/csv.js');
-    const csv = buildCsv([...service.CSV_HEADERS], service.buildCsvRows('pending'));
+    const csv = buildCsv([...service.CSV_HEADERS], await service.buildCsvRows('pending'));
     expect(csv).toContain("'=cmd");
     expect(csv).not.toMatch(/(^|,)=cmd/m);
     expect(csv.split('\n')[0]).not.toContain('email');
@@ -359,51 +402,83 @@ describe('428 guard', () => {
     expect((await post(app, JSON.stringify({ id: 'svc', clientId: 'c' }))).status).toBe(200);
   });
 
-  test('another worker wrote the acknowledgement a moment ago: the store is re-read', async () => {
-    const app = buildApp();
-    // The cached copy is stale, the store (readJsonStrict) is current: both read the same
-    // object here, so write through a user the cache has not seen by dropping it from the cache view.
-    const fresh = structuredClone(store.files[USERS]);
-    fresh.users.alice.aiAcknowledgements = [
-      { version: 1, textHash: 'sha256:x', acknowledgedAt: 'now' }
-    ];
-    const original = store.files[USERS];
-    // loadUsers() sees `original` (no ack); loadUsersFresh() replaces the cache entry with `fresh`.
-    const { default: configStore } = await import('../services/config/ConfigStore.js');
-    const spy = jest.spyOn(configStore, 'readJsonStrict').mockResolvedValue(fresh);
-    expect(original.users.alice.aiAcknowledgements).toBeUndefined();
-    expect((await post(app, asUser('alice'))).status).toBe(200);
-    spy.mockRestore();
+  test('a confirmation on another worker is seen by the guard here, without a cookie', async () => {
+    const workerA = storage.current;
+    const workerB = await openWorker();
+    const appA = buildApp();
+    const appB = buildApp();
+    expect((await post(appA, asUser('alice'))).status).toBe(428);
+
+    storage.current = workerB;
+    const hash = service.textHash('Use AI responsibly.');
+    const confirm = await request(appB)
+      .post('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('alice'))
+      .send({ version: 1, textHash: hash, language: 'en' });
+    expect(confirm.status).toBe(201);
+
+    // Back on worker A, with no cookie: the shared store decides.
+    storage.current = workerA;
+    expect((await post(appA, asUser('alice'))).status).toBe(200);
   });
 
-  describe('signed cookie of a user whose cached record says "not yet"', () => {
+  test('the guard and GET /me never read users.json', async () => {
+    const { default: configStore } = await import('../services/config/ConfigStore.js');
+    const strict = jest.spyOn(configStore, 'readJsonStrict');
+    const plain = jest.spyOn(configStore, 'readJson');
+    try {
+      const app = buildApp();
+      expect((await post(app, asUser('alice'))).status).toBe(428);
+      expect((await post(app, asUser('bob'))).status).toBe(200);
+      await request(app).get('/api/eu-ai-act/acknowledgements/me').set('x-user', asUser('alice'));
+      expect(strict).not.toHaveBeenCalled();
+      expect(plain).not.toHaveBeenCalled();
+    } finally {
+      strict.mockRestore();
+      plain.mockRestore();
+    }
+  });
+
+  describe('signed cookie of a user whose document says "not yet"', () => {
     const cookieFor = (id, issuedAt, version = 1) =>
       `${guest.ACK_COOKIE}=${guest.signAcknowledgement(`user:${id}`, version, issuedAt)}`;
+    const admin = req => req.set('x-admin', '1');
 
-    test('passes without re-reading users.json', async () => {
-      const { default: configStore } = await import('../services/config/ConfigStore.js');
-      const spy = jest.spyOn(configStore, 'readJsonStrict');
-      try {
-        const app = buildApp();
-        expect((await post(app, asUser('alice'), cookieFor('alice'))).status).toBe(200);
-        expect(spy).not.toHaveBeenCalled();
-        // Bound to the user: alice's cookie does not let another user through.
-        expect((await post(app, asUser('=evil'), cookieFor('alice'))).status).toBe(428);
-      } finally {
-        spy.mockRestore();
-      }
+    test('passes, and is bound to its user', async () => {
+      const app = buildApp();
+      expect((await post(app, asUser('alice'), cookieFor('alice'))).status).toBe(200);
+      expect((await post(app, asUser('=evil'), cookieFor('alice'))).status).toBe(428);
     });
 
-    test('a cookie issued before a per-user removal is refused, a newer one passes', async () => {
+    test('a per-user removal revokes an older cookie on every worker; a newer one passes', async () => {
       const app = buildApp();
       const before = cookieFor('bob', Date.now() - 5000);
       expect((await post(app, asUser('bob'), before)).status).toBe(200);
-      await clearAiAcknowledgements('bob', service.usersFilePath());
-      expect(typeof store.files[USERS].users.bob.aiAcknowledgementsClearedAt).toBe('string');
+      const workerA = storage.current;
+      storage.current = await openWorker();
+      expect(
+        (await admin(request(buildApp()).delete('/api/admin/eu-ai-act/users/bob/acknowledgements')))
+          .status
+      ).toBe(204);
+      storage.current = workerA;
+      expect(typeof (await repo().get('bob')).aiAcknowledgementsClearedAt).toBe('string');
+      expect(await entriesOf('bob')).toEqual([]);
       expect((await post(app, asUser('bob'), before)).status).toBe(428);
       expect((await post(app, asUser('bob'), cookieFor('bob', Date.now() + 1000))).status).toBe(
         200
       );
+    });
+
+    test('"Remove all" revokes every user cookie and entry with one settings write', async () => {
+      const app = buildApp();
+      const cookie = cookieFor('alice', Date.now() - 5000);
+      expect((await post(app, asUser('alice'), cookie)).status).toBe(200);
+      expect((await post(app, asUser('bob'))).status).toBe(200);
+      expect(
+        (await admin(request(buildApp()).delete('/api/admin/eu-ai-act/acknowledgements'))).status
+      ).toBe(204);
+      expect((await post(app, asUser('alice'), cookie)).status).toBe(428);
+      expect((await post(app, asUser('bob'))).status).toBe(428);
     });
 
     test('after a version bump the old cookie is refused', async () => {
@@ -415,6 +490,17 @@ describe('428 guard', () => {
       expect((await post(app, asUser('alice'), cookieFor('alice', Date.now(), 2))).status).toBe(
         200
       );
+    });
+
+    test('a store that cannot be read leaves the cookie as the proof', async () => {
+      const app = buildApp();
+      const spy = jest.spyOn(storage.current.documents, 'get').mockRejectedValue(new Error('down'));
+      try {
+        expect((await post(app, asUser('bob'))).status).toBe(428);
+        expect((await post(app, asUser('bob'), cookieFor('bob'))).status).toBe(200);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
@@ -449,23 +535,12 @@ describe('user routes', () => {
     expect(res.body.history).toEqual([]);
   });
 
-  test('GET re-reads users.json for a "not yet" only when enforcement is on', async () => {
-    const { default: configStore } = await import('../services/config/ConfigStore.js');
-    const spy = jest.spyOn(configStore, 'readJsonStrict');
-    const app = buildApp();
-    const me = () =>
-      request(app).get('/api/eu-ai-act/acknowledgements/me').set('x-user', asUser('alice'));
-    try {
-      store.files[PLATFORM].aiAcknowledgement.enforce = false;
-      for (let i = 0; i < 3; i++) expect((await me()).body.acknowledged).toBe(false);
-      expect(spy).not.toHaveBeenCalled();
-
-      store.files[PLATFORM].aiAcknowledgement.enforce = true;
-      expect((await me()).body.acknowledged).toBe(false);
-      expect(spy).toHaveBeenCalledTimes(1);
-    } finally {
-      spy.mockRestore();
-    }
+  test('GET shows the current entries as history', async () => {
+    const res = await request(buildApp())
+      .get('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('bob'));
+    expect(res.body.acknowledged).toBe(true);
+    expect(res.body.history).toEqual([BOB_ENTRY]);
   });
 
   test('GET with the feature off carries no text', async () => {
@@ -494,13 +569,14 @@ describe('user routes', () => {
     expect(first.status).toBe(201);
     expect(first.headers.location).toMatch(/\/api\/eu-ai-act\/acknowledgements\/me$/);
     expect(first.body).toMatchObject({ version: 1, textHash: body.textHash, language: 'en' });
-    expect(store.files[USERS].users.alice.aiAcknowledgements).toHaveLength(1);
+    expect(await entriesOf('alice')).toHaveLength(1);
+    expect(store.files[USERS].users.alice.aiAcknowledgements).toBeUndefined();
     const second = await request(app)
       .post('/api/eu-ai-act/acknowledgements/me')
       .set('x-user', asUser('alice'))
       .send(body);
     expect(second.status).toBe(200);
-    expect(store.files[USERS].users.alice.aiAcknowledgements).toHaveLength(1);
+    expect(await entriesOf('alice')).toHaveLength(1);
     const creates = store.audits.filter(
       a => a.resource === 'aiAcknowledgement' && a.action === 'create'
     );
@@ -531,7 +607,7 @@ describe('user routes', () => {
       .set('x-user', asUser('alice'))
       .send({ version: 7, textHash: hash, language: 'en' });
     expect(wrongVersion.status).toBe(409);
-    expect(store.files[USERS].users.alice.aiAcknowledgements).toBeUndefined();
+    expect(await repo().get('alice')).toBeNull();
   });
 
   test('POST with the feature off answers 403 FEATURE_DISABLED; a bad body 400', async () => {
@@ -599,8 +675,8 @@ describe('first-party delegated clients (Outlook, extension, Nextcloud)', () => 
   const post = (app, user) =>
     request(app).post('/api/apps/x/chat/c1').set('x-user', JSON.stringify(user)).send({});
 
-  beforeEach(() => {
-    seed();
+  beforeEach(async () => {
+    await seed();
     store.files[PLATFORM].officeIntegration = { oauthClientId: OFFICE };
     store.files[PLATFORM].browserExtension = { oauthClientId: EXTENSION };
     store.files[PLATFORM].nextcloudEmbed = { oauthClientId: NEXTCLOUD };
@@ -672,7 +748,7 @@ describe('first-party delegated clients (Outlook, extension, Nextcloud)', () => 
       .send({ version: 1, textHash: notice.body.textHash, language: 'en' });
     expect(confirm.status).toBe(201);
     expect(confirm.body.client).toBe('office');
-    expect(store.files[USERS].users.alice.aiAcknowledgements[0]).toMatchObject({
+    expect((await entriesOf('alice'))[0]).toMatchObject({
       version: 1,
       client: 'office'
     });
@@ -753,7 +829,7 @@ describe('admin routes', () => {
     expect(results.map(r => r.body.requiredVersion).sort()).toEqual([2, 3, 4]);
     expect(store.audits.filter(a => a.action === 'update')).toHaveLength(3);
     // Everyone is outdated now.
-    expect(service.summary().acknowledged).toBe(0);
+    expect((await service.summary()).acknowledged).toBe(0);
   });
 
   test('remove one: 204, entries gone, audit written; unknown user 404', async () => {
@@ -761,11 +837,12 @@ describe('admin routes', () => {
     expect(
       (await admin(request(app).delete('/api/admin/eu-ai-act/users/bob/acknowledgements'))).status
     ).toBe(204);
-    expect(store.files[USERS].users.bob.aiAcknowledgements).toBeUndefined();
+    expect(await entriesOf('bob')).toEqual([]);
     expect(store.audits.at(-1)).toMatchObject({
       action: 'delete',
       resource: 'aiAcknowledgement',
-      resourceId: 'bob'
+      resourceId: 'bob',
+      details: { entries: 1 }
     });
     expect(
       (await admin(request(app).delete('/api/admin/eu-ai-act/users/nobody/acknowledgements')))
@@ -773,18 +850,41 @@ describe('admin routes', () => {
     ).toBe(404);
   });
 
-  test('remove all clears every record and sets resetAt, so old guest cookies die', async () => {
+  test('remove all sets resetAt, so old guest cookies die, and deletes the entries after', async () => {
     const app = buildApp({ chat: false });
     const old = guest.signAcknowledgement(`guest:${GUEST_ID}`, 1, Date.now() - 5000);
+    const usersBefore = JSON.stringify(store.files[USERS]);
     expect((await admin(request(app).delete('/api/admin/eu-ai-act/acknowledgements'))).status).toBe(
       204
     );
-    expect(Object.values(store.files[USERS].users).some(u => u.aiAcknowledgements)).toBe(false);
+    // One settings write; users.json is not touched.
+    expect(JSON.stringify(store.files[USERS])).toBe(usersBefore);
     const { resetAt } = store.files[PLATFORM].aiAcknowledgement;
     expect(typeof resetAt).toBe('string');
     expect(guest.verifyAcknowledgement(old, `guest:${GUEST_ID}`, service.getSettings())).toBeNull();
     expect(store.audits.at(-1)).toMatchObject({ action: 'delete', resourceId: '*' });
     expect(store.audits.at(-1).details).toMatchObject({ users: 1, entries: 1 });
+    // Hidden at once, deleted in the background.
+    expect(await service.summary()).toMatchObject({ acknowledged: 0 });
+    for (let i = 0; i < 50 && (await entriesOf('bob'))?.length; i += 1) {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    expect(await entriesOf('bob')).toEqual([]);
+  });
+
+  test('after "Remove all" a user confirms the same version again and passes', async () => {
+    const app = buildApp();
+    await admin(request(app).delete('/api/admin/eu-ai-act/acknowledgements'));
+    // Let the clock move past resetAt before the new confirmation.
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const confirm = await request(app)
+      .post('/api/eu-ai-act/acknowledgements/me')
+      .set('x-user', asUser('bob'))
+      .send({ version: 1, textHash: service.textHash('Use AI responsibly.'), language: 'en' });
+    expect(confirm.status).toBe(201);
+    expect(
+      (await request(app).post('/api/apps/x/chat/y').set('x-user', asUser('bob')).send({})).status
+    ).toBe(200);
   });
 
   test('export: CSV, filter by status, audited; a bad status is 400', async () => {
@@ -807,45 +907,52 @@ describe('admin routes', () => {
   });
 });
 
-describe('userManager helpers', () => {
-  beforeEach(() => seed({ users: { u0: { username: 'u0' } } }));
+describe('acknowledgement documents', () => {
+  beforeEach(() => seed({ users: { u0: { username: 'u0' } }, acknowledgements: {} }));
+  const entry = { version: 1, textHash: 'sha256:x', acknowledgedAt: new Date().toISOString() };
 
-  test('50 parallel acknowledgements for different users lose none', async () => {
-    const users = {};
-    for (let i = 0; i < 50; i += 1) users[`u${i}`] = { username: `u${i}` };
-    seed({ users });
-    const file = service.usersFilePath();
-    await Promise.all(
-      Object.keys(users).map(id =>
-        recordAiAcknowledgement(
-          id,
-          { version: 1, textHash: 'sha256:x', acknowledgedAt: new Date().toISOString() },
-          file
-        )
-      )
-    );
-    const stored = store.files[USERS].users;
-    expect(Object.values(stored).every(u => u.aiAcknowledgements?.length === 1)).toBe(true);
+  test('50 parallel acknowledgements for different users lose none, users.json untouched', async () => {
+    const usersBefore = JSON.stringify(store.files[USERS]);
+    const ids = Array.from({ length: 50 }, (_, i) => `u${i}`);
+    await Promise.all(ids.map(id => repo().record(id, entry)));
+    for (const id of ids) expect(await entriesOf(id)).toHaveLength(1);
+    expect(JSON.stringify(store.files[USERS])).toBe(usersBefore);
   });
 
-  test('one entry per version; unknown users are reported; clear counts what it removed', async () => {
-    const file = service.usersFilePath();
-    const entry = { version: 1, textHash: 'sha256:x', acknowledgedAt: 'now' };
-    expect((await recordAiAcknowledgement('u0', entry, file)).recorded).toBe(true);
-    expect((await recordAiAcknowledgement('u0', entry, file)).recorded).toBe(false);
-    expect((await recordAiAcknowledgement('ghost', entry, file)).entry).toBeNull();
-    await recordAiAcknowledgement('u0', { ...entry, version: 2 }, file);
-    expect(await clearAiAcknowledgements('u0', file)).toEqual({
-      users: 1,
-      entries: 2,
-      found: true
+  test('the same user confirming twice at once is recorded once', async () => {
+    const results = await Promise.all([repo().record('u0', entry), repo().record('u0', entry)]);
+    expect(results.filter(r => r.recorded)).toHaveLength(1);
+    expect(await entriesOf('u0')).toHaveLength(1);
+  });
+
+  test('one entry per version; clear counts what it removed and stamps the time', async () => {
+    expect((await repo().record('u0', entry)).recorded).toBe(true);
+    expect((await repo().record('u0', entry)).recorded).toBe(false);
+    await repo().record('u0', { ...entry, version: 2 });
+    expect(await repo().clear('u0', { now: '2026-05-05T00:00:00.000Z' })).toEqual({ entries: 2 });
+    expect(await repo().get('u0')).toMatchObject({
+      userId: 'u0',
+      aiAcknowledgements: [],
+      aiAcknowledgementsClearedAt: '2026-05-05T00:00:00.000Z'
     });
-    expect((await clearAiAcknowledgements('ghost', file)).found).toBe(false);
-    expect(await clearAiAcknowledgements(null, file)).toEqual({
-      users: 0,
-      entries: 0,
-      found: true
-    });
+  });
+
+  test('summary and CSV list the namespace once instead of reading per user', async () => {
+    const ids = Array.from({ length: 30 }, (_, i) => `u${i}`);
+    const users = Object.fromEntries(ids.map(id => [id, { username: id }]));
+    await seed({ users, acknowledgements: { u1: [entry], u2: [entry] } });
+    const documents = storage.current.documents;
+    const get = jest.spyOn(documents, 'get');
+    const list = jest.spyOn(documents, 'list');
+    try {
+      expect(await service.summary()).toMatchObject({ acknowledged: 2, total: 30 });
+      expect(get).not.toHaveBeenCalled();
+      expect(list).toHaveBeenCalledTimes(1);
+      expect(list.mock.calls[0][0]).toBe(AI_ACKNOWLEDGEMENTS_NAMESPACE);
+    } finally {
+      get.mockRestore();
+      list.mockRestore();
+    }
   });
 
   test('a fresh read skips an unchanged users.json and re-reads a changed one', async () => {
@@ -863,10 +970,12 @@ describe('userManager helpers', () => {
       expect(spy).toHaveBeenCalledTimes(2);
 
       // This worker's own write leaves the cached copy current: no read after it.
-      const entry = { version: 1, textHash: 'sha256:x', acknowledgedAt: 'now' };
-      await recordAiAcknowledgement('u0', entry, file);
+      await updateUsersFile(file, usersConfig => {
+        usersConfig.users.u0.name = 'U Zero';
+        return true;
+      });
       const reads = spy.mock.calls.length;
-      expect((await loadUsersFresh(file)).users.u0.aiAcknowledgements).toHaveLength(1);
+      expect((await loadUsersFresh(file)).users.u0.name).toBe('U Zero');
       expect(spy).toHaveBeenCalledTimes(reads);
 
       // A shared volume can keep the token after another host's write: past
@@ -886,11 +995,12 @@ describe('userManager helpers', () => {
     }
   });
 
-  test('deleting a user removes their acknowledgements with the record', () => {
-    // The entries live on the user object: removing the record removes them.
-    seed();
-    delete store.files[USERS].users.bob;
-    expect(service.buildCsvRows(undefined).map(r => r[0])).not.toContain('bob');
+  test('deleting a user removes their acknowledgement document', async () => {
+    await repo().record('u0', entry);
+    const { USER_CLEANUP_STEPS } = await import('../services/userDeletion.js');
+    const step = USER_CLEANUP_STEPS.find(item => item.name === 'aiAcknowledgements');
+    expect(await step.run('u0')).toEqual({ removed: 1 });
+    expect(await repo().get('u0')).toBeNull();
   });
 });
 
@@ -904,8 +1014,8 @@ describe('EU AI Act master switch off (step 9)', () => {
     return req;
   };
   const actor = { id: 'admin', name: 'Anna Admin' };
-  beforeEach(() => {
-    seed();
+  beforeEach(async () => {
+    await seed();
     store.files[FILE] = {
       version: 1,
       enabled: false,
@@ -954,7 +1064,7 @@ describe('EU AI Act master switch off (step 9)', () => {
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('FEATURE_DISABLED');
     }
-    expect(store.files[USERS].users.bob.aiAcknowledgements).toHaveLength(1);
+    expect(await entriesOf('bob')).toHaveLength(1);
     expect(store.files[PLATFORM].aiAcknowledgement.requiredVersion).toBe(1);
     expect(
       (await admin(request(app).get('/api/admin/eu-ai-act/acknowledgements/_export'))).status

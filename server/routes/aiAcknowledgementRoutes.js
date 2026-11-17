@@ -8,8 +8,10 @@
  *   whether they did. Per user and language, so never cached.
  * - `POST /api/eu-ai-act/acknowledgements/me`: confirm the current version.
  *
- * Works for the anonymous principal too: a guest's confirmation is a signed
- * cookie plus an audit entry (there is no users.json record).
+ * A signed-in user's confirmation is stored in their acknowledgement document
+ * (`AiAcknowledgementRepository`) and also set as the signed cookie. Works for
+ * the anonymous principal too: a guest's confirmation is the cookie plus an
+ * audit entry.
  */
 import { z } from 'zod';
 import configCache from '../configCache.js';
@@ -22,14 +24,14 @@ import { sendCreated } from '../utils/created.js';
 import validate from '../validators/validate.js';
 import { logAudit } from '../services/AuditLogService.js';
 import { attachGuestIdentity, guestIdOf, guestOwnerId } from '../services/chat/chatOwner.js';
-import { loadUsers, recordAiAcknowledgement } from '../utils/userManager.js';
 import {
+  currentEntries,
   firstPartyClientKind,
   getSettings,
   resolveText,
-  textHash,
-  usersFilePath
+  textHash
 } from '../services/aiAcknowledgement/aiAcknowledgementService.js';
+import { getAiAcknowledgementRepository } from '../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 import { evaluateAcknowledgement } from '../middleware/aiAcknowledgementRequired.js';
 import {
   hasValidAcknowledgementCookie,
@@ -116,11 +118,12 @@ export default function registerAiAcknowledgementRoutes(app) {
       requestedLanguage(req, platform),
       platform.defaultLanguage
     );
+    const evaluation = user ? await evaluateAcknowledgement(req, settings) : null;
     const body = {
       enabled: true,
       enforce: settings.enforce,
       requiredVersion: settings.requiredVersion,
-      acknowledged: user ? (await evaluateAcknowledgement(req, settings)).acknowledged : false,
+      acknowledged: evaluation ? evaluation.acknowledged : false,
       text,
       textHash: textHash(text),
       language,
@@ -128,12 +131,8 @@ export default function registerAiAcknowledgementRoutes(app) {
       // Where "Open iHub in its own tab" goes (a frame that drops the guest cookie).
       appUrl: buildPublicBaseUrl(req)
     };
-    const record =
-      user?.id && user.id !== 'anonymous'
-        ? loadUsers(usersFilePath(platform)).users?.[user.id]
-        : null;
-    if (record) {
-      body.history = Array.isArray(record.aiAcknowledgements) ? record.aiAcknowledgements : [];
+    if (user?.id && user.id !== 'anonymous') {
+      body.history = currentEntries(evaluation?.record, settings);
     }
     return res.json(body);
   });
@@ -208,10 +207,10 @@ export default function registerAiAcknowledgementRoutes(app) {
         });
 
       if (isUser) {
-        const { recorded, entry: stored } = await recordAiAcknowledgement(
+        const { recorded, entry: stored } = await getAiAcknowledgementRepository().record(
           user.id,
           entry,
-          usersFilePath(platform)
+          { resetAt: settings.resetAt }
         );
         if (stored) {
           if (!recorded) return res.status(200).json(stored);
@@ -219,7 +218,7 @@ export default function registerAiAcknowledgementRoutes(app) {
           setAcknowledgementCookie(req, res, version);
           return sendCreated(res, ME_PATH, entry);
         }
-        // A principal without a record (its record vanished) falls through to the cookie.
+        // Without a store to write to, the cookie is all there is.
       }
 
       if (hasValidAcknowledgementCookie(req, settings)) {

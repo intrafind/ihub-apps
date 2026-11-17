@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * The acknowledgement of a principal that has no users.json record: an
- * anonymous guest (or, rarely, a signed-in user whose record is gone).
+ * The signed acknowledgement cookie. For an anonymous guest it is the
+ * acknowledgement; for a signed-in user it backs up their acknowledgement
+ * document (see `AiAcknowledgementRepository`) while the store cannot be read.
  *
  * It is remembered in a signed, HttpOnly cookie `ihubAiAck`:
  * `v<version>.<issuedAtMs>.<hmac>`. The HMAC covers the subject, the version and

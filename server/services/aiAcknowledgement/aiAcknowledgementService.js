@@ -16,6 +16,7 @@ import { isEuAiActEnabled } from '../euAiAct/conformity.js';
 import crypto from 'node:crypto';
 import configCache from '../../configCache.js';
 import { loadUsers } from '../../utils/userManager.js';
+import { getAiAcknowledgementRepository } from './AiAcknowledgementRepository.js';
 import { localUsersFile } from '../../utils/contentsPath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { LANGUAGE_CODE_PATTERN } from '../../../shared/validationPatterns.js';
@@ -100,21 +101,38 @@ export function textHash(text) {
   return `sha256:${crypto.createHash('sha256').update(String(text), 'utf8').digest('hex')}`;
 }
 
-/** @returns {Object[]} The user's entries, newest version last. */
-function entriesOf(user) {
-  return Array.isArray(user?.aiAcknowledgements)
-    ? user.aiAcknowledgements.filter(entry => Number.isInteger(entry?.version))
+/** @returns {Object[]} The record's entries, newest version last. */
+function entriesOf(record) {
+  return Array.isArray(record?.aiAcknowledgements)
+    ? record.aiAcknowledgements.filter(entry => Number.isInteger(entry?.version))
     : [];
 }
 
 /**
- * The newest entry of a user, or null.
+ * The entries of a record that "Remove all" left standing: those confirmed at
+ * or after `resetAt`. An older one is removed (a background pass deletes it,
+ * and so does the user's next confirmation); until then it is treated as gone.
  *
- * @param {Object} user - users.json record
+ * @param {Object|null} record - A user's acknowledgement document (see
+ *   `AiAcknowledgementRepository`), or anything with `aiAcknowledgements`
+ * @param {{resetAt?: string|null}} [settings]
+ * @returns {Object[]}
+ */
+export function currentEntries(record, settings = {}) {
+  const reset = settings.resetAt ? Date.parse(settings.resetAt) : NaN;
+  if (!Number.isFinite(reset)) return entriesOf(record);
+  return entriesOf(record).filter(entry => !(Date.parse(entry.acknowledgedAt) < reset));
+}
+
+/**
+ * The newest current entry of a record, or null.
+ *
+ * @param {Object|null} record - See {@link currentEntries}
+ * @param {{resetAt?: string|null}} [settings]
  * @returns {Object|null}
  */
-export function latestEntry(user) {
-  return entriesOf(user).reduce(
+export function latestEntry(record, settings) {
+  return currentEntries(record, settings).reduce(
     (best, entry) => (!best || entry.version > best.version ? entry : best),
     null
   );
@@ -123,31 +141,24 @@ export function latestEntry(user) {
 /**
  * Whether a user's acknowledgement counts for the current policy version.
  *
- * @param {Object} user - users.json record
+ * @param {Object|null} record - See {@link currentEntries}
  * @param {{requiredVersion: number, resetAt?: string|null}} settings
  * @returns {boolean}
  */
-export function isAcknowledged(user, settings) {
-  const reset = settings.resetAt ? Date.parse(settings.resetAt) : NaN;
-  return entriesOf(user).some(
-    entry =>
-      entry.version >= settings.requiredVersion &&
-      // "Remove all" sets `resetAt`. An entry from before it does not count even if a stale
-      // whole-file write of users.json brought it back.
-      (!Number.isFinite(reset) || !(Date.parse(entry.acknowledgedAt) < reset))
-  );
+export function isAcknowledged(record, settings) {
+  return currentEntries(record, settings).some(entry => entry.version >= settings.requiredVersion);
 }
 
 /**
  * `acknowledged`, `outdated` (only older versions) or `never`.
  *
- * @param {Object} user - users.json record
- * @param {{requiredVersion: number}} settings
+ * @param {Object|null} record - See {@link currentEntries}
+ * @param {{requiredVersion: number, resetAt?: string|null}} settings
  * @returns {'acknowledged'|'outdated'|'never'}
  */
-export function statusOfUser(user, settings) {
-  if (isAcknowledged(user, settings)) return 'acknowledged';
-  return entriesOf(user).length > 0 ? 'outdated' : 'never';
+export function statusOfUser(record, settings) {
+  if (isAcknowledged(record, settings)) return 'acknowledged';
+  return currentEntries(record, settings).length > 0 ? 'outdated' : 'never';
 }
 
 /**
@@ -203,18 +214,20 @@ export function isMachinePrincipal(user, platform = configCache.getPlatform() ||
 
 /**
  * Counts for the admin overview: users with a current acknowledgement,
- * the rest, and the total. Anonymous guests are not counted (no record).
+ * the rest, and the total. Users come from users.json, their state from the
+ * acknowledgement documents (one listing). Anonymous guests are not counted.
  *
  * @param {Object} [options]
  * @param {Object} [options.platform]
- * @returns {{enabled: boolean, enforce: boolean, requiredVersion: number, acknowledged: number, pending: number, total: number}}
+ * @returns {Promise<{enabled: boolean, enforce: boolean, requiredVersion: number, acknowledged: number, pending: number, total: number}>}
  */
-export function summary({ platform = configCache.getPlatform() || {} } = {}) {
+export async function summary({ platform = configCache.getPlatform() || {} } = {}) {
   const settings = getSettings(platform);
   const users = loadUsers(usersFilePath(platform)).users || {};
+  const records = await getAiAcknowledgementRepository().listAll();
   let acknowledged = 0;
   const ids = Object.keys(users);
-  for (const id of ids) if (isAcknowledged(users[id], settings)) acknowledged += 1;
+  for (const id of ids) if (isAcknowledged(records.get(id)?.data, settings)) acknowledged += 1;
   return {
     enabled: settings.enabled,
     configuredEnabled: settings.configuredEnabled,
@@ -241,24 +254,27 @@ export const CSV_HEADERS = Object.freeze([
 ]);
 
 /**
- * The rows of the CSV export, every user of users.json (filtered by `status`):
+ * The rows of the CSV export, every user of users.json (filtered by `status`),
+ * with the state of their acknowledgement document:
  * `acknowledged` keeps users with a current acknowledgement, `pending` everyone
  * else, no filter keeps all.
  *
  * @param {'acknowledged'|'pending'|undefined} status
  * @param {Object} [options]
  * @param {Object} [options.platform]
- * @returns {Array<Array<*>>}
+ * @returns {Promise<Array<Array<*>>>}
  */
-export function buildCsvRows(status, { platform = configCache.getPlatform() || {} } = {}) {
+export async function buildCsvRows(status, { platform = configCache.getPlatform() || {} } = {}) {
   const settings = getSettings(platform);
   const users = loadUsers(usersFilePath(platform)).users || {};
+  const records = await getAiAcknowledgementRepository().listAll();
   const rows = [];
   for (const [id, user] of Object.entries(users)) {
-    const state = statusOfUser(user, settings);
+    const record = records.get(id)?.data;
+    const state = statusOfUser(record, settings);
     if (status === 'acknowledged' && state !== 'acknowledged') continue;
     if (status === 'pending' && state === 'acknowledged') continue;
-    const entry = latestEntry(user);
+    const entry = latestEntry(record, settings);
     rows.push([
       id,
       user.username ?? '',

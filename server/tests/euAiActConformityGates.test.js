@@ -138,7 +138,7 @@ describe('with the switch off every entry point is a silent no-op', () => {
     expect(result.status).toBe('not_configured');
   });
 
-  test('acknowledgement: the guard calls next() without a users read; configuredEnabled stays', async () => {
+  test('acknowledgement: the guard calls next() without a store read; configuredEnabled stays', async () => {
     const platform = { aiAcknowledgement: { enabled: true, enforce: true } };
     expect(getSettings(platform)).toMatchObject({ enabled: true, configuredEnabled: true });
     setSwitch(false);
@@ -155,7 +155,7 @@ describe('with the switch off every entry point is a silent no-op', () => {
       platform,
       models: [],
       probe,
-      acknowledgementSummary: () => ({
+      acknowledgementSummary: async () => ({
         enabled: false,
         configuredEnabled: true,
         enforce: true,

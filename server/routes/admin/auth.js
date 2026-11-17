@@ -18,6 +18,11 @@ import { deleteLoginTokens } from '../../services/integrations/iFinderTokenProvi
 import { clearFailedLogins, lockoutKey } from '../../utils/loginLockout.js';
 import { getDemoAccountStatus } from '../../utils/demoAccounts.js';
 import { parseUsageLimitsInput } from '../../validators/common.js';
+import {
+  currentEntries,
+  getSettings as getAcknowledgementSettings
+} from '../../services/aiAcknowledgement/aiAcknowledgementService.js';
+import { getAiAcknowledgementRepository } from '../../services/aiAcknowledgement/AiAcknowledgementRepository.js';
 
 /** The local user database, as a path relative to `contents/`. */
 const USERS_FILE = 'config/users.json';
@@ -262,9 +267,29 @@ export default function registerAdminAuthRoutes(app) {
       usersData = { users: {}, metadata: {} };
     }
 
+    // AI-use acknowledgements live in their own documents (one listing for all users).
+    const acknowledgementSettings = getAcknowledgementSettings();
+    const acknowledgements = await getAiAcknowledgementRepository().listAll();
     const sanitizedUsers = Object.fromEntries(
       Object.entries(usersData.users || {}).map(([id, user]) => {
-        const { passwordHash, ...userWithoutPasswordHash } = user;
+        // users.json no longer holds acknowledgements; a leftover copy there is not shown.
+        const {
+          passwordHash,
+          aiAcknowledgements: _legacyEntries,
+          aiAcknowledgementsClearedAt: _legacyClearedAt,
+          ...userWithoutPasswordHash
+        } = user;
+        const record = acknowledgements.get(id)?.data;
+        if (record) {
+          userWithoutPasswordHash.aiAcknowledgements = currentEntries(
+            record,
+            acknowledgementSettings
+          );
+          if (record.aiAcknowledgementsClearedAt) {
+            userWithoutPasswordHash.aiAcknowledgementsClearedAt =
+              record.aiAcknowledgementsClearedAt;
+          }
+        }
         return [id, userWithoutPasswordHash];
       })
     );
