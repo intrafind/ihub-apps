@@ -6,6 +6,7 @@
  * provider (#1036, spec 1 §8, §9): the documents, the member and chat
  * markers, the blob cascade, quotas and the item rules.
  */
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -194,6 +195,24 @@ describe('user projects', () => {
       error => error instanceof StorageError && error.code === ACCESS_CHANGED
     );
     assert.equal((await repo.get(project.id)).name, 'Guarded');
+  });
+
+  it('keeps every item of parallel writes, without a fencing counter', async () => {
+    const project = await repo.createUser({ owner: ADA, content: { name: 'Busy' } });
+    const ids = Array.from({ length: 20 }, () => mintItemId());
+    await Promise.all(
+      ids.map(id =>
+        repo.mutate(project.id, stored => {
+          stored.items = [...(stored.items || []), { id, kind: 'note', name: id }];
+          return stored;
+        })
+      )
+    );
+    const stored = (await repo.get(project.id)).items.map(item => item.id);
+    assert.deepEqual(stored.sort(), [...ids].sort());
+    const digest = createHash('sha256').update(`project:${project.id}`).digest('hex').slice(0, 40);
+    const files = await fs.readdir(getStorage().locks.lockDir).catch(() => []);
+    assert.equal(files.includes(`${digest}.fence`), false);
   });
 
   it('transfers ownership and drops the new owner from the members', async () => {
