@@ -366,14 +366,14 @@
         "untitled": "das Dokument",
         "onlyDocumentApps": "Nur Apps anzeigen, die dieses Dokument verwenden können",
         "dismiss": "Schließen",
-        "unavailable": "Das System, aus dem dieses Dokument stammt, steht dir nicht zur Verfügung.",
-        "noAccess": "Du hast keinen Zugriff auf dieses Dokument.",
+        "unavailable": "Das System, aus dem dieses Dokument stammt, steht Ihnen nicht zur Verfügung.",
+        "noAccess": "Sie haben keinen Zugriff auf dieses Dokument.",
         "notFound": "Dieses Dokument wurde nicht gefunden. Es wurde möglicherweise verschoben oder gelöscht.",
         "noApp": "Keine App kann Dokumente aus diesem System verwenden. Bitte eine Administratorin oder einen Administrator, die Integration zu einer App hinzuzufügen.",
-        "continueWithout": "Du kannst trotzdem eine App wählen und ohne das Dokument starten."
+        "continueWithout": "Sie können trotzdem eine App wählen und ohne das Dokument starten."
       },
       "nextcloudSelection": {
-        "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt.",
+        "description": "Wählen Sie unten eine App, um den Chat zu starten — Ihre ausgewählten Dateien werden automatisch angehängt.",
         "title_one": "{{count}} Datei in Nextcloud ausgewählt",
         "title_other": "{{count}} Dateien in Nextcloud ausgewählt"
       },
@@ -447,11 +447,11 @@
       "invalidUrl": "Für diese App ist keine gültige Webadresse hinterlegt. Nur http- und https-Links können geöffnet werden."
     },
     "appChat": {
-      "messagePlaceholder": "Gib deine Nachricht hier ein...",
+      "messagePlaceholder": "Geben Sie Ihre Nachricht hier ein...",
       "thinking": "Denkt nach...",
       "loadingChat": "Chat wird geladen...",
       "clear": "Chat löschen",
-      "confirmClear": "Möchtest du den Chat wirklich löschen?",
+      "confirmClear": "Möchten Sie den Chat wirklich löschen?",
       "editApp": "App bearbeiten",
       "export": {
         "dialogTitle": "Unterhaltung exportieren",
@@ -511,7 +511,7 @@
       "starterPromptsTitle": "Start-Prompts",
       "starterPromptsSubtitle": "Wählen Sie einen Prompt unten aus, um schnell zu beginnen",
       "noMessagesTitle": "Noch keine Nachrichten",
-      "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!",
+      "noMessagesSubtitle": "Beginnen Sie eine Unterhaltung, indem Sie eine Nachricht senden!",
       "modelSelector": {
         "hint": {
           "alertTitle": "Wichtiger Hinweis",
@@ -667,7 +667,7 @@
     "showThoughts": "Denkprozess anzeigen"
   },
   "chatMessage": {
-    "user": "Du",
+    "user": "Sie",
     "assistant": "Assistent",
     "system": "System",
     "copy": "Kopieren",
@@ -1997,7 +1997,7 @@
       "exportConversation": "Konversation exportieren",
       "thinking": "Denkt nach...",
       "responseComplete": "Antwort vollständig",
-      "placeholder": "Gib deine Nachricht hier ein...",
+      "placeholder": "Geben Sie Ihre Nachricht hier ein...",
       "conversationHistory": "Konversationsverlauf",
       "modelSelector": {
         "label": "Modell",
@@ -2498,13 +2498,13 @@
       "disabled": "Nextcloud-Embed deaktiviert",
       "viewClient": "OAuth-Client ansehen",
       "embedUrlTitle": "Embed-URL",
-      "embedUrlDesc": "Das mitgelieferte Nextcloud-App-Skelett (nextcloud-app/) zeigt bereits auf diese URL; das Feld dient zur Referenz und zum Kopieren, wenn du eine eigene Nextcloud-Integration konfigurierst.",
+      "embedUrlDesc": "Das mitgelieferte Nextcloud-App-Skelett (nextcloud-app/) zeigt bereits auf diese URL; das Feld dient zur Referenz und zum Kopieren, wenn Sie eine eigene Nextcloud-Integration konfigurieren.",
       "copy": "Kopieren",
       "originsTitle": "Erlaubte Nextcloud-Ursprünge",
       "originsDesc": "Nur diese Nextcloud-Ursprünge dürfen iHub einbetten oder Auswahl-Nachrichten via postMessage senden. Wird sowohl für CSP frame-ancestors als auch für die postMessage-Origin-Prüfung verwendet.",
       "addOrigin": "Hinzufügen",
       "originInvalid": "Gib einen gültigen http(s)-Ursprung an, z. B. https://cloud.beispiel.de",
-      "noOrigins": "Noch keine Ursprünge hinzugefügt. Das Einbetten von iHub aus einer Nextcloud-Instanz wird blockiert, bis du deren Ursprung hier ergänzt.",
+      "noOrigins": "Noch keine Ursprünge hinzugefügt. Das Einbetten von iHub aus einer Nextcloud-Instanz wird blockiert, bis Sie deren Ursprung hier ergänzen.",
       "displayTitle": "Anzeigeeinstellungen",
       "displayName": "Anzeigename",
       "descriptionField": "Beschreibung",
@@ -2525,7 +2525,7 @@
       "toggleError": "Nextcloud-Embed konnte nicht aktualisiert werden",
       "setupTitle": "Bereitstellungsanleitung",
       "step1": "Richte unter Admin → Integrationen → Nextcloud einen Nextcloud-Cloud-Speicher-Anbieter ein (dieser stellt OAuth + WebDAV bereit).",
-      "step2": "Füge deinen Nextcloud-Ursprung (z. B. https://cloud.beispiel.de) oben hinzu, damit die Embed-Seite iframe und postMessage akzeptiert.",
+      "step2": "Fügen Sie Ihren Nextcloud-Ursprung (z. B. https://cloud.beispiel.de) oben hinzu, damit die Embed-Seite iframe und postMessage akzeptiert.",
       "step3": "Baue und installiere das mitgelieferte Nextcloud-App-Skelett (siehe nextcloud-app/README.md im iHub-Repo).",
       "step4": "Nutzer klicken in Nextcloud Files mit der rechten Maustaste auf eine Datei → „Mit iHub chatten“ — das Embed öffnet sich mit den vorausgewählten Dokumenten."
     },
@@ -4730,7 +4730,7 @@
         "overrideDataFlow": "Datenfluss überschreiben",
         "asDeclaredPlain": "Wie angegeben",
         "actionApproval": "Freigabe für diese Aktion",
-        "effectHelp": "Eine Überschreibung ist deine Entscheidung und gilt als vertrauenswürdig: Sie kann eine Freigabe strenger machen oder, bei einem bestätigten Lesen, lockerer. Es gilt die strengste Einstellung aus Plattform-Standard, Integration, dieser Aktion und App.",
+        "effectHelp": "Eine Überschreibung ist Ihre Entscheidung und gilt als vertrauenswürdig: Sie kann eine Freigabe strenger machen oder, bei einem bestätigten Lesen, lockerer. Es gilt die strengste Einstellung aus Plattform-Standard, Integration, dieser Aktion und App.",
         "howToUse": "So wird sie genutzt",
         "guidance": "Hinweise für das Modell",
         "noGuidance": "Keine Hinweise.",
@@ -4760,10 +4760,10 @@
           "internal": "Bleibt in iHub",
           "external": "Verlässt iHub"
         },
-        "intro": "Das ist eine einzelne Aktion der Integration: etwas, das das KI-Modell von diesem System ausführen lassen kann. Hier legst du fest, was das Modell darüber erfährt und wie iHub sie behandelt (lesend oder schreibend, wohin die Daten gehen, ob eine Person freigeben muss). Außerdem kannst du sie einmal ausführen, um zu prüfen, ob sie funktioniert.",
+        "intro": "Das ist eine einzelne Aktion der Integration: etwas, das das KI-Modell von diesem System ausführen lassen kann. Hier legen Sie fest, was das Modell darüber erfährt und wie iHub sie behandelt (lesend oder schreibend, wohin die Daten gehen, ob eine Person freigeben muss). Außerdem können Sie sie einmal ausführen, um zu prüfen, ob sie funktioniert.",
         "badgesLabel": "Aktuelle Einstellungen:",
         "whatLead": "Was das KI-Modell über diese Aktion erfährt. Anhand von Beschreibung und Parametern entscheidet es, wann es sie aufruft und was es übergibt.",
-        "effectLead": "Wie iHub einen Aufruf dieser Aktion behandelt. Diese Werte entscheiden, ob vorher eine Person freigeben muss. Die Angabe des Herstellers gilt nicht von selbst als vertrauenswürdig, deine Überschreibungen schon.",
+        "effectLead": "Wie iHub einen Aufruf dieser Aktion behandelt. Diese Werte entscheiden, ob vorher eine Person freigeben muss. Die Angabe des Herstellers gilt nicht von selbst als vertrauenswürdig, Ihre Überschreibungen schon.",
         "overridesTitle": "Diese Einstellungen ändern",
         "sideEffectHelp": "Was ein Aufruf im angebundenen System verändert: nichts (lesend), etwas (schreibend) oder er löscht Daten.",
         "dataFlowHelp": "Ob das Ergebnis in iHub bleibt oder an einen externen Dienst weitergegeben wird.",
@@ -4794,7 +4794,7 @@
         }
       },
       "instructions": {
-        "sourceAdmin": "Dein Text",
+        "sourceAdmin": "Ihr Text",
         "sourceDefinition": "Aus der Integrationsdefinition",
         "sourceServer": "Vom Server gesendet",
         "title": "Hinweise für das Modell",
@@ -5103,7 +5103,7 @@
       "retentionDays": "{{days}} Tage aufbewahren",
       "retentionForever": "Dauerhaft aufbewahren",
       "retentionDisabled": "Aufräumen deaktiviert",
-      "retentionHint": "Konfiguriert in platform.json → audit. Bearbeitung unter Plattform → Erweitert.",
+      "retentionHint": "Wird in platform.json festgelegt (audit.retentionDays, audit.cleanupEnabled). Noch keine Admin-Seite bearbeitet diese Werte.",
       "runCleanup": "Jetzt aufräumen",
       "cleanupRunning": "Läuft…",
       "cleanupRemoved": "{{count}} Dateien entfernt",
@@ -5561,7 +5561,10 @@
         "detectedVariables": "Im Text erkannt",
         "describeVariable": "Beschreiben",
         "variableDescribed": "beschrieben",
-        "variablesDescPlaceholders": "Platzhalter wie {{name}} im Prompt-Text werden beim Verwenden des Prompts abgefragt. Beschreiben Sie sie hier, um Bezeichnung, Typ, Standardwert oder Optionen festzulegen. {{content}} markiert, wo der eigene Text des Nutzers hingehört; globale Variablen wie {{user_name}} werden automatisch ausgefüllt."
+        "variablesDescPlaceholders": "Platzhalter wie {{name}} im Prompt-Text werden beim Verwenden des Prompts abgefragt. Beschreiben Sie sie hier, um Bezeichnung, Typ, Standardwert oder Optionen festzulegen. {{content}} markiert, wo der eigene Text des Nutzers hingehört; globale Variablen wie {{user_name}} werden automatisch ausgefüllt.",
+        "appId": "Öffnet in App",
+        "noApp": "Standard-Chat-App",
+        "appIdDesc": "Die Prompt-Bibliothek öffnet diesen Prompt in dieser App und zeigt ihn dort zuerst an. Wer den Prompt sieht, legt dieses Feld nicht fest."
       },
       "userPrompts": {
         "allowEveryone": "Alle angemeldeten Nutzer",
@@ -5598,6 +5601,9 @@
         "truncated": "Es werden nur die ersten Prompts angezeigt",
         "updated": "Zuletzt geändert",
         "userCount": "{{count}} Nutzer"
+      },
+      "details": {
+        "linkedApp": "Öffnet in App"
       }
     },
     "skills": {
@@ -5740,6 +5746,17 @@
       },
       "users": {
         "active": "{{count}} aktiv (30 T.)"
+      },
+      "gettingStarted": "Erste Schritte",
+      "setup": {
+        "installed": "Plattform installiert",
+        "adminAccount": "Administratorkonto bereit",
+        "addProvider": "LLM-Anbieter konfigurieren",
+        "createApp": "Erste App erstellen",
+        "configureAuth": "Identitätsanbieter verbinden (optional)",
+        "shippedPasswordHint": "Das Konto „admin“ meldet sich noch mit dem ausgelieferten Passwort an. Ändern Sie es.",
+        "dismiss": "Ausblenden",
+        "dismissLabel": "Einrichtungs-Checkliste ausblenden"
       }
     },
     "copilotAgent": {
@@ -7279,6 +7296,13 @@
       "relatedNoticeText": "– der Hinweis im leeren Chat und der Wortlaut der Leitplanke",
       "relatedAck": "KI-Bestätigung",
       "relatedAckText": "– die Bestätigung vor der ersten Nachricht, beim Benutzer gespeichert"
+    },
+    "pages": {
+      "fields": {
+        "allowedGroups": "Erlaubte Gruppen",
+        "allowedGroupsPlaceholder": "admins, users oder *",
+        "allowedGroupsHelp": "Gruppen-IDs, durch Kommas getrennt, genau wie unter Admin → Gruppen. Leer lassen oder * eingeben, um allen den Zugriff zu erlauben. Nur Mitglieder einer aufgeführten Gruppe sehen die Seite; eine ID, die es nicht gibt, passt auf niemanden."
+      }
     }
   },
   "cloudStorage": {
@@ -7349,10 +7373,10 @@
   },
   "feedback": {
     "ratingHeading": "Bewerte diese Antwort",
-    "commentPlaceholder": "Erzähle uns mehr über deine Bewertung (optional)",
+    "commentPlaceholder": "Erzählen Sie uns mehr über Ihre Bewertung (optional)",
     "rated": "Bewertet",
     "sendFeedback": "Feedback senden",
-    "thankYou": "Danke für dein Feedback!",
+    "thankYou": "Danke für Ihr Feedback!",
     "sending": "Wird gesendet..."
   },
   "auth": {

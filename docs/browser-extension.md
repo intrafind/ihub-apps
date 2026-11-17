@@ -104,19 +104,11 @@ Before starting the rollout, confirm:
 
 ---
 
-## Step 1 — Enable the `integrations` feature flag
+## Step 1 — Check that integrations are on
 
-In **Admin → Platform → Features**, or directly in `contents/config/platform.json`:
-
-```json
-{
-  "features": {
-    "integrations": true
-  }
-}
-```
-
-Save and (if you edited the file directly) restart the server.
+The **Integrations** feature is on by default. If someone switched it off, turn it on in
+**Admin → Platform → Features** (`integrations` in `contents/config/features.json`); no restart is
+needed.
 
 ---
 
@@ -415,9 +407,9 @@ click **Save**, and try **Sign in** again.
 ### `404 Browser extension integration is not enabled`
 
 Either the `integrations` feature flag is off (Step 1), or you haven't
-clicked **Enable** on the admin page (Step 2). Check
-`contents/config/platform.json` — `features.integrations` and
-`browserExtension.enabled` must both be `true`.
+clicked **Enable** on the admin page (Step 2). `integrations` in
+`contents/config/features.json` and `browserExtension.enabled` in
+`contents/config/platform.json` must both be `true`.
 
 ### Sign-in window opens, user authenticates, but page shows *"This account is not enabled for Browser Extension"*
 

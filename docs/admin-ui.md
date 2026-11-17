@@ -10,7 +10,7 @@ adminPage: /admin
 The iHub Apps admin UI is the primary interface for managing your platform. This guide covers navigation, all major sections, and productivity features like keyboard shortcuts and the command palette.
 
 > [!TIP]
-> You do not need to edit JSON files directly to configure iHub Apps. Everything described in this guide can be done through the admin UI at `/admin`.
+> Most settings can be changed in the admin UI at `/admin`. Some can only be set in the configuration files; this guide says so where it applies, and [Platform configuration](platform.md) lists them.
 
 ## Accessing the Admin UI
 
@@ -29,13 +29,13 @@ The admin UI uses a **collapsible left-rail sidebar** with these sections. Click
 | **AI Workspace** | Apps, Models (tabs **Models** and **Providers**), Prompts, Skills, Projects, Workflows, Agents (Agent Factory), Marketplace |
 | **Access & Identity** | Users, Groups, Authentication, OAuth |
 | **Integrations** | Integrations (tabs **Installed**, **Catalog**, **Requests** and **Inbound**, plus **Add manually** for the integration builder: iFinder, iAssistant, web search, people directories, storage providers, MCP servers, remote A2A agents, catalog integrations; Outlook add-in, browser extension, Microsoft 365 Copilot, Nextcloud embed, MCP gateway), MCP gateway, Credentials |
-| **Customization** | UI Customization, Localization, Pages, Short Links |
+| **Customization** | UI Customization, Disclaimer, Localization, Pages, Document templates, Short Links |
 | **Observability** | Usage Reports, Feedback, Logging, Telemetry, System Resources, Chat History, Scheduled Tasks, Audit Log |
-| **Platform** | Features, Voice Input, Security, Backup & Restore, Updates, Advanced |
+| **Platform** | Features, Voice Input, Security, EU AI Act, Backup & Restore, Updates, Advanced |
 
 Pages for features that are switched off (for example Marketplace, Workflows, Agents or Scheduled Tasks, see [Features](#features)) are not listed.
 
-**Collapsing the sidebar:** Click the chevron at the bottom of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
+**Collapsing the sidebar:** Click the double chevron next to the logo at the top of the sidebar to collapse it to icon-only mode. Hover over any icon to see its label. The collapse state is remembered across sessions.
 
 **Mobile:** On small screens the sidebar is hidden by default. Tap the hamburger menu (☰) in the top bar to open the sidebar as a drawer.
 
@@ -63,7 +63,6 @@ Press `g` followed by a letter within 300ms:
 
 | Shortcut | Action |
 |----------|--------|
-| `n` | Create new item (on any list page) |
 | `?` | Show the full shortcut cheatsheet |
 | `Cmd+K` / `Ctrl+K` | Open the command palette |
 | `Cmd+S` / `Ctrl+S` | Save the app you are editing and stay in the editor |
@@ -99,7 +98,7 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 **Stat cards:**
 - **Apps** — total configured apps
 - **Users** — registered users (with active sessions in the last 30 days shown as subtitle)
-- **Conversations** — total chat sessions recorded
+- **Model calls** — model calls in the last 30 days
 - **Version** — current iHub Apps version; shows an update badge if a newer version is available
 
 **Platform status panel:** Shows enabled/total counts for providers, models and projects, the installed integrations (with a notice when newer definitions are available), plus active authentication methods, OAuth server status, and the free space on the fullest disk iHub writes to.
@@ -108,7 +107,14 @@ The dashboard (`/admin`) gives a real-time snapshot of your platform.
 
 **Quick actions:** One-click shortcuts to the most common admin tasks.
 
-**Setup checklist:** Shown on fresh installations to guide initial configuration. Disappears once the checklist steps are complete.
+**Getting started checklist:** Lists the first setup steps with links to their pages. A step is ticked only when the server confirms it:
+
+- **Admin account ready** — the `admin` account no longer signs in with its shipped password (or local sign-in is off). While it still does, the step says so and links to **Users**.
+- **Configure an LLM provider** — at least one enabled model has an API key the server can use, or needs none (a local server).
+- **Create your first app** — listed only when there are no apps at all.
+- **Connect identity provider (optional)** — an OIDC or LDAP provider, or proxy sign-in, is set up. Optional steps do not keep the checklist on screen.
+
+The checklist is shown while a required step is open, however many apps there are. **Hide** removes it in this browser.
 
 **First-run onboarding:** While the setup wizard has not been completed, a card says whether it is shown to users or hidden for everyone, shows the demo-account status and links to **Platform → Advanced → First-run onboarding**, where the wizard can be switched off (`setup.disabled`). The card disappears once onboarding is completed. See [Getting Started](GETTING_STARTED.md).
 
@@ -263,8 +269,6 @@ Go to **Access & Identity → Users** to view, edit, and manage user accounts.
 
 **Editing a user:** Click the user's name to open their profile. You can change their groups, disable their account, and view their authentication methods and last active date.
 
-**Bulk operations:** Select multiple users with the checkboxes to perform bulk actions (enable, disable, change group).
-
 **Deleting a user:** Deleting a user ends their access immediately, whichever way they signed in, and then removes what they owned in the background:
 
 - Always: personal API keys, OAuth connections, the credentials they stored for other systems (Office 365, Jira, Google Drive, Nextcloud, MCP servers) and their scheduled tasks.
@@ -342,8 +346,8 @@ See [Scheduled Tasks](scheduled-tasks.md).
 
 **Platform → Voice Input** configures speech for the whole platform:
 
-- **Defaults** — the dictation service of the microphone button (Browser, Azure Speech or vLLM Realtime) and the transcription model for recordings and audio/video uploads. Apps follow the defaults unless they choose a service or model of their own.
-- **vLLM Realtime** and **Azure Speech** — endpoints and keys, each with **Test connection**.
+- **Voice input (microphone button)** — the speech recognition service (the browser, Azure Speech, or a streaming transcription model such as vLLM Realtime enabled under **Models**) and the transcription model for recordings and audio/video uploads. Apps follow the defaults unless they choose a service or model of their own.
+- **Azure Speech** — endpoint and key, with **Test connection**.
 - **Read aloud (text-to-speech)** — the play button on chat messages and its model, with a test field.
 - **Voice mode (preview)** — the spoken conversation with an app: switch, default for apps, text-to-speech model, listening style, pause length, interrupting, reasoning effort, longest session, voice style instruction and a **Try it** button. Needs the **Voice Mode** preview feature under Features. See [Voice Mode](microphone-feature.md#voice-mode-spoken-conversation).
 - **Test voice input** — microphone check, live dictation and a record-and-transcribe test, run in your own browser against the saved configuration.
@@ -466,6 +470,19 @@ time-of-day cutoff. The default view covers today and yesterday — not a rollin
 table is not near-empty just after midnight. Widen or narrow it with the date inputs or the
 quick-filter chips.
 
+### Retention and privacy
+
+The chip next to the page title shows how long entries are kept. These settings live in
+`platform.json` under `audit`:
+
+| Key | Default | Where to change it |
+|-----|---------|--------------------|
+| `audit.retentionDays` | `365` | `platform.json` only |
+| `audit.cleanupEnabled` | `true` | `platform.json` only |
+| `audit.includeEmail` | `false` (email-shaped identifiers masked) | `platform.json` only |
+| `audit.verbosity` | `metadata` | `platform.json` only |
+| `audit.anonymizeIp` | `off` | **Observability → Logging → PII & Privacy** |
+
 ### Filtering
 
 Actor, resource, action, result and source are **checkbox lists**. Open one and you get every value that actually occurs in the selected date range, each with the number of entries behind it — so when logins dominate the log you can see `login — 794` and untick exactly that. **Select all** and **Select none** are one click each, and lists longer than ten values get a type-ahead box.
@@ -513,12 +530,13 @@ The checkbox lists write the **exclusion** form for a partial selection, so a va
 
 ## Change History
 
-Every entity edit page (apps, models, prompts, sources, providers, groups, users) has a **History** button in the page header.
+The app, model, prompt and project editors have a **History** button in the page header.
 
 Opening the history drawer shows:
 - A list of every saved change, with timestamp and the admin who made it
 - A before/after diff for each change — only the fields that changed are shown
 - Both form edits and raw JSON editor changes are recorded
+- **Rollback** restores a saved version after a confirmation
 
 The drawer keeps keyboard focus while it is open: Tab moves only between its controls, and Escape
 or the close button closes it and returns focus to the **History** button.
@@ -557,10 +575,14 @@ The import replaces the files *inside* `contents/` rather than the folder itself
 ## Security Settings
 
 Go to **Platform → Security** to manage:
-- **SSL certificates** — upload a custom TLS certificate and key
-- **CORS** — configure allowed origins for cross-origin API requests
-- **Cookie settings** — SameSite policy, Secure flag, and session expiry
-- **Value encryption** — encrypt a plaintext secret for use in configuration files
+- **SSL / TLS** — certificate checks you relax for listed hosts
+- **Cookies** — the Secure flag
+- **CORS** — allowed origins for cross-origin API requests
+- **Rate Limits**
+- **SSRF Allowlist**
+- **Tool approval**
+- **Outbound Proxy**
+- **Value Encryption** — encrypt a plaintext secret for use in configuration files
 
 ---
 
@@ -568,7 +590,7 @@ Go to **Platform → Security** to manage:
 
 Go to **Platform → Updates** to:
 - See the current installed version
-- Check for available updates
+- See whether a newer version is available (checked when the page opens)
 - Apply an update (binary installations only)
 - Roll back to the previous version if needed
 
@@ -585,7 +607,6 @@ Go to **Platform → Updates** to:
 | `g` `g` | Go to Groups |
 | `g` `j` | Go to Projects |
 | `g` `l` | Go to Audit Log |
-| `n` | New item on current list page |
 | `?` | Show shortcut cheatsheet |
 | `Cmd+K` / `Ctrl+K` | Open command palette |
 | `Cmd+S` / `Ctrl+S` | Save (in the app editor) |

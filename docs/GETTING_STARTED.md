@@ -59,7 +59,7 @@ On a fresh installation the browser opens the setup wizard:
   <img src="assets/screenshots/setup-wizard-provider.png" alt="Setup wizard: connect your first AI provider" width="45%">
 </p>
 
-You can add more providers and models at any time under **Admin → Providers** and
+You can add more providers and models at any time under **Admin → Models → Providers** and
 **Admin → Models** (including **Import from URL** for whole endpoints; OpenRouter ships as a
 provider whose key you enter there). API keys can also come from
 environment variables such as `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or
@@ -91,7 +91,7 @@ direct URL.
 
 ## What you get out of the box
 
-- **26 apps** — Chat, Web Chat, Email Composer, Meeting Briefing, Diagram Generator, Image
+- **About 25 apps** — Chat, Web Chat, Email Composer, Meeting Briefing, Diagram Generator, Image
   Generator, File Analyzer, NDA Risk Analyzer and more; some ship disabled and are switched on in
   **Admin → Apps**.
 - **Providers** for OpenAI, Anthropic, Google, Mistral, OpenRouter, AWS Bedrock and local servers,

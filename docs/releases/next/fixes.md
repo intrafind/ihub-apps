@@ -781,11 +781,15 @@ A skill that an app switches on itself (`skillSettings.autoActivate`) is no long
 the user, and a skill kept from an earlier message of the chat is now announced too instead of being
 silent. The chat shows who brought each skill in once the activity line is updated.
 
-## Two German Messages About Documents Use the Formal Address
+## German Texts Use the Formal Address
 
 When a document could not be attached to a chat, the German messages said "Du hast keinen Zugriff" and
 "steht dir nicht zur Verfügung". They now say "Sie haben keinen Zugriff" and "steht Ihnen nicht zur
 Verfügung", like the rest of the German interface.
+
+- The other German texts that still said *du* use *Sie* as well: the chat input placeholder, the
+  question before a chat is cleared, the empty chat, the feedback dialog, the sender name of your own
+  messages ("Sie"), the Nextcloud embed settings and the integration action details.
 
 ## Source Cards Get the Search Profile Name and the "Uploaded" or "Picked" Marker Again
 
@@ -824,3 +828,33 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Admin Overview: The Getting Started Checklist Shows What Is Really Done
+
+The **Getting started** checklist on the admin Overview ticked "Admin account ready" while the same
+page warned that `admin` still signed in with its shipped password, and it only appeared on an
+installation without any apps, which a real installation never is. Each tick now comes from the
+server, and the checklist shows while a required step is still open.
+
+- **Admin account ready** stays open while `admin` signs in with the shipped password, says so and
+  links to **Users**.
+- **Configure an LLM provider** is ticked once an enabled model has an API key the server can use,
+  or needs none.
+- **Create your first app** is listed only when there are no apps at all.
+- **Hide** removes the checklist in this browser.
+
+## Admin Hints Point to the Right Place
+
+Several hints in the admin area sent admins to the wrong place or described a field wrongly.
+
+- **Prompts:** the field "Linked App" is now **Opens in app**. It sets the app a prompt opens in from
+  the prompt library and lists it first in that app's prompt search; it never limited who sees the
+  prompt, which the old label and the documentation suggested.
+- **Audit Log:** the retention chip said "Edit under Platform → Advanced", which has no audit
+  settings. It now says that retention is set in `platform.json` (`audit.retentionDays`,
+  `audit.cleanupEnabled`).
+- **Pages:** the example for **Allowed Groups** named the groups `admin` and `user`, which do not
+  exist; copying it hid the page from everyone. It now reads `admins, users or *`, with a hint that
+  the IDs must match **Admin → Groups** exactly.
+- **Integrations:** connection tests that reject a TLS certificate point to **Admin → Security →
+  SSL / TLS** instead of "Admin > Platform > SSL".

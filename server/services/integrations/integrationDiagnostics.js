@@ -265,7 +265,7 @@ export async function resolveHostname(hostname) {
  * expired, unknown CA, hostname mismatch). That already distinguishes
  * "unreachable" from "reachable but not trusted", which are very different fixes.
  *
- * Callers that have relaxed TLS for a domain via the Admin > Platform > SSL
+ * Callers that have relaxed TLS for a domain via the Admin → Security → SSL / TLS
  * whitelist should keep enforcing it here and use
  * `describeTransport().ignoreInvalidCertificates` only to interpret the result —
  * i.e. to explain that real requests still succeed even though the system trust
@@ -597,7 +597,7 @@ export function describeNetworkError(error, { hostname, port, timeout } = {}) {
     code?.startsWith?.('CERT')
   ) {
     hints.push(
-      'The TLS certificate of the target was rejected. Add the issuing CA to the trust store of the iHub server, or whitelist the domain under Admin > Platform > SSL.'
+      'The TLS certificate of the target was rejected. Add the issuing CA to the trust store of the iHub server, or add the domain under Admin → Security → SSL / TLS.'
     );
   } else if (code === 'EPROTO' || /wrong version number/i.test(message)) {
     hints.push(
