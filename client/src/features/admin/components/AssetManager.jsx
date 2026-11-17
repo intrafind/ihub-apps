@@ -20,9 +20,13 @@ function AssetManager({ t }) {
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
   const fileInputRef = useRef(null);
 
+  /**
+   * Reads the asset list. Only the first load shows the spinner (`loading`
+   * starts true); a reload after an upload or delete keeps the list, and with
+   * it an open confirmation, mounted.
+   */
   const loadAssets = async () => {
     try {
-      setLoading(true);
       setError(null);
 
       const response = await makeAdminApiCall('/admin/ui/assets');

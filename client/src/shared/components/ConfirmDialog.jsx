@@ -136,13 +136,22 @@ function ConfirmDialogPanel({
   // A menu that opened this dialog returns focus to its own trigger as it
   // closes, which can land after the trap's initial focus: put focus back into
   // the dialog on the next frame if it ended up outside.
+  // The frame is cancelled once the user confirms: from then on the action
+  // owns focus (it may move it to the page, e.g. a heading after a delete),
+  // and a late frame would pull focus into a dialog about to unmount and
+  // drop it on <body>.
+  const refocusFrameRef = useRef(null);
   useEffect(() => {
-    const frame = requestAnimationFrame(() => {
+    refocusFrameRef.current = requestAnimationFrame(() => {
+      refocusFrameRef.current = null;
       const container = containerRef.current;
       const target = (requiredToken ? tokenInputRef : denyButtonRef).current;
       if (container && target && !container.contains(document.activeElement)) target.focus();
     });
-    return () => cancelAnimationFrame(frame);
+    return () => {
+      if (refocusFrameRef.current !== null) cancelAnimationFrame(refocusFrameRef.current);
+      refocusFrameRef.current = null;
+    };
     // Only on open: later focus moves are the user's.
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
@@ -157,6 +166,10 @@ function ConfirmDialogPanel({
 
   const handleConfirm = () => {
     if (confirmDisabled) return;
+    if (refocusFrameRef.current !== null) {
+      cancelAnimationFrame(refocusFrameRef.current);
+      refocusFrameRef.current = null;
+    }
     onConfirm();
   };
 

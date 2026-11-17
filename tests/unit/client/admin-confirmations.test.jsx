@@ -16,7 +16,10 @@ const mockAdminApi = {
   fetchMarketplaceRegistries: jest.fn(),
   deleteMarketplaceRegistry: jest.fn(),
   listCredentials: jest.fn(),
-  deleteCredential: jest.fn()
+  deleteCredential: jest.fn(),
+  fetchAdminSkills: jest.fn(),
+  deleteSkill: jest.fn(),
+  makeAdminApiCall: jest.fn()
 };
 jest.mock('../../../client/src/api/adminApi', () => ({
   fetchMarketplaceRegistries: (...a) => mockAdminApi.fetchMarketplaceRegistries(...a),
@@ -27,6 +30,12 @@ jest.mock('../../../client/src/api/adminApi', () => ({
   createCredential: jest.fn(),
   updateCredential: jest.fn(),
   deleteCredential: (...a) => mockAdminApi.deleteCredential(...a),
+  fetchAdminSkills: (...a) => mockAdminApi.fetchAdminSkills(...a),
+  deleteSkill: (...a) => mockAdminApi.deleteSkill(...a),
+  toggleSkill: jest.fn(),
+  exportSkill: jest.fn(),
+  importSkill: jest.fn(),
+  makeAdminApiCall: (...a) => mockAdminApi.makeAdminApiCall(...a),
   getAdminApiErrorMessage: err => err?.message || 'error'
 }));
 const mockFetchInstalled = jest.fn();
@@ -41,6 +50,14 @@ jest.mock('../../../client/src/features/admin/components/marketplace/RegistryFor
   __esModule: true,
   default: () => null
 }));
+jest.mock('../../../client/src/features/admin/components/AdminUserSkillsTab', () => ({
+  __esModule: true,
+  default: () => null
+}));
+// runtimeBasePath reads import.meta, which jest can't load.
+jest.mock('../../../client/src/utils/runtimeBasePath', () => ({
+  buildUploadUrl: path => path
+}));
 jest.mock('react-i18next', () => {
   const { enT } = require('./helpers/i18nMock');
   const translation = { t: enT, i18n: { language: 'en' } };
@@ -51,6 +68,9 @@ const AdminMarketplaceRegistriesPage =
   require('../../../client/src/features/admin/pages/AdminMarketplaceRegistriesPage').default;
 const AdminCredentialsPage =
   require('../../../client/src/features/admin/pages/AdminCredentialsPage').default;
+const AdminSkillsPage = require('../../../client/src/features/admin/pages/AdminSkillsPage').default;
+const AssetManager = require('../../../client/src/features/admin/components/AssetManager').default;
+const { enT } = require('./helpers/i18nMock');
 const {
   SHIPPED_REGISTRY_IDS
 } = require('../../../client/src/features/admin/utils/shippedRegistries');
@@ -243,5 +263,84 @@ describe('credential delete (IN-B3, client part)', () => {
     });
     expect(screen.getByRole('alertdialog', { name: 'Delete credential "a"?' })).toBeInTheDocument();
     expect(deleteB).not.toHaveAttribute('aria-disabled');
+  });
+});
+
+/**
+ * A confirmed delete reloads the list without the first-load spinner, so the
+ * busy dialog and the status line (role=status) stay mounted and the success
+ * announcement is not lost.
+ */
+describe('delete keeps the page mounted while the list reloads', () => {
+  it('skills: the list stays, the notice is announced and focus moves to the heading', async () => {
+    let finishReload;
+    mockAdminApi.fetchAdminSkills
+      .mockResolvedValueOnce([
+        { name: 's1', displayName: 'Skill one' },
+        { name: 's2', displayName: 'Skill two' }
+      ])
+      .mockImplementationOnce(() => new Promise(resolve => (finishReload = resolve)));
+    mockAdminApi.deleteSkill.mockResolvedValue({});
+    render(
+      <MemoryRouter>
+        <AdminSkillsPage />
+      </MemoryRouter>
+    );
+    const row = (await screen.findByText('Skill one')).closest('tr');
+    await act(async () => {
+      fireEvent.click(within(row).getByTitle('Delete'));
+    });
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete skill "s1"?' });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    });
+    expect(mockAdminApi.deleteSkill).toHaveBeenCalledWith('s1');
+    // Reload running: the busy dialog and the list are still there.
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByText('Skill two')).toBeInTheDocument();
+    await act(async () => {
+      finishReload([{ name: 's2', displayName: 'Skill two' }]);
+    });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('status')).toHaveTextContent('Skill "s1" deleted.');
+    expect(screen.getByText('Skill two')).toBeInTheDocument();
+    expect(screen.queryByText('Skill one')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Skill Management' })).toHaveFocus();
+  });
+
+  it('assets: the busy dialog and the list stay while the list reloads', async () => {
+    const ASSET = {
+      id: 'a1',
+      originalName: 'logo.svg',
+      filename: 'a1.svg',
+      mimetype: 'image/svg+xml',
+      assetType: 'icon',
+      size: 10,
+      publicUrl: '/uploads/assets/a1.svg'
+    };
+    let finishReload;
+    mockAdminApi.makeAdminApiCall.mockImplementation((url, options) => {
+      if (options?.method === 'DELETE') return Promise.resolve({ data: {} });
+      if (mockAdminApi.makeAdminApiCall.mock.calls.length === 1) {
+        return Promise.resolve({ data: { items: [ASSET] } });
+      }
+      return new Promise(resolve => (finishReload = resolve));
+    });
+    render(<AssetManager t={enT} />);
+    const remove = await screen.findByTitle('Delete asset');
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete asset "logo.svg"?' });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    });
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.queryByText('Loading assets...')).not.toBeInTheDocument();
+    await act(async () => {
+      finishReload({ data: { items: [] } });
+    });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.getByText('Asset deleted successfully')).toBeInTheDocument();
   });
 });

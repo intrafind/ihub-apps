@@ -94,6 +94,24 @@ describe('ConfirmDialog', () => {
     trigger.remove();
   });
 
+  it('leaves focus where the confirmed action put it, even before the next frame', async () => {
+    // The action of a delete moves focus to the page heading (the row is gone)
+    // before the dialog closes. The open-time refocus frame must not pull it back.
+    const heading = document.createElement('h1');
+    heading.tabIndex = -1;
+    document.body.appendChild(heading);
+    const onConfirm = jest.fn(() => heading.focus());
+    const { unmount } = renderDialog({ onConfirm });
+    // Confirm within the first frame after opening.
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(heading).toHaveFocus();
+    await act(() => new Promise(resolve => requestAnimationFrame(() => resolve())));
+    expect(heading).toHaveFocus();
+    unmount();
+    heading.remove();
+  });
+
   it('lists consequences and the irreversible callout', () => {
     const { unmount } = renderDialog({
       consequences: ['Used by "HR assistant"', 'Used by "Sales bot"'],

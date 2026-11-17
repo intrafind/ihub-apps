@@ -34,7 +34,7 @@ jest.mock('react-i18next', () => {
 const AdminOAuthClientsPage =
   require('../../../client/src/features/admin/pages/AdminOAuthClientsPage').default;
 
-const SECRET = 'new-secret-0123456789';
+const SECRET = 'example-rotated-secret-value';
 
 test('rotating a secret asks with the client named and reveals the secret in a dialog', async () => {
   mockMakeAdminApiCall.mockImplementation(async (url, options) => {
