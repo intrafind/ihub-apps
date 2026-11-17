@@ -3,6 +3,7 @@
 **Date:** 2026-11-17
 **Status:** Draft / Idea
 **Owners:** TBD
+**Epic:** [#3148](https://github.com/intrafind/ihub-apps/issues/3148), sub-issue [#3766](https://github.com/intrafind/ihub-apps/issues/3766)
 **Builds on:**
 
 - [`2026-04-28 Browser Extension Plan.md`](./2026-04-28%20Browser%20Extension%20Plan.md) —
