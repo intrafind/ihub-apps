@@ -320,6 +320,35 @@ describe('useUnsavedChanges and browser Back/Forward (POP)', () => {
     expect(screen.getByLabelText('editor-field')).toHaveValue('x');
   });
 
+  it('lets navigate(-1) back to a same-page entry through (closing a pushed pane)', async () => {
+    render(<BrowserApp />);
+    fireEvent.click(screen.getByText('open editor'));
+    type('editor', 'x');
+    // Like ArtifactViewerHost: open a pane with a pushed `?pane=…`, close it with navigate(-1).
+    fireEvent.click(screen.getByText('editor-push-tab'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/edit?tab=c');
+
+    fireEvent.click(screen.getByText('editor-back'));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/edit$/));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('editor-field')).toHaveValue('x');
+  });
+
+  it('still blocks navigate(-1) to another page after a same-page entry was closed', async () => {
+    render(<BrowserApp />);
+    fireEvent.click(screen.getByText('open editor'));
+    type('editor', 'x');
+    fireEvent.click(screen.getByText('editor-push-tab'));
+    fireEvent.click(screen.getByText('editor-back'));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/edit$/));
+
+    // The next step back leaves the editor for /start.
+    fireEvent.click(screen.getByText('editor-back'));
+    expect(screen.getByTestId('editor-blocker')).toHaveTextContent('blocked');
+    expect(screen.getByTestId('location')).toHaveTextContent('/edit');
+  });
+
   it('lets a POP through when the target entry has no router index (fails open)', async () => {
     render(<BrowserApp />);
     fireEvent.click(screen.getByText('open editor'));

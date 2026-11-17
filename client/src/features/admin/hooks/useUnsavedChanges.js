@@ -132,6 +132,10 @@ function getRegistry(navigator) {
       // Set by proceed() for a pending go/POP: the next popstate (to this index,
       // when known) passes through even though the page is still dirty.
       allowPop: null,
+      // Router pathname of each history entry seen while the interceptors were
+      // installed, by history index. Lets a navigate(-n) back to an entry of the
+      // same page (a closed artifact pane, a pushed tab) through.
+      entryPathnames: new Map(),
       // A held POP whose "Discard changes" arrived before the restoring popstate.
       afterRestore: null
     };
@@ -159,20 +163,35 @@ function installGuardRegistry(registry) {
     go: navigator.go
   };
   registry.originals = originals;
-  registry.currentIdx = readHistoryIndex();
-  registry.currentPathname = readWindowPathname();
-  /** Records the history entry the app shows now (after a navigation passed). */
-  const recordCurrentEntry = () => {
-    registry.currentIdx = readHistoryIndex();
-    registry.currentPathname = readWindowPathname();
-  };
-  registry.recordCurrentEntry = recordCurrentEntry;
-
   const callOriginal = (name, args) => originals[name].apply(navigator, args);
   const currentPathname = () => {
     const pathname = navigator.location?.pathname;
     return pathname === undefined ? undefined : normalizePathname(pathname);
   };
+
+  /**
+   * Records the history entry the app shows now (after a navigation passed).
+   *
+   * @param {boolean} [discardForward=false] - A push: the browser dropped every
+   *   entry after the new one, so their recorded pathnames are dropped too.
+   */
+  const recordCurrentEntry = (discardForward = false) => {
+    registry.currentIdx = readHistoryIndex();
+    registry.currentPathname = readWindowPathname();
+    const idx = registry.currentIdx;
+    if (idx === null) return;
+    if (discardForward) {
+      for (const known of [...registry.entryPathnames.keys()]) {
+        if (known > idx) registry.entryPathnames.delete(known);
+      }
+    }
+    const pathname = currentPathname();
+    if (pathname === undefined) registry.entryPathnames.delete(idx);
+    else registry.entryPathnames.set(idx, pathname);
+  };
+  registry.recordCurrentEntry = recordCurrentEntry;
+  registry.entryPathnames.clear();
+  recordCurrentEntry();
 
   /**
    * Wraps push/replace: navigation to another pathname is blocked while a guard
@@ -194,18 +213,33 @@ function installGuardRegistry(registry) {
         }
       }
       const result = callOriginal(name, args);
-      recordCurrentEntry();
+      recordCurrentEntry(name === 'push');
       return result;
     };
+
+  /**
+   * Whether `go(delta)` lands on a history entry recorded for the pathname the
+   * app shows now (e.g. closing an artifact pane that was opened with
+   * `?pane=…`). Unknown entries count as another page.
+   *
+   * @param {number} delta
+   * @returns {boolean}
+   */
+  const isSamePageJump = delta => {
+    const fromIdx = registry.currentIdx;
+    const current = currentPathname();
+    if (delta === 0 || fromIdx === null || current === undefined) return false;
+    return registry.entryPathnames.get(fromIdx + delta) === current;
+  };
 
   navigator.push = wrapPushOrReplace('push');
   navigator.replace = wrapPushOrReplace('replace');
   if (typeof originals.go === 'function') {
     navigator.go = function guardedGo(...args) {
       const guard = firstDirtyGuard(registry);
-      if (guard) {
-        // The target of a history jump is unknown until it happens, so any jump
-        // is treated as leaving the page.
+      if (guard && !isSamePageJump(Number(args[0]) || 0)) {
+        // A jump to an entry this page did not record, or to another page, is
+        // treated as leaving the page.
         guard.block({ kind: 'go', args });
         return undefined;
       }
@@ -284,6 +318,7 @@ function uninstallGuardRegistry(registry) {
   registry.originals = null;
   registry.onPopState = null;
   registry.recordCurrentEntry = null;
+  registry.entryPathnames.clear();
   registry.swallowNextPop = false;
   registry.allowPop = null;
   registry.afterRestore = null;
@@ -344,7 +379,8 @@ function runPendingNavigation(navigator, pending) {
  *   leave dialog (`UnsavedChangesDialog`);
  * - browser Back/Forward is undone and held the same way;
  * - a change of only the query string or hash on the same page (tabs, filters)
- *   is never held;
+ *   is never held, nor is a `navigate(-n)` or Back back to such an entry (closing
+ *   an artifact pane opened with `?pane=…`);
  * - reload / close tab shows the browser's own `beforeunload` prompt.
  *
  * Pass `null` as `initialData` while the page is loading or after its load
