@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 import { generatedFileKind, TEXT_FILE_MEDIA_TYPES } from '../../../../../shared/generatedFiles.js';
-import { prepareHtmlPreview } from '../../../../../shared/artifactPreview.js';
+import {
+  artifactPromptFromMessage,
+  prepareHtmlPreview
+} from '../../../../../shared/artifactPreview.js';
+
+export { artifactPromptFromMessage };
 
 /**
  * Helpers for the files a chat produced (its artifacts): how they are named,
@@ -130,7 +135,7 @@ export function isTextArtifact(artifact) {
  * page and the server's `create_web_artifact` checks.
  *
  * @param {unknown} html
- * @param {{scriptHosts?: string[], theme?: 'light'|'dark'}} [options]
+ * @param {{scriptHosts?: string[], theme?: 'light'|'dark', promptBridge?: boolean}} [options]
  * @returns {string}
  */
 export function withPreviewCsp(html, options) {

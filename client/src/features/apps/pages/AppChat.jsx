@@ -3188,6 +3188,8 @@ function AppChat({
         controllerRef={workspaceRef}
         files={workspaceFiles}
         onQuote={quoteIntoComposer}
+        // An HTML artifact's `sendPrompt` posts like an MCP App view's follow-up message.
+        promptHost={mcpAppHost}
         renderFullScreenChat={renderComposerDock}
         onShare={
           artifactSharingEnabled && chatShareReady && chatId

@@ -10336,7 +10336,10 @@
     "showInFiles": "Show in files",
     "openInNewTab": "Open in new tab",
     "closeViewer": "Close artifact",
-    "pageNotFound": "This file could not be found."
+    "pageNotFound": "This file could not be found.",
+    "promptRequest": "The artifact wants to ask in the chat:",
+    "promptSend": "Send",
+    "promptBusy": "An answer is still being written. Send once it is done."
   },
   "chatFiles": {
     "deleted": "{{name}} deleted.",
@@ -10817,7 +10820,8 @@
       "edit": "Edit with AI",
       "editHint": "The assistant writes a new file with the change. The original stays as it is.",
       "label": "Selection actions"
-    }
+    },
+    "promptSent": "Sent to the chat"
   },
   "clarification": {
     "skipped": "Skipped",

@@ -10335,7 +10335,10 @@
     "showInFiles": "In Dateien anzeigen",
     "openInNewTab": "In neuem Tab öffnen",
     "closeViewer": "Artefakt schließen",
-    "pageNotFound": "Diese Datei wurde nicht gefunden."
+    "pageNotFound": "Diese Datei wurde nicht gefunden.",
+    "promptRequest": "Das Artefakt möchte im Chat fragen:",
+    "promptSend": "Senden",
+    "promptBusy": "Eine Antwort wird noch geschrieben. Senden Sie, sobald sie fertig ist."
   },
   "chatFiles": {
     "deleted": "{{name}} wurde gelöscht.",
@@ -10816,7 +10819,8 @@
       "edit": "Mit KI bearbeiten",
       "editHint": "Der Assistent erstellt eine neue Datei mit der Änderung. Das Original bleibt unverändert.",
       "label": "Aktionen zur Auswahl"
-    }
+    },
+    "promptSent": "An den Chat gesendet"
   },
   "clarification": {
     "skipped": "Übersprungen",

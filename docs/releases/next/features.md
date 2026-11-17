@@ -2248,3 +2248,16 @@ popup and of the hint under the chat input, the hint text and link (previously o
 `ui.json`) and a **Show again to everyone** button. The popup now remembers the version a visitor
 confirmed, so raising the version shows it again, as the setting always promised; visitors who confirmed
 earlier are not asked again until the next change. See [UI Configuration](../../ui.md#disclaimer-configuration).
+
+## Chat: Interactive Artifacts Can Ask Follow-up Questions
+
+An HTML artifact can now turn a click into a question in the chat: a bar of a chart, a node of a
+diagram or an "Explain this" button asks about exactly that item. The question is shown above the
+artifact first, and nothing is sent until the user clicks **Send**.
+
+- **Built by the `web-artifacts` skill.** It adds such questions where the answer needs the model;
+  filtering, sorting and tabs stay inside the page.
+- **The user decides.** One question waits at a time, it cannot be sent while an answer is still
+  being written, and **Cancel** or Esc drops it.
+- **Sandbox unchanged.** The artifact still runs isolated from iHub; it can only propose a
+  question. In shared links and on the standalone artifact page the controls do nothing.
