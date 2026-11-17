@@ -80,6 +80,10 @@ jest.mock('../../../client/src/shared/utils/openSseStream', () => {
 });
 
 const { SseHttpError } = jest.requireActual('../../../client/src/shared/utils/openSseStream');
+const {
+  fetchWithAuthRetry: mockFetchLedger
+} = require('../../../client/src/shared/utils/openSseStream');
+const { TURN_IDLE_TIMEOUT_MS } = require('../../../client/src/shared/hooks/useEventSource');
 const useAppChat = require('../../../client/src/features/chat/hooks/useAppChat').default;
 
 const CHAT_ID = 'chat-1';
@@ -145,8 +149,32 @@ beforeEach(() => {
   mockAcknowledgement = null;
   seq = 0;
   sessionStorage.clear();
+  localStorage.clear();
   Object.values(mockApi).forEach(fn => fn.mockClear());
 });
+
+/** Ledger frames of a turn that started (and ran a tool), as the replay reads them. */
+const ledgerOf = started => [
+  { v: 2, seq: 1, runId: RUN_ID, ts: started.ts, type: 'run/started', data: started.data },
+  {
+    v: 2,
+    seq: 4,
+    runId: RUN_ID,
+    ts: started.ts,
+    type: 'tool/started',
+    data: { step: 0, callId: 'c1', toolId: 'search', name: 'search', execution: 'server' }
+  }
+];
+
+/** Send, accept and draw part of an answer; resolves with the stream and frames. */
+async function partialTurn(result, text = 'Partial') {
+  send(result);
+  const stream = mockStreams[0];
+  await open(stream);
+  const frames = answerFrames(lastAssistant(result).id, text);
+  await play(stream, frames[0], frames[1], frames[2]);
+  return { stream, frames };
+}
 
 describe('flag off: GET first, then the POST', () => {
   test('opens the GET and posts on stream/connected', async () => {
@@ -397,6 +425,199 @@ describe('flag on: the POST streams the turn', () => {
       envelope('run/ended', { status: 'completed', finishReason: 'stop' })
     );
     expect(lastAssistant(result).content).toBe('Partial answer');
+  });
+
+  test('the chat counts as accepted as soon as the turn is (not when it ends)', async () => {
+    const onMessageAccepted = jest.fn();
+    const { result } = render({ onMessageAccepted });
+    send(result);
+    await open(mockStreams[0]);
+    expect(onMessageAccepted).toHaveBeenCalledWith(CHAT_ID);
+  });
+
+  test('a read that breaks after the turn was accepted is a drop, not a refusal', async () => {
+    const { result } = render();
+    const { stream, frames } = await partialTurn(result);
+    mockLedger.events = ledgerOf(frames[1]);
+    // What the real parser does: report the broken read, then throw.
+    await act(async () => {
+      stream.opts.onEvent('error', { message: 'network' });
+    });
+    await fail(stream, new TypeError('network error'));
+    await flush();
+    expect(mockStreams).toHaveLength(2);
+    expect(mockStreams[1].url).toContain(`resumeRun=${RUN_ID}`);
+    expect(lastAssistant(result).content).not.toMatch(/Failed to generate/);
+  });
+
+  test('a temporary chat keeps what was drawn when its POST breaks', async () => {
+    const { result } = render({ ephemeral: true });
+    const { stream } = await partialTurn(result);
+    await end(stream);
+    await flush();
+    // The server stopped the turn: nothing to re-attach to.
+    expect(mockStreams).toHaveLength(1);
+    const assistants = result.current.messages.filter(m => m.role === 'assistant');
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].content).toContain('Partial');
+    expect(assistants[0].content).toContain('The connection was lost');
+    expect(result.current.processing).toBe(false);
+  });
+
+  test('a kept chat keeps what was drawn when the replay brings nothing', async () => {
+    const { result } = render();
+    const { stream } = await partialTurn(result);
+    mockLedger.events = [];
+    await end(stream);
+    await flush();
+    expect(mockStreams).toHaveLength(1);
+    const assistants = result.current.messages.filter(m => m.role === 'assistant');
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].content).toContain('Partial');
+    expect(assistants[0].content).toContain('The connection was lost');
+    expect(result.current.processing).toBe(false);
+  });
+
+  test('a turn the server stopped because its client left keeps what was drawn', async () => {
+    const { result } = render();
+    const { stream, frames } = await partialTurn(result);
+    mockLedger.events = [
+      ...ledgerOf(frames[1]),
+      {
+        v: 2,
+        seq: 5,
+        runId: RUN_ID,
+        ts: frames[1].ts,
+        type: 'run/ended',
+        data: {
+          status: 'aborted',
+          finishReason: 'cancelled',
+          cause: { kind: 'client_disconnected' }
+        }
+      }
+    ];
+    await end(stream);
+    await flush();
+    expect(mockStreams).toHaveLength(1);
+    const assistants = result.current.messages.filter(m => m.role === 'assistant');
+    expect(assistants).toHaveLength(1);
+    expect(assistants[0].content).toContain('Partial');
+  });
+
+  test('a silent POST counts as dropped after twice the heartbeat', async () => {
+    jest.useFakeTimers();
+    try {
+      const { result } = render();
+      const { stream, frames } = await partialTurn(result);
+      mockLedger.events = ledgerOf(frames[1]);
+      // The real transport ends when its signal aborts.
+      stream.opts.signal.addEventListener('abort', () => stream.resolve());
+      // A heartbeat comment keeps it alive.
+      await act(async () => {
+        jest.advanceTimersByTime(TURN_IDLE_TIMEOUT_MS - 1000);
+        stream.opts.onChunk();
+        jest.advanceTimersByTime(TURN_IDLE_TIMEOUT_MS - 1000);
+      });
+      expect(stream.opts.signal.aborted).toBe(false);
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(stream.opts.signal.aborted).toBe(true);
+      jest.useRealTimers();
+      await flush();
+      await flush();
+      expect(mockStreams).toHaveLength(2);
+      expect(mockStreams[1].url).toContain(`resumeRun=${RUN_ID}`);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  test('a POST that closes while Stop is on its way is not re-attached', async () => {
+    const { result } = render();
+    const { stream, frames } = await partialTurn(result);
+    mockLedger.events = ledgerOf(frames[1]);
+    mockApi.stopAppChatStream.mockImplementationOnce(async () => {
+      stream.resolve();
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      result.current.cancelGeneration();
+    });
+    await flush();
+    expect(mockStreams).toHaveLength(1);
+  });
+
+  test('a surface gone before its re-attach replay finished opens no GET', async () => {
+    let releaseLedger;
+    mockFetchLedger.mockImplementationOnce(
+      () =>
+        new Promise(resolve => {
+          releaseLedger = () =>
+            resolve({
+              ok: true,
+              json: async () => ({ items: mockLedger.events, nextCursor: null })
+            });
+        })
+    );
+    const { result, unmount } = render();
+    const { stream, frames } = await partialTurn(result);
+    mockLedger.events = ledgerOf(frames[1]);
+    await end(stream);
+    await flush();
+    unmount();
+    await act(async () => {
+      releaseLedger();
+    });
+    await flush();
+    expect(mockStreams).toHaveLength(1);
+  });
+
+  describe('refusals read like the JSON path’s', () => {
+    test('401 expires the session and says so', async () => {
+      localStorage.setItem('authToken', 'stale');
+      const expired = jest.fn();
+      window.addEventListener('authTokenExpired', expired);
+      try {
+        const { result } = render();
+        send(result);
+        await fail(
+          mockStreams[0],
+          new SseHttpError('Authentication required', 401, {
+            code: 'UNAUTHORIZED',
+            detail: 'Authentication required'
+          })
+        );
+        expect(expired).toHaveBeenCalledTimes(1);
+        expect(localStorage.getItem('authToken')).toBeNull();
+        expect(lastAssistant(result).content).toMatch(/Your session has expired/);
+      } finally {
+        window.removeEventListener('authTokenExpired', expired);
+      }
+    });
+
+    test.each([
+      [403, /You do not have permission/],
+      [404, /The requested resource was not found/],
+      [500, /A server error occurred/]
+    ])('%s shows the friendly text, not the server detail', async (status, text) => {
+      const { result } = render();
+      send(result);
+      await fail(
+        mockStreams[0],
+        new SseHttpError('raw', status, { code: 'X', detail: 'raw server detail' })
+      );
+      expect(lastAssistant(result).content).toMatch(text);
+      expect(lastAssistant(result).content).not.toContain('raw server detail');
+    });
+
+    test('a request that never reached the server does not say "Failed to fetch"', async () => {
+      const { result } = render();
+      send(result);
+      await fail(mockStreams[0], new TypeError('Failed to fetch'));
+      expect(lastAssistant(result).content).not.toContain('Failed to fetch');
+      expect(lastAssistant(result).content).toMatch(/Failed to generate response/);
+    });
   });
 
   test('an @workflow mention answered with JSON follows the GET', async () => {

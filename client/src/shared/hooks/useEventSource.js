@@ -20,6 +20,13 @@ import { RUN_EVENTS } from '../../../../shared/run/runReducer.js';
 const TURN_ACCEPT_TIMEOUT_MS = 300000;
 
 /**
+ * How long an accepted turn's POST stream may stay silent before it counts as
+ * dropped: twice the server's 30-second heartbeat. A half-open connection
+ * (the peer gone without a close) otherwise stays "streaming" forever.
+ */
+export const TURN_IDLE_TIMEOUT_MS = 60000;
+
+/**
  * Per connection: drop a frame of a run this connection has already passed.
  *
  * The server numbers a run's frames (`rseq`). A re-attached stream starts with
@@ -108,6 +115,19 @@ function useEventSource({
   // The stream whose Stop is on its way to the server: it delivers no more
   // frames, but stays open until the server has the stop (see stopEventSource).
   const stoppingRef = useRef(null);
+  // Whether this hook is still mounted. Declared before the teardown effect so
+  // its cleanup runs first (and before the
+  // callbacks that open a stream, which check it): React destroys effects in declaration order, so by
+  // the time the teardown below runs on a real unmount this is already false,
+  // while a mere dependency change leaves it true.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Whether a run this surface started or followed may still be going on the
   // server. A detached surface has no stream and is not "processing", yet the
   // run lives on (a stored turn keeps going), so "Clear chat" still has to stop
@@ -263,6 +283,9 @@ function useEventSource({
    */
   const initEventSource = useCallback(
     async url => {
+      // A surface that is gone opens nothing (a re-attach finishing its replay
+      // after an unmount would otherwise leak a GET).
+      if (!mountedRef.current) return;
       // Synchronously detach any prior stream first. Only detach: the server
       // sees the old connection close, and the turn the new stream follows or
       // starts supersedes whatever was still running. Telling it to stop here
@@ -408,11 +431,13 @@ function useEventSource({
    *   `@workflow` mention, whose frames come over the GET).
    * - `onAccepted()` — the turn is committed (headers arrived).
    * - `onEnded()` — the stream ended with the turn's own end.
-   * - `onDropped(runId)` — the stream broke before the turn's end; the turn
-   *   may still be running on the server and can be re-attached to.
+   * - `onDropped(runId)` — the stream broke before the turn's end, or stayed
+   *   silent for {@link TURN_IDLE_TIMEOUT_MS} (a half-open connection); the
+   *   turn may still be running on the server and can be re-attached to.
    *   Without a run id yet, a synthetic `stream/error` is emitted instead.
+   *   Never after Stop: that turn is over.
    *
-   * No heartbeat: the response itself ends with the turn. Stop works as for
+   * No status polling: the response itself ends with the turn. Stop works as for
    * {@link initEventSource}: the stop is sent while this request is still open.
    *
    * @param {string} url - The chat URL
@@ -431,19 +456,41 @@ function useEventSource({
       let turnRunId = null;
       let ended = false;
       let timedOut = false;
+      let accepted = false;
+      let idle = false;
+      let idleTimer = null;
 
       const emit = envelope => {
         if (stoppingRef.current === ac) return;
         if (onEvent) onEvent({ type: envelope.type, envelope });
       };
-      connectionTimeoutRef.current = setTimeout(() => {
-        timedOut = true;
+      const abort = () => {
         try {
           ac.abort();
         } catch {
           // already aborted — nothing to do
         }
+      };
+      // This stream's own timers: a newer stream's are never touched.
+      const acceptTimer = setTimeout(() => {
+        timedOut = true;
+        abort();
       }, TURN_ACCEPT_TIMEOUT_MS);
+      connectionTimeoutRef.current = acceptTimer;
+      const clearAcceptTimer = () => {
+        clearTimeout(acceptTimer);
+        if (connectionTimeoutRef.current === acceptTimer) connectionTimeoutRef.current = null;
+      };
+      // Any byte (a frame or the server's heartbeat comment) proves the
+      // connection alive; silence past the limit is a drop.
+      const touch = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          if (ac.signal.aborted) return;
+          idle = true;
+          abort();
+        }, TURN_IDLE_TIMEOUT_MS);
+      };
 
       let answer;
       let failure = null;
@@ -454,13 +501,15 @@ function useEventSource({
           headers: { 'X-Session-ID': getSessionId() },
           signal: ac.signal,
           onOpen: () => {
-            clearTimeout(connectionTimeoutRef.current);
-            connectionTimeoutRef.current = null;
+            accepted = true;
+            clearAcceptTimer();
+            touch();
             onAccepted?.();
           },
+          onChunk: touch,
           onEvent: (name, data) => {
             // The parser reports a broken read as an `error` frame and then
-            // returns: a drop, decided below.
+            // throws: a drop, decided below.
             if (name === 'error') return;
             const envelope = toRunEnvelope(name, data, chatId);
             if (!envelope || !keep(envelope)) return;
@@ -477,16 +526,16 @@ function useEventSource({
           }
         });
       } catch (err) {
-        failure = err;
+        // Once accepted, a broken read is a drop (decided below), not a refusal.
+        if (!accepted) failure = err;
       } finally {
-        if (connectionTimeoutRef.current) {
-          clearTimeout(connectionTimeoutRef.current);
-          connectionTimeoutRef.current = null;
-        }
+        clearAcceptTimer();
+        clearTimeout(idleTimer);
       }
 
       // Detached, stopped or replaced: whoever did that owns what happens next.
-      const current = abortControllerRef.current === ac && !ac.signal.aborted;
+      // A silent connection was aborted here, and is still this hook's to handle.
+      const current = abortControllerRef.current === ac && (!ac.signal.aborted || idle);
       if (abortControllerRef.current === ac) abortControllerRef.current = null;
       try {
         ac.abort();
@@ -520,6 +569,8 @@ function useEventSource({
         onEnded?.();
         return;
       }
+      // Stopped: the turn is over, there is nothing to re-attach to.
+      if (stoppingRef.current === ac) return;
       if (turnRunId && onDropped) {
         onDropped(turnRunId);
         return;
@@ -535,18 +586,6 @@ function useEventSource({
     },
     [abortAndClearTimers, chatId, onProcessingChange, onEvent]
   );
-
-  // Whether this hook is still mounted. Declared before the teardown effect so
-  // its cleanup runs first: React destroys effects in declaration order, so by
-  // the time the teardown below runs on a real unmount this is already false,
-  // while a mere dependency change leaves it true.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   // Read through a ref so the teardown below stays keyed on the stream's
   // identity alone: an unstable callback in the dependency array would abort a

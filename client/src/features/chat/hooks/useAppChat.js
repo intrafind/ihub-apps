@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
 import { sendAppChatMessage, checkAppChatStatus } from '../../../api';
+import { enhanceApiError, expireSession } from '../../../api/utils/apiErrors';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { setConversationId } from '../../../utils/chatId';
 import { debugLog } from '../../../utils/debugLog';
@@ -35,20 +36,25 @@ export const CHAT_POST_STREAM_FEATURE = 'chatPostStream';
 
 /**
  * A refused POST stream (`SseHttpError`: status and problem body) in the shape
- * the JSON path's errors have, so both share one handler.
+ * the JSON path's errors have, so both share one handler: the same friendly
+ * texts (`enhanceApiError`), and a 401 expires the session as the API client's
+ * interceptor does. A request that never reached the server (the browser's
+ * "Failed to fetch") carries no text, so the handler's generic one is shown.
  *
  * @param {Error} error
  * @returns {Error}
  */
 function sendErrorOf(error) {
-  if (!error?.status) return error;
-  const detail = error.body?.detail || error.body?.message;
-  const result = new Error(detail || error.message);
-  result.status = error.status;
-  result.code = error.body?.code;
-  result.userFriendlyMessage = detail || error.message;
-  result.isAuthRequired = error.status === 401;
-  return result;
+  if (!error?.status) {
+    const failed = new Error('');
+    failed.originalError = error;
+    return failed;
+  }
+  if (error.status === 401) expireSession();
+  return enhanceApiError({
+    message: error.message,
+    response: { status: error.status, data: error.body }
+  });
 }
 
 /**
@@ -796,18 +802,49 @@ function useAppChat({
   detachEventSourceRef.current = detachEventSource;
 
   /**
+   * Keep the drawn answer of a turn whose stream broke with nothing coming
+   * back to replace it: the error goes under what was drawn, and the turn no
+   * longer shows as running.
+   *
+   * @param {string|null} messageId
+   * @param {string} drawn - What the message showed when the stream broke
+   */
+  const keepDroppedAnswer = useCallback(
+    (messageId, drawn) => {
+      if (messageId) {
+        updateAssistantMessage(
+          messageId,
+          drawn +
+            '\n\n' +
+            t('error.connectionLost', 'The connection was lost before the answer was complete.'),
+          false
+        );
+      }
+      setProcessing(false);
+    },
+    [updateAssistantMessage, t]
+  );
+
+  /**
    * Re-attach to a turn whose POST stream broke before its end. The turn may
    * still be running (a kept chat's turn outlives its connection; a temporary
-   * one was stopped by the server and replays as such). What this surface drew
-   * of it is dropped and rebuilt from the ledger plus the server's snapshot of
-   * the step in progress, so nothing is doubled.
+   * one was stopped by the server, so its drawn answer is kept as it is). The
+   * same message is redrawn from the ledger plus the server's snapshot of the
+   * step in progress, so nothing is doubled; when the replay has nothing, what
+   * was drawn is put back.
    *
    * @param {string} runId - The turn's run
    */
   const resumeDroppedTurn = useCallback(
     runId => {
       const messageId = runMessageMapRef.current.get(runId) || lastMessageIdRef.current;
-      if (messageId) removeMessage(messageId);
+      const drawn = messagesRef.current.find(m => m.id === messageId)?.content || '';
+      // The server stopped a temporary chat's turn when its stream closed:
+      // there is nothing to re-attach to, and what was drawn is all there is.
+      if (ephemeral) {
+        keepDroppedAnswer(messageId, drawn);
+        return;
+      }
       const runs = { ...streamStateRef.current.runs };
       for (const [id, run] of Object.entries(runs)) {
         if (id === runId || run.parentRunId === runId) {
@@ -816,9 +853,14 @@ function useAppChat({
         }
       }
       streamStateRef.current = { ...streamStateRef.current, runs };
-      void reattachToRunRef.current?.(runId);
+      // The replay redraws the same message; when it has nothing, what was
+      // drawn is put back, with the error under it.
+      void reattachToRunRef.current?.(runId, {
+        replaceMessageId: messageId,
+        onNothing: () => keepDroppedAnswer(messageId, drawn)
+      });
     },
-    [removeMessage]
+    [ephemeral, keepDroppedAnswer, messagesRef]
   );
 
   /**
@@ -844,11 +886,12 @@ function useAppChat({
       url,
       { messages: pending.messages, ...params },
       {
-        // The turn is the server's from here; a refusal can no longer happen.
+        // The turn is the server's from here (the chat is in the store); a
+        // refusal can no longer happen.
         onAccepted: () => {
           if (pendingMessageDataRef.current === pending) pendingMessageDataRef.current = null;
+          onMessageAcceptedRef.current?.(pending.chatId);
         },
-        onEnded: () => onMessageAcceptedRef.current?.(pending.chatId),
         onRefused: error => handleSendError(sendErrorOf(error)),
         // JSON instead of a stream: an @workflow mention, whose frames come
         // over the GET (it backfills what it missed on connect).
@@ -1424,18 +1467,23 @@ function useAppChat({
    *
    * @param {string} runId - The run the chat document reports as active
    * @param {Object} [options]
+   * @param {string} [options.replaceMessageId] - A message already showing this
+   *   run (a dropped POST stream): the replay redraws it instead of a new one.
+   * @param {Function} [options.onNothing] - Called, and nothing re-attached,
+   *   when the replay has no such run or the server stopped it because its
+   *   client left (a temporary chat): there is nothing to come back.
    * @param {Function} [options.onSettled] - Called once the turn is no longer running
    * @returns {Promise<boolean>} Whether the surface attached to a live turn
    */
   const reattachToRun = useCallback(
-    async (runId, { onSettled } = {}) => {
+    async (runId, { onSettled, replaceMessageId, onNothing } = {}) => {
       if (!runId || !appId || !chatId) return false;
 
       // The replay needs somewhere to write. `bindRunToMessage` falls back to
       // `lastMessageIdRef` for a run whose `run/started` names no message id —
       // which is every run replayed from the ledger, since the message id it
       // referenced belongs to the browser session that started the turn.
-      const placeholderId = addAssistantMessage();
+      const placeholderId = replaceMessageId || addAssistantMessage();
       lastMessageIdRef.current = placeholderId;
       setProcessing(true);
 
@@ -1479,6 +1527,14 @@ function useAppChat({
       }
 
       if (!stillCurrent()) return false;
+
+      if (onNothing) {
+        const replayed = getRun(streamStateRef.current, runId);
+        if (!replayed || replayed.cause?.kind === 'client_disconnected') {
+          onNothing();
+          return false;
+        }
+      }
 
       if (ended) {
         // It finished between the chat document being read and this replay.

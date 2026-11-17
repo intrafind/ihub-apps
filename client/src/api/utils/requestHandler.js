@@ -3,6 +3,9 @@
 
 import cache, { DEFAULT_CACHE_TTL } from '../../utils/cache';
 import { API_REQUEST_TIMEOUT } from '../client';
+import { enhanceApiError } from './apiErrors';
+
+export { isTimeoutError } from './apiErrors';
 
 // Keep track of pending requests for deduplication
 const pendingRequests = new Map();
@@ -72,44 +75,7 @@ export const handleApiResponse = async (
 
         return data;
       } catch (error) {
-        // Create user-friendly error messages
-        let userMessage =
-          error.response?.data?.detail || error.message || 'An unexpected error occurred';
-        let userFriendlyMessage = userMessage;
-
-        // Handle specific error types with better messages
-        if (isTimeoutError(error)) {
-          userFriendlyMessage =
-            'Request timed out. The operation may have taken longer than expected.';
-        } else if (error.response?.status === 403) {
-          userFriendlyMessage =
-            'You do not have permission to access this resource. Please contact your administrator if you believe this is an error.';
-        } else if (error.response?.status === 401) {
-          // For authentication errors, prioritize the server's message if it's more descriptive
-          if (
-            error.response?.data?.detail &&
-            error.response.data.detail !== 'Authentication required'
-          ) {
-            userFriendlyMessage = error.response.data.detail;
-          } else {
-            userFriendlyMessage = 'Authentication required. Please log in to access this resource.';
-          }
-        } else if (error.response?.status === 404) {
-          userFriendlyMessage = 'The requested resource was not found.';
-        } else if (error.response?.status >= 500) {
-          userFriendlyMessage = 'A server error occurred. Please try again later.';
-        }
-
-        // Enhance error object with useful information
-        const enhancedError = new Error(userFriendlyMessage);
-        enhancedError.status = error.response?.status || 500;
-        enhancedError.originalError = error;
-        enhancedError.originalMessage = userMessage;
-        enhancedError.userFriendlyMessage = userFriendlyMessage;
-        enhancedError.isAccessDenied = error.response?.status === 403;
-        enhancedError.isAuthRequired = error.response?.status === 401;
-        enhancedError.isTimeout = isTimeoutError(error);
-        enhancedError.code = error.response?.data?.code; // Extract error code from server response
+        const enhancedError = enhanceApiError(error);
 
         // Add request details to error for better debugging
         enhancedError.requestDetails = {
@@ -151,13 +117,4 @@ export const handleApiResponse = async (
     console.error('Error in handleApiResponse wrapper:', error);
     throw error;
   }
-};
-
-// Request timeout detection
-export const isTimeoutError = error => {
-  return (
-    error?.message?.includes('timeout') ||
-    error?.originalError?.message?.includes('timeout') ||
-    error?.code === 'ECONNABORTED'
-  );
 };

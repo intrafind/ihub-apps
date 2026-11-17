@@ -131,6 +131,7 @@ export async function fetchWithAuthRetry(url, init = {}) {
  * @param {AbortSignal} [options.signal] - Abort to close the stream
  * @param {Function} options.onEvent - `(eventName, payload) => void` for each frame
  * @param {Function} [options.onOpen] - Called once with the Response when headers arrived
+ * @param {Function} [options.onChunk] - Called for every chunk read, heartbeat comments included
  * @param {string} [options.method='GET'] - HTTP method
  * @param {Object} [options.body] - JSON request body (sent as `application/json`)
  * @param {Object} [options.headers] - Extra request headers
@@ -138,7 +139,7 @@ export async function fetchWithAuthRetry(url, init = {}) {
  */
 export async function openSseStream(
   url,
-  { signal, onEvent, onOpen, method = 'GET', body, headers } = {}
+  { signal, onEvent, onOpen, onChunk, method = 'GET', body, headers } = {}
 ) {
   const res = await fetchWithAuthRetry(url, {
     method,
@@ -175,7 +176,7 @@ export async function openSseStream(
   }
 
   if (onOpen) onOpen(res);
-  await parseSseStream(res.body, onEvent, signal);
+  await parseSseStream(res.body, onEvent, signal, onChunk);
   return undefined;
 }
 
