@@ -224,6 +224,9 @@ class ConfigCache {
     this.refreshTimers = new Map();
     // Numbers the reloads of each entry, so a slow older one cannot store over a newer one.
     this.reloads = new ReloadSequence();
+    // Entries whose last reload failed and still serve older data, by key:
+    // `{ message, at }`. Shown on the admin Overview (`getRefreshErrors`).
+    this.refreshErrors = new Map();
     this.isInitialized = false;
     this.localeLoadingLocks = new Map();
     this.apiKeyVerifier = new ApiKeyVerifier();
@@ -405,6 +408,16 @@ class ConfigCache {
   }
 
   /**
+   * The entries whose last reload failed, so they still serve older data
+   * (for example a hand-edited groups.json that no longer resolves).
+   *
+   * @returns {Array<{key: string, message: string, at: string}>}
+   */
+  getRefreshErrors() {
+    return [...this.refreshErrors].map(([key, value]) => ({ key, ...value }));
+  }
+
+  /**
    * Set a cache entry with automatic refresh timer
    */
   setCacheEntry(key, data) {
@@ -576,6 +589,7 @@ class ConfigCache {
       }
 
       const entry = this._resolveEntry(key, data);
+      this.refreshErrors.delete(key);
       if (this.cache.get(key)?.etag === entry.etag) {
         // Unchanged: nothing to store, and nothing downstream to invalidate —
         // but the chain continues, see _armRefreshTimer().
@@ -598,7 +612,15 @@ class ConfigCache {
         error
       });
       // Keep the old data in cache on refresh failure, and keep retrying it.
-      if (this.cache.has(key)) this._armRefreshTimer(key);
+      // A groups.json that no longer resolves lands here: the old groups stay
+      // in force, so the failure is recorded where an admin can see it.
+      if (this.cache.has(key)) {
+        this.refreshErrors.set(key, {
+          message: error?.message || String(error),
+          at: new Date().toISOString()
+        });
+        this._armRefreshTimer(key);
+      }
     } finally {
       // Telemetry: emit reload counter + duration. Lazy-imported because
       // configCache.js is itself imported very early in the boot sequence.

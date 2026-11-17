@@ -12,6 +12,7 @@ import { findByIdCaseInsensitive } from '../../utils/resourceLookup.js';
 import logger from '../../utils/logger.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { saveSnapshot } from '../../services/ChangeHistoryService.js';
+import { assertGroupsResolvable } from '../../utils/adminGuards.js';
 import {
   CONTENT_ACCESS_TYPES,
   applyContentAccessChanges,
@@ -341,6 +342,8 @@ export default function registerAdminContentAccessRoutes(app) {
         });
 
         if (changes.length === 0) return undefined;
+        // Like every groups.json writer: never store a body that does not resolve.
+        assertGroupsResolvable(groupsData);
         groupsData.metadata = {
           ...groupsData.metadata,
           lastModified: new Date().toISOString()

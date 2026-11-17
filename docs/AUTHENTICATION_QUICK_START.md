@@ -405,6 +405,62 @@ Press F12, go to Application → Cookies, look for `authToken` cookie.
 
 ---
 
+## Switching Sign-in Methods Safely
+
+iHub refuses any change that would lock you, or every administrator, out:
+
+- **Authentication** (`/admin/auth`): you cannot save a configuration that turns off the sign-in
+  method you are signed in with (for example unticking **Local Authentication** while signed in
+  locally, or removing the OIDC provider you used), or that leaves no administrator who can sign
+  in. The page shows why and nothing is saved.
+- **Users** (`/admin/users`): you cannot deactivate or delete your own account. Removing
+  administrator rights from a user, or deactivating one, is refused when no other active
+  administrator who can sign in would remain. Removing your own administrator group is allowed
+  while another administrator remains.
+- **Groups** (`/admin/groups`): a group that other groups inherit from cannot be deleted; the
+  dialog lists them, so you can remove the inheritance first. An edit that would leave no
+  administrator (for example removing the inheritance every admin gets admin rights through) is
+  refused.
+
+There is no override. To move from one sign-in method to another:
+
+1. Enable the new method (for example OIDC) and save.
+2. Make sure an administrator can sign in with it: an OIDC group mapped to an admin group, or a
+   user with an admin group.
+3. Sign out, sign in with the new method as that administrator.
+4. Turn off the old method and save.
+
+An "administrator who can sign in" is an active user in `users.json`, in a group with
+administrator access (also through inherited groups), whose sign-in method is enabled; or an LDAP
+provider or NTLM whose default groups include such a group. Administrators who get their rights
+only from an identity-provider group mapping are not counted, because iHub cannot know whether
+anyone holds that group.
+
+## Recover Admin Access
+
+If nobody can sign in as an administrator (for example `platform.json` was edited on disk, or
+the only administrator's identity provider is gone):
+
+1. Stop iHub (or keep it running if you use the environment variable below and can restart).
+2. Turn local sign-in back on, either way:
+   - edit `contents/config/platform.json` and set `"localAuth": { "enabled": true }`, or
+   - set the environment variable `IHUB_PLATFORM__LOCAL_AUTH__ENABLED=true`.
+3. Make sure a local administrator exists in `contents/config/users.json`: an `"active": true`
+   user with `"authMethods": ["local"]`, a password hash and `"internalGroups": ["admins"]`.
+4. Start iHub again and sign in with that account at `/login`.
+5. Remove the environment variable afterwards, once the configuration is saved the way you want
+   it. While it is set, the Authentication page shows local sign-in as off (the stored value),
+   but it stays on.
+
+**How the admin rescue behaves:** whenever nobody can sign in as an administrator (by the rule
+above), the next person who signs in through local, OIDC, proxy, NTLM or Teams sign-in is made an
+administrator automatically (LDAP sign-ins are not). This keeps a fresh installation reachable,
+but on a running installation it means a stranger can become administrator. The guards above
+exist so that the admin UI never puts an installation into that state; a hand edit on disk can,
+so after recovering, check **Users** for unexpected administrators.
+
+---
+
 ## Key Files Reference
 
 ```

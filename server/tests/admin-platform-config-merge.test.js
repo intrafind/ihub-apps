@@ -76,7 +76,8 @@ function createTestApp() {
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
-    req.user = { id: 'admin-user', username: 'admin', groups: ['admins'] };
+    // A local admin session (the lockout guard needs the caller's sign-in route).
+    req.user = { id: 'admin-user', username: 'admin', groups: ['admins'], authMode: 'local' };
     next();
   });
   registerAdminConfigRoutes(app);

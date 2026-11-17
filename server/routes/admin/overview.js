@@ -116,6 +116,10 @@ export default function registerAdminOverviewRoutes(app) {
       users: userCount,
       integrations,
       storage,
+      // Config files whose last reload failed and that still serve older data
+      // (a groups.json that no longer resolves keeps the old groups in force).
+      configRefreshErrors:
+        typeof configCache.getRefreshErrors === 'function' ? configCache.getRefreshErrors() : [],
       auth: {
         mode: authMode,
         anonymous: anonymousEnabled,

@@ -17,6 +17,7 @@ import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { sharedSecretHeaderProblem } from '../../utils/proxyAuthTrust.js';
 import { toolApprovalConfigProblem } from '../../utils/toolApproval.js';
 import { platformConfigSchema } from '../../validators/platformConfigSchema.js';
+import { assertPlatformChangeKeepsAccess } from '../../utils/adminGuards.js';
 import {
   describeSettingsChange,
   mergeSettingsForSave
@@ -336,7 +337,7 @@ export default function registerAdminConfigRoutes(app) {
     let mergedConfig;
     let firstRun = false;
     await updatePlatform(
-      stored => {
+      async stored => {
         firstRun = stored === null || Object.keys(stored).length === 0;
         newConfig = structuredClone(submittedConfig);
         existingConfig = structuredClone(stored);
@@ -460,6 +461,12 @@ export default function registerAdminConfigRoutes(app) {
           );
           mergedConfig.speech.azure.subscriptionKey = encryptSecretIfNeeded(restored);
         }
+
+        // No save may lock the caller, or every administrator, out (409
+        // AUTH_LOCKOUT, no override): evaluated on the stored body and the
+        // merged one, under the platform lock. A later scoped PATCH calls the
+        // same guard.
+        await assertPlatformChangeKeepsAccess(req.user, existingConfig, mergedConfig);
 
         // Save to file. Every secret has already been restored-if-redacted and
         // encrypted above; what reaches the store is a plain object.

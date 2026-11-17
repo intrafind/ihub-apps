@@ -13,6 +13,11 @@ import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import { parseUsageLimitsInput } from '../../validators/common.js';
 import { resolveGroupInheritance } from '../../utils/authorization.js';
 import { PROTECTED_GROUP_IDS } from '../../utils/protectedGroups.js';
+import {
+  assertGroupChangeKeepsAdmin,
+  assertGroupNotInherited,
+  assertGroupsResolvable
+} from '../../utils/adminGuards.js';
 
 /** The group configuration, as a path relative to `contents/`. */
 const GROUPS_FILE = 'config/groups.json';
@@ -623,6 +628,8 @@ export default function registerAdminGroupRoutes(app) {
       groupsData.groups[id] = newGroup;
       const inheritanceError = validateGroupInheritance(groupsData.groups, id);
       if (inheritanceError) throw new ServiceError('BAD_REQUEST', inheritanceError);
+      // The whole file must resolve, or the cache keeps the old groups.
+      assertGroupsResolvable(groupsData);
       groupsData.metadata.lastModified = new Date().toISOString();
       return groupsData;
     });
@@ -728,7 +735,7 @@ export default function registerAdminGroupRoutes(app) {
     // cannot overwrite a concurrent create, delete or content-access change.
     let group;
     let oldGroup;
-    await configStore.updateJson(GROUPS_FILE, groupsData => {
+    await configStore.updateJson(GROUPS_FILE, async groupsData => {
       if (!groupsData) {
         throw new ServiceError('NOT_FOUND', 'Groups file not found');
       }
@@ -739,6 +746,7 @@ export default function registerAdminGroupRoutes(app) {
         throw new ServiceError('NOT_FOUND', 'Group not found');
       }
 
+      const groupsBefore = structuredClone(groupsData);
       group = groupsData.groups[groupId];
       oldGroup = JSON.parse(JSON.stringify(group));
 
@@ -781,6 +789,11 @@ export default function registerAdminGroupRoutes(app) {
           newAdminAccess
         );
       }
+
+      // The whole file must resolve, and an administrator who can sign in must
+      // remain (removing admin access or an `inherits` link to it): 409 LAST_ADMIN.
+      assertGroupsResolvable(groupsData);
+      await assertGroupChangeKeepsAdmin(groupsBefore, groupsData, { groupId });
 
       groupsData.metadata.lastModified = new Date().toISOString();
       return groupsData;
@@ -861,6 +874,10 @@ export default function registerAdminGroupRoutes(app) {
    *                   type: string
    *             example:
    *               error: "Cannot delete protected system group: admins"
+   *       409:
+   *         description: |
+   *           `GROUP_IN_USE`: other groups inherit from this group; `details.dependants`
+   *           lists them (remove the group from their `inherits` first)
    *       404:
    *         description: Group not found
    *         content:
@@ -902,6 +919,11 @@ export default function registerAdminGroupRoutes(app) {
 
       deletedGroup = groupsData.groups[groupId];
 
+      // A group others inherit from cannot go: their inheritance would no
+      // longer resolve, and the cache would keep serving the old groups, so
+      // revocations would silently stop applying. 409 GROUP_IN_USE, naming them.
+      assertGroupNotInherited(groupsData, groupId);
+
       // Prevent deleting the last group that grants adminAccess, which would
       // lock every admin out of the platform.
       if (deletedGroup.permissions?.adminAccess === true) {
@@ -915,6 +937,7 @@ export default function registerAdminGroupRoutes(app) {
       }
 
       delete groupsData.groups[groupId];
+      assertGroupsResolvable(groupsData);
       groupsData.metadata.lastModified = new Date().toISOString();
       return groupsData;
     });

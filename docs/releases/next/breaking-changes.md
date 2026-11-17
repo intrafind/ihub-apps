@@ -940,3 +940,31 @@ went: site title, logo, favicon, tagline and PWA settings → **Branding**; the 
 
 Nothing changes in `ui.json` or the REST API for existing settings. `PUT /api/admin/ui/disclaimer` is
 new and saves the disclaimer on its own; `POST /api/admin/ui/config` still takes the whole configuration.
+
+## Admin API Refuses Changes That Lock Administrators Out
+
+Scripts that call the admin API can now get these refusals. Each is an `application/problem+json`
+response whose `code` says what happened; nothing is changed. There is no override.
+
+| Route | Refused when | Status | `code` |
+| --- | --- | --- | --- |
+| `POST /api/admin/configs/platform` | the caller's own sign-in method or provider would be off, or no administrator could sign in | 409 | `AUTH_LOCKOUT` |
+| `POST /api/admin/changes/platform/…/rollback` | the same, for the restored configuration | 409 | `AUTH_LOCKOUT` |
+| `PUT /api/admin/auth/users/{id}` | deactivating your own account | 409 | `SELF_LOCKOUT` |
+| `PUT /api/admin/auth/users/{id}` | no active administrator who can sign in would remain | 409 | `LAST_ADMIN` |
+| `PUT`, `POST /api/admin/auth/users…` | `active` is present and not `true` or `false` | 400 | `BAD_REQUEST` |
+| `DELETE /api/admin/auth/users/{id}` | deleting your own account | 409 | `SELF_LOCKOUT` |
+| `DELETE /api/admin/auth/users/{id}` | the last administrator who can sign in (unchanged) | 403 | `FORBIDDEN` |
+| `DELETE /api/admin/groups/{id}` | other groups inherit from it (`details.dependants`) | 409 | `GROUP_IN_USE` |
+| `PUT /api/admin/groups/{id}`, group rollback | no active administrator who can sign in would remain | 409 | `LAST_ADMIN` |
+| every groups.json write (create, update, delete, content access, rollback) | the group inheritance would not resolve | 400 | `BAD_REQUEST` |
+| any of the above | the check itself could not run (a file unreadable) | 503 | `ADMIN_CHECK_FAILED` |
+
+"An administrator who can sign in" is an active user with an admin group (also inherited) whose
+sign-in method is enabled, or an LDAP provider or NTLM with an admin default group. Admins who
+get their rights only from an identity-provider group mapping are not counted.
+
+**Before upgrading:** scripts that switch the sign-in method in one call, demote or deactivate
+the account they run as, or delete parent groups before their children must change order: enable
+the new method first and sign in with it, use another admin account, and delete children first
+(the `details.dependants` of the refusal name them).

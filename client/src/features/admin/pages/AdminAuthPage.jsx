@@ -10,6 +10,7 @@ import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 
 /** A value with its object keys sorted, so key order does not count as a change. */
 function canonical(value) {
@@ -148,9 +149,11 @@ function AdminAuthPage() {
       // Refresh the platform config context to update navigation
       refreshConfig();
     } catch (error) {
+      // A lockout refusal (AUTH_LOCKOUT) says why and what to do instead, in the
+      // admin's language; the form keeps every edit.
       setMessage({
         type: 'error',
-        text: `Failed to save configuration: ${getAdminApiErrorMessage(error)}`
+        text: `Failed to save configuration: ${apiErrorMessage(error, t, getAdminApiErrorMessage(error))}`
       });
     } finally {
       setSaving(false);
@@ -217,6 +220,8 @@ function AdminAuthPage() {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {message && (
           <div
+            role={message.type === 'error' ? 'alert' : 'status'}
+            data-testid="admin-auth-message"
             className={`mb-6 p-4 rounded-md ${
               message.type === 'success'
                 ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'

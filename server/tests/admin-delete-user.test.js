@@ -22,14 +22,28 @@ const testRateLimiter = rateLimit({ windowMs: 60 * 1000, limit: 10000 });
 const state = {
   users: null,
   written: null,
-  lastAdmin: false,
   cleanup: null,
   audits: []
 };
 
+// groups.json and platform.json as the last-admin guard reads them (fresh, from the store).
+const OTHER_FILES = {
+  'config/groups.json': {
+    groups: {
+      admins: { id: 'admins', permissions: { adminAccess: true } },
+      users: { id: 'users', permissions: { adminAccess: false } }
+    }
+  },
+  'config/platform.json': { localAuth: { enabled: true } }
+};
+
+const readFile = path =>
+  Promise.resolve(structuredClone(path in OTHER_FILES ? OTHER_FILES[path] : state.users));
+
 jest.unstable_mockModule('../services/config/ConfigStore.js', () => ({
   default: {
-    readJson: () => Promise.resolve(structuredClone(state.users)),
+    readJson: readFile,
+    readJsonStrict: readFile,
     writeJson: (_path, data) => {
       state.written = structuredClone(data);
       return Promise.resolve();
@@ -60,11 +74,6 @@ jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
   }
 }));
 
-jest.unstable_mockModule('../utils/adminRescue.js', () => ({
-  isLastAdmin: () => state.lastAdmin,
-  ensureFirstUserIsAdmin: user => Promise.resolve(user)
-}));
-
 jest.unstable_mockModule('../services/AuditLogService.js', () => ({
   logAudit: entry => state.audits.push(entry)
 }));
@@ -87,6 +96,17 @@ function buildApp() {
   return app;
 }
 
+/** Alice: the only active administrator, signing in locally. */
+function makeAliceTheOnlyAdmin() {
+  state.users.users.user_alice = {
+    ...state.users.users.user_alice,
+    internalGroups: ['admins'],
+    authMethods: ['local'],
+    passwordHash: 'hash',
+    active: true
+  };
+}
+
 const del = userId => request(buildApp()).delete(`/api/admin/auth/users/${userId}`);
 
 beforeEach(() => {
@@ -98,7 +118,6 @@ beforeEach(() => {
     metadata: {}
   };
   state.written = null;
-  state.lastAdmin = false;
   state.cleanup = null;
   state.audits = [];
 });
@@ -139,7 +158,7 @@ describe('DELETE /api/admin/auth/users/:userId', () => {
   });
 
   test('cleans up nothing, and deletes nothing, for the last admin', async () => {
-    state.lastAdmin = true;
+    makeAliceTheOnlyAdmin();
 
     const res = await del('user_alice');
 
@@ -155,7 +174,7 @@ describe('user routes answer errors in the shared shape', () => {
     expect(missing.status).toBe(404);
     expect(missing.body).toMatchObject({ code: 'NOT_FOUND', detail: 'User not found' });
 
-    state.lastAdmin = true;
+    makeAliceTheOnlyAdmin();
     const last = await del('user_alice');
     expect(last.status).toBe(403);
     expect(last.body.code).toBe('FORBIDDEN');

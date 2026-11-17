@@ -11,7 +11,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { ServiceError } from '../../utils/ServiceError.js';
 import { assertValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
-import { isLastAdmin } from '../../utils/adminRescue.js';
+import { assertUserChangeKeepsAdmin } from '../../utils/adminGuards.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import { startUserCleanup } from '../../services/userDeletion.js';
 import { deleteLoginTokens } from '../../services/integrations/iFinderTokenProvider.js';
@@ -353,6 +353,12 @@ export default function registerAdminAuthRoutes(app) {
       authMethods = ['local']
     } = req.body;
 
+    // `active` is read as `=== false` at sign-in, so "false" or 0 stored here
+    // would leave the account enabled. Only a boolean is accepted.
+    if (typeof active !== 'boolean') {
+      throw new ServiceError('BAD_REQUEST', 'active must be true or false');
+    }
+
     // Check if this is a local auth user (needs password)
     const isLocalAuth = authMethods.includes('local');
 
@@ -498,9 +504,13 @@ export default function registerAdminAuthRoutes(app) {
    *             schema:
    *               $ref: '#/components/schemas/UserOperation'
    *       400:
-   *         description: Validation error (e.g., password too short)
+   *         description: Validation error (e.g., password too short, `active` not a boolean)
    *       404:
    *         description: User not found
+   *       409:
+   *         description: |
+   *           Refused: `SELF_LOCKOUT` (deactivating your own account) or `LAST_ADMIN`
+   *           (no active administrator who can sign in would remain)
    *       500:
    *         description: Failed to update user
    */
@@ -518,6 +528,10 @@ export default function registerAdminAuthRoutes(app) {
     const { email, name, password, internalGroups, active, usageLimits } = req.body;
     const limits = usageLimits === undefined ? null : parseUsageLimitsInput(usageLimits);
     if (limits && !limits.ok) throw new ServiceError('BAD_REQUEST', limits.error);
+    // See the create route: a non-boolean `active` would be stored and read as enabled.
+    if (active !== undefined && typeof active !== 'boolean') {
+      throw new ServiceError('BAD_REQUEST', 'active must be true or false');
+    }
 
     if (password && password.length < 6) {
       throw new ServiceError('BAD_REQUEST', 'Password must be at least 6 characters long');
@@ -528,7 +542,7 @@ export default function registerAdminAuthRoutes(app) {
     // Read, change and write run under the file lock; see the create route.
     let user;
     let deactivated = false;
-    await configStore.updateJson(USERS_FILE, usersData => {
+    await configStore.updateJson(USERS_FILE, async usersData => {
       if (!usersData) {
         throw new ServiceError('NOT_FOUND', 'Users file not found');
       }
@@ -538,6 +552,7 @@ export default function registerAdminAuthRoutes(app) {
         throw new ServiceError('NOT_FOUND', 'User not found');
       }
 
+      const usersBefore = structuredClone(usersData);
       const target = usersData.users[userId];
       deactivated = active === false && target.active !== false;
 
@@ -552,6 +567,15 @@ export default function registerAdminAuthRoutes(app) {
         else delete target.usageLimits;
       }
       if (newPasswordHash) target.passwordHash = newPasswordHash;
+
+      // On the body held under the lock, so two admins demoting the last two
+      // administrators at once cannot both succeed: 409 SELF_LOCKOUT for
+      // deactivating yourself, 409 LAST_ADMIN when no administrator who can
+      // sign in would remain.
+      await assertUserChangeKeepsAdmin(req.user, usersBefore, usersData, {
+        userId,
+        action: 'update'
+      });
 
       target.updatedAt = new Date().toISOString();
       if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
@@ -633,8 +657,12 @@ export default function registerAdminAuthRoutes(app) {
    *                   type: string
    *             example:
    *               message: "User deleted successfully"
+   *       403:
+   *         description: The last administrator who can sign in cannot be deleted
    *       404:
    *         description: User not found
+   *       409:
+   *         description: Refused with `SELF_LOCKOUT` (deleting your own account)
    *       500:
    *         description: Failed to delete user
    */
@@ -646,7 +674,7 @@ export default function registerAdminAuthRoutes(app) {
 
     // Read, change and write run under the file lock; see the create route.
     let username;
-    await configStore.updateJson(USERS_FILE, usersData => {
+    await configStore.updateJson(USERS_FILE, async usersData => {
       if (!usersData) {
         throw new ServiceError('NOT_FOUND', 'Users file not found');
       }
@@ -656,18 +684,18 @@ export default function registerAdminAuthRoutes(app) {
         throw new ServiceError('NOT_FOUND', 'User not found');
       }
 
-      // Check if user is the last admin - prevent deletion
-      if (isLastAdmin(userId)) {
-        throw new ServiceError(
-          'FORBIDDEN',
-          'Cannot delete the last admin user. At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
-        );
-      }
-
       username = usersData.users[userId].username;
+      const usersBefore = structuredClone(usersData);
 
       // Remove user
       delete usersData.users[userId];
+
+      // On the body held under the lock: never your own account (409
+      // SELF_LOCKOUT), never the last administrator who can sign in (403).
+      await assertUserChangeKeepsAdmin(req.user, usersBefore, usersData, {
+        userId,
+        action: 'delete'
+      });
       if (!usersData.metadata) usersData.metadata = { version: '2.0.0' };
       usersData.metadata.lastUpdated = new Date().toISOString();
       return usersData;

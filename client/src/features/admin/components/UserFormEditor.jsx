@@ -22,6 +22,7 @@ function UserFormEditor({
   onChange,
   onValidationChange,
   isNewUser = false,
+  isSelf = false,
   jsonSchema,
   availableGroups = []
 }) {
@@ -244,22 +245,38 @@ function UserFormEditor({
 
                 <div className="col-span-6 sm:col-span-3">
                   <div className="flex items-center">
+                    {/* The stored field is `active`; it is the only one this switch sets.
+                        Your own account cannot be deactivated (the server refuses it). */}
                     <input
+                      id="user-active"
                       type="checkbox"
-                      checked={user.enabled !== false && user.active !== false}
-                      onChange={e => {
-                        handleInputChange('enabled', e.target.checked);
-                        handleInputChange('active', e.target.checked);
-                      }}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm"
+                      checked={user.active !== false}
+                      disabled={isSelf && user.active !== false}
+                      aria-describedby={isSelf ? 'user-active-self-hint' : undefined}
+                      onChange={e => handleInputChange('active', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded-sm disabled:opacity-50"
                     />
-                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                    <label
+                      htmlFor="user-active"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
                       {t('admin.users.enabled', 'Enabled')}
                     </label>
                   </div>
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     Disabled users cannot log in or access the system
                   </p>
+                  {isSelf && (
+                    <p
+                      id="user-active-self-hint"
+                      className="mt-1 text-xs text-gray-600 dark:text-gray-300"
+                    >
+                      {t(
+                        'admin.users.edit.selfDeactivateHint',
+                        'You cannot deactivate your own account.'
+                      )}
+                    </p>
+                  )}
                 </div>
 
                 {/* Auth Methods - selector for new users, read-only for existing */}

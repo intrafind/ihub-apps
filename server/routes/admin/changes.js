@@ -11,6 +11,11 @@ import configStore from '../../services/config/ConfigStore.js';
 import { logAudit } from '../../services/AuditLogService.js';
 import logger from '../../utils/logger.js';
 import { updatePlatform } from '../../utils/platformConfigStore.js';
+import {
+  assertGroupChangeKeepsAdmin,
+  assertGroupsResolvable,
+  assertPlatformChangeKeepsAccess
+} from '../../utils/adminGuards.js';
 
 const VALID_RESOURCES = new Set([
   'app',
@@ -123,10 +128,16 @@ export default function registerAdminChangesRoutes(app) {
           //
           // `beforeState` comes from a snapshot the groups routes take from
           // this same authored file, so it merges back into it unchanged.
-          await configStore.updateJson('config/groups.json', current => {
+          //
+          // The rolled-back body must resolve (a snapshot can name a parent
+          // deleted since) and must leave an administrator who can sign in.
+          await configStore.updateJson('config/groups.json', async current => {
             const config = current || { groups: {} };
             if (!config.groups || typeof config.groups !== 'object') config.groups = {};
+            const previous = structuredClone(config);
             config.groups[id] = beforeState;
+            assertGroupsResolvable(config);
+            await assertGroupChangeKeepsAdmin(previous, config, { groupId: id });
             return config;
           });
           await configCache.refreshCacheEntry('config/groups.json');
@@ -135,7 +146,13 @@ export default function registerAdminChangesRoutes(app) {
         case 'platform': {
           // A rollback replaces the whole file by design; it still goes through
           // the platform update lock so it cannot interleave with another save.
-          await updatePlatform(() => structuredClone(beforeState));
+          // It is refused, like any platform save, when it would lock the
+          // caller or every administrator out (409 AUTH_LOCKOUT).
+          await updatePlatform(async stored => {
+            const next = structuredClone(beforeState);
+            await assertPlatformChangeKeepsAccess(req.user, stored, next);
+            return next;
+          });
           await configCache.refreshCacheEntry('config/platform.json');
           break;
         }

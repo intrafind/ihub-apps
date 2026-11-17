@@ -824,3 +824,31 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Admins Can No Longer Lock Themselves or Everyone Out
+
+Unticking the sign-in method you were signed in with on **Authentication**, demoting or
+deactivating the last administrator on **Users**, or a save after the Authentication page failed
+to load could leave nobody able to administer iHub. Worse, the next person to sign in through
+OIDC, proxy or NTLM was then made an administrator automatically. Such changes are now refused,
+with an explanation on the page, and nothing is saved.
+
+- **Authentication:** a save that turns off your own sign-in method (or your OIDC/LDAP provider),
+  or leaves no administrator who can sign in, is refused. To switch methods: enable the new one,
+  sign in with it as an administrator, then turn off the old one. Methods forced on through
+  `IHUB_PLATFORM__*` environment variables count as on. A rollback from the change history is
+  checked the same way.
+- **Users:** you cannot deactivate or delete your own account; your own Enabled switch is locked.
+  Removing administrator rights from, or deactivating, the last active administrator who can
+  sign in is refused. Administrators inherited through a group count; deactivated ones and those
+  whose sign-in method is off do not.
+- **Users:** saving a user (an email change, say) no longer re-enables a deactivated account,
+  and unticking **Enabled** deactivates it again.
+- **Groups:** a group other groups inherit from can no longer be deleted; the dialog names them.
+  Deleting it used to leave the groups unresolvable, and from then on permission changes silently
+  stopped applying until a restart. Group edits that would leave no administrator are refused,
+  and a groups file that no longer resolves is listed on the admin Overview statistics
+  (`configRefreshErrors`).
+
+How to recover when nobody can sign in as an administrator: see
+[Authentication Quick Start → Recover Admin Access](../../AUTHENTICATION_QUICK_START.md#recover-admin-access).
