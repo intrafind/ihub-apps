@@ -199,7 +199,7 @@ export async function editableSourceOf(params, { tool, extension, what }) {
   const source = await readSource(data);
   if (!source || source.tool !== tool) {
     throw new GeneratedFileError(
-      `"${name}" carries no editable source (it was made before edits were possible, uploaded, or saved elsewhere). Create it again with ${tool}; later changes can then be edits.`,
+      `"${name}" carries no editable source (it was made before edits were possible, built on an uploaded file, uploaded itself, or saved elsewhere). Create it again with ${tool}; later changes can then be edits.`,
       'not-editable'
     );
   }

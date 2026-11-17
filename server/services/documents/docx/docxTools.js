@@ -151,11 +151,17 @@ export async function runCreateDocx(params) {
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
-      // The date is kept as rendered, so an edit next week keeps this one.
-      data: await embedSource(buffer, 'docx', {
-        tool: CREATE_DOCX_TOOL.id,
-        args: { ...toolArgsOf(params, CREATE_DOCX_TOOL), date: spec.date }
-      }),
+      // The source is kept only when it is the whole document: an uploaded
+      // file whose own text stays (placeholders filled, content appended) is
+      // more than the Markdown, so an edit could not rebuild it. The date is
+      // kept as rendered, so an edit next week keeps this one.
+      data:
+        !templateFile || templateFile.mode === 'styles_only'
+          ? await embedSource(buffer, 'docx', {
+              tool: CREATE_DOCX_TOOL.id,
+              args: { ...toolArgsOf(params, CREATE_DOCX_TOOL), date: spec.date }
+            })
+          : buffer,
       mimeType: DOCX_MIME,
       name: params.filename || params.title
     });

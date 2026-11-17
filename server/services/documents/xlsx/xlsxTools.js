@@ -128,10 +128,14 @@ export async function runCreateXlsx(params) {
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
-      data: await embedSource(buffer, 'xlsx', {
-        tool: CREATE_XLSX_TOOL.id,
-        args: toolArgsOf(params, CREATE_XLSX_TOOL)
-      }),
+      // Built on an uploaded workbook, the sheets here are only the new or
+      // changed ones: no source, so an edit cannot drop the others.
+      data: sourceFile
+        ? buffer
+        : await embedSource(buffer, 'xlsx', {
+            tool: CREATE_XLSX_TOOL.id,
+            args: toolArgsOf(params, CREATE_XLSX_TOOL)
+          }),
       mimeType: XLSX_MIME,
       name: params.filename || params.title,
       meta: { sheets }

@@ -3,6 +3,7 @@
 
 import { parseStructured } from '../documentToolHelpers.js';
 import { GeneratedFileError } from '../generatedFiles.js';
+import { WORKBOOK_LIMITS } from './buildXlsx.js';
 
 /**
  * Sheet operations of `edit_xlsx`: set cells, append, insert and delete
@@ -21,6 +22,12 @@ export const MAX_SHEET_CHANGES = 100;
 
 /** Most sheets a workbook may have (as `create_xlsx`). */
 const MAX_SHEETS = 20;
+
+/** Last row a cell may be in: the header plus the rows a sheet keeps. */
+const MAX_ROW = WORKBOOK_LIMITS.maxRowsPerSheet + 1;
+
+/** Last column a cell may be in: Excel's XFD. */
+const MAX_COLUMN = 16383;
 
 /** Most cells one `setCells` may write. */
 const MAX_CELLS_PER_CHANGE = 10000;
@@ -51,7 +58,13 @@ export function columnIndexOf(letters) {
 function cellOf(value, where) {
   const match = /^([A-Za-z]{1,3})([1-9]\d{0,6})$/.exec(String(value ?? '').trim());
   if (!match) throw invalid(`${where} must be a cell such as "B3".`);
-  return { row: Number(match[2]), column: columnIndexOf(match[1]) };
+  const cell = { row: Number(match[2]), column: columnIndexOf(match[1]) };
+  if (cell.row > MAX_ROW || cell.column > MAX_COLUMN) {
+    throw invalid(
+      `${where} "${value}" is outside the sheet: a workbook keeps rows 1 to ${MAX_ROW} (row 1 is the header) and columns A to XFD.`
+    );
+  }
+  return cell;
 }
 
 /** The index of a sheet named (case-insensitive) or numbered (1-based) by `ref`. */
@@ -105,6 +118,10 @@ function setCells(sheet, cell, values, where) {
     );
   }
   const start = cellOf(cell, `${where}.cell`);
+  const widest = Math.max(...values.map(row => row.length));
+  if (start.row + values.length - 1 > MAX_ROW || start.column + widest - 1 > MAX_COLUMN) {
+    throw invalid(`${where}.values reach past row ${MAX_ROW} or column XFD, the end of a sheet.`);
+  }
   const next = { ...sheet, rows: [...(Array.isArray(sheet.rows) ? sheet.rows : [])] };
   values.forEach((rowValues, i) => {
     const rowNumber = start.row + i;

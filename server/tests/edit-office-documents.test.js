@@ -194,6 +194,21 @@ describe('edit helpers', () => {
       () => applySheetChanges(sheets, [{ op: 'deleteSheet', sheet: 'Summary' }]),
       /at least one sheet/
     );
+    // A cell past the sheet's end is refused before any row is padded.
+    assert.throws(
+      () =>
+        applySheetChanges(sheets, [
+          { op: 'setCells', sheet: 'Summary', cell: 'A1048576', values: [[1]] }
+        ]),
+      /outside the sheet: a workbook keeps rows 1 to 5001/
+    );
+    assert.throws(
+      () =>
+        applySheetChanges(sheets, [
+          { op: 'setCells', sheet: 'Summary', cell: 'A5001', values: [[1], [2]] }
+        ]),
+      /reach past row 5001/
+    );
   });
 });
 

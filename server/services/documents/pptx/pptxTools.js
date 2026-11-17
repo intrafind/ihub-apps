@@ -232,10 +232,15 @@ export async function runCreatePptx(params) {
     const file = holdGeneratedFile({
       user: params.user,
       chatId: params.chatId,
-      data: await embedSource(buffer, 'pptx', {
-        tool: CREATE_PPTX_TOOL.id,
-        args: toolArgsOf(params, CREATE_PPTX_TOOL)
-      }),
+      // Appended to an uploaded deck, the slides here are only part of the
+      // file: no source, so an edit cannot miscount the slides.
+      data:
+        templateFile?.mode === 'append'
+          ? buffer
+          : await embedSource(buffer, 'pptx', {
+              tool: CREATE_PPTX_TOOL.id,
+              args: toolArgsOf(params, CREATE_PPTX_TOOL)
+            }),
       mimeType: PPTX_MIME,
       name: params.filename || params.title,
       meta: { slides }
