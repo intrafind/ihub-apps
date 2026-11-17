@@ -103,10 +103,22 @@ export class AiAcknowledgementRepository {
    */
   async get(userId) {
     if (!this.isAvailable() || !userId) return null;
-    return ownData(
-      await this.documents.get(AI_ACKNOWLEDGEMENTS_NAMESPACE, acknowledgementKey(userId)),
-      userId
-    );
+    return ownData(await this._read(acknowledgementKey(userId)), userId);
+  }
+
+  /**
+   * Read a document. One that exists but cannot be parsed (the store has
+   * logged it) reads as `{damaged: true}`: it only ever held this user's
+   * confirmations, so they are asked again and the next write replaces it,
+   * rather than every read and write failing for that user for good.
+   */
+  async _read(key) {
+    try {
+      return await this.documents.get(AI_ACKNOWLEDGEMENTS_NAMESPACE, key);
+    } catch (error) {
+      if (error?.code !== 'CORRUPT_DOCUMENT') throw error;
+      return { damaged: true };
+    }
   }
 
   /**
@@ -120,7 +132,7 @@ export class AiAcknowledgementRepository {
   async _update(userId, mutate) {
     const key = acknowledgementKey(userId);
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-      const doc = await this.documents.get(AI_ACKNOWLEDGEMENTS_NAMESPACE, key);
+      const doc = await this._read(key);
       const current = ownData(doc, userId) || {
         version: AI_ACKNOWLEDGEMENT_DOC_VERSION,
         userId: String(userId),
@@ -131,7 +143,8 @@ export class AiAcknowledgementRepository {
       try {
         await this.documents.put(AI_ACKNOWLEDGEMENTS_NAMESPACE, key, next, {
           ownerId: String(userId),
-          etag: doc ? doc.etag : null
+          // A damaged document is overwritten unconditionally (see _read).
+          ...(doc?.damaged ? {} : { etag: doc ? doc.etag : null })
         });
         return result;
       } catch (error) {

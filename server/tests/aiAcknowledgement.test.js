@@ -1092,6 +1092,16 @@ describe('acknowledgement documents', () => {
     }
   });
 
+  test('an unreadable document is replaced instead of blocking the user for good', async () => {
+    await repo().record('u0', entry);
+    const files = await fs.readdir(storage.dir, { recursive: true });
+    const name = files.find(file => file.endsWith(`${acknowledgementKey('u0')}.json`));
+    await fs.writeFile(path.join(storage.dir, name), '{"torn');
+    expect(await repo().get('u0')).toBeNull();
+    expect((await repo().record('u0', entry)).recorded).toBe(true);
+    expect(await entriesOf('u0')).toHaveLength(1);
+  });
+
   test('deleting a user removes their acknowledgement document', async () => {
     await repo().record('u0', entry);
     const { USER_CLEANUP_STEPS } = await import('../services/userDeletion.js');
