@@ -44,7 +44,7 @@
  * @module server/utils/adminGuards
  */
 
-import fs from 'fs/promises';
+import fs from 'node:fs/promises';
 import configStore from '../services/config/ConfigStore.js';
 import configCache from '../configCache.js';
 import { resolveGroupInheritance } from './authorization.js';

@@ -223,3 +223,60 @@ describe('assertNoMarkers with the stored value (R8)', () => {
     expect(() => assertNoMarkers({ a: '[REDACTED]' })).toThrow();
   });
 });
+
+/** Milliseconds `fn` takes for one call. */
+function timeOf(fn) {
+  const start = performance.now();
+  fn();
+  return performance.now() - start;
+}
+
+describe('URL masks are found in linear time (Sonar S8786)', () => {
+  test.each([
+    ['https://h/x?token=REDACTED', true],
+    ['https://h/x?a=1&token=REDACTED', true],
+    ['https://h/x?token=REDACTED#frag', true],
+    ['https://h/x?token=REDACTED&b=2', true],
+    ['https://REDACTED@h/x', true],
+    ['https://h/x?next=https://REDACTED@h2/', true],
+    ['a?b?c=REDACTED', true],
+    ['&?=REDACTED', true],
+    ['?=REDACTED', false],
+    ['&&=REDACTED', false],
+    ['?a#b=REDACTED', false],
+    ['?a=b=REDACTED', false],
+    ['?token=REDACTEDX', false],
+    ['token=REDACTED', false],
+    ['?x=REDACTEDREDACTED&y=REDACTED', true],
+    ['Notice: [redacted] text', false],
+    ['[redacted]', true]
+  ])('isRedactedValue(%j) is %s', (value, expected) => {
+    expect(isRedactedValue(value)).toBe(expected);
+  });
+
+  test.each([
+    ['https://h/x?token=abc&tenant=acme', 'https://h/x?token=REDACTED&tenant=acme'],
+    ['https://h/x?tenant=acme&clientSecret=s3', 'https://h/x?tenant=acme&clientSecret=REDACTED'],
+    ['https://h/x?a?apiKey=k', 'https://h/x?a?apiKey=REDACTED'],
+    ['https://h/x?foo=a?apiKey=k', 'https://h/x?foo=a?apiKey=REDACTED'],
+    ['https://h/x?foo&apiKey=k#apiKey=z', 'https://h/x?foo&apiKey=REDACTED#apiKey=z'],
+    ['https://h/x?access%5Ftoken=k', 'https://h/x?access%5Ftoken=REDACTED'],
+    ['https://h/x?bad%E0=k', 'https://h/x?bad%E0=k'],
+    ['https://h/x?=k&&apiKey= z', 'https://h/x?=k&&apiKey=REDACTED z'],
+    ['no query at all', 'no query at all']
+  ])('maskUrlCredentials(%j)', (url, expected) => {
+    expect(maskUrlCredentials(url)).toBe(expected);
+  });
+
+  test.each([
+    ['?'.repeat(50000)],
+    ['&a'.repeat(25000)],
+    [`?${'a?'.repeat(25000)}`],
+    ['=REDACTED'.repeat(5000)],
+    [`?${'?='.repeat(25000)}REDACTEDx`],
+    [`?${' '.repeat(50000)}`]
+  ])('a %#. adversarial 50k-character input finishes fast', value => {
+    expect(timeOf(() => isRedactedValue(value))).toBeLessThan(50);
+    expect(timeOf(() => maskUrlCredentials(value))).toBeLessThan(50);
+  });
+});

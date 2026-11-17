@@ -147,14 +147,10 @@ describe('AdminUICustomization', () => {
 
     fireEvent.click(screen.getByLabelText('Custom text per language'));
     fireEvent.change(screen.getByDisplayValue('Acme AI'), { target: { value: 'My Hub' } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await flush();
     fireEvent.change(screen.getByDisplayValue('My Hub'), { target: { value: 'Our Hub' } });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
-    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Changes' }));
     await flush();
 
     const saves = makeAdminApiCall.mock.calls.filter(([, options]) => options?.method === 'POST');

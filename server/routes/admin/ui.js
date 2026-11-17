@@ -67,7 +67,8 @@ export function uiRevisionOf(stored) {
   if (stored === null || typeof stored !== 'object' || Array.isArray(stored)) {
     return revisionOf(stored);
   }
-  const { pages: _pages, ...withoutPages } = stored;
+  const withoutPages = { ...stored };
+  delete withoutPages.pages;
   return revisionOf(withoutPages);
 }
 

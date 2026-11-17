@@ -106,7 +106,8 @@ function canonicalJson(value) {
     const keys = Object.keys(value)
       .filter(key => value[key] !== undefined)
       .sort(compareCodeUnits);
-    return `{${keys.map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+    const members = keys.map(key => `${JSON.stringify(key)}:${canonicalJson(value[key])}`);
+    return `{${members.join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
 }

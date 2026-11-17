@@ -47,8 +47,57 @@ export const SECRET_MARKER = '***REDACTED***';
  */
 const KNOWN_MARKERS = new Set([SECRET_MARKER, '[redacted]', '[REDACTED]']);
 
-/** The masks `redactUrlSecrets` writes into a URL (`//REDACTED@`, `?token=REDACTED`). */
-const URL_MASK_PATTERN = /\/\/REDACTED@|[?&][^=&#]+=REDACTED(?=$|[&#])/;
+/** The user-info mask `redactUrlSecrets` writes into a URL (`//REDACTED@`). */
+const USER_INFO_MASK = '//REDACTED@';
+
+/** The query value mask `redactUrlSecrets` writes into a URL (`?token=REDACTED`). */
+const QUERY_VALUE_MASK = '=REDACTED';
+
+/**
+ * Whether the `=` at `equalsAt` ends a query parameter name: a `?` or `&`
+ * followed by at least one character that is none of `=`, `&`, `#`.
+ *
+ * Walks back from the `=` and stops at the first `=`, `&` or `#`, so the walks
+ * for all masks of one string together read it at most once.
+ *
+ * @param {string} value
+ * @param {number} equalsAt - Index of the `=` of a {@link QUERY_VALUE_MASK}
+ * @returns {boolean}
+ */
+function endsQueryParamName(value, equalsAt) {
+  for (let index = equalsAt - 1; index >= 0; index--) {
+    const char = value[index];
+    if (char === '=' || char === '#') return false;
+    const nameIsEmpty = index === equalsAt - 1;
+    // `&` ends every name; `?` may also be part of a longer one (`a?b?c=`).
+    if (char === '&') return !nameIsEmpty;
+    if (char === '?' && !nameIsEmpty) return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a string holds a mask `redactUrlSecrets` writes into a URL:
+ * `//REDACTED@`, or a query value `REDACTED` that ends the string or is
+ * followed by `&` or `#` (`?token=REDACTED`). Plain string code, linear in the
+ * length of `value`, because admin input reaches it.
+ *
+ * @param {string} value
+ * @returns {boolean}
+ */
+function hasUrlMask(value) {
+  if (value.includes(USER_INFO_MASK)) return true;
+  for (
+    let at = value.indexOf(QUERY_VALUE_MASK);
+    at !== -1;
+    at = value.indexOf(QUERY_VALUE_MASK, at + 1)
+  ) {
+    const after = value[at + QUERY_VALUE_MASK.length];
+    const endsValue = after === undefined || after === '&' || after === '#';
+    if (endsValue && endsQueryParamName(value, at)) return true;
+  }
+  return false;
+}
 
 /**
  * The secrets of `config/platform.json` that the admin read redacts.
@@ -167,13 +216,57 @@ function decodeParamName(name) {
  */
 export function maskUrlCredentials(value) {
   if (typeof value !== 'string') return value;
-  return redactUrlSecrets(value).replace(
-    /([?&])([^=&#\s]+)=([^&#\s]*)/g,
-    (match, separator, name, paramValue) =>
-      paramValue === 'REDACTED' || !isSecretName(decodeParamName(name))
-        ? match
-        : `${separator}${name}=REDACTED`
-  );
+  const url = redactUrlSecrets(value);
+  let masked = '';
+  let index = 0;
+  while (index < url.length) {
+    const param = queryParamAt(url, index);
+    const masks =
+      param.name !== undefined &&
+      param.value !== 'REDACTED' &&
+      isSecretName(decodeParamName(param.name));
+    masked += masks ? `${url[index]}${param.name}=REDACTED` : url.slice(index, param.end);
+    index = param.end;
+  }
+  return masked;
+}
+
+/** Whether a character is whitespace, as `\s` in a regular expression. */
+function isWhitespace(char) {
+  return /\s/.test(char);
+}
+
+/**
+ * Read the query parameter that starts at `start`: `?` or `&`, a name of at
+ * least one character that is none of `=`, `&`, `#` or whitespace, `=`, and a
+ * value up to the next `&`, `#` or whitespace.
+ *
+ * When there is none, `end` skips every character that cannot start one: the
+ * name run that a `?` begins also covers every `?` inside it, so none of them
+ * can start a parameter either. That keeps {@link maskUrlCredentials} linear.
+ *
+ * @param {string} url
+ * @param {number} start
+ * @returns {{end: number, name?: string, value?: string}} `name` and `value`
+ *   are set only when a parameter starts at `start`
+ */
+function queryParamAt(url, start) {
+  if (url[start] !== '?' && url[start] !== '&') return { end: start + 1 };
+  let nameEnd = start + 1;
+  while (nameEnd < url.length && !'=&#'.includes(url[nameEnd]) && !isWhitespace(url[nameEnd])) {
+    nameEnd++;
+  }
+  if (nameEnd === start + 1) return { end: start + 1 };
+  if (url[nameEnd] !== '=') return { end: nameEnd };
+  let valueEnd = nameEnd + 1;
+  while (valueEnd < url.length && !'&#'.includes(url[valueEnd]) && !isWhitespace(url[valueEnd])) {
+    valueEnd++;
+  }
+  return {
+    end: valueEnd,
+    name: url.slice(start + 1, nameEnd),
+    value: url.slice(nameEnd + 1, valueEnd)
+  };
 }
 
 /**
@@ -259,30 +352,43 @@ export function restoreRedacted(
   { mode = 'save' } = {}
 ) {
   for (const { path, kind = 'secret' } of secretPaths) {
-    walk(next, stored, parsePath(path), (holder, storedHolder, leaf) => {
-      const storedHas = storedHolder !== undefined && storedHolder[leaf] !== undefined;
-      const storedValue = storedHas ? storedHolder[leaf] : undefined;
-
-      if (mode === 'rollback' && kind === 'secret') {
-        if (storedHas) holder[leaf] = storedValue;
-        else delete holder[leaf];
-        return;
-      }
-
-      if (!Object.hasOwn(holder, leaf) || holder[leaf] === undefined) {
-        if (mode === 'save' && storedHas) holder[leaf] = storedValue;
-        return;
-      }
-      if (holder[leaf] === null) {
-        if (mode === 'save') delete holder[leaf];
-        return;
-      }
-      if (storedHas && isMaskOf(holder[leaf], storedValue, kind)) {
-        holder[leaf] = storedValue;
-      }
-    });
+    walk(next, stored, parsePath(path), (holder, storedHolder, leaf) =>
+      restoreLeaf(holder, storedHolder?.[leaf], leaf, { kind, mode })
+    );
   }
   return next;
+}
+
+/**
+ * Apply the {@link restoreRedacted} rules to one secret field.
+ *
+ * @param {Object} holder - The object in the body being written that holds the field (modified)
+ * @param {unknown} storedValue - The stored value of the field; `undefined` when none
+ * @param {string} leaf - The field name
+ * @param {Object} options
+ * @param {'secret'|'url'} options.kind
+ * @param {'save'|'rollback'} options.mode
+ */
+function restoreLeaf(holder, storedValue, leaf, { kind, mode }) {
+  const storedHas = storedValue !== undefined;
+
+  if (mode === 'rollback' && kind === 'secret') {
+    if (storedHas) holder[leaf] = storedValue;
+    else delete holder[leaf];
+    return;
+  }
+
+  if (!Object.hasOwn(holder, leaf) || holder[leaf] === undefined) {
+    if (mode === 'save' && storedHas) holder[leaf] = storedValue;
+    return;
+  }
+  if (holder[leaf] === null) {
+    if (mode === 'save') delete holder[leaf];
+    return;
+  }
+  if (storedHas && isMaskOf(holder[leaf], storedValue, kind)) {
+    holder[leaf] = storedValue;
+  }
 }
 
 /**
@@ -292,7 +398,7 @@ export function restoreRedacted(
  * @returns {boolean}
  */
 export function isRedactedValue(value) {
-  return typeof value === 'string' && (KNOWN_MARKERS.has(value) || URL_MASK_PATTERN.test(value));
+  return typeof value === 'string' && (KNOWN_MARKERS.has(value) || hasUrlMask(value));
 }
 
 /** The child of a stored value at `key`, or `undefined` when there is none. */

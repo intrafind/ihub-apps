@@ -425,7 +425,7 @@ function providerSurvives(block, provider) {
  */
 export function routeSurvives(route, platform, userRecord) {
   if (!route || !KNOWN_SIGN_IN_MODES.includes(route.mode)) return false;
-  if (userRecord && userRecord.active === false) return false;
+  if (userRecord?.active === false) return false;
   const p = platform || {};
   switch (route.mode) {
     case 'local':

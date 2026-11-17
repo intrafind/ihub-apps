@@ -60,8 +60,21 @@ const revisions = new Map();
  */
 export function guardedResourceOf(url) {
   if (typeof url !== 'string') return null;
-  const path = (url.startsWith('/') ? url : `/${url}`).split(/[?#]/)[0].replace(/\/+$/, '');
+  const path = withoutTrailingSlashes((url.startsWith('/') ? url : `/${url}`).split(/[?#]/)[0]);
   return GUARDED_ENDPOINTS[path] ?? null;
+}
+
+/**
+ * `path` without the slashes it ends with. A loop rather than `/\/+$/`, which
+ * takes quadratic time on a long run of slashes that does not end the string.
+ *
+ * @param {string} path
+ * @returns {string}
+ */
+function withoutTrailingSlashes(path) {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === '/') end--;
+  return path.slice(0, end);
 }
 
 /** @param {Object|undefined} headers */

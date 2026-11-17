@@ -339,11 +339,17 @@ describe('PATCH /api/admin/configs/platform: the POST checks apply', () => {
 
   test('a stale If-Match is 412; a fresh one is applied', async () => {
     const read = await request(appFor(LOCAL_ADMIN)).get('/api/admin/configs/platform');
-    await patch({ setup: { disabled: true } }).expect(200);
-    await patch({ setup: { disabled: false } }, { ifMatch: read.headers.etag }).expect(412);
+    expect((await patch({ setup: { disabled: true } })).status).toBe(200);
+
+    const stale = await patch({ setup: { disabled: false } }, { ifMatch: read.headers.etag });
+    expect(stale.status).toBe(412);
+    expect(stale.body.code).toBe('PRECONDITION_FAILED');
+    expect((await readPlatform()).setup.disabled).toBe(true);
 
     const fresh = await request(appFor(LOCAL_ADMIN)).get('/api/admin/configs/platform');
-    await patch({ setup: { disabled: false } }, { ifMatch: fresh.headers.etag }).expect(200);
+    const applied = await patch({ setup: { disabled: false } }, { ifMatch: fresh.headers.etag });
+    expect(applied.status).toBe(200);
+    expect((await readPlatform()).setup.disabled).toBe(false);
   });
 
   test('a snapshot (as stored, secrets encrypted) and an audit entry naming the sections', async () => {
