@@ -27,6 +27,10 @@ const WORKER = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   'helpers/file-lock-worker.js'
 );
+const HOT_WORKER = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'helpers/file-lock-hot-worker.js'
+);
 
 let dir;
 before(() => {
@@ -352,5 +356,34 @@ describe('withFileLock: callers in one process', () => {
       Promise.all([0, 1].map(() => withFileLock(lockPath, () => sleep(5), { renewMs: 0 })))
     );
     assert.equal(creates, 2);
+  });
+});
+
+describe('withFileLock: one busy lock over several processes', () => {
+  it('a process whose own callers keep the lock busy does not starve the others', async () => {
+    const lockPath = lockPathFor();
+    const results = await Promise.all(
+      [0, 1, 2].map(
+        () =>
+          new Promise((resolve, reject) => {
+            const child = fork(HOT_WORKER, [lockPath, '6', '3000']);
+            let stats = null;
+            child.on('message', m => (stats = m));
+            child.on('exit', code =>
+              code === 0 ? resolve(stats) : reject(new Error(`worker exited ${code}`))
+            );
+          })
+      )
+    );
+    const detail = JSON.stringify(results);
+    assert.deepEqual(
+      results.map(r => r.timeouts),
+      [0, 0, 0],
+      `a process timed out: ${detail}`
+    );
+    const total = results.reduce((sum, r) => sum + r.done, 0);
+    for (const r of results) {
+      assert.ok(r.done >= total / 8, `a process was starved: ${detail}`);
+    }
   });
 });

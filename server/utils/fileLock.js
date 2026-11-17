@@ -338,8 +338,12 @@ export async function acquireLease(lockPath, owner, opts) {
   }
 }
 
-/** Longest pause between two looks at a held lease, as a multiple of `pollMs`. */
-const MAX_POLL_FACTOR = 8;
+/**
+ * Longest pause between two looks at a held lease, as a multiple of `pollMs`.
+ * Kept short because a busy worker only leaves the lease free for about this
+ * long between its runs (see `passTurn`).
+ */
+const MAX_POLL_FACTOR = 4;
 
 async function acquireLeaseUntimed(
   lockPath,
@@ -514,12 +518,20 @@ export async function releaseLease(lockPath, owner, name, component = COMPONENT)
 }
 
 /**
- * How many local waiters in a row may inherit a held lease before it is
- * released for the other workers.
- * ponytail: fixed bound on per-worker runs; make it time-based if another
- * worker's waiters are seen timing out behind a busy key.
+ * How long one worker may keep a lease by passing it from local waiter to local
+ * waiter before it releases it for the other workers.
  */
-const MAX_HANDOFFS = 8;
+const MAX_RUN_MS = 200;
+
+/**
+ * After a run ended with local waiters still queued, the next local waiter
+ * sleeps this long (times 1 to 1.25, jittered) before re-acquiring. It covers
+ * the longest pause of another worker's waiter, so that waiter sees the lease
+ * free at least once instead of losing it to a re-acquire microseconds later.
+ * ponytail: blind yield, paid even when no other worker waits; replace with
+ * want-markers (a waiter announces itself) to yield only when someone does.
+ */
+const YIELD_FACTOR = MAX_POLL_FACTOR;
 
 /**
  * This process's holders and waiters per lock path. `withFileLock` callers in
@@ -527,7 +539,7 @@ const MAX_HANDOFFS = 8;
  * head of the line touches the file, and a holder passes its lease straight to
  * the next local waiter instead of releasing and re-creating it.
  *
- * @type {Map<string, {waiters: Array<() => void>, lease: {owner: string, stopRenewal: (() => void)|null, lost: boolean}|null, handoffs: number}>}
+ * @type {Map<string, {waiters: Array<() => void>, lease: {owner: string, stopRenewal: (() => void)|null, lost: boolean}|null, runStartedAt: number, yieldFirst: boolean}>}
  */
 const localLines = new Map();
 
@@ -554,22 +566,17 @@ function waitLocalTurn(line, deadline, waitMs, name) {
 
 /**
  * End a turn at `line`: hand the lease to the next local waiter while it is
- * renewed and still ours (and the run of hand-offs is short enough), else
- * release it; then wake the next waiter, or forget the line.
+ * renewed and still ours (and the run is younger than MAX_RUN_MS), else
+ * release it; then wake the next waiter, or forget the line. A run ended by
+ * its age makes the next local waiter yield first (see YIELD_FACTOR).
  */
 async function passTurn(lockPath, line, name, component) {
   const lease = line.lease;
-  const handOff =
-    lease &&
-    lease.stopRenewal &&
-    !lease.lost &&
-    line.waiters.length > 0 &&
-    line.handoffs < MAX_HANDOFFS;
-  if (handOff) {
-    line.handoffs += 1;
-  } else if (lease) {
+  const canHandOff = lease && lease.stopRenewal && !lease.lost && line.waiters.length > 0;
+  const runOver = performance.now() - line.runStartedAt >= MAX_RUN_MS;
+  if (lease && (!canHandOff || runOver)) {
     line.lease = null;
-    line.handoffs = 0;
+    line.yieldFirst = Boolean(canHandOff);
     lease.stopRenewal?.();
     await releaseLease(lockPath, lease.owner, name, component);
   }
@@ -590,7 +597,8 @@ async function passTurn(lockPath, line, name, component) {
  * Callers in one process queue in memory first (see `localLines`): the next
  * local caller inherits a held, renewed lease without touching the file, so
  * the file is contended only between processes. A run of local hand-offs is
- * capped so other workers get their turn.
+ * capped in time, and the worker then pauses before re-acquiring, so other
+ * workers get their turn.
  *
  * Not reentrant: a nested call on the same path waits for its own caller's
  * lease and times out.
@@ -601,7 +609,7 @@ async function passTurn(lockPath, line, name, component) {
  * @param {number} [opts.staleMs=15000] - Age at which an unrenewed lease is taken over
  * @param {number} [opts.timeoutMs=5000] - Acquisition budget, local wait included
  * @param {number} [opts.pollMs=20] - First pause between looks at a lease held
- *   by another process; doubles up to 8x
+ *   by another process; doubles up to 4x
  * @param {number} [opts.renewMs] - Renewal interval; default `staleMs / 3`, 0
  *   disables (and disables hand-off, since nothing keeps the lease young)
  * @param {string} [opts.component='FileLock']
@@ -631,13 +639,18 @@ export async function withFileLock(
       diag.waiters -= 1;
     }
   } else {
-    line = { waiters: [], lease: null, handoffs: 0 };
+    line = { waiters: [], lease: null, runStartedAt: 0, yieldFirst: false };
     localLines.set(lockPath, line);
   }
 
   // This call holds the turn from here on and must pass it on, whatever happens.
   try {
     if (!line.lease) {
+      if (line.yieldFirst) {
+        line.yieldFirst = false;
+        const pause = pollMs * YIELD_FACTOR * (1 + Math.random() / 4);
+        await sleep(Math.min(pause, Math.max(0, deadline - Date.now())));
+      }
       const owner = crypto.randomUUID();
       await acquireLease(lockPath, owner, {
         ttlMs: staleMs,
@@ -661,6 +674,7 @@ export async function withFileLock(
         );
       }
       line.lease = lease;
+      line.runStartedAt = performance.now();
     } else {
       diag.acquisitions += 1;
       diag.wait.record(performance.now() - startedAt);
