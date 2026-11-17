@@ -5,6 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
  */
 export default defineConfig({
   testDir: '../e2e',
+  // Changes users and groups on the server it runs against; it runs only through
+  // its own isolated config (npm run test:e2e:admin-safety).
+  testIgnore: ['**/admin-safety-guards.spec.js'],
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */

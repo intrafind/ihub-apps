@@ -116,10 +116,25 @@ export function effectivePlatformConfig(stored, env = process.env) {
     current[pathParts[pathParts.length - 1]] = parseEnvValue(envValue);
   }
 
+  return applySignInEnvFlags(effective, env);
+}
+
+/**
+ * Apply the sign-in switches that the runtime reads from the environment and
+ * not from the platform file: today `PROXY_AUTH_ENABLED=true` turns proxy
+ * sign-in on (`proxyAuth.js`). The guards and the admin rescue both use this, so
+ * they agree on which admins can sign in.
+ *
+ * @param {Object} platform - A platform body (not modified)
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {Object} The body with the env switches applied (a copy when changed)
+ */
+export function applySignInEnvFlags(platform, env = process.env) {
+  const base = platform && typeof platform === 'object' ? platform : {};
   if (String(env.PROXY_AUTH_ENABLED ?? '').toLowerCase() === 'true') {
-    effective.proxyAuth = { ...effective.proxyAuth, enabled: true };
+    return { ...base, proxyAuth: { ...base.proxyAuth, enabled: true } };
   }
-  return effective;
+  return base;
 }
 
 /**
