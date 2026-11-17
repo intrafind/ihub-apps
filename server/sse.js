@@ -17,7 +17,14 @@
  */
 
 import { createPresenceMap, hasRemote, lookupRemote, publish, subscribe } from './clusterBus.js';
-import { setEnvelopeDelivery, resetStream, stampSeq } from './services/loop/RunStream.js';
+import {
+  setEnvelopeDelivery,
+  resetStream,
+  stampSeq,
+  buildEnvelope,
+  currentSeq
+} from './services/loop/RunStream.js';
+import { SSE_V2_EVENTS } from '../shared/runEvents.js';
 import logger from './utils/logger.js';
 import {
   abortCause,
@@ -63,9 +70,15 @@ const EVENT_CHANNEL = 'sse:event';
 const ABORT_CHANNEL = 'chat:abort';
 const CLOSE_CHANNEL = 'chat:close';
 
-/** Write one SSE frame. `data` is serialized as JSON unless it already is a string. */
+/**
+ * Write one SSE frame. `data` is serialized as JSON unless it already is a
+ * string. An envelope with a run frame counter also gets an `id:` line
+ * (`{runId}:{rseq}`); the client does not rely on it, the resume does not need
+ * it, but it names the frame for any SSE reader that wants to.
+ */
 export function sendSSE(res, event, data) {
   res.write(`event: ${event}\n`);
+  if (data && typeof data === 'object' && data.rseq) res.write(`id: ${data.runId}:${data.rseq}\n`);
   res.write(`data: ${typeof data === 'string' ? data : JSON.stringify(data)}\n\n`);
 }
 
@@ -84,6 +97,12 @@ export function deliverEnvelope(streamId, envelope) {
 
   const clientEntry = clients.get(streamId);
   clientEntry.lastActivity = new Date(); // Keep connection marked as active
+  // A stream being resumed holds live frames until its snapshot is written
+  // (`writeResumedStream`).
+  if (clientEntry.held) {
+    clientEntry.held.push(envelope);
+    return true;
+  }
   try {
     // This worker owns the stream, so it owns the stream's sequence: frames
     // produced here and frames relayed from other workers get one counter.
@@ -125,6 +144,46 @@ export function deliverEnvelope(streamId, envelope) {
     }
     return false;
   }
+}
+
+/**
+ * Start a GET stream: write `stream/connected`, then — for a resumed run — the
+ * resume frames, then whatever arrived live meanwhile.
+ *
+ * Written straight to this connection rather than routed.
+ *
+ * A resumed stream holds its live frames (`entry.held`, see
+ * {@link deliverEnvelope}) while the snapshot is being fetched. Frames of the
+ * resumed run numbered up to the snapshot's cursor (`rseq <= upTo`) are in the
+ * snapshot already and are dropped; everything else is written after it.
+ *
+ * @param {string} streamId - The chat id
+ * @param {object} entry - This connection's `clients` entry
+ * @param {object} [resume]
+ * @param {object[]} [resume.frames] - Snapshot and ledger frames, in order
+ * @param {string} [resume.runId] - The resumed run
+ * @param {number} [resume.upTo] - The run frame counter the frames cover
+ * @returns {boolean} False when this connection is no longer the chat's stream.
+ */
+export function writeStreamStart(streamId, entry, { frames = [], runId = null, upTo = 0 } = {}) {
+  const held = entry.held || [];
+  delete entry.held;
+  if (clients.get(streamId) !== entry) return false;
+  deliverEnvelope(
+    streamId,
+    buildEnvelope({
+      streamId,
+      runId: streamId,
+      type: SSE_V2_EVENTS.STREAM_CONNECTED,
+      data: { runId: streamId, lastSeq: currentSeq(streamId) }
+    })
+  );
+  for (const frame of frames) deliverEnvelope(streamId, frame);
+  for (const frame of held) {
+    if (runId && frame.runId === runId && frame.rseq && frame.rseq <= upTo) continue;
+    deliverEnvelope(streamId, frame);
+  }
+  return true;
 }
 
 /**

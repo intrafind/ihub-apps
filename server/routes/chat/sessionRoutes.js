@@ -25,9 +25,11 @@ import {
   hasChatClient,
   isChatDurable,
   locateChatClient,
-  markChatDurable
+  markChatDurable,
+  writeStreamStart
 } from '../../sse.js';
-import { RunStreamEmitter, currentSeq, getStreamRun } from '../../services/loop/RunStream.js';
+import { resumeChatRun } from '../../services/chat/chatResume.js';
+import { RunStreamEmitter, getStreamRun } from '../../services/loop/RunStream.js';
 import runLog, { newRunId, isValidRunId } from '../../services/loop/RunLog.js';
 import { resolveActorId } from '../../services/loop/runIdentity.js';
 import { authorizeInteraction } from '../../services/loop/runAccess.js';
@@ -507,6 +509,24 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
    *         schema:
    *           type: string
    *         description: Unique chat session ID (e.g. UUID) created by the client
+   *       - in: query
+   *         name: resumeRun
+   *         required: false
+   *         schema:
+   *           type: string
+   *         description: >-
+   *           Re-attach to this running turn. After `stream/connected` the stream
+   *           first carries the turn's text and thinking so far (as `step/delta`
+   *           frames) and its ledger events after `afterLedgerSeq`, then goes live.
+   *       - in: query
+   *         name: afterLedgerSeq
+   *         required: false
+   *         schema:
+   *           type: integer
+   *           minimum: 0
+   *         description: >-
+   *           The last ledger `seq` of `resumeRun` the client replayed
+   *           (`GET /api/runs/{runId}/events?view=sse`).
    *     responses:
    *       200:
    *         description: SSE stream established successfully
@@ -570,10 +590,25 @@ export default function registerSessionRoutes(app, { getLocalizedError, DEFAULT_
         // appId is carried on the entry for parity with the previous shape;
         // nothing currently reads it back off the map, but keep it available.
         channel.entry.appId = appId;
-        new RunStreamEmitter({ streamId: chatId }).emit(SSE_V2_EVENTS.STREAM_CONNECTED, {
-          runId: chatId,
-          lastSeq: currentSeq(chatId)
-        });
+        // A client re-attaching to a running turn (`resumeRun`, after replaying
+        // its ledger up to `afterLedgerSeq`) gets the turn's partial text and
+        // thinking first; live frames wait until then (`writeStreamStart`).
+        const { resumeRun, afterLedgerSeq } = req.query;
+        let resume = null;
+        if (resumeRun && isValidRunId(resumeRun)) {
+          channel.entry.held = [];
+          try {
+            resume = await resumeChatRun({ chatId, runId: resumeRun, afterLedgerSeq });
+          } catch (resumeError) {
+            logger.warn('Chat stream resume failed', {
+              component: 'sessionRoutes',
+              chatId,
+              runId: resumeRun,
+              error: resumeError.message
+            });
+          }
+        }
+        writeStreamStart(chatId, channel.entry, resume ? { ...resume, runId: resumeRun } : {});
 
         // --- Workflow disconnect resilience ---
         // 1. If a workflow finished while the chat was disconnected, deliver
