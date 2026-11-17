@@ -21,7 +21,7 @@ The harness is plain Node 20+ with no dependencies. It runs the same way on a la
 | `tools/generate-corpus.mjs` | Generates 42 realistic Word, PowerPoint, Excel and PDF files (`npm run loadtest:corpus`)                                                                                       |
 | `profiles/*.json`           | One per experiment: `smoke`, `capacity-stub`, `company`, `capacity-gpu`, `ingest`, `ratelimits`, `soak`, `spike`                                                               |
 | `docker-compose.yml`        | Local sizing lab: iHub with a fixed CPU/RAM budget, plus the stubs                                                                                                             |
-| `k8s/`                      | Stubs Deployment, setup Job, Indexed runner Job, `collect.sh`                                                                                                                  |
+| `k8s/`                      | Stubs, optional iHub under test and snapshot pod, setup Job, Indexed runner Job, `run.sh` (one run end to end), `collect.sh`                                                   |
 
 ## What a virtual user does
 
@@ -174,67 +174,120 @@ docker compose -f tests/load/docker-compose.yml down -v
 
 ## In the cluster
 
-1. Generate the corpus, so the image carries it. Then build the runner image and push it:
+Run the runners **in the cluster, against the iHub Service**. A laptop runner over VPN and an ingress collapses beyond a few hundred connections and then measures the VPN, not iHub.
 
-   ```bash
-   npm run loadtest:corpus
-   ```
+### Notes before the first run
 
-   ```bash
-   docker build -t ghcr.io/intrafind/ihub-loadtest:latest tests/load
-   ```
+- **Images for amd64.** An image built on an Apple-silicon laptop is arm64 and does not start on amd64 nodes. Build with `docker buildx build --platform linux/amd64 …` (the runner below, and an iHub build under test).
+- **kube-downscaler.** `k8s/namespace.yaml` carries `downscaler/exclude: 'true'`, so a downscaler (k3s01 has one, Mon–Fri 08:00–18:00) does not scale the stubs or iHub to 0 mid-run.
+- **Volumes.** `k8s/ihub-under-test.yaml` asks for a 10Gi `local-path` volume, an example of a cluster policy that caps claims at 10Gi. One 1,500-user run writes about 2.8 GB.
+- **CPU.** One Kubernetes CPU is one hyperthread, not a physical core. Set `requests` = `limits` so the pod gets a guaranteed budget and cannot burst into idle node CPU.
+- **Memory.** Kubernetes has no swap: the memory limit is a hard ceiling, and the pod is OOM-killed at it. Docker's default swap is twice the memory limit, which made the local lab's memory results optimistic; `docker-compose.yml` now sets `memswap_limit` equal to `mem_limit`.
+- **Node pinning and hostnames** in the manifests are commented examples from k3s01. Pin iHub to an otherwise idle node if your cluster has one.
 
-   ```bash
-   docker push ghcr.io/intrafind/ihub-loadtest:latest
-   ```
+### 1. Build and push the runner image
 
-   Adjust the image name in `k8s/kustomization.yaml` and the Job files if you push elsewhere.
+Generate the corpus first, so the image carries it (it is generated, never committed):
 
-2. Configure the iHub under test with the environment in `k8s/ihub-env.example.yaml`, then restart it.
-3. Edit `k8s/loadtest.env`:
-   - `LT_BASE_URL`: the ingress URL measures what users get; `http://ihub.<ns>.svc:3000` measures iHub alone.
-   - `LT_PROFILE`, a new `LT_RUN_ID` per run, and `LT_SHARD_COUNT`, which must equal `completions` in `run-job.yaml`.
-4. Create the Secret:
+```bash
+npm run loadtest:corpus
+```
 
-   ```bash
-   kubectl create namespace ihub-loadtest
-   ```
+```bash
+docker buildx build --platform linux/amd64 -t ghcr.io/intrafind/ihub-apps:loadtest-runner --push tests/load
+```
 
-   ```bash
-   kubectl -n ihub-loadtest create secret generic loadtest-secrets \
-     --from-literal=LT_ADMIN_USER=admin --from-literal=LT_ADMIN_PASSWORD='…' \
-     --from-literal=LT_USER_PASSWORD='LoadTest-2026!' --from-literal=LT_LLM_API_KEY=''
-   ```
+If you push elsewhere, change the image in `k8s/kustomization.yaml` (stubs), `k8s/setup-job.yaml` and `k8s/run-job.yaml`, or pass `RUNNER_IMAGE` to `k8s/run.sh`.
 
-5. Apply the stubs and config, run setup, then run the test:
+### 2. Stubs, config and the iHub under test
 
-   ```bash
-   kubectl apply -k tests/load/k8s
-   ```
+Edit `k8s/loadtest.env` (shared by setup and runs). `LT_BASE_URL` defaults to the Service `http://ihub.ihub-loadtest.svc:3000`, which measures iHub alone. An ingress URL measures what users get.
 
-   ```bash
-   kubectl -n ihub-loadtest apply -f tests/load/k8s/setup-job.yaml
-   ```
+```bash
+kubectl apply -k tests/load/k8s
+```
 
-   ```bash
-   kubectl -n ihub-loadtest logs -f job/loadtest-setup
-   ```
+```bash
+kubectl -n ihub-loadtest create secret generic loadtest-secrets \
+  --from-literal=LT_ADMIN_USER=admin --from-literal=LT_ADMIN_PASSWORD='…' \
+  --from-literal=LT_USER_PASSWORD='LoadTest-2026!' --from-literal=LT_LLM_API_KEY=''
+```
 
-   ```bash
-   kubectl -n ihub-loadtest apply -f tests/load/k8s/run-job.yaml
-   ```
+To test a fresh iHub with a fixed budget, apply `k8s/ihub-under-test.yaml` (PVC, Deployment, Service; the Ingress is only for a runner outside the cluster). Set its image to the build you measure. To test an existing deployment instead, merge `k8s/ihub-env.example.yaml` into its env and restart it.
 
-6. Collect and merge. This writes `tests/load/results/<runId>/report.md`:
+```bash
+kubectl -n ihub-loadtest apply -f tests/load/k8s/ihub-under-test.yaml
+```
 
-   ```bash
-   tests/load/k8s/collect.sh
-   ```
+```bash
+kubectl -n ihub-loadtest rollout status deploy/ihub
+```
 
-7. Before the next run, delete the old Job and change `LT_RUN_ID`:
+### 3. Setup
 
-   ```bash
-   kubectl -n ihub-loadtest delete job loadtest-run
-   ```
+Setup creates the users `lt-0001…`. Create as many as the largest run needs: `run.mjs` stops before the clock starts when a shard's last user cannot log in, and prints the `LT_USER_COUNT` to use.
+
+```bash
+kubectl -n ihub-loadtest apply -f tests/load/k8s/setup-job.yaml
+```
+
+```bash
+kubectl -n ihub-loadtest logs -f job/loadtest-setup
+```
+
+Optional: keep the prepared state as a snapshot, so every run starts from the same `contents/` without setup. Stop iHub first, so the files are consistent:
+
+```bash
+kubectl -n ihub-loadtest apply -f tests/load/k8s/seed.yaml
+```
+
+```bash
+kubectl -n ihub-loadtest scale deploy/ihub --replicas=0
+```
+
+```bash
+kubectl -n ihub-loadtest exec seed -- tar czf /seed/prepared.tgz -C /contents .
+```
+
+`run.sh` with `SEED_SNAPSHOT` scales iHub back up; without it, run `kubectl -n ihub-loadtest scale deploy/ihub --replicas=1`. A snapshot made elsewhere can be copied in with `kubectl cp prepared.tgz ihub-loadtest/seed:/seed/`.
+
+### 4. Run
+
+`k8s/run.sh` does one run end to end: it restores the snapshot (`SEED_SNAPSHOT`), gives iHub its budget (`IHUB_CPU`, `IHUB_MEMORY`, `IHUB_WORKERS`, `IHUB_NODE_OPTIONS`; `kubectl set` restarts it), starts the Indexed Job with `SHARDS` pods, and collects the results. Every `LT_*` variable you set overrides `loadtest.env` for this run. The header of `run.sh` lists all settings.
+
+```bash
+KUBECTL="kubectl --context k3s01" SHARDS=4 \
+LT_RUN_ID=company-1500-w6 LT_PROFILE=company LT_STAGES=1500:180:420 LT_STOP_ON_FAILURE=false \
+LT_TARGET_CONCURRENT_USERS=1500 \
+IHUB_CPU=7 IHUB_MEMORY=8Gi IHUB_WORKERS=6 SEED_SNAPSHOT=prepared.tgz \
+tests/load/k8s/run.sh
+```
+
+It ends with the report path and iHub's memory peak and restart count (a restart during the run is an OOM kill or a crash: the run is not valid).
+
+By hand, without `run.sh`: keep `completions`/`parallelism` in `run-job.yaml` equal to `LT_SHARD_COUNT`, delete a leftover `loadtest-run-overrides` ConfigMap, and change `LT_RUN_ID` per run.
+
+```bash
+kubectl -n ihub-loadtest apply -f tests/load/k8s/run-job.yaml
+```
+
+```bash
+tests/load/k8s/collect.sh
+```
+
+### 5. How the results get out
+
+Each runner pod writes `results/<runId>/shard-<n>.json`, touches `results/DONE` and then sleeps for an hour. `k8s/collect.sh` waits for `DONE` in every pod, copies the shard files out with `kubectl cp` into `tests/load/results/<runId>/`, and runs `report.mjs` on that directory. **This is the reliable path.**
+
+The shard result also goes to stdout as `##LT-RESULT##` lines (`LT_RESULT_TO_STDOUT=1`), and `collect.sh` falls back to them when no runner pod is left. `kubectl logs` can split very long lines, so a larger result may arrive incomplete ("incomplete result for …"); rerun the collection while the pods are still up.
+
+`run.sh` deletes the Job after collecting. When you collect by hand, delete it yourself, or the runner pods hold their CPU for the hour:
+
+```bash
+kubectl -n ihub-loadtest delete job loadtest-run
+```
+
+### Scaling runs
 
 The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU limit to `WORKERS` + 1 (the primary relays SSE between workers), and repeat `capacity-stub` for `WORKERS` 1, 2, 4, 8 and 12. Comparing users per worker across those runs shows where more workers stop helping. Keep `STICKY_SESSIONS` off: it routes by client address and would pin all VUs of a runner to one worker.
 
@@ -279,6 +332,12 @@ The test target is **one iHub replica scaled by `WORKERS`**. Set the pod's CPU l
 | `LT_POST_STREAM`                                                           | off                                 | `1`: each chat turn streams on its own POST (`Accept: text/event-stream`), no GET; needs server support |
 
 Stub tuning (`stub/server.mjs`): `STUB_TTFT_MS` (700), `STUB_TOKENS` (250), `STUB_TOKENS_PER_SEC` (40), `STUB_JITTER` (0.25), `STUB_SITE_PAGES` (300), `STUB_SITE_LATENCY_MS` (80).
+
+## Tests of the harness
+
+```bash
+node --test tests/load/
+```
 
 ## Things that silently distort results
 

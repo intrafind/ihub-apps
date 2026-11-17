@@ -15,6 +15,9 @@ services:
       - '9464:9464' # Prometheus metrics when telemetry is on
     cpus: ${IHUB_CPUS:-2}
     mem_limit: ${IHUB_MEMORY:-4g}
+    # No swap, as in Kubernetes: Docker's default (memswap = 2x mem) lets the container
+    # swap instead of being OOM-killed, which makes memory results look better than a pod.
+    memswap_limit: ${IHUB_MEMORY:-4g}
     environment:
       WORKERS: ${IHUB_WORKERS:-2}
       NODE_ENV: production
