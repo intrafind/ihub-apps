@@ -328,14 +328,14 @@ function PromptFormEditor({
                     htmlFor="appId"
                     className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
-                    {t('admin.prompts.edit.appId', 'Linked App')}
+                    {t('admin.prompts.edit.appId', 'Opens in app')}
                   </label>
                   <div className="mt-1">
                     <SearchableAppsSelector
                       apps={apps}
                       value={data.appId || ''}
                       onChange={value => handleChange('appId', value)}
-                      placeholder={t('admin.prompts.edit.noApp', 'No linked app')}
+                      placeholder={t('admin.prompts.edit.noApp', 'Default chat app')}
                       currentLanguage={currentLanguage}
                     />
                   </div>
@@ -343,7 +343,10 @@ function PromptFormEditor({
                     <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.appId}</p>
                   )}
                   <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.prompts.edit.appIdDesc', 'Link this prompt to a specific app')}
+                    {t(
+                      'admin.prompts.edit.appIdDesc',
+                      'The prompt library opens this prompt in this app and lists it first there. It does not limit who sees the prompt.'
+                    )}
                   </p>
                 </div>
 

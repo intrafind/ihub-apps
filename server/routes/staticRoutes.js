@@ -29,6 +29,18 @@ export function isHashedAsset(staticPath, filePath) {
   return relative.startsWith(`assets${path.sep}`);
 }
 
+/**
+ * Whether a request path (relative to the base path) is an in-app documentation page,
+ * `/admin/docs/<page>.md`. Those URLs end in an extension but are client routes rendered
+ * by the admin Documentation page, not files, so the SPA must serve them. Only `.md` is
+ * exempt: any other extension under `/admin/docs/` is still a missing asset.
+ * @param {string} relativePath - Request path with the base path removed
+ * @returns {boolean}
+ */
+export function isAdminDocsPagePath(relativePath) {
+  return /^\/admin\/docs\/.+\.md$/i.test(relativePath);
+}
+
 export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath }) {
   // Only serve static files in production or packaged mode
   // In development, Vite serves the frontend directly
@@ -106,8 +118,10 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       }
 
       // Don't serve SPA for requests that look like static assets (have file extensions)
-      // If they weren't served by the static middleware above, they don't exist
-      if (relativePath.match(/\.[a-z0-9]+$/i)) {
+      // If they weren't served by the static middleware above, they don't exist.
+      // Exception: the in-app documentation routes end in `.md` (`/admin/docs/<page>.md`);
+      // those are client routes, so a reload, bookmark or shared link must get the SPA.
+      if (/\.[a-z0-9]+$/i.test(relativePath) && !isAdminDocsPagePath(relativePath)) {
         return res.status(404).send('File not found');
       }
 

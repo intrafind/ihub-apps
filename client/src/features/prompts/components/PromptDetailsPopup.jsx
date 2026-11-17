@@ -88,7 +88,7 @@ function PromptDetailsPopup({ prompt, isOpen, onClose }) {
             </div>
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
               <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
-                {t('admin.prompts.details.linkedApp', 'Linked App')}
+                {t('admin.prompts.details.linkedApp', 'Opens in app')}
               </div>
               <div className="text-sm text-gray-900 dark:text-gray-100 mt-1">
                 {prompt.appId || t('common.none', 'None')}

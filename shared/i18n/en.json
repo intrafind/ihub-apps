@@ -4708,7 +4708,7 @@
       "retentionDays": "Retain {{days}} days",
       "retentionForever": "Retain forever",
       "retentionDisabled": "Cleanup disabled",
-      "retentionHint": "Configured in platform.json → audit. Edit under Platform → Advanced.",
+      "retentionHint": "Set in platform.json (audit.retentionDays, audit.cleanupEnabled). No admin page edits these yet.",
       "runCleanup": "Run cleanup now",
       "cleanupRunning": "Running…",
       "cleanupRemoved": "{{count}} files removed",
@@ -5174,7 +5174,10 @@
         "detectedVariables": "Detected in the text",
         "describeVariable": "Describe",
         "variableDescribed": "described",
-        "variablesDescPlaceholders": "Placeholders written as {{name}} in the prompt text are asked for when the prompt is used. Describe them here to set a label, type, default value or options. {{content}} marks where the user’s own text goes; global variables such as {{user_name}} fill in by themselves."
+        "variablesDescPlaceholders": "Placeholders written as {{name}} in the prompt text are asked for when the prompt is used. Describe them here to set a label, type, default value or options. {{content}} marks where the user’s own text goes; global variables such as {{user_name}} fill in by themselves.",
+        "appId": "Opens in app",
+        "noApp": "Default chat app",
+        "appIdDesc": "The prompt library opens this prompt in this app and lists it first there. It does not limit who sees the prompt."
       },
       "userPrompts": {
         "allowEveryone": "Everyone signed in",
@@ -5211,6 +5214,9 @@
         "truncated": "Showing the first prompts only",
         "updated": "Last changed",
         "userCount": "{{count}} user(s)"
+      },
+      "details": {
+        "linkedApp": "Opens in app"
       }
     },
     "skills": {
@@ -5357,6 +5363,17 @@
       },
       "users": {
         "active": "{{count}} active (30d)"
+      },
+      "gettingStarted": "Getting started",
+      "setup": {
+        "installed": "Platform installed",
+        "adminAccount": "Admin account ready",
+        "addProvider": "Configure an LLM provider",
+        "createApp": "Create your first app",
+        "configureAuth": "Connect identity provider (optional)",
+        "shippedPasswordHint": "The admin account still signs in with the shipped password. Change it.",
+        "dismiss": "Hide",
+        "dismissLabel": "Hide the setup checklist"
       },
       "resource": "the overview",
       "apps": {
@@ -6967,6 +6984,9 @@
     },
     "pages": {
       "fields": {
+        "allowedGroups": "Allowed Groups",
+        "allowedGroupsPlaceholder": "admins, users or *",
+        "allowedGroupsHelp": "Group IDs, separated by commas, exactly as in Admin → Groups. Leave empty or enter * to allow everyone. Only members of a listed group see the page; an ID that does not exist matches nobody.",
         "idRequired": "ID is required"
       }
     },

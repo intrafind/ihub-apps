@@ -153,9 +153,10 @@ export default function registerAdminAuditLogRoutes(app) {
   /**
    * PUT /api/admin/audit-log/settings
    * Update audit policy fields in platform.json. Currently scoped to the
-   * `anonymizeIp` toggle; retention/email/verbosity continue to be edited
-   * through the platform config form. Only fields explicitly provided in the
-   * body are written — `undefined` keys leave the existing value alone.
+   * `anonymizeIp` toggle; retention, cleanup, email and verbosity are set in
+   * platform.json (`audit.*`) only: no admin page edits them yet. Only fields
+   * explicitly provided in the body are written — `undefined` keys leave the
+   * existing value alone.
    */
   app.put(buildServerPath('/api/admin/audit-log/settings'), adminAuth, async (req, res) => {
     const { anonymizeIp } = req.body || {};

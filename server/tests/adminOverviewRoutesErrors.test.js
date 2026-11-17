@@ -13,7 +13,8 @@ import { jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 
-const state = { appsError: null };
+const DEFAULT_PLATFORM = { auth: { mode: 'local' } };
+const state = { appsError: null, platform: DEFAULT_PLATFORM };
 
 jest.unstable_mockModule('../middleware/adminAuth.js', () => ({
   adminAuth: (req, res, next) => next()
@@ -35,7 +36,7 @@ jest.unstable_mockModule('../configCache.js', () => ({
     getProjects: () => ({ data: [] }),
     getGroups: () => ({ data: { groups: { admins: {}, users: {} } } }),
     get: () => ({ data: { users: { u1: {} } } }),
-    getPlatform: () => ({ data: { auth: { mode: 'local' } } })
+    getPlatform: () => ({ data: state.platform })
   }
 }));
 
@@ -57,6 +58,7 @@ app.use(errorHandler);
 
 beforeEach(() => {
   state.appsError = null;
+  state.platform = DEFAULT_PLATFORM;
 });
 
 describe('Admin overview route: errors', () => {
@@ -67,6 +69,31 @@ describe('Admin overview route: errors', () => {
     expect(res.body.users).toBe(1);
     expect(res.body.auth.mode).toBe('local');
     expect(res.body.storage).toBeNull();
+  });
+
+  it('counts only sign-in providers people can use', async () => {
+    state.platform = {
+      auth: { mode: 'local' },
+      oidcAuth: {
+        enabled: true,
+        providers: [{ name: 'on' }, { name: 'off', enabled: false }, { name: 'also-on' }]
+      },
+      ldapAuth: { enabled: false, providers: [{ name: 'corp' }] }
+    };
+    const res = await request(app).get('/api/admin/overview/stats').expect(200);
+    expect(res.body.auth.oidcProviders).toBe(2);
+    expect(res.body.auth.ldapProviders).toBe(0);
+  });
+
+  it('counts no OIDC provider while OIDC sign-in is off', async () => {
+    state.platform = {
+      auth: { mode: 'local' },
+      oidcAuth: { enabled: false, providers: [{ name: 'idp' }] },
+      ldapAuth: { enabled: true, providers: [{ name: 'corp' }] }
+    };
+    const res = await request(app).get('/api/admin/overview/stats').expect(200);
+    expect(res.body.auth.oidcProviders).toBe(0);
+    expect(res.body.auth.ldapProviders).toBe(1);
   });
 
   it('answers an unexpected failure with a 500 that does not leak the cause', async () => {

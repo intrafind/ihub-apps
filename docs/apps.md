@@ -1518,10 +1518,19 @@ Here are some practical examples of how to configure the settings for different 
 
 **App not appearing in the list:**
 
-- Verify JSON syntax is valid (no trailing commas, proper quotes)
-- Check that the app ID is unique
-- Ensure the app file is in `contents/apps/` directory
-- Restart the server after adding new app files
+Apps reload by themselves when a file or the admin editor changes them; a restart is not needed.
+If a user does not see an app, check in this order:
+
+1. **Enabled:** the app's switch in **Admin → Apps** is on.
+2. **Access:** one of the user's groups grants the app (**Admin → Groups**, the group's apps: its id
+   or `*`). Grants add up through `inherits`; anonymous visitors get what
+   `anonymousAuth.defaultGroups` grant.
+3. **Required features:** every id in the app's `requiredFeatures` is on in
+   **Admin → Platform → Features**.
+4. **Integrations:** every integration installation the app binds is installed and enabled
+   (**Admin → Integrations**).
+5. **Valid file:** a file that fails validation is not loaded; the server log names it. App ids must
+   be unique.
 
 **Variables not working:**
 

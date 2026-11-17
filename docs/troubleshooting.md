@@ -479,17 +479,17 @@ node utils/rehashPasswords.js --passwords='{"user_demo_admin":"password123","use
 
 1. **Check User Groups:**
 ```bash
-# Verify user group assignments in users.json
-jq '.users."username".groups' contents/config/users.json
+# Verify user group assignments in users.json (entries are keyed by user id)
+jq '.users[] | select(.username == "alice") | .internalGroups' contents/config/users.json
 
 # Check group permissions in groups.json
-jq '.groups."admin".permissions' contents/config/groups.json
+jq '.groups."admins".permissions' contents/config/groups.json
 ```
 
 2. **Verify Group Inheritance:**
 ```bash
 # Check inheritance chain
-jq '.groups."admin".inherits' contents/config/groups.json
+jq '.groups."admins".inherits' contents/config/groups.json
 ```
 
 **Solutions:**
@@ -499,8 +499,8 @@ jq '.groups."admin".inherits' contents/config/groups.json
 // In contents/config/users.json
 {
   "users": {
-    "username": {
-      "groups": ["admin", "users"]  // Add admin group
+    "user_alice": {
+      "internalGroups": ["admins", "users"]  // Add the admins group
     }
   }
 }
@@ -511,7 +511,7 @@ jq '.groups."admin".inherits' contents/config/groups.json
 // In contents/config/groups.json
 {
   "groups": {
-    "admin": {
+    "admins": {
       "permissions": {
         "apps": ["*"],
         "prompts": ["*"],

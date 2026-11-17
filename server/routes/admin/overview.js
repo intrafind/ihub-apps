@@ -66,12 +66,16 @@ export default function registerAdminOverviewRoutes(app) {
     const anonymousEnabled = platform.anonymousAuth?.enabled ?? false;
     const localAuthEnabled = platform.localAuth?.enabled ?? false;
     const proxyAuthEnabled = platform.proxyAuth?.enabled ?? false;
-    const oidcProviderCount = Array.isArray(platform.oidcAuth?.providers)
-      ? platform.oidcAuth.providers.length
-      : 0;
-    const ldapProviderCount = Array.isArray(platform.ldapAuth?.providers)
-      ? platform.ldapAuth.providers.length
-      : 0;
+    // Providers people can actually sign in with: the sign-in method is on and, for OIDC, the
+    // provider itself is not switched off (the same rules oidcAuth.js / ldapAuth.js apply).
+    const oidcProviderCount =
+      platform.oidcAuth?.enabled && Array.isArray(platform.oidcAuth.providers)
+        ? platform.oidcAuth.providers.filter(provider => provider?.enabled !== false).length
+        : 0;
+    const ldapProviderCount =
+      platform.ldapAuth?.enabled && Array.isArray(platform.ldapAuth.providers)
+        ? platform.ldapAuth.providers.length
+        : 0;
     const oauthAuthzEnabled = platform.oauth?.enabled?.authz ?? false;
     const oauthClientsEnabled = platform.oauth?.enabled?.clients ?? false;
 

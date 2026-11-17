@@ -224,9 +224,19 @@ function AdminPageEditPage() {
               type="text"
               value={page.allowedGroups}
               onChange={e => setPage(prev => ({ ...prev, allowedGroups: e.target.value }))}
-              placeholder="admin, user or *"
+              placeholder={t('admin.pages.fields.allowedGroupsPlaceholder', 'admins, users or *')}
+              aria-describedby="page-allowed-groups-help"
               className={`${INPUT_CLASS} mt-1 block`}
             />
+            <p
+              id="page-allowed-groups-help"
+              className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+            >
+              {t(
+                'admin.pages.fields.allowedGroupsHelp',
+                'Group IDs, separated by commas, exactly as in Admin → Groups. Leave empty or enter * to allow everyone. Only members of a listed group see the page; an ID that does not exist matches nobody.'
+              )}
+            </p>
           </div>
           {error && <div className="text-red-600 dark:text-red-400 text-sm">{error}</div>}
           <div className="flex justify-end space-x-2">

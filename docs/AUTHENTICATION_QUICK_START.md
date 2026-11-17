@@ -157,8 +157,8 @@ NTLM sign-in returns no groups. `ldapGroupLookupProvider` names an entry in `lda
 ```json
 {
   "groups": {
-    "admin": {
-      "id": "admin",
+    "admins": {
+      "id": "admins",
       "name": "Administrators",
       "inherits": ["users"],
       "mappings": ["Admins", "IT-Admin"],
