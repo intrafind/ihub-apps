@@ -24,7 +24,7 @@ const WORKER = path.join(
 const PROCESSES = 2;
 const CALLERS = 8;
 const DURATION_MS = 2500;
-const WAIT_MS = 2000;
+const WAIT_MS = 5000; // the production budget of a project or document lock
 
 async function hammer(mode) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ihub-lock-fair-'));

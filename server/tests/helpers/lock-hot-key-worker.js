@@ -4,7 +4,7 @@
 /**
  * Child process for lock-fairness.test.js: one cluster worker hammering one
  * hot lock name with many concurrent callers.
- * argv: <mode file|manager> <path> <insidePath> <callers> <durationMs> <waitMs>
+ * argv: <mode file|manager> <path> <insidePath> <callers> <durationMs> <waitMs> [sectionMs=2]
  *   file:    <path> is the lock file for `withFileLock`
  *   manager: <path> is the base directory of a `FilesystemLockManager`
  *
@@ -16,7 +16,8 @@ import fs from 'node:fs/promises';
 import { withFileLock } from '../../utils/fileLock.js';
 import { FilesystemLockManager } from '../../storage/providers/filesystem/FilesystemLockManager.js';
 
-const [mode, target, insidePath, callers, durationMs, waitMs] = process.argv.slice(2);
+const [mode, target, insidePath, callers, durationMs, waitMs, sectionMs = '2'] =
+  process.argv.slice(2);
 const manager = mode === 'manager' ? new FilesystemLockManager({ baseDir: target }) : null;
 const stats = { done: 0, timeouts: 0, overlaps: 0, maxWaitMs: 0 };
 
@@ -26,7 +27,7 @@ const section = async () => {
   } catch {
     stats.overlaps++;
   }
-  await new Promise(resolve => setTimeout(resolve, 2));
+  await new Promise(resolve => setTimeout(resolve, Number(sectionMs)));
   await fs.rm(insidePath, { force: true });
 };
 

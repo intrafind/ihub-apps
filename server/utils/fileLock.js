@@ -343,8 +343,16 @@ export async function acquireLease(lockPath, owner, opts) {
   }
 }
 
-/** Longest pause between two looks at a held lease, as a multiple of `pollMs`. */
-const MAX_POLL_FACTOR = 8;
+/**
+ * Longest pause between two looks at a held lease, as a multiple of `pollMs`.
+ * Short, because a holder that gives way to another process (`passTurn`) leaves
+ * the path free only for about one such pause: with 8 a hot name spent up to
+ * 180 ms idle on every switch, and with sections slower than the hand-off bound
+ * every turn was a switch.
+ * ponytail: a waiter behind one long section looks every 40-50 ms; a
+ * cross-process wake-up (a watched file, the cluster bus) if that ever costs.
+ */
+const MAX_POLL_FACTOR = 2;
 
 async function acquireLeaseUntimed(
   lockPath,
@@ -599,8 +607,8 @@ export async function releaseLease(lockPath, owner, name, component = COMPONENT,
  * Fair turns between processes. Callers of one process line up in memory (see
  * `localLines`) and a holder hands its lease straight to the next local
  * caller. Without a bound one busy process kept a hot lease for good: the
- * other processes' waiters sleep between looks at it (up to `MAX_POLL_FACTOR`
- * times `pollMs`) and never found the path free.
+ * other processes' waiters sleep between looks at it and never found the path
+ * free.
  *
  * So a waiter that finds the lease held puts a *want* marker beside it
  * (`<lease>.want`, see {@link signalWant}). A holder that has handed its lease
@@ -671,6 +679,8 @@ async function releaseLineLease(lockPath, line, name, component) {
   line.handoffs = 0;
   lease.stopRenewal?.();
   lease.onRelease?.();
+  // Handed back already (`FilesystemLockManager.releaseAll` at shutdown).
+  if (lease.released) return;
   await releaseLease(lockPath, lease.owner, name, component, lease.lost ? undefined : lease.clock);
 }
 
@@ -809,7 +819,7 @@ export async function withLeaseLine(
  * @param {number} [opts.staleMs=15000] - Age at which an unrenewed lease is taken over
  * @param {number} [opts.timeoutMs=5000] - Acquisition budget, local wait included
  * @param {number} [opts.pollMs=20] - First pause between looks at a lease held
- *   by another process; doubles up to 8x
+ *   by another process; doubles once
  * @param {number} [opts.renewMs] - Renewal interval; default `staleMs / 3`, 0
  *   disables (and so does one above `staleMs / 2`: the lease may age out, so a
  *   caller of this process must be able to take it over, not wait behind it)

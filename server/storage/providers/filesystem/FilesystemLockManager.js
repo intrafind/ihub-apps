@@ -626,8 +626,10 @@ export class FilesystemLockManager extends LockManager {
     const held = [...this._held.entries()];
     this._held.clear();
     for (const [lockPath, lease] of held) {
-      // Not to be handed on to a caller still waiting in this process.
-      lease.lost = true;
+      // Not to be handed on to a caller still waiting in this process, nor
+      // released a second time when its section ends.
+      lease.released = true;
+      lease.noHandOff = true;
       lease.stopRenewal?.();
       await this._release(lockPath, lease.owner, lease.name);
     }
