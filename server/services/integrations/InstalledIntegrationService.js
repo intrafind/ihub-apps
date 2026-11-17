@@ -431,7 +431,20 @@ export class InstalledIntegrationService {
     }
     await configStore.writeJson(INTEGRATIONS_FILE, result.data);
     await configCache.refreshCacheEntry?.(INTEGRATIONS_FILE);
+    await this._reapplyOnThisWorker();
     return result.data;
+  }
+
+  /**
+   * The other workers re-apply the runtime state derived from
+   * `integrations.json` (the MCP and A2A client managers, the adapter caches)
+   * when the write is announced; the announcement never reaches the sender,
+   * so this worker does it itself. Imported on use: the hooks module reaches
+   * the cluster sync, which the service does not need until it writes.
+   */
+  async _reapplyOnThisWorker() {
+    const { applyConfigReloadHooks } = await import('../../configReloadHooks.js');
+    await applyConfigReloadHooks({ entries: [INTEGRATIONS_FILE] });
   }
 
   /**
@@ -461,6 +474,7 @@ export class InstalledIntegrationService {
     });
     if (!written) return null;
     await configCache.refreshCacheEntry?.(INTEGRATIONS_FILE);
+    await this._reapplyOnThisWorker();
     return outcome;
   }
 

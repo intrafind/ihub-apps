@@ -70,7 +70,7 @@ import ChatFilesContext from '../../chat/contexts/ChatFilesContext';
 import { attachStoredFileToMail, mailAttachState } from '../../chat/utils/attachToMail';
 import { consumePendingChatStart } from '../../chat/startChatHandoff';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
-import { useConnectRetry } from '../../integrations/connect/useConnectRetry';
+import { useConnectResume } from '../../integrations/connect/useConnectResume';
 import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import useMediaQuery from '../../../shared/hooks/useMediaQuery';
@@ -492,7 +492,8 @@ function AppChat({
     setImageQuality,
     setIntegrationScopes,
     modelsLoading,
-    settingsInitializedFor
+    settingsInitializedFor,
+    chatSettingsApplied
   } = useAppSettings(appId, app, { chatSettings, isolated: embedded, withTranscription: true });
 
   // Where the chat's integrations search and whom they ask (#3050): the "+"
@@ -870,6 +871,8 @@ function AppChat({
   // the history. `storedTemporary` is what the store said about the open
   // chat; a chat not stored yet will be created the way the toggles say now.
   const [storedTemporary, setStoredTemporary] = useState(null);
+  // The call that waits for a connection (#3752), as the stored chat reports it.
+  const [pendingConnect, setPendingConnect] = useState(null);
   const chatTemporary = storedTemporary ?? (ephemeral || !chatPersistence);
   // `chatPersistence` answers false until the platform config and the auth
   // status have both landed, so an early false is "not known yet", not "no".
@@ -892,6 +895,7 @@ function AppChat({
     addSystemMessage,
     submitClarificationResponse,
     submitToolApproval,
+    submitConnectResume,
     conversationTitle,
     loadServerMessages,
     reattachToRun,
@@ -1182,6 +1186,7 @@ function AppChat({
     setChatOrigin(null);
     setChatProjectId(null);
     setStoredTemporary(null);
+    setPendingConnect(null);
     // A stored chat brings its own list when it loads below.
     setAttachedProjectIds(
       embedded
@@ -1264,6 +1269,7 @@ function AppChat({
         setChatOrigin(result?.chat?.origin || null);
         setChatProjectId(result?.chat?.projectId || null);
         setStoredTemporary(result?.chat?.temporary === true);
+        setPendingConnect(result?.chat?.pendingConnect || null);
         setAttachedProjectIds(
           Array.isArray(result?.chat?.attachedProjectIds) ? result.chat.attachedProjectIds : []
         );
@@ -1309,6 +1315,8 @@ function AppChat({
                 // rendering live, and it is the version that survives a
                 // reload.
                 loadServerMessages(Array.isArray(settled?.messages) ? settled.messages : []);
+                // The turn that just settled may have left a call waiting for a connection.
+                setPendingConnect(settled?.chat?.pendingConnect || null);
                 invalidateChatsCache();
               } catch (err) {
                 // The live projection stays on screen. It is very probably
@@ -2734,19 +2742,30 @@ function AppChat({
   };
 
   // After connecting an integration from a Connect card, the browser comes
-  // back here; the answer that needed the connection is retried once (#2917).
-  // It is a typed turn (not a voice one), sent once the chat can take it.
-  useConnectRetry({
+  // back here and the server continues the call that waited for the
+  // connection, once (#3752). The chat sends no message of its own: only the
+  // id of the stored call.
+  useConnectResume({
     chatId,
-    messages,
-    ready: !hydrating,
+    pendingConnect,
+    // A turn sent before the chat has resolved its model goes out without a
+    // `modelId` and the server refuses it (400). It also waits for the checked
+    // scopes (a stored one the server no longer accepts would refuse it, and
+    // the continuation is not repeated) and for the reopened chat's own settings
+    // (its model and enabled integrations) to be applied.
+    ready:
+      !hydrating &&
+      !modelsLoading &&
+      Boolean(selectedModel) &&
+      !integrationScopesLoading &&
+      Boolean(chatSettings) === chatSettingsApplied,
     busy:
       processing ||
       compareIsProcessing ||
       isTranscribing ||
       isRecordingTranscription ||
       fileUploadHandler.isAttachmentProcessing,
-    send: async text => (await handleSubmit({ preventDefault() {} }, null, { text })) === true
+    resume: request => submitConnectResume(request, clarificationParams({ sendChatHistory }))
   });
   // The answer to a question the app asked, spoken.
   const answerVoiceClarification = answer =>

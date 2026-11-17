@@ -159,6 +159,8 @@ audit log (Admin → Audit Log, `resource: chatShare`).
 
 ## Enabling
 
+![Admin → Chat History: the status of chat history and chat sharing, and the stored chats](assets/screenshots/admin-chat-history.png)
+
 1. Turn on **Chat History** and **Chat Sharing** under Admin → Platform →
    Features (or `"chatPersistence": true, "chatSharing": true` in
    `contents/config/features.json`). No restart needed.
@@ -208,6 +210,8 @@ The same admin page shows how many shares exist, in which state and for which
 audience, lists the newest ones, and lets an administrator revoke any of them.
 
 ## Using it
+
+![The Share dialog of a chat: who may open the link, expiry and maximum opens](assets/screenshots/chat-share-dialog.png)
 
 - **Share** in the chat header opens one dialog for everything a chat page
   can share. **This conversation** is the read-only link described here;

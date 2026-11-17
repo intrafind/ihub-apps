@@ -83,6 +83,7 @@ import {
   pausedTurnTranscript,
   replaceToolResult
 } from './chatToolApproval.js';
+import { buildPendingConnect, connectResumeMessages, loopResumeOf } from './chatConnectResume.js';
 import { describeChatError } from './chatErrors.js';
 import { scheduleChatTitle } from './chatTitles.js';
 import { appendSchedulingContextNote } from '../scheduler/tasks/schedulingContext.js';
@@ -522,6 +523,10 @@ class ChatService {
    *   call: { id, name, toolId }, args, transcript } }` from `settleChatApprovals`. With
    *   `resume` the turn continues the paused one: its transcript replaces the decision
    *   message, and the approved call runs with exactly `args`.
+   * @param {Object} [params.connectResume] - The call(s) to resume after a connect (#3752):
+   *   `{ id, calls, transcript, question, basis }` from `prepareConnectResume`. The turn
+   *   continues the stored one: the calls run once through the seams with the stored
+   *   arguments (the approval policy still asks) and the model continues. No user message.
    * @param {boolean} [params.canApproveTools] - The client renders approval cards. Without
    *   it (and for a headless turn) a gated call gets `APPROVAL_REQUIRED_NO_USER`.
    * @param {{type: string, source?: string}} [params.trigger] - What started the turn, as the
@@ -553,6 +558,7 @@ class ChatService {
     extraSeams = [],
     approvalGate = null,
     toolApproval = null,
+    connectResume = null,
     canApproveTools = !headless,
     trigger = null,
     maxWallClockMs = null,
@@ -708,8 +714,12 @@ class ChatService {
       // stored with the answer; folding starts before the first frame.
       recordRunActivity(runId);
       const attachments = normalizeAttachments(persist.attachments);
-      this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
+      // A resume after a connect has no user message: the person sent nothing.
+      if (!persist.silent) {
+        this._appendUserMessageEvent({ runId, messageId, content: persist.content, attachments });
+      }
       const { refusal } = await settleUserTurn({
+        silent: persist.silent === true,
         repository: persist.repository,
         chatId,
         ownerId: persist.ownerId,
@@ -799,6 +809,9 @@ class ChatService {
     // Per-user OAuth MCP servers the turn's tools asked the user to connect,
     // stored with the answer so the Connect card survives the sign-in redirect.
     const authPrompts = [];
+    // The calls that returned `INTEGRATION_AUTH_REQUIRED`, kept with the chat
+    // so the connect can resume them (#3752).
+    const connectCalls = [];
     // Scheduled-task proposals the scheduling tools made, stored with the
     // answer so the confirmation card is still there when the chat reopens.
     const scheduledTaskProposals = [];
@@ -867,6 +880,7 @@ class ChatService {
         streamProgress: Boolean(streaming),
         mcpAppViews,
         authPrompts,
+        connectCalls,
         scheduledTaskProposals,
         generatedFiles,
         generatedImages
@@ -938,15 +952,27 @@ class ChatService {
         });
       }
     }
+    // A resume after a connect (#3752): the stored step replaces nothing in
+    // the history (it has no decision message); the calls that failed run
+    // again through the seams, with no approval carried over.
+    let continuation = resume;
+    if (connectResume?.calls?.length && Array.isArray(connectResume.transcript)) {
+      loopMessages = connectResumeMessages(llmMessages, connectResume.transcript, {
+        question: connectResume.question
+      });
+      loopResume = loopResumeOf(connectResume.calls);
+      continuation = connectResume;
+    }
     // The last message before what this turn's loop adds (a continuation
     // starts after the stored transcript's predecessor), found by identity.
     const turnStartMessage =
       loopMessages === llmMessages
         ? llmMessages[llmMessages.length - 1]
-        : loopMessages[loopMessages.length - resume.transcript.length - 1];
+        : loopMessages[loopMessages.length - continuation.transcript.length - 1];
 
     // From here the answered approval is used: a caller must not put it back.
     if (toolApproval && typeof toolApproval === 'object') toolApproval.started = true;
+    if (connectResume && typeof connectResume === 'object') connectResume.started = true;
 
     // Until this turn's wrap-up is done (answer stored, chat released, stream
     // unbound — the `finally` below), a continuation of its run waits: a
@@ -1047,7 +1073,7 @@ class ChatService {
           messages: result.messages,
           startMessage: turnStartMessage,
           // What this turn found so far: the answer after the approval rests on it too.
-          basis: carriedBasis({ prior: resume?.basis, result })
+          basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
         });
         if (stored) {
           stream.emit(SSE_V2_EVENTS.INTERACTION_RAISED, { interaction: result.pendingInteraction });
@@ -1069,6 +1095,31 @@ class ChatService {
             }
           });
         }
+      }
+      // The calls that stopped on a missing connection stay with the chat, so
+      // the connect can run them once (#3752). Before the answer is stored:
+      // a client that reopens the chat at once finds the record.
+      // Not for a headless turn (the inference API, a scheduled run) nor a
+      // temporary chat: nobody can come back to continue them.
+      if (
+        !approvalGate &&
+        !headless &&
+        persist &&
+        persist.temporary !== true &&
+        result.status === 'completed' &&
+        connectCalls.length > 0
+      ) {
+        await this._storePendingConnect({
+          repository: persist.repository,
+          chatId,
+          runId,
+          user,
+          calls: connectCalls,
+          messages: result.messages,
+          startMessage: turnStartMessage,
+          continues: connectResume?.answerRunIds || [],
+          basis: carriedBasis({ prior: resume?.basis || connectResume?.basis, result })
+        });
       }
       outcome = await this._finishTurn({
         result,
@@ -1092,7 +1143,7 @@ class ChatService {
         promptSources,
         knowledgeScope,
         // What the turn this one continues had used (an approval paused it).
-        priorBasis: resume?.basis || null,
+        priorBasis: resume?.basis || connectResume?.basis || null,
         contextTracker,
         signal: controller.signal,
         structured: outputSeam
@@ -1272,6 +1323,59 @@ class ChatService {
       await this.interactionService.cancel(interaction.id, 'unrecoverable').catch(() => {});
     }
     return Boolean(stored);
+  }
+
+  /**
+   * Keep the calls that stopped on a missing connection with the chat
+   * (`pendingConnect`, see `chatConnectResume.js`). Fail closed: a record that
+   * cannot be built whole (cut arguments, an oversized step) or stored simply
+   * leaves the Connect card without a resume. Never fatal to the turn.
+   *
+   * @private
+   */
+  async _storePendingConnect({
+    repository,
+    chatId,
+    runId,
+    user,
+    calls,
+    messages,
+    startMessage,
+    continues = [],
+    basis = null
+  }) {
+    // A person with a connection of their own: no record for an anonymous or
+    // guest owner (they cannot hold one), nor for a delegated caller.
+    if (!user?.id || user.id === 'anonymous') return false;
+    try {
+      const record = buildPendingConnect({
+        runId,
+        calls,
+        messages,
+        startMessage,
+        basis,
+        continues
+      });
+      if (!record) {
+        logger.info('Failed calls are not resumable after a connect', {
+          component: COMPONENT,
+          chatId,
+          runId,
+          calls: calls.length
+        });
+        return false;
+      }
+      const stored = await repository.setPendingConnect(chatId, runId, record);
+      return Boolean(stored);
+    } catch (error) {
+      logger.warn('The pending call could not be kept with the chat', {
+        component: COMPONENT,
+        chatId,
+        runId,
+        error: error.message
+      });
+      return false;
+    }
   }
 
   /**

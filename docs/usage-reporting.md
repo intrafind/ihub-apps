@@ -83,6 +83,8 @@ shared. **Today** and **24 hours** offer **Auto-refresh** (every 30 seconds).
 Today is always live: the reports combine the stored daily rollups with what was recorded today, at
 most 30 seconds old. There is no lag and nothing to generate by hand.
 
+![Admin → Usage Reports](assets/screenshots/admin-usage.png)
+
 ### Overview
 
 - **KPI cards**: requests, input tokens, cached input (with the cache hit rate), output tokens,

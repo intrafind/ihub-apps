@@ -605,3 +605,11 @@ Go to **Platform → Updates** to:
 | `?` | Show shortcut cheatsheet |
 | `Cmd+K` / `Ctrl+K` | Open command palette |
 | `Cmd+S` / `Ctrl+S` | Save (in the app editor) |
+
+## Next steps
+
+- [Apps](apps.md) — what the app editor fields do.
+- [Models](models.md) — connect and manage language models.
+- [Authentication Quick Start](AUTHENTICATION_QUICK_START.md) — set up how users sign in.
+- [Usage Reporting](usage-reporting.md) — read the usage reports.
+- [Troubleshooting](troubleshooting.md) — fix common problems.

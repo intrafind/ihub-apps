@@ -62,15 +62,6 @@ export function integrationIssueOf(toolId, raw) {
     ...(typeof raw.integration === 'string' ? { integration: raw.integration } : {}),
     ...(typeof raw.reason === 'string' ? { reason: raw.reason } : {})
   };
-  const marker = raw.authRequired && typeof raw.authRequired === 'object' ? raw.authRequired : null;
-  if (marker) {
-    return {
-      toolId,
-      message: `Connect ${marker.serverName || marker.serverId || 'the integration'} again`,
-      ...structured,
-      ...(typeof marker.connectUrl === 'string' ? { connectUrl: marker.connectUrl } : {})
-    };
-  }
   if ((code && REAUTH_ERROR.test(code)) || (raw.error && REAUTH_MESSAGE.test(message))) {
     const connectUrl =
       typeof raw.connectUrl === 'string'

@@ -703,6 +703,9 @@ index can answer "list my chats" without scanning:
   status,               // 'active' | 'running' | 'error'
   temporary?,           // true for a chat that is not kept — see Temporary chats
   runIds: [],           // most recent 200, for the delete cascade
+  pendingConnect?,      // the call(s) that stopped on a missing connection, kept for 15 minutes so
+                        // the connect can resume them once — see Integrations; never sent to clients
+                        // (they get only { id, integrations, callIds, expiresAt })
   origin,               // { createdVia: 'ui' | 'responses-api' | 'scheduled-task',
                         //   clientId?, authMode?, taskId?, runId?, taskName? }
   // Chats made through the inference API's Conversations API also carry:
@@ -919,7 +922,7 @@ therefore shows what the live one showed, in the same components.
   chip above the answer. A skill's `activatedBy` is `user`, `app` (the app's `autoActivate`), `model` or
   `chat` (kept from an earlier message); the stored activity items keep `integration`, `origin`,
   `resultCount`, `readOutcome` and `places` (the projects or the search profile a call looked in, by
-  name; see [SSE v2](sse-v2.md#where-a-tool-call-looked)). A share keeps the origin type and the
+  name; see [Streaming Events](streaming-events.md#where-a-tool-call-looked)). A share keeps the origin type and the
   counts of each activity row, never an integration name on a non-public row, and the names of what
   an admin owns (`places` with `ownership: admin`: an admin project, an iFinder search profile), but
   never a user's project name. Public web-search rows are shared whole and keep their integration
@@ -944,7 +947,7 @@ therefore shows what the live one showed, in the same components.
   execution page link back to the chat.
 
 The badge is what the server named on `run/ended` (see
-[SSE v2](sse-v2.md#a-chat-turn-on-the-wire)), never inferred in the browser from
+[Streaming Events](streaming-events.md#a-chat-turn-on-the-wire)), never inferred in the browser from
 the rest of the message: answers stored before this existed have no `activity`
 and show no badge, because nothing recorded what they were based on.
 
