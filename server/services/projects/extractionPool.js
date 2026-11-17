@@ -4,6 +4,7 @@
 import { Worker } from 'node:worker_threads';
 import configCache from '../../configCache.js';
 import { renderScannedPdfPagesInProcess } from '../documents/pdf/scannedPages.js';
+import { readCrawledPage } from './crawledPage.js';
 import { projectSettings } from './projectSettings.js';
 
 /**
@@ -113,7 +114,7 @@ function ownedBytes(bytes, transfer) {
 /**
  * Run one job on a thread.
  *
- * @param {'extract'|'renderPdfPages'} task
+ * @param {'extract'|'renderPdfPages'|'crawlPage'} task
  * @param {Object} payload - Plain data for the task, without the file.
  * @param {Object} file
  * @param {Buffer|Uint8Array} file.bytes
@@ -269,5 +270,25 @@ export async function renderScannedPdfPages(bytes, maxPages) {
   if (!extractionThreadsEnabled()) return renderScannedPdfPagesInProcess(bytes, maxPages);
   const { envelope } = await runInThread('renderPdfPages', { maxPages }, { bytes });
   if (!envelope.ok) throw new Error(envelope.error?.message || 'The PDF could not be rendered');
+  return envelope.result;
+}
+
+/**
+ * Decode and parse a page the site crawler fetched, in a thread when the pool
+ * is on: JSDOM on a large page held the event loop for hundreds of ms.
+ *
+ * @param {Buffer} bytes - The body; moved to the thread, empty afterwards.
+ * @param {string} contentType
+ * @param {string} pageUrl
+ * @returns {Promise<{html: string, title: string, links: string[]}>}
+ */
+export async function parseCrawledPage(bytes, contentType, pageUrl) {
+  if (!extractionThreadsEnabled()) return readCrawledPage(bytes, contentType, pageUrl);
+  const { envelope } = await runInThread(
+    'crawlPage',
+    { contentType, pageUrl },
+    { bytes, transfer: true }
+  );
+  if (!envelope.ok) throw new Error(envelope.error?.message || 'The page could not be read');
   return envelope.result;
 }

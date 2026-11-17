@@ -17,16 +17,16 @@
  *
  * @module services/projects/siteCrawler
  */
-import { JSDOM } from 'jsdom';
 import { fetchWebPage } from '../pageReader/pageReader.js';
 import {
   BOT_PROTECTION_CODE,
   blockedResponseError,
   classifyBlockedResponse
 } from '../pageReader/botProtection.js';
-import { dropRawTextElements } from '../pageReader/pageContent.js';
 import { HTML_MIME, acceptedTypeOf } from './extractText.js';
-import { DOCUMENT_EXTENSIONS, decodeHtml } from './webFileDownload.js';
+import { DOCUMENT_EXTENSIONS } from './webFileDownload.js';
+import { decodeHtml, extractPageLinks, normalizeCrawlUrl } from './crawledPage.js';
+import { parseCrawledPage } from './extractionPool.js';
 
 /** Defaults and upper bounds of a crawl request. */
 export const CRAWL_DEFAULT_MAX_PAGES = 50;
@@ -68,7 +68,7 @@ const MAX_LEVEL_CANDIDATES = 5000;
  * they are downloaded and extracted like an upload (#3536). Defined with the
  * download, which also trusts them for an address it cannot check.
  */
-export { DOCUMENT_EXTENSIONS };
+export { DOCUMENT_EXTENSIONS, extractPageLinks, normalizeCrawlUrl };
 
 /**
  * Links to these are neither pages nor documents: never listed. A filter that
@@ -118,49 +118,6 @@ const SKIPPED_EXTENSIONS = new Set([
   'xml',
   'zip'
 ]);
-
-/** Query parameters that track a visit or a session and never change a page. */
-const TRACKING_PARAMS = new Set([
-  'fbclid',
-  'gclid',
-  'jsessionid',
-  'mc_cid',
-  'mc_eid',
-  'msclkid',
-  'phpsessid',
-  'sessionid',
-  'yclid',
-  '_ga',
-  '_gl'
-]);
-
-/**
- * An absolute http(s) URL without its fragment, credentials, session id and
- * tracking parameters, or `null`.
- *
- * @param {string} href
- * @param {string|URL} [base]
- * @returns {string|null}
- */
-export function normalizeCrawlUrl(href, base) {
-  try {
-    const url = new URL(String(href || '').trim(), base);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
-    url.hash = '';
-    url.username = '';
-    url.password = '';
-    // Java servlet containers put the session in the path: `/a;jsessionid=…`.
-    const sessionAt = url.pathname.toLowerCase().indexOf(';jsessionid=');
-    if (sessionAt !== -1) url.pathname = url.pathname.slice(0, sessionAt);
-    for (const name of [...url.searchParams.keys()]) {
-      const key = name.toLowerCase();
-      if (key.startsWith('utm_') || TRACKING_PARAMS.has(key)) url.searchParams.delete(name);
-    }
-    return url.href;
-  } catch {
-    return null;
-  }
-}
 
 /** The lower-cased extension of a URL's last path segment, or ''. */
 function extensionOf(url) {
@@ -328,34 +285,6 @@ export function robotsAllows(url, rules) {
   return !best || best.allow;
 }
 
-/**
- * The title and the absolute link targets of an HTML page (resolved against
- * the page URL and any `<base href>`, without fragments, deduplicated in
- * document order). Links marked `rel="nofollow"` are left out.
- *
- * @param {string} html
- * @param {string} pageUrl
- * @returns {{title: string, links: string[]}}
- */
-export function extractPageLinks(html, pageUrl) {
-  // Scripts and styles carry no links, are where JSDOM is slowest, and its
-  // CSS parser throws on some real-world stylesheets.
-  const dom = new JSDOM(dropRawTextElements(html, ['script', 'style']), { url: pageUrl });
-  const { document } = dom.window;
-  const title = (document.querySelector('title')?.textContent || '').replace(/\s+/g, ' ').trim();
-  const seen = new Set();
-  const links = [];
-  for (const anchor of document.querySelectorAll('a[href]')) {
-    if (/\bnofollow\b/i.test(anchor.getAttribute('rel') || '')) continue;
-    const url = normalizeCrawlUrl(anchor.getAttribute('href'), document.baseURI || pageUrl);
-    if (!url || seen.has(url)) continue;
-    seen.add(url);
-    links.push(url);
-  }
-  dom.window.close();
-  return { title, links };
-}
-
 /** Whether `hostname` is the host of `origin` (an origin URL such as `https://x.com`). */
 function sameHostname(hostname, origin) {
   try {
@@ -426,10 +355,7 @@ export async function readBoundedBytes(
   return Buffer.concat(chunks).subarray(0, maxBytes);
 }
 
-/**
- * The text of an HTML page in the charset it declares (defined with the
- * download, which hands a page's snapshot on as UTF-8).
- */
+/** The text of an HTML page in the charset it declares (`crawledPage.js`). */
 export { decodeHtml };
 
 /**
@@ -480,7 +406,8 @@ async function fetchHtml(url, { signal } = {}) {
   return {
     finalUrl: finalUrl.href,
     contentType,
-    html: decodeHtml(bytes, contentType),
+    // Decoded and parsed off the event loop (`readPage` in crawlSite).
+    bytes,
     // Cut by the byte or the time limit: listed, but not kept as the page.
     complete: report.complete === true,
     // The version read, so a page added from the crawl is refreshed conditionally.
@@ -553,13 +480,15 @@ function stoppedError() {
  * @param {AbortSignal} [params.signal] - Stops the crawl (the client went away)
  * @param {Object} [deps]
  * @param {(url: string, options: {signal: AbortSignal}) => Promise<{finalUrl: string,
- *   contentType: string, html: string|null}>} [deps.fetchPage] - Test seam
+ *   contentType: string, html?: string|null, bytes?: Buffer}>} [deps.fetchPage] - Test
+ *   seam; a page is `bytes` (decoded and parsed on an extraction thread) or
+ *   `html` (parsed here), `html: null` when it is not HTML
  * @param {(origin: string, options: {signal: AbortSignal}) => Promise<string|null>}
  *   [deps.fetchRobots] - Test seam
  * @param {(page: {url: string, html: string, contentType: string, etag: string|null,
  *   lastModified: string|null}) => Promise<unknown>} [deps.keepPage] - Called with
- *   every HTML page read, under the address it is listed by, before its links
- *   are parsed (`crawlHandover.js`); a failure only means the page is fetched
+ *   every HTML page read, under the address it is listed by, once it is parsed
+ *   (`crawlHandover.js`); a failure only means the page is fetched
  *   again when it is added
  * @param {() => number} [deps.now] - Test seam
  * @param {number} [deps.deadlineMs] - Test seam
@@ -612,14 +541,14 @@ export async function crawlSite(
    * Only a page read to its end is kept, and the crawl does not wait for a
    * write past its own end: a page not kept is fetched when it is added.
    */
-  const keep = async (pageUrl, page) => {
+  const keep = async (pageUrl, page, html) => {
     if (typeof keepPage !== 'function' || page.complete === false) return;
     let onAbort = null;
     try {
       const written = Promise.resolve().then(() =>
         keepPage({
           url: pageUrl,
-          html: page.html,
+          html,
           contentType: page.contentType,
           etag: page.etag || null,
           lastModified: page.lastModified || null
@@ -637,6 +566,15 @@ export async function crawlSite(
     } finally {
       signal.removeEventListener('abort', onAbort);
     }
+  };
+
+  /** A fetched page's HTML, title and links; kept for the add step on the way. */
+  const readPage = async (pageUrl, page) => {
+    const read = page.bytes
+      ? await parseCrawledPage(page.bytes, page.contentType, pageUrl)
+      : { html: page.html, ...extractPageLinks(page.html, pageUrl) };
+    await keep(pageUrl, page, read.html);
+    return { title: read.title, links: read.links };
   };
 
   try {
@@ -660,8 +598,7 @@ export async function crawlSite(
       }
       throw new Error(`The page is not a web page (${first.contentType || 'unknown type'})`);
     }
-    await keep(firstUrl, first);
-    const firstPage = extractPageLinks(first.html, firstUrl);
+    const firstPage = await readPage(firstUrl, first);
     const scope = crawlScope(firstUrl, { samePath, links: firstPage.links });
     const listed = [{ url: firstUrl, title: firstPage.title, depth: 0, type: 'page' }];
     if (depthLimit === 0) return { pages: listed, truncated: false, robotsExcluded: 0, scope };
@@ -730,8 +667,7 @@ export async function crawlSite(
           if (!isDocumentResponse(page.contentType, finalUrl)) return null;
           return { finalUrl, title: fileNameOf(finalUrl), links: [], document: true };
         }
-        await keep(finalUrl, page);
-        return { finalUrl, ...extractPageLinks(page.html, finalUrl) };
+        return { finalUrl, ...(await readPage(finalUrl, page)) };
       } catch (error) {
         // Only the crawled site's own refusal ends the crawl: a link that
         // redirects to a third-party host behind a WAF is just a dead link.
