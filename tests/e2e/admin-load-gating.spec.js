@@ -64,7 +64,13 @@ const PAGES = [
     path: '/admin/browser-extension',
     gets: ['/browser-extension/status']
   },
-  { name: 'Copilot agent', path: '/admin/copilot-agent', gets: ['/copilot-agent/status'] },
+  {
+    name: 'Copilot agent',
+    path: '/admin/copilot-agent',
+    gets: ['/copilot-agent/status'],
+    // A fresh install has the integration off: the loaded page is its status card.
+    ready: main => main.getByRole('button', { name: /^Enable$/ })
+  },
   { name: 'Nextcloud embed', path: '/admin/nextcloud-embed', gets: ['/nextcloud-embed/status'] },
   { name: 'Voice input', path: '/admin/voice-input', gets: ['/configs/platform'] },
   { name: 'OAuth server', path: '/admin/oauth/server', gets: ['/configs/platform'] },
@@ -163,11 +169,13 @@ test.describe('Admin config pages after a failed load', () => {
       await expect(panels).toHaveCount(0);
       // The form (or the page's first control) is back.
       await expect(
-        main
-          .locator(
-            'input:visible, select:visible, textarea:visible, [role="switch"]:visible, [role="tablist"]:visible'
-          )
-          .first()
+        target.ready
+          ? target.ready(main)
+          : main
+              .locator(
+                'input:visible, select:visible, textarea:visible, [role="switch"]:visible, [role="tablist"]:visible'
+              )
+              .first()
       ).toBeVisible();
       expect(navigations, 'Retry re-runs the load in place, without a page reload').toEqual([]);
       expect(writes).toEqual([]);
