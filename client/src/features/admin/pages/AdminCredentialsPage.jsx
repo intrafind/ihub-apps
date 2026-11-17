@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -366,11 +366,22 @@ function AdminCredentialsPage() {
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
+  const headingRef = useRef(null);
+  // The credential whose usage is being read before its delete dialog opens.
+  // Further Delete clicks are ignored meanwhile, so a slow answer for one row
+  // can't open a dialog after the admin clicked another row (the dialog
+  // would name a credential the admin no longer means).
+  const [checkingId, setCheckingId] = useState(null);
+  const checkingRef = useRef(null);
 
   const isEdit = editing !== null && editing !== 'new';
 
+  /**
+   * Reads the credential list. Only the first load shows the full-page
+   * spinner (`loading` starts true); a reload after a save or delete keeps the
+   * page, and with it an open confirmation, mounted.
+   */
   const load = async () => {
-    setLoading(true);
     try {
       const list = await listCredentials();
       setCredentials(list);
@@ -439,12 +450,18 @@ function AdminCredentialsPage() {
    * @param {string} id - Credential profile id.
    */
   const remove = async id => {
+    if (checkingRef.current !== null) return;
+    checkingRef.current = id;
+    setCheckingId(id);
     let usedBy = null;
     try {
       const installed = await fetchInstalledIntegrations();
       usedBy = installationsUsingCredential(installed?.items, id);
     } catch {
       usedBy = null;
+    } finally {
+      checkingRef.current = null;
+      setCheckingId(null);
     }
 
     const usageMessage =
@@ -482,6 +499,8 @@ function AdminCredentialsPage() {
         await deleteCredential(id);
         setMessage({ type: 'success', text: t('admin.credentials.deleted', 'Credential deleted') });
         await load();
+        // The row's Delete button is gone: keep keyboard focus on the page.
+        headingRef.current?.focus();
       }
     });
   };
@@ -500,7 +519,11 @@ function AdminCredentialsPage() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex justify-between items-start mb-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          <h1
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-3xl font-bold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+          >
             {t('admin.credentials.title', 'Credentials')}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
@@ -571,10 +594,13 @@ function AdminCredentialsPage() {
                     </button>
                     <button
                       onClick={() => remove(c.id)}
+                      // Not `disabled`: that would drop keyboard focus to <body>.
+                      aria-disabled={checkingId !== null || undefined}
+                      aria-busy={checkingId === c.id || undefined}
                       aria-label={t('admin.credentials.deleteNamed', 'Delete credential "{{id}}"', {
                         id: c.id
                       })}
-                      className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
+                      className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-xs text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50 aria-disabled:opacity-50 aria-disabled:cursor-wait"
                     >
                       <Icon name="trash" size="sm" />
                     </button>

@@ -62,9 +62,9 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
         defaultValue: 'Disconnect "{{user}}" from {{label}}?'
       }),
       message: t(
-        'admin.integrationCatalog.connections.disconnectConfirm',
-        'Disconnect "{{user}}" from {{label}}? They have to sign in again to use it.',
-        { user: userId, label: instance.label }
+        'admin.integrationCatalog.connections.disconnectConsequence',
+        'They have to sign in again to use {{label}}.',
+        { label: instance.label }
       ),
       confirmLabel: t('admin.integrationCatalog.connections.disconnectAction', 'Disconnect'),
       danger: true,
@@ -88,9 +88,8 @@ function IntegrationConnectionsDialog({ instance, onClose }) {
         defaultValue: 'Reset the OAuth client registration of {{label}}?'
       }),
       message: t(
-        'admin.integrationCatalog.connections.resetConfirm',
-        'Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.',
-        { label: instance.label }
+        'admin.integrationCatalog.connections.resetConsequence',
+        'The next sign-in registers iHub afresh; connected users may have to connect again.'
       ),
       confirmLabel: t('admin.integrationCatalog.connections.resetAction', 'Reset registration'),
       danger: true,

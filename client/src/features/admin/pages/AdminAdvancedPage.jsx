@@ -274,6 +274,12 @@ function AdminAdvancedPage() {
           t(
             'admin.system.forceRefreshConfirmKept',
             'The disclaimer acceptance is kept; other settings stored only in the browser are cleared.'
+          ),
+          // localStorage.clear() also removes a sign-in token kept in the
+          // browser (token / proxy sign-in); cookie sessions are not affected.
+          t(
+            'admin.system.forceRefreshConfirmSignIn',
+            'Users whose sign-in is stored in the browser may have to sign in again.'
           )
         ]}
         confirmLabel={t('admin.system.forceRefreshConfirmAction', 'Force refresh')}

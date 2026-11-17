@@ -74,7 +74,9 @@ function AdminPageEditPage() {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (!page.id) {
+    // An empty field is stopped by the browser (`required`); an id of only
+    // spaces passes that check and is caught here.
+    if (!page.id.trim()) {
       setIdError(t('admin.pages.fields.idRequired', 'ID is required'));
       document.getElementById('page-id')?.focus();
       return;
@@ -139,7 +141,10 @@ function AdminPageEditPage() {
               aria-invalid={idError ? 'true' : undefined}
               aria-describedby={idError ? 'page-id-error' : undefined}
               value={page.id}
-              onChange={e => setPage(prev => ({ ...prev, id: e.target.value }))}
+              onChange={e => {
+                setIdError(null);
+                setPage(prev => ({ ...prev, id: e.target.value }));
+              }}
               disabled={!isNew}
               required
               className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-xs focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"

@@ -101,9 +101,14 @@ export default [
     // Native browser dialogs (alert/confirm/prompt) can't be styled, translated
     // or named, and a bare confirm() let the shipped marketplace registry be
     // deleted without saying which one (AX-B14). The admin area and the shared
-    // components use ConfirmDialog, SecretRevealDialog and inline messages.
+    // components, and the workflow editor the admin area opens, use
+    // ConfirmDialog, SecretRevealDialog and inline messages.
     // tests/unit/client/admin-no-native-dialogs.test.jsx is the ratchet CI can't skip.
-    files: ['client/src/features/admin/**/*.{js,jsx}', 'client/src/shared/**/*.{js,jsx}'],
+    files: [
+      'client/src/features/admin/**/*.{js,jsx}',
+      'client/src/features/workflows/**/*.{js,jsx}',
+      'client/src/shared/**/*.{js,jsx}'
+    ],
     rules: {
       'no-alert': 'error'
     }

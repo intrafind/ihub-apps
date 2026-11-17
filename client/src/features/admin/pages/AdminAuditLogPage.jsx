@@ -22,6 +22,7 @@ import AuditEntryDetailDrawer from '../components/AuditEntryDetailDrawer';
 import { getAuditActorLink, getAuditResourceLink } from '../utils/auditLinks';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useConfirmAction } from '../hooks/useConfirmAction';
+import { auditCleanupCutoffLabel } from '../utils/auditCleanupCutoff';
 
 const ACTION_PILL_COLORS = {
   create: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
@@ -146,11 +147,10 @@ function AuditLogRetentionBadge({ t }) {
   if (!policy) return null;
 
   const runCleanup = () => {
-    const cutoff = new Date(Date.now() - policy.retentionDays * 24 * 60 * 60 * 1000);
     setMessage(null);
     requestConfirm({
       title: t('admin.auditLog.cleanupConfirmTitle', 'Delete audit entries older than {{date}}?', {
-        date: cutoff.toLocaleDateString()
+        date: auditCleanupCutoffLabel(policy.retentionDays)
       }),
       message: t(
         'admin.auditLog.cleanupConfirmMessage',

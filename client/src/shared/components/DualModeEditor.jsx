@@ -296,10 +296,10 @@ const DualModeEditor = ({
         }
         message={
           pendingConfirm?.kind === 'reset'
-            ? t('admin.editor.resetConfirmation', 'Are you sure you want to reset all changes?')
+            ? t('admin.editor.resetConsequence', 'Your unsaved changes are discarded.')
             : t(
-                'admin.editor.unsavedChangesWarning',
-                'You have unsaved changes. Switching modes may cause data loss. Continue?'
+                'admin.editor.switchConsequence',
+                'You have unsaved changes. Switching editors may lose some of them.'
               )
         }
         confirmLabel={

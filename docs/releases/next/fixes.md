@@ -842,7 +842,8 @@ button that names the action. If the action fails, the error stays in the dialog
 - **Deletes** of apps, models, prompts, providers, skills, workflows, assets and credentials name
   the item; a credential's dialog lists the installed integrations that use it. The shipped
   **iHub Official Marketplace** registry asks for its id to be typed before it is deleted.
-- **Rotate Secret** on an OAuth client shows the new secret in a dialog with Copy instead of a
-  browser alert. No browser `alert`/`confirm`/`prompt` boxes remain in the admin area.
+- **Rotate Secret** on an OAuth client, and creating one, show the new secret in a dialog with
+  Copy that warns before it closes uncopied. No browser `alert`/`confirm`/`prompt` boxes remain in
+  the admin area or the workflow editor (deleting a node asks in a named dialog).
 - Dialogs with a form (Install integration, Add an existing key) ask before Escape, ✕ or Cancel
   discards what you typed, and Escape closes only the topmost dialog.

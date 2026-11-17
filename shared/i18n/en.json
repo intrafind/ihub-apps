@@ -1414,7 +1414,6 @@
         "presets": "Preset voices ({{count}})",
         "useDefault": "Use as voice",
         "useFor": "Use for {{language}}",
-        "deleteConfirm": "Delete the voice \"{{name}}\" from the provider account? Models that use it can no longer speak with it.",
         "deleteError": "Could not delete the voice",
         "createTitle": "Create a custom voice",
         "createHint": "Record or upload 10–30 seconds of one person speaking naturally, without music or background noise. The voice is created in the provider account straight away; it reads every language, with the accent of the recording.",
@@ -1437,7 +1436,8 @@
         "creating": "Creating…",
         "createError": "Could not create the voice",
         "created": "Voice \"{{name}}\" created ({{id}}). Use it below, then save the model.",
-        "deleteTitle": "Delete voice \"{{name}}\"?"
+        "deleteTitle": "Delete voice \"{{name}}\"?",
+        "deleteConsequence": "The voice is deleted from the provider account. Models that use it can no longer speak with it."
       },
       "import": {
         "button": "Import from URL",
@@ -1834,7 +1834,8 @@
         "rotateSecretNamedTitle": "Rotate the secret of \"{{name}}\"?",
         "rotateSecretAction": "Rotate secret",
         "secretReveal": {
-          "title": "New secret for \"{{name}}\""
+          "title": "New secret for \"{{name}}\"",
+          "createdTitle": "Client \"{{name}}\" created"
         }
       },
       "ldap": {
@@ -2032,10 +2033,10 @@
       "addinId": "Add-in ID",
       "addinIdShared": "Every iHub installation ships this ID. Generate a new one to install this server next to another one (for example dev and production) in the same Outlook.",
       "regenerateAddinId": "Generate new ID",
-      "regenerateAddinIdConfirm": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?",
       "regenerateAddinIdDone": "New add-in ID generated. Download the manifest and deploy it again.",
       "regenerateAddinIdError": "Failed to generate a new add-in ID",
-      "regenerateAddinIdTitle": "Generate a new add-in ID?"
+      "regenerateAddinIdTitle": "Generate a new add-in ID?",
+      "regenerateAddinIdConsequence": "Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud Embed",
@@ -2291,6 +2292,7 @@
       "forceRefreshConfirmTitle": "Force a refresh for all users?",
       "forceRefreshConfirmMessage": "Every browser that uses iHub clears its cached files and its locally stored data, then reloads the next time iHub is loaded in it. Pages that are open now are not interrupted.",
       "forceRefreshConfirmKept": "The disclaimer acceptance is kept; other settings stored only in the browser are cleared.",
+      "forceRefreshConfirmSignIn": "Users whose sign-in is stored in the browser may have to sign in again.",
       "forceRefreshConfirmAction": "Force refresh",
       "forceRefreshDone": "Force refresh triggered. Every browser clears its cached files and reloads the next time iHub is loaded in it."
     },
@@ -3407,14 +3409,14 @@
         "connectedAt": "since {{date}}",
         "expired": "expired",
         "disconnect": "Disconnect",
-        "disconnectConfirm": "Disconnect \"{{user}}\" from {{label}}? They have to sign in again to use it.",
         "resetRegistration": "Reset OAuth client registration",
-        "resetConfirm": "Reset the OAuth client registration of {{label}}? The next sign-in registers iHub afresh; connected users may have to connect again.",
         "resetDone": "OAuth client registration reset",
         "disconnectTitle": "Disconnect \"{{user}}\" from {{label}}?",
         "disconnectAction": "Disconnect",
         "resetTitle": "Reset the OAuth client registration of {{label}}?",
-        "resetAction": "Reset registration"
+        "resetAction": "Reset registration",
+        "disconnectConsequence": "They have to sign in again to use {{label}}.",
+        "resetConsequence": "The next sign-in registers iHub afresh; connected users may have to connect again."
       },
       "runsCode": "Runs code on this server",
       "incompatibleReason": "This installation offers no actions: its definition {{reason}}.",
@@ -5290,9 +5292,9 @@
       "memory": {
         "summary": "{{chars}} chars · v{{version}} · {{updatedAt}}",
         "clear": "Clear memory",
-        "confirmClear": "Clear the memory of \"{{name}}\" of {{owner}}? The owner loses these notes.",
         "clearTitle": "Clear the memory of \"{{name}}\"?",
-        "clearAction": "Clear notes"
+        "clearAction": "Clear notes",
+        "clearConsequence": "Its owner, {{owner}}, loses the notes this task has written so far."
       },
       "memoryEnabledHint": "Off: runs neither read nor update the notes of a task (the notes are kept), and \"Only when something changed\" notifies after every run.",
       "deleteConsequence": "The task stops running and its owner can no longer see it or its runs."
@@ -6920,14 +6922,23 @@
       "usedBy_other": "Used by {{count}} installed integrations, which stop working:",
       "notUsedByIntegrations": "No installed integration uses it.",
       "notChecked": "Tools, MCP servers and sign-in settings that reference it are not checked here; they fail until they get another credential.",
-      "deleteNamed": "Delete credential \"{{id}}\""
+      "deleteNamed": "Delete credential \"{{id}}\"",
+      "deleted": "Credential deleted",
+      "deleteError": "Delete failed: {{error}}"
     },
     "editor": {
       "resetTitle": "Reset all changes?",
       "resetAction": "Reset changes",
       "switchToJsonTitle": "Switch to the JSON editor?",
       "switchToFormTitle": "Switch to the form editor?",
-      "switchAction": "Switch editor"
+      "switchAction": "Switch editor",
+      "resetConsequence": "Your unsaved changes are discarded.",
+      "switchConsequence": "You have unsaved changes. Switching editors may lose some of them."
+    },
+    "pages": {
+      "fields": {
+        "idRequired": "ID is required"
+      }
     }
   },
   "cloudStorage": {
@@ -8008,7 +8019,6 @@
       "chatVisible": "Show progress in chat",
       "config": "Configuration",
       "configJson": "Config (JSON)",
-      "confirmDeleteNode": "Delete this node?",
       "copied": "copied",
       "deleteEdge": "Delete connection",
       "deleteNode": "Delete node",
@@ -8173,7 +8183,9 @@
           "wait": "Wait until the document is ready",
           "outputHelp": "State variable for the stored document. Default: {{name}}. Keep \"wait\" on when a later step reads the document."
         }
-      }
+      },
+      "deleteNodeTitle": "Delete node \"{{name}}\"?",
+      "deleteNodeConsequence": "The node, the steps nested in it and their connections are removed. The workflow keeps its saved version until you save."
     },
     "checkpointAwaiting": "Awaiting your input",
     "join": "Join",
@@ -9741,13 +9753,13 @@
     "save": "Save",
     "saving": "Saving…",
     "clear": "Clear",
-    "clearConfirm": "Clear all notes? This removes everything written so far.",
     "reload": "Reload (discard my edits)",
     "keepEditing": "Keep editing",
     "versionConflict": "Conflict: memory was modified elsewhere. Reload to see the latest.",
     "staleNotice": "The notes changed since you started editing (a run may have updated them).",
     "clearTitle": "Clear all notes?",
-    "clearAction": "Clear notes"
+    "clearAction": "Clear notes",
+    "clearConsequence": "Everything written so far is removed."
   },
   "usageGuide": {
     "question": "How do I use this app?",

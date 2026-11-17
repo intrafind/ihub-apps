@@ -9,27 +9,31 @@
  *
  * An installation uses a credential when
  *   - its sign-in keeps it as the managed secret (`auth.credentialRef`), or
- *   - one of its stored values (at any depth) is exactly the credential id —
- *     how `credential` fields reference a profile.
+ *   - one of its credential fields holds the credential id. Credential fields
+ *     (`type: "credential"` in the definition) are named `…Ref` by convention
+ *     (`apiKeyRef`, `clientSecretRef`, `bindPasswordRef`); only those keys
+ *     count, so an ordinary value that happens to equal a short id such as
+ *     `jira` is not mistaken for a reference.
  *
  * @module features/admin/utils/credentialUsage
  */
 
+/** Key suffix of credential-reference fields in installation values. */
+const CREDENTIAL_FIELD_SUFFIX = 'Ref';
+
 /**
- * Whether `value` (a stored installation value) contains `credentialId`
- * as a whole string, at any depth.
+ * Whether a credential-reference field of `values` (an installation's stored
+ * values) holds `credentialId`.
  *
- * @param {unknown} value
+ * @param {Object|undefined} values
  * @param {string} credentialId
  * @returns {boolean}
  */
-function containsCredentialId(value, credentialId) {
-  if (typeof value === 'string') return value === credentialId;
-  if (Array.isArray(value)) return value.some(entry => containsCredentialId(entry, credentialId));
-  if (value && typeof value === 'object') {
-    return Object.values(value).some(entry => containsCredentialId(entry, credentialId));
-  }
-  return false;
+function referencesCredential(values, credentialId) {
+  if (!values || typeof values !== 'object') return false;
+  return Object.entries(values).some(
+    ([key, value]) => key.endsWith(CREDENTIAL_FIELD_SUFFIX) && value === credentialId
+  );
 }
 
 /**
@@ -49,7 +53,7 @@ export function installationsUsingCredential(installations, credentialId) {
     .filter(
       item =>
         item?.auth?.credentialRef === credentialId ||
-        containsCredentialId(item?.values, credentialId)
+        referencesCredential(item?.values, credentialId)
     )
     .map(item => ({ id: item.id, label: item.label || item.id }));
 }

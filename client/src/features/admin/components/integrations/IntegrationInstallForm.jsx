@@ -267,7 +267,7 @@ function IntegrationInstallForm({
     if (!form) return;
     // `checkedActions` is a Set, which JSON.stringify would write as {}.
     const snapshot = JSON.stringify(form, (_key, value) =>
-      value instanceof Set ? [...value].sort() : value
+      value instanceof Set ? [...value].sort((a, b) => String(a).localeCompare(String(b))) : value
     );
     if (loadedFormRef.current === null) loadedFormRef.current = snapshot;
     onDirtyChangeRef.current?.(snapshot !== loadedFormRef.current);

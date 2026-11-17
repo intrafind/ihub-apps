@@ -22,7 +22,7 @@ jest.mock('../../../client/src/shared/components/Icon', () => ({
 const SecretRevealDialog =
   require('../../../client/src/shared/components/SecretRevealDialog').default;
 
-const SECRET = 's3cr3t-abcdef-0123456789';
+const SECRET = 'example-client-secret-value';
 
 function renderDialog() {
   const onDone = jest.fn();

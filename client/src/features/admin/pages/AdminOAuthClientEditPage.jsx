@@ -11,6 +11,7 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import SecretRevealDialog from '../../../shared/components/SecretRevealDialog';
 
 function AdminOAuthClientEditPage() {
   const { t } = useTranslation();
@@ -270,16 +271,9 @@ function AdminOAuthClientEditPage() {
     });
   };
 
-  const copyToClipboard = async text => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (error) {
-      console.error('Failed to copy to clipboard:', error);
-    }
-  };
-
   const handleModalClose = () => {
     setShowSecretModal(false);
+    setNewClientSecret('');
     markSaved();
     navigate('/admin/oauth/clients');
   };
@@ -808,82 +802,25 @@ function AdminOAuthClientEditPage() {
         onDeny={() => blocker.reset?.()}
       />
 
-      {/* Secret Modal */}
-      {showSecretModal && (
-        <div className="fixed inset-0 bg-gray-600/50 dark:bg-gray-900/75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4">
-            <div className="p-6">
-              <div className="flex items-center mb-4">
-                <Icon name="check" className="h-6 w-6 text-green-500 mr-3" />
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  {t('admin.auth.oauth.createSuccess', 'OAuth client created successfully')}
-                </h3>
-              </div>
-
-              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4 mb-4">
-                <div className="flex">
-                  <Icon name="warning" className="h-5 w-5 text-yellow-400 mr-3 mt-0.5" />
-                  <div>
-                    <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                      {t(
-                        'admin.auth.oauth.clientSecretWarning',
-                        'Save this secret now. It will not be shown again.'
-                      )}
-                    </h4>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('admin.auth.oauth.clientId', 'Client ID')}
-                  </label>
-                  <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-sm text-sm break-all text-gray-900 dark:text-gray-100">
-                      {newClientId}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(newClientId)}
-                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
-                    >
-                      <Icon name="clipboard" size="sm" />
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    {t('admin.auth.oauth.clientSecret', 'Client Secret')}
-                  </label>
-                  <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded-sm text-sm break-all text-gray-900 dark:text-gray-100">
-                      {newClientSecret}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(newClientSecret)}
-                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
-                    >
-                      <Icon name="clipboard" size="sm" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={handleModalClose}
-                  className="px-4 py-2 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  {t('common.close', 'Close')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* The new client's secret, shown once (ID-B15). The secret leaves state on Done. */}
+      <SecretRevealDialog
+        isOpen={showSecretModal}
+        title={t('admin.auth.oauth.secretReveal.createdTitle', {
+          name: formData.name || newClientId,
+          defaultValue: 'Client "{{name}}" created'
+        })}
+        description={
+          <p>
+            {t('admin.auth.oauth.clientId', 'Client ID')}:{' '}
+            <code className="font-mono break-all text-gray-900 dark:text-gray-100">
+              {newClientId}
+            </code>
+          </p>
+        }
+        fieldLabel={t('admin.auth.oauth.clientSecret', 'Client Secret')}
+        secret={newClientSecret}
+        onDone={handleModalClose}
+      />
     </>
   );
 }

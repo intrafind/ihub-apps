@@ -1869,7 +1869,6 @@
         "presets": "Vorlage-Stimmen ({{count}})",
         "useDefault": "Als Stimme verwenden",
         "useFor": "Für {{language}} verwenden",
-        "deleteConfirm": "Die Stimme „{{name}}“ im Anbieterkonto löschen? Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen.",
         "deleteError": "Die Stimme konnte nicht gelöscht werden",
         "createTitle": "Eigene Stimme anlegen",
         "createHint": "Nehmen Sie 10–30 Sekunden einer Person auf, die natürlich spricht, ohne Musik oder Hintergrundgeräusche, oder laden Sie eine solche Aufnahme hoch. Die Stimme wird sofort im Anbieterkonto angelegt; sie liest jede Sprache, mit dem Akzent der Aufnahme.",
@@ -1892,7 +1891,8 @@
         "creating": "Wird angelegt…",
         "createError": "Die Stimme konnte nicht angelegt werden",
         "created": "Stimme „{{name}}“ angelegt ({{id}}). Verwenden Sie sie unten und speichern Sie dann das Modell.",
-        "deleteTitle": "Stimme „{{name}}“ löschen?"
+        "deleteTitle": "Stimme „{{name}}“ löschen?",
+        "deleteConsequence": "Die Stimme wird im Anbieterkonto gelöscht. Modelle, die sie verwenden, können dann nicht mehr mit ihr sprechen."
       },
       "import": {
         "button": "Von URL importieren",
@@ -2315,7 +2315,8 @@
         "rotateSecretNamedTitle": "Geheimnis von „{{name}}“ erneuern?",
         "rotateSecretAction": "Geheimnis erneuern",
         "secretReveal": {
-          "title": "Neues Geheimnis für „{{name}}“"
+          "title": "Neues Geheimnis für „{{name}}“",
+          "createdTitle": "Client „{{name}}“ angelegt"
         }
       },
       "ldap": {
@@ -2513,10 +2514,10 @@
       "addinId": "Add-in-ID",
       "addinIdShared": "Jede iHub-Installation liefert diese ID aus. Erzeugen Sie eine neue, um diesen Server neben einem anderen (zum Beispiel Entwicklung und Produktion) im selben Outlook zu installieren.",
       "regenerateAddinId": "Neue ID erzeugen",
-      "regenerateAddinIdConfirm": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird. Fortfahren?",
       "regenerateAddinIdDone": "Neue Add-in-ID erzeugt. Laden Sie das Manifest herunter und stellen Sie es erneut bereit.",
       "regenerateAddinIdError": "Neue Add-in-ID konnte nicht erzeugt werden",
-      "regenerateAddinIdTitle": "Neue Add-in-ID erzeugen?"
+      "regenerateAddinIdTitle": "Neue Add-in-ID erzeugen?",
+      "regenerateAddinIdConsequence": "Outlook behandelt ein Manifest mit neuer ID als anderes Add-in. Alle Nutzer müssen das neue Manifest installieren, und das alte zeigt weiter auf diesen Server, bis es entfernt wird."
     },
     "nextcloudEmbed": {
       "title": "Nextcloud-Embed",
@@ -2772,6 +2773,7 @@
       "forceRefreshConfirmTitle": "Aktualisierung für alle Benutzer erzwingen?",
       "forceRefreshConfirmMessage": "Jeder Browser, der iHub verwendet, löscht seine zwischengespeicherten Dateien und lokal gespeicherten Daten und lädt neu, wenn iHub darin das nächste Mal geladen wird. Gerade geöffnete Seiten werden nicht unterbrochen.",
       "forceRefreshConfirmKept": "Die Zustimmung zum Hinweis bleibt erhalten; andere nur im Browser gespeicherte Einstellungen werden gelöscht.",
+      "forceRefreshConfirmSignIn": "Benutzer, deren Anmeldung im Browser gespeichert ist, müssen sich eventuell erneut anmelden.",
       "forceRefreshConfirmAction": "Aktualisierung erzwingen",
       "forceRefreshDone": "Aktualisierung ausgelöst. Jeder Browser löscht seine zwischengespeicherten Dateien und lädt neu, wenn iHub darin das nächste Mal geladen wird."
     },
@@ -3888,14 +3890,14 @@
         "connectedAt": "seit {{date}}",
         "expired": "abgelaufen",
         "disconnect": "Trennen",
-        "disconnectConfirm": "„{{user}}“ von {{label}} trennen? Die Person muss sich erneut anmelden, um es zu nutzen.",
         "resetRegistration": "OAuth-Client-Registrierung zurücksetzen",
-        "resetConfirm": "OAuth-Client-Registrierung von {{label}} zurücksetzen? Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden.",
         "resetDone": "OAuth-Client-Registrierung zurückgesetzt",
         "disconnectTitle": "„{{user}}“ von {{label}} trennen?",
         "disconnectAction": "Trennen",
         "resetTitle": "OAuth-Client-Registrierung von {{label}} zurücksetzen?",
-        "resetAction": "Registrierung zurücksetzen"
+        "resetAction": "Registrierung zurücksetzen",
+        "disconnectConsequence": "Die Person muss sich erneut anmelden, um {{label}} zu nutzen.",
+        "resetConsequence": "Die nächste Anmeldung registriert iHub neu; verbundene Benutzer müssen sich eventuell erneut verbinden."
       },
       "runsCode": "Führt Code auf diesem Server aus",
       "incompatibleReason": "Diese Installation bietet keine Aktionen: ihre Definition {{reason}}.",
@@ -5771,9 +5773,9 @@
       "memory": {
         "summary": "{{chars}} Zeichen · v{{version}} · {{updatedAt}}",
         "clear": "Gedächtnis leeren",
-        "confirmClear": "Das Gedächtnis von „{{name}}“ von {{owner}} leeren? Der Eigentümer verliert diese Notizen.",
         "clearTitle": "Gedächtnis von „{{name}}“ löschen?",
-        "clearAction": "Notizen löschen"
+        "clearAction": "Notizen löschen",
+        "clearConsequence": "Der Eigentümer, {{owner}}, verliert die Notizen, die diese Aufgabe bisher geschrieben hat."
       },
       "memoryEnabledHint": "Aus: Läufe lesen und aktualisieren die Notizen einer Aufgabe nicht (die Notizen bleiben erhalten), und „Nur bei Änderungen“ benachrichtigt nach jedem Lauf.",
       "deleteConsequence": "Die Aufgabe wird nicht mehr ausgeführt, und ihr Besitzer kann sie und ihre Läufe nicht mehr sehen."
@@ -7401,14 +7403,23 @@
       "usedBy_other": "Wird von {{count}} installierten Integrationen verwendet, die dann nicht mehr funktionieren:",
       "notUsedByIntegrations": "Keine installierte Integration verwendet sie.",
       "notChecked": "Tools, MCP-Server und Anmeldeeinstellungen, die darauf verweisen, werden hier nicht geprüft; sie schlagen fehl, bis sie andere Zugangsdaten erhalten.",
-      "deleteNamed": "Zugangsdaten „{{id}}“ löschen"
+      "deleteNamed": "Zugangsdaten „{{id}}“ löschen",
+      "deleted": "Zugangsdaten gelöscht",
+      "deleteError": "Löschen fehlgeschlagen: {{error}}"
     },
     "editor": {
       "resetTitle": "Alle Änderungen zurücksetzen?",
       "resetAction": "Änderungen zurücksetzen",
       "switchToJsonTitle": "Zum JSON-Editor wechseln?",
       "switchToFormTitle": "Zum Formular-Editor wechseln?",
-      "switchAction": "Editor wechseln"
+      "switchAction": "Editor wechseln",
+      "resetConsequence": "Ihre nicht gespeicherten Änderungen werden verworfen.",
+      "switchConsequence": "Sie haben nicht gespeicherte Änderungen. Beim Wechsel des Editors können einige davon verloren gehen."
+    },
+    "pages": {
+      "fields": {
+        "idRequired": "Die ID ist erforderlich."
+      }
     }
   },
   "cloudStorage": {
@@ -8007,7 +8018,6 @@
       "chatVisible": "Fortschritt im Chat anzeigen",
       "config": "Konfiguration",
       "configJson": "Konfiguration (JSON)",
-      "confirmDeleteNode": "Diesen Knoten löschen?",
       "copied": "kopiert",
       "deleteEdge": "Verbindung löschen",
       "deleteNode": "Knoten löschen",
@@ -8172,7 +8182,9 @@
           "wait": "Warten, bis das Dokument bereit ist",
           "outputHelp": "Zustandsvariable für das gespeicherte Dokument. Standard: {{name}}. Lassen Sie „Warten“ an, wenn ein späterer Schritt das Dokument liest."
         }
-      }
+      },
+      "deleteNodeTitle": "Knoten „{{name}}“ löschen?",
+      "deleteNodeConsequence": "Der Knoten, die darin verschachtelten Schritte und ihre Verbindungen werden entfernt. Der Workflow behält seine gespeicherte Fassung, bis Sie speichern."
     },
     "checkpointAwaiting": "Wartet auf Ihre Eingabe",
     "join": "Beitreten",
@@ -9740,13 +9752,13 @@
     "save": "Speichern",
     "saving": "Speichern…",
     "clear": "Leeren",
-    "clearConfirm": "Alle Notizen leeren? Das entfernt alles, was bisher geschrieben wurde.",
     "reload": "Neu laden (meine Änderungen verwerfen)",
     "keepEditing": "Weiter bearbeiten",
     "versionConflict": "Konflikt: Das Gedächtnis wurde an anderer Stelle geändert. Neu laden, um den aktuellen Stand zu sehen.",
     "staleNotice": "Die Notizen haben sich geändert, seit Sie mit dem Bearbeiten begonnen haben (ein Lauf hat sie evtl. aktualisiert).",
     "clearTitle": "Alle Notizen löschen?",
-    "clearAction": "Notizen löschen"
+    "clearAction": "Notizen löschen",
+    "clearConsequence": "Alles bisher Geschriebene wird entfernt."
   },
   "usageGuide": {
     "question": "Wie nutze ich diese App?",

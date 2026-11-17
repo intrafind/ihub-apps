@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
 /**
- * Ratchet: no native browser dialog in the admin area or the shared
+ * Ratchet: no native browser dialog in the admin area, the workflow editor
+ * (opened from the admin area) or the shared
  * components. `window.confirm()` / `alert()` / `prompt()` can't be styled,
  * translated or named — a bare confirm() let the shipped marketplace registry
  * be deleted without saying which one (AX-B14). Use `ConfirmDialog`
@@ -22,7 +23,7 @@ const path = require('path');
 const espree = require('espree');
 
 const ROOT = path.resolve(__dirname, '../../../client/src');
-const SCANNED = ['features/admin', 'shared'];
+const SCANNED = ['features/admin', 'features/workflows', 'shared'];
 const NATIVE = new Set(['confirm', 'alert', 'prompt']);
 const GLOBALS = new Set(['window', 'globalThis', 'self']);
 

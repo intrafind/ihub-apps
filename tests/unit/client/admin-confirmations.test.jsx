@@ -9,7 +9,7 @@
  *     integrations that use it.
  */
 import '@testing-library/jest-dom';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const mockAdminApi = {
@@ -144,10 +144,12 @@ describe('credential delete (IN-B3, client part)', () => {
       auth: { mode: 'service-account', credentialRef: 'brave-key' },
       values: {}
     },
-    { id: 'other', label: 'Other', values: { nested: { list: ['not-brave-key'] } } }
+    { id: 'other', label: 'Other', values: { nested: { list: ['not-brave-key'] } } },
+    // A plain value equal to the id is not a reference; only `…Ref` fields are.
+    { id: 'plain', label: 'Plain', values: { product: 'brave-key', list: ['brave-key'] } }
   ];
 
-  it('finds installations by managed secret and by a stored value', () => {
+  it('finds installations by managed secret and by a credential field', () => {
     expect(installationsUsingCredential(INSTALLED, 'brave-key')).toEqual([
       { id: 'brave', label: 'Brave Search' },
       { id: 'jira', label: 'Jira' }
@@ -193,5 +195,53 @@ describe('credential delete (IN-B3, client part)', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     });
     expect(mockAdminApi.deleteCredential).toHaveBeenCalledWith('k1');
+  });
+
+  it('keeps the busy dialog mounted while the list reloads, then focuses the heading', async () => {
+    let finishReload;
+    mockAdminApi.listCredentials
+      .mockResolvedValueOnce([{ id: 'k1', name: 'Key', type: 'secret' }])
+      .mockImplementationOnce(() => new Promise(resolve => (finishReload = resolve)));
+    mockFetchInstalled.mockResolvedValue({ items: [] });
+    mockAdminApi.deleteCredential.mockResolvedValue({});
+    render(<AdminCredentialsPage />);
+    const remove = await screen.findByRole('button', { name: 'Delete credential "k1"' });
+    await act(async () => {
+      fireEvent.click(remove);
+    });
+    const dialog = screen.getByRole('alertdialog', { name: 'Delete credential "k1"?' });
+    await act(async () => {
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    });
+    // The reload is still running: the page (and the busy dialog) stay.
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Credentials' })).toBeInTheDocument();
+    await act(async () => {
+      finishReload([]);
+    });
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.getByRole('heading', { name: 'Credentials' })).toHaveFocus();
+  });
+
+  it('ignores a second Delete click while the first usage check runs', async () => {
+    let finishCheck;
+    mockAdminApi.listCredentials.mockResolvedValue([
+      { id: 'a', name: 'A', type: 'secret' },
+      { id: 'b', name: 'B', type: 'secret' }
+    ]);
+    mockFetchInstalled.mockImplementation(() => new Promise(resolve => (finishCheck = resolve)));
+    render(<AdminCredentialsPage />);
+    const deleteA = await screen.findByRole('button', { name: 'Delete credential "a"' });
+    const deleteB = screen.getByRole('button', { name: 'Delete credential "b"' });
+    fireEvent.click(deleteA);
+    expect(deleteA).toHaveAttribute('aria-busy', 'true');
+    expect(deleteB).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(deleteB);
+    expect(mockFetchInstalled).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishCheck({ items: [] });
+    });
+    expect(screen.getByRole('alertdialog', { name: 'Delete credential "a"?' })).toBeInTheDocument();
+    expect(deleteB).not.toHaveAttribute('aria-disabled');
   });
 });

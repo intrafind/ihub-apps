@@ -167,9 +167,9 @@ export default function AdminScheduledTasksPage() {
         name: task.name
       }),
       message: t(
-        'admin.scheduledTasks.memory.confirmClear',
-        'Clear the memory of "{{name}}" of {{owner}}? The owner loses these notes.',
-        { name: task.name, owner }
+        'admin.scheduledTasks.memory.clearConsequence',
+        'Its owner, {{owner}}, loses the notes this task has written so far.',
+        { owner }
       ),
       confirmLabel: t('admin.scheduledTasks.memory.clearAction', 'Clear notes'),
       danger: true,

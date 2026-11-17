@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -51,6 +51,7 @@ function AdminPromptsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
+  const headingRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
@@ -156,6 +157,8 @@ function AdminPromptsPage() {
       action: async () => {
         await makeAdminApiCall(`/admin/prompts/${prompt.id}`, { method: 'DELETE' });
         await loadPrompts();
+        // The row's Delete button is gone: keep keyboard focus on the page.
+        headingRef.current?.focus();
       }
     });
   };
@@ -370,7 +373,11 @@ function AdminPromptsPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+            >
               {activeTab === 'variables'
                 ? t('admin.promptVariables.title', 'Global Prompt Variables')
                 : activeTab === 'user'

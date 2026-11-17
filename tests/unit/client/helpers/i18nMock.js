@@ -28,7 +28,7 @@ const lookup = key => key.split('.').reduce((node, part) => node?.[part], en);
  */
 function enT(key, fallbackOrOptions, maybeOptions) {
   const options =
-    typeof fallbackOrOptions === 'object' && fallbackOrOptions !== null
+    fallbackOrOptions && typeof fallbackOrOptions === 'object'
       ? fallbackOrOptions
       : maybeOptions || {};
   const fallback = typeof fallbackOrOptions === 'string' ? fallbackOrOptions : options.defaultValue;

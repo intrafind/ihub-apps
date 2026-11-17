@@ -1590,8 +1590,8 @@ function AdminOfficeIntegrationPage() {
         isOpen={confirmingRegenerate}
         title={t('admin.officeIntegration.regenerateAddinIdTitle', 'Generate a new add-in ID?')}
         message={t(
-          'admin.officeIntegration.regenerateAddinIdConfirm',
-          'Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed. Continue?'
+          'admin.officeIntegration.regenerateAddinIdConsequence',
+          'Outlook treats a manifest with a new ID as a different add-in. Everyone using the add-in must install the new manifest, and the old one keeps pointing at this server until it is removed.'
         )}
         confirmLabel={t('admin.officeIntegration.regenerateAddinId', 'Generate new ID')}
         danger

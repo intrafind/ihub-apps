@@ -324,10 +324,7 @@ export default function MemoryEditor({
       <ConfirmDialog
         isOpen={confirmingClear}
         title={t('memoryEditor.clearTitle', 'Clear all notes?')}
-        message={t(
-          'memoryEditor.clearConfirm',
-          'Clear all notes? This removes everything written so far.'
-        )}
+        message={t('memoryEditor.clearConsequence', 'Everything written so far is removed.')}
         confirmLabel={t('memoryEditor.clearAction', 'Clear notes')}
         danger
         onConfirm={performClear}

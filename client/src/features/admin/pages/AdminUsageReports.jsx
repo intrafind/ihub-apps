@@ -24,11 +24,14 @@ const MODES = ['anonymous', 'pseudonymous', 'identified'];
  * the saved mode until the change is confirmed and saved. A failed save stays
  * in the dialog; a successful one is announced.
  */
-function TrackingMode() {
+export function TrackingMode() {
   const { t } = useTranslation();
   const [mode, setMode] = useState(null);
   const [notice, setNotice] = useState('');
-  const { requestConfirm, dialogProps, isOpen: confirming } = useConfirmAction();
+  // The select is not disabled while the dialog is open: disabling the focused
+  // element would drop focus to <body>, and Cancel could not return it here.
+  // The dialog is modal, so the select can't be changed meanwhile.
+  const { requestConfirm, dialogProps } = useConfirmAction();
 
   useEffect(() => {
     fetchAdminUsageMeta()
@@ -54,7 +57,6 @@ function TrackingMode() {
         {t('admin.usage.reports.mode.label', 'Tracking mode')}
         <select
           value={mode}
-          disabled={confirming}
           onChange={e => {
             const next = e.target.value;
             if (next === mode) return;

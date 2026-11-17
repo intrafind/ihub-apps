@@ -107,9 +107,8 @@ function TtsVoicesPanel({ modelId, onUseVoice, t, uiLanguage }) {
         name: voice.name
       }),
       message: t(
-        'admin.models.ttsVoices.deleteConfirm',
-        'Delete the voice "{{name}}" from the provider account? Models that use it can no longer speak with it.',
-        { name: voice.name }
+        'admin.models.ttsVoices.deleteConsequence',
+        'The voice is deleted from the provider account. Models that use it can no longer speak with it.'
       ),
       irreversible: true,
       confirmLabel: t('admin.confirm.delete', 'Delete'),

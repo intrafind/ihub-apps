@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
@@ -50,6 +50,7 @@ function AdminSkillsPage() {
   const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState('');
+  const headingRef = useRef(null);
   const { requestConfirm, dialogProps: confirmDialogProps } = useConfirmAction();
 
   useEffect(() => {
@@ -71,11 +72,12 @@ function AdminSkillsPage() {
 
   /**
    * Fetches the full list of skills from the admin API and stores
-   * them in local state.
+   * them in local state. Only the first load shows the full-page spinner
+   * (`loading` starts true); a reload after a change keeps the page, and with
+   * it an open confirmation, mounted.
    */
   const loadSkills = async () => {
     try {
-      setLoading(true);
       setError(null);
       const data = await fetchAdminSkills();
       const skillsArray = Array.isArray(data) ? data : [];
@@ -124,6 +126,8 @@ function AdminSkillsPage() {
             defaultValue: 'Skill "{{name}}" deleted.'
           })
         );
+        // The row's Delete button is gone: keep keyboard focus on the page.
+        headingRef.current?.focus();
       }
     });
   };
@@ -237,7 +241,11 @@ function AdminSkillsPage() {
         {/* Page header */}
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+            <h1
+              ref={headingRef}
+              tabIndex={-1}
+              className="text-2xl font-semibold text-gray-900 dark:text-gray-100 focus:outline-hidden"
+            >
               {activeTab === 'user'
                 ? t('admin.skills.userSkills.title', 'User Skills')
                 : t('admin.skills.title', 'Skill Management')}
