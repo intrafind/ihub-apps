@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: IntraFind Software AG
 // SPDX-License-Identifier: LicenseRef-iHub-Apps
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -20,7 +20,10 @@ import {
 } from '../../../api/adminApi';
 import { getSchemaByType } from '../../../utils/schemaService';
 import AdminLoadError from '../components/AdminLoadError';
-import UsageLimitsEditor, { normalizeUsageLimits } from '../components/UsageLimitsEditor';
+import UsageLimitsEditor from '../components/UsageLimitsEditor';
+import { buildUserSavePayload } from '../utils/userSavePayload';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import QuotaBar from '../../../shared/components/QuotaBar';
 import { windowLabel, localizedName } from '../../../shared/utils/usageFormat';
 
@@ -220,6 +223,9 @@ function AdminUserEditPage() {
   const [saveError, setSaveError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
   const [availableGroups, setAvailableGroups] = useState([]);
+  const { user: currentUser } = useAuth();
+  // The user as loaded: `active` is sent only when the admin changed it.
+  const loadedUserRef = useRef(null);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replaceAll('-', '_')}`;
@@ -245,6 +251,7 @@ function AdminUserEditPage() {
           throw new Error('User not found');
         }
 
+        loadedUserRef.current = userData;
         return { ...userData, password: '' };
       } catch (err) {
         throw new Error(getAdminApiErrorMessage(err));
@@ -272,27 +279,7 @@ function AdminUserEditPage() {
       const isLocalAuth =
         !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
 
-      // Prepare the data for API call
-      const apiData = {
-        username: data.username,
-        email: data.email || null,
-        name: data.fullName || data.name || '',
-        // Use internalGroups, with fallback to groups for backward compatibility
-        internalGroups: data.internalGroups || data.groups || [],
-        active: data.enabled !== false,
-        authMethods: data.authMethods || ['local']
-      };
-
-      // Personal usage limits (only the update route accepts them); `null`
-      // clears limits saved before.
-      if (!isNew) {
-        apiData.usageLimits = normalizeUsageLimits(data.usageLimits);
-      }
-
-      // Only include password if it's provided
-      if (data.password) {
-        apiData.password = data.password;
-      }
+      const apiData = buildUserSavePayload(data, { isNew, initial: loadedUserRef.current });
 
       // For new local auth users, ensure password is provided
       if (isNew && isLocalAuth && !data.password) {
@@ -346,7 +333,9 @@ function AdminUserEditPage() {
       // Success - navigate back to users list
       navigate('/admin/users');
     } catch (err) {
-      setSaveError(getAdminApiErrorMessage(err));
+      // The form and every edit stay; a refusal (LAST_ADMIN, SELF_LOCKOUT) is shown
+      // in the admin's language from its code.
+      setSaveError(apiErrorMessage(err, t, getAdminApiErrorMessage(err)));
     } finally {
       setSaving(false);
     }
@@ -425,13 +414,18 @@ function AdminUserEditPage() {
       </div>
 
       {saveError && (
-        <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+        <div
+          role="alert"
+          className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4"
+        >
           <div className="flex">
             <div className="shrink-0">
               <Icon name="warning" size="md" className="text-red-400" />
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                {t('admin.users.edit.saveFailedTitle', 'Could not save the user')}
+              </h3>
               <div className="mt-2 text-sm text-red-700 dark:text-red-300">{saveError}</div>
             </div>
           </div>
@@ -445,6 +439,7 @@ function AdminUserEditPage() {
           formComponent={UserFormEditor}
           formProps={{
             isNewUser,
+            isSelf: !isNewUser && Boolean(currentUser?.id) && currentUser.id === user?.id,
             jsonSchema,
             availableGroups
           }}

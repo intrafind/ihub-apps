@@ -25,6 +25,7 @@
  */
 
 import configStore from '../services/config/ConfigStore.js';
+import { withAdminInvariantLock } from './adminInvariantLock.js';
 
 export const PLATFORM_FILE = 'config/platform.json';
 
@@ -56,16 +57,22 @@ export async function updatePlatform(change, { create = false } = {}) {
   // which resolves the contents directory when first imported.
   const { encryptPlatformSecrets } = await import('./configSecrets.js');
 
-  const { data, written } = await configStore.updateJson(PLATFORM_FILE, async current => {
-    if (current === null || current === undefined) {
-      if (!create) throw new Error(`${PLATFORM_FILE} is missing`);
-    }
-    const draft = current && typeof current === 'object' && !Array.isArray(current) ? current : {};
-    const returned = await mutate(draft);
-    if (returned === SKIP) return undefined;
-    const next = returned === undefined ? draft : returned;
-    return encryptPlatformSecrets(next);
-  });
+  // Under the admin invariant lock: an auth change is checked against
+  // users.json and groups.json, which their own guarded writers must not
+  // change between that check and this write (see adminInvariantLock.js).
+  const { data, written } = await withAdminInvariantLock(() =>
+    configStore.updateJson(PLATFORM_FILE, async current => {
+      if (current === null || current === undefined) {
+        if (!create) throw new Error(`${PLATFORM_FILE} is missing`);
+      }
+      const draft =
+        current && typeof current === 'object' && !Array.isArray(current) ? current : {};
+      const returned = await mutate(draft);
+      if (returned === SKIP) return undefined;
+      const next = returned === undefined ? draft : returned;
+      return encryptPlatformSecrets(next);
+    })
+  );
   return { data: data ?? {}, written };
 }
 

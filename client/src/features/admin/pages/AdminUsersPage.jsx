@@ -5,7 +5,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { getAdminApiErrorMessage, makeAdminApiCall } from '../../../api/adminApi';
+import { apiErrorMessage } from '../../../utils/apiErrorMessage';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import Switch from '../../../shared/components/Switch';
 import { useFilterState } from '../hooks/useFilterState';
@@ -201,14 +202,19 @@ function AdminUsersPage() {
           setMessage({ type: 'success', text: 'User deleted successfully!' });
           void loadUsers();
         } catch (error) {
-          setMessage({ type: 'error', text: `Failed to delete user: ${error.message}` });
+          // A refusal (your own account, the last admin) says why, from its code.
+          setMessage({
+            type: 'error',
+            text: `Failed to delete user: ${apiErrorMessage(error, t, getAdminApiErrorMessage(error))}`
+          });
         }
       }
     });
   };
 
   const handleToggleUserStatus = async user => {
-    const newStatus = !user.active;
+    // A record without `active` is active (the switch shows it on).
+    const newStatus = user.active === false;
     try {
       await makeAdminApiCall(`/admin/auth/users/${user.id}`, {
         method: 'PUT',
@@ -226,7 +232,10 @@ function AdminUsersPage() {
       });
       void loadUsers();
     } catch (error) {
-      setMessage({ type: 'error', text: `Failed to update user status: ${error.message}` });
+      setMessage({
+        type: 'error',
+        text: `Failed to update user status: ${apiErrorMessage(error, t, getAdminApiErrorMessage(error))}`
+      });
     }
   };
 

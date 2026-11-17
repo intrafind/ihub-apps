@@ -596,7 +596,6 @@ For detailed configuration documentation, see the main README.md Configuration s
 | `PORT` | Server port | 3000 | No |
 | `HOST` | Bind address (use `0.0.0.0` to listen on all interfaces, then access via `localhost` or `127.0.0.1` in browser) | 0.0.0.0 | No |
 | `JWT_SECRET` | JWT signing key (auto-generated if not set) | - | No* |
-| `ADMIN_SECRET` | Admin access key | - | No |
 | `OPENAI_API_KEY` | OpenAI API key | - | No |
 | `ANTHROPIC_API_KEY` | Anthropic API key | - | No |
 | `GOOGLE_API_KEY` | Google AI key | - | No |

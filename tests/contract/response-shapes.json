@@ -2390,6 +2390,7 @@
         "oidcProviders": "number",
         "proxy": "boolean"
       },
+      "configRefreshErrors": [],
       "groups": "number",
       "integrations": {
         "enabled": "number",

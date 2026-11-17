@@ -23,6 +23,8 @@ import Icon from './Icon';
  * @param {string} [props.confirmLabel]
  * @param {string} [props.denyLabel]
  * @param {boolean} [props.danger=false] - styles the confirm button as destructive (red).
+ * @param {boolean} [props.hideConfirm=false] - show only the deny button (labelled `denyLabel`),
+ *   for a dialog that can no longer go ahead (the action was refused).
  * @param {() => void} props.onConfirm
  * @param {() => void} props.onDeny
  */
@@ -33,6 +35,7 @@ function ConfirmDialog({
   confirmLabel,
   denyLabel,
   danger = false,
+  hideConfirm = false,
   onConfirm,
   onDeny
 }) {
@@ -118,13 +121,15 @@ function ConfirmDialog({
             >
               {denyLabel || t('common.cancel', 'Cancel')}
             </button>
-            <button
-              type="button"
-              onClick={onConfirm}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${confirmClasses}`}
-            >
-              {confirmLabel || t('common.confirm', 'Confirm')}
-            </button>
+            {!hideConfirm && (
+              <button
+                type="button"
+                onClick={onConfirm}
+                className={`px-4 py-2 rounded-lg font-medium transition-colors focus:outline-hidden focus:ring-2 focus:ring-offset-2 ${confirmClasses}`}
+              >
+                {confirmLabel || t('common.confirm', 'Confirm')}
+              </button>
+            )}
           </div>
         </div>
       </div>

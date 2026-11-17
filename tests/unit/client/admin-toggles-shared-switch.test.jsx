@@ -211,6 +211,33 @@ describe('AdminUsersPage active switch', () => {
     );
     expect(putCall[1].body.active).toBe(false);
   });
+
+  it('turns off a user whose record has no active field (shown as active)', async () => {
+    mockMakeAdminApiCall.mockReset();
+    mockMakeAdminApiCall.mockImplementation(async (url, options) => {
+      if (!options) {
+        return { data: { users: { u2: { id: 'u2', username: 'old', name: 'Old Record' } } } };
+      }
+      return { data: {} };
+    });
+    render(
+      <MemoryRouter>
+        <AdminUsersPage />
+      </MemoryRouter>
+    );
+
+    const control = await screen.findByRole('switch', { name: 'Account active: Old Record' });
+    expect(control).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(control);
+
+    await waitFor(() =>
+      expect(mockMakeAdminApiCall.mock.calls.some(([, o]) => o?.method === 'PUT')).toBe(true)
+    );
+    const putCall = mockMakeAdminApiCall.mock.calls.find(
+      ([, options]) => options?.method === 'PUT'
+    );
+    expect(putCall[1].body.active).toBe(false);
+  });
 });
 
 describe('TechnicalDetailsToggle', () => {

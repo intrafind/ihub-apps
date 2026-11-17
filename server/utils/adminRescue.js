@@ -6,47 +6,7 @@ import { loadUsers, saveUsers } from './userManager.js';
 import configCache from '../configCache.js';
 import logger from './logger.js';
 import { localUsersFile } from './contentsPath.js';
-
-/**
- * Check if a user's authentication method is enabled in platform config
- * @param {Object} user - User object
- * @param {Object} platform - Platform configuration
- * @returns {boolean} True if user can login with at least one enabled auth method
- */
-function isUserAuthMethodEnabled(user, platform) {
-  const authMethods = user.authMethods || [];
-
-  // If user has no authMethods array, they are a legacy local user
-  if (authMethods.length === 0) {
-    // Check if they have a passwordHash (local user)
-    if (user.passwordHash) {
-      return platform.localAuth?.enabled === true;
-    }
-    // Unknown auth method, assume enabled to be safe
-    return true;
-  }
-
-  // Check if ANY of the user's auth methods is enabled
-  return authMethods.some(method => {
-    switch (method) {
-      case 'local':
-        return platform.localAuth?.enabled === true;
-      case 'oidc':
-        return platform.oidcAuth?.enabled === true;
-      case 'proxy':
-        return platform.proxyAuth?.enabled === true;
-      case 'ntlm':
-        return platform.ntlmAuth?.enabled === true;
-      case 'ldap':
-        return platform.ldapAuth?.enabled === true;
-      case 'teams':
-        return platform.teamsAuth?.enabled === true;
-      default:
-        // Unknown auth method, assume enabled to be safe
-        return true;
-    }
-  });
-}
+import { applySignInEnvFlags, isUsableAdmin, isUserAuthMethodEnabled } from './authInvariants.js';
 
 /**
  * Check if there is at least one admin user across all enabled authentication methods
@@ -55,7 +15,10 @@ function isUserAuthMethodEnabled(user, platform) {
  */
 export function hasAnyAdmin(usersFilePath = localUsersFile()) {
   try {
-    const platform = configCache.getPlatform() || {};
+    // Same view of the sign-in methods as the lockout guards (adminGuards.js):
+    // proxy sign-in switched on by PROXY_AUTH_ENABLED counts, so a proxy admin
+    // is seen and the rescue promotes nobody.
+    const platform = applySignInEnvFlags(configCache.getPlatform() || {});
     const groupsConfig = loadGroupsConfiguration();
 
     // Check persisted users (local, OIDC, proxy, NTLM auth users)
@@ -305,46 +268,37 @@ export async function ensureFirstUserIsAdmin(user, authMode, usersFilePath = loc
 }
 
 /**
- * Check if a user is the last admin
+ * Check if a user is the last admin who can sign in.
+ *
+ * Counts the same administrators the platform guards count
+ * (`authInvariants.isUsableAdmin`): active, with an enabled sign-in method, in
+ * a group that grants admin access (also through inheritance). Fails closed:
+ * when the answer cannot be worked out, the user is treated as the last
+ * admin, so a caller that uses this to allow a removal refuses it.
+ *
+ * The admin routes do not use this any more; they run the check on the body
+ * they hold under the users.json lock (`adminGuards.assertUserChangeKeepsAdmin`).
+ *
  * @param {string} userId - User ID to check
  * @param {string} usersFilePath - Path to users.json file
- * @returns {boolean} True if user is the last admin
+ * @returns {boolean} True if user is the last usable admin (or the check failed)
  */
 export function isLastAdmin(userId, usersFilePath = localUsersFile()) {
   try {
     const usersConfig = loadUsers(usersFilePath);
     const users = usersConfig.users || {};
     const groupsConfig = loadGroupsConfiguration();
+    const platform = applySignInEnvFlags(configCache.getPlatform() || {});
 
     let adminCount = 0;
     let isUserAdmin = false;
 
     for (const uid in users) {
-      const user = users[uid];
-
-      // Skip inactive users
-      if (user.active === false) {
-        continue;
-      }
-
-      // Check if user has admin access through their internal groups
-      const userGroups = user.internalGroups || [];
-      const hasAdmin = userGroups.some(groupName => {
-        const group = groupsConfig.groups?.[groupName];
-        return group?.permissions?.adminAccess === true;
-      });
-
-      if (hasAdmin) {
-        adminCount++;
-        if (uid === userId) {
-          isUserAdmin = true;
-        }
-      }
+      if (!isUsableAdmin(users[uid], groupsConfig, platform)) continue;
+      adminCount++;
+      if (uid === userId) isUserAdmin = true;
     }
 
-    // User is the last admin if:
-    // 1. They are an admin
-    // 2. There's only one admin total
     const result = isUserAdmin && adminCount === 1;
 
     if (result) {
@@ -357,12 +311,10 @@ export function isLastAdmin(userId, usersFilePath = localUsersFile()) {
 
     return result;
   } catch (error) {
-    logger.error('Error checking if user is last admin', {
+    logger.error('Error checking if user is last admin; treating them as the last admin', {
       component: 'AdminRescue',
       error
     });
-    // In case of error, assume user is NOT the last admin to allow deletion
-    // This is safer than blocking all deletions
-    return false;
+    return true;
   }
 }
