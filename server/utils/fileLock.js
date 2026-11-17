@@ -24,6 +24,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import logger from './logger.js';
+import { writeInDirectory } from './atomicWrite.js';
 import { LockTimeoutError } from '../storage/errors.js';
 import { lockPrefix, lockStats, recordLockHold } from '../telemetry/waitDiagnostics.js';
 
@@ -34,9 +35,10 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
  * @returns {Promise<boolean>} true when this call created the file
  */
 export async function tryCreateExclusive(filePath, content) {
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
   try {
-    await fs.writeFile(filePath, content, { encoding: 'utf8', flag: 'wx' });
+    await writeInDirectory(path.dirname(filePath), () =>
+      fs.writeFile(filePath, content, { encoding: 'utf8', flag: 'wx' })
+    );
     return true;
   } catch (err) {
     if (err.code === 'EEXIST') return false;

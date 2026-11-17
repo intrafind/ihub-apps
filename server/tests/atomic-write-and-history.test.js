@@ -13,7 +13,8 @@ fsSync.mkdirSync(path.join(ROOT, 'contents'), { recursive: true });
 process.env.APP_ROOT_DIR = ROOT;
 process.env.CONTENTS_DIR = 'contents';
 
-const { atomicWriteFile, atomicWriteJSON } = await import('../utils/atomicWrite.js');
+const { atomicWriteFile, atomicWriteJSON, writeInDirectory } =
+  await import('../utils/atomicWrite.js');
 const { saveSnapshot, listSnapshots } = await import('../services/ChangeHistoryService.js');
 
 const modeOf = async p => (await fs.stat(p)).mode & 0o777;
@@ -34,6 +35,32 @@ describe('atomicWrite permissions', { skip: process.platform === 'win32' }, () =
     assert.equal(await modeOf(file), 0o600);
     await atomicWriteFile(file, 'x', { encoding: 'utf8' });
     assert.equal(await modeOf(file), 0o600);
+  });
+
+  it('gives the default mode with keepMode: false, and still honours an explicit mode', async () => {
+    const file = path.join(ROOT, 'store-doc.json');
+    await fs.writeFile(file, '{}');
+    await fs.chmod(file, 0o600);
+    const fresh = path.join(ROOT, 'fresh.json');
+    await fs.writeFile(fresh, '{}');
+    const defaultMode = await modeOf(fresh);
+    await atomicWriteJSON(file, { a: 1 }, { keepMode: false });
+    assert.equal(await modeOf(file), defaultMode);
+    await atomicWriteJSON(file, { a: 2 }, { keepMode: false, mode: 0o600 });
+    assert.equal(await modeOf(file), 0o600);
+  });
+
+  it('writeInDirectory creates a missing directory and retries once', async () => {
+    const dir = path.join(ROOT, 'later', 'nested');
+    const file = path.join(dir, 'a.json');
+    await writeInDirectory(dir, () => atomicWriteJSON(file, { a: 1 }));
+    assert.deepEqual(JSON.parse(await fs.readFile(file, 'utf8')), { a: 1 });
+    await assert.rejects(
+      writeInDirectory(dir, async () => {
+        throw Object.assign(new Error('denied'), { code: 'EACCES' });
+      }),
+      /denied/
+    );
   });
 
   it('leaves no temp file behind', async () => {

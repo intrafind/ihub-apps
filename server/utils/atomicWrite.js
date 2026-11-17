@@ -23,6 +23,27 @@ async function resolveMode(filePath, mode) {
   }
 }
 
+/**
+ * Run `write`; when it fails because `dir` does not exist, create `dir` and run
+ * it once more. Saves a `mkdir` on every write to a directory that is almost
+ * always there already. `write` must be safe to repeat after an ENOENT.
+ *
+ * @template T
+ * @param {string} dir - Directory `write` puts its file in
+ * @param {() => Promise<T>} write
+ * @returns {Promise<T>}
+ */
+export async function writeInDirectory(dir, write) {
+  try {
+    return await write();
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+    // lgtm[js/path-injection] -- caller-validated path; see atomicWriteFile.
+    await fs.mkdir(dir, { recursive: true });
+    return write();
+  }
+}
+
 /** Flush the directory entry created by a rename; best effort where unsupported. */
 async function syncDirectory(dir) {
   let handle;
@@ -55,18 +76,25 @@ async function syncDirectory(dir) {
  *
  * @param {string} filePath - The target file path (must be caller-validated)
  * @param {string|Buffer} data - The data to write
- * @param {string|{encoding?: string, mode?: number}} [options] - Encoding, or
- *   `{ encoding, mode }`. `mode` sets the file's permission bits (e.g. `0o600`
- *   for secrets); without it the existing target's mode is kept.
+ * @param {string|{encoding?: string, mode?: number, keepMode?: boolean}} [options] -
+ *   Encoding, or `{ encoding, mode, keepMode }`. `mode` sets the file's
+ *   permission bits (e.g. `0o600` for secrets); without it the existing
+ *   target's mode is kept, unless `keepMode: false`: then the file gets the
+ *   default mode a new file gets, and the `stat` and `fchmod` are skipped (for
+ *   files that are always written with the default mode, like store documents).
  * @returns {Promise<void>}
  */
 export async function atomicWriteFile(filePath, data, options = 'utf8') {
-  const { encoding = 'utf8', mode } =
-    typeof options === 'string' ? { encoding: options } : options || {};
+  const {
+    encoding = 'utf8',
+    mode,
+    keepMode = true
+  } = typeof options === 'string' ? { encoding: options } : options || {};
   const dir = dirname(filePath);
   const tempSuffix = randomBytes(8).toString('hex');
   const tempPath = join(dir, `.tmp_${tempSuffix}`);
-  const targetMode = await resolveMode(filePath, mode);
+  const targetMode =
+    keepMode || Number.isInteger(mode) ? await resolveMode(filePath, mode) : undefined;
 
   try {
     // Write to temporary file first
@@ -102,12 +130,16 @@ export async function atomicWriteFile(filePath, data, options = 'utf8') {
  *
  * @param {string} filePath - The target file path
  * @param {any} data - The data to serialize as JSON
- * @param {{mode?: number}} [options] - `mode` sets the permission bits (see atomicWriteFile)
+ * @param {{mode?: number, keepMode?: boolean}} [options] - Permission bits (see atomicWriteFile)
  * @returns {Promise<void>}
  */
 export async function atomicWriteJSON(filePath, data, options = {}) {
   const jsonData = JSON.stringify(data, null, 2);
-  await atomicWriteFile(filePath, jsonData, { encoding: 'utf8', mode: options?.mode });
+  await atomicWriteFile(filePath, jsonData, {
+    encoding: 'utf8',
+    mode: options?.mode,
+    keepMode: options?.keepMode
+  });
 }
 
 /**
