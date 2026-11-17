@@ -305,8 +305,16 @@ function startStub() {
 test.use({
   launchOptions: process.env.PW_CHROMIUM_PATH
     ? { executablePath: process.env.PW_CHROMIUM_PATH }
-    : {}
+    : {},
+  // Screenshots a person will look at are taken at twice the pixel density.
+  ...(process.env.CONNECT_E2E_SHOTS ? { deviceScaleFactor: 2 } : {})
 });
+
+/** `CONNECT_E2E_SHOTS=<dir>` keeps a screenshot of the key states there; otherwise nothing. */
+async function shot(page, name) {
+  const dir = process.env.CONNECT_E2E_SHOTS;
+  if (dir) await page.screenshot({ path: `${dir}/${name}.png` });
+}
 test.describe.configure({ mode: 'serial' });
 
 let stubServer = null;
@@ -322,7 +330,7 @@ let originalSsrf = null;
  */
 async function primeCatalog() {
   const started = await api.post(`${BASE}/api/integrations/${INSTALLATION_ID}/_connect`, {
-    data: { returnUrl: '/' }
+    data: { returnUrl: `${BASE}/` }
   });
   expect(started.ok(), await started.text()).toBeTruthy();
   const { url } = await started.json();
@@ -505,6 +513,7 @@ test('not connected → Connect → consent → back in the same chat → answer
   const card = page.getByRole('region', { name: /Connect E2E directory/ });
   await expect(card).toBeVisible({ timeout: 60_000 });
   await expect(card).toContainText('iHub needs to act as you in E2E directory');
+  await shot(page, '1-card-asking-light');
 
   // The card in its "not connected" state meets WCAG 2.2 AA (the tags of
   // accessibility.spec.js): no axe violation inside the card, and the buttons
@@ -528,6 +537,7 @@ test('not connected → Connect → consent → back in the same chat → answer
   expect(
     axeDark.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target.join(' ')).join(', ')}`)
   ).toEqual([]);
+  await shot(page, '2-card-asking-dark');
   await page.emulateMedia({ colorScheme: 'light' });
   await card.getByRole('button', { name: /Connect/ }).focus();
   await expect(card.getByRole('button', { name: /Connect/ })).toBeFocused();
@@ -545,6 +555,7 @@ test('not connected → Connect → consent → back in the same chat → answer
     timeout: 60_000
   });
   await expect(chatLog(page).getByText(/I connected E2E directory/)).toHaveCount(0);
+  await shot(page, '3-after-connect-answer');
   expect(vendor.toolCalls).toBe(1);
   // The model saw the question once: call, explanation, continuation.
   expect(vendor.modelRequests.length).toBeGreaterThanOrEqual(3);
@@ -639,6 +650,7 @@ test('a call that needs approval asks again after the connect; it does not run',
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeVisible({
     timeout: 60_000
   });
+  await shot(page, '4-approval-after-connect');
   await page.waitForTimeout(1500);
   expect(vendor.toolCalls).toBe(calls);
 
@@ -679,7 +691,7 @@ test('a second request for the same stored call runs nothing', async ({ page, co
 
   // Connect (as the browser would), then two requests at once: one runs it.
   const started = await api.post(`${BASE}/api/integrations/${INSTALLATION_ID}/_connect`, {
-    data: { returnUrl: '/' }
+    data: { returnUrl: `${BASE}/` }
   });
   expect(started.ok(), await started.text()).toBeTruthy();
   expect((await api.get((await started.json()).url)).ok()).toBeTruthy();

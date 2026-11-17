@@ -472,8 +472,12 @@ their first use of it (the list is built as tokens are used, not at start).
 - **One Connect card:** when a request needs an integration the user has not connected, the chat
   explains why iHub must act as the user, what that covers in read and write terms and where the
   sign-in happens, with **Connect** and **Not now**. After consent the user returns to the same
-  chat and the request is retried once; a call that failed for another reason is never retried.
-  **Reconnect** appears when a connection expired or lacks a permission, also when an MCP server
+  chat and the server runs the call that was waiting once more, with the same arguments, and the
+  answer continues from its result: no message is sent on the user's behalf. A request waits 15
+  minutes for the connection; closing the tab or declining at the vendor runs nothing and the card
+  stays. A call that failed for another reason is never run again, and a call that needs approval
+  still asks first. Cards from chats stored before this release connect the account but do not
+  re-run the question. **Reconnect** appears when a connection expired or lacks a permission, also when an MCP server
   asks for more scopes. The cloud file pickers show the same card.
 - **Scheduled tasks** use their owner's connection; with none, the run fails with
   `INTEGRATION_AUTH_REQUIRED`, naming the integration, the reason and a **Reconnect** link.
