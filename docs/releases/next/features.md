@@ -2261,3 +2261,16 @@ artifact first, and nothing is sent until the user clicks **Send**.
   being written, and **Cancel** or Esc drops it.
 - **Sandbox unchanged.** The artifact still runs isolated from iHub; it can only propose a
   question. In shared links and on the standalone artifact page the controls do nothing.
+
+## Chat: Web Artifacts Are Changed in Place Instead of Written Again
+
+A change to an interactive artifact or SVG graphic no longer makes the model write the whole file
+again. It sends only the lines that change, so a fix or a small request ("make the button green",
+"add a VAT field") is ready in seconds instead of a minute or more on a self-hosted model.
+
+- **New tool `edit_web_artifact`** in the `web-artifacts` skill. It changes the newest version of
+  the file in the chat; the earlier version stays in the Files list.
+- **Only real problems send the model back.** A script that does not run, a library that will not
+  load or a file that was cut off is fixed before the answer. A dead link, a remote image or a
+  missing `viewBox` is now a note the model mentions or fixes in passing, never a reason to
+  rewrite the file.

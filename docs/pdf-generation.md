@@ -42,13 +42,13 @@ The shipped system skills:
 | `docx` | `create_docx` | Create editable Word documents on request |
 | `pptx` | `create_pptx`, `restyle_pptx` | Create PowerPoint presentations on request; move an uploaded deck into the company design |
 | `xlsx` | `create_xlsx` | Create formatted Excel workbooks with live formulas on request |
-| `web-artifacts` | `create_web_artifact` | Build interactive HTML pages (calculators, simulators, prototypes) and SVG graphics that run in the chat's workspace pane |
+| `web-artifacts` | `create_web_artifact`, `edit_web_artifact` | Build interactive HTML pages (calculators, simulators, prototypes) and SVG graphics that run in the chat's workspace pane, and change them in place |
 | `dashboard` | `create_web_artifact` | Turn figures from tools or from the user into a dashboard page (headline, KPI tiles, bar and line charts, tables, method and sources) in the chat's workspace pane |
 | `files` | `create_file`, `create_zip` | Create source code, JSON, YAML, CSV, Markdown and text files, and ZIP archives, on request |
 
 ### Skill access checks
 
-System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `restyle_pptx`, `create_xlsx`, `create_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
+System skills go through the same access check as every other skill (`server/services/skillAccess.js`): `activate_skill`, `read_skill_resource`, `requestedSkills` and `/name` only load a skill that the app (or agent node) lists and the user's groups grant. The tools a system skill brings (`create_pdf`, `preview_pdf`, `create_docx`, `create_pptx`, `restyle_pptx`, `create_xlsx`, `create_web_artifact`, `edit_web_artifact`, `create_file`, `create_zip`) are offered under the same condition.
 
 ### Document templates and the tools
 
@@ -159,6 +159,8 @@ Use the `files` skill for a plain `.csv` instead. Enable it like the other skill
 ## The `web-artifacts` skill
 
 `create_web_artifact` creates a single-file interactive page (`format: "html"`, the default) or a standalone vector graphic (`format: "svg"`) — a dashboard, calculator, simulator, clickable prototype, canvas visualization or diagram. The user gets a download card, and the file opens in the chat's [workspace pane](artifacts.md#the-workspace-pane) with a **Preview | Code** toggle: HTML runs in a sandboxed frame, SVG renders as a picture. The server still stores and serves both as `text/plain` (see [Artifacts](artifacts.md#kinds)), so a downloaded file is never executed by iHub itself. Enable it by adding `web-artifacts` to the app's skills.
+
+`edit_web_artifact` changes an artifact the chat already has instead of writing it again: the model names the file and sends exact replacements (`edits: [{ oldText, newText }]`). It works on the newest version of that file in the chat (one this turn made, or a stored one), applies every edit or none — each `oldText` must occur exactly once — runs the same checks as a new file, and stores the result as the file's new version under the same name; the earlier version stays. A fix or a small change then costs a few hundred output tokens instead of the whole file, which on a self-hosted model is the difference between seconds and a minute or more. When the model lacks the current text (the file was made in an earlier turn), it reads it with `chat_artifacts_read` first.
 
 ## The `dashboard` skill
 

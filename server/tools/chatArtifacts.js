@@ -7,7 +7,8 @@
  * (`services/artifacts/ArtifactRepository.js`), as `create_zip` finds them
  * (`chatArtifactCandidates`). See `services/chat/chatContextTools.js`.
  *
- * Artifacts are write-once: the model changes a file by creating a new one.
+ * Artifacts are write-once: the model changes a file by creating a new one
+ * (a web artifact through `edit_web_artifact`, which writes the new version).
  *
  * @module tools/chatArtifacts
  */

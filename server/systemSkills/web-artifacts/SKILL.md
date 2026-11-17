@@ -1,15 +1,15 @@
 ---
 name: web-artifacts
-description: Build interactive, self-contained HTML web artifacts (.html) — live dashboards, calculators, ROI/pricing simulators, interactive data explorers, clickable UI prototypes, HTML5 Canvas/generative visualizations — and standalone vector graphics (.svg) that render live in the chat's Artifacts panel. Use whenever the user asks for an interactive web app, dashboard, calculator, UI prototype, interactive visualization or standalone SVG graphic. Do not use for static print PDFs/posters (use pdf), multi-file code repositories (use files/create_zip), or quick inline chat flowcharts (use a ```mermaid code block in chat).
+description: Build and change interactive, self-contained HTML web artifacts (.html) — live dashboards, calculators, ROI/pricing simulators, interactive data explorers, clickable UI prototypes, HTML5 Canvas/generative visualizations — and standalone vector graphics (.svg) that render live in the chat's Artifacts panel. Use whenever the user asks for an interactive web app, dashboard, calculator, UI prototype, interactive visualization or standalone SVG graphic, or for a change to one this chat already made. Do not use for static print PDFs/posters (use pdf), multi-file code repositories (use files/create_zip), or quick inline chat flowcharts (use a ```mermaid code block in chat).
 metadata:
   author: IntraFind
-  version: '1.2'
-allowed-tools: create_web_artifact
+  version: '1.3'
+allowed-tools: create_web_artifact edit_web_artifact
 ---
 
 # Building interactive web & SVG artifacts
 
-You create live, interactive web artifacts and vector graphics with the `create_web_artifact` tool. The user gets a download card in the chat and can interact with the artifact directly inside the **Artifacts** panel with a **Preview | Code** toggle.
+You create live, interactive web artifacts and vector graphics with the `create_web_artifact` tool, and change them with `edit_web_artifact`. The user gets a download card in the chat and can interact with the artifact directly inside the **Artifacts** panel with a **Preview | Code** toggle.
 
 ## Choose the right format
 
@@ -56,7 +56,18 @@ The preview defines `sendPrompt(text)`. Calling it from a click asks the chat a 
 </script>
 ```
 
-If `create_web_artifact` returns `warnings` (such as a relative script/link, a URL the preview will not load, a dead link, unguarded `localStorage`, JavaScript that does not parse, a file that was cut off, or a missing `viewBox`), fix the issue and call `create_web_artifact` again. A file that was cut off is too long: write a more compact one rather than the same one again.
+## Changing an artifact: `edit_web_artifact`, not a new file
+
+Writing a file costs as long as the file is. Once an artifact exists, change it with `edit_web_artifact`: the `filename`, and `edits`, each an `oldText` copied exactly from the current file (whitespace and quotes included, a few lines around the change so it occurs only once) and its `newText`. All edits apply or none; the result is the file's new version, checked like a new one.
+
+- **After the user asks for a change** to an existing artifact (another colour, one more field, a different label, a fixed bug), edit it. Write a new file with `create_web_artifact` only when most of it changes or the user wants something new.
+- **When you do not have the current text** (the file was made in an earlier turn), read it first with `chat_artifacts_read` and copy `oldText` from there.
+- **When an edit is refused** (its `oldText` is not in the file, or occurs more than once), nothing was changed: correct that edit, by copying the text again or adding more of its surroundings, and send the call again.
+
+## When the tool reports something
+
+- **`warnings`** are problems that break the preview: a script that does not parse, unguarded `localStorage`, a script or stylesheet that will not load, relative files, a file that was cut off. The user already sees the broken version. Do not answer yet: fix each with `edit_web_artifact`, changing only the faulty lines. A file that was cut off is too long: write a more compact one with `create_web_artifact`, not the same one again.
+- **`notes`** are things that work but could be better: a dead link, a remote image, a missing `viewBox`, a placeholder comment. Never write the file again for them. Fix one with `edit_web_artifact` when it is a small change, otherwise leave it.
 
 ## Corporate brand tokens & anti-"AI slop" design
 

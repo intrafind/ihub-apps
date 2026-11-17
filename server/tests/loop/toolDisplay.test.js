@@ -264,6 +264,8 @@ test('the built-in creators say what they produce; the server decides, not the i
     restyle_pptx: 'presentation',
     create_xlsx: 'workbook',
     create_web_artifact: 'webArtifact',
+    // Changes a file rather than creating one: its row reads "Edit web artifact".
+    edit_web_artifact: undefined,
     create_file: 'file',
     create_zip: 'archive'
   });

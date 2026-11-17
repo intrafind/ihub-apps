@@ -217,12 +217,13 @@ system, not iHub's own light/dark switch. The preview therefore sets
 parsed, and the skills style `:root[data-theme="dark"]` alongside the media
 query. A file opened on its own falls back to the media query.
 
-**Checks before the user sees it.** `create_web_artifact` returns warnings —
-and the model fixes and resends the file — for URLs the preview will not load
-(given this installation's `scriptHosts`), inline scripts that do not parse
-(compiled with `vm.Script`, never run), and markup that was cut off mid-file
-(an unclosed `<script>` or `<style>`, or no `</body>`/`</html>`), besides
-relative files, dead links and unguarded storage.
+**Checks before the user sees it.** `create_web_artifact` and
+`edit_web_artifact` check every file and sort what they find in two:
+
+| Reported as | Means | The model |
+| --- | --- | --- |
+| `warnings` (problems) | The preview is broken: markup cut off mid-file (an unclosed `<script>` or `<style>`, or no `</body>`/`</html>`), an inline script that does not parse (compiled with `vm.Script`, never run), unguarded `localStorage`/`sessionStorage`, a script or stylesheet from a host outside `scriptHosts`, a relative script or stylesheet, an SVG without `<svg>` | fixes it before it answers, with `edit_web_artifact` (a cut-off file is written again, more compactly) |
+| `notes` | It works but could be better: a dead link, a remote image, font or CSS `url()`, a missing `viewBox`, a placeholder comment | mentions it, or fixes it with a small edit; never writes the file again for it |
 
 **Follow-up questions (`sendPrompt`).** Every preview defines
 `sendPrompt(text)`, so an artifact can turn a click into a question in the

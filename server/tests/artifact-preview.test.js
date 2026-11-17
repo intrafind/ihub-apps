@@ -19,7 +19,10 @@ import {
   prepareHtmlPreview
 } from '../../shared/artifactPreview.js';
 import { artifactSettings } from '../services/artifacts/artifactPolicy.js';
-import { inspectWebArtifact } from '../services/documents/webArtifacts/webArtifactTools.js';
+import {
+  inspectWebArtifact,
+  inspectWebArtifactFindings
+} from '../services/documents/webArtifacts/webArtifactTools.js';
 import { embedPageCsp } from '../routes/shareEmbedPage.js';
 
 describe('artifact script hosts', () => {
@@ -195,12 +198,16 @@ describe('create_web_artifact checks', () => {
       '<script src="https://evil.test/x.js"></script>' +
       '<img src="https://cdn.jsdelivr.net/logo.png">' +
       '<style>@import url("https://fonts.googleapis.com/css2?family=Inter");</style>';
-    const warnings = inspectWebArtifact(html, 'html', { scriptHosts: hosts });
-    assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /evil\.test/);
-    assert.match(warnings[0], /logo\.png/);
-    assert.match(warnings[0], /fonts\.googleapis\.com/);
-    assert.match(warnings[0], /only over https from cdn\.jsdelivr\.net/);
+    const findings = inspectWebArtifactFindings(html, 'html', { scriptHosts: hosts });
+    assert.equal(findings.length, 2);
+    // A script that will not load breaks the page: a problem.
+    assert.equal(findings[0].blocking, true);
+    assert.match(findings[0].text, /evil\.test/);
+    assert.match(findings[0].text, /only over https from cdn\.jsdelivr\.net/);
+    // An image or a web font that will not load only looks worse: a note.
+    assert.equal(findings[1].blocking, false);
+    assert.match(findings[1].text, /logo\.png/);
+    assert.match(findings[1].text, /fonts\.googleapis\.com/);
   });
 
   it('warns about every external script when the installation allows none', () => {

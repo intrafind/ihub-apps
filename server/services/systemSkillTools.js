@@ -6,7 +6,10 @@ import { CREATE_DOCX_TOOL } from './documents/docx/docxToolDefinitions.js';
 import { CREATE_FILE_TOOL, CREATE_ZIP_TOOL } from './documents/files/fileToolDefinitions.js';
 import { CREATE_PDF_TOOL, PREVIEW_PDF_TOOL } from './documents/pdf/pdfToolDefinitions.js';
 import { CREATE_PPTX_TOOL, RESTYLE_PPTX_TOOL } from './documents/pptx/pptxToolDefinitions.js';
-import { CREATE_WEB_ARTIFACT_TOOL } from './documents/webArtifacts/webArtifactToolDefinitions.js';
+import {
+  CREATE_WEB_ARTIFACT_TOOL,
+  EDIT_WEB_ARTIFACT_TOOL
+} from './documents/webArtifacts/webArtifactToolDefinitions.js';
 import { CREATE_XLSX_TOOL } from './documents/xlsx/xlsxToolDefinitions.js';
 
 /**
@@ -62,6 +65,13 @@ const REGISTRY = new Map([
     {
       definition: CREATE_WEB_ARTIFACT_TOOL,
       run: async params => (await webArtifactTools()).runCreateWebArtifact(params)
+    }
+  ],
+  [
+    EDIT_WEB_ARTIFACT_TOOL.id,
+    {
+      definition: EDIT_WEB_ARTIFACT_TOOL,
+      run: async params => (await webArtifactTools()).runEditWebArtifact(params)
     }
   ],
   [
