@@ -28,6 +28,29 @@ import { refreshMyUsage } from '../../../shared/hooks/useMyUsage';
 import { useAiAcknowledgement } from '../../../shared/hooks/useAiAcknowledgement';
 import { setConnectResumeStatus } from '../../integrations/connect/connectResumeStatus';
 
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+
+/** Feature flag: send a turn and read its frames on one POST (`featureRegistry`). */
+export const CHAT_POST_STREAM_FEATURE = 'chatPostStream';
+
+/**
+ * A refused POST stream (`SseHttpError`: status and problem body) in the shape
+ * the JSON path's errors have, so both share one handler.
+ *
+ * @param {Error} error
+ * @returns {Error}
+ */
+function sendErrorOf(error) {
+  if (!error?.status) return error;
+  const detail = error.body?.detail || error.body?.message;
+  const result = new Error(detail || error.message);
+  result.status = error.status;
+  result.code = error.body?.code;
+  result.userFriendlyMessage = detail || error.message;
+  result.isAuthRequired = error.status === 401;
+  return result;
+}
+
 /**
  * Refusals of the chat request the user can do something about, by the code
  * the server answers with: translation key and English fallback.
@@ -126,7 +149,14 @@ function useAppChat({
   const acknowledgement = useAiAcknowledgement();
   // The last send, to roll back and retry once when the server answers 428.
   const lastSendRef = useRef(null);
-  const initEventSourceRef = useRef(null);
+  // Sends the queued turn: on its own POST stream, or GET-then-POST (`openTurn`).
+  const openTurnRef = useRef(null);
+  // Re-attach after a dropped POST stream; `reattachToRun` is declared below.
+  const reattachToRunRef = useRef(null);
+  // Read when a turn is sent, so switching the flag takes effect on the next send.
+  const postStreamEnabled = useFeatureFlags().isEnabled(CHAT_POST_STREAM_FEATURE, false);
+  const postStreamEnabledRef = useRef(postStreamEnabled);
+  postStreamEnabledRef.current = postStreamEnabled;
   const onSendRefusedRef = useRef(onSendRefused);
   onSendRefusedRef.current = onSendRefused;
   // Use the chatId directly instead of storing it in a ref
@@ -347,37 +377,15 @@ function useAppChat({
   );
 
   /**
-   * Send the message queued by sendMessage / submitClarificationResponse once
-   * the stream is connected. On failure the error is rendered into the
-   * assistant placeholder (401 → session expired) and the stream is closed.
+   * Answer a send the server refused or that failed before its turn started:
+   * the AI-use acknowledgement asks and retries once, a tool approval card asks
+   * again, anything else is rendered into the assistant placeholder (401 →
+   * session expired). Shared by both ways a turn is sent (`openTurn`).
+   *
+   * @param {Error} error - `code`, `status`, `isAuthRequired`, `userFriendlyMessage`
    */
-  const sendPendingMessage = useCallback(async () => {
-    if (!pendingMessageDataRef.current) return;
-    const { appId, chatId, messages, params } = pendingMessageDataRef.current;
-    try {
-      await sendAppChatMessage(
-        appId,
-        chatId,
-        messages,
-        toolApprovals ? { ...params, toolApprovalCapable: true } : params
-      );
-      pendingMessageDataRef.current = null;
-      // The server has the turn — the chat is in the store from here on.
-      onMessageAcceptedRef.current?.(chatId);
-    } catch (error) {
-      // The POST is answered when the turn ends, so a turn longer than the
-      // request timeout (axios, the ingress's proxy-read-timeout) loses the
-      // reply, not the turn: the server keeps running it and the open stream
-      // still carries every frame. Keep listening instead of reporting a failure.
-      const lostReply = error?.isTimeout || error?.status === 502 || error?.status === 504;
-      if (lostReply && !isCancellingRef.current) {
-        const status = await checkAppChatStatus(appId, chatId).catch(() => null);
-        if (status?.processing) {
-          pendingMessageDataRef.current = null;
-          onMessageAcceptedRef.current?.(chatId);
-          return;
-        }
-      }
+  const handleSendError = useCallback(
+    error => {
       const pendingSend = pendingMessageDataRef.current;
       if (
         error?.code === 'AI_ACKNOWLEDGEMENT_REQUIRED' &&
@@ -400,9 +408,7 @@ function useAppChat({
             pendingSend.acknowledgementRetried = true;
             pendingMessageDataRef.current = pendingSend;
             setProcessing(true);
-            initEventSourceRef.current?.(
-              buildApiUrl(`apps/${pendingSend.appId}/chat/${pendingSend.chatId}`)
-            );
+            openTurnRef.current?.();
             return;
           }
           // Declined, or the user moved to another chat meanwhile: take the turn back.
@@ -487,17 +493,46 @@ function useAppChat({
       detachEventSourceRef.current?.();
       setProcessing(false);
       reopenToolApproval(error?.code);
+    },
+    [t, messagesRef, updateAssistantMessage, reopenToolApproval, acknowledgement, removeMessage]
+  );
+
+  /**
+   * Send the message queued by sendMessage / submitClarificationResponse once
+   * the stream is connected (GET-then-POST). On failure the error is rendered
+   * into the assistant placeholder (401 → session expired) and the stream is
+   * closed.
+   */
+  const sendPendingMessage = useCallback(async () => {
+    if (!pendingMessageDataRef.current) return;
+    const { appId, chatId, messages, params } = pendingMessageDataRef.current;
+    try {
+      await sendAppChatMessage(
+        appId,
+        chatId,
+        messages,
+        toolApprovals ? { ...params, toolApprovalCapable: true } : params
+      );
+      pendingMessageDataRef.current = null;
+      // The server has the turn — the chat is in the store from here on.
+      onMessageAcceptedRef.current?.(chatId);
+    } catch (error) {
+      // The POST is answered when the turn ends, so a turn longer than the
+      // request timeout (axios, the ingress's proxy-read-timeout) loses the
+      // reply, not the turn: the server keeps running it and the open stream
+      // still carries every frame. Keep listening instead of reporting a failure.
+      const lostReply = error?.isTimeout || error?.status === 502 || error?.status === 504;
+      if (lostReply && !isCancellingRef.current) {
+        const status = await checkAppChatStatus(appId, chatId).catch(() => null);
+        if (status?.processing) {
+          pendingMessageDataRef.current = null;
+          onMessageAcceptedRef.current?.(chatId);
+          return;
+        }
+      }
+      handleSendError(error);
     }
-  }, [
-    t,
-    messagesRef,
-    updateAssistantMessage,
-    toolApprovals,
-    reopenToolApproval,
-    acknowledgement,
-    removeMessage,
-    reopenToolApproval
-  ]);
+  }, [toolApprovals, handleSendError]);
 
   /**
    * Resolve the assistant message a run belongs to. `run/started` binds the
@@ -745,7 +780,7 @@ function useAppChat({
     ]
   );
 
-  const { initEventSource, detachEventSource, stopEventSource } = useEventSource({
+  const { initEventSource, startTurn, detachEventSource, stopEventSource } = useEventSource({
     appId,
     chatId: chatId,
     onEvent: handleEvent,
@@ -759,7 +794,74 @@ function useAppChat({
 
   // Store the detach function in a ref for access in callbacks
   detachEventSourceRef.current = detachEventSource;
-  initEventSourceRef.current = initEventSource;
+
+  /**
+   * Re-attach to a turn whose POST stream broke before its end. The turn may
+   * still be running (a kept chat's turn outlives its connection; a temporary
+   * one was stopped by the server and replays as such). What this surface drew
+   * of it is dropped and rebuilt from the ledger plus the server's snapshot of
+   * the step in progress, so nothing is doubled.
+   *
+   * @param {string} runId - The turn's run
+   */
+  const resumeDroppedTurn = useCallback(
+    runId => {
+      const messageId = runMessageMapRef.current.get(runId) || lastMessageIdRef.current;
+      if (messageId) removeMessage(messageId);
+      const runs = { ...streamStateRef.current.runs };
+      for (const [id, run] of Object.entries(runs)) {
+        if (id === runId || run.parentRunId === runId) {
+          delete runs[id];
+          runMessageMapRef.current.delete(id);
+        }
+      }
+      streamStateRef.current = { ...streamStateRef.current, runs };
+      void reattachToRunRef.current?.(runId);
+    },
+    [removeMessage]
+  );
+
+  /**
+   * Send the turn queued in `pendingMessageDataRef`.
+   *
+   * With the `chatPostStream` flag the POST itself streams the turn
+   * (`Accept: text/event-stream`, one connection). Without it the chat's GET
+   * stream is opened first and the POST goes out on its `stream/connected`
+   * (`sendPendingMessage`). Both paths answer refusals with `handleSendError`.
+   */
+  const openTurn = useCallback(() => {
+    const pending = pendingMessageDataRef.current;
+    if (!pending) return;
+    const url = buildApiUrl(`apps/${pending.appId}/chat/${pending.chatId}`);
+    if (!postStreamEnabledRef.current) {
+      initEventSource(url);
+      return;
+    }
+    const params = toolApprovals
+      ? { ...pending.params, toolApprovalCapable: true }
+      : pending.params;
+    void startTurn(
+      url,
+      { messages: pending.messages, ...params },
+      {
+        // The turn is the server's from here; a refusal can no longer happen.
+        onAccepted: () => {
+          if (pendingMessageDataRef.current === pending) pendingMessageDataRef.current = null;
+        },
+        onEnded: () => onMessageAcceptedRef.current?.(pending.chatId),
+        onRefused: error => handleSendError(sendErrorOf(error)),
+        // JSON instead of a stream: an @workflow mention, whose frames come
+        // over the GET (it backfills what it missed on connect).
+        onAnswer: () => {
+          if (pendingMessageDataRef.current === pending) pendingMessageDataRef.current = null;
+          onMessageAcceptedRef.current?.(pending.chatId);
+          initEventSource(url);
+        },
+        onDropped: resumeDroppedTurn
+      }
+    );
+  }, [initEventSource, startTurn, toolApprovals, handleSendError, resumeDroppedTurn]);
+  openTurnRef.current = openTurn;
 
   /**
    * Send a chat message and start streaming the response.
@@ -851,7 +953,7 @@ function useAppChat({
 
         lastSendRef.current = { args, userMessageId, pending: pendingMessageDataRef.current };
 
-        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+        openTurn();
       } catch (err) {
         console.error('Error sending message:', err);
         addSystemMessage(
@@ -868,7 +970,7 @@ function useAppChat({
       addUserMessage,
       addAssistantMessage,
       getMessagesForApi,
-      initEventSource,
+      openTurn,
       addSystemMessage,
       takeProtocolParams,
       t,
@@ -1114,7 +1216,7 @@ function useAppChat({
           }
         };
 
-        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+        openTurn();
       } catch (err) {
         console.error('Error submitting clarification response:', err);
         addSystemMessage(
@@ -1133,7 +1235,7 @@ function useAppChat({
       addUserMessage,
       addAssistantMessage,
       getMessagesForApi,
-      initEventSource,
+      openTurn,
       addSystemMessage,
       messagesRef,
       takeProtocolParams,
@@ -1205,7 +1307,7 @@ function useAppChat({
           }),
           params: { ...params, ...takeProtocolParams() }
         };
-        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+        openTurn();
       } catch (err) {
         console.error('Error submitting tool approval:', err);
         addSystemMessage(
@@ -1223,7 +1325,7 @@ function useAppChat({
       addUserMessage,
       addAssistantMessage,
       getMessagesForApi,
-      initEventSource,
+      openTurn,
       addSystemMessage,
       messagesRef,
       takeProtocolParams,
@@ -1312,10 +1414,13 @@ function useAppChat({
    *    replayed ones out of order. This way every live frame folds on top of a
    *    finished replay.
    *
-   * The window between the two is a fetch apart, and a delta emitted inside it
-   * is not in the replay and not yet on the stream. `onSettled` is the answer
-   * to that: the caller re-reads the stored transcript when the turn ends, and
-   * the store is the authority on what the answer finally was.
+   * The ledger has no text deltas and no thinking, and the window between the
+   * two steps is a fetch apart. The stream closes both gaps: it is opened with
+   * `resumeRun` and the last ledger seq replayed, and the server starts it with
+   * the step in progress and the ledger events after that seq
+   * (`server/services/chat/chatResume.js`). `onSettled` stays the backstop: the
+   * caller re-reads the stored transcript when the turn ends, and the store is
+   * the authority on what the answer finally was.
    *
    * @param {string} runId - The run the chat document reports as active
    * @param {Object} [options]
@@ -1340,6 +1445,8 @@ function useAppChat({
 
       let ended = false;
       let pausedAgain = false;
+      // The last ledger seq replayed: the server resumes the stream after it.
+      let lastLedgerSeq = 0;
       try {
         const { events } = await fetchAllLedgerEvents(async (cursor, limit) => {
           const cursorParam = cursor ? `&cursor=${encodeURIComponent(cursor)}` : '';
@@ -1358,7 +1465,8 @@ function useAppChat({
           // The ledger numbers a run's own events; the live stream numbers the
           // chat's. Folding a ledger seq would poison gap detection with a
           // counter from the wrong space.
-          const { seq: _ledgerSeq, ...live } = envelope;
+          const { seq: ledgerSeq, ...live } = envelope;
+          if (Number.isInteger(ledgerSeq) && ledgerSeq > lastLedgerSeq) lastLedgerSeq = ledgerSeq;
           await handleEvent({ envelope: live });
         }
         // The last lifecycle frame says where the run is: a turn continued
@@ -1390,11 +1498,19 @@ function useAppChat({
         activeClarificationRef.current = null;
       }
       reattachedRunRef.current = { runId, onSettled };
-      initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+      // The stream starts with what the ledger does not have: the text and
+      // thinking of the step in progress, then the ledger past what was
+      // replayed here, then the live frames.
+      initEventSource(
+        buildApiUrl(
+          `apps/${appId}/chat/${chatId}?resumeRun=${encodeURIComponent(runId)}&afterLedgerSeq=${lastLedgerSeq}`
+        )
+      );
       return true;
     },
     [appId, chatId, addAssistantMessage, handleEvent, initEventSource]
   );
+  reattachToRunRef.current = reattachToRun;
 
   return {
     chatId: chatId,

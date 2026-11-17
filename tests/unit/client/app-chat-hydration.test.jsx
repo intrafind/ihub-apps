@@ -427,7 +427,9 @@ describe('reopening a chat whose turn is still running', () => {
 
     // The whole point of durability: the turn outlived the tab, so reopening
     // has to follow it rather than wait for a second page load.
-    expect(mockStreams).toEqual(['/api/apps/acme/chat/chat-stored']);
+    expect(mockStreams).toEqual([
+      '/api/apps/acme/chat/chat-stored?resumeRun=run-live&afterLedgerSeq=0'
+    ]);
   });
 
   test('does not re-attach when the answer is already in the transcript', async () => {
@@ -468,7 +470,9 @@ describe('reopening a chat whose turn is still running', () => {
     // A previous turn's answer says nothing about this one. Matching on
     // "is there any assistant message" rather than on the run id would leave
     // every continued chat unable to follow its live turn.
-    expect(mockStreams).toEqual(['/api/apps/acme/chat/chat-stored']);
+    expect(mockStreams).toEqual([
+      '/api/apps/acme/chat/chat-stored?resumeRun=run-two&afterLedgerSeq=0'
+    ]);
   });
 });
 
