@@ -107,9 +107,11 @@ describe('the preview CSP', () => {
  */
 function runBridge(options) {
   const html = prepareHtmlPreview('<p>x</p>', options);
-  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]);
-  const bridge = scripts.find(code => code.includes('sendPrompt'));
-  assert.ok(bridge, 'the preview defines sendPrompt');
+  // The bridge is the one script element that defines sendPrompt; cut it out by position.
+  const open = '<script>';
+  const start = html.lastIndexOf(open, html.indexOf('function sendPrompt'));
+  assert.ok(start >= 0, 'the preview defines sendPrompt');
+  const bridge = html.slice(start + open.length, html.indexOf('</script>', start));
   const posted = [];
   const window = {};
   const parent = { postMessage: (data, origin) => posted.push({ data, origin }) };
