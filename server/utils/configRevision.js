@@ -54,8 +54,8 @@ const REVISION_KEY_LABEL = 'ihub-config-revision-v1';
  */
 const PROCESS_FALLBACK_KEY = randomBytes(32);
 
-/** The derived key, cached per encryption key. */
-let derivedKey = { from: null, key: null };
+/** The derived key per encryption key (one entry in practice). */
+const derivedKeys = new Map();
 
 /**
  * The HMAC key of revisions, derived from the server's encryption key.
@@ -65,15 +65,16 @@ let derivedKey = { from: null, key: null };
 function revisionKey() {
   const encryptionKey = tokenStorageService?.encryptionKey;
   if (typeof encryptionKey !== 'string' || !encryptionKey) return PROCESS_FALLBACK_KEY;
-  if (derivedKey.from !== encryptionKey) {
-    derivedKey = {
-      from: encryptionKey,
-      key: createHmac('sha256', Buffer.from(encryptionKey, 'hex'))
-        .update(REVISION_KEY_LABEL)
-        .digest()
-    };
+  let key = derivedKeys.get(encryptionKey);
+  if (!key) {
+    key = createHmac('sha256', Buffer.from(encryptionKey, 'hex'))
+      .update(REVISION_KEY_LABEL)
+      .digest();
+    // A rotated encryption key replaces the old entry.
+    derivedKeys.clear();
+    derivedKeys.set(encryptionKey, key);
   }
-  return derivedKey.key;
+  return key;
 }
 
 /**
