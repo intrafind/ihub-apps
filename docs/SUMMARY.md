@@ -148,7 +148,7 @@
   - [NTLM Technical Reference](ntlm-technical-reference.md)
 - [LLM Client](llm-client.md)
 - [Agent Loop](agent-loop.md)
-- [SSE v2 Streaming](sse-v2.md)
+- [Streaming Events](streaming-events.md)
 - [Run Ledger](run-ledger.md)
 - [Storage Providers](storage.md)
 - [Chat Persistence](chat-persistence.md)

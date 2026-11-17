@@ -33,7 +33,7 @@ Working nginx and Apache configurations, including the SSE and WebSocket
 locations and timeouts, are in the
 [Production Reverse Proxy Guide](production-reverse-proxy-guide.md). The voice
 WebSocket is described in [Voice Transcription](voice-transcription.md), and the
-stream formats in [SSE v2](sse-v2.md). Other listeners, such as the Prometheus
+stream formats in [Streaming Events](streaming-events.md). Other listeners, such as the Prometheus
 metrics port, are covered under [Telemetry](#telemetry) below.
 
 ## Outbound: what the server contacts

@@ -343,7 +343,7 @@ graph TB
 
 #### Component Responsibilities
 
-- **`ChatService.js`**: One chat turn. `prepareChatRequest()` delegates to `RequestBuilder`; `runTurn()` runs the turn as one run on the chat's SSE v2 stream (`run/started` … `run/ended`, see [SSE v2 Streaming](sse-v2.md)) on `AgentLoop` with the chat seams and channel; `invokeAppInternal()` runs an app headlessly for the app-as-tool gateway and MCP `tools/call`
+- **`ChatService.js`**: One chat turn. `prepareChatRequest()` delegates to `RequestBuilder`; `runTurn()` runs the turn as one run on the chat's SSE v2 stream (`run/started` … `run/ended`, see [Streaming Events](streaming-events.md)) on `AgentLoop` with the chat seams and channel; `invokeAppInternal()` runs an app headlessly for the app-as-tool gateway and MCP `tools/call`
 - **`RequestBuilder.js`**: Resolves app, model, messages, tools and model options for the turn (templates, variables, uploads, skills, sources)
 - **`chatChannel.js`**: Projects the loop's streamed chunks onto SSE v2 frames — `step/delta` (text, thinking, image), `tool/progress` (grounding, citations, search status) and `meta` (conversation title / ids)
 - **`chatSeams.js`**: Everything the chat surface adds to the loop, as seams: `tool/started` / `tool/completed` frames and interaction logs, the `ask_user` clarification (`interaction/raised`), the passthrough (workflow tool) projection, upload/email knowledge sources and per-call usage telemetry
@@ -598,7 +598,7 @@ graph TB
 
 ### Human-in-the-Loop Flow
 
-When a `human` node is reached, the workflow pauses and raises the checkpoint as an interaction of the execution's run: the stream carries `interaction/raised` followed by `run/paused` (see [SSE v2 Streaming](sse-v2.md)). The user answers it through the one answer endpoint, `POST /api/runs/:executionId/interactions/:checkpointId/answer` with `{ value, data? }`; the server validates the answer, routes the workflow on the chosen branch and resumes it (`interaction/answered`, `run/resumed`). Workflow executions and agent runs are runs on the [run ledger](run-ledger.md) (run id = execution id), so the same endpoint serves chat-launched workflows, the workflow execution page and agent runs.
+When a `human` node is reached, the workflow pauses and raises the checkpoint as an interaction of the execution's run: the stream carries `interaction/raised` followed by `run/paused` (see [Streaming Events](streaming-events.md)). The user answers it through the one answer endpoint, `POST /api/runs/:executionId/interactions/:checkpointId/answer` with `{ value, data? }`; the server validates the answer, routes the workflow on the chosen branch and resumes it (`interaction/answered`, `run/resumed`). Workflow executions and agent runs are runs on the [run ledger](run-ledger.md) (run id = execution id), so the same endpoint serves chat-launched workflows, the workflow execution page and agent runs.
 
 ### Client UI
 

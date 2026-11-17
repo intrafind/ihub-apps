@@ -320,7 +320,7 @@ export function authRequiredOf(rawResult, toolDef) {
  * live `tool/progress` frames: `args` / `args.ended` for the call being
  * written and `model.waiting` for the silence (`onChunk`, `streamEnd`,
  * `preStep`; the rules are in `toolArgProgress.js`, the frames in
- * `docs/sse-v2.md`). They are not stored. `streamProgress: false` (a turn
+ * `docs/streaming-events.md`). They are not stored. `streamProgress: false` (a turn
  * nobody watches live) leaves them out.
  */
 export function chatToolSeam({

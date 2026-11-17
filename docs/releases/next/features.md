@@ -1686,7 +1686,7 @@ what is happening.
 
 For integrators: SSE v2 gains three `tool/progress` phases, `args`, `args.ended` and
 `model.waiting`. They are additive, `tool/started` is unchanged and nothing is added to saved chats.
-See [SSE v2](../../sse-v2.md) and [Accessibility](../../accessibility.md).
+See [Streaming Events](../../streaming-events.md) and [Accessibility](../../accessibility.md).
 
 ## Translations: One Key for the Product Name, and No More Untranslatable Texts
 
