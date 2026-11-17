@@ -22,10 +22,14 @@ import express from 'express';
 //
 // It stands in for the first step of the authentication chain: a request with
 // `x-test-user` is signed in as that user, one with `x-test-client` as an
-// OAuth client (client_credentials / static API key), anything else stays
-// unauthenticated.
+// OAuth client (client_credentials / static API key), one with
+// `x-test-reject` is refused with 401 the way jwtAuth refuses a bad token,
+// anything else stays unauthenticated.
 jest.unstable_mockModule('../middleware/proxyAuth.js', () => ({
   proxyAuth: (req, res, next) => {
+    if (req.headers['x-test-reject']) {
+      return res.status(401).json({ error: 'invalid_token' });
+    }
     const userId = req.headers['x-test-user'];
     const clientId = req.headers['x-test-client'];
     if (userId) req.user = { id: userId, groups: ['admins'], permissions: {} };
@@ -35,7 +39,8 @@ jest.unstable_mockModule('../middleware/proxyAuth.js', () => ({
 }));
 
 const { setupMiddleware } = await import('../middleware/setup.js');
-const { adminApiRateLimitKey } = await import('../middleware/rateLimiting.js');
+const { adminApiRateLimitKey, adminApiAuthenticatedOrSucceeded } =
+  await import('../middleware/rateLimiting.js');
 
 const LIMIT = 2;
 
@@ -43,14 +48,15 @@ function createTestApp() {
   const app = express();
   setupMiddleware(app, { rateLimit: { adminApi: { limit: LIMIT, windowMs: 60_000 } } });
   app.get('/api/admin/apps', (req, res) => res.status(200).json({ user: req.user?.id ?? null }));
+  app.get('/api/admin/missing', (req, res) => res.status(404).json({ user: req.user?.id ?? null }));
   return app;
 }
 
 /** Send `count` requests and return their status codes. */
-async function hit(app, headers, count) {
+async function hit(app, headers, count, path = '/api/admin/apps') {
   const statuses = [];
   for (let i = 0; i < count; i++) {
-    const response = await request(app).get('/api/admin/apps').set(headers);
+    const response = await request(app).get(path).set(headers);
     statuses.push(response.status);
   }
   return statuses;
@@ -103,6 +109,55 @@ describe('admin API limiter keys per user', () => {
     const blocked = await request(app).get('/api/admin/apps').set('x-test-user', 'carol');
     expect(blocked.status).toBe(429);
     expect(blocked.headers['retry-after']).toBeDefined();
+  });
+});
+
+describe('requests the authentication chain refuses', () => {
+  const REJECTED = { ...SAME_ADDRESS, 'x-test-reject': '1' };
+
+  test('are still limited per address', async () => {
+    const app = createTestApp();
+
+    expect(await hit(app, REJECTED, LIMIT + 1)).toEqual([401, 401, 429]);
+    // Another address is not affected.
+    expect(await hit(app, { 'X-Forwarded-For': '203.0.113.11', 'x-test-reject': '1' }, 1)).toEqual([
+      401
+    ]);
+  });
+
+  test('do not cost signed-in users at the same address their per-user budget', async () => {
+    const app = createTestApp();
+
+    await hit(app, REJECTED, LIMIT - 1);
+    expect(await hit(app, { ...SAME_ADDRESS, 'x-test-user': 'alice' }, LIMIT)).toEqual([200, 200]);
+  });
+
+  test("a signed-in user's own failed requests do not count against the address", async () => {
+    const app = createTestApp();
+
+    // Alice spends her whole budget on failing requests ...
+    expect(
+      await hit(app, { ...SAME_ADDRESS, 'x-test-user': 'alice' }, LIMIT, '/api/admin/missing')
+    ).toEqual([404, 404]);
+    // ... and Bob at the same address still has all of his.
+    expect(
+      await hit(app, { ...SAME_ADDRESS, 'x-test-user': 'bob' }, LIMIT, '/api/admin/missing')
+    ).toEqual([404, 404]);
+    // The address bucket is untouched too: refused requests still get their full budget.
+    expect(await hit(app, REJECTED, LIMIT + 1)).toEqual([401, 401, 429]);
+  });
+});
+
+describe('adminApiAuthenticatedOrSucceeded', () => {
+  test('counts only failed requests without a signed-in caller', () => {
+    expect(adminApiAuthenticatedOrSucceeded({ user: null }, { statusCode: 401 })).toBe(false);
+    expect(
+      adminApiAuthenticatedOrSucceeded({ user: { id: 'anonymous' } }, { statusCode: 403 })
+    ).toBe(false);
+    expect(adminApiAuthenticatedOrSucceeded({ user: null }, { statusCode: 200 })).toBe(true);
+    expect(adminApiAuthenticatedOrSucceeded({ user: { id: 'alice' } }, { statusCode: 404 })).toBe(
+      true
+    );
   });
 });
 

@@ -2252,7 +2252,9 @@ requests". The admin API limit now counts per signed-in user, and its shipped va
 requests per minute.
 
 - Each signed-in user has their own budget; an OAuth client or static API key counts per client.
-  Requests without a sign-in still count per address.
+  Requests without a sign-in still count per address, and so do requests whose sign-in is refused
+  (an invalid or expired token), with the same limit.
+- The budget is counted per server worker process, as before.
 - Upgrades: migration `V254` raises `rateLimit.adminApi` from 100 to 500 only where it still has
   the shipped 100 requests per minute. A limit or period you changed is kept (the server log says
   so). See **Admin → Security → Rate limits**.

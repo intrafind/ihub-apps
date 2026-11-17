@@ -107,6 +107,26 @@ export function adminApiRateLimitKey(req) {
 }
 
 /**
+ * Whether a finished `/api/admin` request leaves the pre-authentication limiter's count again:
+ * every request answered below 400, and every request of a signed-in user or API client, whatever
+ * its status. What stays counted is a failed request without a signed-in caller, chiefly one the
+ * authentication chain refused (a bad, expired or revoked token), which never reaches the per-user
+ * admin limiter.
+ *
+ * @param {import('express').Request} req - The request, after it was answered.
+ * @param {import('express').Response} res - Its response.
+ * @returns {boolean} True when the request does not count.
+ * @example
+ * adminApiAuthenticatedOrSucceeded({ user: null }, { statusCode: 401 }); // false (counts)
+ * adminApiAuthenticatedOrSucceeded({ user: { id: 'alice' } }, { statusCode: 404 }); // true
+ */
+export function adminApiAuthenticatedOrSucceeded(req, res) {
+  if (res.statusCode < 400) return true;
+  const user = req.user;
+  return Boolean(user?.id && user.id !== 'anonymous');
+}
+
+/**
  * Create a rate limiter with given configuration
  * @param {Object} config - Rate limiter configuration
  * @param {Object} defaults - Default configuration to merge with
@@ -117,6 +137,9 @@ export function adminApiRateLimitKey(req) {
  * @param {boolean} [options.shared=false] - Count across all cluster workers.
  * @param {(req: import('express').Request) => string} [options.keyGenerator] -
  *   Bucket key; the library's per-address key when omitted.
+ * @param {(req: import('express').Request, res: import('express').Response) => boolean}
+ *   [options.requestWasSuccessful] - Which finished requests count as successful for
+ *   `skipSuccessfulRequests` / `skipFailedRequests`; status below 400 when omitted.
  * @returns {Function} Express rate limiter middleware
  */
 function createRateLimiter(
@@ -124,13 +147,14 @@ function createRateLimiter(
   defaults = {},
   type = 'API',
   skip = undefined,
-  { shared = false, keyGenerator = undefined } = {}
+  { shared = false, keyGenerator = undefined, requestWasSuccessful = undefined } = {}
 ) {
   const finalConfig = { ...defaults, ...config };
 
   return rateLimit({
     ...(skip ? { skip } : {}),
     ...(keyGenerator ? { keyGenerator } : {}),
+    ...(requestWasSuccessful ? { requestWasSuccessful } : {}),
     // Counted across all cluster workers, so the limit means what it says.
     ...(shared ? { store: new ClusterRateLimitStore(type) } : {}),
     windowMs: finalConfig.windowMs || 1 * 60 * 1000, // 1 minute default
@@ -265,6 +289,17 @@ export function createRateLimiters(platformConfig = {}) {
     adminApiLimiter: createRateLimiter(configs.adminApi, {}, 'admin API', undefined, {
       keyGenerator: adminApiRateLimitKey
     }),
+    // Mounted on /api/admin before the authentication chain, per address, with the admin API
+    // budget. It counts only failed requests without a signed-in caller, so it bounds a flood of
+    // refused tokens (which the auth chain answers before adminApiLimiter runs) without making
+    // admins behind one address share a budget again.
+    adminApiUnauthenticatedLimiter: createRateLimiter(
+      { ...configs.adminApi, skipSuccessfulRequests: true, skipFailedRequests: false },
+      {},
+      'admin API',
+      undefined,
+      { requestWasSuccessful: adminApiAuthenticatedOrSucceeded }
+    ),
     publicApiLimiter: createRateLimiter(configs.publicApi, {}, 'public API'),
     // Read-only auth endpoints skip the strict credential limiter; they are
     // still bounded by the public API limiter mounted on the same path.

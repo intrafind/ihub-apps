@@ -109,7 +109,22 @@ describe('V254 admin_api_rate_limit_default', () => {
     const { ctx, read, logs } = await seed(platform);
     await up(ctx);
     assert.deepEqual(await read(), platform);
-    assert.ok(logs.some(line => /customised/.test(line) && /250/.test(line)));
+    assert.ok(logs.some(line => /customized/.test(line) && /250/.test(line)));
+  });
+
+  it('says "nothing to do", not "customized", when it runs again on its own result', async () => {
+    const { ctx, read, raw, logs } = await seed({
+      rateLimit: { adminApi: { windowMs: 60000, limit: 100 } }
+    });
+    await up(ctx);
+    const afterFirst = await raw();
+    logs.length = 0;
+
+    await up(ctx);
+    assert.equal(await raw(), afterFirst);
+    assert.equal((await read()).rateLimit.adminApi.limit, 500);
+    assert.ok(logs.some(line => /already 500/.test(line) && /nothing to do/.test(line)));
+    assert.ok(!logs.some(line => /customi[sz]ed/.test(line)));
   });
 
   it('keeps 100 requests over a tuned window', async () => {

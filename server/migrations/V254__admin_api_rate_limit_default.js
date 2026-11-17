@@ -52,12 +52,18 @@ export async function up(ctx) {
     return;
   }
 
+  if (adminApi.limit === ADMIN_API_LIMIT) {
+    // Already the new value: set by an admin, or this migration ran before.
+    ctx.log(`rateLimit.adminApi is already ${ADMIN_API_LIMIT} requests per window — nothing to do`);
+    return;
+  }
+
   const untouched =
     adminApi.limit === PREVIOUS_ADMIN_API.limit &&
     adminApi.windowMs === PREVIOUS_ADMIN_API.windowMs;
   if (!untouched) {
     ctx.log(
-      `rateLimit.adminApi was customised (limit ${adminApi.limit}, windowMs ${adminApi.windowMs}) — keeping it`
+      `rateLimit.adminApi was customized (limit ${adminApi.limit}, windowMs ${adminApi.windowMs}) — keeping it`
     );
     return;
   }
