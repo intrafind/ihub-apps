@@ -125,11 +125,20 @@ const freshReads = new Map();
 
 /**
  * Per cache key: the file token (inode, mtime, size) the cached copy was read
- * at or written as, and that cached object. A fresh read is skipped while both
- * still match: the file did not change, and nothing else (a config-sync reload,
- * a TTL refresh) replaced the cached copy since.
+ * at or written as, that cached object, and when. A fresh read is skipped while
+ * both still match: the file did not change, and nothing else (a config-sync
+ * reload, a TTL refresh) replaced the cached copy since.
  */
 const knownUsersFiles = new Map();
+
+/**
+ * How long a matching token is trusted. On a shared volume the token can stay
+ * the same after another host's write: NFS caches attributes for up to a
+ * minute, CIFS and FUSE mounts keep a coarse mtime, and a same-size rewrite
+ * within that granularity looks unchanged. Past this age the file is read
+ * again whatever the token says.
+ */
+const TOKEN_TRUST_MS = 3_000;
 
 /**
  * The change token of a users file, or null when it cannot be told (then the
@@ -148,7 +157,7 @@ async function probeUsersFile({ fullPath, relPath }) {
 /** Remember which file token the cached copy of `cacheKey` belongs to. */
 function rememberUsersFile(cacheKey, token) {
   const data = configCache.get(cacheKey)?.data;
-  if (token && data) knownUsersFiles.set(cacheKey, { token, data });
+  if (token && data) knownUsersFiles.set(cacheKey, { token, data, at: Date.now() });
   else knownUsersFiles.delete(cacheKey);
 }
 
@@ -189,7 +198,7 @@ async function readUsersFileFresh({ fullPath, relPath }) {
 /**
  * Load users straight from the store, bypassing (and refreshing) the cached
  * copy. The file is stat'ed first and not read again while it is unchanged
- * since this worker's last read or write of it.
+ * since this worker's last read or write of it, for at most TOKEN_TRUST_MS.
  *
  * Cluster workers each cache this file and hear about another worker's write
  * over the config sync bus, which takes a few milliseconds. An external user
@@ -217,7 +226,12 @@ export async function loadUsersFresh(usersFilePath) {
       // newer body, which only costs one more read next time.
       const token = await probeUsersFile(location);
       const known = knownUsersFiles.get(cacheKey);
-      if (token && known?.token === token && configCache.get(cacheKey)?.data === known.data) {
+      if (
+        token &&
+        known?.token === token &&
+        Date.now() - known.at < TOKEN_TRUST_MS &&
+        configCache.get(cacheKey)?.data === known.data
+      ) {
         return;
       }
       const data = await readUsersFileFresh(location);

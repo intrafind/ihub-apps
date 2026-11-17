@@ -868,6 +868,19 @@ describe('userManager helpers', () => {
       const reads = spy.mock.calls.length;
       expect((await loadUsersFresh(file)).users.u0.aiAcknowledgements).toHaveLength(1);
       expect(spy).toHaveBeenCalledTimes(reads);
+
+      // A shared volume can keep the token after another host's write: past
+      // a few seconds the file is read again although its token matches.
+      const now = Date.now();
+      const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 5_000);
+      try {
+        await loadUsersFresh(file);
+        expect(spy).toHaveBeenCalledTimes(reads + 1);
+        await loadUsersFresh(file);
+        expect(spy).toHaveBeenCalledTimes(reads + 1);
+      } finally {
+        clock.mockRestore();
+      }
     } finally {
       spy.mockRestore();
     }
