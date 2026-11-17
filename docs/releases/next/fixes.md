@@ -838,3 +838,13 @@ dark mode was selected; only pages reached from the chat were dark.
 The warnings at the top of the admin area (demo accounts with their shipped passwords, low disk
 space) showed one word per line on a narrow screen and filled the whole screen. The text now uses
 the full width and the links move below it.
+
+## Placeholders in User Names and Other User Data Are Kept as Written
+
+Placeholders such as `${…}` in user names, emails, OAuth client names, user prompts and skills promoted
+to global ones, and other user-provided data are now kept as written instead of being replaced by server
+configuration values. Placeholders are resolved only in configuration admins write (platform, UI, models,
+providers, apps, groups and the like).
+
+- Check `users.json` for names or emails whose placeholders were replaced before the upgrade; the upgrade
+  does not restore those records.
