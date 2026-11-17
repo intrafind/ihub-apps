@@ -1422,6 +1422,49 @@ describe('ingest pipeline', () => {
     }
   });
 
+  it('a new item whose job waited long in the queue is marked when the job starts', async () => {
+    const project = await newProject();
+    const repository = getProjectRepository();
+    const realMutate = repository.mutate;
+    const realEnqueue = service.ingest._enqueue;
+    let writes = 0;
+    repository.mutate = function (projectId, ...rest) {
+      if (projectId === project.id) writes += 1;
+      return realMutate.call(this, projectId, ...rest);
+    };
+    // As if it had waited past half of `staleAfterMinutes` behind other jobs.
+    service.ingest._enqueue = function (job) {
+      job.startedAt -= 3 * 60 * 60 * 1000;
+      return realEnqueue.call(this, job);
+    };
+    let open = null;
+    try {
+      fakeFetch.entered = false;
+      fakeFetch.gate = new Promise(resolve => {
+        open = resolve;
+      });
+      const { item } = await service.addItem(
+        project.id,
+        { kind: 'fake-cloud', ref: { fileId: 'queued-long' } },
+        { user: ADA }
+      );
+      await waitFor(() => fakeFetch.entered);
+      // Restamped at the start: another worker's reconciler counts from here.
+      const running = await itemOf(project.id, item.id);
+      assert.equal(running.status, 'extracting');
+      assert.equal(writes, 2, 'the add and the start');
+
+      open();
+      const done = await settled(project.id, item.id);
+      assert.equal(done.status, 'ready', JSON.stringify(done.error));
+    } finally {
+      repository.mutate = realMutate;
+      service.ingest._enqueue = realEnqueue;
+      open?.();
+      fakeFetch.gate = null;
+    }
+  });
+
   it('a new item removed while its job waited stores nothing', async () => {
     const project = await newProject();
     const repository = getProjectRepository();

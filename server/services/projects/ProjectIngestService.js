@@ -556,7 +556,16 @@ export class ProjectIngestService {
     // it is not marked again when its job starts — one write under the
     // project's lock fewer per item. A first fetch takes its item here, and a
     // refresh or an edit marks its run, so those still write at the start.
-    const marksStart = Boolean(input.reserve) || refresh || Boolean(input.previousBlobKey);
+    // Except one that waited long in this worker's queue: another worker's
+    // reconciler counts a pending item's age from its `updatedAt` (the add) and
+    // cannot see this job, so a long wait plus the run would be taken for a
+    // crash and the result discarded. Marked, the run gets its own budget.
+    // ponytail: a job queued just under half the budget has only the other
+    // half to run in; a per-worker heartbeat the reconciler checks if that bites.
+    const staleMs = this.settings().ingest.staleAfterMinutes * 60 * 1000;
+    const queuedLong = Date.now() - job.startedAt > staleMs / 2;
+    const marksStart =
+      Boolean(input.reserve) || refresh || Boolean(input.previousBlobKey) || queuedLong;
     try {
       const extracting = !marksStart
         ? true
